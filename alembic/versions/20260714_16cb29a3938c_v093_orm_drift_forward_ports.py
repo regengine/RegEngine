@@ -57,9 +57,13 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS ix_api_keys_tenant_id ON api_keys (tenant_id)")
 
     # 3. tenants.slug NOT NULL — backfill any legacy NULL slugs from the
-    #    tenant id first so the constraint cannot fail mid-deploy.
+    #    tenant id first so the constraint cannot fail mid-deploy.  The
+    #    migration credential is NOBYPASSRLS and tenants is already FORCE-RLS,
+    #    so restore owner access only for this transactional repair.
+    op.execute("ALTER TABLE tenants NO FORCE ROW LEVEL SECURITY")
     op.execute("UPDATE tenants SET slug = 'tenant-' || id::text WHERE slug IS NULL")
     op.execute("ALTER TABLE tenants ALTER COLUMN slug SET NOT NULL")
+    op.execute("ALTER TABLE tenants FORCE ROW LEVEL SECURITY")
 
 
 def downgrade() -> None:

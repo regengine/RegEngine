@@ -10,22 +10,10 @@ if [[ ! -x "$APPLY_SQL" ]]; then
     chmod +x "$APPLY_SQL"
 fi
 
-ADMIN_DB_URL="${ADMIN_DATABASE_URL:-${DATABASE_URL:-}}"
-INGESTION_DB_URL="${INGESTION_DATABASE_URL:-${DATABASE_URL:-}}"
-COMPLIANCE_DB_URL="${COMPLIANCE_DATABASE_URL:-${DATABASE_URL:-}}"
+MIGRATION_DB_URL="${MIGRATIONS_DATABASE_URL:-}"
 
-if [[ -z "$ADMIN_DB_URL" ]]; then
-    echo "ADMIN_DATABASE_URL or DATABASE_URL must be set."
-    exit 1
-fi
-
-if [[ -z "$INGESTION_DB_URL" ]]; then
-    echo "INGESTION_DATABASE_URL or DATABASE_URL must be set."
-    exit 1
-fi
-
-if [[ -z "$COMPLIANCE_DB_URL" ]]; then
-    echo "COMPLIANCE_DATABASE_URL or DATABASE_URL must be set."
+if [[ -z "$MIGRATION_DB_URL" ]]; then
+    echo "MIGRATIONS_DATABASE_URL must be set; runtime credentials cannot apply DDL."
     exit 1
 fi
 
@@ -34,19 +22,19 @@ echo "Repo root: $REPO_ROOT"
 
 echo
 echo "[1/4] Admin migrations"
-bash "$APPLY_SQL" "$ADMIN_DB_URL" "$REPO_ROOT/services/admin/migrations"
+bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/services/admin/migrations"
 
 echo
 echo "[2/4] Ingestion service migrations"
-bash "$APPLY_SQL" "$INGESTION_DB_URL" "$REPO_ROOT/services/ingestion/migrations"
+bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/services/ingestion/migrations"
 
 echo
 echo "[3/4] Root FSMA migrations"
-bash "$APPLY_SQL" "$INGESTION_DB_URL" "$REPO_ROOT/migrations"
+bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/migrations"
 
 echo
 echo "[4/4] Compliance service migrations"
-bash "$APPLY_SQL" "$COMPLIANCE_DB_URL" "$REPO_ROOT/services/compliance/migrations"
+bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/services/compliance/migrations"
 
 echo
 echo "All Phase 1A SQL migration batches completed."

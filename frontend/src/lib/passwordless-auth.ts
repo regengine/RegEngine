@@ -7,9 +7,6 @@ export type ChallengeStartResponse = {
   detail?: string;
   message?: string;
   challenge_id?: string;
-  sso_redirect?: boolean;
-  organization_id?: string;
-  sso_url?: string;
 };
 
 export type StoredOtpChallenge = {

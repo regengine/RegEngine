@@ -3,10 +3,10 @@ import { getServerServiceURL } from '@/lib/api-config';
 import {
     requireProxyAuth,
     validateProxySession,
-    getServerApiKey,
     validateUuid,
     enforceTenantMatch,
 } from '@/lib/api-proxy';
+import { prepareTenantScopedProxyHeaders, rejectUpstreamRedirect } from '@/lib/proxy-factory';
 
 function getComplianceUrl(): string {
     const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
@@ -56,20 +56,21 @@ export async function GET(
             { status: 503 },
         );
     }
-    const headers: Record<string, string> = {
+    const headers = new Headers({
         'Content-Type': 'application/json',
-    };
-    const apiKey = getServerApiKey();
-    if (apiKey) {
-        headers['X-RegEngine-API-Key'] = apiKey;
-    }
+    });
+    const credentialError = prepareTenantScopedProxyHeaders(headers, request, tenantId);
+    if (credentialError) return credentialError;
 
     try {
         const res = await fetch(`${COMPLIANCE_URL}/v1/compliance/status/${tenantId}?detailed=${detailed}`, {
             headers,
+            redirect: 'manual',
         });
+        const redirectError = rejectUpstreamRedirect(res, 'compliance-status');
+        if (redirectError) return redirectError;
         const data = await res.json();
-        return NextResponse.json(data);
+        return NextResponse.json(data, { status: res.status });
     } catch {
         return NextResponse.json(
             { error: 'compliance_service_unavailable', message: 'Unable to reach compliance service' },

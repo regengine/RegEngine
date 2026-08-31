@@ -16,6 +16,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _allow_explicit_admin_sqlite_for_unit_test(monkeypatch):
+    """Let the local-import patch load the fail-closed admin DB module.
+
+    Production still requires ``ADMIN_DATABASE_URL``. This unit suite runs the
+    scheduler in isolation, so it explicitly opts into the test-only SQLite
+    fallback before patching ``SessionLocal`` with a mock.
+    """
+    monkeypatch.setenv("REGENGINE_ENV", "test")
+    monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///:memory:")
+
+
 def _build_scheduler_service_without_init():
     from services.scheduler import service as scheduler_service
 
@@ -39,7 +51,7 @@ class TestTaskQueueRetention:
     def test_purge_old_tasks_issues_delete(self):
         svc = _build_scheduler_service_without_init()
 
-        with patch("shared.database.SessionLocal") as session_factory:
+        with patch("services.admin.app.database.SessionLocal") as session_factory:
             db = MagicMock()
             db.execute.return_value.fetchall.return_value = []
             session_factory.return_value = db
@@ -57,7 +69,7 @@ class TestTaskQueueRetention:
     def test_purge_only_targets_terminal_statuses(self):
         svc = _build_scheduler_service_without_init()
 
-        with patch("shared.database.SessionLocal") as session_factory:
+        with patch("services.admin.app.database.SessionLocal") as session_factory:
             db = MagicMock()
             db.execute.return_value.fetchall.return_value = []
             session_factory.return_value = db
@@ -89,6 +101,6 @@ class TestTaskQueueRetention:
         """If the DB is unavailable, log and return — do not crash the scheduler."""
         svc = _build_scheduler_service_without_init()
 
-        with patch("shared.database.SessionLocal", side_effect=ConnectionError("pg down")):
+        with patch("services.admin.app.database.SessionLocal", side_effect=ConnectionError("pg down")):
             # Must not raise — otherwise the retention job will poison the scheduler.
             svc.purge_old_tasks()

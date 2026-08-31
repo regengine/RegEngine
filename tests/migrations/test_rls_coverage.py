@@ -63,18 +63,12 @@ TABLES_EXEMPT: Set[str] = {
     # locks it down instead: FORCE RLS with no policy (deny-all) and
     # REVOKE ALL FROM PUBLIC.
     "cte_kdes_backfill_log_v059",
-    # Adopted from runtime DDL by v098 with the v092 client-role lockdown
-    # (FORCE RLS + permissive app_only policy TO regengine): the incident
-    # endpoints only set the tenant GUC for UUID tenants
-    # (set_tenant_guc_if_uuid backstop), so a get_tenant_context() policy
-    # would 500 the non-GUC paths. Tenant scoping is enforced by the
-    # router's WHERE tenant_id filters; matches the prod state v092 left.
+    # Release-disabled by v111. FORCE RLS has no policy and neither runtime
+    # role has table privileges; application WHERE clauses are not treated as
+    # an authorization boundary.
     "incidents",
-    # Adopted from runtime DDL by v098, same app_only lockdown. Carries
-    # sender_tenant_id/receiver_tenant_id (TEXT) instead of a tenant_id
-    # column — a package row belongs to two tenants at once, so the
-    # single-tenant get_tenant_context() predicate does not fit. Scoping
-    # is enforced by exchange_api's receiver_tenant_id filters.
+    # Release-disabled by v111 for the same reason. A future exchange router
+    # must ship a two-party RLS design before either role receives access.
     "exchange_packages",
 }
 
@@ -139,6 +133,7 @@ def upgraded_engine() -> Iterator[Engine]:
     with rls_postgres_or_skip() as (plain_url, engine):
         driver_url = engine.url.render_as_string(hide_password=False)
         env = {
+            "MIGRATIONS_DATABASE_URL": plain_url,
             "DATABASE_URL": plain_url,
             "PATH": subprocess.os.environ["PATH"],
         }
@@ -244,6 +239,32 @@ def _table_has_tenant_policy(engine: Engine, table: str) -> bool:
 
 
 class TestRLSCoverage_EPIC_B:
+    def test_release_disabled_incident_exchange_surfaces_are_deny_all(
+        self,
+        upgraded_engine: Engine,
+    ):
+        with upgraded_engine.connect() as conn:
+            for table in ("incidents", "exchange_packages"):
+                assert _table_has_force_rls(upgraded_engine, table)
+                assert conn.execute(
+                    text(
+                        """
+                        SELECT count(*)
+                          FROM pg_policies
+                         WHERE schemaname = 'fsma' AND tablename = :table
+                        """
+                    ),
+                    {"table": table},
+                ).scalar_one() == 0
+                for role in ("regengine", "regengine_sysadmin"):
+                    assert not conn.execute(
+                        text(
+                            "SELECT has_table_privilege(:role, :table, "
+                            "'SELECT,INSERT,UPDATE,DELETE')"
+                        ),
+                        {"role": role, "table": f"fsma.{table}"},
+                    ).scalar_one()
+
     def test_every_fsma_table_has_tenant_id_not_null(self, upgraded_engine: Engine):
         tables = _fsma_tables(upgraded_engine)
         assert tables, "no fsma.* tables found after alembic upgrade head"

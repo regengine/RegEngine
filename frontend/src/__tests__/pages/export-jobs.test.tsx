@@ -1,17 +1,7 @@
-/**
- * Export Jobs Page Tests
- *
- * Tests for the archive & export jobs view:
- * - Loading state
- * - Data rendering when fetch succeeds
- * - Error state when save fails
- * - Empty state when no jobs exist
- * - Auth redirect when not authenticated
- */
+/** Release-disabled export scheduling must remain local and non-networked. */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ExportJobsPage from '@/app/dashboard/export-jobs/page';
 
@@ -24,29 +14,18 @@ function createWrapper() {
     );
 }
 
-// ── Mocks ──
-
-const mockPush = vi.fn();
-
 vi.mock('next/navigation', () => ({
-    useRouter: () => ({ push: mockPush, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
     usePathname: () => '/dashboard/export-jobs',
     useSearchParams: () => new URLSearchParams(),
 }));
 
-const mockUseAuth = vi.fn();
 vi.mock('@/lib/auth-context', () => ({
-    useAuth: () => mockUseAuth(),
+    useAuth: () => ({ apiKey: null, isAuthenticated: true }),
 }));
 
-const mockUseTenant = vi.fn();
-vi.mock('@/lib/tenant-context', () => ({
-    useTenant: () => mockUseTenant(),
-}));
-
-// Mock lucide-react icons as simple stubs
 vi.mock('lucide-react', () => {
-    const stub = (props: any) => <svg {...props} />;
+    const stub = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} />;
     return {
         Archive: stub,
         Download: stub,
@@ -61,134 +40,29 @@ vi.mock('lucide-react', () => {
     };
 });
 
-// ── Helpers ──
-
-const SAMPLE_JOBS = [
-    {
-        id: 'job-1',
-        name: 'Weekly FDA Export',
-        cadence: 'Weekly',
-        format: 'FDA Package',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: '2026-03-25 08:00',
-        nextRun: '2026-04-01 08:00',
-        manifestHash: 'sha256:abc123',
-    },
-    {
-        id: 'job-2',
-        name: 'Monthly EPCIS',
-        cadence: 'Monthly',
-        format: 'GS1 EPCIS 2.0',
-        destination: 'Downloadable bundle',
-        status: 'paused',
-        lastRun: '2026-03-01 12:00',
-        nextRun: '2026-04-01 12:00',
-        manifestHash: 'sha256:def456',
-    },
-];
-
-function mockFetchSuccess(jobs = SAMPLE_JOBS) {
-    global.fetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ jobs }),
-    });
-}
-
-function mockFetchFailure() {
-    global.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 500 });
-}
-
-describe('ExportJobsPage', () => {
+describe('ExportJobsPage release boundary', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockUseAuth.mockReturnValue({ apiKey: null, isAuthenticated: true });
-        mockUseTenant.mockReturnValue({ tenantId: 'tenant-123', isSystemTenant: false });
+        vi.stubGlobal('fetch', vi.fn());
     });
 
-    it('renders loading state initially', () => {
-        // Fetch never resolves during this tick
-        global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-        render(<ExportJobsPage />, { wrapper: createWrapper() });
-
-        expect(screen.getByText('Loading export jobs')).toBeInTheDocument();
-    });
-
-    it('renders jobs when fetch succeeds', async () => {
-        mockFetchSuccess();
-        render(<ExportJobsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(screen.getByText('Weekly FDA Export')).toBeInTheDocument();
-        });
-        expect(screen.getByText('Monthly EPCIS')).toBeInTheDocument();
-        expect(screen.getByText(/sha256:abc123/)).toBeInTheDocument();
-    });
-
-    it('renders empty state when no jobs exist', async () => {
-        mockFetchSuccess([]);
-        render(<ExportJobsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(screen.getByText('No export jobs yet')).toBeInTheDocument();
-        });
-    });
-
-    it('renders page heading', async () => {
-        mockFetchSuccess([]);
+    it('renders the FDA Export page', () => {
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByRole('heading', { name: 'FDA Export' })).toBeInTheDocument();
     });
 
-    it('loads export jobs without a placeholder apiKey or browser auth header', async () => {
-        mockFetchSuccess([]);
+    it('renders the local unavailable state and disables scheduling', async () => {
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
-        await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalled();
-        });
-
-        const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit | undefined][];
-        const [url, init] = calls[0]!;
-
-        expect(url).toBe('/api/fsma/customer-readiness/export-jobs');
-        expect(init?.credentials).toBe('include');
-        expect(new Headers(init?.headers).get('X-RegEngine-API-Key')).toBeNull();
+        expect(await screen.findByText(/Scheduled export jobs aren.t available/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save export job/i })).toBeDisabled();
     });
 
-    it('renders error state when save job fails', async () => {
-        // First call: loading jobs succeeds (empty)
-        // Second call: save fails
-        global.fetch = vi.fn()
-            .mockResolvedValueOnce({ ok: true, json: async () => ({ jobs: [] }) })
-            .mockResolvedValueOnce({ ok: false, status: 500 });
-
-        const user = userEvent.setup();
+    it('never calls the retired anonymous customer-readiness BFF', async () => {
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
-        // Wait for initial load
-        await waitFor(() => {
-            expect(screen.getByText('No export jobs yet')).toBeInTheDocument();
-        });
-
-        // Click save
-        const saveButton = screen.getByRole('button', { name: /save export job/i });
-        await user.click(saveButton);
-
-        await waitFor(() => {
-            // The page surfaces the mutation error message directly
-            expect(screen.getByText(/could not create the export job|failed to create export job/i)).toBeInTheDocument();
-        });
-    });
-
-    it('shows active jobs count', async () => {
-        mockFetchSuccess();
-        render(<ExportJobsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            // 1 active job out of 2
-            expect(screen.getByText('1')).toBeInTheDocument();
-        });
+        await screen.findByText(/Scheduled export jobs aren.t available/i);
+        expect(global.fetch).not.toHaveBeenCalled();
     });
 });

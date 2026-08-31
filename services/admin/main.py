@@ -57,10 +57,11 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Modern lifespan context manager with graceful degradation.
+    """Modern lifespan context manager with fail-closed security boot.
 
-    The service will start even if some dependencies are unavailable,
-    enabling health checks to report partial availability.
+    Optional integrations may degrade, but an enforced database-posture gate
+    is fatal.  This legacy/local entrypoint must not provide a weaker boot
+    boundary than the consolidated server.
     """
     log = structlog.get_logger("startup")
     log.info(
@@ -69,7 +70,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         environment=os.getenv("REGENGINE_ENV", "development"),
     )
 
-    # Database initialization (critical but non-blocking)
+    # Database initialization. The RLS posture gate is a hard startup
+    # boundary in production and whenever staging explicitly enables it.
     try:
         from app.database import init_db
 
@@ -77,7 +79,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("database_initialized")
     except (ImportError, RuntimeError, ConnectionError, OSError) as e:
         log.error("database_init_failed", error=str(e))
-        # Continue - service can still serve health checks
+        if is_production() or os.getenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT") == "1":
+            raise
+        # Local development may continue to expose diagnostic health output.
 
     # Initialize API Key Store DB if enabled (non-blocking)
     if os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true":
@@ -112,44 +116,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         log.info("supabase_credentials_present")
 
-    # JWT Key Registry (non-blocking — falls back to static AUTH_SECRET_KEY)
-    try:
-        import redis.asyncio as _aioredis
-        from app.auth_utils import _sync_keys_from_registry, set_revocation_redis
-        from shared.jwt_key_registry import JWTKeyRegistry, set_key_registry
+    # Shared auth runtime. Production startup is fatal unless Redis-backed
+    # revocation and the JWT key registry are both ready.
+    from app.auth_runtime import initialize_auth_runtime, shutdown_auth_runtime
 
-        _redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
-        _jwt_redis = _aioredis.from_url(_redis_url, decode_responses=True)
-
-        # Share the Redis client for token revocation checks
-        set_revocation_redis(_jwt_redis)
-        _jwt_registry = JWTKeyRegistry(redis_client=_jwt_redis)
-        await _jwt_registry.initialize()
-        set_key_registry(_jwt_registry)
-
-        # Cache keys into auth_utils for sync access
-        _signing = await _jwt_registry.get_signing_key()
-        _verifying = await _jwt_registry.get_verification_keys()
-        _sync_keys_from_registry(_signing, _verifying)
-
-        # Clean up any expired keys
-        await _jwt_registry.cleanup_expired_keys()
-
-        log.info("jwt_key_registry_ready", active_kid=_signing.kid)
-    except Exception as e:
-        log.warning("jwt_key_registry_init_failed", error=str(e))
-        # Continue — auth_utils falls back to static SECRET_KEY
+    auth_runtime = await initialize_auth_runtime()
 
     # Kafka consumer (optional feature, never blocks startup)
     _start_review_consumer()
 
     log.info("startup_complete")
-    yield
+    try:
+        yield
+    finally:
+        # Shutdown
+        log.info("shutdown_initiated")
+        _stop_review_consumer()
+        from app.api_key_admin_store import close_admin_api_key_store
 
-    # Shutdown
-    log.info("shutdown_initiated")
-    _stop_review_consumer()
-    log.info("shutdown_complete")
+        await close_admin_api_key_store()
+        await shutdown_auth_runtime(auth_runtime)
+        log.info("shutdown_complete")
 
 
 from shared.env import is_production
@@ -262,7 +249,6 @@ app.add_middleware(
         "Content-Type",
         "X-RegEngine-API-Key",
         "X-RegEngine-Partner-Key",
-        "X-Admin-Key",
         "X-Tenant-ID",
         "X-Request-ID",
         "X-Correlation-ID",

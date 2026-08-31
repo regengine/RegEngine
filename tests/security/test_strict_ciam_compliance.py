@@ -1,353 +1,413 @@
-import hashlib
-import os
+"""Deterministic privileged-auth release contracts.
+
+This module replaces the retired live-HTTP CIAM suite.  The old tests used
+Bearer JWTs and a shared administrative header against ``localhost:8400``;
+the weekly security job did not start that service, so every assertion could
+pass by skipping.  These tests exercise the current dependency boundary
+directly: opaque browser sessions for humans, WebAuthn/SSO step-up for
+high-risk actions, and a single-purpose database API key for workload tenant
+provisioning.
+
+These are source-level authentication contracts.  They do not claim that a
+deployed two-tenant matrix, Redis replica behavior, or database RLS posture has
+been validated.
+"""
+
+from __future__ import annotations
+
+import asyncio
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from types import SimpleNamespace
+from unittest.mock import MagicMock, call, patch
 
 import pytest
-from app.auth_utils import create_access_token
-from app.sqlalchemy_models import AuditLogModel, InviteModel, MembershipModel, RoleModel, TenantModel, UserModel
-from httpx import AsyncClient
-from sqlalchemy import and_, create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from fastapi import HTTPException
+from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore, RateLimitInfo
+from starlette.requests import Request
 
-# --- Fixtures ---
-# Connect to Dockerized DB exposed on localhost:5432 (local) or postgres (container)
-DB_URL = os.getenv("TEST_DB_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
+from services.admin.app import privileged_auth as auth
+from services.admin.app.auth.session_auth import ActiveSessionContext
 
-
-@pytest.fixture(scope="session")
-def db_engine():
-    try:
-        engine = create_engine(DB_URL)
-        # Test connection
-        with engine.connect() as conn:
-            pass
-        yield engine
-        engine.dispose()
-    except Exception as e:
-        pytest.skip(f"Database unavailable: {e}")
+TENANT_A = "11111111-1111-1111-1111-111111111111"
+TENANT_B = "22222222-2222-2222-2222-222222222222"
 
 
-@pytest.fixture(scope="function")
-def db(db_engine):
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
-    session = SessionLocal()
-    from sqlalchemy import text
-
-    session.execute(text("SELECT set_admin_context(true)"))
-    yield session
-    session.close()
+def _run(coro):
+    return asyncio.run(coro)
 
 
-@pytest.fixture
-async def async_client():
-    try:
-        async with AsyncClient(base_url="http://localhost:8400", timeout=30.0) as client:
-            # Simple check
-            try:
-                await client.get("/docs")
-            except Exception:
-                pytest.skip("Admin API unavailable")
-            yield client
-    except Exception:
-        pytest.skip("Admin API unavailable")
-
-
-@pytest.fixture
-def admin_user(db: Session):
-    role = (
-        db.execute(select(RoleModel).where(RoleModel.name == "Owner", RoleModel.tenant_id.is_(None))).scalars().first()
+def _request(
+    path: str = "/v1/admin/tenants",
+    *,
+    headers: dict[str, str] | None = None,
+) -> Request:
+    raw_headers = [(name.lower().encode(), value.encode()) for name, value in (headers or {}).items()]
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": raw_headers,
+            "client": ("203.0.113.50", 12345),
+            "server": ("testserver", 443),
+            "scheme": "https",
+            "query_string": b"",
+            "http_version": "1.1",
+            "root_path": "",
+            "state": {},
+            "app": SimpleNamespace(state=SimpleNamespace()),
+        }
     )
 
-    if not role:
-        role = RoleModel(name="Owner", permissions=["*"], tenant_id=None)
-        db.add(role)
-        db.commit()
 
-    tenant = TenantModel(name="Admin Tenant", slug=f"admin-{uuid4().hex[:8]}")
-    db.add(tenant)
-    db.commit()
+class _Throttle:
+    """Deterministic stand-in for the separately tested Redis throttle."""
 
-    user = UserModel(
-        email=f"admin-{uuid4()}@example.com",
-        is_sysadmin=True,
-        status="active",
+    def __init__(self) -> None:
+        self.failures = 0
+        self.resets = 0
+
+    async def is_limited(self, _subject: str) -> bool:
+        return False
+
+    async def record_failure(self, _subject: str) -> int:
+        self.failures += 1
+        return self.failures
+
+    async def reset(self, _subject: str) -> None:
+        self.resets += 1
+
+
+def _session_context(*, sysadmin: bool, auth_method: str) -> ActiveSessionContext:
+    return ActiveSessionContext(
+        user=SimpleNamespace(
+            id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            email="staff@example.test",
+            is_sysadmin=sysadmin,
+        ),
+        session=SimpleNamespace(
+            id="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            auth_method=auth_method,
+            active_membership_id="cccccccc-cccc-cccc-cccc-cccccccccccc",
+        ),
     )
-    db.add(user)
-    db.commit()
-
-    membership = MembershipModel(user_id=user.id, tenant_id=tenant.id, role_id=role.id, is_active=True)
-    db.add(membership)
-    db.commit()
-
-    token = create_access_token({"sub": str(user.id), "tid": str(tenant.id)})
-    return {"user": user, "tenant": tenant, "token": token, "role": role}
 
 
-@pytest.fixture
-def other_tenant_user(db: Session):
-    role = (
-        db.execute(select(RoleModel).where(RoleModel.name == "Owner", RoleModel.tenant_id.is_(None))).scalars().first()
-    )
-
-    # If not found (unlikely if admin_user ran first, but possible), create it
-    if not role:
-        role = RoleModel(name="Owner", permissions=["*"], tenant_id=None)
-        db.add(role)
-        db.commit()
-
-    tenant = TenantModel(name="Other Tenant", slug=f"other-{uuid4().hex[:8]}")
-    db.add(tenant)
-    db.commit()
-
-    user = UserModel(email=f"other-{uuid4()}@example.com", status="active")
-    db.add(user)
-    db.commit()
-
-    membership = MembershipModel(user_id=user.id, tenant_id=tenant.id, role_id=role.id, is_active=True)
-    db.add(membership)
-    db.commit()
-
-    token = create_access_token({"sub": str(user.id), "tid": str(tenant.id)})
-    return {"user": user, "tenant": tenant, "token": token}
-
-
-# --- Test Classes ---
-
-
-class TestAdminEndpointsRequireJWT:
-    """1. Auth & Permissions: Endpoints require JWT, reject API Key."""
-
-    @pytest.mark.asyncio
-    async def test_endpoints_reject_no_auth(self, async_client: AsyncClient):
-        endpoints = [
-            ("GET", "/v1/admin/invites"),
-            ("POST", "/v1/admin/invites"),
-            ("GET", "/v1/admin/users"),
-            ("GET", "/v1/admin/roles"),
-        ]
-        for method, url in endpoints:
-            resp = await async_client.request(method, url)
-            assert resp.status_code == 401, f"{method} {url} should require auth"
-
-    @pytest.mark.asyncio
-    async def test_endpoints_reject_api_key(self, async_client: AsyncClient):
-        # Even with a valid API key header, it should fail if Bearer is missing
-        # (Assuming get_current_user only looks at Bearer)
-        headers = {"X-Admin-Key": "some-key", "X-RegEngine-API-Key": "some-key"}
-        resp = await async_client.get("/v1/admin/users", headers=headers)
-        assert resp.status_code == 401
-
-
-class TestInviteTenantIsolation:
-    """2. Security / Tenant Isolation: Invites are isolated."""
-
-    @pytest.mark.asyncio
-    async def test_tenant_cannot_list_others_invites(self, async_client: AsyncClient, admin_user, other_tenant_user):
-        # Admin creates invite in Tenant A
-        headers_a = {"Authorization": f"Bearer {admin_user['token']}"}
-        await async_client.post(
-            "/v1/admin/invites",
-            json={"email": "invitee-a@example.com", "role_id": str(admin_user["role"].id)},
-            headers=headers_a,
+def _require_sysadmin(request: Request, throttle: _Throttle):
+    return _run(
+        auth.require_sysadmin_high_assurance(
+            request=request,
+            db=MagicMock(),
+            crypto_service=MagicMock(),
+            throttle=throttle,
         )
+    )
 
-        # Other User (Tenant B) lists invites
-        headers_b = {"Authorization": f"Bearer {other_tenant_user['token']}"}
-        resp = await async_client.get("/v1/admin/invites", headers=headers_b)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data) == 0  # Should look empty, not show Tenant A's invite
 
-    @pytest.mark.asyncio
-    async def test_tenant_cannot_revoke_others_invite(
-        self, async_client: AsyncClient, admin_user, other_tenant_user, db: Session
+def test_bearer_token_cannot_replace_missing_opaque_session():
+    throttle = _Throttle()
+    request = _request(headers={"Authorization": "Bearer attacker-controlled-token"})
+    missing_session = HTTPException(status_code=401, detail="Authentication required.")
+
+    with patch.object(auth, "get_current_active_session_context", side_effect=missing_session):
+        with pytest.raises(HTTPException) as exc_info:
+            _require_sysadmin(request, throttle)
+
+    assert exc_info.value.status_code == 401
+    assert throttle.failures == 1
+
+
+def test_retired_admin_header_is_rejected_before_session_lookup():
+    throttle = _Throttle()
+    request = _request(headers={"X-Admin-Key": "retired-shared-credential"})
+
+    with patch.object(
+        auth,
+        "get_current_active_session_context",
+        return_value=_session_context(sysadmin=True, auth_method="webauthn"),
+    ) as session_lookup:
+        with pytest.raises(HTTPException) as exc_info:
+            _require_sysadmin(request, throttle)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "X-Admin-Key is not an accepted authentication method."
+    assert throttle.failures == 1
+    session_lookup.assert_not_called()
+
+
+def test_non_sysadmin_high_assurance_session_is_denied():
+    throttle = _Throttle()
+    with patch.object(
+        auth,
+        "get_current_active_session_context",
+        return_value=_session_context(sysadmin=False, auth_method="webauthn"),
     ):
-        # Admin creates invite
-        headers_a = {"Authorization": f"Bearer {admin_user['token']}"}
-        create_resp = await async_client.post(
-            "/v1/admin/invites",
-            json={"email": "invitee-revoke-test@example.com", "role_id": str(admin_user["role"].id)},
-            headers=headers_a,
-        )
-        invite_id = create_resp.json()["id"]
+        with pytest.raises(HTTPException) as exc_info:
+            _require_sysadmin(_request(), throttle)
 
-        # Other User tries to revoke
-        headers_b = {"Authorization": f"Bearer {other_tenant_user['token']}"}
-        resp = await async_client.post(f"/v1/admin/invites/{invite_id}/revoke", headers=headers_b)
-        assert resp.status_code == 404  # Not found in Tenant B context
+    assert exc_info.value.status_code == 403
+    assert throttle.failures == 1
 
 
-class TestUserManagementTenantIsolation:
-    """2b. Security / User Mgmt Isolation."""
+def test_email_code_sysadmin_session_requires_step_up():
+    throttle = _Throttle()
+    with patch.object(
+        auth,
+        "get_current_active_session_context",
+        return_value=_session_context(sysadmin=True, auth_method="email_otp"),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            _require_sysadmin(_request(), throttle)
 
-    @pytest.mark.asyncio
-    async def test_cannot_change_role_across_tenants(self, async_client: AsyncClient, admin_user, other_tenant_user):
-        # Admin tries to change role of Other Tenant User
-        # We need the ID of the other user
-        target_id = other_tenant_user["user"].id
-
-        headers_a = {"Authorization": f"Bearer {admin_user['token']}"}
-        resp = await async_client.patch(
-            f"/v1/admin/users/{target_id}/role", json={"role_id": str(admin_user["role"].id)}, headers=headers_a
-        )
-
-        # User exists globally, but membership in Tenant A does not exist for them
-        assert resp.status_code == 404
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "requires_step_up"
+    assert throttle.failures == 1
 
 
-class TestLastOwnerProtection:
-    """4. Invariants: Last Owner Protection."""
+@pytest.mark.parametrize("auth_method", ["webauthn", "sso"])
+def test_high_assurance_sysadmin_session_is_accepted(auth_method):
+    throttle = _Throttle()
+    with patch.object(
+        auth,
+        "get_current_active_session_context",
+        return_value=_session_context(sysadmin=True, auth_method=auth_method),
+    ):
+        actor = _require_sysadmin(_request(), throttle)
 
-    @pytest.mark.asyncio
-    async def test_cannot_deactivate_last_owner(self, async_client: AsyncClient, admin_user):
-        # Admin is the only owner in fixture
-        headers = {"Authorization": f"Bearer {admin_user['token']}"}
-        resp = await async_client.post(f"/v1/admin/users/{admin_user['user'].id}/deactivate", headers=headers)
-        assert resp.status_code == 400
-        assert "last Owner" in resp.json()["detail"]
-
-    @pytest.mark.asyncio
-    async def test_cannot_demote_last_owner(self, async_client: AsyncClient, admin_user, db: Session):
-        # Create another role
-        viewer_role = RoleModel(name="Viewer", tenant_id=admin_user["tenant"].id, permissions=[])
-        db.add(viewer_role)
-        db.commit()
-
-        headers = {"Authorization": f"Bearer {admin_user['token']}"}
-        resp = await async_client.patch(
-            f"/v1/admin/users/{admin_user['user'].id}/role", json={"role_id": str(viewer_role.id)}, headers=headers
-        )
-        assert resp.status_code == 400
-        assert "last Owner" in resp.json()["detail"]
+    assert actor.actor_type == "staff_user"
+    assert actor.auth_method == auth_method
+    assert actor.session_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    assert throttle.resets == 1
 
 
-class TestDeactivateReactivate:
-    """5. Frontend Flows compatibility: Deactivate/Reactivate."""
+class _ScalarResult:
+    def __init__(self, value) -> None:
+        self.value = value
 
-    @pytest.mark.asyncio
-    async def test_deactivate_reactivate_flow(self, async_client: AsyncClient, admin_user, db: Session):
-        # Add a secondary user to deactivate
-        user2_email = f"user2-{uuid4()}@example.com"
-        user2 = UserModel(email=user2_email, status="active")
-        db.add(user2)
-        db.commit()
-
-        # Make them an owner so we can verify we can deactivate (since admin_user is also owner, count > 1)
-        mem = MembershipModel(user_id=user2.id, tenant_id=admin_user["tenant"].id, role_id=admin_user["role"].id)
-        db.add(mem)
-        db.commit()
-
-        headers = {"Authorization": f"Bearer {admin_user['token']}"}
-
-        # Deactivate
-        resp = await async_client.post(f"/v1/admin/users/{user2.id}/deactivate", headers=headers)
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "deactivated"
-
-        # Verify inactive via List
-        resp = await async_client.get("/v1/admin/users", headers=headers)
-        users = resp.json()
-        target = next(u for u in users if u["id"] == str(user2.id))
-        assert target["status"] == "inactive"
-
-        # Reactivate
-        resp = await async_client.post(f"/v1/admin/users/{user2.id}/reactivate", headers=headers)
-        assert resp.status_code == 200
-
-        # Verify active
-        resp = await async_client.get("/v1/admin/users", headers=headers)
-        users = resp.json()
-        target = next(u for u in users if u["id"] == str(user2.id))
-        assert target["status"] == "active"
+    def scalar_one_or_none(self):
+        return self.value
 
 
-class TestInviteLifecycle:
-    """3. Invite Security & Lifecycle."""
-
-    @pytest.mark.asyncio
-    async def test_invite_lifecycle_full(self, async_client: AsyncClient, admin_user, db: Session):
-        headers = {"Authorization": f"Bearer {admin_user['token']}"}
-
-        # 1. Create Invite
-        email = f"life-{uuid4()}@example.com"
-        resp = await async_client.post(
-            "/v1/admin/invites", json={"email": email, "role_id": str(admin_user["role"].id)}, headers=headers
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        link = data["invite_link"]
-        token = link.split("token=")[1]
-
-        # 1a. Duplicate Fail
-        resp_dup = await async_client.post(
-            "/v1/admin/invites", json={"email": email, "role_id": str(admin_user["role"].id)}, headers=headers
-        )
-        assert resp_dup.status_code == 409
-
-        # 2. Accept
-        resp_accept = await async_client.post(
-            "/v1/auth/accept-invite", json={"token": token, "name": "New Guy"}
-        )
-        assert resp_accept.status_code == 201
-
-        # 3. Accept again (Fail)
-        resp_again = await async_client.post(
-            "/v1/auth/accept-invite", json={"token": token, "name": "New Guy"}
-        )
-        assert resp_again.status_code == 400
-
-    @pytest.mark.asyncio
-    async def test_revoke_flow(self, async_client: AsyncClient, admin_user, db: Session):
-        headers = {"Authorization": f"Bearer {admin_user['token']}"}
-        email = f"revoke-{uuid4()}@example.com"
-        create_resp = await async_client.post(
-            "/v1/admin/invites", json={"email": email, "role_id": str(admin_user["role"].id)}, headers=headers
-        )
-        invite_id = create_resp.json()["id"]
-        token = create_resp.json()["invite_link"].split("token=")[1]
-
-        # Revoke
-        await async_client.post(f"/v1/admin/invites/{invite_id}/revoke", headers=headers)
-
-        # Accept Revoked (Fail)
-        resp = await async_client.post(
-            "/v1/auth/accept-invite", json={"token": token, "name": "Revoked Guy"}
-        )
-        # Could be 400 or 404 depending on implementation (checked: 400 "Invite invalid")
-        assert resp.status_code == 400
+def _review_db(*permissions: str) -> MagicMock:
+    db = MagicMock()
+    membership = SimpleNamespace(organization_id=TENANT_A)
+    role = SimpleNamespace(permissions=list(permissions))
+    db.execute.side_effect = [_ScalarResult(membership), _ScalarResult(role)]
+    return db
 
 
-class TestAuditLogs:
-    """5. Audit Log Completeness."""
-
-    @pytest.mark.asyncio
-    async def test_audit_log_entries(self, async_client: AsyncClient, admin_user, db: Session):
-        # Trigger an event: Create Invite
-        headers = {"Authorization": f"Bearer {admin_user['token']}"}
-        email = f"audit-{uuid4()}@example.com"
-        resp = await async_client.post(
-            "/v1/admin/invites", json={"email": email, "role_id": str(admin_user["role"].id)}, headers=headers
-        )
-        invite_id = resp.json()["id"]
-
-        # Refresh session visibility
-        db.commit()
-
-        log = db.execute(
-            select(AuditLogModel).where(
-                AuditLogModel.action == "invite.create", AuditLogModel.resource_id == str(invite_id)
+def test_review_read_requires_permission_but_not_step_up():
+    throttle = _Throttle()
+    db = _review_db("review.read")
+    with (
+        patch.object(
+            auth,
+            "get_current_active_session_context",
+            return_value=_session_context(sysadmin=False, auth_method="email_otp"),
+        ),
+        patch.object(auth, "arm_global_admin_context") as arm_context,
+        patch.object(auth, "disarm_global_admin_context") as disarm_context,
+        patch.object(auth, "bind_authenticated_user_context") as bind_user_context,
+    ):
+        actor = _run(
+            auth.require_review_read(
+                request=_request(path="/v1/admin/review/flagged-extractions"),
+                db=db,
+                crypto_service=MagicMock(),
+                throttle=throttle,
             )
-        ).scalar_one_or_none()
+        )
 
-        if not log:
-            all_logs = db.execute(select(AuditLogModel)).scalars().all()
-            print(f"\nDEBUG: Found {len(all_logs)} logs:")
-            for l in all_logs:
-                print(f" - {l.action} on {l.resource_id} (Tenant: {l.tenant_id})")
+    assert actor.tenant_id == TENANT_A
+    assert actor.permissions == ("review.read",)
+    assert throttle.resets == 1
+    assert arm_context.call_args_list == [call(db), call(db)]
+    assert disarm_context.call_args_list == [call(db), call(db)]
+    bind_user_context.assert_called_once_with(db, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
-        assert log is not None
-        assert log.tenant_id == admin_user["tenant"].id
-        assert log.actor_id == admin_user["user"].id
-        assert log.resource_type == "invite"
-        assert log.changes["email"] == email
+
+def test_review_decision_requires_high_assurance_before_permission_lookup():
+    throttle = _Throttle()
+    db = _review_db("review.decide")
+    with (
+        patch.object(
+            auth,
+            "get_current_active_session_context",
+            return_value=_session_context(sysadmin=False, auth_method="email_otp"),
+        ),
+        patch.object(auth, "arm_global_admin_context") as arm_context,
+        patch.object(auth, "disarm_global_admin_context") as disarm_context,
+        patch.object(auth, "bind_authenticated_user_context") as bind_user_context,
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            _run(
+                auth.require_review_decide(
+                    request=_request(path="/v1/admin/review/item/approve"),
+                    db=db,
+                    crypto_service=MagicMock(),
+                    throttle=throttle,
+                )
+            )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "requires_step_up"
+    db.execute.assert_not_called()
+    arm_context.assert_called_once_with(db)
+    disarm_context.assert_called_once_with(db)
+    bind_user_context.assert_called_once_with(db, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+
+def test_review_identity_and_tenant_come_from_session_membership():
+    throttle = _Throttle()
+    db = _review_db("review.decide")
+    request = _request(
+        path="/v1/admin/review/item/approve",
+        headers={"X-Tenant-ID": TENANT_B},
+    )
+    with (
+        patch.object(
+            auth,
+            "get_current_active_session_context",
+            return_value=_session_context(sysadmin=False, auth_method="webauthn"),
+        ),
+        patch.object(auth, "arm_global_admin_context") as arm_context,
+        patch.object(auth, "disarm_global_admin_context") as disarm_context,
+        patch.object(auth, "bind_authenticated_user_context") as bind_user_context,
+    ):
+        actor = _run(
+            auth.require_review_decide(
+                request=request,
+                db=db,
+                crypto_service=MagicMock(),
+                throttle=throttle,
+            )
+        )
+
+    assert actor.actor_id == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert actor.tenant_id == TENANT_A
+    assert actor.tenant_id != request.headers["X-Tenant-ID"]
+    assert arm_context.call_args_list == [call(db), call(db)]
+    assert disarm_context.call_args_list == [call(db), call(db)]
+    bind_user_context.assert_called_once_with(db, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+
+class _FakeDatabaseStore(DatabaseAPIKeyStore):
+    def __init__(self, api_key: APIKeyResponse | None, *, allowed: bool = True) -> None:
+        self.api_key = api_key
+        self.allowed = allowed
+        self._redis = object()
+
+    async def validate_key(self, _raw_key: str) -> APIKeyResponse | None:
+        return self.api_key
+
+    async def check_rate_limit(self, key_id: str, limit: int, window_seconds: int = 60) -> RateLimitInfo:
+        assert self.api_key is not None
+        assert key_id == self.api_key.key_id
+        assert limit == self.api_key.rate_limit_per_minute
+        assert window_seconds == 60
+        return RateLimitInfo(
+            allowed=self.allowed,
+            limit=limit,
+            remaining=max(0, limit - 1) if self.allowed else 0,
+            reset_at=datetime.now(timezone.utc) + timedelta(seconds=window_seconds),
+            retry_after=None if self.allowed else window_seconds,
+        )
+
+
+def _workload_key(**overrides) -> APIKeyResponse:
+    now = datetime.now(timezone.utc)
+    values = {
+        "key_id": "rge_live_workload",
+        "key_prefix": "rge_live_wor",
+        "name": "stripe-tenant-provisioner",
+        "tenant_id": None,
+        "scopes": [auth.TENANT_PROVISIONER_SCOPE],
+        "rate_limit_per_minute": 10,
+        "created_at": now,
+        "expires_at": now + timedelta(days=30),
+    }
+    values.update(overrides)
+    return APIKeyResponse(**values)
+
+
+def _require_workload(monkeypatch, api_key: APIKeyResponse | None, *, allowed: bool = True):
+    store = _FakeDatabaseStore(api_key, allowed=allowed)
+    monkeypatch.setattr(auth, "get_key_store", lambda: store)
+    throttle = _Throttle()
+    actor = _run(
+        auth.require_tenant_provisioner_key(
+            request=_request(path="/v1/internal/tenants"),
+            x_regengine_api_key="rge_live_workload.raw-secret",  # pragma: allowlist secret
+            throttle=throttle,
+        )
+    )
+    return actor, throttle
+
+
+def test_exact_tenantless_workload_key_is_accepted(monkeypatch):
+    actor, throttle = _require_workload(monkeypatch, _workload_key())
+
+    assert actor.actor_type == "workload_api_key"
+    assert actor.actor_id == "rge_live_workload"
+    assert actor.actor_name == "stripe-tenant-provisioner"
+    assert actor.auth_method == "database_api_key"
+    assert throttle.resets == 1
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"tenant_id": TENANT_A},
+        {"scopes": ["internal.tenants.create", "review.read"]},
+        {"scopes": ["tenants.create"]},
+        {"expires_at": None},
+        {"rate_limit_per_minute": 11},
+    ],
+)
+def test_wrong_class_or_scope_workload_key_is_denied(monkeypatch, overrides):
+    store = _FakeDatabaseStore(_workload_key(**overrides))
+    monkeypatch.setattr(auth, "get_key_store", lambda: store)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(
+            auth.require_tenant_provisioner_key(
+                request=_request(path="/v1/internal/tenants"),
+                x_regengine_api_key="rge_live_workload.raw-secret",  # pragma: allowlist secret
+                throttle=_Throttle(),
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_expired_or_revoked_workload_key_is_denied(monkeypatch):
+    store = _FakeDatabaseStore(None)
+    monkeypatch.setattr(auth, "get_key_store", lambda: store)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(
+            auth.require_tenant_provisioner_key(
+                request=_request(path="/v1/internal/tenants"),
+                x_regengine_api_key="rge_revoked.raw-secret",  # pragma: allowlist secret
+                throttle=_Throttle(),
+            )
+        )
+
+    assert exc_info.value.status_code == 401
+
+
+def test_workload_rate_limit_is_enforced(monkeypatch):
+    store = _FakeDatabaseStore(_workload_key(), allowed=False)
+    monkeypatch.setattr(auth, "get_key_store", lambda: store)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(
+            auth.require_tenant_provisioner_key(
+                request=_request(path="/v1/internal/tenants"),
+                x_regengine_api_key="rge_live_workload.raw-secret",  # pragma: allowlist secret
+                throttle=_Throttle(),
+            )
+        )
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.headers["Retry-After"] == "60"

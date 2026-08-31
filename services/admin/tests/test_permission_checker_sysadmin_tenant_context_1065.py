@@ -109,3 +109,23 @@ def test_non_sysadmin_without_tenant_context_still_rejected(monkeypatch):
 
     assert exc.value.status_code == 403
     assert "E_NO_TENANT_CONTEXT" in exc.value.detail
+
+
+def test_permission_lookup_rejects_cross_tenant_custom_roles(monkeypatch):
+    """The RBAC join must constrain custom roles to the active tenant."""
+    from services.admin.app import dependencies as deps
+
+    tenant_id = uuid.uuid4()
+    monkeypatch.setattr(deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: tenant_id))
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db = MagicMock()
+    db.execute.return_value = result
+
+    with pytest.raises(HTTPException) as exc:
+        deps.PermissionChecker("users.read")(user=_FakeUser(), db=db)
+
+    assert exc.value.status_code == 403
+    statement = str(db.execute.call_args.args[0])
+    assert "roles.tenant_id IS NULL" in statement
+    assert "roles.tenant_id =" in statement

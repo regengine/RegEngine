@@ -21,12 +21,6 @@ const localTestAdminEmail =
 const localTestAdminPassword =
     process.env.TEST_ADMIN_PASSWORD || 'Trace204!Playwright1';
 const localBackendBaseURL = 'http://localhost:8000';
-const localAdminMasterKey =
-    process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
-const localRegEngineApiKey =
-    process.env.API_KEY ||
-    process.env.REGENGINE_API_KEY ||
-    'playwright-local-regengine-api-key-2026';
 const localEmailOutboxPath =
     process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
     '/tmp/regengine-playwright-email-outbox.jsonl';
@@ -51,9 +45,6 @@ if (!externalBaseURL) {
     process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
     process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
     process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
-    process.env.ADMIN_MASTER_KEY = localAdminMasterKey;
-    process.env.API_KEY = localRegEngineApiKey;
-    process.env.REGENGINE_API_KEY = process.env.REGENGINE_API_KEY || localRegEngineApiKey;
     process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
     process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
     process.env.DATABASE_URL = localSharedDatabaseUrl;
@@ -131,10 +122,6 @@ export default defineConfig({
                     JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
                     AUTH_OTP_HMAC_SECRET:
                         process.env.AUTH_OTP_HMAC_SECRET || localOtpHmacSecret,
-                    ADMIN_MASTER_KEY: process.env.ADMIN_MASTER_KEY || localAdminMasterKey,
-                    API_KEY: process.env.API_KEY || localRegEngineApiKey,
-                    REGENGINE_API_KEY:
-                        process.env.REGENGINE_API_KEY || localRegEngineApiKey,
                     REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
                     REGENGINE_E2E_EMAIL_OUTBOX:
                         process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
@@ -169,10 +156,6 @@ export default defineConfig({
                     TEST_ADMIN_EMAIL: process.env.TEST_ADMIN_EMAIL || localTestAdminEmail,
                     TEST_ADMIN_PASSWORD:
                         process.env.TEST_ADMIN_PASSWORD || localTestAdminPassword,
-                    ADMIN_MASTER_KEY: process.env.ADMIN_MASTER_KEY || localAdminMasterKey,
-                    API_KEY: process.env.API_KEY || localRegEngineApiKey,
-                    REGENGINE_API_KEY:
-                        process.env.REGENGINE_API_KEY || localRegEngineApiKey,
                     ADMIN_SERVICE_URL: localBackendBaseURL,
                     INGESTION_SERVICE_URL: localBackendBaseURL,
                     COMPLIANCE_SERVICE_URL: localBackendBaseURL,

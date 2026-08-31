@@ -12,7 +12,8 @@
 # Usage:
 #   ./scripts/demo_mvp_flow.sh [API_KEY]
 #
-# If no API_KEY is provided, the script will create one via the admin API.
+# If no API_KEY is provided, REGENGINE_API_KEY must already contain a scoped,
+# tenant-bound credential provisioned by an authorized staff user.
 
 set -euo pipefail
 
@@ -20,7 +21,6 @@ set -euo pipefail
 ADMIN_URL="${ADMIN_URL:-http://localhost:8400}"
 INGEST_URL="${INGEST_URL:-http://localhost:8002}"  # matches docker-compose.yml port mapping
 API_KEY="${1:-}"
-ADMIN_MASTER_KEY="${ADMIN_MASTER_KEY:-}"
 TENANT_ID="${TENANT_ID:-00000000-0000-0000-0000-000000000001}"
 SAMPLE_DIR="$(cd "$(dirname "$0")/../sample_data" && pwd)"
 EXPORT_DIR="$(cd "$(dirname "$0")/.." && pwd)/demo_exports"
@@ -52,7 +52,7 @@ for svc in "$ADMIN_URL/health|Admin" "$INGEST_URL/health|Ingestion"; do
   fi
 done
 
-# ── Step 1: Get or create API key ───────────────────────────────────────────
+# ── Step 1: Load the pre-provisioned API key ────────────────────────────────
 header "Step 1 · Authentication"
 
 if [ -z "$API_KEY" ]; then
@@ -61,27 +61,10 @@ if [ -z "$API_KEY" ]; then
 fi
 
 if [ -z "$API_KEY" ]; then
-  if [ -z "$ADMIN_MASTER_KEY" ]; then
-    echo -e "  ${Y}No API_KEY, REGENGINE_API_KEY, or ADMIN_MASTER_KEY provided.${NC}"
-    echo -e "  ${Y}Usage: ./scripts/demo_mvp_flow.sh <your-api-key>${NC}"
-    echo -e "  ${Y}Or set REGENGINE_API_KEY or ADMIN_MASTER_KEY env vars.${NC}"
-    exit 1
-  fi
-
-  info "Creating API key via admin service..."
-  KEY_RESPONSE=$(curl -sf -X POST "$ADMIN_URL/v1/admin/keys" \
-    -H "Content-Type: application/json" \
-    -H "X-Admin-Key: $ADMIN_MASTER_KEY" \
-    -d "{\"name\": \"mvp-demo\", \"tenant_id\": \"$TENANT_ID\", \"permissions\": [\"ingest.write\", \"fda.export\"]}" \
-    2>/dev/null || echo "{}")
-
-  API_KEY=$(echo "$KEY_RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('api_key') or d.get('key', ''))" 2>/dev/null || echo "")
-
-  if [ -z "$API_KEY" ]; then
-    fail "Could not create API key. Set REGENGINE_API_KEY directly."
-    exit 1
-  fi
-  ok "API key created: ${API_KEY:0:8}..."
+  echo -e "  ${Y}No API_KEY or REGENGINE_API_KEY provided.${NC}"
+  echo -e "  ${Y}Usage: ./scripts/demo_mvp_flow.sh <tenant-scoped-api-key>${NC}"
+  echo -e "  ${Y}An authorized staff user must provision this credential first.${NC}"
+  exit 1
 else
   ok "Using API key: ${API_KEY:0:8}..."
 fi

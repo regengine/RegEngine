@@ -1,0 +1,4789 @@
+{
+  "schema_version": 1,
+  "source": "server/main.py FastAPI route table",
+  "production_router_groups": [
+    "admin",
+    "audit_export_log",
+    "auditor",
+    "billing",
+    "canonical_records",
+    "chain_verification",
+    "compliance_metrics",
+    "csv",
+    "edi",
+    "epcis_ingestion",
+    "exceptions",
+    "export_monitoring",
+    "fda_export",
+    "fsma_compliance",
+    "inflow_workbench",
+    "onboarding",
+    "portal",
+    "proof_recall",
+    "proof_verify",
+    "readiness",
+    "recall",
+    "request_workflow",
+    "rules",
+    "score",
+    "sla_tracking"
+  ],
+  "always_mounted_owners": [
+    "core_ingest",
+    "features",
+    "health",
+    "metrics",
+    "root",
+    "scheduler",
+    "status",
+    "webhook"
+  ],
+  "enabled_operations": [
+    {
+      "operation": "root:GET:/",
+      "owner": "root",
+      "method": "GET",
+      "path": "/",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:PUT:/admin/organizations/{org_id}/sso-policy",
+      "owner": "admin",
+      "method": "PUT",
+      "path": "/admin/organizations/{org_id}/sso-policy",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "health:GET:/api/health",
+      "owner": "health",
+      "method": "GET",
+      "path": "/api/health",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "audit_export_log:GET:/api/v1/audit/activity/{tenant_id}",
+      "owner": "audit_export_log",
+      "method": "GET",
+      "path": "/api/v1/audit/activity/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/chain",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/chain",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/events",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/events",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/events/{event_id}",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/events/{event_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/exceptions",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/exceptions",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/export-log",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/export-log",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "audit_export_log:POST:/api/v1/audit/exports/{tenant_id}",
+      "owner": "audit_export_log",
+      "method": "POST",
+      "path": "/api/v1/audit/exports/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/requests",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/requests",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/rules",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/rules",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "auditor:GET:/api/v1/audit/summary",
+      "owner": "auditor",
+      "method": "GET",
+      "path": "/api/v1/audit/summary",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "audit.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "audit_export_log:POST:/api/v1/audit/verifications/{tenant_id}",
+      "owner": "audit_export_log",
+      "method": "POST",
+      "path": "/api/v1/audit/verifications/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/checkout",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/checkout",
+      "classification": "public",
+      "authentication": "optional-x-regengine-api-key",
+      "required_permissions": [],
+      "storage_boundary": "stripe+redis:anonymous-or-credential-bound-tenant",
+      "test_adapter": "public_optional_tenant_checkout"
+    },
+    {
+      "operation": "billing:GET:/api/v1/billing/invoices",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/invoices",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.invoices.read"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:GET:/api/v1/billing/invoices/{invoice_id}/pdf",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/invoices/{invoice_id}/pdf",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.invoices.read"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:GET:/api/v1/billing/plans",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/plans",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/portal",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/portal",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/portal/{tenant_id}",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/portal/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:GET:/api/v1/billing/subscription/{tenant_id}",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/subscription/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.subscription.read"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/webhook/stripe",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/webhook/stripe",
+      "classification": "workload-only",
+      "authentication": "stripe-signature",
+      "required_permissions": [
+        "stripe.webhook.deliver"
+      ],
+      "storage_boundary": "stripe-event-to-credential-bound-tenant",
+      "test_adapter": "workload_stripe_signature"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/webhooks",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/webhooks",
+      "classification": "workload-only",
+      "authentication": "stripe-signature",
+      "required_permissions": [
+        "stripe.webhook.deliver"
+      ],
+      "storage_boundary": "stripe-event-to-credential-bound-tenant",
+      "test_adapter": "workload_stripe_signature"
+    },
+    {
+      "operation": "chain_verification:POST:/api/v1/chain/verify-all",
+      "owner": "chain_verification",
+      "method": "POST",
+      "path": "/api/v1/chain/verify-all",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "chain_verification:GET:/api/v1/chain/verify-all/{job_id}",
+      "owner": "chain_verification",
+      "method": "GET",
+      "path": "/api/v1/chain/verify-all/{job_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "score:GET:/api/v1/compliance/pending-reviews/{tenant_id}",
+      "owner": "score",
+      "method": "GET",
+      "path": "/api/v1/compliance/pending-reviews/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "score:GET:/api/v1/compliance/score/{tenant_id}",
+      "owner": "score",
+      "method": "GET",
+      "path": "/api/v1/compliance/score/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "epcis_ingestion:POST:/api/v1/epcis/events",
+      "owner": "epcis_ingestion",
+      "method": "POST",
+      "path": "/api/v1/epcis/events",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "epcis_ingestion:POST:/api/v1/epcis/events/batch",
+      "owner": "epcis_ingestion",
+      "method": "POST",
+      "path": "/api/v1/epcis/events/batch",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "epcis_ingestion:POST:/api/v1/epcis/events/xml",
+      "owner": "epcis_ingestion",
+      "method": "POST",
+      "path": "/api/v1/epcis/events/xml",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "epcis_ingestion:GET:/api/v1/epcis/events/{event_id}",
+      "owner": "epcis_ingestion",
+      "method": "GET",
+      "path": "/api/v1/epcis/events/{event_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "epcis_ingestion:GET:/api/v1/epcis/export",
+      "owner": "epcis_ingestion",
+      "method": "GET",
+      "path": "/api/v1/epcis/export",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "epcis_ingestion:POST:/api/v1/epcis/validate",
+      "owner": "epcis_ingestion",
+      "method": "POST",
+      "path": "/api/v1/epcis/validate",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:GET:/api/v1/exceptions",
+      "owner": "exceptions",
+      "method": "GET",
+      "path": "/api/v1/exceptions",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:POST:/api/v1/exceptions",
+      "owner": "exceptions",
+      "method": "POST",
+      "path": "/api/v1/exceptions",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:GET:/api/v1/exceptions/stats/blocking",
+      "owner": "exceptions",
+      "method": "GET",
+      "path": "/api/v1/exceptions/stats/blocking",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:GET:/api/v1/exceptions/{case_id}",
+      "owner": "exceptions",
+      "method": "GET",
+      "path": "/api/v1/exceptions/{case_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:PATCH:/api/v1/exceptions/{case_id}/assign",
+      "owner": "exceptions",
+      "method": "PATCH",
+      "path": "/api/v1/exceptions/{case_id}/assign",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:GET:/api/v1/exceptions/{case_id}/comments",
+      "owner": "exceptions",
+      "method": "GET",
+      "path": "/api/v1/exceptions/{case_id}/comments",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:POST:/api/v1/exceptions/{case_id}/comments",
+      "owner": "exceptions",
+      "method": "POST",
+      "path": "/api/v1/exceptions/{case_id}/comments",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:PATCH:/api/v1/exceptions/{case_id}/resolve",
+      "owner": "exceptions",
+      "method": "PATCH",
+      "path": "/api/v1/exceptions/{case_id}/resolve",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "exceptions:PATCH:/api/v1/exceptions/{case_id}/waive",
+      "owner": "exceptions",
+      "method": "PATCH",
+      "path": "/api/v1/exceptions/{case_id}/waive",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "exceptions.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.export"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export/all",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export/all",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.export"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export/history",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export/history",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.read"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export/merkle-proof",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export/merkle-proof",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.verify"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export/merkle-root",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export/merkle-root",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.verify"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export/recall",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export/recall",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.export"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/export/v2",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/export/v2",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.export"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:POST:/api/v1/fda/export/verify",
+      "owner": "fda_export",
+      "method": "POST",
+      "path": "/api/v1/fda/export/verify",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.verify"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fda_export:GET:/api/v1/fda/trace/{tlc}",
+      "owner": "fda_export",
+      "method": "GET",
+      "path": "/api/v1/fda/trace/{tlc}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "fda.read"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "features:GET:/api/v1/features",
+      "owner": "features",
+      "method": "GET",
+      "path": "/api/v1/features",
+      "classification": "workload-only",
+      "authentication": "x-metrics-key",
+      "required_permissions": [
+        "metrics.read"
+      ],
+      "storage_boundary": "process-observability:no-tenant-data",
+      "test_adapter": "workload_metrics_key"
+    },
+    {
+      "operation": "readiness:GET:/api/v1/fsma/export-jobs",
+      "owner": "readiness",
+      "method": "GET",
+      "path": "/api/v1/fsma/export-jobs",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "readiness:GET:/api/v1/fsma/mappings",
+      "owner": "readiness",
+      "method": "GET",
+      "path": "/api/v1/fsma/mappings",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "inflow_workbench:POST:/api/v1/inflow-workbench/commit-gate",
+      "owner": "inflow_workbench",
+      "method": "POST",
+      "path": "/api/v1/inflow-workbench/commit-gate",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:GET:/api/v1/inflow-workbench/fix-queue",
+      "owner": "inflow_workbench",
+      "method": "GET",
+      "path": "/api/v1/inflow-workbench/fix-queue",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:PATCH:/api/v1/inflow-workbench/fix-queue/{item_id}",
+      "owner": "inflow_workbench",
+      "method": "PATCH",
+      "path": "/api/v1/inflow-workbench/fix-queue/{item_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:POST:/api/v1/inflow-workbench/readiness/preview",
+      "owner": "inflow_workbench",
+      "method": "POST",
+      "path": "/api/v1/inflow-workbench/readiness/preview",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:GET:/api/v1/inflow-workbench/readiness/summary",
+      "owner": "inflow_workbench",
+      "method": "GET",
+      "path": "/api/v1/inflow-workbench/readiness/summary",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:POST:/api/v1/inflow-workbench/runs",
+      "owner": "inflow_workbench",
+      "method": "POST",
+      "path": "/api/v1/inflow-workbench/runs",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:GET:/api/v1/inflow-workbench/runs/{run_id}",
+      "owner": "inflow_workbench",
+      "method": "GET",
+      "path": "/api/v1/inflow-workbench/runs/{run_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:GET:/api/v1/inflow-workbench/scenarios",
+      "owner": "inflow_workbench",
+      "method": "GET",
+      "path": "/api/v1/inflow-workbench/scenarios",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "inflow_workbench:POST:/api/v1/inflow-workbench/scenarios",
+      "owner": "inflow_workbench",
+      "method": "POST",
+      "path": "/api/v1/inflow-workbench/scenarios",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "inflow.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "csv:POST:/api/v1/ingest/csv",
+      "owner": "csv",
+      "method": "POST",
+      "path": "/api/v1/ingest/csv",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "webhooks.ingest"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "edi:POST:/api/v1/ingest/edi",
+      "owner": "edi",
+      "method": "POST",
+      "path": "/api/v1/ingest/edi",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "edi.ingest"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "edi:POST:/api/v1/ingest/edi/document",
+      "owner": "edi",
+      "method": "POST",
+      "path": "/api/v1/ingest/edi/document",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "edi.ingest"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "compliance_metrics:GET:/api/v1/metrics/compliance",
+      "owner": "compliance_metrics",
+      "method": "GET",
+      "path": "/api/v1/metrics/compliance",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "metrics.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "export_monitoring:GET:/api/v1/monitoring/alerts/{tenant_id}",
+      "owner": "export_monitoring",
+      "method": "GET",
+      "path": "/api/v1/monitoring/alerts/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "export_monitoring:GET:/api/v1/monitoring/exports/{tenant_id}",
+      "owner": "export_monitoring",
+      "method": "GET",
+      "path": "/api/v1/monitoring/exports/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "export_monitoring:GET:/api/v1/monitoring/health/{tenant_id}",
+      "owner": "export_monitoring",
+      "method": "GET",
+      "path": "/api/v1/monitoring/health/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "onboarding:GET:/api/v1/onboarding/steps",
+      "owner": "onboarding",
+      "method": "GET",
+      "path": "/api/v1/onboarding/steps",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "onboarding:GET:/api/v1/onboarding/{tenant_id}/progress",
+      "owner": "onboarding",
+      "method": "GET",
+      "path": "/api/v1/onboarding/{tenant_id}/progress",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "onboarding:POST:/api/v1/onboarding/{tenant_id}/step/{step_id}",
+      "owner": "onboarding",
+      "method": "POST",
+      "path": "/api/v1/onboarding/{tenant_id}/step/{step_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "portal:POST:/api/v1/portal/links",
+      "owner": "portal",
+      "method": "POST",
+      "path": "/api/v1/portal/links",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "webhooks.ingest"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "portal:GET:/api/v1/portal/links/list",
+      "owner": "portal",
+      "method": "GET",
+      "path": "/api/v1/portal/links/list",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "webhooks.ingest"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "portal:PATCH:/api/v1/portal/links/{portal_id}/revoke",
+      "owner": "portal",
+      "method": "PATCH",
+      "path": "/api/v1/portal/links/{portal_id}/revoke",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "webhooks.ingest"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "portal:GET:/api/v1/portal/{portal_id}",
+      "owner": "portal",
+      "method": "GET",
+      "path": "/api/v1/portal/{portal_id}",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "postgres-rls:opaque-portal-capability",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "portal:POST:/api/v1/portal/{portal_id}/preflight",
+      "owner": "portal",
+      "method": "POST",
+      "path": "/api/v1/portal/{portal_id}/preflight",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "postgres-rls:opaque-portal-capability",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "portal:POST:/api/v1/portal/{portal_id}/submit",
+      "owner": "portal",
+      "method": "POST",
+      "path": "/api/v1/portal/{portal_id}/submit",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "postgres-rls:opaque-portal-capability",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "proof_recall:POST:/api/v1/proof/recall-drill",
+      "owner": "proof_recall",
+      "method": "POST",
+      "path": "/api/v1/proof/recall-drill",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-proof-store:non-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "proof_verify:POST:/api/v1/proof/verify",
+      "owner": "proof_verify",
+      "method": "POST",
+      "path": "/api/v1/proof/verify",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-proof-store:non-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "readiness:GET:/api/v1/readiness/assessment",
+      "owner": "readiness",
+      "method": "GET",
+      "path": "/api/v1/readiness/assessment",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "readiness.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "readiness:GET:/api/v1/readiness/checklist",
+      "owner": "readiness",
+      "method": "GET",
+      "path": "/api/v1/readiness/checklist",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "readiness.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "readiness:GET:/api/v1/readiness/gaps",
+      "owner": "readiness",
+      "method": "GET",
+      "path": "/api/v1/readiness/gaps",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "readiness.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "recall:GET:/api/v1/recall/{tenant_id}/report",
+      "owner": "recall",
+      "method": "GET",
+      "path": "/api/v1/recall/{tenant_id}/report",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records/ingestion-runs",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records/ingestion-runs",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records/ingestion-runs/{run_id}",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records/ingestion-runs/{run_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records/trace/backward/{tlc}",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records/trace/backward/{tlc}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records/trace/forward/{tlc}",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records/trace/forward/{tlc}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records/{event_id}",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records/{event_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "canonical_records:GET:/api/v1/records/{event_id}/history",
+      "owner": "canonical_records",
+      "method": "GET",
+      "path": "/api/v1/records/{event_id}/history",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "records.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "core_ingest:POST:/api/v1/regulatory/ingest/url",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/api/v1/regulatory/ingest/url",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.url"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "core_ingest:POST:/api/v1/regulatory/v1/ingest",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/api/v1/regulatory/v1/ingest",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.direct"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "core_ingest:POST:/api/v1/regulatory/v1/ingest/file",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/api/v1/regulatory/v1/ingest/file",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.file"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "core_ingest:POST:/api/v1/regulatory/v1/ingest/regulation",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/api/v1/regulatory/v1/ingest/regulation",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.regulation"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "core_ingest:POST:/api/v1/regulatory/v1/ingest/url",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/api/v1/regulatory/v1/ingest/url",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.url"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "request_workflow:GET:/api/v1/requests",
+      "owner": "request_workflow",
+      "method": "GET",
+      "path": "/api/v1/requests",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:GET:/api/v1/requests/deadlines",
+      "owner": "request_workflow",
+      "method": "GET",
+      "path": "/api/v1/requests/deadlines",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:GET:/api/v1/requests/{request_case_id}",
+      "owner": "request_workflow",
+      "method": "GET",
+      "path": "/api/v1/requests/{request_case_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests/{request_case_id}/amend",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests/{request_case_id}/amend",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests/{request_case_id}/assemble",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests/{request_case_id}/assemble",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:GET:/api/v1/requests/{request_case_id}/blockers",
+      "owner": "request_workflow",
+      "method": "GET",
+      "path": "/api/v1/requests/{request_case_id}/blockers",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests/{request_case_id}/collect",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests/{request_case_id}/collect",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests/{request_case_id}/gap-analysis",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests/{request_case_id}/gap-analysis",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:GET:/api/v1/requests/{request_case_id}/packages",
+      "owner": "request_workflow",
+      "method": "GET",
+      "path": "/api/v1/requests/{request_case_id}/packages",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:PATCH:/api/v1/requests/{request_case_id}/scope",
+      "owner": "request_workflow",
+      "method": "PATCH",
+      "path": "/api/v1/requests/{request_case_id}/scope",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests/{request_case_id}/signoff",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests/{request_case_id}/signoff",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "request_workflow:POST:/api/v1/requests/{request_case_id}/submit",
+      "owner": "request_workflow",
+      "method": "POST",
+      "path": "/api/v1/requests/{request_case_id}/submit",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "requests.write"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "rules:GET:/api/v1/rules",
+      "owner": "rules",
+      "method": "GET",
+      "path": "/api/v1/rules",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "rules.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "rules:POST:/api/v1/rules/evaluate",
+      "owner": "rules",
+      "method": "POST",
+      "path": "/api/v1/rules/evaluate",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "rules.evaluate"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "rules:POST:/api/v1/rules/evaluate-batch",
+      "owner": "rules",
+      "method": "POST",
+      "path": "/api/v1/rules/evaluate-batch",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "rules.evaluate"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "rules:GET:/api/v1/rules/evaluations/{event_id}",
+      "owner": "rules",
+      "method": "GET",
+      "path": "/api/v1/rules/evaluations/{event_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "rules.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "rules:GET:/api/v1/rules/{rule_id}",
+      "owner": "rules",
+      "method": "GET",
+      "path": "/api/v1/rules/{rule_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "rules.read"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "sla_tracking:GET:/api/v1/sla/alerts/{tenant_id}",
+      "owner": "sla_tracking",
+      "method": "GET",
+      "path": "/api/v1/sla/alerts/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "sla_tracking:GET:/api/v1/sla/dashboard/{tenant_id}",
+      "owner": "sla_tracking",
+      "method": "GET",
+      "path": "/api/v1/sla/dashboard/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "sla_tracking:POST:/api/v1/sla/requests",
+      "owner": "sla_tracking",
+      "method": "POST",
+      "path": "/api/v1/sla/requests",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "sla_tracking:PATCH:/api/v1/sla/requests/{request_id}/complete",
+      "owner": "sla_tracking",
+      "method": "PATCH",
+      "path": "/api/v1/sla/requests/{request_id}/complete",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "sla_tracking:GET:/api/v1/sla/requests/{tenant_id}",
+      "owner": "sla_tracking",
+      "method": "GET",
+      "path": "/api/v1/sla/requests/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "csv:GET:/api/v1/templates",
+      "owner": "csv",
+      "method": "GET",
+      "path": "/api/v1/templates",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "csv:GET:/api/v1/templates/{cte_type}",
+      "owner": "csv",
+      "method": "GET",
+      "path": "/api/v1/templates/{cte_type}",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/api/v1/tools/confirm-code",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/api/v1/tools/confirm-code",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/api/v1/tools/lead-erasure/confirm",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/api/v1/tools/lead-erasure/confirm",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/api/v1/tools/lead-erasure/request",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/api/v1/tools/lead-erasure/request",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/api/v1/tools/verify-email",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/api/v1/tools/verify-email",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "webhook:GET:/api/v1/webhooks/chain/verify",
+      "owner": "webhook",
+      "method": "GET",
+      "path": "/api/v1/webhooks/chain/verify",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+webhook-ledger:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "webhook:POST:/api/v1/webhooks/ingest",
+      "owner": "webhook",
+      "method": "POST",
+      "path": "/api/v1/webhooks/ingest",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key+hmac-signature",
+      "required_permissions": [
+        "webhooks.ingest"
+      ],
+      "storage_boundary": "postgres-rls+webhook-ledger:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "webhook:GET:/api/v1/webhooks/recent",
+      "owner": "webhook",
+      "method": "GET",
+      "path": "/api/v1/webhooks/recent",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+webhook-ledger:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "admin:POST:/auth/challenges",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/challenges",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/auth/challenges/{challenge_id}/verify",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/challenges/{challenge_id}/verify",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:GET:/auth/check-permission",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/auth/check-permission",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "admin.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/auth/logout",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/logout",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/auth/logout-all",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/logout-all",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/auth/me",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/auth/me",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_opaque_session"
+    },
+    {
+      "operation": "admin:POST:/auth/refresh",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/refresh",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/auth/session/logout",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/session/logout",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_opaque_session"
+    },
+    {
+      "operation": "admin:GET:/auth/sessions",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/auth/sessions",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/auth/sessions/{session_id}/revoke",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/sessions/{session_id}/revoke",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/auth/webauthn/login/generate-options",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/webauthn/login/generate-options",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/auth/webauthn/login/verify",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/webauthn/login/verify",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/auth/webauthn/register/generate-options",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/webauthn/register/generate-options",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_high_assurance_session"
+    },
+    {
+      "operation": "admin:POST:/auth/webauthn/register/verify",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/auth/webauthn/register/verify",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_high_assurance_session"
+    },
+    {
+      "operation": "billing:GET:/billing/plans",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/billing/plans",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "fsma_compliance:GET:/checklists",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/checklists",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:GET:/checklists/{checklist_id}",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/checklists/{checklist_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "health:GET:/health",
+      "owner": "health",
+      "method": "GET",
+      "path": "/health",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:GET:/health/consumer",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/health/consumer",
+      "classification": "workload-only",
+      "authentication": "x-metrics-key",
+      "required_permissions": [
+        "metrics.read"
+      ],
+      "storage_boundary": "process-observability:no-tenant-data",
+      "test_adapter": "workload_metrics_key"
+    },
+    {
+      "operation": "health:GET:/healthz",
+      "owner": "health",
+      "method": "GET",
+      "path": "/healthz",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "fsma_compliance:GET:/industries",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/industries",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "core_ingest:POST:/ingest/url",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/ingest/url",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.url"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "metrics:GET:/metrics",
+      "owner": "metrics",
+      "method": "GET",
+      "path": "/metrics",
+      "classification": "workload-only",
+      "authentication": "x-metrics-key",
+      "required_permissions": [
+        "metrics.read"
+      ],
+      "storage_boundary": "process-observability:no-tenant-data",
+      "test_adapter": "workload_metrics_key"
+    },
+    {
+      "operation": "health:GET:/readiness",
+      "owner": "health",
+      "method": "GET",
+      "path": "/readiness",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:GET:/ready",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/ready",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/v1/account/erasure",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/account/erasure",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres+graph-outbox:authenticated-user-global-identity",
+      "test_adapter": "tenant_identity_global_self_erasure"
+    },
+    {
+      "operation": "admin:GET:/v1/account/export",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/account/export",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/funnel",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/funnel",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "admin.funnel.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/invites",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/invites",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/invites",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/invites",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.invite"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/invites/{invite_id}/revoke",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/invites/{invite_id}/revoke",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.invite"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/keys",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/keys",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/keys",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/keys",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:DELETE:/v1/admin/keys/{key_id}",
+      "owner": "admin",
+      "method": "DELETE",
+      "path": "/v1/admin/keys/{key_id}",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/review/flagged-extractions",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/review/flagged-extractions",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie",
+      "required_permissions": [
+        "review.read"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/review/flagged-extractions/{review_id}/approve",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/review/flagged-extractions/{review_id}/approve",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "review.decide"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/review/flagged-extractions/{review_id}/reject",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/review/flagged-extractions/{review_id}/reject",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "review.decide"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/review/hallucinations",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/review/hallucinations",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie",
+      "required_permissions": [
+        "review.read"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/review/{review_id}/approve",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/review/{review_id}/approve",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "review.decide"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/review/{review_id}/reject",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/review/{review_id}/reject",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "review.decide"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/roles",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/roles",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/tenants",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/tenants",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/admin/users",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/admin/users",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/users/{user_id}/deactivate",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/users/{user_id}/deactivate",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.disable"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/admin/users/{user_id}/reactivate",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/admin/users/{user_id}/reactivate",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.manage_roles"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:PATCH:/v1/admin/users/{user_id}/role",
+      "owner": "admin",
+      "method": "PATCH",
+      "path": "/v1/admin/users/{user_id}/role",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "users.manage_roles"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/agent-reviews/items",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/agent-reviews/items",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie",
+      "required_permissions": [
+        "review.read"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:POST:/v1/agent-reviews/items/{artifact_id}/review",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/agent-reviews/items/{artifact_id}/review",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "review.decide"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:GET:/v1/agent-reviews/items/{artifact_id}/timeline",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/agent-reviews/items/{artifact_id}/timeline",
+      "classification": "tenant-scoped",
+      "authentication": "opaque-session-cookie",
+      "required_permissions": [
+        "review.read"
+      ],
+      "storage_boundary": "admin-postgres:session-membership-tenant",
+      "test_adapter": "tenant_review_session"
+    },
+    {
+      "operation": "admin:GET:/v1/audit/export",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/audit/export",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "status:GET:/v1/audit/jobs/{job_id}",
+      "owner": "status",
+      "method": "GET",
+      "path": "/v1/audit/jobs/{job_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "ingestion-postgres:explicit-tenant-filter",
+      "test_adapter": "tenant_api_key_ingestion_postgres_filter"
+    },
+    {
+      "operation": "status:GET:/v1/audit/logs/{job_id}",
+      "owner": "status",
+      "method": "GET",
+      "path": "/v1/audit/logs/{job_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "ingestion-postgres:explicit-tenant-filter",
+      "test_adapter": "tenant_api_key_ingestion_postgres_filter"
+    },
+    {
+      "operation": "admin:POST:/v1/auth/accept-invite",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/auth/accept-invite",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:GET:/v1/compliance/alerts/{tenant_id}",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/compliance/alerts/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/compliance/alerts/{tenant_id}",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/compliance/alerts/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.create"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/compliance/alerts/{tenant_id}/{alert_id}",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/compliance/alerts/{tenant_id}/{alert_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/compliance/alerts/{tenant_id}/{alert_id}/acknowledge",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/compliance/alerts/{tenant_id}/{alert_id}/acknowledge",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.create"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/compliance/alerts/{tenant_id}/{alert_id}/resolve",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/compliance/alerts/{tenant_id}/{alert_id}/resolve",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.create"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/compliance/profile/{tenant_id}",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/compliance/profile/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:PUT:/v1/compliance/profile/{tenant_id}",
+      "owner": "admin",
+      "method": "PUT",
+      "path": "/v1/compliance/profile/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.create"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/compliance/snapshots/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:POST:/v1/compliance/snapshots/{tenant_id}",
+      "owner": "fsma_compliance",
+      "method": "POST",
+      "path": "/v1/compliance/snapshots/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/diff",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/compliance/snapshots/{tenant_id}/diff",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:POST:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/attest",
+      "owner": "fsma_compliance",
+      "method": "POST",
+      "path": "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/attest",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/audit-pack",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/audit-pack",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/export",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/export",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/fda-response",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/fda-response",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:POST:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/refreeze",
+      "owner": "fsma_compliance",
+      "method": "POST",
+      "path": "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/refreeze",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/verify",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/verify",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "admin:GET:/v1/compliance/status/{tenant_id}",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/compliance/status/{tenant_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "analysis.read"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "fsma_compliance:GET:/v1/fsma/audit/spreadsheet",
+      "owner": "fsma_compliance",
+      "method": "GET",
+      "path": "/v1/fsma/audit/spreadsheet",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "core_ingest:POST:/v1/ingest",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/v1/ingest",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.direct"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "status:GET:/v1/ingest/documents",
+      "owner": "status",
+      "method": "GET",
+      "path": "/v1/ingest/documents",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "ingestion-postgres:explicit-tenant-filter",
+      "test_adapter": "tenant_api_key_ingestion_postgres_filter"
+    },
+    {
+      "operation": "status:GET:/v1/ingest/documents/{document_id}/analysis",
+      "owner": "status",
+      "method": "GET",
+      "path": "/v1/ingest/documents/{document_id}/analysis",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "redis:tenant-owner-key",
+      "test_adapter": "tenant_api_key_redis_job_owner"
+    },
+    {
+      "operation": "core_ingest:POST:/v1/ingest/file",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/v1/ingest/file",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.file"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "core_ingest:POST:/v1/ingest/regulation",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/v1/ingest/regulation",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.regulation"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "status:GET:/v1/ingest/status/{job_id}",
+      "owner": "status",
+      "method": "GET",
+      "path": "/v1/ingest/status/{job_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "redis:tenant-owner-key",
+      "test_adapter": "tenant_api_key_redis_job_owner"
+    },
+    {
+      "operation": "core_ingest:POST:/v1/ingest/url",
+      "owner": "core_ingest",
+      "method": "POST",
+      "path": "/v1/ingest/url",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "ingest.url"
+      ],
+      "storage_boundary": "postgres-rls+redis+object-storage:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_mixed_storage"
+    },
+    {
+      "operation": "admin:POST:/v1/internal/tenants",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/internal/tenants",
+      "classification": "workload-only",
+      "authentication": "x-regengine-api-key:database-workload",
+      "required_permissions": [
+        "internal.tenants.create"
+      ],
+      "storage_boundary": "admin-postgres:tenantless-workload",
+      "test_adapter": "workload_tenant_provisioner"
+    },
+    {
+      "operation": "scheduler:GET:/v1/scheduler/status",
+      "owner": "scheduler",
+      "method": "GET",
+      "path": "/v1/scheduler/status",
+      "classification": "workload-only",
+      "authentication": "x-metrics-key",
+      "required_permissions": [
+        "metrics.read"
+      ],
+      "storage_boundary": "process-observability:no-tenant-data",
+      "test_adapter": "workload_metrics_key"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/bulk-upload/commit",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/bulk-upload/commit",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/bulk-upload/parse",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/bulk-upload/parse",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/bulk-upload/status/{session_id}",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/bulk-upload/status/{session_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/bulk-upload/template",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/bulk-upload/template",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/bulk-upload/validate",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/bulk-upload/validate",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/compliance-score",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/compliance-score",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/demo/reset",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/demo/reset",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "supplier.demo.reset"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/export/fda-records",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/export/fda-records",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/export/fda-records/preview",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/export/fda-records/preview",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/facilities",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/facilities",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/facilities",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/facilities",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/facilities/{facility_id}/cte-events",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/facilities/{facility_id}/cte-events",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:PUT:/v1/supplier/facilities/{facility_id}/ftl-categories",
+      "owner": "admin",
+      "method": "PUT",
+      "path": "/v1/supplier/facilities/{facility_id}/ftl-categories",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/facilities/{facility_id}/required-ctes",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/facilities/{facility_id}/required-ctes",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/ftl-categories",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/ftl-categories",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/funnel-events",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/funnel-events",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/funnel-summary",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/funnel-summary",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/gaps",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/gaps",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/social-proof",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/social-proof",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/tlcs",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/tlcs",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/supplier/tlcs",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/supplier/tlcs",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/system/dlq/replay",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/system/dlq/replay",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/system/jwt/keys",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/system/jwt/keys",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:POST:/v1/system/jwt/revoke",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/system/jwt/revoke",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:POST:/v1/system/jwt/revoke-all",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/system/jwt/revoke-all",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:POST:/v1/system/jwt/revoke-key",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/system/jwt/revoke-key",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:POST:/v1/system/jwt/rotate",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/system/jwt/rotate",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/system/metrics",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/system/metrics",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/system/qa-health",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/system/qa-health",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/system/status",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/system/status",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:POST:/v1/system/task-queue/replay",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/v1/system/task-queue/replay",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/system/task-queue/summary",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/system/task-queue/summary",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:GET:/v1/tenants/{tenant_id}/onboarding",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/tenants/{tenant_id}/onboarding",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:PATCH:/v1/tenants/{tenant_id}/partner-status",
+      "owner": "admin",
+      "method": "PATCH",
+      "path": "/v1/tenants/{tenant_id}/partner-status",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
+      "operation": "admin:PATCH:/v1/tenants/{tenant_id}/settings",
+      "owner": "admin",
+      "method": "PATCH",
+      "path": "/v1/tenants/{tenant_id}/settings",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "status:GET:/v1/verify/{document_id}",
+      "owner": "status",
+      "method": "GET",
+      "path": "/v1/verify/{document_id}",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "ingestion-postgres:explicit-tenant-filter",
+      "test_adapter": "tenant_api_key_ingestion_postgres_filter"
+    },
+    {
+      "operation": "fsma_compliance:POST:/validate",
+      "owner": "fsma_compliance",
+      "method": "POST",
+      "path": "/validate",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "postgres-rls+generated-artifact:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    }
+  ],
+  "disabled_operations": [
+    {
+      "operation": "alerts:GET:/api/v1/alerts/{tenant_id}",
+      "owner": "alerts",
+      "method": "GET",
+      "path": "/api/v1/alerts/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/alerts/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "alerts:GET:/api/v1/alerts/{tenant_id}/rules",
+      "owner": "alerts",
+      "method": "GET",
+      "path": "/api/v1/alerts/{tenant_id}/rules",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/alerts/00000000-0000-4000-8000-000000000000/rules"
+    },
+    {
+      "operation": "alerts:GET:/api/v1/alerts/{tenant_id}/summary",
+      "owner": "alerts",
+      "method": "GET",
+      "path": "/api/v1/alerts/{tenant_id}/summary",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/alerts/00000000-0000-4000-8000-000000000000/summary"
+    },
+    {
+      "operation": "alerts:POST:/api/v1/alerts/{tenant_id}/{alert_id}/acknowledge",
+      "owner": "alerts",
+      "method": "POST",
+      "path": "/api/v1/alerts/{tenant_id}/{alert_id}/acknowledge",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/alerts/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000/acknowledge"
+    },
+    {
+      "operation": "audit_log:GET:/api/v1/audit-log/{tenant_id}",
+      "owner": "audit_log",
+      "method": "GET",
+      "path": "/api/v1/audit-log/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/audit-log/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "audit:POST:/api/v1/audit/drill/start",
+      "owner": "audit",
+      "method": "POST",
+      "path": "/api/v1/audit/drill/start",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/audit/drill/start"
+    },
+    {
+      "operation": "audit:GET:/api/v1/audit/drill/{drill_id}",
+      "owner": "audit",
+      "method": "GET",
+      "path": "/api/v1/audit/drill/{drill_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/audit/drill/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "audit:POST:/api/v1/audit/drill/{drill_id}/submit",
+      "owner": "audit",
+      "method": "POST",
+      "path": "/api/v1/audit/drill/{drill_id}/submit",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/audit/drill/00000000-0000-4000-8000-000000000000/submit"
+    },
+    {
+      "operation": "disaster_recovery:GET:/api/v1/dr/{tenant_id}/backup-status",
+      "owner": "disaster_recovery",
+      "method": "GET",
+      "path": "/api/v1/dr/{tenant_id}/backup-status",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/dr/00000000-0000-4000-8000-000000000000/backup-status"
+    },
+    {
+      "operation": "disaster_recovery:GET:/api/v1/dr/{tenant_id}/readiness",
+      "owner": "disaster_recovery",
+      "method": "GET",
+      "path": "/api/v1/dr/{tenant_id}/readiness",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/dr/00000000-0000-4000-8000-000000000000/readiness"
+    },
+    {
+      "operation": "disaster_recovery:POST:/api/v1/dr/{tenant_id}/test-recovery",
+      "owner": "disaster_recovery",
+      "method": "POST",
+      "path": "/api/v1/dr/{tenant_id}/test-recovery",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/dr/00000000-0000-4000-8000-000000000000/test-recovery"
+    },
+    {
+      "operation": "exchange:GET:/api/v1/exchange/receive",
+      "owner": "exchange",
+      "method": "GET",
+      "path": "/api/v1/exchange/receive",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/exchange/receive"
+    },
+    {
+      "operation": "exchange:POST:/api/v1/exchange/send",
+      "owner": "exchange",
+      "method": "POST",
+      "path": "/api/v1/exchange/send",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/exchange/send"
+    },
+    {
+      "operation": "export:POST:/api/v1/export/epcis",
+      "owner": "export",
+      "method": "POST",
+      "path": "/api/v1/export/epcis",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/export/epcis"
+    },
+    {
+      "operation": "export:POST:/api/v1/export/fda",
+      "owner": "export",
+      "method": "POST",
+      "path": "/api/v1/export/fda",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/export/fda"
+    },
+    {
+      "operation": "export:GET:/api/v1/export/formats",
+      "owner": "export",
+      "method": "GET",
+      "path": "/api/v1/export/formats",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/export/formats"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/coverage",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/coverage",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/coverage"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/export/epcis",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/export/epcis",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/export/epcis"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/export/fda-request",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/export/fda-request",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/export/fda-request"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/export/gaps",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/export/gaps",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/export/gaps"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/export/recall-contacts/{tlc}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/export/recall-contacts/{tlc}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/export/recall-contacts/disabled-probe"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/export/trace/{tlc}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/export/trace/{tlc}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/export/trace/disabled-probe"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/gaps",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/gaps",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/gaps"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/gaps/orphans",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/gaps/orphans",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/gaps/orphans"
+    },
+    {
+      "operation": "graph:POST:/api/v1/fsma/compliance/plan/generate",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/fsma/compliance/plan/generate",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/fsma/compliance/plan/generate"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/plan/template",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/plan/template",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/plan/template"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/compliance/score",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/compliance/score",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/compliance/score"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/metrics/dashboard",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/metrics/dashboard",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/metrics/dashboard"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/metrics/health",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/metrics/health",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/metrics/health"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/metrics/metrics",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/metrics/metrics",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/metrics/metrics"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/metrics/metrics/quality",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/metrics/metrics/quality",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/metrics/metrics/quality"
+    },
+    {
+      "operation": "graph:POST:/api/v1/fsma/recall/drill",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/fsma/recall/drill",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/fsma/recall/drill"
+    },
+    {
+      "operation": "graph:DELETE:/api/v1/fsma/recall/drill/{drill_id}",
+      "owner": "graph",
+      "method": "DELETE",
+      "path": "/api/v1/fsma/recall/drill/{drill_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "DELETE",
+      "probe_path": "/api/v1/fsma/recall/drill/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/recall/drill/{drill_id}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/recall/drill/{drill_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/recall/drill/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/recall/history",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/recall/history",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/recall/history"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/recall/readiness",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/recall/readiness",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/recall/readiness"
+    },
+    {
+      "operation": "graph:POST:/api/v1/fsma/recall/schedule",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/fsma/recall/schedule",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/fsma/recall/schedule"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/recall/schedules",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/recall/schedules",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/recall/schedules"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/recall/sla",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/recall/sla",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/recall/sla"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/science/mass-balance/event/{event_id}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/science/mass-balance/event/{event_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/science/mass-balance/event/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/science/mass-balance/{tlc}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/science/mass-balance/{tlc}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/science/mass-balance/disabled-probe"
+    },
+    {
+      "operation": "graph:POST:/api/v1/fsma/traceability/event",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/fsma/traceability/event",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/fsma/traceability/event"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/traceability/search/events",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/traceability/search/events",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/traceability/search/events"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/traceability/timeline/{tlc}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/traceability/timeline/{tlc}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/traceability/timeline/disabled-probe"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/traceability/trace/backward/{tlc}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/traceability/trace/backward/{tlc}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/traceability/trace/backward/disabled-probe"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/traceability/trace/forward/{tlc}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/traceability/trace/forward/{tlc}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/traceability/trace/forward/disabled-probe"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/traceability/traceability/impacted-lots",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/traceability/traceability/impacted-lots",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/traceability/traceability/impacted-lots"
+    },
+    {
+      "operation": "graph:POST:/api/v1/fsma/traceability/traceability/link/{obligation_id}",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/fsma/traceability/traceability/link/{obligation_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/fsma/traceability/traceability/link/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/api/v1/fsma/traceability/traceability/regulations",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/fsma/traceability/traceability/regulations",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/fsma/traceability/traceability/regulations"
+    },
+    {
+      "operation": "graph:GET:/api/v1/health",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/health",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/health"
+    },
+    {
+      "operation": "nlp:GET:/api/v1/health",
+      "owner": "nlp",
+      "method": "GET",
+      "path": "/api/v1/health",
+      "inventory_source": "source-excluded-shadow",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/health"
+    },
+    {
+      "operation": "identity:GET:/api/v1/identity/entities",
+      "owner": "identity",
+      "method": "GET",
+      "path": "/api/v1/identity/entities",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/identity/entities"
+    },
+    {
+      "operation": "identity:POST:/api/v1/identity/entities",
+      "owner": "identity",
+      "method": "POST",
+      "path": "/api/v1/identity/entities",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/identity/entities"
+    },
+    {
+      "operation": "identity:GET:/api/v1/identity/entities/{entity_id}",
+      "owner": "identity",
+      "method": "GET",
+      "path": "/api/v1/identity/entities/{entity_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/identity/entities/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "identity:POST:/api/v1/identity/entities/{entity_id}/aliases",
+      "owner": "identity",
+      "method": "POST",
+      "path": "/api/v1/identity/entities/{entity_id}/aliases",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/identity/entities/00000000-0000-4000-8000-000000000000/aliases"
+    },
+    {
+      "operation": "identity:GET:/api/v1/identity/lookup",
+      "owner": "identity",
+      "method": "GET",
+      "path": "/api/v1/identity/lookup",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/identity/lookup"
+    },
+    {
+      "operation": "identity:GET:/api/v1/identity/match",
+      "owner": "identity",
+      "method": "GET",
+      "path": "/api/v1/identity/match",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/identity/match"
+    },
+    {
+      "operation": "identity:POST:/api/v1/identity/merge",
+      "owner": "identity",
+      "method": "POST",
+      "path": "/api/v1/identity/merge",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/identity/merge"
+    },
+    {
+      "operation": "identity:GET:/api/v1/identity/reviews",
+      "owner": "identity",
+      "method": "GET",
+      "path": "/api/v1/identity/reviews",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/identity/reviews"
+    },
+    {
+      "operation": "identity:PATCH:/api/v1/identity/reviews/{review_id}",
+      "owner": "identity",
+      "method": "PATCH",
+      "path": "/api/v1/identity/reviews/{review_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PATCH",
+      "probe_path": "/api/v1/identity/reviews/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "identity:POST:/api/v1/identity/split",
+      "owner": "identity",
+      "method": "POST",
+      "path": "/api/v1/identity/split",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/identity/split"
+    },
+    {
+      "operation": "incidents:GET:/api/v1/incidents",
+      "owner": "incidents",
+      "method": "GET",
+      "path": "/api/v1/incidents",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/incidents"
+    },
+    {
+      "operation": "incidents:POST:/api/v1/incidents",
+      "owner": "incidents",
+      "method": "POST",
+      "path": "/api/v1/incidents",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/incidents"
+    },
+    {
+      "operation": "incidents:GET:/api/v1/incidents/{incident_id}",
+      "owner": "incidents",
+      "method": "GET",
+      "path": "/api/v1/incidents/{incident_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "incidents:POST:/api/v1/incidents/{incident_id}/actions",
+      "owner": "incidents",
+      "method": "POST",
+      "path": "/api/v1/incidents/{incident_id}/actions",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000/actions"
+    },
+    {
+      "operation": "incidents:PATCH:/api/v1/incidents/{incident_id}/actions/{action_id}",
+      "owner": "incidents",
+      "method": "PATCH",
+      "path": "/api/v1/incidents/{incident_id}/actions/{action_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PATCH",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000/actions/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "incidents:POST:/api/v1/incidents/{incident_id}/close",
+      "owner": "incidents",
+      "method": "POST",
+      "path": "/api/v1/incidents/{incident_id}/close",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000/close"
+    },
+    {
+      "operation": "incidents:GET:/api/v1/incidents/{incident_id}/impact",
+      "owner": "incidents",
+      "method": "GET",
+      "path": "/api/v1/incidents/{incident_id}/impact",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000/impact"
+    },
+    {
+      "operation": "incidents:PATCH:/api/v1/incidents/{incident_id}/status",
+      "owner": "incidents",
+      "method": "PATCH",
+      "path": "/api/v1/incidents/{incident_id}/status",
+      "inventory_source": "development-route-table",
+      "probe_method": "PATCH",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000/status"
+    },
+    {
+      "operation": "incidents:POST:/api/v1/incidents/{incident_id}/updates",
+      "owner": "incidents",
+      "method": "POST",
+      "path": "/api/v1/incidents/{incident_id}/updates",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/incidents/00000000-0000-4000-8000-000000000000/updates"
+    },
+    {
+      "operation": "sensitech:POST:/api/v1/ingest/iot/sensitech",
+      "owner": "sensitech",
+      "method": "POST",
+      "path": "/api/v1/ingest/iot/sensitech",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/ingest/iot/sensitech"
+    },
+    {
+      "operation": "integration:GET:/api/v1/integrations/available",
+      "owner": "integration",
+      "method": "GET",
+      "path": "/api/v1/integrations/available",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/integrations/available"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/configure/{tenant_id}",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/configure/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/configure/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/csv-upload/{tenant_id}",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/csv-upload/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/csv-upload/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:DELETE:/api/v1/integrations/disconnect/{tenant_id}/{connector_id}",
+      "owner": "integration",
+      "method": "DELETE",
+      "path": "/api/v1/integrations/disconnect/{tenant_id}/{connector_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "DELETE",
+      "probe_path": "/api/v1/integrations/disconnect/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:GET:/api/v1/integrations/profiles/{tenant_id}",
+      "owner": "integration",
+      "method": "GET",
+      "path": "/api/v1/integrations/profiles/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/integrations/profiles/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/profiles/{tenant_id}",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/profiles/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/profiles/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:GET:/api/v1/integrations/profiles/{tenant_id}/{profile_id}",
+      "owner": "integration",
+      "method": "GET",
+      "path": "/api/v1/integrations/profiles/{tenant_id}/{profile_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/integrations/profiles/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:PATCH:/api/v1/integrations/profiles/{tenant_id}/{profile_id}",
+      "owner": "integration",
+      "method": "PATCH",
+      "path": "/api/v1/integrations/profiles/{tenant_id}/{profile_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PATCH",
+      "probe_path": "/api/v1/integrations/profiles/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/profiles/{tenant_id}/{profile_id}/preview",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/profiles/{tenant_id}/{profile_id}/preview",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/profiles/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000/preview"
+    },
+    {
+      "operation": "integration:GET:/api/v1/integrations/status/{tenant_id}",
+      "owner": "integration",
+      "method": "GET",
+      "path": "/api/v1/integrations/status/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/integrations/status/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/sync/{tenant_id}",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/sync/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/sync/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/test/{tenant_id}/{connector_id}",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/test/{tenant_id}/{connector_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/test/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "integration:POST:/api/v1/integrations/webhook/{tenant_id}/{connector_id}",
+      "owner": "integration",
+      "method": "POST",
+      "path": "/api/v1/integrations/webhook/{tenant_id}/{connector_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/integrations/webhook/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:POST:/api/v1/labels/batch/init",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/labels/batch/init",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/labels/batch/init"
+    },
+    {
+      "operation": "graph:GET:/api/v1/labels/health",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/labels/health",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/labels/health"
+    },
+    {
+      "operation": "graph:GET:/api/v1/lineage/lineage/{tlc}/history",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/lineage/lineage/{tlc}/history",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/lineage/lineage/disabled-probe/history"
+    },
+    {
+      "operation": "graph:GET:/api/v1/metrics",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/metrics"
+    },
+    {
+      "operation": "nlp:GET:/api/v1/metrics",
+      "owner": "nlp",
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "inventory_source": "source-excluded-shadow",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/metrics"
+    },
+    {
+      "operation": "notification_prefs:GET:/api/v1/notifications/{tenant_id}/preferences",
+      "owner": "notification_prefs",
+      "method": "GET",
+      "path": "/api/v1/notifications/{tenant_id}/preferences",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/notifications/00000000-0000-4000-8000-000000000000/preferences"
+    },
+    {
+      "operation": "notification_prefs:PUT:/api/v1/notifications/{tenant_id}/preferences",
+      "owner": "notification_prefs",
+      "method": "PUT",
+      "path": "/api/v1/notifications/{tenant_id}/preferences",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/notifications/00000000-0000-4000-8000-000000000000/preferences"
+    },
+    {
+      "operation": "notification_prefs:PUT:/api/v1/notifications/{tenant_id}/preferences/alert/{rule_id}",
+      "owner": "notification_prefs",
+      "method": "PUT",
+      "path": "/api/v1/notifications/{tenant_id}/preferences/alert/{rule_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/notifications/00000000-0000-4000-8000-000000000000/preferences/alert/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "notification_prefs:PUT:/api/v1/notifications/{tenant_id}/preferences/channel/{channel}",
+      "owner": "notification_prefs",
+      "method": "PUT",
+      "path": "/api/v1/notifications/{tenant_id}/preferences/channel/{channel}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/notifications/00000000-0000-4000-8000-000000000000/preferences/channel/disabled-probe"
+    },
+    {
+      "operation": "product_catalog:GET:/api/v1/products/categories/ftl",
+      "owner": "product_catalog",
+      "method": "GET",
+      "path": "/api/v1/products/categories/ftl",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/products/categories/ftl"
+    },
+    {
+      "operation": "product_catalog:GET:/api/v1/products/{tenant_id}",
+      "owner": "product_catalog",
+      "method": "GET",
+      "path": "/api/v1/products/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "product_catalog:POST:/api/v1/products/{tenant_id}",
+      "owner": "product_catalog",
+      "method": "POST",
+      "path": "/api/v1/products/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "product_catalog:GET:/api/v1/products/{tenant_id}/lookup",
+      "owner": "product_catalog",
+      "method": "GET",
+      "path": "/api/v1/products/{tenant_id}/lookup",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000/lookup"
+    },
+    {
+      "operation": "product_catalog:DELETE:/api/v1/products/{tenant_id}/{product_id}",
+      "owner": "product_catalog",
+      "method": "DELETE",
+      "path": "/api/v1/products/{tenant_id}/{product_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "DELETE",
+      "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "product_catalog:GET:/api/v1/products/{tenant_id}/{product_id}",
+      "owner": "product_catalog",
+      "method": "GET",
+      "path": "/api/v1/products/{tenant_id}/{product_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "product_catalog:PUT:/api/v1/products/{tenant_id}/{product_id}",
+      "owner": "product_catalog",
+      "method": "PUT",
+      "path": "/api/v1/products/{tenant_id}/{product_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "qr_decoder:POST:/api/v1/qr/decode",
+      "owner": "qr_decoder",
+      "method": "POST",
+      "path": "/api/v1/qr/decode",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/qr/decode"
+    },
+    {
+      "operation": "nlp:POST:/api/v1/query/traceability",
+      "owner": "nlp",
+      "method": "POST",
+      "path": "/api/v1/query/traceability",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/query/traceability"
+    },
+    {
+      "operation": "graph:GET:/api/v1/ready",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/ready",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/ready"
+    },
+    {
+      "operation": "graph:POST:/api/v1/regulations/harmonize/{obligation_id}",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/api/v1/regulations/harmonize/{obligation_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/regulations/harmonize/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/api/v1/regulations/list",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/regulations/list",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/regulations/list"
+    },
+    {
+      "operation": "graph:GET:/api/v1/regulations/mappings",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/regulations/mappings",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/regulations/mappings"
+    },
+    {
+      "operation": "graph:GET:/api/v1/regulations/search",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/regulations/search",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/regulations/search"
+    },
+    {
+      "operation": "graph:GET:/api/v1/regulations/{name}/citations",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/regulations/{name}/citations",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/regulations/disabled-probe/citations"
+    },
+    {
+      "operation": "graph:GET:/api/v1/regulations/{name}/sections",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/regulations/{name}/sections",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/regulations/disabled-probe/sections"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/cases/{case_id}/link",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/cases/{case_id}/link",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/cases/00000000-0000-4000-8000-000000000000/link"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/cases/{case_id}/link/revoke",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/cases/{case_id}/link/revoke",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/cases/00000000-0000-4000-8000-000000000000/link/revoke"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/manifests",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/manifests",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/manifests"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/manifests",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/manifests",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/manifests"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/manifests/{run_id}",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/manifests/{run_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/manifests/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/manifests/{run_id}/evidence",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/manifests/{run_id}/evidence",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/manifests/00000000-0000-4000-8000-000000000000/evidence"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/manifests/{run_id}/original",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/manifests/{run_id}/original",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/manifests/00000000-0000-4000-8000-000000000000/original"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/manifests/{run_id}/release",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/manifests/{run_id}/release",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/manifests/00000000-0000-4000-8000-000000000000/release"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/metrics",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/metrics",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/metrics"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/outbox",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/outbox",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/outbox"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/supplier/context",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/supplier/context",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/supplier/context"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/supplier/exchange",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/supplier/exchange",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/supplier/exchange"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/supplier/form",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/supplier/form",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/supplier/form"
+    },
+    {
+      "operation": "remediation:POST:/api/v1/remediation/supplier/session/corrections",
+      "owner": "remediation",
+      "method": "POST",
+      "path": "/api/v1/remediation/supplier/session/corrections",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/remediation/supplier/session/corrections"
+    },
+    {
+      "operation": "remediation:GET:/api/v1/remediation/supplier/session/current",
+      "owner": "remediation",
+      "method": "GET",
+      "path": "/api/v1/remediation/supplier/session/current",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/remediation/supplier/session/current"
+    },
+    {
+      "operation": "sandbox:POST:/api/v1/sandbox/evaluate",
+      "owner": "sandbox",
+      "method": "POST",
+      "path": "/api/v1/sandbox/evaluate",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/sandbox/evaluate"
+    },
+    {
+      "operation": "sandbox:POST:/api/v1/sandbox/share",
+      "owner": "sandbox",
+      "method": "POST",
+      "path": "/api/v1/sandbox/share",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/sandbox/share"
+    },
+    {
+      "operation": "sandbox:GET:/api/v1/sandbox/share/{share_id}",
+      "owner": "sandbox",
+      "method": "GET",
+      "path": "/api/v1/sandbox/share/{share_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/sandbox/share/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "sandbox:POST:/api/v1/sandbox/trace",
+      "owner": "sandbox",
+      "method": "POST",
+      "path": "/api/v1/sandbox/trace",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/sandbox/trace"
+    },
+    {
+      "operation": "settings:GET:/api/v1/settings/{tenant_id}",
+      "owner": "settings",
+      "method": "GET",
+      "path": "/api/v1/settings/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/settings/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "settings:PUT:/api/v1/settings/{tenant_id}/profile",
+      "owner": "settings",
+      "method": "PUT",
+      "path": "/api/v1/settings/{tenant_id}/profile",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/settings/00000000-0000-4000-8000-000000000000/profile"
+    },
+    {
+      "operation": "settings:PUT:/api/v1/settings/{tenant_id}/retention",
+      "owner": "settings",
+      "method": "PUT",
+      "path": "/api/v1/settings/{tenant_id}/retention",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/settings/00000000-0000-4000-8000-000000000000/retention"
+    },
+    {
+      "operation": "recall_simulations:POST:/api/v1/simulations/run",
+      "owner": "recall_simulations",
+      "method": "POST",
+      "path": "/api/v1/simulations/run",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/simulations/run"
+    },
+    {
+      "operation": "recall_simulations:GET:/api/v1/simulations/scenarios",
+      "owner": "recall_simulations",
+      "method": "GET",
+      "path": "/api/v1/simulations/scenarios",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/simulations/scenarios"
+    },
+    {
+      "operation": "recall_simulations:GET:/api/v1/simulations/{simulation_id}",
+      "owner": "recall_simulations",
+      "method": "GET",
+      "path": "/api/v1/simulations/{simulation_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/simulations/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "recall_simulations:GET:/api/v1/simulations/{simulation_id}/export",
+      "owner": "recall_simulations",
+      "method": "GET",
+      "path": "/api/v1/simulations/{simulation_id}/export",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/simulations/00000000-0000-4000-8000-000000000000/export"
+    },
+    {
+      "operation": "recall_simulations:GET:/api/v1/simulations/{simulation_id}/impact-graph",
+      "owner": "recall_simulations",
+      "method": "GET",
+      "path": "/api/v1/simulations/{simulation_id}/impact-graph",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/simulations/00000000-0000-4000-8000-000000000000/impact-graph"
+    },
+    {
+      "operation": "recall_simulations:GET:/api/v1/simulations/{simulation_id}/timeline",
+      "owner": "recall_simulations",
+      "method": "GET",
+      "path": "/api/v1/simulations/{simulation_id}/timeline",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/simulations/00000000-0000-4000-8000-000000000000/timeline"
+    },
+    {
+      "operation": "sop:POST:/api/v1/sop/generate",
+      "owner": "sop",
+      "method": "POST",
+      "path": "/api/v1/sop/generate",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/sop/generate"
+    },
+    {
+      "operation": "supplier_validation:GET:/api/v1/suppliers/validation/{tenant_id}/report",
+      "owner": "supplier_validation",
+      "method": "GET",
+      "path": "/api/v1/suppliers/validation/{tenant_id}/report",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/suppliers/validation/00000000-0000-4000-8000-000000000000/report"
+    },
+    {
+      "operation": "supplier_validation:POST:/api/v1/suppliers/validation/{tenant_id}/validate",
+      "owner": "supplier_validation",
+      "method": "POST",
+      "path": "/api/v1/suppliers/validation/{tenant_id}/validate",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/suppliers/validation/00000000-0000-4000-8000-000000000000/validate"
+    },
+    {
+      "operation": "supplier_validation:POST:/api/v1/suppliers/validation/{tenant_id}/{supplier_id}/validate",
+      "owner": "supplier_validation",
+      "method": "POST",
+      "path": "/api/v1/suppliers/validation/{tenant_id}/{supplier_id}/validate",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/suppliers/validation/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000/validate"
+    },
+    {
+      "operation": "supplier_mgmt:GET:/api/v1/suppliers/{tenant_id}",
+      "owner": "supplier_mgmt",
+      "method": "GET",
+      "path": "/api/v1/suppliers/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/suppliers/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "supplier_mgmt:POST:/api/v1/suppliers/{tenant_id}",
+      "owner": "supplier_mgmt",
+      "method": "POST",
+      "path": "/api/v1/suppliers/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/suppliers/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "supplier_mgmt:GET:/api/v1/suppliers/{tenant_id}/health",
+      "owner": "supplier_mgmt",
+      "method": "GET",
+      "path": "/api/v1/suppliers/{tenant_id}/health",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/suppliers/00000000-0000-4000-8000-000000000000/health"
+    },
+    {
+      "operation": "supplier_mgmt:POST:/api/v1/suppliers/{tenant_id}/{supplier_id}/send-link",
+      "owner": "supplier_mgmt",
+      "method": "POST",
+      "path": "/api/v1/suppliers/{tenant_id}/{supplier_id}/send-link",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/suppliers/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000/send-link"
+    },
+    {
+      "operation": "team_mgmt:GET:/api/v1/team/roles/definitions",
+      "owner": "team_mgmt",
+      "method": "GET",
+      "path": "/api/v1/team/roles/definitions",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/team/roles/definitions"
+    },
+    {
+      "operation": "team_mgmt:GET:/api/v1/team/{tenant_id}",
+      "owner": "team_mgmt",
+      "method": "GET",
+      "path": "/api/v1/team/{tenant_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/team/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "team_mgmt:POST:/api/v1/team/{tenant_id}/invite",
+      "owner": "team_mgmt",
+      "method": "POST",
+      "path": "/api/v1/team/{tenant_id}/invite",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/team/00000000-0000-4000-8000-000000000000/invite"
+    },
+    {
+      "operation": "team_mgmt:PUT:/api/v1/team/{tenant_id}/{member_id}/role",
+      "owner": "team_mgmt",
+      "method": "PUT",
+      "path": "/api/v1/team/{tenant_id}/{member_id}/role",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/api/v1/team/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000/role"
+    },
+    {
+      "operation": "label_vision:POST:/api/v1/vision/analyze-label",
+      "owner": "label_vision",
+      "method": "POST",
+      "path": "/api/v1/vision/analyze-label",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/vision/analyze-label"
+    },
+    {
+      "operation": "scraping:POST:/scrape/{adaptor}",
+      "owner": "scraping",
+      "method": "POST",
+      "path": "/scrape/{adaptor}",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/scrape/disabled-probe"
+    },
+    {
+      "operation": "scraping:POST:/v1/ingest/all-regulations",
+      "owner": "scraping",
+      "method": "POST",
+      "path": "/v1/ingest/all-regulations",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/all-regulations"
+    },
+    {
+      "operation": "discovery:POST:/v1/ingest/discovery/approve",
+      "owner": "discovery",
+      "method": "POST",
+      "path": "/v1/ingest/discovery/approve",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/discovery/approve"
+    },
+    {
+      "operation": "discovery:POST:/v1/ingest/discovery/bulk-approve",
+      "owner": "discovery",
+      "method": "POST",
+      "path": "/v1/ingest/discovery/bulk-approve",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/discovery/bulk-approve"
+    },
+    {
+      "operation": "discovery:POST:/v1/ingest/discovery/bulk-reject",
+      "owner": "discovery",
+      "method": "POST",
+      "path": "/v1/ingest/discovery/bulk-reject",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/discovery/bulk-reject"
+    },
+    {
+      "operation": "discovery:GET:/v1/ingest/discovery/queue",
+      "owner": "discovery",
+      "method": "GET",
+      "path": "/v1/ingest/discovery/queue",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/ingest/discovery/queue"
+    },
+    {
+      "operation": "discovery:POST:/v1/ingest/discovery/reject",
+      "owner": "discovery",
+      "method": "POST",
+      "path": "/v1/ingest/discovery/reject",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/discovery/reject"
+    },
+    {
+      "operation": "sources:POST:/v1/ingest/ecfr",
+      "owner": "sources",
+      "method": "POST",
+      "path": "/v1/ingest/ecfr",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/ecfr"
+    },
+    {
+      "operation": "sources:POST:/v1/ingest/fda",
+      "owner": "sources",
+      "method": "POST",
+      "path": "/v1/ingest/fda",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/fda"
+    },
+    {
+      "operation": "sources:POST:/v1/ingest/federal-register",
+      "owner": "sources",
+      "method": "POST",
+      "path": "/v1/ingest/federal-register",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/ingest/federal-register"
+    },
+    {
+      "operation": "discovery:GET:/v1/ingest/manual-queue",
+      "owner": "discovery",
+      "method": "GET",
+      "path": "/v1/ingest/manual-queue",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/ingest/manual-queue"
+    },
+    {
+      "operation": "sources:GET:/v1/ingest/sources",
+      "owner": "sources",
+      "method": "GET",
+      "path": "/v1/ingest/sources",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/ingest/sources"
+    },
+    {
+      "operation": "graph:GET:/v1/overlay/controls",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/v1/overlay/controls",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/overlay/controls"
+    },
+    {
+      "operation": "graph:POST:/v1/overlay/controls",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/v1/overlay/controls",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/overlay/controls"
+    },
+    {
+      "operation": "graph:DELETE:/v1/overlay/controls/{control_id}",
+      "owner": "graph",
+      "method": "DELETE",
+      "path": "/v1/overlay/controls/{control_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "DELETE",
+      "probe_path": "/v1/overlay/controls/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/v1/overlay/controls/{control_id}",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/v1/overlay/controls/{control_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/overlay/controls/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:PUT:/v1/overlay/controls/{control_id}",
+      "owner": "graph",
+      "method": "PUT",
+      "path": "/v1/overlay/controls/{control_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "PUT",
+      "probe_path": "/v1/overlay/controls/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:POST:/v1/overlay/mappings",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/v1/overlay/mappings",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/overlay/mappings"
+    },
+    {
+      "operation": "graph:DELETE:/v1/overlay/mappings/{mapping_id}",
+      "owner": "graph",
+      "method": "DELETE",
+      "path": "/v1/overlay/mappings/{mapping_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "DELETE",
+      "probe_path": "/v1/overlay/mappings/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/v1/overlay/products",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/v1/overlay/products",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/overlay/products"
+    },
+    {
+      "operation": "graph:POST:/v1/overlay/products",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/v1/overlay/products",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/overlay/products"
+    },
+    {
+      "operation": "graph:POST:/v1/overlay/products/link-control",
+      "owner": "graph",
+      "method": "POST",
+      "path": "/v1/overlay/products/link-control",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/overlay/products/link-control"
+    },
+    {
+      "operation": "graph:DELETE:/v1/overlay/products/{product_id}",
+      "owner": "graph",
+      "method": "DELETE",
+      "path": "/v1/overlay/products/{product_id}",
+      "inventory_source": "development-route-table",
+      "probe_method": "DELETE",
+      "probe_path": "/v1/overlay/products/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "operation": "graph:GET:/v1/overlay/products/{product_id}/compliance-gaps",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/v1/overlay/products/{product_id}/compliance-gaps",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/overlay/products/00000000-0000-4000-8000-000000000000/compliance-gaps"
+    },
+    {
+      "operation": "graph:GET:/v1/overlay/products/{product_id}/requirements",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/v1/overlay/products/{product_id}/requirements",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/overlay/products/00000000-0000-4000-8000-000000000000/requirements"
+    },
+    {
+      "operation": "graph:GET:/v1/overlay/provisions/{provision_hash}/overlays",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/v1/overlay/provisions/{provision_hash}/overlays",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/v1/overlay/provisions/disabled-probe/overlays"
+    },
+    {
+      "operation": "scraping:POST:/v1/scrape/cppa",
+      "owner": "scraping",
+      "method": "POST",
+      "path": "/v1/scrape/cppa",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/v1/scrape/cppa"
+    }
+  ],
+  "summary": {
+    "enabled_operation_count": 246,
+    "disabled_operation_count": 177,
+    "disabled_unique_path_count": 160,
+    "enabled_by_classification": {
+      "global-sysadmin": 15,
+      "public": 29,
+      "tenant-scoped": 195,
+      "workload-only": 7
+    }
+  }
+}

@@ -6,7 +6,7 @@ Provides two distinct primitives:
    slowapi. Used as a decorator on individual FastAPI endpoints.
 
 2. ``BruteForceLimiter`` -- cross-process failure counter backed by
-   Redis. Used for high-stakes paths (admin master key, password
+   Redis. Used for high-stakes paths (privileged authentication, password
    login, MFA verify) where a per-process in-memory counter would be
    bypassed by multi-worker / multi-replica deployments. (#1392)
 
@@ -121,10 +121,12 @@ class BruteForceLimiter:
         max_failures: int,
         window_seconds: int,
         redis_client: Optional[_RedisLike] = None,
+        require_shared_backend: bool = False,
     ) -> None:
         self._namespace = namespace
         self._max = max_failures
         self._window = window_seconds
+        self._require_shared_backend = require_shared_backend
 
         self._redis = redis_client
         if self._redis is None:
@@ -160,13 +162,14 @@ class BruteForceLimiter:
         """Per-activation degrade logging (#2699) — never silent."""
         if not self._degraded:
             self._degraded = True
+            effective_fail_mode = "closed" if self._require_shared_backend else self._fail_mode()
             logger.warning(
                 "brute_force_limiter_backend_unavailable",
                 namespace=self._namespace,
                 op=op,
                 error=str(exc),
-                fail_mode=self._fail_mode(),
-                fallback="in_memory" if self._fail_mode() == "degrade" else "deny",
+                fail_mode=effective_fail_mode,
+                fallback="in_memory" if effective_fail_mode == "degrade" else "deny",
             )
 
     @staticmethod
@@ -177,6 +180,13 @@ class BruteForceLimiter:
 
     def is_limited(self, subject: str) -> bool:
         """Return True if this subject has exceeded the threshold."""
+        if self._redis is None and self._require_shared_backend:
+            exc = RuntimeError("Redis is not configured for a shared-only limiter")
+            self._note_redis_failure("is_limited", exc)
+            from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+            raise RateLimitBackendUnavailable() from exc
+
         if self._redis is not None:
             try:
                 raw = self._redis.get(self._key(subject))
@@ -200,6 +210,10 @@ class BruteForceLimiter:
                 # through to the per-process counter (budget × workers, a
                 # documented trade-off) — but never silently anymore.
                 self._note_redis_failure("is_limited", exc)
+                if self._require_shared_backend:
+                    from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+                    raise RateLimitBackendUnavailable() from exc
                 if self._fail_mode() == "closed":
                     return True
 
@@ -211,6 +225,13 @@ class BruteForceLimiter:
 
     def record_failure(self, subject: str) -> int:
         """Record a failure and return the current count."""
+        if self._redis is None and self._require_shared_backend:
+            exc = RuntimeError("Redis is not configured for a shared-only limiter")
+            self._note_redis_failure("record_failure", exc)
+            from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+            raise RateLimitBackendUnavailable() from exc
+
         if self._redis is not None:
             try:
                 key = self._key(subject)
@@ -223,6 +244,10 @@ class BruteForceLimiter:
                 # Failures are still recorded in the per-process counter
                 # below in BOTH modes — closed mode only affects reads.
                 self._note_redis_failure("record_failure", exc)
+                if self._require_shared_backend:
+                    from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+                    raise RateLimitBackendUnavailable() from exc
 
         # In-memory fallback
         now = time.time()
@@ -234,11 +259,22 @@ class BruteForceLimiter:
 
     def reset(self, subject: str) -> None:
         """Clear the failure counter for a subject (e.g., on success)."""
+        if self._redis is None and self._require_shared_backend:
+            exc = RuntimeError("Redis is not configured for a shared-only limiter")
+            self._note_redis_failure("reset", exc)
+            from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+            raise RateLimitBackendUnavailable() from exc
+
         if self._redis is not None:
             try:
                 self._redis.delete(self._key(subject))
-            except Exception:
-                pass
+            except Exception as exc:
+                self._note_redis_failure("reset", exc)
+                if self._require_shared_backend:
+                    from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+                    raise RateLimitBackendUnavailable() from exc
         with self._mem_lock:
             self._mem_failures.pop(subject, None)
 
@@ -260,3 +296,8 @@ class BruteForceLimiter:
         should alert on this being False in prod.
         """
         return self._redis is not None
+
+    @property
+    def requires_shared_backend(self) -> bool:
+        """Whether Redis uncertainty must reject instead of degrading."""
+        return self._require_shared_backend

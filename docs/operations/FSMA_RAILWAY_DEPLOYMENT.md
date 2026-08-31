@@ -1,6 +1,16 @@
 # FSMA Backend Deployment Runbook (Railway)
 
-This is the P0 Phase 1A deployment path for the FSMA-first backend.
+> **Historical Phase 1A topology:** the multi-service instructions below are
+> retained for migration context and are not the current production deploy
+> contract. RegEngine now deploys the repo-root `Dockerfile` as one consolidated
+> Railway service running `server.main:app`. For the blocking production
+> database and router configuration, follow
+> [`DATABASE_ROLE_CUTOVER.md`](./DATABASE_ROLE_CUTOVER.md). In particular,
+> production requires separate `DATABASE_URL`, `ADMIN_DATABASE_URL`, and
+> `MIGRATIONS_DATABASE_URL` credentials against the same database plus the exact
+> `ENABLED_ROUTERS` allowlist.
+
+This was the P0 Phase 1A deployment path for the FSMA-first backend.
 
 ## 1. Target Services
 
@@ -34,7 +44,6 @@ Use [`docs/ENV_SETUP_CHECKLIST.md`] for full inventory. This section is only the
 - `ADMIN_DATABASE_URL` (or `DATABASE_URL`)
 - `REDIS_URL`
 - `AUTH_SECRET_KEY`
-- `ADMIN_MASTER_KEY`
 - `SERVICE_AUTH_SECRET`
 - `CORS_ORIGINS` (include `https://regengine.co`)
 - `CORS_ALLOW_CREDENTIALS=true`

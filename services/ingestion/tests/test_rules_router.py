@@ -591,41 +591,18 @@ class TestGetEventEvaluations:
 
 
 # ---------------------------------------------------------------------------
-# Tests: seed rules
+# Tests: migration-owned rule seeding
 # ---------------------------------------------------------------------------
 
 
 class TestSeedRules:
-    def test_seed_rules_success(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
-
-        def _fake_seed(db_session):
-            return 12
-
-        monkeypatch.setattr(rules_router_mod, "seed_rule_definitions", _fake_seed, raising=False)
-        # Also patch the import inside the function
-        import types
-
-        fake_shared = types.ModuleType("shared.rules_engine")
-        fake_shared.seed_rule_definitions = _fake_seed
-        monkeypatch.setitem(sys.modules, "shared.rules_engine", fake_shared)
-
+    def test_seed_rules_is_not_a_runtime_operation(self):
         with _build_client(_default_principal(), db_session=_FakeSession()) as client:
             resp = client.post("/api/v1/rules/seed")
 
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["seeded"] == 12
-        assert data["status"] == "ok"
-
-    def test_seed_rules_db_unavailable_returns_503(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
-
-        with _build_client(_default_principal(), db_session=_NullSession()) as client:
-            resp = client.post("/api/v1/rules/seed")
-
-        assert resp.status_code == 503
-        assert "Database" in resp.json()["detail"]
+        # GET /rules/{rule_id} owns the same URL shape, so FastAPI returns
+        # method-not-allowed rather than not-found.  No POST operation exists.
+        assert resp.status_code == 405
 
 
 # ---------------------------------------------------------------------------
@@ -635,11 +612,10 @@ class TestSeedRules:
 
 class TestAuth:
     def test_missing_api_key_returns_401(self, monkeypatch: pytest.MonkeyPatch):
-        """When API_KEY is configured but no key header is sent, expect 401."""
-        monkeypatch.setenv("API_KEY", "real-secret-key")
-        from app import config as cfg
-
-        cfg.get_settings.cache_clear()
+        """Production rejects a missing tenant API key with 401."""
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
 
         app = FastAPI()
         app.include_router(rules_router)

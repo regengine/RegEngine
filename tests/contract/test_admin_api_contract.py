@@ -36,7 +36,6 @@ def client():
     os.environ["ADMIN_DATABASE_URL"] = "sqlite:///:memory:"
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
     os.environ["ADMIN_FALLBACK_SQLITE"] = "sqlite:///:memory:"
-    os.environ["ADMIN_MASTER_KEY"] = "test-admin-master-key"  # pragma: allowlist secret
     os.environ["AUTH_SECRET_KEY"] = "test-secret-key-long-enough"  # pragma: allowlist secret
     os.environ["REGENGINE_API_KEY"] = "test-regengine-api-key"  # pragma: allowlist secret
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
@@ -140,8 +139,8 @@ class TestAuthenticationContract:
         response = client.get("/v1/admin/keys")
         assert response.status_code in [401, 403], f"Expected 401/403 without auth, got {response.status_code}"
 
-    def test_invalid_api_key_rejected(self, client):
-        """Invalid API key should be rejected."""
+    def test_retired_privileged_header_rejected(self, client):
+        """The retired shared privileged credential must stay disabled."""
         response = client.get("/v1/admin/keys", headers={"X-Admin-Key": "invalid-key-12345"})
         assert response.status_code in [401, 403]
 

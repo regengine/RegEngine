@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import inspect
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Callable, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from shared.rate_limit import limiter
 from sqlalchemy import select
@@ -30,7 +30,12 @@ from ..auth_utils import (
     decode_access_token,
     hash_token,
 )
-from ..database import get_session
+from ..database import (
+    arm_global_admin_context,
+    bind_authenticated_user_context,
+    disarm_global_admin_context,
+    get_session,
+)
 from ..dependencies import get_session_store
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
@@ -52,6 +57,23 @@ async def _maybe_await(result):
     return result
 
 
+async def _session_store_call(operation_name: str, operation: Callable[[], Any]):
+    """Map every refresh-store uncertainty to the public fail-closed contract."""
+
+    try:
+        return await _maybe_await(operation())
+    except Exception as exc:
+        logger.error(
+            "refresh_session_store_unavailable",
+            operation=operation_name,
+            error_type=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable",
+        ) from exc
+
+
 @router.post("/refresh", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def refresh_session(
@@ -66,7 +88,10 @@ async def refresh_session(
     # refresh request succeeds. The second request finds the mapping gone
     # and gets 401, preventing the "last write wins" race condition where
     # two tabs refresh simultaneously and one gets an invalidated token.
-    session = await session_store.claim_session_by_token(input_hash)
+    session = await _session_store_call(
+        "claim_session_by_token",
+        lambda: session_store.claim_session_by_token(input_hash),
+    )
 
     if not session:
         # SECURITY (#1859): distinguish "never valid" from "already rotated".
@@ -74,12 +99,22 @@ async def refresh_session(
         # token reuse — either a theft replay or a double-spend. Revoke the
         # entire session family so the thief (and victim) are forced to
         # re-authenticate, and emit a high-severity audit signal.
-        reused_session_id = await _maybe_await(session_store.check_token_reuse(input_hash))
+        reused_session_id = await _session_store_call(
+            "check_token_reuse",
+            lambda: session_store.check_token_reuse(input_hash),
+        )
         if reused_session_id is not None:
-            reused_session = await _maybe_await(session_store.get_session(reused_session_id))
+            reused_session = await _session_store_call(
+                "get_session",
+                lambda: session_store.get_session(reused_session_id),
+            )
             if reused_session is not None:
-                await _maybe_await(session_store.revoke_all_for_family(reused_session.family_id))
+                await _session_store_call(
+                    "revoke_all_for_family",
+                    lambda: session_store.revoke_all_for_family(reused_session.family_id),
+                )
                 try:
+                    arm_global_admin_context(db)
                     audit_tenant_id = db.execute(
                         select(MembershipModel.tenant_id)
                         .where(
@@ -124,6 +159,8 @@ async def refresh_session(
                         family_id=str(reused_session.family_id),
                         error=str(exc),
                     )
+                finally:
+                    disarm_global_admin_context(db)
                 logger.warning(
                     "refresh_token_reuse_detected",
                     session_id=str(reused_session_id),
@@ -166,7 +203,10 @@ async def refresh_session(
     if isinstance(last_used_at, datetime):
         idle_deadline = last_used_at + timedelta(minutes=idle_timeout_minutes)
         if idle_deadline <= now:
-            await _maybe_await(session_store.revoke_session(session.id))
+            await _session_store_call(
+                "revoke_session",
+                lambda: session_store.revoke_session(session.id),
+            )
             logger.warning(
                 "refresh_idle_timeout",
                 session_id=str(session.id),
@@ -180,6 +220,9 @@ async def refresh_session(
     # already rejects stale ACCESS tokens, but without this check a still-valid
     # REFRESH token from a session issued before the bump could keep minting
     # fresh access tokens after the user logged out everywhere (SEL-12 gap).
+    # Possession of the validated refresh token identifies this user.  Bind a
+    # transaction-local self scope rather than opening the global policy arm.
+    bind_authenticated_user_context(db, session.user_id)
     user = db.get(UserModel, session.user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -202,8 +245,9 @@ async def refresh_session(
 
     # Update session with new token hash and timestamps.
     # old_token_hash already deleted by claim_session_by_token (GETDEL).
-    await _maybe_await(
-        session_store.update_session(
+    await _session_store_call(
+        "update_session",
+        lambda: session_store.update_session(
             session.id,
             {
                 "refresh_token_hash": new_hash,
@@ -213,18 +257,19 @@ async def refresh_session(
             },
             new_token_hash=new_hash,
             old_token_hash=input_hash,
-        )
+        ),
     )
 
     # SECURITY (#1859): tombstone the consumed hash so a replay can be
     # detected as reuse (not just "unknown token"). TTL matches refresh
     # expiration so the tombstone outlives any legitimate replay window.
-    await _maybe_await(
-        session_store.mark_token_used(
+    await _session_store_call(
+        "mark_token_used",
+        lambda: session_store.mark_token_used(
             input_hash,
             session.id,
             ttl_seconds=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
-        )
+        ),
     )
 
     # Re-issue Access Token (user + token_version already resolved above)
@@ -263,47 +308,53 @@ async def refresh_session(
             TenantModel.status == "active",
         )
     )
-    memberships = db.execute(stmt_mem).scalars().all()
-    active_tenant_ids = {m.tenant_id for m in memberships}
+    # Membership discovery occurs before a tenant can be selected.  Arm only
+    # this bounded lookup and disarm before the refreshed token is returned.
+    arm_global_admin_context(db)
+    try:
+        memberships = db.execute(stmt_mem).scalars().all()
+        active_tenant_ids = {m.tenant_id for m in memberships}
 
-    if original_tenant_id is not None:
-        if original_tenant_id not in active_tenant_ids:
-            logger.warning(
-                "refresh_tenant_no_longer_active_member",
-                user_id=str(user.id),
-                tenant_id=str(original_tenant_id),
-            )
-            raise HTTPException(status_code=403, detail="Tenant membership no longer active")
-        active_tenant_id = original_tenant_id
-    else:
-        # No prior tenant claim (e.g. legacy client that never carried one).
-        # Fall back to deterministic ordering so refreshes are at least
-        # stable, rather than racing on VACUUM/HOT updates.
-        memberships_sorted = sorted(memberships, key=lambda m: str(m.tenant_id))
-        active_tenant_id = memberships_sorted[0].tenant_id if memberships_sorted else None
+        if original_tenant_id is not None:
+            if original_tenant_id not in active_tenant_ids:
+                logger.warning(
+                    "refresh_tenant_no_longer_active_member",
+                    user_id=str(user.id),
+                    tenant_id=str(original_tenant_id),
+                )
+                raise HTTPException(status_code=403, detail="Tenant membership no longer active")
+            active_tenant_id = original_tenant_id
+        else:
+            # No prior tenant claim (e.g. legacy client that never carried one).
+            # Fall back to deterministic ordering so refreshes are at least
+            # stable, rather than racing on VACUUM/HOT updates.
+            memberships_sorted = sorted(memberships, key=lambda m: str(m.tenant_id))
+            active_tenant_id = memberships_sorted[0].tenant_id if memberships_sorted else None
 
-    if not active_tenant_id:
-        logger.warning("refresh_no_active_tenant", user_id=str(user.id))
-        raise HTTPException(status_code=403, detail="No active tenant available")
+        if not active_tenant_id:
+            logger.warning("refresh_no_active_tenant", user_id=str(user.id))
+            raise HTTPException(status_code=403, detail="No active tenant available")
 
-    active_membership = next(
-        (membership for membership in memberships if membership.tenant_id == active_tenant_id),
-        None,
-    )
-    active_role = db.get(RoleModel, active_membership.role_id) if active_membership else None
+        active_membership = next(
+            (membership for membership in memberships if membership.tenant_id == active_tenant_id),
+            None,
+        )
+        active_role = db.get(RoleModel, active_membership.role_id) if active_membership else None
 
     # #1401 — Re-query the real tenant status instead of hardcoding "active".
     # The query above already filters for active memberships/tenants, but the
     # status we embed in the token should reflect the DB truth at refresh time.
-    real_tenant_status: Optional[str] = None
-    if active_tenant_id:
-        tenant_row = db.get(TenantModel, active_tenant_id)
-        if tenant_row:
-            real_tenant_status = tenant_row.status
-        else:
-            real_tenant_status = "active"  # defensive fallback; query above already enforced it
-    if real_tenant_status is None:
-        logger.warning("refresh_no_tenant_status", user_id=str(user.id), tenant_id=str(active_tenant_id))
+        real_tenant_status: Optional[str] = None
+        if active_tenant_id:
+            tenant_row = db.get(TenantModel, active_tenant_id)
+            if tenant_row:
+                real_tenant_status = tenant_row.status
+            else:
+                real_tenant_status = "active"  # defensive fallback; query above already enforced it
+        if real_tenant_status is None:
+            logger.warning("refresh_no_tenant_status", user_id=str(user.id), tenant_id=str(active_tenant_id))
+    finally:
+        disarm_global_admin_context(db)
 
     access_token_data = {
         "sub": str(user.id),

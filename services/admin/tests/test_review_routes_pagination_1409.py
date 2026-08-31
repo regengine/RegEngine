@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pytest
 from fastapi import FastAPI
@@ -54,15 +54,16 @@ def _reset_route_limiter(limiter) -> None:
         storage_reset()
 
 
-def _fake_api_key(tenant_id: Optional[str] = TENANT_ID):
-    from shared.auth import APIKey
+def _fake_review_actor(tenant_id: str | None = TENANT_ID):
+    from app.privileged_auth import PrivilegedActor
 
-    return APIKey(
-        key_id="rge_test_list_hallucinations",
-        key_hash="x",
-        name="test-key",
+    return PrivilegedActor(
+        actor_type="tenant_user",
+        actor_id="22222222-2222-2222-2222-222222222222",
+        session_id="33333333-3333-3333-3333-333333333333",
+        auth_method="webauthn",
         tenant_id=tenant_id,
-        created_at=datetime.now(timezone.utc),
+        permissions=("review.read",),
     )
 
 
@@ -140,7 +141,7 @@ def app_and_tracker(monkeypatch):
     tracker = _FakeTracker(fake_items)
     monkeypatch.setattr(review_mod, "_get_tracker", lambda: tracker)
 
-    app.dependency_overrides[review_mod.require_api_key] = lambda: _fake_api_key()
+    app.dependency_overrides[review_mod.require_review_read] = lambda: _fake_review_actor()
 
     yield app, tracker, long_text
 
@@ -349,13 +350,12 @@ def test_tracker_detail_projection_still_includes_text_raw():
 # =========================================================================
 
 
-def test_legacy_key_without_tenant_still_rejected(app_and_tracker, monkeypatch):
-    """The existing #1389 guard (no-tenant keys are 403) must survive
-    the #1409 refactor."""
+def test_session_actor_without_tenant_is_rejected(app_and_tracker):
+    """A dependency-contract regression cannot turn into an unscoped read."""
     from app import review_routes as review_mod
 
     app, _tracker, _ = app_and_tracker
-    app.dependency_overrides[review_mod.require_api_key] = lambda: _fake_api_key(tenant_id=None)
+    app.dependency_overrides[review_mod.require_review_read] = lambda: _fake_review_actor(tenant_id=None)
 
     with TestClient(app) as client:
         response = client.get("/v1/admin/review/hallucinations")

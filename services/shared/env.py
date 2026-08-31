@@ -34,6 +34,8 @@ CLOUD_ENV_VARS = (
 _CLOUD_ENV_VARS = CLOUD_ENV_VARS
 
 _PRODUCTION_ENVIRONMENT_NAMES = {"production"}
+_LOCAL_AUTH_ENVIRONMENT_NAMES = {"development", "dev", "local", "test", "testing"}
+_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 def is_production() -> bool:
@@ -57,6 +59,31 @@ def get_environment() -> str:
     return os.getenv("REGENGINE_ENV", "").lower() or os.getenv("ENV", "").lower() or "development"
 
 
+def is_cloud_deployment() -> bool:
+    """Return whether a supported deployment-platform marker is present."""
+
+    return any(os.getenv(var) for var in CLOUD_ENV_VARS)
+
+
+def requires_strict_auth_runtime() -> bool:
+    """Return whether authentication must use shared, durable backends.
+
+    Production is always strict.  Deployed staging/preview environments are
+    strict too, even though they deliberately retain their non-production
+    environment name.  ``REGENGINE_AUTH_STRICT=1`` makes the same posture
+    explicit for self-hosted staging where no recognized cloud marker exists.
+
+    There is intentionally no environment-variable escape hatch that can
+    disable strict behavior in production or a deployed non-local runtime.
+    """
+
+    if is_production():
+        return True
+    if os.getenv("REGENGINE_AUTH_STRICT", "").strip().lower() in _TRUE_VALUES:
+        return True
+    return is_cloud_deployment() and get_environment() not in _LOCAL_AUTH_ENVIRONMENT_NAMES
+
+
 def validate_cloud_environment() -> None:
     """Ensure REGENGINE_ENV is set correctly when running in cloud.
 
@@ -64,7 +91,7 @@ def validate_cloud_environment() -> None:
     are detected but REGENGINE_ENV is not explicitly set, force it to
     'production' to prevent auth bypass tokens from being active.
     """
-    is_cloud = any(os.getenv(var) for var in CLOUD_ENV_VARS)
+    is_cloud = is_cloud_deployment()
     if not is_cloud:
         return
 

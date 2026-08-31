@@ -42,7 +42,15 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
+            redirect: 'manual',
         });
+
+        if (res.status >= 300 && res.status < 400) {
+            return NextResponse.json(
+                { error: 'Verification service redirect refused' },
+                { status: 502 },
+            );
+        }
 
         const data = await res.json();
 
@@ -68,7 +76,9 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(data);
     } catch (err) {
-        console.error('[api/tools/verify] error:', err);
+        console.error('[api/tools/verify] request failed', {
+            errorClass: err instanceof Error ? err.name : 'UnknownError',
+        });
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 },

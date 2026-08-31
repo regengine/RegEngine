@@ -743,7 +743,7 @@ class HallucinationTracker:
 
                     audit_metadata["review_notes_sha256"] = _hashlib.sha256(notes.encode("utf-8")).hexdigest()
 
-                AuditLogger.log_event(
+                audit_entry_id = AuditLogger.log_event(
                     db=session,
                     tenant_id=item.tenant_id,
                     event_type="review.decision",
@@ -756,6 +756,11 @@ class HallucinationTracker:
                     resource_id=str(item.id),
                     metadata=audit_metadata,
                 )
+                if audit_entry_id is None:
+                    # AuditLogger uses None as its persistence-failure signal.
+                    # Raising inside this session scope rolls back both the
+                    # review mutation and any partially staged audit work.
+                    raise RuntimeError("review decision audit persistence failed")
             except Exception as audit_err:  # noqa: BLE001
                 # If audit-chain logging fails, fail the transition. The
                 # approval must not commit without the tamper-evident

@@ -1,8 +1,6 @@
 """Configuration for the ingestion service."""
 
 import logging
-import os
-import warnings
 from functools import lru_cache
 from typing import Optional
 
@@ -26,7 +24,6 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
     processed_bucket: str = Field(default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET")
     kafka_bootstrap_servers: str = Field(default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
     kafka_topic_normalized: str = Field(default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED")
-    api_key: Optional[str] = Field(default=None, alias="API_KEY")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
     env: str = Field(default="development", alias="ENV")
     allowed_origins: str = Field(
@@ -46,24 +43,11 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return cached settings instance.
-
-    Warns loudly if no supported API key environment variable is configured
-    in a production-like environment so operators notice immediately instead
-    of silently falling back.
-    """
+    """Return cached settings instance."""
     from shared.env import is_production
 
     settings = Settings()
     _is_prod = is_production()
-    configured_api_key = settings.api_key or os.environ.get("REGENGINE_API_KEY")
-    if not configured_api_key and _is_prod:
-        msg = (
-            "REGENGINE_API_KEY/API_KEY env var is not set in production. "
-            "Webhook ingestion will reject all requests until configured."
-        )
-        _logger.warning(msg)
-        warnings.warn(msg, stacklevel=2)
 
     # Block AUTH_TEST_BYPASS_TOKEN in production — fail closed.
     if _is_prod and settings.auth_test_bypass_token:

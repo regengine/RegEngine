@@ -283,8 +283,8 @@ class TestValidation:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_validate_accepts_and_migrates_legacy_hash_when_peppered(self, monkeypatch):
-        """Legacy SHA-256 rows still validate, then upgrade to peppered HMAC."""
+    async def test_runtime_validate_accepts_legacy_hash_without_rewriting_credential(self, monkeypatch):
+        """Runtime validation accepts legacy SHA-256 without mutating key material."""
         from shared.api_key_store import (
             APIKeyModel,
             DatabaseAPIKeyStore,
@@ -330,15 +330,64 @@ class TestValidation:
 
         assert result is not None
         assert result.key_id == key_id
-        assert model.key_hash == hash_api_key(raw_key)
+        assert model.key_hash == legacy_hash_api_key(raw_key)
+        assert model.key_hash != hash_api_key(raw_key)
         usage_updates = [
             call
             for call in mock_session.execute.call_args_list
             if call.args and "UPDATE api_keys" in str(call.args[0])
         ]
         assert len(usage_updates) == 1
+        assert "key_hash" not in str(usage_updates[0].args[0])
         assert usage_updates[0].args[1]["delta"] == 1
         assert usage_updates[0].args[1]["kid"] == key_id
+
+    @pytest.mark.asyncio
+    async def test_sysadmin_validate_migrates_legacy_hash_when_peppered(self, monkeypatch):
+        """The explicitly privileged key-management store may migrate a digest."""
+        from shared.api_key_store import (
+            APIKeyModel,
+            DatabaseAPIKeyStore,
+            hash_api_key,
+            legacy_hash_api_key,
+        )
+
+        raw_key = "rge_live_legacy.secret"
+        key_id = raw_key.split(".", 1)[0]
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=legacy_hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Legacy Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            total_requests=0,
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        store = DatabaseAPIKeyStore(
+            database_url=TEST_DATABASE_URL,
+            arm_sysadmin_rls=True,
+        )
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(raw_key)
+
+        assert result is not None
+        assert result.key_id == key_id
+        assert model.key_hash == hash_api_key(raw_key)
 
     @pytest.mark.asyncio
     async def test_validate_rejects_forged_secret_against_legacy_hash_when_peppered(self, monkeypatch):

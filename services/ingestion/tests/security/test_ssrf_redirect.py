@@ -30,6 +30,18 @@ class _RedirectHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class _CanaryHandler(http.server.BaseHTTPRequestHandler):
+    hits = 0
+
+    def do_GET(self):  # noqa: N802
+        type(self).hits += 1
+        self.send_response(204)
+        self.end_headers()
+
+    def log_message(self, *args, **kwargs):  # silence
+        pass
+
+
 @contextmanager
 def _running_server():
     server = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
@@ -37,6 +49,19 @@ def _running_server():
     thread.start()
     try:
         yield server.server_address  # (host, port)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@contextmanager
+def _running_canary():
+    _CanaryHandler.hits = 0
+    server = http.server.HTTPServer(("127.0.0.1", 0), _CanaryHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address
     finally:
         server.shutdown()
         server.server_close()
@@ -51,22 +76,45 @@ def test_redirect_to_metadata_ip_blocked(monkeypatch):
     # blocklist on subsequent calls.
     from shared import url_validation
 
-    real_validate = url_validation.validate_url
-    bypass_first = {"done": False}
-
-    def patched(url, *args, **kwargs):
-        if not bypass_first["done"]:
-            bypass_first["done"] = True
-            return url
-        return real_validate(url, *args, **kwargs)
-
-    monkeypatch.setattr("shared.safe_http.validate_url", patched)
-
     with _running_server() as (host, port):
         url = f"http://{host}:{port}/start"
+
+        real_validate = url_validation.validate_url
+
+        def patched(candidate, *args, **kwargs):
+            if candidate == url:
+                return candidate
+            return real_validate(candidate, *args, **kwargs)
+
+        monkeypatch.setattr("shared.safe_http.validate_url", patched)
         with pytest.raises(SSRFError):
-            # validator kwarg uses our patched validate_url (via shared.safe_http)
             safe_httpx_get_sync(url, validator=patched, max_redirects=3)
+
+
+def test_redirect_to_internal_canary_is_blocked_before_outbound_request(monkeypatch):
+    """The internal target must receive zero requests after a public-hop redirect."""
+    from shared import url_validation
+
+    original_target = _RedirectHandler.target
+    try:
+        with _running_canary() as (canary_host, canary_port):
+            _RedirectHandler.target = f"http://{canary_host}:{canary_port}/private-canary"
+            with _running_server() as (source_host, source_port):
+                source_url = f"http://{source_host}:{source_port}/start"
+                real_validate = url_validation.validate_url
+
+                def allow_test_source(candidate, *args, **kwargs):
+                    if candidate == source_url:
+                        return candidate
+                    return real_validate(candidate, *args, **kwargs)
+
+                monkeypatch.setattr("shared.safe_http.validate_url", allow_test_source)
+                with pytest.raises(SSRFError):
+                    safe_httpx_get_sync(source_url, validator=allow_test_source, max_redirects=3)
+
+            assert _CanaryHandler.hits == 0
+    finally:
+        _RedirectHandler.target = original_target
 
 
 def test_validate_url_blocks_metadata_directly():

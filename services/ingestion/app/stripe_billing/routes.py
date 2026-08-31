@@ -11,7 +11,12 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from shared import funnel_events as _funnel_mod
 
-from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from ..authz import (
+    IngestionPrincipal,
+    get_ingestion_principal,
+    get_optional_ingestion_principal,
+    require_permission,
+)
 from . import (
     customers as _customers_mod,
     helpers as _helpers_mod,
@@ -79,6 +84,7 @@ async def list_plans() -> dict[str, list[dict[str, Any]]]:
 @router.post(
     "/checkout",
     response_model=CheckoutResponse,
+    dependencies=[Depends(_rate_limiting_mod._check_stripe_checkout_rate_limit)],
     summary="Create Stripe checkout session",
     description=(
         "Creates a Stripe checkout session for the selected plan and returns "
@@ -88,14 +94,14 @@ async def list_plans() -> dict[str, list[dict[str, Any]]]:
 async def create_checkout(
     request: CheckoutRequest,
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
-    principal: Optional[IngestionPrincipal] = Depends(get_ingestion_principal),
+    principal: Optional[IngestionPrincipal] = Depends(get_optional_ingestion_principal),
 ) -> CheckoutResponse:
     """Create a Stripe checkout session.
 
-    #1184 fix: the tenant is derived from the authenticated principal /
-    ``X-Tenant-ID`` header. The client-supplied ``request.tenant_id`` is
-    ignored — honoring it would let an attacker bind another tenant's
-    billing record to their Stripe customer. Unauthenticated callers may
+    #1184 fix: the tenant is derived from the authenticated principal;
+    ``X-Tenant-ID`` is only a matching assertion. The client-supplied
+    ``request.tenant_id`` is ignored — honoring it would let an attacker bind
+    another tenant's billing record to their Stripe customer. Anonymous callers may
     still trigger a new-tenant-at-checkout flow (no principal => no
     ``tenant_id`` placed in metadata, and the webhook will provision a
     fresh tenant when Stripe fires ``checkout.session.completed``).
@@ -106,7 +112,8 @@ async def create_checkout(
     plan, price_id, amount = _plans_mod._resolve_price_id(request.plan_id, billing_period)
     existing_customer_id: Optional[str] = None
 
-    # Resolve tenant ONLY from authenticated context — ignore request body.
+    # Resolve tenant ONLY from authenticated context — ignore request body and
+    # ignore X-Tenant-ID entirely when no credential was presented.
     # Note: when this function is called directly (outside FastAPI DI, e.g.
     # in unit tests) the `x_tenant_id` / `principal` parameters may still
     # hold their FastAPI param defaults (Header/Depends objects). We coerce
@@ -115,18 +122,12 @@ async def create_checkout(
     safe_principal = principal if isinstance(principal, IngestionPrincipal) else None
 
     authenticated_tenant_id: Optional[str] = None
-    try:
+    if safe_principal is not None:
         authenticated_tenant_id = _helpers_mod._resolve_tenant_context(
             explicit_tenant_id=None,
             x_tenant_id=safe_x_tenant_id,
             principal=safe_principal,
         )
-    except HTTPException:
-        # Unauthenticated checkout creation (self-serve signup flow): the
-        # webhook will call the admin service to provision a fresh tenant
-        # after payment. We therefore allow the session to proceed without
-        # binding to an existing tenant.
-        authenticated_tenant_id = None
 
     if request.tenant_id and request.tenant_id != authenticated_tenant_id:
         logger.warning(
@@ -418,7 +419,7 @@ async def create_portal_session_for_tenant(
     ),
 )
 async def list_invoices(
-    tenant_id: Optional[str] = Query(default=None, description="Tenant ID override for legacy/master keys"),
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant assertion; must match the credential"),
     limit: int = Query(default=25, ge=1, le=100),
     starting_after: Optional[str] = Query(default=None, description="Stripe pagination cursor"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -494,7 +495,7 @@ async def list_invoices(
 )
 async def get_invoice_pdf(
     invoice_id: str,
-    tenant_id: Optional[str] = Query(default=None, description="Tenant ID override for legacy/master keys"),
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant assertion; must match the credential"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     principal: IngestionPrincipal = Depends(require_permission("billing.invoices.read")),
 ) -> InvoicePdfResponse:

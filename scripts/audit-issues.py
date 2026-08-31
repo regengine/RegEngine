@@ -59,7 +59,7 @@ ISSUES = [
         "title": "[P0][security] Rotate exposed credentials in .env and .env.local",
         "labels": ["P0", "security", "infra"],
         "body": """## Problem
-`.env` contains hardcoded secrets (DB passwords, API keys, admin master key, internal secrets). `.env.local` contains Supabase credentials. If either file is in git history, all secrets are compromised.
+`.env` contains hardcoded secrets (DB passwords, API keys, a retired shared administrative credential, and internal secrets). `.env.local` contains Supabase credentials. If either file is in git history, all secrets are compromised.
 
 ## Files
 - `.env` — lines 6, 13, 16, 23, 32, 46, 49
@@ -67,24 +67,24 @@ ISSUES = [
 
 ## Action
 1. Verify both files are in `.gitignore` (and not in git history)
-2. Rotate ALL secrets: Supabase anon key, DB password, admin master key, internal secret, scheduler key, auth secret
+2. Rotate ALL secrets: Supabase anon key, DB password, the retired shared credential, internal secret, scheduler key, and auth secret
 3. Add `.env` validation that rejects default/dev values in production
 4. Run `git log --all --full-history -- .env .env.local` to check exposure
 """,
     },
     {
-        "title": "[P0][security] Admin master key lacks rate limiting — brute force risk",
+        "title": "[P0][security] Remove retired shared administrative authentication",
         "labels": ["P0", "security", "backend"],
         "body": """## Problem
-`verify_admin_key()` in admin service compares against a single master key with no rate limiting, lockout, or audit logging. Allows unlimited brute-force attempts.
+Historical admin authentication compared one shared secret with no rate limiting, lockout, or attributable audit actor. That model must remain retired.
 
 ## File
 - `services/admin/app/routes.py` — lines 121-143
 
 ## Action
-1. Add rate limiting (e.g., 5 attempts per minute per IP)
-2. Add audit logging for failed admin auth attempts
-3. Consider replacing single master key with proper admin auth (OAuth, short-lived tokens)
+1. Require opaque WebAuthn/SSO staff sessions for human administration
+2. Use exact-scope tenantless workload keys only for approved automation
+3. Rate-limit privileged failures in Redis and fail closed when Redis is unavailable
 """,
     },
     # ===================== P1 — SIGNIFICANT GAPS =====================

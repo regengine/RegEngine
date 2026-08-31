@@ -445,14 +445,15 @@ class NotificationOutboxDrainer:
 def drain_all_tenants(session, *, email_sender: Optional[EmailSender] = None, batch_size: int = 50) -> Dict[str, int]:
     """Tenant-iterating entry point for the scheduler job.
 
-    public.tenants is the discovery table (infra table, permissive policy)
-    because the RLS-forced outbox cannot be scanned cross-tenant (#2461).
+    Tenant UUID discovery uses the audited admin credential; the RLS-forced
+    outbox is then drained through the ordinary role one tenant at a time.
     """
-    tenant_rows = session.execute(text("SELECT id FROM public.tenants")).fetchall()
+    from shared.maintenance_tenants import list_maintenance_tenant_ids
+
+    tenant_ids = list_maintenance_tenant_ids()
     drainer = NotificationOutboxDrainer(session, email_sender=email_sender)
     totals = {"claimed": 0, "sent": 0, "skipped": 0, "failed": 0, "rescheduled": 0}
-    for (tenant_id,) in tenant_rows:
-        tid = str(tenant_id)
+    for tid in tenant_ids:
         try:
             with tenant_scope(tid):
                 set_tenant_guc(session, tid)

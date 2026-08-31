@@ -12,77 +12,73 @@ are explicitly allow-listed so new unprotected endpoints are caught.
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-# ── Allow-list: endpoints that are intentionally unauthenticated ──────
-
-UNAUTHENTICATED_ALLOWLIST = frozenset(
+STRIPE_SIGNATURE_OPERATIONS = frozenset(
     {
-        # Service root and liveness aliases — public for platform probes
-        "GET /",
-        # Health/readiness — must be public for load balancers and orchestrators
-        "GET /health",
-        "GET /api/health",
-        # Feature discovery — public endpoint for client capability negotiation
-        "GET /api/v1/features",
-        # Public/static compatibility and reference data — no tenant data returned
-        "GET /api/v1/billing/plans",
-        "GET /api/v1/fsma/export-jobs",
-        "GET /api/v1/fsma/mappings",
-        "GET /api/v1/onboarding/steps",
-        "GET /api/v1/products/categories/ftl",
-        "GET /api/v1/team/roles/definitions",
-        # Supplier correction form — static HTML shell with no tenant data.
-        # The correction link carries the token in the URL fragment (never
-        # sent to the server, keeping it out of access logs); every data
-        # endpoint behind the form (/context, /exchange, /session/*) requires
-        # the token or a bearer session and is rate-limited (#2594 slice).
-        "GET /api/v1/remediation/supplier/form",
-        # Sandbox — intentionally public with rate limiting
-        "POST /api/v1/sandbox/evaluate",
-        # Webhook receivers — use signature verification instead of API keys
-        "POST /api/v1/integrations/webhook/{tenant_id}/{connector_id}",
-        # OpenAPI docs
-        "GET /docs",
-        "GET /redoc",
-        "GET /openapi.json",
+        "billing:POST:/api/v1/billing/webhook/stripe",
+        "billing:POST:/api/v1/billing/webhooks",
     }
 )
 
 
+class _AuthProbePipeline:
+    def __init__(self, redis) -> None:
+        self.redis = redis
+        self.key = ""
+
+    def incr(self, key):
+        self.key = key
+        return self
+
+    def expire(self, key, _seconds):
+        assert key == self.key
+        return self
+
+    async def execute(self):
+        self.redis.values[self.key] = self.redis.values.get(self.key, 0) + 1
+        return [self.redis.values[self.key], True]
+
+
+class _AuthProbeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, int] = {}
+
+    async def get(self, key):
+        return self.values.get(key)
+
+    def pipeline(self, transaction=True):
+        assert transaction is True
+        return _AuthProbePipeline(self)
+
+    async def delete(self, key):
+        self.values.pop(key, None)
+        return 1
+
+
 def _build_test_app():
-    """Import and build the ingestion service FastAPI app.
+    """Build the exact production route table, without starting its lifespan."""
+    from server.main import app as inventory_app
+    from server.route_ownership import route_owner
+    from server.route_security_manifest import PRODUCTION_OWNERS, build_route_security_manifest
 
-    Assumes auth-related environment variables are already configured by the
-    ``app_and_client`` fixture so the enforced-auth path is active. The shared
-    test env sets ``REGENGINE_ENV=test`` (tests/env_defaults.py), which would
-    otherwise activate the ``dev_open`` auth fallback in
-    ``authz.get_ingestion_principal`` and authenticate every request, making
-    this coverage test vacuous. The settings cache is cleared so the configured
-    key is picked up at app build time.
-    """
-    import sys
-    from pathlib import Path
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.router.routes.extend(
+        route
+        for route in inventory_app.routes
+        if isinstance(route, APIRoute) and route_owner(route) in PRODUCTION_OWNERS
+    )
+    from services.admin.app import privileged_auth
 
-    service_dir = Path(__file__).resolve().parent.parent.parent / "services" / "ingestion"
-    services_dir = service_dir.parent
-    for p in [str(services_dir), str(service_dir)]:
-        if p in sys.path:
-            sys.path.remove(p)
-        sys.path.insert(0, p)
-    for name in list(sys.modules):
-        if name == "main" or name == "app" or name.startswith("app."):
-            sys.modules.pop(name, None)
-
-    from shared.paths import ensure_shared_importable
-
-    ensure_shared_importable()
-
-    from app.config import get_settings
-    get_settings.cache_clear()
-
-    from main import app
-
+    app.state.previous_privileged_auth_throttle = privileged_auth._privileged_auth_throttle
+    privileged_auth_redis = _AuthProbeRedis()
+    privileged_auth._privileged_auth_throttle = privileged_auth.PrivilegedAuthThrottle(
+        redis_client=privileged_auth_redis
+    )
+    app.state.privileged_auth_probe_redis = privileged_auth_redis
+    app.state.security_manifest = build_route_security_manifest(inventory_app)
     return app
 
 
@@ -98,25 +94,35 @@ def _extract_endpoints(app) -> list[tuple[str, str]]:
 
 
 def _make_dummy_path(path: str) -> str:
-    """Replace path parameters with dummy values for testing."""
-    import re
+    """Replace path parameters with type-valid values for auth probing."""
+    from server.route_security_manifest import _concrete_probe_path
 
-    return re.sub(r"\{[^}]+\}", "test-000", path)
+    return _concrete_probe_path(path)
 
 
 @pytest.fixture(scope="module")
 def app_and_client():
     """Build the app once for all tests in this module, with auth enforced.
 
-    Sets ``API_KEY`` so the auth layer rejects unauthenticated requests
-    instead of falling through to the ``dev_open`` test fallback, then
-    restores the prior environment on teardown so the change does not leak
-    into the rest of the test session.
+    Uses staging auth semantics and restores the prior environment on teardown
+    so the change does not leak into the rest of the test session.
     """
     import os
     import sys
 
-    env_keys = ("API_KEY", "REGENGINE_ENV", "ENV", "AUTH_TEST_BYPASS_TOKEN")
+    env_keys = (
+        "ADMIN_FALLBACK_SQLITE",
+        "API_KEY",
+        "AUTH_SECRET_KEY",
+        "AUTH_TEST_BYPASS_TOKEN",
+        "ENV",
+        "METRICS_API_KEY",
+        "REDIS_URL",
+        "REGENGINE_API_KEY",
+        "REGENGINE_ENV",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+    )
     prev_env = {key: os.environ.get(key) for key in env_keys}
     prev_modules = {
         name: module
@@ -124,21 +130,34 @@ def app_and_client():
         if name == "main" or name == "app" or name.startswith("app.")
     }
     prev_sys_path = list(sys.path)
-    os.environ["API_KEY"] = "test-auth-coverage-master-key"  # pragma: allowlist secret
-    os.environ["REGENGINE_ENV"] = "staging"
-    os.environ["ENV"] = "staging"
+    os.environ.pop("API_KEY", None)
+    os.environ.pop("REGENGINE_API_KEY", None)
+    # Import-time database setup may use the explicit SQLite test fallback;
+    # request-time auth is switched to staging below to disable dev_open.
+    os.environ["REGENGINE_ENV"] = "test"
+    os.environ["ENV"] = "test"
+    os.environ["ADMIN_FALLBACK_SQLITE"] = "sqlite:///:memory:"
+    os.environ.setdefault("AUTH_SECRET_KEY", "auth-coverage-signing-material")
+    os.environ.setdefault("METRICS_API_KEY", "auth-coverage-metrics")
+    os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+    os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_auth_coverage")
+    os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_auth_coverage")
     os.environ.pop("AUTH_TEST_BYPASS_TOKEN", None)
     try:
         app = _build_test_app()
+        os.environ["REGENGINE_ENV"] = "staging"
+        os.environ["ENV"] = "staging"
         client = TestClient(app, raise_server_exceptions=False)
     except Exception as e:
         _restore_test_state(prev_env, prev_modules, prev_sys_path)
-        pytest.skip(f"Cannot build ingestion app: {e}")
-        return
+        pytest.fail(f"Cannot build ingestion app for mandatory auth coverage: {e}")
 
     try:
         yield app, client
     finally:
+        from services.admin.app import privileged_auth
+
+        privileged_auth._privileged_auth_throttle = app.state.previous_privileged_auth_throttle
         _restore_test_state(prev_env, prev_modules, prev_sys_path)
 
 
@@ -166,51 +185,51 @@ def _restore_test_state(prev_env, prev_modules, prev_sys_path):
 
 
 def test_all_endpoints_require_auth(app_and_client):
-    """Every endpoint not in the allowlist must reject unauthenticated requests."""
+    """Every protected production operation reaches an exact auth denial."""
     app, client = app_and_client
-    endpoints = _extract_endpoints(app)
+    manifest = app.state.security_manifest
 
     # Reset the per-IP auth failure counter between requests. Otherwise, after
     # 15 unauthenticated probes the rate limiter blocks "testclient" and every
     # subsequent endpoint returns 429 — which would mask a genuinely
     # unprotected endpoint behind the block and make this assertion
     # order-dependent.
-    from app import authz
+    from services.ingestion.app import authz
 
     unprotected = []
-    for method, path in endpoints:
-        key = f"{method} {path}"
-        if key in UNAUTHENTICATED_ALLOWLIST:
+    for operation in manifest["enabled_operations"]:
+        if operation["classification"] == "public":
             continue
+        authz._get_auth_limiter().reset("testclient")
+        # The privileged human/workload realm intentionally shares a much
+        # tighter Redis-backed failure budget. Reset the in-process test
+        # double between route probes so a prior denial cannot turn later
+        # checks into 429 responses that mask whether their auth dependency
+        # was actually reached.
+        app.state.privileged_auth_probe_redis.values.clear()
+        method = operation["method"]
+        path = operation["path"]
+        request_kwargs = {"json": {}} if method in {"POST", "PUT", "PATCH", "DELETE"} else {}
+        response = client.request(method, _make_dummy_path(path), **request_kwargs)
 
-        # Skip HEAD (mirrors GET auth) and OPTIONS (CORS preflight)
-        if method in ("HEAD", "OPTIONS"):
-            continue
-
-        authz._auth_failures.clear()
-        test_path = _make_dummy_path(path)
-        response = client.request(method, test_path)
-
-        # 401/403 = auth enforced. 404/405/422 = route resolved but rejected
-        # on other grounds (still means auth middleware ran or route doesn't match).
-        # Only 200/201/204 without auth is a problem.
-        if response.status_code in (200, 201, 204):
-            unprotected.append(f"{method} {path} -> {response.status_code}")
+        # Only an exact authentication/authorization denial is evidence. A
+        # 404/405/422 can mean the probe never exercised the auth dependency.
+        expected_statuses = {400} if operation["operation"] in STRIPE_SIGNATURE_OPERATIONS else {401, 403}
+        if response.status_code not in expected_statuses:
+            unprotected.append(f"{operation['operation']} -> {response.status_code}")
 
     assert not unprotected, f"Endpoints accessible without authentication:\n" + "\n".join(f"  {e}" for e in unprotected)
 
 
 def test_allowlist_entries_still_exist(app_and_client):
-    """Verify allowlist entries map to real endpoints — stale entries should be removed."""
+    """Public operations are exactly the explicit reviewed policy set."""
     app, _ = app_and_client
-    endpoints = _extract_endpoints(app)
-    endpoint_keys = {f"{m} {p}" for m, p in endpoints}
+    from server.route_security_policy import PUBLIC_OPERATIONS
 
-    stale = UNAUTHENTICATED_ALLOWLIST - endpoint_keys
-    # Docs endpoints may not show up in routes — filter those out
-    docs_paths = {"GET /docs", "GET /redoc", "GET /openapi.json"}
-    stale -= docs_paths
+    manifest_public = {
+        (operation["owner"], operation["method"], operation["path"])
+        for operation in app.state.security_manifest["enabled_operations"]
+        if operation["classification"] == "public"
+    }
 
-    assert not stale, f"Stale allowlist entries (endpoints no longer exist):\n" + "\n".join(
-        f"  {e}" for e in sorted(stale)
-    )
+    assert manifest_public == PUBLIC_OPERATIONS

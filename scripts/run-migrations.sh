@@ -5,10 +5,11 @@
 # Uses PostgreSQL advisory lock to prevent concurrent migration execution
 # across multiple service instances (e.g. Railway scaling events).
 #
-# Safe for both fresh databases and existing ones:
+# Safe for fresh and already Alembic-managed databases:
 #   - If alembic_version table exists and is populated → just run upgrade
-#   - If tables exist but alembic_version doesn't → stamp + upgrade (adopting Alembic)
 #   - If nothing exists → full upgrade from scratch
+#   - If application tables exist without a revision → fail for reviewed
+#     baseline recovery; never stamp an unknown schema to head
 #
 # Lock acquisition uses pg_try_advisory_xact_lock with bounded retries so a
 # blocked deploy fails LOUDLY (stderr, non-zero exit) within
@@ -19,7 +20,7 @@
 # transaction ends or the backend dies. See incident 2026-04-17 through
 # 2026-04-20.
 #
-# Usage:  DATABASE_URL=postgresql://... ./scripts/run-migrations.sh
+# Usage:  MIGRATIONS_DATABASE_URL=postgresql://... ./scripts/run-migrations.sh
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -31,23 +32,45 @@ MIGRATION_LOCK_ID=4294967294
 # to leave room for the actual migration + app boot after the lock is acquired.
 MIGRATION_LOCK_TIMEOUT_S=${MIGRATION_LOCK_TIMEOUT_S:-90}
 
-# #2461: after the least-privilege cutover the runtime DATABASE_URL connects
-# as the RLS-enforced `regengine` role, which does not own the schema.
-# Migrations (DDL) must keep running as the owner role, so when
-# MIGRATIONS_DATABASE_URL is set (Railway production) it overrides
-# DATABASE_URL for this runner and the alembic subprocesses it spawns. The
-# override is scoped to this script's process tree — the app that starts
-# after this script still sees the original runtime DATABASE_URL. CI and
-# local dev set only DATABASE_URL; behavior there is unchanged.
-if [ -n "${MIGRATIONS_DATABASE_URL:-}" ]; then
-  DATABASE_URL="${MIGRATIONS_DATABASE_URL}"
-  export DATABASE_URL
+# Deployed DDL always uses the schema-owner credential.  Keep DATABASE_URL as
+# the RLS-enforced application credential; never overwrite or reuse it here.
+DEPLOYED_MIGRATION_RUN=false
+case "${REGENGINE_ENV:-${ENVIRONMENT:-${ENV:-}}}" in
+  production|staging) DEPLOYED_MIGRATION_RUN=true ;;
+esac
+for marker in RAILWAY_ENVIRONMENT RAILWAY_ENVIRONMENT_NAME RAILWAY_ENVIRONMENT_ID RAILWAY_PROJECT_NAME RAILWAY_PROJECT_ID RAILWAY_SERVICE_NAME RAILWAY_SERVICE_ID VERCEL_ENV VERCEL_URL RENDER FLY_APP_NAME KUBERNETES_SERVICE_HOST; do
+  if [ -n "${!marker:-}" ]; then
+    DEPLOYED_MIGRATION_RUN=true
+    break
+  fi
+done
+
+if [ -z "${MIGRATIONS_DATABASE_URL:-}" ] && [ "$DEPLOYED_MIGRATION_RUN" = true ]; then
+  echo "!! MIGRATIONS_DATABASE_URL is required for deployed migrations." >&2
+  echo "!! Refusing to use DATABASE_URL for schema-owner DDL." >&2
+  exit 64
 fi
 
-if [ -z "${DATABASE_URL:-}" ]; then
-  echo "!! DATABASE_URL must be set before running migrations." >&2
+MIGRATION_RUNNER_URL="${MIGRATIONS_DATABASE_URL:-${DATABASE_URL:-}}"
+export MIGRATION_RUNNER_URL
+if [ -z "$MIGRATION_RUNNER_URL" ]; then
+  echo "!! MIGRATIONS_DATABASE_URL is required (DATABASE_URL is accepted only for local/CI scratch databases)." >&2
   echo "!! Refusing to fall back to development database defaults in deploy/runtime paths." >&2
   exit 64  # EX_USAGE
+fi
+
+# The supported runner is always a dedicated-owner path, including local/CI
+# rehearsals. Export the selected URL so v111 can derive and prove the exact
+# login identity even when a local caller used the legacy DATABASE_URL input.
+export MIGRATIONS_DATABASE_URL="$MIGRATION_RUNNER_URL"
+export REGENGINE_ENFORCE_MIGRATION_ROLE=1
+
+MIGRATION_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_ROLE_CUTOVER_SCRIPT="${MIGRATION_SCRIPT_DIR}/apply_runtime_role_cutover.py"
+export RUNTIME_ROLE_CUTOVER_SCRIPT
+if [ ! -f "$RUNTIME_ROLE_CUTOVER_SCRIPT" ]; then
+  echo "!! Runtime-role cutover helper is missing: $RUNTIME_ROLE_CUTOVER_SCRIPT" >&2
+  exit 66  # EX_NOINPUT
 fi
 
 PYTHON_BIN=${PYTHON_BIN:-python3}
@@ -72,7 +95,7 @@ import os, sys, subprocess, time
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
-url = os.environ['DATABASE_URL']
+url = os.environ['MIGRATION_RUNNER_URL']
 timeout_s = int(os.environ.get('MIGRATION_LOCK_TIMEOUT_S', '${MIGRATION_LOCK_TIMEOUT_S}'))
 # NullPool: closing a connection really disconnects it instead of parking an
 # idle backend in the pool for the whole alembic run — the probe connection
@@ -162,7 +185,7 @@ try:
             result2 = probe.execute(text(
                 \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
             ))
-            state = 'NEEDS_STAMP' if result2.scalar() else 'FRESH'
+            state = 'NEEDS_BASELINE_REVIEW' if result2.scalar() else 'FRESH'
         else:
             result3 = probe.execute(text('SELECT count(*) FROM alembic_version'))
             if result3.scalar() > 0:
@@ -171,18 +194,22 @@ try:
                 result4 = probe.execute(text(
                     \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
                 ))
-                state = 'NEEDS_STAMP' if result4.scalar() else 'FRESH'
+                state = 'NEEDS_BASELINE_REVIEW' if result4.scalar() else 'FRESH'
     finally:
         probe.close()
 
     print(f'    DB state: {state}', flush=True)
 
     # ---- Run migrations ----
-    if state == 'NEEDS_STAMP':
-        print('==> Existing database detected — stamping as baseline...', flush=True)
-        subprocess.check_call(['alembic', 'stamp', 'head'])
-        print('==> Stamped. Running any newer migrations...', flush=True)
-        subprocess.check_call(['alembic', 'upgrade', 'head'])
+    if state == 'NEEDS_BASELINE_REVIEW':
+        print(
+            '!! Existing application schema has no trusted Alembic revision. '
+            'Refusing to stamp an unknown schema to head. Restore migration '
+            'metadata or execute an operator-reviewed baseline recovery before retrying.',
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(65)  # EX_DATAERR
     elif state == 'ALREADY_MANAGED':
         print('==> Alembic already managing this database — upgrading...', flush=True)
         subprocess.check_call(['alembic', 'upgrade', 'head'])
@@ -190,7 +217,18 @@ try:
         print('==> Fresh database — running full migration...', flush=True)
         subprocess.check_call(['alembic', 'upgrade', 'head'])
 
-    print('==> Migrations complete.', flush=True)
+    # Reapply the convergent v111 cutover after every managed migration run so
+    # privilege/policy drift is repaired before startup. Pass the already-
+    # selected schema-owner URL only to this child process; never replace
+    # DATABASE_URL.
+    cutover_env = os.environ.copy()
+    cutover_env['MIGRATIONS_DATABASE_URL'] = url
+    subprocess.check_call(
+        [sys.executable, os.environ['RUNTIME_ROLE_CUTOVER_SCRIPT']],
+        env=cutover_env,
+    )
+
+    print('==> Migrations and runtime-role cutover complete.', flush=True)
     tx.commit()
 
 except BaseException:

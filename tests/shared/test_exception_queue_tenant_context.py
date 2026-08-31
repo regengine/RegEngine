@@ -82,7 +82,7 @@ def calls(monkeypatch) -> list[str]:
     def _set_tenant_guc(_session, tenant_id: str) -> None:
         observed.append(f"set:{tenant_id}")
 
-    from services.shared import tenant_context
+    from shared import tenant_context
 
     monkeypatch.setattr(tenant_context, "set_tenant_guc", _set_tenant_guc)
     return observed

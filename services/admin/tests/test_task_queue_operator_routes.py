@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -17,12 +17,24 @@ def _make_user(*, is_sysadmin: bool) -> MagicMock:
 
 
 def _build_app(user: MagicMock, db: MagicMock) -> FastAPI:
-    from services.admin.app.dependencies import get_current_user, get_session
+    from services.admin.app.dependencies import get_session
+    from services.admin.app.privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
     from services.admin.app.system_routes import router
 
     app = FastAPI()
     app.include_router(router, prefix="/v1")
-    app.dependency_overrides[get_current_user] = lambda: user
+
+    def _privileged_actor() -> PrivilegedActor:
+        if not user.is_sysadmin:
+            raise HTTPException(status_code=403, detail="Sysadmin required")
+        return PrivilegedActor(
+            actor_type="staff_user",
+            actor_id=str(user.id),
+            auth_method="webauthn",
+            user=user,
+        )
+
+    app.dependency_overrides[require_sysadmin_high_assurance] = _privileged_actor
     app.dependency_overrides[get_session] = lambda: db
     return app
 

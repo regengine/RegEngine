@@ -43,6 +43,11 @@ def upgrade() -> None:
     #    ALTERs and the UPDATE share this migration's transaction and the
     #    ACCESS EXCLUSIVE lock, so no concurrent writer ever sees the
     #    trigger disabled.
+    #
+    # The migration credential is NOBYPASSRLS and audit_logs is FORCE-RLS.
+    # Temporarily restore owner access in the same transaction; FORCE is
+    # reinstated before the migration returns.
+    op.execute("ALTER TABLE public.audit_logs NO FORCE ROW LEVEL SECURITY;")
     op.execute(
         """
         DO $$
@@ -87,6 +92,7 @@ def upgrade() -> None:
         $$;
         """
     )
+    op.execute("ALTER TABLE public.audit_logs FORCE ROW LEVEL SECURITY;")
 
     # 3. Enforce per-tenant uniqueness. NULLs are distinct in Postgres, so
     #    any future legacy/NULL rows do not collide. Idempotent via the

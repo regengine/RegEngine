@@ -1,7 +1,7 @@
 """Unit tests for the #2461 RLS context propagation mechanism.
 
-Covers the pure-contextvar surface (tenant_scope / system_scope /
-set_rls_tenant_id), the Engine-class-level "begin" hook
+Covers the pure-contextvar surface (tenant_scope / set_rls_tenant_id),
+the Engine-class-level "begin" hook
 (_apply_rls_gucs_on_begin / install_rls_guc_hook), the TaskWorker
 dispatch seeding, and the boot-time check_rls_posture probe.
 
@@ -15,7 +15,9 @@ SAME module instance (and ContextVar pair) as the code under test.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import time
 import uuid
 from types import SimpleNamespace
 from unittest import mock
@@ -29,6 +31,26 @@ from sqlalchemy.engine import Engine
 
 _T_A = "11111111-1111-1111-1111-111111111111"
 _T_B = "22222222-2222-2222-2222-222222222222"
+_UNIT_POLICY_MANIFEST = "unit-policy-manifest"
+
+
+@pytest.fixture(autouse=True)
+def _unit_policy_manifest_fingerprint(monkeypatch):
+    """Keep fake-engine posture tests aligned with exact manifest hashing."""
+
+    from shared import database as shared_database
+
+    fingerprint = hashlib.sha256(_UNIT_POLICY_MANIFEST.encode("utf-8")).hexdigest()
+    monkeypatch.setitem(
+        shared_database._EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256,
+        "regengine",
+        fingerprint,
+    )
+    monkeypatch.setitem(
+        shared_database._EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256,
+        "regengine_sysadmin",
+        fingerprint,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -75,26 +97,6 @@ class TestContextvarSemantics:
                 raise RuntimeError("boom")
         assert tc.get_rls_tenant_id() is None
 
-    def test_system_scope_sets_and_resets(self):
-        assert tc._rls_system_context.get() is False
-        with tc.system_scope():
-            assert tc._rls_system_context.get() is True
-        assert tc._rls_system_context.get() is False
-
-    def test_system_scope_resets_on_exception(self):
-        with pytest.raises(RuntimeError):
-            with tc.system_scope():
-                raise RuntimeError("boom")
-        assert tc._rls_system_context.get() is False
-
-    def test_scopes_are_independent(self):
-        with tc.tenant_scope(_T_A), tc.system_scope():
-            assert tc.get_rls_tenant_id() == _T_A
-            assert tc._rls_system_context.get() is True
-        assert tc.get_rls_tenant_id() is None
-        assert tc._rls_system_context.get() is False
-
-
 # ---------------------------------------------------------------------------
 # (c) hook no-ops on non-postgresql dialects
 # ---------------------------------------------------------------------------
@@ -109,7 +111,7 @@ class TestSqliteNoop:
         def _spy(conn, cursor, statement, parameters, context, executemany):
             statements.append(statement)
 
-        with tc.tenant_scope(_T_A), tc.system_scope():
+        with tc.tenant_scope(_T_A):
             with engine.begin() as conn:
                 conn.execute(text("SELECT 1"))
 
@@ -138,8 +140,11 @@ class TestApplyOnBegin:
         conn, executed = _fake_pg_conn()
         with tc.tenant_scope(_T_A):
             tc._apply_rls_gucs_on_begin(conn)
-        assert len(executed) == 1
-        stmt, params = executed[0]
+        assert len(executed) == 2
+        baseline, _ = executed[0]
+        assert "set_config('app.tenant_id', '', true)" in baseline
+        assert "set_config('regengine.is_sysadmin', 'false', true)" in baseline
+        stmt, params = executed[1]
         assert "set_config('app.tenant_id', :tid, true)" in stmt
         assert params == {"tid": _T_A}
 
@@ -148,35 +153,28 @@ class TestApplyOnBegin:
         conn, executed = _fake_pg_conn()
         with tc.tenant_scope("acme-co-slug"):
             tc._apply_rls_gucs_on_begin(conn)  # must not raise
-        assert executed == []
+        assert len(executed) == 1
+        assert "set_config('app.tenant_id', '', true)" in executed[0][0]
 
-    def test_unseeded_context_is_noop(self):
+    def test_unseeded_context_sets_fail_closed_baseline(self):
         conn, executed = _fake_pg_conn()
         tc._apply_rls_gucs_on_begin(conn)
-        assert executed == []
-
-    def test_system_scope_sets_system_guc(self):
-        conn, executed = _fake_pg_conn()
-        with tc.system_scope():
-            tc._apply_rls_gucs_on_begin(conn)
         assert len(executed) == 1
-        stmt, _ = executed[0]
-        assert "set_config('regengine.system_context', 'true', true)" in stmt
+        stmt, params = executed[0]
+        assert params is None
+        assert "set_config('app.tenant_id', '', true)" in stmt
+        assert "set_config('regengine.user_id', '', true)" in stmt
+        assert "set_config('regengine.is_sysadmin', 'false', true)" in stmt
+        assert "set_config('regengine.system_context', 'false', true)" in stmt
+        assert "set_config('audit.allow_break_glass', 'false', true)" in stmt
+        assert "set_config('fsma.allow_mutation', 'false', true)" in stmt
 
-    def test_tenant_and_system_both_applied(self):
+    def test_retired_system_context_has_no_positive_overlay(self):
         conn, executed = _fake_pg_conn()
-        with tc.tenant_scope(_T_A), tc.system_scope():
-            tc._apply_rls_gucs_on_begin(conn)
-        assert len(executed) == 2
-        assert "app.tenant_id" in executed[0][0]
-        assert "regengine.system_context" in executed[1][0]
-
-    def test_apply_system_guc_helper_executes_on_session(self):
-        executed = []
-        session = SimpleNamespace(execute=lambda stmt, params=None: executed.append(str(stmt)))
-        tc.apply_system_guc(session)
-        assert len(executed) == 1
-        assert "set_config('regengine.system_context', 'true', true)" in executed[0]
+        tc._apply_rls_gucs_on_begin(conn)
+        rendered = "\n".join(statement for statement, _params in executed)
+        assert "set_config('regengine.system_context', 'false', true)" in rendered
+        assert "set_config('regengine.system_context', 'true', true)" not in rendered
 
 
 # ---------------------------------------------------------------------------
@@ -313,9 +311,59 @@ class TestTaskWorkerDispatchSeeding:
 # ---------------------------------------------------------------------------
 
 
-def _fake_posture_engine(rolsuper: bool, rolbypassrls: bool):
+def _fake_posture_engine(
+    rolsuper: bool,
+    rolbypassrls: bool,
+    *,
+    role: str = "somerole",
+    session_role: str | None = None,
+):
     conn = mock.MagicMock()
-    conn.execute.return_value.fetchone.return_value = ("somerole", rolsuper, rolbypassrls)
+    conn.execute.return_value.fetchone.return_value = (
+        session_role or role,
+        role,
+        rolsuper,
+        rolbypassrls,
+    )
+    cm = mock.MagicMock()
+    cm.__enter__.return_value = conn
+    cm.__exit__.return_value = False
+    eng = mock.MagicMock()
+    eng.dialect.name = "postgresql"
+    eng.connect.return_value = cm
+    return eng
+
+
+def _fake_runtime_engine(
+    role: str,
+    *,
+    database: str = "regengine",
+    server_address: str | None = "10.0.0.5",
+    server_port: int | None = 5432,
+    rolsuper: bool = False,
+    rolbypassrls: bool = False,
+    canary: tuple[bool, str, bool, bool, bool] = (
+        True,
+        _UNIT_POLICY_MANIFEST,
+        True,
+        True,
+        True,
+    ),
+):
+    conn = mock.MagicMock()
+
+    def _execute(statement):
+        result = mock.MagicMock()
+        sql = str(statement)
+        if "required_relations" in sql:
+            result.fetchone.return_value = canary
+        elif "pg_roles" in sql:
+            result.fetchone.return_value = (role, role, rolsuper, rolbypassrls)
+        else:
+            result.fetchone.return_value = (database, server_address, server_port)
+        return result
+
+    conn.execute.side_effect = _execute
     cm = mock.MagicMock()
     cm.__enter__.return_value = conn
     cm.__exit__.return_value = False
@@ -355,6 +403,22 @@ class TestCheckRlsPosture:
         monkeypatch.delenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", raising=False)
         assert check_rls_posture(_fake_posture_engine(False, True), label="unit-inert2") == "inert"
 
+    def test_switched_session_role_is_inert(self, monkeypatch):
+        from shared.database import check_rls_posture
+
+        monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+        with pytest.raises(RuntimeError, match="session role 'provider_owner'"):
+            check_rls_posture(
+                _fake_posture_engine(
+                    False,
+                    False,
+                    role="regengine",
+                    session_role="provider_owner",
+                ),
+                label="unit-switched-role",
+                expected_role="regengine",
+            )
+
     def test_require_env_raises_on_inert(self, monkeypatch):
         from shared.database import check_rls_posture
 
@@ -369,3 +433,121 @@ class TestCheckRlsPosture:
         assert check_rls_posture(_fake_posture_engine(False, False), label="unit-enforced") == "enforced"
         gauge_value = regengine_rls_enforcement_inert.labels(engine="unit-enforced")._value.get()
         assert gauge_value == 0
+
+    def test_production_requires_enforcement_without_opt_in_flag(self, monkeypatch):
+        from shared.database import check_rls_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.delenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", raising=False)
+        with pytest.raises(RuntimeError, match="RLS enforcement required"):
+            check_rls_posture(_fake_posture_engine(True, False), label="unit-production")
+
+    def test_production_rejects_unknown_posture(self, monkeypatch):
+        from shared.database import check_rls_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.delenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", raising=False)
+        monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+        eng = mock.MagicMock()
+        eng.dialect.name = "postgresql"
+        eng.connect.side_effect = ConnectionError("db down")
+
+        with pytest.raises(RuntimeError, match="refusing to boot blind"):
+            check_rls_posture(eng, label="unit-production-down")
+        assert eng.connect.call_count == 3
+
+    def test_hard_gate_rejects_unexpected_runtime_role(self, monkeypatch):
+        from shared.database import check_rls_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+
+        with pytest.raises(RuntimeError, match="expected 'regengine'"):
+            check_rls_posture(
+                _fake_posture_engine(False, False, role="schema_owner"),
+                label="shared",
+                expected_role="regengine",
+            )
+
+
+class TestRuntimeDatabasePosture:
+    def test_both_expected_roles_same_database_pass_and_report_zero(self, monkeypatch):
+        from shared.database import regengine_rls_enforcement_inert, validate_runtime_database_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+        shared = _fake_runtime_engine("regengine")
+        admin = _fake_runtime_engine("regengine_sysadmin")
+
+        identities = validate_runtime_database_posture(shared, admin)
+
+        assert identities["shared"] == identities["admin"]
+        assert regengine_rls_enforcement_inert.labels(engine="shared")._value.get() == 0
+        assert regengine_rls_enforcement_inert.labels(engine="admin")._value.get() == 0
+
+    def test_hard_gate_rejects_missing_v111_catalog_controls(self, monkeypatch):
+        from shared.database import (
+            check_rls_posture,
+            regengine_rls_enforcement_inert,
+        )
+
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+        shared = _fake_runtime_engine(
+            "regengine",
+            canary=(False, _UNIT_POLICY_MANIFEST, True, True, True),
+        )
+
+        with pytest.raises(RuntimeError, match="failed the v111 catalog canary"):
+            check_rls_posture(
+                shared,
+                label="shared-missing-cutover",
+                expected_role="regengine",
+            )
+        assert (
+            regengine_rls_enforcement_inert.labels(
+                engine="shared-missing-cutover"
+            )._value.get()
+            == 1
+        )
+
+    def test_soft_gate_reports_inert_when_membership_or_acl_drifts(self, monkeypatch):
+        from shared.database import check_rls_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.delenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", raising=False)
+        admin = _fake_runtime_engine(
+            "regengine_sysadmin",
+            canary=(True, _UNIT_POLICY_MANIFEST, True, False, True),
+        )
+
+        assert (
+            check_rls_posture(
+                admin,
+                label="admin-membership-drift",
+                expected_role="regengine_sysadmin",
+            )
+            == "inert"
+        )
+
+    def test_hard_gate_rejects_different_database_identity(self, monkeypatch):
+        from shared.database import validate_runtime_database_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+        shared = _fake_runtime_engine("regengine", database="regengine", server_address="10.0.0.5")
+        admin = _fake_runtime_engine("regengine_sysadmin", database="other", server_address="10.0.0.6")
+
+        with pytest.raises(RuntimeError, match="resolve to different PostgreSQL databases"):
+            validate_runtime_database_posture(shared, admin)
+
+    def test_hard_gate_rejects_incomplete_identity(self, monkeypatch):
+        from shared.database import validate_runtime_database_posture
+
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+        shared = _fake_runtime_engine("regengine", server_address=None, server_port=None)
+        admin = _fake_runtime_engine("regengine_sysadmin")
+
+        with pytest.raises(RuntimeError, match="identity probe.*incomplete"):
+            validate_runtime_database_posture(shared, admin)

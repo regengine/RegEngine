@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateProxySession } from "@/lib/api-proxy";
+import {
+    isUsableCallerCredential,
+    requireProxyAuth,
+    resolveOpaqueSessionTenantId,
+    validateProxySession,
+} from "@/lib/api-proxy";
 
 export const dynamic = "force-dynamic";
 
 const DEFAULT_LOCAL_INFLOW_LAB_URL = "http://127.0.0.1:8000";
+const AUTH_SESSION_COOKIE = "__Host-regengine_session";
 const ALLOWED_METHODS = new Set(["GET", "POST"]);
 const JSON_CONTENT_TYPES = ["application/json", "application/problem+json"];
 
@@ -27,9 +33,14 @@ type ProxyErrorCode =
 function serviceBaseUrl() {
     return (
         process.env.INFLOW_LAB_SERVICE_URL ||
-        process.env.NEXT_PUBLIC_INFLOW_LAB_SERVICE_URL ||
         DEFAULT_LOCAL_INFLOW_LAB_URL
     ).replace(/\/$/, "");
+}
+
+function inflowLabProxyEnabled() {
+    if (process.env.NODE_ENV !== "production") return true;
+    const value = process.env.REGENGINE_ENABLE_INFLOW_LAB_PROXY?.trim().toLowerCase();
+    return value === "1" || value === "true";
 }
 
 function basicAuthHeader() {
@@ -212,10 +223,20 @@ function optionalOfflineResponse(contract: EndpointContract, detail?: string, up
 }
 
 async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: string[] }>) {
+    // The simulator/sandbox boundary is release-disabled. A future production
+    // enablement must be an explicit server-only deployment decision; page
+    // feature flags never mount this credentialed proxy by themselves.
+    if (!inflowLabProxyEnabled()) {
+        return new NextResponse(null, { status: 404 });
+    }
+
     const method = request.method.toUpperCase();
     if (!ALLOWED_METHODS.has(method)) {
         return proxyError("Unsupported Inflow Lab proxy method", 405, "METHOD_NOT_ALLOWED");
     }
+
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
 
     const sessionError = await validateProxySession(request);
     if (sessionError) {
@@ -225,6 +246,27 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
             401,
             "SESSION_UNAVAILABLE",
             { hint: "Refresh the page and sign in again before using live Inflow Lab actions." }
+        );
+    }
+
+    // This proxy attaches server-held Inflow Lab Basic auth, so caller-owned
+    // API-key/header presence is insufficient: it would upgrade an unverified
+    // string to server authority. Require an opaque browser session and prove
+    // it against backend /auth/me before contacting the simulator.
+    const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
+    if (!isUsableCallerCredential(sessionToken)) {
+        return proxyError(
+            "Authenticated browser session required",
+            401,
+            "SESSION_UNAVAILABLE",
+        );
+    }
+    const authenticatedTenant = await resolveOpaqueSessionTenantId(sessionToken);
+    if (!authenticatedTenant) {
+        return proxyError(
+            "Session expired or unavailable",
+            401,
+            "SESSION_UNAVAILABLE",
         );
     }
 
@@ -248,8 +290,7 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
     const headers = new Headers();
     const contentType = request.headers.get("content-type");
     if (contentType) headers.set("content-type", contentType);
-    const tenant = request.headers.get("x-regengine-tenant");
-    if (tenant) headers.set("x-regengine-tenant", tenant);
+    headers.set("x-regengine-tenant", authenticatedTenant);
     const authorization = basicAuthHeader();
     if (authorization) headers.set("authorization", authorization);
 
@@ -259,7 +300,17 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
             headers,
             body: method === "GET" ? undefined : await request.text(),
             cache: "no-store",
+            redirect: "manual",
         });
+
+        if (upstream.status >= 300 && upstream.status < 400) {
+            return proxyError(
+                "Inflow Lab upstream redirect refused",
+                502,
+                "UPSTREAM_BAD_RESPONSE",
+                { upstreamStatus: upstream.status, contract },
+            );
+        }
 
         if (contract.stream && upstream.ok) {
             return new NextResponse(upstream.body, {

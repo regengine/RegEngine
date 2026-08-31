@@ -67,12 +67,25 @@ If the FDA issues a records request under FSMA 204 (21 CFR Part 1, Subpart S), R
 ### Redis
 
 - **Purpose:** Session storage, JWT key registry, rate limiting, token revocation blocklist
-- **Check connection:** Service logs will show `session_store_initialized` or `jwt_key_registry_ready` on startup
-- **If Redis is down:**
-  - Auth still works (falls back to static `AUTH_SECRET_KEY` for JWT verification)
-  - Rate limiting is per-process only (not shared across replicas)
-  - JWT key rotation is disabled (static key mode)
-  - Token revocation uses in-memory fallback (effective for single instance)
+- **Check connection:** Production startup must emit `auth_runtime_ready` with
+  `redis_backed=true`. A missing or unreachable Redis backend aborts startup.
+- **If Redis is down in production:**
+  - Bearer-token revocation checks, refresh/session operations, and key-registry
+    reads or mutations fail closed. Authentication uncertainty returns 503; it
+    must never fall back to a static signing key or process-local revocation.
+  - Invalid privileged/workload authentication also fails closed when its
+    shared throttle cannot be evaluated.
+  - Do not restore service by enabling an in-memory session store, legacy
+    JTI-free tokens, or a static-key verification fallback.
+- **JWT registry concurrency:** Registry mutations use an atomic compare-and-set
+  over `regengine:jwt:keys`; they do not acquire a persistent Redis mutex. An
+  old `regengine:jwt:keys:mutation-lock` key may remain after upgrading from a
+  pre-CAS build, but current code ignores it. Remove it only after confirming no
+  old application version is running.
+- **JWT registry upgrade constraint:** Do not rotate or revoke registry keys
+  during a mixed-version rollout. Drain every pre-CAS replica first; those
+  builds use unconditional Redis writes and can overwrite a concurrent CAS
+  mutation. Confirm the all-current replica set before resuming key changes.
 
 ### Neo4j
 
@@ -92,12 +105,13 @@ If the FDA issues a records request under FSMA 204 (21 CFR Part 1, Subpart S), R
 
 ### Supabase
 
-- **Purpose:** Primary auth provider in production (JWT validation, password reset)
-- **Dashboard:** Check project dashboard for auth service status
-- **If Supabase is down:**
-  - Production auth fails unless `ALLOW_LOCAL_JWT_FALLBACK=true` is set
-  - Password reset returns 503
-  - Local JWT fallback activates in non-production environments automatically
+- **Purpose:** Optional compatibility integration outside production. Production
+  bearer authentication accepts only RegEngine-issued JWTs in the shared
+  Redis/JTI/session/token-version revocation domain; it never sends bearer
+  tokens to Supabase for validation.
+- **If Supabase is down:** Production bearer authentication is unaffected.
+  Investigate only explicitly enabled non-production compatibility flows; do
+  not introduce a production fallback or bypass to restore them.
 
 ---
 

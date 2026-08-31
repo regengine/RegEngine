@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "promise:audit": "node scripts/promise-audit.mjs",
     "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
     "verify:ssr": "node scripts/verify-public-ssr.mjs",
     "test:e2e": "env -u NO_COLOR playwright test",
     "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",

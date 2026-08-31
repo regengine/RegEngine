@@ -531,7 +531,7 @@ async def ingest_csv(
     file: UploadFile = File(..., description="CSV file to ingest"),
     cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
     source: str = Form("csv_upload", description="Source identifier"),
-    tenant_id: Optional[str] = Form(None, description="Tenant ID for legacy/master-key callers"),
+    tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),

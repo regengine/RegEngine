@@ -172,6 +172,7 @@ def _persist_audit_buffer(
     """
     # Imported lazily so importing this module does not require a DB.
     from shared.database import get_db_safe  # type: ignore
+    from shared.tenant_context import set_tenant_guc
     from sqlalchemy import text
 
     session = get_db_safe()
@@ -179,6 +180,7 @@ def _persist_audit_buffer(
         raise RuntimeError("audit_log_buffer: no DB session available")
 
     try:
+        set_tenant_guc(session, tenant_id)
         session.execute(
             text(
                 """

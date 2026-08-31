@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Mapping, Optional
+from typing import Any, Callable, List, Mapping, Optional, Protocol
 
 import httpx
 import structlog
@@ -14,6 +14,18 @@ from shared.url_validation import SSRFError, validate_url
 from ..models import EnforcementItem, ScrapeResult, SourceType
 
 logger = structlog.get_logger("scraper.base")
+
+
+class SyncGetClient(Protocol):
+    """Minimal client seam used by the retry loop and test transports."""
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        timeout: float = 30.0,
+    ) -> httpx.Response: ...
 
 
 # ── #1138: FDA HTTP retry / backoff ─────────────────────────────────────────
@@ -72,7 +84,7 @@ def _compute_backoff(attempt: int, *, base: float, max_delay: float) -> float:
 
 
 def fetch_with_retry(
-    session: httpx.Client,
+    session: SyncGetClient,
     url: str,
     *,
     params: Optional[Mapping[str, Any]] = None,

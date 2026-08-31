@@ -109,9 +109,9 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         // must now enforce CSRF on POST /api/session like every other mutating
         // endpoint. If /api/session ever drifts back into CSRF_EXEMPT_PREFIXES,
         // this test fails and forces an explicit threat-model conversation.
-        expect(isCsrfExempt('/api/session')).toBe(false);
+        expect(isCsrfExempt('/api/session', 'POST')).toBe(false);
         // Passwordless auth starts are still pre-auth — sanity check.
-        expect(isCsrfExempt('/api/admin/auth/challenges')).toBe(true);
+        expect(isCsrfExempt('/api/admin/auth/challenges', 'POST')).toBe(true);
     });
 
     it('GET /api/session sets re_csrf and re_csrf_sig cookies on first call', async () => {
@@ -155,6 +155,8 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
                     organization_id: '22222222-2222-4222-8222-222222222222',
                     role: 'owner',
                     auth_method: 'webauthn',
+                    is_sysadmin: true,
+                    permissions: ['review.read', 'review.decide'],
                 }),
                 { status: 200, headers: { 'content-type': 'application/json' } },
             ),
@@ -179,22 +181,23 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
                 cookie: '__Host-regengine_session=opaque-session-token',
             },
             cache: 'no-store',
+            redirect: 'manual',
         });
         await expect(response.json()).resolves.toEqual({
             authenticated: true,
             has_api_key: false,
-            has_admin_key: false,
             has_credentials: true,
             tenant_id: '22222222-2222-4222-8222-222222222222',
             auth_method: 'webauthn',
             user: {
                 id: '11111111-1111-4111-8111-111111111111',
                 email: 'owner@example.com',
-                is_sysadmin: false,
+                is_sysadmin: true,
                 status: 'active',
                 role_name: 'owner',
                 organization_id: '22222222-2222-4222-8222-222222222222',
                 auth_method: 'webauthn',
+                permissions: ['review.read', 'review.decide'],
             },
         });
         expect(response.cookies.get('re_tenant_id')?.value).toBe('22222222-2222-4222-8222-222222222222');
@@ -219,7 +222,6 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         await expect(response.json()).resolves.toEqual({
             authenticated: false,
             has_api_key: false,
-            has_admin_key: false,
             has_credentials: false,
             tenant_id: null,
             auth_method: null,
@@ -315,7 +317,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         );
     });
 
-    it('deletes stale API/admin key cookies when accepting a new access token without those fields', async () => {
+    it('deletes a stale tenant API-key cookie when accepting a new access token', async () => {
         // Signing material is irrelevant — the route decodes claims without verifying.
         const accessToken = await signRegEngineJwt('session-origin-test-secret', 'tenant-access');
 
@@ -327,7 +329,6 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
                 },
                 cookies: {
                     re_api_key: 'stale-api-key',
-                    re_admin_key: 'stale-admin-key',
                 },
             }),
         );
@@ -337,12 +338,9 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         expect(response.cookies.get('re_api_key')).toEqual(
             expect.objectContaining({ name: 're_api_key', value: '' }),
         );
-        expect(response.cookies.get('re_admin_key')).toEqual(
-            expect.objectContaining({ name: 're_admin_key', value: '' }),
-        );
     });
 
-    it('deletes stale API/admin key cookies when new access token body includes unusable key fields', async () => {
+    it('ignores a retired administrative credential field instead of creating a cookie', async () => {
         // Signing material is irrelevant — the route decodes claims without verifying.
         const accessToken = await signRegEngineJwt('session-origin-test-secret', 'tenant-access');
 
@@ -356,7 +354,6 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
                 },
                 cookies: {
                     re_api_key: 'stale-api-key',
-                    re_admin_key: 'stale-admin-key',
                 },
             }),
         );
@@ -365,9 +362,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         expect(response.cookies.get('re_api_key')).toEqual(
             expect.objectContaining({ name: 're_api_key', value: '' }),
         );
-        expect(response.cookies.get('re_admin_key')).toEqual(
-            expect.objectContaining({ name: 're_admin_key', value: '' }),
-        );
+        expect(response.cookies.get('re_admin_key')).toBeUndefined();
     });
 
     it('DELETE calls backend logout with the bearer token and clears cookies', async () => {
@@ -387,15 +382,13 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
             headers: {
                 Authorization: 'Bearer access-token-to-revoke',
             },
+            redirect: 'manual',
         });
         expect(response.cookies.get('re_access_token')).toEqual(
             expect.objectContaining({ name: 're_access_token', value: '' }),
         );
         expect(response.cookies.get('re_api_key')).toEqual(
             expect.objectContaining({ name: 're_api_key', value: '' }),
-        );
-        expect(response.cookies.get('re_admin_key')).toEqual(
-            expect.objectContaining({ name: 're_admin_key', value: '' }),
         );
     });
 
@@ -416,6 +409,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
             headers: {
                 cookie: '__Host-regengine_session=opaque-session-token',
             },
+            redirect: 'manual',
         });
         expect(response.cookies.get('__Host-regengine_session')).toEqual(
             expect.objectContaining({ name: '__Host-regengine_session', value: '' }),
@@ -434,9 +428,6 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         );
         expect(response.cookies.get('re_api_key')).toEqual(
             expect.objectContaining({ name: 're_api_key', value: '' }),
-        );
-        expect(response.cookies.get('re_admin_key')).toEqual(
-            expect.objectContaining({ name: 're_admin_key', value: '' }),
         );
     });
 });

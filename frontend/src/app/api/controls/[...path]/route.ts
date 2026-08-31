@@ -26,7 +26,6 @@ const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
             'authorization',
             'x-regengine-api-key',
             'x-api-key',
-            'x-admin-key',
             'x-tenant-id',
         ]);
         return applyCookieCredentials(headers, request);

@@ -12,6 +12,11 @@ from fastapi import HTTPException, Response
 from starlette.requests import Request
 
 from services.admin.app.auth import webauthn_router as wr
+from services.admin.app.auth.session_auth import (
+    ActiveSessionContext,
+    get_current_active_user,
+    require_high_assurance_session,
+)
 from services.admin.app.sqlalchemy_models import (
     SessionModel,
     WebAuthnChallengeModel,
@@ -77,6 +82,10 @@ class FakeResult:
         return FakeScalars(self._scalars)
 
 
+def _is_security_guc(statement) -> bool:
+    return "set_config('regengine.is_sysadmin'" in str(statement)
+
+
 class FakeTransaction:
     def __init__(self, db):
         self.db = db
@@ -113,6 +122,8 @@ class FakeDb:
 
     def execute(self, statement):
         self.execute_statements.append(statement)
+        if _is_security_guc(statement):
+            return FakeResult()
         if not self.results:
             raise AssertionError("unexpected execute")
         return self.results.pop(0)
@@ -165,6 +176,35 @@ def _stored_credential(*, user_id: uuid.UUID, credential_id: str = "credential-i
         public_key=b"stored-public-key",
         sign_count=1,
     )
+
+
+def test_passkey_enrollment_routes_require_existing_high_assurance_session():
+    dependencies = {
+        route.path: {dependency.call for dependency in route.dependant.dependencies}
+        for route in wr.router.routes
+    }
+
+    for path in (
+        "/webauthn/register/generate-options",
+        "/webauthn/register/verify",
+    ):
+        assert require_high_assurance_session in dependencies[path]
+        assert get_current_active_user not in dependencies[path]
+
+
+def test_email_otp_sysadmin_cannot_bootstrap_attacker_passkey():
+    user = _user()
+    user.is_sysadmin = True
+    context = ActiveSessionContext(
+        user=user,
+        session=SimpleNamespace(auth_method="email_otp"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_high_assurance_session(context)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "requires_step_up"
 
 
 @pytest.mark.asyncio

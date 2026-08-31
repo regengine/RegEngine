@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from .database import get_session
+from .database import arm_global_admin_context, disarm_global_admin_context, get_session
 from .dependencies import PermissionChecker, get_current_user, get_session_store  # noqa: F401
 from .models import PermissionCheckResponse  # noqa: F401
 from .session_store import RedisSessionStore, SessionData  # noqa: F401
@@ -24,7 +24,6 @@ logger = structlog.get_logger("auth")
 
 from .auth import (  # noqa: E402
     challenges_router as _challenges_router_mod,
-    email_code_router as _email_code_router_mod,
     refresh_router as _refresh_router_mod,
     sessions_router as _sessions_router_mod,
     webauthn_router as _webauthn_router_mod,
@@ -33,13 +32,8 @@ from .auth.challenges_router import (  # noqa: F401,E402
     AUTH_BROWSER_NONCE_COOKIE,
     AUTH_CHALLENGE_DETAIL,
     AUTH_SESSION_COOKIE,
-    AUTH_SSO_REQUIRED_MESSAGE,
     create_auth_challenge,
     verify_auth_challenge,
-)
-from .auth.email_code_router import (  # noqa: F401,E402
-    confirm_email_login_code,
-    request_email_login_code,
 )
 from .auth.refresh_router import RefreshRequest, refresh_session  # noqa: F401,E402
 from .auth.schemas import (  # noqa: F401,E402
@@ -48,13 +42,10 @@ from .auth.schemas import (  # noqa: F401,E402
     ChallengeCreateResponse,
     ChallengeVerifyRequest,
     ChallengeVerifyResponse,
-    EmailCodeConfirmRequest,
-    EmailCodeRequest,
-    EmailCodeRequestResponse,
     TokenResponse,
     UserResponse,
 )
-from .auth.session_auth import ActiveSessionContext, get_current_active_session_context  # noqa: E402
+from .auth.session_auth import ActiveSessionContext, get_scoped_active_session_context  # noqa: E402
 from .auth.session_helpers import _persist_session  # noqa: F401,E402
 from .auth.sessions_router import (  # noqa: F401,E402
     list_sessions,
@@ -64,7 +55,6 @@ from .auth.sessions_router import (  # noqa: F401,E402
 )
 
 router.include_router(_challenges_router_mod.router)
-router.include_router(_email_code_router_mod.router)
 router.include_router(_refresh_router_mod.router)
 router.include_router(_sessions_router_mod.router)
 router.include_router(_webauthn_router_mod.router)
@@ -117,22 +107,52 @@ def _resolve_session_tenant_id(*, user_id, db: Session):
     return tenant_ids[0] if len(tenant_ids) == 1 else None
 
 
+def _resolve_session_permissions(*, user_id, tenant_id, db: Session) -> list[str]:
+    """Return the active tenant role's string permissions, or fail closed."""
+    if tenant_id is None:
+        return []
+
+    role = db.execute(
+        select(RoleModel)
+        .join(MembershipModel, MembershipModel.role_id == RoleModel.id)
+        .where(
+            MembershipModel.user_id == user_id,
+            MembershipModel.tenant_id == tenant_id,
+            MembershipModel.is_active == True,  # noqa: E712 (SQLAlchemy needs ==)
+            or_(RoleModel.tenant_id.is_(None), RoleModel.tenant_id == tenant_id),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if role is None or not isinstance(role.permissions, list):
+        return []
+    return [permission for permission in role.permissions if isinstance(permission, str)]
+
+
 @router.get("/me", response_model=AuthMeResponse)
 def get_me(
-    context: ActiveSessionContext = Depends(get_current_active_session_context),
+    context: ActiveSessionContext = Depends(get_scoped_active_session_context),
     db: Session = Depends(get_session),
 ) -> AuthMeResponse:
     """Hydrate the current opaque browser session."""
-    membership = _load_active_organization_membership(context=context, db=db)
-    tenant_id = _resolve_session_tenant_id(user_id=context.user.id, db=db)
-    return AuthMeResponse(
-        user_id=context.user.id,
-        email=context.user.email,
-        organization_id=membership.organization_id if membership is not None else None,
-        tenant_id=tenant_id,
-        role=membership.role if membership is not None else None,
-        auth_method=context.session.auth_method,
-    )
+    # Hydration is still part of the authenticated pre-tenant bootstrap.  The
+    # global arm is removed before the response leaves this dependency chain.
+    arm_global_admin_context(db)
+    try:
+        membership = _load_active_organization_membership(context=context, db=db)
+        tenant_id = _resolve_session_tenant_id(user_id=context.user.id, db=db)
+        permissions = _resolve_session_permissions(user_id=context.user.id, tenant_id=tenant_id, db=db)
+        return AuthMeResponse(
+            user_id=context.user.id,
+            email=context.user.email,
+            organization_id=membership.organization_id if membership is not None else None,
+            tenant_id=tenant_id,
+            role=membership.role if membership is not None else None,
+            auth_method=context.session.auth_method,
+            is_sysadmin=bool(context.user.is_sysadmin),
+            permissions=permissions,
+        )
+    finally:
+        disarm_global_admin_context(db)
 
 
 @router.get("/check-permission", response_model=PermissionCheckResponse)

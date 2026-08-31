@@ -7,11 +7,9 @@ import requests
 ADMIN_API_URL = "http://localhost:8400"
 API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
 TENANT_ID = os.environ.get("REGENGINE_TENANT_ID", "00000000-0000-0000-0000-000000000000")
-ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "")
 
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": ADMIN_MASTER_KEY,
     "X-Tenant-ID": TENANT_ID,
 }
 

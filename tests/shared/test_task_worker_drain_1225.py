@@ -239,7 +239,7 @@ class TestReleaseAbandonedTaskLockSQL_Issue1225:
             def close(self):
                 pass
 
-        with patch("shared.database.SessionLocal", _FakeSession):
+        with patch("services.admin.app.database.SessionLocal", _FakeSession):
             task_processor._release_abandoned_task_lock(task_id=123, attempts=2)
 
         sql = captured["sql"]
@@ -265,7 +265,7 @@ class TestReleaseAbandonedTaskLockSQL_Issue1225:
             def __init__(self):
                 raise RuntimeError("db unreachable")
 
-        with patch("shared.database.SessionLocal", _ExplodingSession):
+        with patch("services.admin.app.database.SessionLocal", _ExplodingSession):
             # Should not raise.
             task_processor._release_abandoned_task_lock(task_id=1, attempts=1)
 

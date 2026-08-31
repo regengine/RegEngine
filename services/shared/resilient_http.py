@@ -138,6 +138,11 @@ async def resilient_client(
         circuit protection.
     **kwargs:
         Extra keyword args forwarded to ``httpx.AsyncClient``.
+
+    Redirects are disabled by default. Internal callers frequently attach
+    custom workload credentials, which HTTP clients may preserve across a
+    cross-origin redirect. A caller that truly needs redirects must opt in
+    explicitly and must not attach secrets.
     """
     if circuit_name:
         circuit = get_http_circuit(circuit_name)
@@ -147,10 +152,11 @@ async def resilient_client(
         wrapped=httpx.AsyncHTTPTransport(http2=True),
         retries=retries,
     )
+    follow_redirects = bool(kwargs.pop("follow_redirects", False))
     async with httpx.AsyncClient(
         transport=transport,
         timeout=timeout,
-        follow_redirects=True,
+        follow_redirects=follow_redirects,
         **kwargs,
     ) as client:
         if circuit_name:

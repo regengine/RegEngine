@@ -34,9 +34,6 @@ CONTENT_V2 = """
 </html>
 """
 
-ADMIN_MASTER_KEY = "admin-master-key-dev"
-
-
 def _service_available(base_url: str) -> bool:
     try:
         response = requests.get(f"{base_url}/health", timeout=2)
@@ -49,7 +46,6 @@ def _service_available(base_url: str) -> bool:
 def auth_headers():
     return {
         "X-RegEngine-API-Key": API_KEY,
-        "X-Admin-Key": ADMIN_MASTER_KEY,
         "X-Tenant-ID": TENANT_ID,
         "Content-Type": "application/json",
     }

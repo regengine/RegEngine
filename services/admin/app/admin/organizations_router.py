@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..auth.session_auth import require_high_assurance_session
-from ..database import get_session
+from ..database import arm_global_admin_context, get_session
+from ..privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
 from ..sqlalchemy_models import OrganizationModel, UserModel
 
 logger = structlog.get_logger("admin.organizations")
@@ -51,8 +51,14 @@ class OrganizationSsoPolicyResponse(BaseModel):
 
 
 def require_super_admin(
-    current_user: UserModel = Depends(require_high_assurance_session),
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
 ) -> UserModel:
+    current_user = actor.user
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required.",
+        )
     if not bool(getattr(current_user, "is_sysadmin", False)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -68,6 +74,9 @@ async def update_organization_sso_policy(
     _: UserModel = Depends(require_super_admin),
     db: Session = Depends(get_session),
 ) -> OrganizationSsoPolicyResponse:
+    # ``require_super_admin`` has already completed high-assurance human
+    # authentication.  Elevation is local to this database transaction.
+    arm_global_admin_context(db)
     organization = db.get(OrganizationModel, org_id)
     if organization is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
@@ -77,8 +86,13 @@ async def update_organization_sso_policy(
     organization.enforced_auth_policy = payload.enforced_auth_policy
 
     try:
+        response = OrganizationSsoPolicyResponse(
+            id=organization.id,
+            domain_name=organization.domain_name,
+            domain_verified=bool(organization.domain_verified),
+            enforced_auth_policy=organization.enforced_auth_policy,
+        )
         db.commit()
-        db.refresh(organization)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
@@ -93,9 +107,4 @@ async def update_organization_sso_policy(
             detail="Organization policy update temporarily unavailable.",
         ) from exc
 
-    return OrganizationSsoPolicyResponse(
-        id=organization.id,
-        domain_name=organization.domain_name,
-        domain_verified=bool(organization.domain_verified),
-        enforced_auth_policy=organization.enforced_auth_policy,
-    )
+    return response

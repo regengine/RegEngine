@@ -28,9 +28,14 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
         from sqlalchemy import bindparam as _bindparam
         from sqlalchemy import text as _text
 
-        key_hashes = _pkg.api_key_hash_candidates(raw_api_key)
+        from shared.api_key_store import set_api_key_lookup_context
+
         _db = SessionLocal()
         try:
+            lookup_proof = set_api_key_lookup_context(_db, raw_api_key)
+            if lookup_proof is None:
+                return None
+            _key_id, key_hashes = lookup_proof
             stmt = _text(
                 "SELECT tenant_id FROM api_keys WHERE key_hash IN :key_hashes LIMIT 1"
             ).bindparams(_bindparam("key_hashes", expanding=True))

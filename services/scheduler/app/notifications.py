@@ -17,6 +17,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import httpx
 import structlog
+from shared.safe_http import PinnedHTTPSession
 from shared.url_validation import SSRFError, validate_url
 
 from .config import get_settings
@@ -160,7 +161,7 @@ class WebhookNotifier:
         self.timeout = timeout or settings.webhook_timeout_seconds
         self.max_retries = max_retries or settings.webhook_max_retries
         self.max_workers = max_workers
-        self.session = httpx.Client(timeout=30.0)
+        self.session = PinnedHTTPSession()
         self.session.headers.update(
             {
                 "Content-Type": "application/json",

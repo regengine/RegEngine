@@ -36,11 +36,6 @@ function resolveSafeNextPath(nextPath: string | null): string {
   return trimmed;
 }
 
-function resolveSsoRedirect(organizationId?: string | null): string {
-  const params = organizationId ? `?organization_id=${encodeURIComponent(organizationId)}` : '';
-  return `/auth/sso/mock${params}`;
-}
-
 export default function PasswordlessEntryClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,11 +79,6 @@ export default function PasswordlessEntryClient() {
 
     try {
       const response = await startEmailChallenge(normalizedEmail);
-      if (response.sso_redirect) {
-        window.location.assign(resolveSsoRedirect(response.organization_id));
-        return;
-      }
-
       saveOtpChallengeState({
         email: normalizedEmail,
         challengeId: response.challenge_id ?? null,

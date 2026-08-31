@@ -49,10 +49,9 @@ def _verify_api_key_present(
     NAMING (F-1, re-audit): this helper only checks header PRESENCE.
     It does NOT validate the key itself — that happens later in
     ``require_permission`` → ``get_ingestion_principal`` → ``require_api_key``
-    which consults the DB-backed key store and the preshared master env var.
-    This gate only enforces that (a) a header is present at all and (b) the
-    service has at least one credential configured, so a misconfigured
-    prod deploy can't silently accept unauthenticated traffic.
+    against the database-backed key store. This gate only enforces that a
+    header is present; it must not require or consult a generic environment
+    key because that retired shared-credential path has no authority.
 
     NEVER use this dependency alone on a route that returns or mutates
     tenant-scoped data — chain it with ``require_permission(...)`` (which
@@ -60,22 +59,10 @@ def _verify_api_key_present(
     ``get_ingestion_principal`` and bind the URL/query ``tenant_id`` to
     the principal's tenant explicitly.
 
-    Before the #1888 fix, the gate only checked ``API_KEY`` (never set on
-    Railway — ``REGENGINE_API_KEY`` is used instead), so every per-tenant
-    API key 401'd here even when valid and later resolved by the
-    principal path.
+    Before the #1888 follow-up, this gate also required a generic key env var,
+    so valid tenant keys failed after the shared credential was retired.
     """
     if not x_regengine_api_key:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    settings = _pkg.get_settings()
-    configured_api_key = (
-        getattr(settings, "api_key", None)
-        or os.environ.get("API_KEY")
-        or os.environ.get("REGENGINE_API_KEY")
-    )
-    if not configured_api_key and _pkg._is_production():
-        # Neither API_KEY nor REGENGINE_API_KEY set in prod — reject so a
-        # misconfigured deploy cannot silently accept traffic.
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 

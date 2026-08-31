@@ -1,9 +1,11 @@
 import asyncio
+import hashlib
 import os
 import random
 import threading
 import time
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass
 
 import structlog
 from prometheus_client import REGISTRY, CollectorRegistry, Gauge
@@ -87,8 +89,8 @@ _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 # #2461: importing tenant_context installs the class-level RLS GUC
 # "begin" hook BEFORE the module-level create_engine() below, so every
 # transaction on this engine (and every other Engine in the process)
-# gets app.tenant_id / regengine.system_context applied from the
-# seeded contextvars. Import kept under the ``shared.`` alias — the
+# gets a fail-closed security-GUC baseline plus app.tenant_id from the
+# seeded contextvar. Import kept under the ``shared.`` alias — the
 # canonical runtime alias — so exactly one module instance (and one
 # ContextVar pair) exists.
 import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
@@ -146,86 +148,528 @@ def _safe_labeled_gauge(name: str, description: str, labelnames: list[str]) -> G
 
 regengine_rls_enforcement_inert = _safe_labeled_gauge(
     "regengine_rls_enforcement_inert",
-    "1 when the DB role is SUPERUSER or BYPASSRLS (RLS policies are inert), 0 when enforced.",
+    "1 when the DB role can bypass RLS or the required v111 catalog controls are missing, 0 when enforced.",
     ["engine"],
 )
 
 
-def check_rls_posture(target_engine=None, *, label: str = "shared") -> str:
-    """Boot-time role posture probe for #2461.
+# A role-name/rolbypassrls probe alone can report a false green after an
+# unmanaged database is stamped at head or after policy/ACL drift.  This
+# catalog-only canary intentionally touches no tenant data and is executable
+# with both least-privilege runtime roles.  It proves the critical v111 FORCE
+# RLS, policy, role-topology, ownership, and privilege signatures before the
+# metric can report zero.
+_RUNTIME_CUTOVER_CANARY_SQL = """
+WITH required_relations(schema_name, relation_name) AS (
+    VALUES
+        ('public', 'api_keys'),
+        ('public', 'users'),
+        ('public', 'sessions'),
+        ('public', 'user_emails'),
+        ('public', 'organization_memberships'),
+        ('public', 'organizations'),
+        ('public', 'auth_challenges'),
+        ('public', 'webauthn_credentials'),
+        ('public', 'webauthn_challenges'),
+        ('public', 'admin_mfa_recovery_codes'),
+        ('public', 'memberships'),
+        ('public', 'roles'),
+        ('public', 'tenants'),
+        ('public', 'funnel_events'),
+        ('public', 'audit_log_buffer'),
+        ('fsma', 'agent_artifacts'),
+        ('fsma', 'agent_artifact_reviews'),
+        ('fsma', 'ingestion_run_receipts'),
+        ('fsma', 'ingestion_runs'),
+        ('fsma', 'task_queue'),
+        ('fsma', 'fsma_audit_trail'),
+        ('ingestion', 'documents'),
+        ('ingestion', 'jobs'),
+        ('ingestion', 'audit_log'),
+        ('dlq', 'webhook_failures'),
+        ('fsma', 'incidents'),
+        ('fsma', 'exchange_packages'),
+        ('fsma', 'organizations')
+),
+policy_manifest AS (
+    SELECT COALESCE(
+               string_agg(
+                   concat_ws(
+                       chr(31),
+                       policy.schemaname,
+                       policy.tablename,
+                       policy.policyname,
+                       policy.permissive,
+                       array_to_string(policy.roles, ','),
+                       policy.cmd,
+                       regexp_replace(
+                           trim(COALESCE(policy.qual, '<NULL>')),
+                           '\\s+',
+                           ' ',
+                           'g'
+                       ),
+                       regexp_replace(
+                           trim(COALESCE(policy.with_check, '<NULL>')),
+                           '\\s+',
+                           ' ',
+                           'g'
+                       )
+                   ),
+                   chr(30) ORDER BY
+                       policy.schemaname,
+                       policy.tablename,
+                       policy.policyname,
+                       policy.cmd,
+                       policy.roles::text
+               ),
+               ''
+           ) AS manifest
+      FROM pg_policies AS policy
+      JOIN required_relations AS required
+        ON required.schema_name = policy.schemaname
+       AND required.relation_name = policy.tablename
+     WHERE current_user = ANY(policy.roles)
+        OR 'public'::name = ANY(policy.roles)
+),
+relation_posture AS (
+    SELECT COALESCE(
+               bool_and(
+                   c.oid IS NOT NULL
+                   AND c.relrowsecurity
+                   AND c.relforcerowsecurity
+               ),
+               false
+           ) AS ok
+      FROM required_relations AS required
+      LEFT JOIN pg_namespace AS n ON n.nspname = required.schema_name
+      LEFT JOIN pg_class AS c
+        ON c.relnamespace = n.oid
+       AND c.relname = required.relation_name
+       AND c.relkind IN ('r', 'p')
+),
+policy_guards AS (
+    SELECT NOT EXISTS (
+        SELECT 1
+          FROM pg_policies
+         WHERE COALESCE(qual, '') LIKE '%regengine.system_context%'
+            OR COALESCE(with_check, '') LIKE '%regengine.system_context%'
+            OR (
+                COALESCE(qual, '') LIKE '%regengine.is_sysadmin%'
+                AND (
+                    lower(COALESCE(qual, '')) NOT LIKE '%current_user%'
+                    OR lower(COALESCE(qual, '')) NOT LIKE '%regengine_sysadmin%'
+                )
+            )
+            OR (
+                COALESCE(with_check, '') LIKE '%regengine.is_sysadmin%'
+                AND (
+                    lower(COALESCE(with_check, '')) NOT LIKE '%current_user%'
+                    OR lower(COALESCE(with_check, '')) NOT LIKE '%regengine_sysadmin%'
+                )
+            )
+    ) AS ok
+),
+implicit_authority AS (
+    SELECT NOT EXISTS (
+               SELECT 1
+                 FROM pg_auth_members
+                WHERE member = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+                   OR roleid = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+           )
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM pg_database
+                WHERE datname = current_database()
+                  AND datdba = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+           )
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM pg_namespace
+                WHERE nspname IN ('public', 'fsma', 'audit', 'dlq', 'ingestion')
+                  AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+           )
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM pg_class AS c
+                 JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                WHERE n.nspname IN ('public', 'fsma', 'audit', 'dlq', 'ingestion')
+                  AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+                  AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+           )
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM pg_proc AS p
+                 JOIN pg_namespace AS n ON n.oid = p.pronamespace
+                WHERE n.nspname IN ('public', 'fsma', 'audit', 'dlq', 'ingestion')
+                  AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+           ) AS ok
+),
+privilege_posture AS (
+    SELECT
+        NOT EXISTS (
+            SELECT 1
+              FROM unnest(ARRAY['public', 'fsma', 'audit', 'dlq', 'ingestion'])
+                   AS protected_schema(schema_name)
+             WHERE has_schema_privilege(
+                       current_user,
+                       protected_schema.schema_name,
+                       'CREATE'
+                   )
+        )
+        AND NOT has_table_privilege(current_user, 'public.alembic_version', 'SELECT')
+        AND NOT has_table_privilege(current_user, 'public.alembic_version', 'INSERT')
+        AND NOT has_table_privilege(current_user, 'public.alembic_version', 'UPDATE')
+        AND NOT has_table_privilege(current_user, 'public.alembic_version', 'DELETE')
+        AND CASE current_user
+            WHEN 'regengine' THEN
+                has_table_privilege(current_user, 'fsma.task_queue', 'SELECT')
+                AND has_table_privilege(current_user, 'fsma.task_queue', 'INSERT')
+                AND NOT has_table_privilege(current_user, 'fsma.task_queue', 'UPDATE')
+                AND NOT has_table_privilege(current_user, 'fsma.task_queue', 'DELETE')
+                AND NOT has_table_privilege(current_user, 'public.audit_log_buffer', 'SELECT')
+                AND NOT has_table_privilege(current_user, 'dlq.webhook_failures', 'SELECT')
+                AND has_table_privilege(current_user, 'public.compliance_alerts', 'SELECT')
+                AND has_table_privilege(current_user, 'public.compliance_alerts', 'INSERT')
+                AND NOT has_table_privilege(current_user, 'public.compliance_alerts', 'UPDATE')
+                AND NOT has_table_privilege(current_user, 'public.compliance_notifications', 'SELECT')
+                AND NOT has_table_privilege(current_user, 'public.compliance_status_log', 'SELECT')
+                AND has_table_privilege(current_user, 'fsma.notification_outbox', 'SELECT')
+                AND has_table_privilege(current_user, 'fsma.notification_outbox', 'UPDATE')
+                AND has_table_privilege(current_user, 'fsma.remediation_tokens', 'SELECT')
+                AND has_table_privilege(current_user, 'fsma.remediation_tokens', 'INSERT')
+                AND has_table_privilege(current_user, 'fsma.remediation_tokens', 'UPDATE')
+                AND has_function_privilege(current_user, 'public.set_tenant_context(text)', 'EXECUTE')
+                AND NOT has_function_privilege(current_user, 'public.set_admin_context(boolean)', 'EXECUTE')
+                AND NOT has_function_privilege(current_user, 'fsma.get_remediation_token_by_hash(text)', 'EXECUTE')
+                AND NOT has_function_privilege(current_user, 'fsma.get_remediation_token_by_session_hash(text)', 'EXECUTE')
+            WHEN 'regengine_sysadmin' THEN
+                has_table_privilege(current_user, 'fsma.task_queue', 'SELECT')
+                AND NOT has_table_privilege(current_user, 'fsma.task_queue', 'INSERT')
+                AND NOT has_table_privilege(current_user, 'fsma.task_queue', 'UPDATE')
+                AND has_column_privilege(current_user, 'fsma.task_queue', 'status', 'UPDATE')
+                AND has_table_privilege(current_user, 'fsma.task_queue', 'DELETE')
+                AND has_table_privilege(current_user, 'public.audit_log_buffer', 'SELECT')
+                AND NOT has_table_privilege(current_user, 'public.audit_log_buffer', 'UPDATE')
+                AND has_column_privilege(current_user, 'public.audit_log_buffer', 'replayed_at', 'UPDATE')
+                AND has_table_privilege(current_user, 'dlq.webhook_failures', 'SELECT')
+                AND NOT has_table_privilege(current_user, 'dlq.webhook_failures', 'UPDATE')
+                AND has_column_privilege(current_user, 'dlq.webhook_failures', 'status', 'UPDATE')
+                AND has_table_privilege(current_user, 'public.api_keys', 'SELECT')
+                AND has_table_privilege(current_user, 'public.api_keys', 'INSERT')
+                AND NOT has_table_privilege(current_user, 'public.api_keys', 'UPDATE')
+                AND has_column_privilege(current_user, 'public.api_keys', 'enabled', 'UPDATE')
+                AND NOT has_table_privilege(current_user, 'public.api_keys', 'DELETE')
+                AND has_function_privilege(current_user, 'public.set_admin_context(boolean)', 'EXECUTE')
+            ELSE false
+        END AS ok
+),
+disabled_surface_posture AS (
+    SELECT NOT EXISTS (
+               SELECT 1
+                 FROM pg_policies
+                WHERE (schemaname, tablename) IN (
+                          ('fsma', 'incidents'),
+                          ('fsma', 'exchange_packages'),
+                          ('fsma', 'organizations')
+                      )
+           )
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM unnest(
+                          ARRAY[
+                              'fsma.incidents',
+                              'fsma.exchange_packages',
+                              'fsma.organizations'
+                          ]
+                      ) AS disabled_table(table_name)
+                WHERE has_table_privilege(
+                          current_user,
+                          disabled_table.table_name,
+                          'SELECT,INSERT,UPDATE,DELETE'
+                      )
+           ) AS ok
+)
+SELECT relation_posture.ok,
+       policy_manifest.manifest,
+       policy_guards.ok,
+       implicit_authority.ok,
+       privilege_posture.ok AND disabled_surface_posture.ok
+  FROM relation_posture,
+       policy_manifest,
+       policy_guards,
+       implicit_authority,
+       privilege_posture,
+       disabled_surface_posture
+"""
 
-    Returns ``"enforced"`` | ``"inert"`` | ``"unknown"``. ``unknown`` on
-    sqlite or probe failure — a probe failure alone must never crash
-    boot. When the role is SUPERUSER or BYPASSRLS the fleet's RLS
-    policies are decorative: log loudly, set the
-    ``regengine_rls_enforcement_inert{engine=label}`` gauge, and — only
-    when ``REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`` (the post-#2461-cutover
-    posture) — raise RuntimeError so boot aborts instead of silently
-    regressing to a BYPASSRLS role.
-    """
-    eng = target_engine if target_engine is not None else engine
-    require_enforcement = os.getenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT") == "1"
-    if eng.dialect.name != "postgresql":
-        return "unknown"
+# SHA-256 of the exact sorted catalog tuples emitted above.  The source of
+# truth remains v111's policy DDL; these fingerprints were generated by the
+# direct-role migrated-PostgreSQL gate.  Whitespace alone is normalized.
+_EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256 = {
+    "regengine": "37a00b9eeb2c2ff127c5c9bc4be6093e6c887a9e783ef891f28d419b0318b329",  # pragma: allowlist secret
+    "regengine_sysadmin": "a7bacda65dc495ccaa238d7b01a53b409eb0136efb0f97d86328afe1dc209b41",  # pragma: allowlist secret
+}
 
-    # #2696: under REQUIRE=1 a probe failure must not silently bypass the
-    # one-way boot guard — retry (transient boot-time blips), then abort
-    # boot rather than proceed blind. Outside REQUIRE=1 the original
-    # probe-failure-must-never-crash-boot contract stands.
-    attempts = 3 if require_enforcement else 1
-    row = None
-    probe_error: Exception | None = None
-    for attempt in range(1, attempts + 1):
-        try:
-            with eng.connect() as conn:
-                row = conn.execute(
-                    text("SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
-                ).fetchone()
-            probe_error = None
-            break
-        except Exception as exc:
-            probe_error = exc
-            logger.warning("rls_posture_probe_failed", engine=label, attempt=attempt, attempts=attempts, error=str(exc))
-            if attempt < attempts:
-                time.sleep(min(2 ** (attempt - 1), 4))
-    if probe_error is not None:
-        if require_enforcement:
-            raise RuntimeError(
-                f"RLS enforcement required but the posture probe for the '{label}' engine "
-                f"failed after {attempts} attempts ({probe_error}) — refusing to boot blind. "
-                "Fix DB connectivity or unset REGENGINE_REQUIRE_RLS_ENFORCEMENT."
-            ) from probe_error
-        return "unknown"
 
-    if row is None:  # pragma: no cover — current_user always resolves
-        return "unknown"
+@dataclass(frozen=True)
+class DatabaseIdentity:
+    """Non-secret identity returned by PostgreSQL for cross-engine checks."""
 
-    rolname, rolsuper, rolbypassrls = row
-    inert = bool(rolsuper) or bool(rolbypassrls)
+    database: str
+    server_address: str
+    server_port: int
+
+
+def _rls_enforcement_required() -> bool:
+    """Production cannot opt out; staging can explicitly activate the gate."""
+    return is_production() or os.getenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT") == "1"
+
+
+def _record_rls_metric(*, label: str, inert: bool) -> None:
     try:
         regengine_rls_enforcement_inert.labels(engine=label).set(1 if inert else 0)
     except Exception:  # pragma: no cover — metrics must never break boot
         pass
 
+
+def _probe_with_retries(target_engine, *, label: str, statement, required: bool):
+    attempts = 3 if required else 1
+    probe_error: Exception | None = None
+    row = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with target_engine.connect() as conn:
+                row = conn.execute(statement).fetchone()
+            probe_error = None
+            break
+        except Exception as exc:  # noqa: BLE001 - startup probe must classify all DB failures
+            probe_error = exc
+            logger.warning(
+                "database_posture_probe_failed",
+                engine=label,
+                attempt=attempt,
+                attempts=attempts,
+                error=str(exc),
+            )
+            if attempt < attempts:
+                time.sleep(min(2 ** (attempt - 1), 4))
+
+    if probe_error is not None and required:
+        raise RuntimeError(
+            f"RLS enforcement required but the posture probe for the '{label}' engine "
+            f"failed after {attempts} attempts ({probe_error}) — refusing to boot blind."
+        ) from probe_error
+    return row
+
+
+def _runtime_cutover_canary(
+    target_engine,
+    *,
+    label: str,
+    expected_role: str,
+    required: bool,
+) -> bool:
+    """Prove critical v111 catalog state using the runtime credential itself."""
+
+    try:
+        row = _probe_with_retries(
+            target_engine,
+            label=f"{label}-v111-catalog",
+            statement=text(_RUNTIME_CUTOVER_CANARY_SQL),
+            required=required,
+        )
+    except RuntimeError:
+        _record_rls_metric(label=label, inert=True)
+        raise
+
+    if row is None:
+        _record_rls_metric(label=label, inert=True)
+        return False
+
+    expected_policy_fingerprint = _EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256.get(
+        expected_role
+    )
+    policy_manifest = row[1]
+    actual_policy_fingerprint = hashlib.sha256(
+        str(policy_manifest).encode("utf-8")
+    ).hexdigest()
+    checks = (
+        bool(row[0]),
+        bool(expected_policy_fingerprint)
+        and actual_policy_fingerprint == expected_policy_fingerprint,
+        bool(row[2]),
+        bool(row[3]),
+        bool(row[4]),
+    )
+    if all(checks):
+        return True
+
+    _record_rls_metric(label=label, inert=True)
+    logger.error(
+        "runtime_cutover_catalog_canary_failed",
+        engine=label,
+        forced_rls=checks[0],
+        policies=checks[1],
+        policy_guards=checks[2],
+        implicit_authority=checks[3],
+        privileges=checks[4],
+    )
+    if required:
+        raise RuntimeError(
+            f"RLS enforcement required but the '{label}' engine failed the "
+            "v111 catalog canary (FORCE RLS, policy, membership/ownership, or "
+            "privilege drift) — refusing to boot."
+        )
+    return False
+
+
+def check_rls_posture(
+    target_engine=None,
+    *,
+    label: str = "shared",
+    expected_role: str | None = None,
+) -> str:
+    """Validate that a runtime connection cannot bypass row-level security.
+
+    Production always fails closed on a non-PostgreSQL engine, an unknown
+    posture, a SUPERUSER/BYPASSRLS role, or a role other than
+    ``expected_role``. ``REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`` activates the
+    same hard gate in staging. Other local/test environments retain the
+    historical best-effort ``"unknown"``/``"inert"`` return values.
+    """
+    eng = target_engine if target_engine is not None else engine
+    required = _rls_enforcement_required()
+    if eng.dialect.name != "postgresql":
+        if required:
+            raise RuntimeError(
+                f"RLS enforcement required but the '{label}' engine uses "
+                f"{eng.dialect.name!r}, not PostgreSQL."
+            )
+        return "unknown"
+
+    row = _probe_with_retries(
+        eng,
+        label=label,
+        statement=text(
+            "SELECT session_user, current_user, rolsuper, rolbypassrls "
+            "FROM pg_roles WHERE rolname = current_user"
+        ),
+        required=required,
+    )
+    if row is None:
+        _record_rls_metric(label=label, inert=True)
+        if required:
+            raise RuntimeError(
+                f"RLS enforcement required but the posture probe for the '{label}' engine "
+                "returned no current role — refusing to boot blind."
+            )
+        return "unknown"
+
+    session_role, rolname, rolsuper, rolbypassrls = row
+    switched_role = session_role != rolname
+    inert = bool(rolsuper) or bool(rolbypassrls) or switched_role
     if inert:
+        _record_rls_metric(label=label, inert=True)
         logger.error(
             "rls_enforcement_inert",
             role=rolname,
+            session_role=session_role,
+            switched_role=switched_role,
             superuser=bool(rolsuper),
             bypassrls=bool(rolbypassrls),
             engine=label,
         )
-        if os.getenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT") == "1":
+        if required:
             raise RuntimeError(
                 f"RLS enforcement required but the '{label}' engine connects as "
-                f"role {rolname!r} (superuser={bool(rolsuper)}, bypassrls={bool(rolbypassrls)}) — "
-                "RLS policies are inert under this role. Point DATABASE_URL at the "
-                "least-privilege application role or unset REGENGINE_REQUIRE_RLS_ENFORCEMENT."
+                f"session role {session_role!r} and effective role {rolname!r} "
+                f"(superuser={bool(rolsuper)}, bypassrls={bool(rolbypassrls)})."
             )
         return "inert"
 
+    if expected_role is not None and rolname != expected_role:
+        _record_rls_metric(label=label, inert=True)
+        logger.error(
+            "database_runtime_role_unexpected",
+            engine=label,
+            role=rolname,
+            expected_role=expected_role,
+        )
+        if required:
+            raise RuntimeError(
+                f"The '{label}' engine connects as role {rolname!r}; expected {expected_role!r}. "
+                "Refusing to start with an unverified runtime role."
+            )
+        return "unknown"
+
+    if expected_role in {"regengine", "regengine_sysadmin"}:
+        if not _runtime_cutover_canary(
+            eng,
+            label=label,
+            expected_role=expected_role,
+            required=required,
+        ):
+            return "inert"
+
+    _record_rls_metric(label=label, inert=False)
     logger.info("rls_enforcement_active", role=rolname, engine=label)
     return "enforced"
+
+
+def _database_identity(target_engine, *, label: str, required: bool) -> DatabaseIdentity | None:
+    if target_engine.dialect.name != "postgresql":
+        if required:
+            raise RuntimeError(f"Cannot verify database identity for non-PostgreSQL '{label}' engine.")
+        return None
+
+    row = _probe_with_retries(
+        target_engine,
+        label=label,
+        statement=text("SELECT current_database(), inet_server_addr()::text, inet_server_port()"),
+        required=required,
+    )
+    if row is None:
+        if required:
+            raise RuntimeError(f"Database identity probe for the '{label}' engine returned no row.")
+        return None
+
+    database, server_address, server_port = row
+    if not database or not server_address or server_port is None:
+        if required:
+            raise RuntimeError(
+                f"Database identity probe for the '{label}' engine was incomplete; "
+                "refusing to compare credential-bearing URLs."
+            )
+        return None
+    return DatabaseIdentity(str(database), str(server_address), int(server_port))
+
+
+def validate_runtime_database_posture(shared_engine, admin_engine) -> dict[str, DatabaseIdentity | None]:
+    """Validate both runtime roles and prove both engines target one database.
+
+    The comparison uses values returned by PostgreSQL, never raw URLs, so
+    credentials cannot leak into logs or exceptions. Production (and staging
+    with ``REGENGINE_REQUIRE_RLS_ENFORCEMENT=1``) rejects unknown or mismatched
+    identities.
+    """
+    required = _rls_enforcement_required()
+    check_rls_posture(shared_engine, label="shared", expected_role="regengine")
+    check_rls_posture(admin_engine, label="admin", expected_role="regengine_sysadmin")
+
+    identities = {
+        "shared": _database_identity(shared_engine, label="shared", required=required),
+        "admin": _database_identity(admin_engine, label="admin", required=required),
+    }
+    if identities["shared"] != identities["admin"]:
+        logger.error("runtime_database_identity_mismatch", **identities)
+        if required:
+            raise RuntimeError(
+                "DATABASE_URL and ADMIN_DATABASE_URL resolve to different PostgreSQL databases; "
+                "both runtime credentials must target the same migrated database."
+            )
+    else:
+        logger.info("runtime_database_identity_verified", identity=identities["shared"])
+    return identities
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

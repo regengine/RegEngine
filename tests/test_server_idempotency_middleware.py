@@ -125,9 +125,16 @@ def principal_echo_route(server_main):
 
 def test_server_stack_contains_ported_middlewares(server_main):
     names = [m.cls.__name__ for m in server_main.app.user_middleware]
+    assert "AuditContextMiddleware" in names
     assert "IdempotencyMiddleware" in names
     assert "RateLimitHeadersMiddleware" in names
     assert "CorrelationIdMiddleware" in names
+
+
+def test_request_id_runs_before_audit_context(server_main):
+    """Audit context must reuse the canonical per-hop request ID."""
+    names = [m.cls.__name__ for m in server_main.app.user_middleware]
+    assert names.index("RequestIDMiddleware") < names.index("AuditContextMiddleware")
 
 
 def test_server_stack_relative_ordering_matches_ingestion(server_main):

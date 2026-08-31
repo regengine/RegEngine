@@ -62,6 +62,13 @@ def _is_production_like() -> bool:
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # These source tables are already FORCE-RLS, while the dedicated migration
+    # owner is intentionally NOBYPASSRLS.  Restore owner visibility only for
+    # this transactional data backfill; an exception rolls the ALTERs back.
+    conn.execute(sa.text("ALTER TABLE public.tenants NO FORCE ROW LEVEL SECURITY"))
+    conn.execute(sa.text("ALTER TABLE public.memberships NO FORCE ROW LEVEL SECURITY"))
+    conn.execute(sa.text("ALTER TABLE public.roles NO FORCE ROW LEVEL SECURITY"))
+
     conn.execute(
         sa.text(
             """
@@ -95,6 +102,9 @@ def upgrade() -> None:
                 "AUTH_OTP_HMAC_SECRET must be set in production to backfill user_emails.email_fingerprint"
             )
         logger.warning("AUTH_OTP_HMAC_SECRET not set; skipping user_emails.email_fingerprint backfill")
+        conn.execute(sa.text("ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY"))
+        conn.execute(sa.text("ALTER TABLE public.memberships FORCE ROW LEVEL SECURITY"))
+        conn.execute(sa.text("ALTER TABLE public.roles FORCE ROW LEVEL SECURITY"))
         return
 
     key = secret.encode("utf-8")
@@ -110,6 +120,10 @@ def upgrade() -> None:
             ),
             {"fp": _fingerprint_email(key, email), "id": row_id},
         )
+
+    conn.execute(sa.text("ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY"))
+    conn.execute(sa.text("ALTER TABLE public.memberships FORCE ROW LEVEL SECURITY"))
+    conn.execute(sa.text("ALTER TABLE public.roles FORCE ROW LEVEL SECURITY"))
 
 
 def downgrade() -> None:

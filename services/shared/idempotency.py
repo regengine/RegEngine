@@ -61,13 +61,16 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
     hash candidates as the auth path and only returns enabled, unexpired keys.
     """
     try:
-        from shared.api_key_store import api_key_hash_candidates
+        from shared.api_key_store import set_api_key_lookup_context
         from shared.database import SessionLocal
         from sqlalchemy import bindparam, text
 
-        key_hashes = api_key_hash_candidates(raw_api_key)
         db_session = SessionLocal()
         try:
+            lookup_proof = set_api_key_lookup_context(db_session, raw_api_key)
+            if lookup_proof is None:
+                return None
+            _key_id, key_hashes = lookup_proof
             stmt = text(
                 """
                 SELECT tenant_id, enabled, expires_at

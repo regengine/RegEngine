@@ -1,29 +1,25 @@
-name: Public OpenAPI Spec Drift
-
-# Closes #2308. Fails the build if `frontend/public/openapi.json` is stale
-# relative to the ingestion FastAPI app. Devs adding/modifying public routes
-# must run `python scripts/generate_openapi.py` and commit the result.
+name: Public OpenAPI Contract
 
 on:
   pull_request:
     branches: [main]
     paths:
-      - 'services/ingestion/**'
-      - 'services/shared/**'
-      - 'shared/**'
-      - 'scripts/generate_openapi.py'
-      - 'frontend/public/openapi.json'
-      - 'requirements.lock'
+      - 'frontend/src/lib/public-openapi.ts'
+      - 'frontend/src/app/openapi.json/**'
+      - 'frontend/src/app/api/openapi.json/**'
+      - 'frontend/src/app/docs/**'
+      - 'frontend/src/__tests__/lib/public-openapi.test.ts'
+      - 'frontend/package-lock.json'
       - '.github/workflows/openapi-public-spec.yml'
   push:
     branches: [main, develop]
     paths:
-      - 'services/ingestion/**'
-      - 'services/shared/**'
-      - 'shared/**'
-      - 'scripts/generate_openapi.py'
-      - 'frontend/public/openapi.json'
-      - 'requirements.lock'
+      - 'frontend/src/lib/public-openapi.ts'
+      - 'frontend/src/app/openapi.json/**'
+      - 'frontend/src/app/api/openapi.json/**'
+      - 'frontend/src/app/docs/**'
+      - 'frontend/src/__tests__/lib/public-openapi.test.ts'
+      - 'frontend/package-lock.json'
       - '.github/workflows/openapi-public-spec.yml'
 
 permissions:
@@ -34,30 +30,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  drift-check:
-    name: Drift check
+  contract-check:
+    name: Public contract check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541dca151540f3d3c9d6a8e2eed2a3  # v4
         with:
-          python-version: '3.11'
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
-          restore-keys: |
-            pip-
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-      - name: Install dependencies
-        run: |
-          pip install --require-hashes -r requirements.lock
-
-      - name: Verify openapi.json is in sync
-        run: |
-          python scripts/generate_openapi.py --check
+      - name: Verify both public OpenAPI URLs
+        working-directory: frontend
+        run: npm test -- --run src/__tests__/lib/public-openapi.test.ts

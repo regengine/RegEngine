@@ -22,7 +22,6 @@ def base_env(**overrides):
     env = {
         "REGENGINE_ENV": "production",
         "AUTH_SECRET_KEY": "auth-secret-with-enough-entropy",  # pragma: allowlist secret
-        "ADMIN_MASTER_KEY": "admin-master-key-with-enough-entropy",  # pragma: allowlist secret
         "POSTGRES_PASSWORD": "postgres-password-with-enough-entropy",  # pragma: allowlist secret
         "DATABASE_URL": "postgresql://regengine:password@localhost:5432/regengine",  # pragma: allowlist secret
         "AUTH_TEST_BYPASS_TOKEN": "",
@@ -84,19 +83,6 @@ class TestEnvValidation:
 
         assert result.ok
         assert result.warnings
-
-
-class TestEnvExample:
-    def test_env_example_has_no_real_secrets(self):
-        env_example_path = Path(__file__).parent.parent.parent / ".env.example"
-        content = env_example_path.read_text()
-
-        for line in content.split("\n"):
-            if line.startswith("ADMIN_MASTER_KEY="):
-                value = line.split("=", 1)[1].strip()
-                assert value == "" or "your-" in value.lower() or value.startswith("#"), (
-                    f"ADMIN_MASTER_KEY should be empty in example: {line}"
-                )
 
 
 class TestDevCompose:

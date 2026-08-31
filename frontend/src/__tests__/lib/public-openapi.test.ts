@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { GET } from '@/app/api/openapi.json/route';
+import { GET as getApiOpenApi } from '@/app/api/openapi.json/route';
+import { GET as getRootOpenApi } from '@/app/openapi.json/route';
 import { publicOpenApiSpec } from '@/lib/public-openapi';
 
 describe('public OpenAPI spec', () => {
@@ -23,15 +24,22 @@ describe('public OpenAPI spec', () => {
   it('does not expose internal service routes in the public spec', () => {
     const serialized = JSON.stringify(publicOpenApiSpec);
 
-    expect(serialized).not.toMatch(/\/admin|\/kernel|\/nlp|\/debug/i);
+    expect(serialized).not.toMatch(/\/admin|\/internal|\/kernel|\/nlp|\/debug/i);
+    expect(serialized).not.toMatch(/x-admin-key|bearer|localhost/i);
     expect(Object.keys(publicOpenApiSpec.paths).every((path) => path.startsWith('/api/v1/'))).toBe(true);
+    expect(publicOpenApiSpec.components.parameters.TenantHeader.required).toBe(false);
+    expect(publicOpenApiSpec.components.parameters.TenantHeader.description).toMatch(/optional tenant assertion/i);
   });
 
-  it('serves the same spec from /api/openapi.json', async () => {
-    const response = await GET();
-    const body = await response.json();
+  it('serves one identical spec from both public URLs', async () => {
+    const apiResponse = await getApiOpenApi();
+    const rootResponse = await getRootOpenApi();
+    const apiBody = await apiResponse.json();
+    const rootBody = await rootResponse.json();
 
-    expect(response.headers.get('cache-control')).toContain('s-maxage=3600');
-    expect(body).toEqual(publicOpenApiSpec);
+    expect(apiResponse.headers.get('cache-control')).toContain('s-maxage=3600');
+    expect(rootResponse.headers.get('cache-control')).toContain('s-maxage=3600');
+    expect(apiBody).toEqual(publicOpenApiSpec);
+    expect(rootBody).toEqual(publicOpenApiSpec);
   });
 });

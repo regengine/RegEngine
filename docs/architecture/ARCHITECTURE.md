@@ -1,6 +1,6 @@
 # RegEngine Architecture (FSMA-First)
 
-Last verified: 2026-05-23
+Last source verification: 2026-08-03 (candidate is not production-approved)
 
 > **The deployed shape is a single consolidated FastAPI monolith.**
 > The directory structure under `services/` preserves decomposition
@@ -58,7 +58,11 @@ graph TB
 
 - **Backend:** one Railway service that builds the repo-root [`Dockerfile`](../../Dockerfile) and starts `server.main:app`. Railway's native TLS + routing terminates the public domain — no separate gateway.
 - **Frontend:** Next.js App Router app in `frontend/` deployed to Vercel (`regengine.co`) via its own workflow.
-- **Database:** PostgreSQL via `DATABASE_URL` (production: Supabase Postgres 17).
+- **Database:** one PostgreSQL database (production: Supabase Postgres 17)
+  reached through separate RLS-enforced `DATABASE_URL` (`regengine`) and
+  `ADMIN_DATABASE_URL` (`regengine_sysadmin`) credentials. Alembic alone uses
+  the schema-owner `MIGRATIONS_DATABASE_URL`; see the
+  [database role cutover runbook](../operations/DATABASE_ROLE_CUTOVER.md).
 - **Optional infra:** Neo4j, Redis, and Kafka-compatible code paths exist in-tree but are not part of the default local dev stack (`docker-compose.dev.yml` starts only Postgres). Treat any in-tree reference to a 6-port topology as historical scaffolding unless you can trace it back to the current Dockerfile.
 
 ## Async / Event Backbone
@@ -78,7 +82,11 @@ graph TB
 | Graph | `services/graph/app/` | traceability + lineage (Neo4j-backed, mounted when enabled) |
 | NLP | `services/nlp/app/` | document extraction (mounted when enabled) |
 
-Routers can be turned off per-deploy via `DISABLED_ROUTERS`. Experimental routers (see `_EXPERIMENTAL_ROUTERS` in `server/main.py`) auto-disable in production unless `ENABLE_EXPERIMENTAL_ROUTERS=true`. The live surface is reported by `GET /api/v1/features`.
+Production requires the exact `ENABLED_ROUTERS` set owned by
+[`server/router_policy.py`](../../server/router_policy.py); missing or extra
+routers abort startup. `DISABLED_ROUTERS` remains local/test-only, and
+production rejects the experimental bypass. The protected live surface is
+reported by `GET /api/v1/features`.
 
 ## Shared Bootstrap Pattern
 
@@ -99,7 +107,9 @@ Service-shaped subtrees still use the shared bootstrap from [`services/shared/pa
 
 - **PostgreSQL** — durable FSMA event persistence, hash-chained audit log, API keys, tenant metadata, task queue. Schema lives under [`alembic/versions/`](../../alembic/versions/).
 - **Neo4j** — lot/facility/event lineage when the `graph` router is enabled. Optional in dev; required for graph-traversal endpoints in prod when the feature is mounted.
-- **Redis** — rate limiting + session-adjacent paths when `REDIS_URL` is set. The app degrades cleanly when unset.
+- **Redis** — revocation, opaque sessions, and cross-replica abuse controls.
+  Local development may use explicitly selected in-memory fallbacks; production
+  authentication and protected throttles fail closed when Redis is unavailable.
 
 ## Startup Drift Guards
 
@@ -113,8 +123,20 @@ Extending the check to additional Bases is a deliberate decision per the criteri
 ## Auth, Tenant Isolation, and Contracts
 
 - **API key contract:** `X-RegEngine-API-Key` header. Hashed at rest with HMAC-SHA256 when `REGENGINE_API_KEY_HASH_PEPPER` is set, else legacy SHA-256.
+- **Human control-plane contract:** active opaque session cookie plus
+  `is_sysadmin=true` and WebAuthn/SSO high assurance for live tenant/key
+  management. The retired shared administrative header is rejected.
+- **Workload provisioning contract:** tenantless database-backed key with exact
+  `internal.tenants.create` scope at the OpenAPI-hidden `/v1/internal/tenants`
+  endpoint.
 - **Shared auth dependency:** [`services/shared/auth.py`](../../services/shared/auth.py) (`require_api_key`).
 - **Tenant context middleware:** [`services/shared/middleware/`](../../services/shared/middleware/). Every request resolves a `TenantContext` from the authenticated principal before any handler sees it; legacy routers cannot use path/query/header tenant claims to pivot across tenants.
+- **RLS trust boundary:** both runtime roles are `NOBYPASSRLS`, and enabled
+  application paths bind the authenticated tenant before data access. The
+  `app.tenant_id` custom GUC is still caller-settable by anyone able to execute
+  arbitrary SQL with `DATABASE_URL`; RLS protects trusted application flows,
+  not runtime-credential theft, SQL injection, or process compromise. See
+  [ADR-004](decisions/ADR-004-security-release-boundary.md).
 - **Non-HTTP ingestion helper:** `webhook_compat.ingest_events()` requires a keyword-only `principal_tenant_id` from the caller's authenticated context and rejects payloads whose `tenant_id` disagrees — closes the implicit-trust window that existed when the helper had no request context.
 
 ## Testing and Verification Commands

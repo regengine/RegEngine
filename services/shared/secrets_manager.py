@@ -142,34 +142,6 @@ class SecretsManager:
             "endpoint_url": os.getenv("OBJECT_STORAGE_ENDPOINT_URL", ""),
         }
 
-    def get_admin_master_key(self, environment: Optional[str] = None) -> str:
-        """Get admin master key for API authentication.
-
-        Args:
-            environment: Environment name (production, staging, dev)
-
-        Returns:
-            Admin master key string
-        """
-        key = os.getenv("ADMIN_MASTER_KEY")
-        if not key:
-            env = os.getenv("REGENGINE_ENV", "development").lower()
-            if env == "production":
-                raise ValueError(
-                    "ADMIN_MASTER_KEY must be set in production. "
-                    "Generate a secure key and set it as an environment variable."
-                )
-            # Non-production: generate a random key so dev/test can proceed
-            import secrets as _secrets
-
-            key = f"dev-{_secrets.token_hex(16)}"
-            logger.warning(
-                "admin_master_key_not_set_using_random",
-                environment=env,
-            )
-        return key
-
-
 # Global instance for singleton pattern
 _secrets_manager: Optional[SecretsManager] = None
 
@@ -240,31 +212,10 @@ def get_s3_credentials(environment: Optional[str] = None) -> dict:
     return get_secrets_manager().get_s3_credentials(environment)
 
 
-def get_admin_master_key(environment: Optional[str] = None) -> str:
-    """Get admin master key.
-
-    Args:
-        environment: Environment name
-
-    Returns:
-        Admin master key
-    """
-    return get_secrets_manager().get_admin_master_key(environment)
-
-
 # Production secret validation
 
 INSECURE_DEFAULTS = {
     "NEO4J_PASSWORD": ["change-me", "password", "secret", "test", "demo", "default", "neo4j"],
-    "ADMIN_MASTER_KEY": [
-        "dev-admin-key",
-        "change-in-production",
-        "test",
-        "demo",
-        "default",
-        "admin",
-        "dev_master_key_change_in_production",
-    ],
     "OBJECT_STORAGE_ACCESS_KEY_ID": ["test"],
     "OBJECT_STORAGE_SECRET_ACCESS_KEY": ["test"],
 }

@@ -98,21 +98,25 @@ def test_no_tenant_context_rejected(monkeypatch):
 
 
 @pytest.mark.security
-def test_sysadmin_cross_tenant_allowed(monkeypatch):
-    """Sysadmin may cross tenant boundaries for support/ops workflows."""
+def test_low_assurance_sysadmin_cross_tenant_rejected(monkeypatch):
+    """Global status never bypasses a tenant-scoped path binding."""
     verify_path_tenant_matches, TenantContext = _load_dep()
     monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT))
-    result = verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock())
-    assert result == OTHER_TENANT
+    with pytest.raises(HTTPException) as exc:
+        verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock())
+    assert exc.value.status_code == 403
+    assert "Tenant mismatch" in exc.value.detail
 
 
 @pytest.mark.security
-def test_sysadmin_without_context_allowed(monkeypatch):
-    """Sysadmin without a tenant context may still act (cross-tenant ops)."""
+def test_low_assurance_sysadmin_without_context_rejected(monkeypatch):
+    """Tenant-scoped routes require a bound tenant for every caller."""
     verify_path_tenant_matches, TenantContext = _load_dep()
     monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: None))
-    result = verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock())
-    assert result == OTHER_TENANT
+    with pytest.raises(HTTPException) as exc:
+        verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock())
+    assert exc.value.status_code == 403
+    assert "No tenant context active" in exc.value.detail
 
 
 # ---------------------------------------------------------------------------

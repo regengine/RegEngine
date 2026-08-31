@@ -13,7 +13,8 @@ import sys
 def main() -> int:
     print(
         "Direct SQL migration deployment is retired. Run `alembic upgrade head` "
-        "from the repository root with DATABASE_URL set."
+        "from the repository root with MIGRATIONS_DATABASE_URL set to the "
+        "schema-owner credential."
     )
     return 2
 
