@@ -53,9 +53,23 @@ def _sign(secret: str, body: bytes) -> str:
 async def test_signature_noop_when_secret_unset(monkeypatch):
     """Unset secret = migration ramp — verification is skipped."""
     monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+    monkeypatch.setattr(wr, "_is_production", lambda: False)
     req = _FakeRequest(b'{"events": []}')
     # No header, no secret → must return without raising.
     await wr._verify_webhook_signature(req, x_webhook_signature=None)
+
+
+@pytest.mark.asyncio
+async def test_signature_secret_required_in_production(monkeypatch):
+    """Production with no WEBHOOK_HMAC_SECRET fails closed."""
+    monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+    monkeypatch.setattr(wr, "_is_production", lambda: True)
+    req = _FakeRequest(b'{"events": []}')
+
+    with pytest.raises(HTTPException) as exc:
+        await wr._verify_webhook_signature(req, x_webhook_signature=None)
+    assert exc.value.status_code == 503
+    assert exc.value.detail["error"] == "webhook_hmac_not_configured"
 
 
 @pytest.mark.asyncio

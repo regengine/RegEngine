@@ -39,7 +39,9 @@ def test_lifespan_verifies_admin_and_api_key_bases_at_startup():
 def test_railway_cloud_import_disables_public_docs():
     script = """
 import json
+import asyncio
 from fastapi.routing import APIRoute
+from fastapi import HTTPException
 import server.main as main
 
 routes = []
@@ -49,6 +51,13 @@ for route in main.app.routes:
             if method not in {"HEAD", "OPTIONS"}:
                 routes.append(f"{method} {route.path}")
 
+try:
+    asyncio.run(main.list_enabled_features())
+except HTTPException as exc:
+    features_response = {"status_code": exc.status_code, "detail": exc.detail}
+else:
+    features_response = {"status_code": 200, "detail": None}
+
 print("DOCS_RESULT_JSON=" + json.dumps({
     "docs_url": main.app.docs_url,
     "redoc_url": main.app.redoc_url,
@@ -57,6 +66,7 @@ print("DOCS_RESULT_JSON=" + json.dumps({
         route for route in routes
         if route in {"GET /docs", "GET /redoc", "GET /openapi.json"}
     ),
+    "features_response": features_response,
 }))
 """
     for regengine_env in (None, "staging"):
@@ -113,4 +123,5 @@ print("DOCS_RESULT_JSON=" + json.dumps({
             "redoc_url": None,
             "openapi_url": None,
             "docs_routes": [],
+            "features_response": {"status_code": 404, "detail": "Not found"},
         }

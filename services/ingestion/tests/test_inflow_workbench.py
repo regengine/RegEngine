@@ -338,21 +338,96 @@ def test_commit_gate_enforces_evidence_boundary(tmp_path, monkeypatch):
         },
     ).json()
     assert denied["allowed"] is False
-    assert "authenticated session" in " ".join(denied["reasons"])
+    assert "run_id" in " ".join(denied["reasons"])
+
+    clean_result = workbench.SandboxResponse(**_sandbox_result(blocked=False))
+    clean_run = workbench.WorkbenchRun(
+        run_id="run-ok",
+        tenant_id="tenant-a",
+        source="inflow-lab",
+        csv="cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+        result=clean_result,
+        readiness=workbench.build_readiness_summary(clean_result),
+        fix_queue=[],
+        commit_gate=workbench.CommitGateDecision(
+            mode="staging",
+            allowed=True,
+            export_eligible=False,
+            reasons=[],
+            next_state="production_evidence",
+        ),
+        saved_at="2026-04-30T00:00:00+00:00",
+        input_hash="input-hash",
+        result_hash="result-hash",
+    )
+    monkeypatch.setattr(workbench, "_db_get_run", lambda run_id, tenant_id: clean_run)
 
     allowed = client.post(
         "/api/v1/inflow-workbench/commit-gate",
         json={
             "mode": "production_evidence",
             "tenant_id": "tenant-a",
-            "result": _sandbox_result(blocked=False),
+            "run_id": "run-ok",
+            "result": _sandbox_result(blocked=True),
+            "authenticated": False,
+            "persisted": False,
+            "provenance_attached": False,
+            "unresolved_fix_count": 99,
+        },
+    ).json()
+    assert allowed["allowed"] is True
+    assert allowed["export_eligible"] is True
+
+    open_fix_run = clean_run.model_copy(
+        update={
+            "fix_queue": [
+                workbench.FixQueueItem(
+                    id="fix-1",
+                    run_id="run-open",
+                    tenant_id="tenant-a",
+                    title="Row 1 missing destination",
+                    owner="Supplier A",
+                    status="open",
+                    severity="blocked",
+                    impact="Add ship_to_location before commit.",
+                    source="TLC-FEED-002",
+                    created_at="2026-04-30T00:00:00+00:00",
+                    updated_at="2026-04-30T00:00:00+00:00",
+                )
+            ]
+        }
+    )
+    monkeypatch.setattr(workbench, "_db_get_run", lambda run_id, tenant_id: open_fix_run)
+
+    blocked = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={
+            "mode": "production_evidence",
+            "tenant_id": "tenant-a",
+            "run_id": "run-open",
             "authenticated": True,
             "persisted": True,
             "provenance_attached": True,
         },
     ).json()
-    assert allowed["allowed"] is True
-    assert allowed["export_eligible"] is True
+    assert blocked["allowed"] is False
+    assert "unresolved validation issues" in " ".join(blocked["reasons"])
+
+
+def test_workbench_file_fallback_disabled_in_production(tmp_path, monkeypatch):
+    tenant_id = "33333333-3333-3333-3333-333333333333"
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.setattr(workbench, "_db_list_scenarios", lambda _tenant_id: None)
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.read"], tenant_id=tenant_id),
+    )
+
+    response = client.get(f"/api/v1/inflow-workbench/scenarios?tenant_id={tenant_id}")
+
+    assert response.status_code == 503
+    assert "file fallback is disabled in production" in response.json()["detail"]
 
 
 def test_uuid_tenant_saved_run_prefers_db_store_and_hashes_inputs(tmp_path, monkeypatch):

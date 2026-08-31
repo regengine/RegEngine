@@ -4,8 +4,9 @@ FDA 24-Hour Export Router.
 Provides the endpoints that fulfill RegEngine's core promise:
 "When the FDA calls, produce compliant traceability records within 24 hours."
 
-This module reads from the Postgres persistence layer (fsma.cte_events)
-and generates sortable, searchable CSV exports in the FDA's expected format.
+New export traffic reads from the canonical Postgres persistence layer
+(fsma.traceability_events). The legacy fsma.cte_events paths remain available
+as compatibility-only routes via ``source=legacy`` while callers migrate.
 
 Endpoints:
     GET  /api/v1/fda/export            — Generate FDA spreadsheet/package for a TLC
@@ -78,10 +79,20 @@ from .queries import (
 )
 from .recall import export_recall_filtered_handler
 from .verification import verify_export_handler
+from shared.env import is_production
 
 logger = logging.getLogger("fda-export")
 
 router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
+
+CANONICAL_EXPORT_SOURCE_HEADER = "canonical-traceability-events"
+LEGACY_EXPORT_SOURCE_HEADER = "legacy-cte-events"
+
+
+def _default_export_source(source: Optional[Literal["canonical", "legacy"]]) -> Literal["canonical", "legacy"]:
+    if source:
+        return source
+    return "canonical" if is_production() else "legacy"
 
 
 # ---------------------------------------------------------------------------
@@ -188,12 +199,12 @@ def _audit_identity(
 
 @router.get(
     "/export",
-    summary="Generate FDA export for a traceability lot code",
+    summary="Generate canonical FDA export for a traceability lot code",
     description=(
-        "Query all CTE events for a specific TLC within an optional date range, "
-        "generate the FDA-required CSV spreadsheet, log the export for audit, "
-        "and return the file. This is the endpoint that fulfills the 24-hour "
-        "FDA response requirement."
+        "Defaults to the canonical fsma.traceability_events export path. "
+        "Pass source=legacy to use the compatibility-only fsma.cte_events "
+        "export while older callers migrate. PDF output is currently "
+        "available only on the legacy path."
     ),
     responses={
         200: {
@@ -214,6 +225,14 @@ async def export_fda_spreadsheet(
     format: Literal["package", "csv", "pdf"] = Query(
         default="package",
         description="Export format: package (zip bundle), csv, or pdf",
+    ),
+    source: Optional[Literal["canonical", "legacy"]] = Query(
+        default=None,
+        description=(
+            "Persistence source for the export. Omit for the environment "
+            "default: canonical in production, legacy outside production. "
+            "legacy is compatibility-only."
+        ),
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     allow_incomplete: bool = Query(
@@ -238,6 +257,31 @@ async def export_fda_spreadsheet(
     _subscription=Depends(require_active_subscription),
 ):
     """Generate and return an FDA-compliant traceability export."""
+    export_source = _default_export_source(source)
+    if export_source == "canonical":
+        if format == "pdf":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Canonical FDA export does not yet support PDF output. "
+                    "Use format=csv/package or pass source=legacy for the "
+                    "compatibility PDF path."
+                ),
+            )
+        return await export_fda_spreadsheet_v2(
+            request=request,
+            tenant_id=tenant_id,
+            tlc=tlc,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=None,
+            format=format,
+            allow_incomplete=allow_incomplete,
+            include_pii=include_pii,
+            principal=principal,
+            _subscription=_subscription,
+        )
+
     # FSMA 204 §1.1455(c) requires a tamper-evident audit trail identifying
     # WHO produced each export and WHEN (issue #1205). Identity fields must
     # resolve from the authenticated principal — never from the request
@@ -391,6 +435,7 @@ async def export_fda_spreadsheet(
         kde_coverage = completeness_summary["required_kde_coverage_ratio"]
         kde_warnings = completeness_summary["events_with_missing_required_fields"]
         compliance_headers: dict[str, str] = {
+            "X-Export-Source": LEGACY_EXPORT_SOURCE_HEADER,
             "X-KDE-Coverage": str(kde_coverage),
             "X-KDE-Warnings": str(kde_warnings),
             "X-PII-Redacted": "false" if include_pii else "true",
@@ -483,8 +528,13 @@ async def export_fda_spreadsheet(
 
 @router.get(
     "/export/all",
-    summary="Export all CTE events",
-    description="Export all traceability events for a tenant within an optional date range.",
+    summary="Export all canonical traceability events",
+    description=(
+        "Defaults to the canonical fsma.traceability_events export path. "
+        "Pass source=legacy to use the compatibility-only fsma.cte_events "
+        "export while older callers migrate. PDF output is currently "
+        "available only on the legacy path."
+    ),
     responses={
         200: {
             "content": {
@@ -505,6 +555,14 @@ async def export_all_events(
         default="csv",
         description="Export format: package (zip bundle), csv, or pdf",
     ),
+    source: Optional[Literal["canonical", "legacy"]] = Query(
+        default=None,
+        description=(
+            "Persistence source for the export. Omit for the environment "
+            "default: canonical in production, legacy outside production. "
+            "legacy is compatibility-only."
+        ),
+    ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     allow_incomplete: bool = Query(
         default=False,
@@ -524,6 +582,31 @@ async def export_all_events(
     _subscription=Depends(require_active_subscription),
 ):
     """Export all events as FDA-format CSV."""
+    export_source = _default_export_source(source)
+    if export_source == "canonical":
+        if format == "pdf":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Canonical FDA export does not yet support PDF output. "
+                    "Use format=csv/package or pass source=legacy for the "
+                    "compatibility PDF path."
+                ),
+            )
+        return await export_fda_spreadsheet_v2(
+            request=request,
+            tenant_id=tenant_id,
+            tlc=None,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=event_type,
+            format=format,
+            allow_incomplete=allow_incomplete,
+            include_pii=include_pii,
+            principal=principal,
+            _subscription=_subscription,
+        )
+
     # FSMA 204 §1.1455(c) audit-trail identity (issue #1205).
     identity = _audit_identity(request, principal)
     if not identity["user_id"]:
@@ -684,6 +767,7 @@ async def export_all_events(
         kde_coverage = completeness_summary["required_kde_coverage_ratio"]
         kde_warnings = completeness_summary["events_with_missing_required_fields"]
         compliance_headers: dict[str, str] = {
+            "X-Export-Source": LEGACY_EXPORT_SOURCE_HEADER,
             "X-KDE-Coverage": str(kde_coverage),
             "X-KDE-Warnings": str(kde_warnings),
             "X-Total-Count": str(total),
@@ -1149,6 +1233,7 @@ async def export_fda_spreadsheet_v2(
                 end_date=end_date,
                 filename=filename,
                 extra_headers={
+                    "X-Export-Source": CANONICAL_EXPORT_SOURCE_HEADER,
                     "X-Export-Version": "2.0",
                     "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
                     "X-Compliance-Rate": str(
@@ -1168,6 +1253,7 @@ async def export_fda_spreadsheet_v2(
             record_count=len(events),
             chain_valid=chain_verification.valid,
             extra_headers={
+                "X-Export-Source": CANONICAL_EXPORT_SOURCE_HEADER,
                 "X-Export-Version": "2.0",
                 "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
                 "X-Compliance-Rate": str(

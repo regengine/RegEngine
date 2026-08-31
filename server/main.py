@@ -50,7 +50,7 @@ from shared.observability.context import setup_logging
 logger = setup_logging()
 
 # ── Imports ──────────────────────────────────────────────────────
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from shared.env import is_production
 from shared.middleware.security import add_security
@@ -243,6 +243,8 @@ def _router_enabled(name: str) -> bool:
 
 @app.get("/api/v1/features", tags=["system"])
 async def list_enabled_features():
+    if _is_prod:
+        raise HTTPException(status_code=404, detail="Not found")
     return {
         "enabled": _MOUNTED_ROUTERS,
         "disabled": sorted(_DISABLED_ROUTERS),

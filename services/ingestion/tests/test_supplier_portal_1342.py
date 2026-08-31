@@ -782,6 +782,7 @@ class TestSubmitSupplierData:
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
 
         async def _fake_ingest(payload, **_kwargs):
+            assert _kwargs["authenticated_via"] == "supplier_portal_link"
             return _make_ingest_response(accepted=1)
 
         monkeypatch.setattr(sp, "ingest_events", _fake_ingest)

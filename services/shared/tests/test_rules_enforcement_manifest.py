@@ -16,7 +16,7 @@ See ``docs/architecture/RULES_ENFORCEMENT.md`` for the full model.
 
 from __future__ import annotations
 
-import subprocess
+import ast
 from pathlib import Path
 
 import pytest
@@ -29,37 +29,20 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def _files_importing_should_reject() -> set[str]:
     """Return repo-relative paths of non-test files that import should_reject."""
-    # Use ripgrep when available — faster and respects .gitignore. Fall back
-    # to a Python walk so the test still works in stripped CI images.
-    try:
-        result = subprocess.run(
-            [
-                "rg",
-                "--type=py",
-                "-l",
-                r"from shared\.rules\.enforcement import .*should_reject|from \.enforcement import .*should_reject",
-                str(REPO_ROOT / "services"),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode in {0, 1}:  # 1 = no matches, still success
-            paths = result.stdout.strip().splitlines()
-        else:
-            raise RuntimeError(result.stderr)
-    except (FileNotFoundError, RuntimeError):
-        paths = []
-        for path in REPO_ROOT.glob("services/**/*.py"):
-            try:
-                text = path.read_text()
-            except OSError:
+    paths = []
+    for path in REPO_ROOT.glob("services/**/*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
                 continue
-            if (
-                "from shared.rules.enforcement import" in text
-                or "from .enforcement import" in text
-            ) and "should_reject" in text:
+            if node.module not in {"shared.rules.enforcement", "enforcement"}:
+                continue
+            if any(alias.name == "should_reject" for alias in node.names):
                 paths.append(str(path))
+                break
 
     rel = set()
     for raw in paths:

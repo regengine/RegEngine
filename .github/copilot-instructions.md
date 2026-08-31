@@ -11,7 +11,7 @@ Read [AGENTS.md](../AGENTS.md) first.
 - Python shared modules live in `services/shared/`, not a repo-root `shared/` directory.
 - The repository is a Python services monorepo plus a Next.js frontend in `frontend/`.
 - `frontend/package-lock.json` is checked in, so default to `npm` for frontend commands.
-- The repo does not contain a `Makefile` or a repo-root `conftest.py`.
+- The repo does not contain a `Makefile`; it does contain a repo-root `conftest.py`.
 - Current editor agent specs live in `.github/agents/`.
 - Legacy `.agent/` and `.agents/` directories are not part of the current operating model.
 

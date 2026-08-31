@@ -100,6 +100,7 @@ class _FakeExceptionQueueService:
 class _FakeCanonical:
     def __init__(self, event: Any) -> None:
         self.event_id = "canonical-uuid-fresh"
+        self.tenant_id = "t-1"
         self.event_type = SimpleNamespace(value=event.cte_type.value)
         self.traceability_lot_code = event.traceability_lot_code
         self.product_reference = None

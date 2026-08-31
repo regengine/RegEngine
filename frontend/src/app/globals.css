@@ -315,6 +315,80 @@ body[data-inflow-lab="true"] {
     }
 }
 
+/* The public story is a self-contained visualization, not one of the legacy
+   position-based Inflow Lab sections above. Keep its layout and controls scoped. */
+[data-inflow-lab-app] section[data-inflow-magic-story] {
+    display: block;
+    grid-template-columns: none;
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] [data-magic-main] {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] button[data-magic-stage] {
+    justify-content: flex-start;
+    border-color: transparent;
+    background: transparent;
+    color: #94a3b8;
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] button[data-magic-stage][aria-selected="true"] {
+    border-color: rgba(110, 231, 183, 0.3);
+    background: rgba(110, 231, 183, 0.1);
+    color: #fff;
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] button[data-magic-play] {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: #0f172a;
+    color: #cbd5e1;
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] button[data-magic-cta] {
+    border-color: transparent;
+    background: #6ee7b7;
+    color: #020617;
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] button[data-magic-cta]:hover {
+    background: #a7f3d0;
+}
+
+[data-inflow-lab-app] [data-inflow-magic-story] [data-magic-raw-mobile] {
+    display: none;
+}
+
+@media (max-width: 639px) {
+    [data-inflow-lab-app] [data-inflow-magic-story] [data-magic-nav] {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+    }
+
+    [data-inflow-lab-app] [data-inflow-magic-story] button[data-magic-stage] {
+        min-width: 142px;
+        flex: 0 0 auto;
+    }
+
+    [data-inflow-lab-app] [data-inflow-magic-story] [data-magic-raw-table] {
+        display: none;
+    }
+
+    [data-inflow-lab-app] [data-inflow-magic-story] [data-magic-raw-mobile] {
+        display: block;
+    }
+}
+
+@media (min-width: 1024px) {
+    [data-inflow-lab-app] [data-inflow-magic-story] [data-magic-main] {
+        grid-template-columns: 300px minmax(0, 1fr);
+    }
+}
+
 
 @layer base {
 

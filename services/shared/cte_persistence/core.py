@@ -543,7 +543,7 @@ class CTEPersistence:
         # Falls back to NOW() if the caller does not supply it.
         _entry_ts = event_entry_timestamp or datetime.now(timezone.utc).isoformat()
 
-        self.session.execute(
+        inserted = self.session.execute(
             text("""
                 INSERT INTO fsma.cte_events (
                     id, tenant_id, event_type, traceability_lot_code,
@@ -565,6 +565,7 @@ class CTEPersistence:
                     :validation_status
                 )
                 ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                RETURNING id, sha256_hash, chain_hash
             """),
             {
                 "id": event_id,
@@ -588,7 +589,35 @@ class CTEPersistence:
                 "epcis_biz_step": epcis_biz_step,
                 "validation_status": _final_status,
             },
-        )
+        ).fetchone()
+
+        if inserted is None:
+            winner = self.session.execute(
+                text("""
+                    SELECT id, sha256_hash, chain_hash
+                    FROM fsma.cte_events
+                    WHERE idempotency_key = :key AND tenant_id = :tid
+                """),
+                {"key": idempotency_key, "tid": tenant_id},
+            ).fetchone()
+            if winner:
+                logger.info(
+                    "idempotent_event_reconciled_after_conflict",
+                    extra={
+                        "existing_id": str(winner[0]),
+                        "tlc": traceability_lot_code,
+                    },
+                )
+                return StoreResult(
+                    success=True,
+                    event_id=str(winner[0]),
+                    sha256_hash=winner[1],
+                    chain_hash=winner[2],
+                    idempotent=True,
+                    errors=[],
+                    kde_completeness=1.0,
+                    alerts=[],
+                )
 
         # --- Rejected events: skip chain write (#1324) ---
         # A rejected event is persisted above for audit but must NOT

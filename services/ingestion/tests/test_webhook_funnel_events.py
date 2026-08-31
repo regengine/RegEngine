@@ -34,8 +34,13 @@ class _FakeDBSession:
 
 
 class _FakePersistence:
+    tenant_contexts: list[str] = []
+
     def __init__(self, _db_session):
         self._db_session = _db_session
+
+    def set_tenant_context(self, tenant_id: str):
+        self.tenant_contexts.append(tenant_id)
 
     def store_event(self, **_kwargs):
         return SimpleNamespace(
@@ -59,7 +64,8 @@ class _FakePersistence:
 
 
 class _FakeCanonical:
-    def __init__(self, tlc: str):
+    def __init__(self, tlc: str, tenant_id: str):
+        self.tenant_id = tenant_id
         self.event_id = UUID("00000000-0000-0000-0000-00000000cafe")
         self.event_type = SimpleNamespace(value="shipping")
         self.traceability_lot_code = tlc
@@ -107,6 +113,7 @@ class _FakeExceptionQueue:
 
 def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     tenant_id = "00000000-0000-0000-0000-000000000111"
+    _FakePersistence.tenant_contexts = []
     app = FastAPI()
     app.include_router(webhook_router_v2.router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -147,7 +154,7 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     monkeypatch.setattr(
         webhook_router_v2,
         "normalize_webhook_event",
-        lambda event, tenant_id, **_kwargs: _FakeCanonical(event.traceability_lot_code),
+        lambda event, tenant_id, **_kwargs: _FakeCanonical(event.traceability_lot_code, tenant_id),
     )
 
     payload = {
@@ -184,5 +191,6 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["accepted"] == 1
+    assert _FakePersistence.tenant_contexts == [tenant_id]
     assert captured["tenant_id"] == payload["tenant_id"]
     assert captured["event_name"] == "first_ingest"

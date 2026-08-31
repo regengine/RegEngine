@@ -99,6 +99,10 @@ class _RecordingCTEPersistence:
 
     def __init__(self, db_session: Any) -> None:
         self.db_session = db_session
+        self.tenant_context_calls: list[str] = []
+
+    def set_tenant_context(self, tenant_id: str) -> None:
+        self.tenant_context_calls.append(tenant_id)
 
     def store_event(self, **kwargs: Any) -> _FakeStoreResult:
         # The lot code is carried through the kde map as lotNumber.
@@ -106,7 +110,7 @@ class _RecordingCTEPersistence:
         lot = kdes.get("lotNumber") or kwargs.get("traceability_lot_code", "")
         if _RecordingCTEPersistence.fail_on_lot and _RecordingCTEPersistence.fail_on_lot in lot:
             raise RuntimeError(f"simulated DB write failure for lot={lot}")
-        event_id = f"cte-{lot}"
+        event_id = "11111111-1111-1111-1111-111111111111"
         _RecordingCTEPersistence.stored_events.append(event_id)
         return _FakeStoreResult(event_id=event_id, idempotent=False)
 
@@ -132,7 +136,7 @@ class _FakeRulesEngine:
 
 def _fake_normalize_epcis_event(event: dict, tenant_id: str) -> Any:
     class _Canonical:
-        event_id = "canonical-id"
+        event_id = "22222222-2222-2222-2222-222222222222"
         event_type = MagicMock(value="OBJECT_EVENT")
         traceability_lot_code = "TLC-X"
         product_reference = "prod-r"
@@ -144,6 +148,10 @@ def _fake_normalize_epcis_event(event: dict, tenant_id: str) -> Any:
         to_entity_reference = None
         kdes: dict[str, Any] = {}
 
+        def prepare_for_persistence(self) -> Any:
+            return self
+
+    _Canonical.tenant_id = tenant_id
     return _Canonical()
 
 

@@ -40,6 +40,7 @@ import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
+import { InflowMagicStory } from "./InflowMagicStory";
 
 type RunStage = "loaded" | "generating" | "delivering" | "validating" | "complete" | "exported";
 type EventStatus = "posted" | "validated" | "queued" | "generated" | "failed";
@@ -1521,6 +1522,17 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             </div>
                         </div>
                     </section>
+                )}
+
+                {isStandalone && (
+                    <InflowMagicStory
+                        eventCount={visibleEvents.length}
+                        readinessScore={readinessScore}
+                        exceptionCount={exceptionCount}
+                        selectedLot={selectedLot}
+                        isBusy={isBusy}
+                        onStartGuidedRun={startMachineDemo}
+                    />
                 )}
 
                 <section

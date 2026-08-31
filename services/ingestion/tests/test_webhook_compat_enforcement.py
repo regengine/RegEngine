@@ -71,9 +71,13 @@ class _FakePersistence:
     def __init__(self, db_session):
         self.db_session = db_session
         self.store_calls: list[dict] = []
+        self.tenant_context_calls: list[str] = []
         self.store_result = SimpleNamespace(
             event_id="ev-1", sha256_hash="sha-1", chain_hash="chain-1"
         )
+
+    def set_tenant_context(self, tenant_id: str):
+        self.tenant_context_calls.append(tenant_id)
 
     def store_event(self, **kwargs):
         self.store_calls.append(kwargs)
@@ -136,6 +140,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
             raise canonical_raises
         return SimpleNamespace(
             event_id="cev-1",
+            tenant_id=tenant_id,
             event_type=SimpleNamespace(value=event.cte_type.value),
             traceability_lot_code=event.traceability_lot_code,
             product_reference=None,
@@ -152,7 +157,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
 
     cps_mod = ModuleType("shared.canonical_persistence")
     class _FakeCanonicalStore:
-        def __init__(self, db_session, dual_write):
+        def __init__(self, db_session, dual_write, skip_chain_write=True):
             pass
         def persist_event(self, canonical):
             pass

@@ -61,7 +61,11 @@ sys.path.insert(0, str(service_dir))
 
 
 class _FakeStoreResult:
-    def __init__(self, event_id: str = "evt-fake", idempotent: bool = False) -> None:
+    def __init__(
+        self,
+        event_id: str = "11111111-1111-1111-1111-111111111111",
+        idempotent: bool = False,
+    ) -> None:
         self.event_id = event_id
         self.idempotent = idempotent
 
@@ -73,12 +77,16 @@ class _FakeCTEPersistence:
 
     def __init__(self, db_session: Any) -> None:
         self.db_session = db_session
+        self.tenant_context_calls: list[str] = []
         _FakeCTEPersistence.last_instance = self
+
+    def set_tenant_context(self, tenant_id: str) -> None:
+        self.tenant_context_calls.append(tenant_id)
 
     def store_event(self, **kwargs: Any) -> _FakeStoreResult:
         _FakeCTEPersistence.last_kwargs = kwargs
         return _FakeStoreResult(
-            event_id="cte-stored-id",
+            event_id="11111111-1111-1111-1111-111111111111",
             idempotent=_FakeCTEPersistence.idempotent_flag,
         )
 
@@ -104,7 +112,8 @@ class _FakeRulesEngine:
 
 def _fake_normalize_epcis_event(event: dict, tenant_id: str) -> Any:
     class _Canonical:
-        event_id = "canonical-id"
+        event_id = "22222222-2222-2222-2222-222222222222"
+        tenant_id = "tenant-1"
         event_type = MagicMock(value="OBJECT_EVENT")
         traceability_lot_code = "TLC-X"
         product_reference = "prod-r"
@@ -115,6 +124,9 @@ def _fake_normalize_epcis_event(event: dict, tenant_id: str) -> Any:
         from_entity_reference = None
         to_entity_reference = None
         kdes: dict[str, Any] = {}
+
+        def prepare_for_persistence(self) -> Any:
+            return self
 
     return _Canonical()
 
@@ -831,10 +843,10 @@ class TestPersistPreparedEventInSession:
         assert status == 200
         assert payload["idempotent"] is True
 
-    def test_canonical_write_failure_logs_and_swallows(
+    def test_canonical_write_failure_rejects_ingest(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Lines 686-687: canonical write exception is swallowed + logged."""
+        """Canonical evidence is required; normalization failure propagates."""
         _FakeCTEPersistence.idempotent_flag = False
 
         # Replace normalize_epcis_event on the canonical-event shim to blow up.
@@ -846,14 +858,10 @@ class TestPersistPreparedEventInSession:
         )
 
         sess = MagicMock()
-        with caplog.at_level("WARNING"):
+        with caplog.at_level("WARNING"), pytest.raises(RuntimeError, match="canon boom"):
             payload, status = persistence_mod._persist_prepared_event_in_session(
                 sess, "tenant-1", self._prep()
             )
-        assert status == 201
-        assert any(
-            "epcis_canonical_write_skipped" in m for m in caplog.messages
-        )
 
 
 # ── _ingest_single_event_db ───────────────────────────────────────────────

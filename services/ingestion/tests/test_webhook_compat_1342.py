@@ -86,11 +86,15 @@ class _FakeSession:
 class _FakePersistence:
     def __init__(self, db_session):
         self.db_session = db_session
+        self.tenant_context_calls: list[str] = []
         self.store_calls: list[dict] = []
         self.store_result = SimpleNamespace(
             event_id="ev-1", sha256_hash="sha-1", chain_hash="chain-1"
         )
         self.store_raises: Exception | None = None
+
+    def set_tenant_context(self, tenant_id: str):
+        self.tenant_context_calls.append(tenant_id)
 
     def store_event(self, **kwargs):
         self.store_calls.append(kwargs)
@@ -221,6 +225,7 @@ def _install_stubs(
             raise canonical_raises
         return SimpleNamespace(
             event_id="cev-1",
+            tenant_id=tenant_id,
             event_type=SimpleNamespace(value="harvesting"),
             traceability_lot_code=event.traceability_lot_code,
             product_reference="pref",
@@ -237,9 +242,10 @@ def _install_stubs(
     monkeypatch.setitem(sys.modules, "shared.canonical_event", ce_mod)
 
     class _FakeCanonicalStore:
-        def __init__(self, db_session, dual_write):
+        def __init__(self, db_session, dual_write, skip_chain_write=True):
             self.db_session = db_session
             self.dual_write = dual_write
+            self.skip_chain_write = skip_chain_write
 
         def persist_event(self, canonical):
             captured["canonical_store_calls"].append(canonical.event_id)
@@ -412,6 +418,26 @@ class TestPreLoopGates:
         ))
         assert cap["verify_calls"] == ["api-xyz"]
 
+    def test_supplier_portal_link_auth_skips_api_key_presence(self, monkeypatch):
+        _, _, cap = _install_stubs(monkeypatch, verify_raises=PermissionError("bad key"))
+        payload = _make_payload([], tenant_id="t", source="supplier_portal")
+        asyncio.run(wc.ingest_events(
+            payload=payload,
+            principal_tenant_id=payload.tenant_id,
+            authenticated_via="supplier_portal_link",
+        ))
+        assert cap["verify_calls"] == []
+
+    def test_supplier_portal_link_auth_rejects_non_portal_source(self, monkeypatch):
+        _install_stubs(monkeypatch)
+        payload = _make_payload([], tenant_id="t", source="manual")
+        with pytest.raises(PermissionError, match="supplier_portal"):
+            asyncio.run(wc.ingest_events(
+                payload=payload,
+                principal_tenant_id=payload.tenant_id,
+                authenticated_via="supplier_portal_link",
+            ))
+
     def test_verify_failure_propagates(self, monkeypatch):
         _install_stubs(monkeypatch, verify_raises=PermissionError("bad key"))
         payload = _make_payload([_make_event()], tenant_id="t")
@@ -472,6 +498,7 @@ class TestEventProcessing:
         assert call["traceability_lot_code"] == "TLC-1"
         assert call["event_type"] == "harvesting"
         assert call["source"] == "manual"
+        assert persist.tenant_context_calls == ["t"]
         # Savepoint committed, session committed once at the end
         assert any(a == ("commit", "sp-0") for a in sess.actions)
         assert sess.commit_count == 1
@@ -581,7 +608,7 @@ class TestEventProcessing:
         sess = _FakeSession()
 
         class _FailingStore:
-            def __init__(self, db_session, dual_write):
+            def __init__(self, db_session, dual_write, skip_chain_write=True):
                 pass
             def persist_event(self, canonical):
                 raise exc_cls("canonical fail")

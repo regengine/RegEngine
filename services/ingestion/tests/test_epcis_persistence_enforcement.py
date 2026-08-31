@@ -32,11 +32,15 @@ class _FakeCTEPersistence:
     def __init__(self, db_session: Any) -> None:
         _FakeCTEPersistence.last_instance = self
         self.db_session = db_session
+        self.tenant_context_calls: list[str] = []
+
+    def set_tenant_context(self, tenant_id: str) -> None:
+        self.tenant_context_calls.append(tenant_id)
 
     def store_event(self, **kwargs: Any) -> Any:
         _FakeCTEPersistence.last_called = True
         result = MagicMock()
-        result.event_id = "ev-1"
+        result.event_id = "11111111-1111-1111-1111-111111111111"
         result.sha256_hash = "sha-1"
         result.chain_hash = "chain-1"
         result.idempotent = False
@@ -52,6 +56,19 @@ class _FakeCanonicalEventStore:
 
     def persist_event(self, canonical: Any) -> None:
         pass
+
+
+class _FakeExceptionQueue:
+    create_calls: list = []
+
+    def __init__(self, db_session: Any) -> None:
+        self.db_session = db_session
+
+    def create_exceptions_from_evaluation(self, tenant_id: str, summary: Any) -> None:
+        _FakeExceptionQueue.create_calls.append({
+            "tenant_id": tenant_id,
+            "summary": summary,
+        })
 
 
 class _FakeEngine:
@@ -83,7 +100,8 @@ class _FakeEngine:
 
 def _fake_normalize_epcis_event(event: Any, tenant_id: str) -> Any:
     class _Canonical:
-        event_id = "canonical-id"
+        event_id = "22222222-2222-2222-2222-222222222222"
+        tenant_id = "t-1"
         event_type = MagicMock(value="OBJECT_EVENT")
         traceability_lot_code = "TLC-X"
         product_reference = "prod-r"
@@ -94,6 +112,9 @@ def _fake_normalize_epcis_event(event: Any, tenant_id: str) -> Any:
         from_entity_reference = None
         to_entity_reference = None
         kdes: dict[str, Any] = {}
+
+        def prepare_for_persistence(self) -> Any:
+            return self
 
     return _Canonical()
 
@@ -107,16 +128,19 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeEngine.evaluate_event_call_count = 0
     _FakeEngine.evaluate_event_persist_true_count = 0
     _FakeEngine.persist_summary_calls = []
+    _FakeExceptionQueue.create_calls = []
 
     import shared.cte_persistence as _cte_mod
     import shared.canonical_event as _canon_mod
     import shared.canonical_persistence as _store_mod
     import shared.rules_engine as _rules_mod
+    import shared.exception_queue as _queue_mod
 
     monkeypatch.setattr(_cte_mod, "CTEPersistence", _FakeCTEPersistence)
     monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _fake_normalize_epcis_event)
     monkeypatch.setattr(_store_mod, "CanonicalEventStore", _FakeCanonicalEventStore)
     monkeypatch.setattr(_rules_mod, "RulesEngine", _FakeEngine)
+    monkeypatch.setattr(_queue_mod, "ExceptionQueueService", _FakeExceptionQueue)
 
 
 # ---------------------------------------------------------------------------

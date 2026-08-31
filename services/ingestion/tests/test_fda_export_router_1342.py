@@ -55,6 +55,16 @@ from app.subscription_gate import require_active_subscription
 import shared.cte_persistence as shared_cte_persistence
 
 
+def test_default_export_source_is_canonical_only_in_production(monkeypatch):
+    monkeypatch.setattr(router_module, "is_production", lambda: True)
+    assert router_module._default_export_source(None) == "canonical"
+
+    monkeypatch.setattr(router_module, "is_production", lambda: False)
+    assert router_module._default_export_source(None) == "legacy"
+    assert router_module._default_export_source("canonical") == "canonical"
+    assert router_module._default_export_source("legacy") == "legacy"
+
+
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------

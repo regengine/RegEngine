@@ -799,7 +799,11 @@ async def submit_supplier_data(
         events=[event],
         tenant_id=link["tenant_id"],
     )
-    result = await ingest_events(payload, principal_tenant_id=link["tenant_id"])
+    result = await ingest_events(
+        payload,
+        principal_tenant_id=link["tenant_id"],
+        authenticated_via="supplier_portal_link",
+    )
 
     submitted_at = datetime.now(timezone.utc).isoformat()
 

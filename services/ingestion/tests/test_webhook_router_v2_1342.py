@@ -112,10 +112,14 @@ class _FakePersistence:
         store_raises: Optional[Exception] = None,
     ):
         self._session = _session
+        self.tenant_context_calls: list[str] = []
         self.batch_calls: list[dict] = []
         self.store_calls: list[dict] = []
         self.batch_raises = batch_raises
         self.store_raises = store_raises
+
+    def set_tenant_context(self, tenant_id: str):
+        self.tenant_context_calls.append(tenant_id)
 
     def store_events_batch(self, *, tenant_id, events, source):
         self.batch_calls.append({"tenant_id": tenant_id, "events": events, "source": source})
@@ -253,8 +257,9 @@ def _install_shared_stubs(
     # The router looks up ``normalize_webhook_event`` via the already-imported
     # module reference, so patching ``wr.normalize_webhook_event`` is enough.
     class _FakeCanonical:
-        def __init__(self, tlc: str):
+        def __init__(self, tlc: str, tenant_id: str):
             self.event_id = "canonical-evt"
+            self.tenant_id = tenant_id
             self.event_type = types.SimpleNamespace(value="shipping")
             self.traceability_lot_code = tlc
             self.product_reference = "prod-ref"
@@ -270,7 +275,12 @@ def _install_shared_stubs(
             return self
 
     monkeypatch.setattr(
-        wr, "normalize_webhook_event", lambda event, tenant_id, **_: _FakeCanonical(event.traceability_lot_code)
+        wr,
+        "normalize_webhook_event",
+        lambda event, tenant_id, **_: _FakeCanonical(
+            event.traceability_lot_code,
+            tenant_id,
+        ),
     )
     monkeypatch.setattr(wr, "emit_funnel_event", lambda **_kw: None)
 
@@ -1309,6 +1319,7 @@ class TestIngestEndpoint:
         )
         assert resp.status_code == 200
         assert persistence.batch_calls[0]["tenant_id"] == "tenant-a"
+        assert persistence.tenant_context_calls == ["tenant-a"]
 
     def test_tenant_key_lookup_failure_falls_through(self, monkeypatch):
         """If the API-key lookup raises, we continue on to principal.tenant_id."""

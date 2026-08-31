@@ -23,6 +23,7 @@ from sqlalchemy import text
 from .sandbox.models import SandboxResponse
 from .authz import IngestionPrincipal, require_permission
 from .shared.tenant_resolution import resolve_principal_tenant_id
+from shared.env import is_production
 
 
 router = APIRouter(prefix="/api/v1/inflow-workbench", tags=["Inflow Workbench"])
@@ -141,6 +142,7 @@ class ReadinessSummary(BaseModel):
 class CommitGateRequest(BaseModel):
     mode: CommitMode
     tenant_id: Optional[str] = None
+    run_id: Optional[str] = None
     result: Optional[SandboxResponse] = None
     authenticated: bool = False
     persisted: bool = False
@@ -261,6 +263,18 @@ def _set_tenant_context(db: Any, tenant_id: str) -> None:
 
 def _store_path() -> Path:
     return Path(os.getenv("REGENGINE_INFLOW_WORKBENCH_PATH", "/tmp/regengine_inflow_workbench.json"))
+
+
+def _allow_file_store_fallback() -> bool:
+    return not is_production()
+
+
+def _require_file_store_fallback() -> None:
+    if not _allow_file_store_fallback():
+        raise HTTPException(
+            status_code=503,
+            detail="Inflow Workbench database is unavailable; file fallback is disabled in production.",
+        )
 
 
 def _empty_store() -> dict[str, Any]:
@@ -851,6 +865,59 @@ def decide_commit_gate(payload: CommitGateRequest) -> CommitGateDecision:
     )
 
 
+def decide_persisted_commit_gate(payload: CommitGateRequest, tenant_id: str) -> CommitGateDecision:
+    """Production evidence gate derived from persisted server-side run state."""
+    if payload.mode != "production_evidence":
+        return decide_commit_gate(payload)
+
+    if not payload.run_id:
+        return CommitGateDecision(
+            mode=payload.mode,
+            allowed=False,
+            export_eligible=False,
+            reasons=["Production evidence requires a persisted Workbench run_id."],
+            next_state="preflight",
+        )
+
+    run = _db_get_run(payload.run_id, tenant_id)
+    if run is None:
+        return CommitGateDecision(
+            mode=payload.mode,
+            allowed=False,
+            export_eligible=False,
+            reasons=["Production evidence requires a server-side persisted Workbench run."],
+            next_state="preflight",
+        )
+
+    unresolved = len([
+        item for item in run.fix_queue
+        if item.status in {"open", "waiting"}
+    ])
+    result = run.result
+    reasons: list[str] = []
+    if result.submission_blocked:
+        reasons.append("Sandbox evaluation has blocking rule failures.")
+    if result.non_compliant_events:
+        reasons.append(f"{result.non_compliant_events} events are not compliant.")
+    if result.total_kde_errors:
+        reasons.append(f"{result.total_kde_errors} KDE validation errors remain.")
+    if result.total_rule_failures:
+        reasons.append(f"{result.total_rule_failures} rule failures remain.")
+    if not run.input_hash or not run.result_hash:
+        reasons.append("Production evidence requires provenance metadata.")
+    if unresolved:
+        reasons.append(f"{unresolved} unresolved validation issues remain.")
+
+    allowed = not reasons
+    return CommitGateDecision(
+        mode=payload.mode,
+        allowed=allowed,
+        export_eligible=allowed,
+        reasons=reasons or ["Persisted Workbench run is provenance-tagged and export-eligible."],
+        next_state="production_evidence" if allowed else "preflight",
+    )
+
+
 @router.get("/scenarios", response_model=list[WorkbenchScenario])
 async def list_scenarios(
     tenant_id: Optional[str] = Query(default=None),
@@ -862,6 +929,7 @@ async def list_scenarios(
     if db_scenarios is not None:
         return [WorkbenchScenario(**item) for item in BUILT_IN_SCENARIOS] + db_scenarios
 
+    _require_file_store_fallback()
     with _STORE_LOCK:
         store = _read_store()
     custom = [
@@ -893,6 +961,7 @@ async def create_scenario(
     if _db_create_scenario(scenario):
         return scenario
 
+    _require_file_store_fallback()
     with _STORE_LOCK:
         store = _read_store()
         store["scenarios"].append(scenario.model_dump())
@@ -918,6 +987,7 @@ async def readiness_summary(
     db_snapshot = _db_readiness_snapshot(tenant_id)
     if db_snapshot is not None:
         return db_snapshot
+    _require_file_store_fallback()
     return _file_readiness_snapshot(tenant_id)
 
 
@@ -928,7 +998,7 @@ async def commit_gate(
     principal: IngestionPrincipal = Depends(require_inflow_write),
 ) -> CommitGateDecision:
     payload.tenant_id = _resolve_workbench_tenant(payload.tenant_id, x_tenant_id, principal)
-    return decide_commit_gate(payload)
+    return decide_persisted_commit_gate(payload, payload.tenant_id)
 
 
 @router.post("/runs", response_model=WorkbenchRun)
@@ -971,6 +1041,7 @@ async def save_run(
     if _db_save_run(run):
         return run
 
+    _require_file_store_fallback()
     with _STORE_LOCK:
         store = _read_store()
         store["runs"][run_id] = run.model_dump()
@@ -993,6 +1064,7 @@ async def get_run(
     if db_run is not None:
         return db_run
 
+    _require_file_store_fallback()
     with _STORE_LOCK:
         store = _read_store()
     run = store["runs"].get(run_id)
@@ -1012,6 +1084,7 @@ async def list_fix_queue(
     if db_items is not None:
         return db_items
 
+    _require_file_store_fallback()
     with _STORE_LOCK:
         store = _read_store()
     items = [
@@ -1035,6 +1108,7 @@ async def update_fix_item(
     if db_item is not None:
         return db_item
 
+    _require_file_store_fallback()
     with _STORE_LOCK:
         store = _read_store()
         item = store["fix_queue"].get(item_id)

@@ -203,6 +203,39 @@ class TestStoreEventAppendOnly_Issue1334:
         assert tid_called == "tenant-1"
         assert len(sha_called) == 64  # sha256 hex string
 
+    def test_store_event_lost_idempotency_race_returns_winner(self):
+        """A conflict after pre-check returns the persisted winner, not a phantom UUID."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            session = MagicMock()
+            lock_result = MagicMock()
+            precheck = MagicMock()
+            precheck.fetchone.return_value = None
+            chain_head = MagicMock()
+            chain_head.fetchone.return_value = None
+            insert_result = MagicMock()
+            insert_result.fetchone.return_value = None
+            winner = MagicMock()
+            winner.fetchone.return_value = ("winner-id", "winner-sha", "winner-chain")
+            session.execute.side_effect = [
+                lock_result,
+                precheck,
+                chain_head,
+                insert_result,
+                winner,
+            ]
+            session.begin_nested.return_value = MagicMock()
+
+            persistence = CTEPersistence(session)
+            with patch("services.shared.cte_persistence.core._assert_not_exists"):
+                result = persistence.store_event(**self._VALID_EVENT_KWARGS)
+
+        assert result.idempotent is True
+        assert result.event_id == "winner-id"
+        assert result.sha256_hash == "winner-sha"
+        assert result.chain_hash == "winner-chain"
+        assert session.execute.call_count == 5
+
 
 # ===========================================================================
 # #1334 — store_events_batch raises DuplicateEventError on overwrite attempt
@@ -307,16 +340,16 @@ class TestLegacyDeprecationWarning_Issue1335:
 
 
 # ===========================================================================
-# #1335 — Callers already dual-write to canonical path (import check)
+# #1335 — Callers already dual-write through canonical ingestion service
 # ===========================================================================
 
 class TestCallersDualWriteToCanonical_Issue1335:
-    """Verify that the primary write callers also call CanonicalEventStore.
+    """Verify that primary write callers route through canonical persistence.
 
     webhook_router_v2 and epcis/persistence are the two callers that write
-    via CTEPersistence.store_event / store_events_batch.  Both should also
-    import and call CanonicalEventStore so that even while the LEGACY path
-    is still in use, canonical data is being written in parallel.
+    via CTEPersistence.store_event / store_events_batch. Both should call the
+    shared canonical ingestion service so legacy CTE persistence remains a
+    compatibility layer instead of each caller owning a separate writer.
     """
 
     def _get_source(self, module_path: str) -> str:
@@ -325,7 +358,7 @@ class TestCallersDualWriteToCanonical_Issue1335:
         source = spec.loader.get_source("_mod")  # type: ignore[attr-defined]
         return source or ""
 
-    def test_webhook_router_v2_imports_canonical_event_store(self):
+    def test_webhook_router_v2_uses_shared_canonical_ingestion_service(self):
         import os
         path = os.path.join(
             os.path.dirname(__file__),
@@ -334,12 +367,12 @@ class TestCallersDualWriteToCanonical_Issue1335:
         path = os.path.normpath(path)
         with open(path) as f:
             source = f.read()
-        assert "CanonicalEventStore" in source, (
-            "webhook_router_v2.py must reference CanonicalEventStore "
+        assert "persist_canonical_evidence" in source, (
+            "webhook_router_v2.py must call shared canonical ingestion "
             "(dual-write to canonical path, #1335)"
         )
 
-    def test_epcis_persistence_imports_canonical_event_store(self):
+    def test_epcis_persistence_uses_shared_canonical_ingestion_service(self):
         import os
         path = os.path.join(
             os.path.dirname(__file__),
@@ -348,8 +381,8 @@ class TestCallersDualWriteToCanonical_Issue1335:
         path = os.path.normpath(path)
         with open(path) as f:
             source = f.read()
-        assert "CanonicalEventStore" in source, (
-            "epcis/persistence.py must reference CanonicalEventStore "
+        assert "persist_canonical_evidence" in source, (
+            "epcis/persistence.py must call shared canonical ingestion "
             "(dual-write to canonical path, #1335)"
         )
 
@@ -359,14 +392,13 @@ class TestCallersDualWriteToCanonical_Issue1335:
 # ===========================================================================
 
 class TestMigrationTriggerSQL_Issue1334:
-    """The v073 migration file must contain the expected trigger DDL."""
+    """The active append-only SQL migration must contain the expected trigger DDL."""
 
     def _get_migration_source(self) -> str:
         import os
         path = os.path.join(
             os.path.dirname(__file__),
-            "../../../../alembic/versions/"
-            "20260420_v073_cte_events_append_only_trigger_1334.py",
+            "../../../../alembic/sql/V053__cte_append_only_triggers.sql",
         )
         path = os.path.normpath(path)
         with open(path) as f:
@@ -375,13 +407,13 @@ class TestMigrationTriggerSQL_Issue1334:
     def test_migration_contains_before_update_or_delete_trigger(self):
         source = self._get_migration_source()
         assert "BEFORE UPDATE OR DELETE" in source, (
-            "Migration v073 must create a BEFORE UPDATE OR DELETE trigger "
+            "Migration V053 must create a BEFORE UPDATE OR DELETE trigger "
             "on fsma.cte_events"
         )
 
     def test_migration_contains_trigger_name(self):
         source = self._get_migration_source()
-        assert "cte_events_no_update_delete" in source
+        assert "cte_events_append_only" in source
 
     def test_migration_contains_raise_exception(self):
         source = self._get_migration_source()
@@ -389,9 +421,9 @@ class TestMigrationTriggerSQL_Issue1334:
 
     def test_migration_references_issue_1334(self):
         source = self._get_migration_source()
-        assert "1334" in source
+        assert "append-only" in source
 
     def test_migration_has_upgrade_and_downgrade(self):
         source = self._get_migration_source()
-        assert "def upgrade" in source
-        assert "def downgrade" in source
+        assert "BEGIN;" in source
+        assert "COMMIT;" in source

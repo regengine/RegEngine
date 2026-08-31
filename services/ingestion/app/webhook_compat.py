@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from fastapi import Depends, Header, Request
 
@@ -77,6 +77,7 @@ async def ingest_events(
     *,
     principal_tenant_id: str,
     x_regengine_api_key: Optional[str] = None,
+    authenticated_via: Literal["api_key", "supplier_portal_link"] = "api_key",
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -97,7 +98,15 @@ async def ingest_events(
             "ingest_events requires principal_tenant_id from authenticated context"
         )
 
-    _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
+    if authenticated_via == "api_key":
+        _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
+    elif authenticated_via == "supplier_portal_link":
+        if payload.source != "supplier_portal":
+            raise PermissionError(
+                "supplier_portal_link auth is only valid for supplier_portal payloads"
+            )
+    else:
+        raise PermissionError(f"Unsupported ingestion auth mode: {authenticated_via}")
 
     payload_tenant_id = payload.tenant_id
     if not payload_tenant_id:
@@ -126,6 +135,7 @@ async def ingest_events(
     try:
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
+        persistence.set_tenant_context(tenant_id)
     except (ImportError, RuntimeError, ConnectionError) as exc:
         # Exhaust the generator so cleanup runs
         next(db_gen, None)
@@ -197,26 +207,17 @@ async def ingest_events(
                 canon_sp = db_session.begin_nested()
                 try:
                     from shared.canonical_event import normalize_webhook_event
-                    from shared.canonical_persistence import CanonicalEventStore
+                    from shared.canonical_ingestion import persist_canonical_evidence
+
                     canonical = normalize_webhook_event(event, tenant_id)
-                    canonical_store = CanonicalEventStore(db_session, dual_write=False)
-                    canonical_store.persist_event(canonical)
-                    from shared.rules_engine import RulesEngine
-                    engine = RulesEngine(db_session)
-                    event_data = {
-                        "event_id": str(canonical.event_id),
-                        "event_type": canonical.event_type.value,
-                        "traceability_lot_code": canonical.traceability_lot_code,
-                        "product_reference": canonical.product_reference,
-                        "quantity": canonical.quantity,
-                        "unit_of_measure": canonical.unit_of_measure,
-                        "from_facility_reference": canonical.from_facility_reference,
-                        "to_facility_reference": canonical.to_facility_reference,
-                        "from_entity_reference": canonical.from_entity_reference,
-                        "to_entity_reference": canonical.to_entity_reference,
-                        "kdes": canonical.kdes,
-                    }
-                    summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                    result = persist_canonical_evidence(
+                        db_session,
+                        canonical,
+                        dual_write=False,
+                        skip_chain_write=True,
+                        create_exceptions=False,
+                    )
+                    summary = result.rule_summary
                     canon_sp.commit()
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()

@@ -20,7 +20,6 @@ import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 import structlog
 from typing import Optional
@@ -197,6 +196,14 @@ async def _verify_webhook_signature(
     """
     secret = _webhook_hmac_secret()
     if not secret:
+        if _is_production():
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "webhook_hmac_not_configured",
+                    "message": "Webhook HMAC verification is required in production.",
+                },
+            )
         # F-5: record the fail-open path so ops can alarm on it. Behavior
         # itself unchanged — verification still skipped per the migration ramp.
         _record_hmac_skip()
@@ -1023,55 +1030,17 @@ def _persist_canonical_and_eval(
     but only the test file made it through the merge — the source
     change was dropped during conflict resolution. Restored here.
     """
-    from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
-    from shared.rules_engine import RulesEngine  # noqa: PLC0415
+    from shared.canonical_ingestion import persist_canonical_evidence  # noqa: PLC0415
 
     canonical = normalize_webhook_event(event, tenant_id, source=source)
-    if canonical_event_id is not None:
-        # Reuse the legacy fsma.cte_events UUID for the canonical row and
-        # rule-evaluation anchor. The legacy CTEPersistence path already
-        # writes fsma.hash_chain for this event; canonical persistence must
-        # not append a second chain row to the same shared ledger.
-        canonical.event_id = UUID(str(canonical_event_id))
-        canonical.prepare_for_persistence()
-    store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
-    persist_result = store.persist_event(canonical)
-    persisted_event_id = str(getattr(persist_result, "event_id", None) or canonical.event_id)
-    engine = RulesEngine(db_session)
-
-    if precomputed_summary is not None and precomputed_summary.results:
-        engine.persist_summary(
-            precomputed_summary,
-            tenant_id=tenant_id,
-            event_id=persisted_event_id,
-        )
-        summary = precomputed_summary
-    else:
-        event_data = {
-            "event_id": persisted_event_id,
-            "event_type": canonical.event_type.value,
-            "traceability_lot_code": canonical.traceability_lot_code,
-            "product_reference": canonical.product_reference,
-            "quantity": canonical.quantity,
-            "unit_of_measure": canonical.unit_of_measure,
-            "from_facility_reference": canonical.from_facility_reference,
-            "to_facility_reference": canonical.to_facility_reference,
-            "from_entity_reference": canonical.from_entity_reference,
-            "to_entity_reference": canonical.to_entity_reference,
-            "kdes": canonical.kdes,
-        }
-        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-
-    # ExceptionQueueService links cases from summary.event_id; idempotent
-    # canonical persistence may return an existing row whose id differs from
-    # the freshly normalized/pre-evaluated candidate.
-    summary.event_id = persisted_event_id
-
-    if not summary.compliant:
-        from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
-        ExceptionQueueService(db_session).create_exceptions_from_evaluation(
-            tenant_id, summary
-        )
+    persist_canonical_evidence(
+        db_session,
+        canonical,
+        precomputed_summary=precomputed_summary,
+        canonical_event_id=canonical_event_id,
+        dual_write=False,
+        skip_chain_write=True,
+    )
 
 
 def _persist_required_canonical_and_eval(
@@ -1291,6 +1260,7 @@ async def ingest_events(
     try:
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
+        persistence.set_tenant_context(tenant_id)
     except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
         logger.error("db_init_failed — rejecting ingest: %s", str(e))
         raise HTTPException(
