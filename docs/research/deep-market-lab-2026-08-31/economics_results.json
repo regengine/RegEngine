@@ -1,0 +1,427 @@
+{
+  "account_monte_carlo": {
+    "1999": {
+      "after_acquisition_allocation_usd": {
+        "mean": 1348.4771953619831,
+        "mean_bottom_5_percent": -275.53530938102506,
+        "mean_top_5_percent": 1729.2125992585695,
+        "median": 1480.7873909019352,
+        "n": 10000,
+        "negative_fraction": 0.0234,
+        "p25": 1293.546987641122,
+        "p5": 559.7005958034124,
+        "p75": 1593.2281762343312,
+        "p95": 1700.182020998965,
+        "variance": 239627.62331269885
+      },
+      "service_contribution_usd": {
+        "mean": 1578.7089786760075,
+        "mean_bottom_5_percent": 175.2058247274033,
+        "mean_top_5_percent": 1851.9924870525128,
+        "median": 1701.9530758644169,
+        "n": 10000,
+        "negative_fraction": 0.0127,
+        "p25": 1547.21789287279,
+        "p5": 893.7763126521181,
+        "p75": 1782.1686738574572,
+        "p95": 1839.2932352056544,
+        "variance": 174907.94925309828
+      }
+    },
+    "499": {
+      "after_acquisition_allocation_usd": {
+        "mean": -97.52280463801675,
+        "mean_bottom_5_percent": -1721.5353093810252,
+        "mean_top_5_percent": 283.2125992585696,
+        "median": 34.78739090193511,
+        "n": 10000,
+        "negative_fraction": 0.4349,
+        "p25": -152.45301235887777,
+        "p5": -886.2994041965876,
+        "p75": 147.22817623433107,
+        "p95": 254.18202099896519,
+        "variance": 239627.62331269885
+      },
+      "service_contribution_usd": {
+        "mean": 132.70897867600758,
+        "mean_bottom_5_percent": -1270.7941752725967,
+        "mean_top_5_percent": 405.99248705251284,
+        "median": 255.9530758644168,
+        "n": 10000,
+        "negative_fraction": 0.1737,
+        "p25": 101.21789287278972,
+        "p5": -552.2236873478821,
+        "p75": 336.1686738574573,
+        "p95": 393.29323520565436,
+        "variance": 174907.94925309828
+      }
+    },
+    "999": {
+      "after_acquisition_allocation_usd": {
+        "mean": 384.47719536198326,
+        "mean_bottom_5_percent": -1239.5353093810252,
+        "mean_top_5_percent": 765.2125992585695,
+        "median": 516.7873909019352,
+        "n": 10000,
+        "negative_fraction": 0.1037,
+        "p25": 329.5469876411222,
+        "p5": -404.29940419658755,
+        "p75": 629.228176234331,
+        "p95": 736.1820209989652,
+        "variance": 239627.62331269885
+      },
+      "service_contribution_usd": {
+        "mean": 614.7089786760076,
+        "mean_bottom_5_percent": -788.7941752725967,
+        "mean_top_5_percent": 887.9924870525128,
+        "median": 737.9530758644167,
+        "n": 10000,
+        "negative_fraction": 0.057,
+        "p25": 583.2178928727897,
+        "p5": -70.2236873478821,
+        "p75": 818.1686738574573,
+        "p95": 875.2932352056544,
+        "variance": 174907.94925309828
+      }
+    }
+  },
+  "amortization_months": 12,
+  "draws_per_experiment": 10000,
+  "evidence_status": "HYPOTHETICAL sensitivity inputs, not measured RegEngine economics or business probabilities",
+  "limitations": [
+    "Distributions, conversion, churn, labor, budget, cost, incident rate and capacity are invented stress assumptions.",
+    "No posterior calibration or observed customer sample; reported fractions are not real-world probabilities.",
+    "Account draws share volume/support and incident dependence, but not all real dependencies or tail events.",
+    "Same demand distribution at different prices; price elasticity, procurement, growth and referrals not modeled.",
+    "Runway assumes unlimited ability to hire overflow help at stated rate; missing expertise can make capacity infeasible.",
+    "Founder draw is assumed cash need, not known finances; 80 delivery hours excludes sales, coding and administration.",
+    "Annual upfront billing, taxes, refunds outside modeled shock, chargebacks, financing and legal liability are excluded.",
+    "12-month free comparison starts at onboarding, not unknown GA date; a post-GA promise can cost more.",
+    "Event cost and capacity blocks do not measure application throughput or cloud bills.",
+    "Cash is netted monthly; intramonth liquidity is omitted and exact zero cash has no safety buffer."
+  ],
+  "price_support_sensitivity": {
+    "price_1999_support_12h": {
+      "allocated_fixed_cost_break_even_accounts": 1,
+      "contribution_after_onboarding_and_cac_allocation": 1118.4026666666666,
+      "revenue": 1999,
+      "service_contribution": 1251.7359999999999,
+      "service_margin": 0.6261810905452726,
+      "simple_payback_months_no_churn": 1.2782248013958215,
+      "support_hours_for_70_percent_service_margin": 9.048719999999998,
+      "variable_cost_including_imputed_support": 747.264
+    },
+    "price_1999_support_1h": {
+      "allocated_fixed_cost_break_even_accounts": 1,
+      "contribution_after_onboarding_and_cac_allocation": 1668.4026666666666,
+      "revenue": 1999,
+      "service_contribution": 1801.7359999999999,
+      "service_margin": 0.9013186593296648,
+      "simple_payback_months_no_churn": 0.8880324309443781,
+      "support_hours_for_70_percent_service_margin": 9.048719999999998,
+      "variable_cost_including_imputed_support": 197.264
+    },
+    "price_1999_support_4h": {
+      "allocated_fixed_cost_break_even_accounts": 1,
+      "contribution_after_onboarding_and_cac_allocation": 1518.4026666666666,
+      "revenue": 1999,
+      "service_contribution": 1651.7359999999999,
+      "service_margin": 0.8262811405702851,
+      "simple_payback_months_no_churn": 0.9686778032324779,
+      "support_hours_for_70_percent_service_margin": 9.048719999999998,
+      "variable_cost_including_imputed_support": 347.264
+    },
+    "price_499_support_12h": {
+      "allocated_fixed_cost_break_even_accounts": null,
+      "contribution_after_onboarding_and_cac_allocation": -327.5973333333334,
+      "revenue": 499,
+      "service_contribution": -194.264,
+      "service_margin": -0.38930661322645294,
+      "simple_payback_months_no_churn": null,
+      "support_hours_for_70_percent_service_margin": 1.1287199999999995,
+      "variable_cost_including_imputed_support": 693.264
+    },
+    "price_499_support_1h": {
+      "allocated_fixed_cost_break_even_accounts": 2,
+      "contribution_after_onboarding_and_cac_allocation": 222.40266666666665,
+      "revenue": 499,
+      "service_contribution": 355.736,
+      "service_margin": 0.7128977955911824,
+      "simple_payback_months_no_churn": 4.497717408415229,
+      "support_hours_for_70_percent_service_margin": 1.1287199999999995,
+      "variable_cost_including_imputed_support": 143.264
+    },
+    "price_499_support_4h": {
+      "allocated_fixed_cost_break_even_accounts": 5,
+      "contribution_after_onboarding_and_cac_allocation": 72.40266666666665,
+      "revenue": 499,
+      "service_contribution": 205.736,
+      "service_margin": 0.41229659318637274,
+      "simple_payback_months_no_churn": 7.776956876774118,
+      "support_hours_for_70_percent_service_margin": 1.1287199999999995,
+      "variable_cost_including_imputed_support": 293.264
+    },
+    "price_999_support_12h": {
+      "allocated_fixed_cost_break_even_accounts": 2,
+      "contribution_after_onboarding_and_cac_allocation": 154.40266666666665,
+      "revenue": 999,
+      "service_contribution": 287.736,
+      "service_margin": 0.288024024024024,
+      "simple_payback_months_no_churn": 5.560652820641144,
+      "support_hours_for_70_percent_service_margin": 3.7687199999999996,
+      "variable_cost_including_imputed_support": 711.264
+    },
+    "price_999_support_1h": {
+      "allocated_fixed_cost_break_even_accounts": 1,
+      "contribution_after_onboarding_and_cac_allocation": 704.4026666666666,
+      "revenue": 999,
+      "service_contribution": 837.736,
+      "service_margin": 0.8385745745745745,
+      "simple_payback_months_no_churn": 1.9099095657820602,
+      "support_hours_for_70_percent_service_margin": 3.7687199999999996,
+      "variable_cost_including_imputed_support": 161.264
+    },
+    "price_999_support_4h": {
+      "allocated_fixed_cost_break_even_accounts": 1,
+      "contribution_after_onboarding_and_cac_allocation": 554.4026666666666,
+      "revenue": 999,
+      "service_contribution": 687.736,
+      "service_margin": 0.6884244244244244,
+      "simple_payback_months_no_churn": 2.326474112159317,
+      "support_hours_for_70_percent_service_margin": 3.7687199999999996,
+      "variable_cost_including_imputed_support": 311.264
+    }
+  },
+  "runway_horizon_months": 24,
+  "runway_monte_carlo_by_free_months": {
+    "12": {
+      "capital_required_usd": {
+        "mean": 89112.8802358,
+        "mean_bottom_5_percent": 69160.607476,
+        "mean_top_5_percent": 114380.704196,
+        "median": 88404.818,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 81241.33099999998,
+        "p5": 72534.1776,
+        "p75": 96127.18400000001,
+        "p95": 108340.99839999998,
+        "variance": 121551028.60512933
+      },
+      "capital_sensitivity": {
+        "0": {
+          "censored_no_failure_by_horizon": 0,
+          "failure_fraction": 1.0,
+          "median_first_failure_month_conditional_on_failure": 1.0,
+          "survival_fraction": 0.0
+        },
+        "10000": {
+          "censored_no_failure_by_horizon": 0,
+          "failure_fraction": 1.0,
+          "median_first_failure_month_conditional_on_failure": 3.0,
+          "survival_fraction": 0.0
+        },
+        "25000": {
+          "censored_no_failure_by_horizon": 0,
+          "failure_fraction": 1.0,
+          "median_first_failure_month_conditional_on_failure": 7.0,
+          "survival_fraction": 0.0
+        },
+        "50000": {
+          "censored_no_failure_by_horizon": 0,
+          "failure_fraction": 1.0,
+          "median_first_failure_month_conditional_on_failure": 12.0,
+          "survival_fraction": 0.0
+        }
+      },
+      "max_delivery_hours": {
+        "mean": 143.5356,
+        "mean_bottom_5_percent": 96.92,
+        "mean_top_5_percent": 197.04,
+        "median": 144.0,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 128.0,
+        "p5": 104.0,
+        "p75": 160.0,
+        "p95": 184.0,
+        "variance": 586.53793264
+      },
+      "max_founder_delivery_plus_sales_hours": {
+        "mean": 91.9864,
+        "mean_bottom_5_percent": 91.728,
+        "mean_top_5_percent": 92,
+        "median": 92.0,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 92.0,
+        "p5": 92.0,
+        "p75": 92.0,
+        "p95": 92.0,
+        "variance": 0.16301504
+      },
+      "terminal_accounts": {
+        "mean": 27.445,
+        "mean_bottom_5_percent": 17.61,
+        "mean_top_5_percent": 38.084,
+        "median": 27.0,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 24.0,
+        "p5": 20.0,
+        "p75": 31.0,
+        "p95": 36.0,
+        "variance": 24.696775
+      },
+      "terminal_net_operating_cash_usd_assuming_financing_continues": {
+        "mean": -88925.699615,
+        "mean_bottom_5_percent": -114333.38154,
+        "mean_top_5_percent": -68300.832172,
+        "median": -88289.584,
+        "n": 10000,
+        "negative_fraction": 1.0,
+        "p25": -96070.992,
+        "p5": -108320.32799999998,
+        "p75": -81030.84799999998,
+        "p95": -71903.99680000001,
+        "variance": 124744047.15460894
+      }
+    },
+    "2": {
+      "capital_required_usd": {
+        "mean": 20975.9439158,
+        "mean_bottom_5_percent": 13382.004324,
+        "mean_top_5_percent": 33600.55088,
+        "median": 20262.032,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 17308.992,
+        "p5": 14271.168000000001,
+        "p75": 23847.6315,
+        "p95": 30010.486399999983,
+        "variance": 24620330.067458108
+      },
+      "capital_sensitivity": {
+        "0": {
+          "censored_no_failure_by_horizon": 0,
+          "failure_fraction": 1.0,
+          "median_first_failure_month_conditional_on_failure": 1.0,
+          "survival_fraction": 0.0
+        },
+        "10000": {
+          "censored_no_failure_by_horizon": 0,
+          "failure_fraction": 1.0,
+          "median_first_failure_month_conditional_on_failure": 3.0,
+          "survival_fraction": 0.0
+        },
+        "25000": {
+          "censored_no_failure_by_horizon": 8142,
+          "failure_fraction": 0.1858,
+          "median_first_failure_month_conditional_on_failure": 10.0,
+          "survival_fraction": 0.8142
+        },
+        "50000": {
+          "censored_no_failure_by_horizon": 10000,
+          "failure_fraction": 0.0,
+          "median_first_failure_month_conditional_on_failure": null,
+          "survival_fraction": 1.0
+        }
+      },
+      "max_delivery_hours": {
+        "mean": 143.5356,
+        "mean_bottom_5_percent": 96.92,
+        "mean_top_5_percent": 197.04,
+        "median": 144.0,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 128.0,
+        "p5": 104.0,
+        "p75": 160.0,
+        "p95": 184.0,
+        "variance": 586.53793264
+      },
+      "max_founder_delivery_plus_sales_hours": {
+        "mean": 91.9864,
+        "mean_bottom_5_percent": 91.728,
+        "mean_top_5_percent": 92,
+        "median": 92.0,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 92.0,
+        "p5": 92.0,
+        "p75": 92.0,
+        "p95": 92.0,
+        "variance": 0.16301504
+      },
+      "terminal_accounts": {
+        "mean": 27.445,
+        "mean_bottom_5_percent": 17.61,
+        "mean_top_5_percent": 38.084,
+        "median": 27.0,
+        "n": 10000,
+        "negative_fraction": 0.0,
+        "p25": 24.0,
+        "p5": 20.0,
+        "p75": 31.0,
+        "p95": 36.0,
+        "variance": 24.696775
+      },
+      "terminal_net_operating_cash_usd_assuming_financing_continues": {
+        "mean": 16664.627872600002,
+        "mean_bottom_5_percent": -17776.727012,
+        "mean_top_5_percent": 47943.514076,
+        "median": 17198.16,
+        "n": 10000,
+        "negative_fraction": 0.1511,
+        "p25": 6205.463500000002,
+        "p5": -10511.900199999996,
+        "p75": 27700.024,
+        "p95": 42339.7067,
+        "variance": 257611857.76210442
+      }
+    }
+  },
+  "scenarios": {
+    "base": {
+      "allocated_fixed_cost_break_even_accounts": 5,
+      "contribution_after_onboarding_and_cac_allocation": 72.40266666666665,
+      "revenue": 499,
+      "service_contribution": 205.736,
+      "service_margin": 0.41229659318637274,
+      "simple_payback_months_no_churn": 7.776956876774118,
+      "support_hours_for_70_percent_service_margin": 1.1287199999999995,
+      "variable_cost_including_imputed_support": 293.264
+    },
+    "catastrophic": {
+      "allocated_fixed_cost_break_even_accounts": null,
+      "contribution_after_onboarding_and_cac_allocation": -5969.264,
+      "revenue": 499,
+      "service_contribution": -5219.264,
+      "service_margin": -10.459446893787575,
+      "simple_payback_months_no_churn": null,
+      "support_hours_for_70_percent_service_margin": -71.37128,
+      "variable_cost_including_imputed_support": 5718.264
+    },
+    "optimistic": {
+      "allocated_fixed_cost_break_even_accounts": 1,
+      "contribution_after_onboarding_and_cac_allocation": 824.1526666666666,
+      "revenue": 999,
+      "service_contribution": 882.486,
+      "service_margin": 0.8833693693693694,
+      "simple_payback_months_no_churn": 0.7932137167048543,
+      "support_hours_for_70_percent_service_margin": 4.66372,
+      "variable_cost_including_imputed_support": 116.514
+    },
+    "pessimistic": {
+      "allocated_fixed_cost_break_even_accounts": null,
+      "contribution_after_onboarding_and_cac_allocation": -944.2640000000001,
+      "revenue": 499,
+      "service_contribution": -569.2640000000001,
+      "service_margin": -1.1408096192384771,
+      "simple_payback_months_no_churn": null,
+      "support_hours_for_70_percent_service_margin": -6.3712800000000005,
+      "variable_cost_including_imputed_support": 1068.2640000000001
+    }
+  },
+  "seed": 2040831
+}
