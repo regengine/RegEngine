@@ -1,0 +1,105 @@
+
+> regengine-frontend@0.1.0 test:run
+> vitest run src/__tests__/pages/ingest-csv.test.tsx src/__tests__/pages/data-import.test.tsx src/__tests__/lib/api-client-review.test.ts src/__tests__/pages/ingest-handoff.test.tsx src/__tests__/components/FieldCaptureClient.test.tsx src/__tests__/hooks/useSync.test.tsx --reporter=dot
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m<repo>/frontend[39m
+
+(node:7654) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[31mx[39m[33m[39m[31mx[39m[33m[39m[31mx[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/api-client-review.test.ts[2m > [22mapiClient review queue contract[2m > [22mrejects a CSV response without trustworthy counts: {"total":1,"accepted":0,"rejected":1,"events":[null]}
+[31m[1mAssertionError[22m: promise resolved "{ total: 1, accepted: +0, …(2) }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "accepted": 0,[39m
+[31m+   "events": [[39m
+[31m+     null,[39m
+[31m+   ],[39m
+[31m+   "rejected": 1,[39m
+[31m+   "total": 1,[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/__tests__/lib/api-client-review.test.ts:[2m161:78[22m[39m
+    [90m159|[39m         fetchMock[33m.[39m[34mmockResolvedValueOnce[39m([34mjsonResponse[39m(result))[33m;[39m
+    [90m160|[39m         [35mconst[39m { apiClient } [33m=[39m [35mawait[39m [34mimportFreshClient[39m()[33m;[39m
+    [90m161|[39m         await expect(apiClient.ingestFile(null, new File([''], 'events…
+    [90m   |[39m                                                                              [31m^[39m
+    [90m162|[39m     })[33m;[39m
+    [90m163|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/api-client-review.test.ts[2m > [22mapiClient review queue contract[2m > [22mrejects a CSV response without trustworthy counts: {"total":1,"accepted":0,"rejected":1,"events":[{"status":"rejected","errors":[{}]}]}
+[31m[1mAssertionError[22m: promise resolved "{ total: 1, accepted: +0, …(2) }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "accepted": 0,[39m
+[31m+   "events": [[39m
+[31m+     {[39m
+[31m+       "errors": [[39m
+[31m+         {},[39m
+[31m+       ],[39m
+[31m+       "status": "rejected",[39m
+[31m+     },[39m
+[31m+   ],[39m
+[31m+   "rejected": 1,[39m
+[31m+   "total": 1,[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/__tests__/lib/api-client-review.test.ts:[2m161:78[22m[39m
+    [90m159|[39m         fetchMock[33m.[39m[34mmockResolvedValueOnce[39m([34mjsonResponse[39m(result))[33m;[39m
+    [90m160|[39m         [35mconst[39m { apiClient } [33m=[39m [35mawait[39m [34mimportFreshClient[39m()[33m;[39m
+    [90m161|[39m         await expect(apiClient.ingestFile(null, new File([''], 'events…
+    [90m   |[39m                                                                              [31m^[39m
+    [90m162|[39m     })[33m;[39m
+    [90m163|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/api-client-review.test.ts[2m > [22mapiClient review queue contract[2m > [22mrejects a CSV response without trustworthy counts: {"total":1,"accepted":1,"rejected":0,"events":[],"kde_warnings":{"message":"not an array"}}
+[31m[1mAssertionError[22m: promise resolved "{ total: 1, accepted: 1, …(3) }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "accepted": 1,[39m
+[31m+   "events": [],[39m
+[31m+   "kde_warnings": {[39m
+[31m+     "message": "not an array",[39m
+[31m+   },[39m
+[31m+   "rejected": 0,[39m
+[31m+   "total": 1,[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/__tests__/lib/api-client-review.test.ts:[2m161:78[22m[39m
+    [90m159|[39m         fetchMock[33m.[39m[34mmockResolvedValueOnce[39m([34mjsonResponse[39m(result))[33m;[39m
+    [90m160|[39m         [35mconst[39m { apiClient } [33m=[39m [35mawait[39m [34mimportFreshClient[39m()[33m;[39m
+    [90m161|[39m         await expect(apiClient.ingestFile(null, new File([''], 'events…
+    [90m   |[39m                                                                              [31m^[39m
+    [90m162|[39m     })[33m;[39m
+    [90m163|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m32 passed[39m[22m[90m (35)[39m
+[2m   Start at [22m 01:57:39
+[2m   Duration [22m 1.42s[2m (transform 461ms, setup 988ms, import 1.41s, tests 972ms, environment 2.08s)[22m
