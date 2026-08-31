@@ -1,0 +1,20 @@
+
+<repo>/frontend/src/app/ingest/page.tsx
+  98:7  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+<repo>/frontend/src/app/ingest/page.tsx:98:7
+   96 |   useEffect(() => {
+   97 |     if (storedApiKey && !apiKey) {
+>  98 |       setApiKey(storedApiKey);
+      |       ^^^^^^^^^ Avoid calling setState() directly within an effect
+   99 |     }
+  100 |   }, [storedApiKey, apiKey]);
+  101 |  react-hooks/set-state-in-effect
+
+✖ 1 problem (0 errors, 1 warning)

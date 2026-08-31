@@ -704,7 +704,7 @@ export default function IngestPage() {
                   </div>
 
                   <NormalizedDocumentViewer
-                    documentId={ingestMutation.data?.document_id || ingestFileMutation.data?.document_id || 'DEMO-DOC-ID'}
+                    documentId={ingestMutation.data?.document_id || 'DEMO-DOC-ID'}
                   />
                 </motion.div>
               </CardContent>

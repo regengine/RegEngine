@@ -1,0 +1,8 @@
+{"case": "original", "offline": {"exit": 0, "output": "manifest: ok\nfiles: 1 / 1 sha256 matches\nmerkle: root recomputed and matched\nresult: bundle intact"}, "public_verified": true}
+{"case": "changed_content_unchanged_manifest", "offline": {"exit": 1, "output": "manifest: ok\nverify: FAILED \u2014 synthetic.csv: sha256 mismatch (got aeed53821532d354b3a2f27668457c561ac861481e0e0006d0aaa5a6c4d35687, declared 92a9dab6bba3cb9e4cfa0cc2dba488a477270b0440179dc4d6182c2e77041f7c)\nresult: bundle TAMPERED"}, "public_verified": false}
+{"case": "changed_content_recomputed_manifest", "offline": {"exit": 0, "output": "manifest: ok\nfiles: 1 / 1 sha256 matches\nmerkle: root recomputed and matched\nresult: bundle intact"}, "public_verified": true}
+{"case": "actual_generator_to_verifiers", "failed_checks": ["manifest_file_entries_well_formed", "merkle_root_matches_declared"], "offline": {"exit": 1, "output": "verify: FAILED \u2014 manifest.merkle.root missing\nresult: bundle TAMPERED"}, "public_verified": false}
+{"case": "invalid_chain_and_missing_hash", "chain_valid": false, "status": "PARTIAL"}
+{"after_valid": true, "before_valid": true, "case": "changed_persisted_quantity", "quantity_hash_changed": true}
+{"case": "corrupted_chain_negative_control", "unrelated_tenant_chain_length": 1, "unrelated_tenant_valid": true, "valid": false}
+{"case": "nonhex_hash_without_trusted_root", "verified": true}

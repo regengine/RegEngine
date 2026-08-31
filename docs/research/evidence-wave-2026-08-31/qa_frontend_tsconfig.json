@@ -1,0 +1,15 @@
+{
+  "extends": "../../../frontend/tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../../frontend/src/types/api.ts",
+    "../../../frontend/src/lib/api-client.ts",
+    "../../../frontend/src/app/ingest/page.tsx",
+    "../../../frontend/src/app/tools/data-import/components/DataImportClient.tsx",
+    "../../../frontend/src/__tests__/pages/ingest-csv.test.tsx",
+    "../../../frontend/src/__tests__/pages/data-import.test.tsx",
+    "../../../frontend/src/__tests__/lib/api-client-review.test.ts",
+    "../../../frontend/next-env.d.ts",
+    "../../../frontend/src/__tests__/setup.ts"
+  ]
+}
