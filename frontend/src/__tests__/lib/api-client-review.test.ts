@@ -18,6 +18,24 @@ function jsonResponse(data: unknown): Response {
     });
 }
 
+function csvResult(statuses: Array<'accepted' | 'rejected'>) {
+    return {
+        total: statuses.length,
+        accepted: statuses.filter(status => status === 'accepted').length,
+        rejected: statuses.filter(status => status === 'rejected').length,
+        ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+        events: statuses.map((status, index) => ({
+            traceability_lot_code: `LOT-${index + 1}`,
+            cte_type: 'shipping',
+            status,
+            event_id: status === 'accepted' ? `evt-${index + 1}` : null,
+            sha256_hash: status === 'accepted' ? `sha-${index + 1}` : null,
+            chain_hash: status === 'accepted' ? `chain-${index + 1}` : null,
+            errors: status === 'rejected' ? [`Row ${index + 2}: rejected`] : [],
+        })),
+    };
+}
+
 async function importFreshClient() {
     vi.resetModules();
     vi.stubGlobal('fetch', fetchMock);
@@ -110,11 +128,12 @@ describe('apiClient review queue contract', () => {
     });
 
     it('omits X-RegEngine-API-Key for cookie-backed file ingest calls when no apiKey is provided', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse({ job_id: 'job-1' }));
+        const result = csvResult(['accepted']);
+        fetchMock.mockResolvedValueOnce(jsonResponse(result));
 
         const { apiClient } = await importFreshClient();
         const file = new File(['csv,data'], 'upload.csv', { type: 'text/csv' });
-        await apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline');
+        await expect(apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline')).resolves.toEqual(result);
 
         const [, init] = fetchMock.mock.calls[0];
         expect(fetchMock.mock.calls[0][0]).toBe('/api/ingestion/api/v1/ingest/csv');
@@ -126,6 +145,51 @@ describe('apiClient review queue contract', () => {
         expect(init.headers).toEqual({ 'X-CSRF-Token': 'csrf-token' });
         expect(init.headers).not.toHaveProperty('X-RegEngine-API-Key');
         expect(init.headers).not.toHaveProperty('Content-Type');
+    });
+
+    it.each([
+        [400, { message: 'No valid rows found', errors: ['Row 2: No CTE type'] }, 'No valid rows found: Row 2: No CTE type'],
+        [400, 'CSV contained no data rows', 'CSV contained no data rows'],
+        [422, [{ loc: ['body', 'file'], msg: 'Field required', type: 'missing' }], 'Field required'],
+        [401, 'Authentication required', 'Authentication required'],
+        [403, 'Tenant mismatch', 'Tenant mismatch'],
+        [500, { unexpected: { value: 'not a display message' } }, 'Request failed'],
+    ])('normalizes CSV failure status %i without losing the HTTP response', async (status, detail, message) => {
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ detail }), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+        }));
+        const { apiClient } = await importFreshClient();
+        await expect(apiClient.ingestFile(null, new File([''], 'events.csv'))).rejects.toMatchObject({
+            message,
+            response: { status, data: { detail } },
+        });
+    });
+
+    it.each([
+        { job_id: 'legacy-job-1' },
+        { total: 2, accepted: 2, rejected: 1, events: [] },
+        { total: 1, accepted: -1, rejected: 2, events: [] },
+        { total: 1, accepted: 0, rejected: 1, events: [null] },
+        { total: 1, accepted: 0, rejected: 1, events: [{ status: 'rejected', errors: [{}] }] },
+        { total: 1, accepted: 1, rejected: 0, events: [], kde_warnings: { message: 'not an array' } },
+    ])('rejects a CSV response without trustworthy counts: %j', async (result) => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(result));
+        const { apiClient } = await importFreshClient();
+        await expect(apiClient.ingestFile(null, new File([''], 'events.csv'))).rejects.toThrow('Unexpected CSV ingestion response');
+    });
+
+    it('preserves the selected tenant and CSV source without fabricating a job', async () => {
+        const result = csvResult(['rejected', 'rejected']);
+        fetchMock.mockResolvedValueOnce(jsonResponse(result));
+        const { apiClient } = await importFreshClient();
+        apiClient.setCurrentTenant('tenant-123');
+        await expect(apiClient.ingestFile('cookie-managed', new File([''], 'events.csv'), 'fsma', 'shipping')).resolves.toEqual(result);
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers).toEqual({ 'X-CSRF-Token': 'csrf-token', 'X-Tenant-ID': 'tenant-123' });
+        expect(init.body.get('source')).toBe('fsma');
+        expect(init.body.get('cte_type')).toBe('shipping');
+        expect(init.body.has('tenant_id')).toBe(false);
     });
 
     it('unwraps paginated admin user-management responses', async () => {

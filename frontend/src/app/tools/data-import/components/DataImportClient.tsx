@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
+import type { IngestCSVResponse } from '@/types/api';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { toast } from '@/components/ui/use-toast';
 
@@ -75,7 +76,7 @@ const SAMPLE_EVENTS = [
 ];
 
 type TabId = 'csv' | 'iot' | 'api';
-type UploadState = 'idle' | 'uploading' | 'success' | 'error';
+type UploadState = 'idle' | 'uploading' | 'success' | 'partial' | 'error';
 type SampleState = 'idle' | 'running' | 'done' | 'error';
 
 interface SampleStepResult {
@@ -92,7 +93,7 @@ export function DataImportClient() {
     // Real file upload state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadState, setUploadState] = useState<UploadState>('idle');
-    const [uploadResult, setUploadResult] = useState<{ jobId?: string; status?: number; error?: string } | null>(null);
+    const [uploadResult, setUploadResult] = useState<{ data?: IngestCSVResponse; error?: string } | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
 
@@ -109,15 +110,15 @@ export function DataImportClient() {
     const handleFileChange = useCallback((file: File | null) => {
         if (!file) return;
 
-        const VALID_EXTENSIONS = ['.csv', '.tsv'];
-        const MAX_SIZE_MB = 10;
+        const VALID_EXTENSIONS = ['.csv'];
+        const MAX_SIZE_MB = 5;
         const ext = '.' + file.name.split('.').pop()?.toLowerCase();
 
         if (!VALID_EXTENSIONS.includes(ext)) {
             toast({
                 variant: 'destructive',
                 title: 'Invalid file type',
-                description: `Only CSV and TSV files are supported. You selected a ${ext} file.`,
+                description: `Only CSV files are supported. You selected a ${ext} file.`,
             });
             return;
         }
@@ -142,16 +143,11 @@ export function DataImportClient() {
         setUploadResult(null);
         try {
             const effectiveKey = apiKey || '';
-            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'fsma');
-            const resultRecord = result as unknown as Record<string, unknown>;
-            const jobId = (resultRecord.job_id as string | undefined) || (resultRecord.id as string | undefined) || (resultRecord.task_id as string | undefined);
-            setUploadResult({ jobId, status: 200 });
-            setUploadState('success');
+            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub');
+            setUploadResult({ data: result });
+            setUploadState(result.accepted === 0 ? 'error' : result.rejected > 0 ? 'partial' : 'success');
         } catch (err: unknown) {
-            const axiosErr = err as { response?: { status?: number; data?: { detail?: string } }; message?: string };
-            const status = axiosErr?.response?.status;
-            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Upload failed';
-            setUploadResult({ status, error: msg });
+            setUploadResult({ error: err instanceof Error ? err.message : 'Upload failed' });
             setUploadState('error');
         }
     }, [selectedFile, apiKey]);
@@ -369,7 +365,7 @@ export function DataImportClient() {
                                                 Drag & drop your CSV here, or click to browse
                                             </div>
                                             <div className="text-xs text-muted-foreground">
-                                                Supports .csv files up to 10MB
+                                                Supports .csv files up to 5MB
                                             </div>
                                         </>
                                     )}
@@ -400,18 +396,30 @@ export function DataImportClient() {
                                             className={`p-4 rounded-xl border text-sm ${
                                                 uploadState === 'success'
                                                     ? 'border-re-brand/30 bg-re-brand/5'
+                                                    : uploadState === 'partial'
+                                                    ? 'border-re-warning/30 bg-re-warning-muted/5'
                                                     : 'border-re-danger/30 bg-re-danger-muted0/5'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2 font-medium mb-1">
                                                 {uploadState === 'success' ? (
-                                                    <><CheckCircle2 className="h-4 w-4 text-re-brand" /> Uploaded successfully</>
+                                                    <><CheckCircle2 className="h-4 w-4 text-re-brand" /> CSV processed</>
+                                                ) : uploadState === 'partial' ? (
+                                                    <><AlertTriangle className="h-4 w-4 text-re-warning" /> CSV partially accepted</>
                                                 ) : (
-                                                    <><XCircle className="h-4 w-4 text-re-danger" /> Upload failed</>
+                                                    <><XCircle className="h-4 w-4 text-re-danger" /> {uploadResult.data ? 'No rows accepted' : 'Upload failed'}</>
                                                 )}
                                             </div>
-                                            {uploadResult.jobId && (
-                                                <div className="text-xs text-muted-foreground font-mono">Job ID: {uploadResult.jobId}</div>
+                                            {uploadResult.data && (
+                                                <>
+                                                    <p>{uploadResult.data.accepted} of {uploadResult.data.total} rows accepted; {uploadResult.data.rejected} rejected.</p>
+                                                    {uploadResult.data.events.filter(event => event.status === 'rejected').flatMap(event => event.errors).map((error, index) => (
+                                                        <p key={index} className="text-xs text-re-danger mt-2">{error}</p>
+                                                    ))}
+                                                    {uploadResult.data.kde_warnings?.map((warning, index) => (
+                                                        <p key={index} className="text-xs text-re-warning mt-2">{warning}</p>
+                                                    ))}
+                                                </>
                                             )}
                                             {uploadResult.error && (
                                                 <div className="text-xs text-re-danger">{uploadResult.error}</div>

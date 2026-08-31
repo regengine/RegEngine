@@ -44,6 +44,26 @@ export interface IngestURLResponse {
     job_id?: string;      // for async processing
 }
 
+export interface IngestCSVEventResult {
+    traceability_lot_code: string;
+    cte_type: string;
+    status: 'accepted' | 'rejected';
+    event_id?: string | null;
+    sha256_hash?: string | null;
+    chain_hash?: string | null;
+    errors: string[];
+}
+
+export interface IngestCSVResponse {
+    total: number;
+    accepted: number;
+    rejected: number;
+    events: IngestCSVEventResult[];
+    ingestion_timestamp: string;
+    kde_warnings?: string[];
+    kde_warning_count?: number;
+}
+
 // Compliance
 export interface ComplianceChecklist {
     id: string;
