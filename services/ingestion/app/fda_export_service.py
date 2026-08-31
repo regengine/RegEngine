@@ -591,7 +591,7 @@ def _build_chain_verification_payload(
     missing_chain_hashes = sum(1 for event in events if not event.get("chain_hash"))
 
     verification_status = "VERIFIED" if chain_verification.valid else "UNVERIFIED"
-    if missing_record_hashes or missing_chain_hashes:
+    if chain_verification.valid and (missing_record_hashes or missing_chain_hashes):
         verification_status = "PARTIAL"
 
     return {
@@ -692,7 +692,10 @@ def _build_fda_package(
         + "\n"
         "Verification:\n"
         "- Compare manifest file hashes with local SHA-256 calculations.\n"
-        "- Validate chain_verification.verification_status == VERIFIED or PARTIAL.\n"
+        "- Read verification_status in chain_verification_*.json.\n"
+        "- VERIFIED means the chain check passed and row hashes are present.\n"
+        "- PARTIAL means row hashes are missing; verification is incomplete.\n"
+        "- UNVERIFIED means the chain check failed; do not treat this package as verified.\n"
     ).encode("utf-8")
 
     file_hashes = {

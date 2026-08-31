@@ -492,6 +492,55 @@ def _chain_result(valid: bool = True, errors=None):
 
 
 class TestBuildChainVerificationPayload:
+    @pytest.mark.parametrize(
+        ("valid", "missing_record_hash", "missing_chain_hash", "expected_status"),
+        [
+            (True, False, False, "VERIFIED"),
+            (True, True, False, "PARTIAL"),
+            (True, False, True, "PARTIAL"),
+            (True, True, True, "PARTIAL"),
+            (False, False, False, "UNVERIFIED"),
+            (False, True, False, "UNVERIFIED"),
+            (False, False, True, "UNVERIFIED"),
+            (False, True, True, "UNVERIFIED"),
+        ],
+    )
+    def test_chain_failure_takes_precedence_over_missing_hashes(
+        self,
+        valid: bool,
+        missing_record_hash: bool,
+        missing_chain_hash: bool,
+        expected_status: str,
+    ) -> None:
+        event = {}
+        if not missing_record_hash:
+            event["sha256_hash"] = "a" * 64
+        if not missing_chain_hash:
+            event["chain_hash"] = "b" * 64
+        errors = [] if valid else ["Chain hash mismatch at sequence 1"]
+
+        payload = svc._build_chain_verification_payload(
+            tenant_id="t",
+            tlc="TLC",
+            events=[event],
+            csv_hash="c" * 64,
+            chain_verification=_chain_result(valid=valid, errors=errors),
+            completeness_summary={
+                "required_kde_coverage_ratio": 1.0,
+                "events_with_missing_required_fields": 0,
+            },
+        )
+
+        assert payload["verification_status"] == expected_status
+        assert payload["chain_verification"]["valid"] is valid
+        assert payload["chain_verification"]["errors"] == errors
+        assert payload["row_hash_coverage"] == {
+            "records_with_hash": int(not missing_record_hash),
+            "records_with_chain_hash": int(not missing_chain_hash),
+            "missing_record_hashes": int(missing_record_hash),
+            "missing_chain_hashes": int(missing_chain_hash),
+        }
+
     def test_verified_when_chain_valid_and_hashes_complete(self) -> None:
         events = [{"sha256_hash": "a" * 64, "chain_hash": "b" * 64}]
         payload = svc._build_chain_verification_payload(
@@ -626,6 +675,48 @@ class TestBuildFdaPackage:
         # Manifest has privacy block reflecting default redaction.
         assert meta["manifest"]["privacy"]["pii_redacted"] is True
         assert meta["package_hash"]
+
+    def test_package_preserves_failed_chain_with_missing_hashes(self) -> None:
+        events = [dict(_CORE_EVENT, sha256_hash=None, chain_hash="")]
+        csv_text = svc._generate_csv(events)
+        summary = self._summary_no_missing()
+        errors = ["Chain hash mismatch at sequence 1"]
+        chain_payload = svc._build_chain_verification_payload(
+            tenant_id="t-1",
+            tlc="TLC-1",
+            events=events,
+            csv_hash="c" * 64,
+            chain_verification=_chain_result(valid=False, errors=errors),
+            completeness_summary=summary,
+        )
+        pkg_bytes, meta = svc._build_fda_package(
+            events=events,
+            csv_content=csv_text,
+            csv_hash="c" * 64,
+            chain_payload=chain_payload,
+            completeness_summary=summary,
+            tenant_id="t-1",
+            tlc="TLC-1",
+            query_start_date=None,
+            query_end_date=None,
+        )
+
+        with zipfile.ZipFile(io.BytesIO(pkg_bytes)) as z:
+            packaged_chain = json.loads(z.read(meta["chain_name"]))
+            manifest = json.loads(z.read(meta["manifest_name"]))
+            readme = z.read(meta["readme_name"]).decode()
+
+        assert packaged_chain["verification_status"] == "UNVERIFIED"
+        assert packaged_chain["chain_verification"]["valid"] is False
+        assert packaged_chain["chain_verification"]["errors"] == errors
+        assert packaged_chain["row_hash_coverage"]["missing_record_hashes"] == 1
+        assert packaged_chain["row_hash_coverage"]["missing_chain_hashes"] == 1
+        assert manifest["verification"]["status"] == "UNVERIFIED"
+        assert manifest["verification"]["chain_valid"] is False
+        assert meta["manifest"]["verification"] == manifest["verification"]
+        assert "PARTIAL means row hashes are missing; verification is incomplete." in readme
+        assert "UNVERIFIED means the chain check failed" in readme
+        assert "VERIFIED or PARTIAL" not in readme
 
     def test_happy_path_with_validation_errors(self) -> None:
         events = [{"event_type": "SHIPPING", "traceability_lot_code": "TLC-1", "id": "e1", "kdes": {}}]

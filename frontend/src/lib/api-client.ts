@@ -5,6 +5,7 @@ import type {
   APIKeyResponse,
   IngestURLRequest,
   IngestURLResponse,
+  IngestCSVResponse,
   ComplianceChecklist,
   Industry,
   TenantResponse,
@@ -415,7 +416,7 @@ class APIClient {
   }
 
 
-  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestURLResponse> {
+  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestCSVResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', sourceSystem);
@@ -424,15 +425,39 @@ class APIClient {
       formData.append('cte_type', cteType);
     }
 
-    const response = await this.ingestionClient.post<IngestURLResponse>(
-      '/api/v1/ingest/csv',
-      formData,
-      {
-        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
-        timeout: 300000 // Longer timeout for large files (5 minutes)
+    try {
+      const response = await this.ingestionClient.post<IngestCSVResponse>(
+        '/api/v1/ingest/csv',
+        formData,
+        {
+          headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+          timeout: 300000 // Longer timeout for large files (5 minutes)
+        }
+      );
+      const result = response.data;
+      if (!result || ![result.total, result.accepted, result.rejected].every(value => Number.isInteger(value) && value >= 0)
+        || result.accepted + result.rejected !== result.total || !Array.isArray(result.events)
+        || !result.events.every(event => event && typeof event.status === 'string' && Array.isArray(event.errors)
+          && event.errors.every(error => typeof error === 'string'))
+        || (result.kde_warnings !== undefined && (!Array.isArray(result.kde_warnings)
+          || !result.kde_warnings.every(warning => typeof warning === 'string')))) {
+        throw new Error('Unexpected CSV ingestion response');
       }
-    );
-    return response.data;
+      return result;
+    } catch (error) {
+      // CSV parsing uses a detail object; request validation uses a detail array.
+      // Keep the original HTTP response for callers while making its message safe to render.
+      if (error instanceof Error) {
+        const detail = asRecord(asRecord(asRecord(error).response).data).detail;
+        const detailRecord = asRecord(detail);
+        const messages = typeof detail === 'string' ? [detail]
+          : Array.isArray(detail) ? detail.map(item => asRecord(item).msg)
+          : [detailRecord.message, ...(Array.isArray(detailRecord.errors) ? detailRecord.errors : [])];
+        const message = messages.filter((value): value is string => typeof value === 'string').join(': ');
+        if (message) error.message = message;
+      }
+      throw error;
+    }
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
