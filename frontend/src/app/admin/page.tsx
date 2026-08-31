@@ -36,6 +36,7 @@ export default function AdminPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [apiKeySaveError, setApiKeySaveError] = useState<string | null>(null);
   const [pendingRevokeKeyId, setPendingRevokeKeyId] = useState<string | null>(null);
   const canManageKeys = isAuthenticated && isHighAssuranceSession && user?.is_sysadmin === true;
 
@@ -95,6 +96,16 @@ export default function AdminPage() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const handleUseApiKey = async (key: string, clear: () => void) => {
+    setApiKeySaveError(null);
+    try {
+      await storeApiKey(key);
+      clear();
+    } catch {
+      setApiKeySaveError('The API key could not be saved. Copy it now and try again.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <PageContainer>
@@ -115,6 +126,12 @@ export default function AdminPage() {
               </p>
             </div>
           </div>
+
+          {apiKeySaveError && (
+            <div role="alert" className="mb-6 p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger">
+              <p className="text-sm text-re-danger">{apiKeySaveError}</p>
+            </div>
+          )}
 
           <Card className="mb-8">
             <CardHeader>
@@ -237,10 +254,7 @@ export default function AdminPage() {
                           <Button
                             size="sm"
                             className="mt-3"
-                            onClick={() => {
-                              storeApiKey(generatedKey);
-                              setGeneratedKey(null);
-                            }}
+                            onClick={() => void handleUseApiKey(generatedKey, () => setGeneratedKey(null))}
                           >
                             <CheckCircle className="h-4 w-4 mr-2" />
                             Use as my API Key
@@ -332,10 +346,7 @@ export default function AdminPage() {
                             <Button
                               size="sm"
                               className="mt-3"
-                              onClick={() => {
-                                storeApiKey(copiedKey);
-                                setCopiedKey(null);
-                              }}
+                              onClick={() => void handleUseApiKey(copiedKey, () => setCopiedKey(null))}
                             >
                               <CheckCircle className="h-4 w-4 mr-2" />
                               Use as my API Key

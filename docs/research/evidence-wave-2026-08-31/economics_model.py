@@ -9,8 +9,8 @@ earned evenly; the cash model collects whole invoices after an explicit delay.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, replace
 import json
+from dataclasses import asdict, dataclass, replace
 from math import ceil, isclose, isfinite
 
 
@@ -46,16 +46,14 @@ def validate(p: Inputs) -> None:
     for name, value in asdict(p).items():
         if not isfinite(value) or value < 0:
             raise ValueError(f"{name} must be finite and nonnegative")
-    for name in ("events_per_account_month", "employee_service_hours_per_month",
-                 "attempts_per_infrastructure_block"):
+    for name in ("events_per_account_month", "employee_service_hours_per_month", "attempts_per_infrastructure_block"):
         if getattr(p, name) <= 0:
             raise ValueError(f"{name} must be positive")
     if p.attempts_per_accepted_event < 1 or p.payment_fraction > 1:
         raise ValueError("attempts must be >=1 and payment fraction <=1")
 
 
-def monthly(events: int, accounts: int, p: Inputs,
-            retained_events: float | None = None) -> dict:
+def monthly(events: int, accounts: int, p: Inputs, retained_events: float | None = None) -> dict:
     """Steady service month; acquisition/onboarding are separate one-time costs.
 
     Every account is assumed paying and active for a whole month. This is a
@@ -71,14 +69,10 @@ def monthly(events: int, accounts: int, p: Inputs,
     attempts = events * p.attempts_per_accepted_event
     revenue = accounts * p.account_month_price
     cases = events * p.remediation_cases_per_accepted_event
-    hours = accounts * p.routine_support_hours_per_account + (
-        cases * p.remediation_minutes_per_case / 60
-    )
+    hours = accounts * p.routine_support_hours_per_account + (cases * p.remediation_minutes_per_case / 60)
     flexible_hours = min(hours, p.flexible_human_hours)
     staff = ceil(max(0, hours - flexible_hours) / p.employee_service_hours_per_month)
-    human_cost = p.human_hour_cost * (
-        flexible_hours + staff * p.employee_service_hours_per_month
-    )
+    human_cost = p.human_hour_cost * (flexible_hours + staff * p.employee_service_hours_per_month)
     blocks = max(1, ceil(attempts / p.attempts_per_infrastructure_block))
     variable = {
         "compute": attempts * p.compute_per_attempt,
@@ -91,20 +85,24 @@ def monthly(events: int, accounts: int, p: Inputs,
         "loss_allowance_not_expected_loss": accounts * p.loss_allowance_per_account_month,
     }
     contribution = revenue - sum(variable.values()) - human_cost
-    platform_cost = p.infrastructure_base_month + (
-        blocks - 1
-    ) * p.additional_infrastructure_block_month
+    platform_cost = p.infrastructure_base_month + (blocks - 1) * p.additional_infrastructure_block_month
     service_surplus = contribution - platform_cost
     operating = service_surplus - p.core_overhead_month
     service_cost = revenue - service_surplus
     out = {
-        "accepted_events": events, "paid_accounts": accounts,
-        "attempts": attempts, "retained_event_stock": retained,
-        "revenue": revenue, "variable_cost_components": variable,
-        "remediation_cases": cases, "human_hours": hours,
-        "reserved_staff": staff, "support_cost_including_idle_capacity": human_cost,
+        "accepted_events": events,
+        "paid_accounts": accounts,
+        "attempts": attempts,
+        "retained_event_stock": retained,
+        "revenue": revenue,
+        "variable_cost_components": variable,
+        "remediation_cases": cases,
+        "human_hours": hours,
+        "reserved_staff": staff,
+        "support_cost_including_idle_capacity": human_cost,
         "reserved_human_hours": flexible_hours + staff * p.employee_service_hours_per_month,
-        "infrastructure_blocks": blocks, "platform_capacity_cost": platform_cost,
+        "infrastructure_blocks": blocks,
+        "platform_capacity_cost": platform_cost,
         "contribution_before_platform_and_core": contribution,
         "service_surplus_before_core_overhead": service_surplus,
         "service_margin_before_core_overhead": service_surplus / revenue if revenue else None,
@@ -112,12 +110,13 @@ def monthly(events: int, accounts: int, p: Inputs,
         "total_service_cost": service_cost,
         "total_operating_cost": service_cost + p.core_overhead_month,
         "revenue_to_operating_cost": revenue / (service_cost + p.core_overhead_month)
-        if service_cost + p.core_overhead_month else None,
-        "expected_failure_cost": None, "expected_fraud_abuse_cost": None,
+        if service_cost + p.core_overhead_month
+        else None,
+        "expected_failure_cost": None,
+        "expected_fraud_abuse_cost": None,
         "expected_incident_legal_risk_cost": None,
         "one_time_acquisition_and_onboarding_per_new_account": (
-            p.acquisition_cash_per_new_account
-            + p.onboarding_hours_per_new_account * p.human_hour_cost
+            p.acquisition_cash_per_new_account + p.onboarding_hours_per_new_account * p.human_hour_cost
         ),
     }
     for unit, count in (("per_accepted_event", events), ("per_account_month", accounts)):
@@ -151,9 +150,14 @@ def breakeven(p: Inputs, max_accounts: int = 10000) -> dict:
     }
 
 
-def cash_path(p: Inputs, new_accounts_per_30_days: int, collection_delay_days: int,
-              initial_cash: float = 100000, shock_day: int | None = None,
-              shock_loss: float = 0) -> dict:
+def cash_path(
+    p: Inputs,
+    new_accounts_per_30_days: int,
+    collection_delay_days: int,
+    initial_cash: float = 100000,
+    shock_day: int | None = None,
+    shock_loss: float = 0,
+) -> dict:
     """Daily cash ledger; a negative balance is infeasible without new funding.
 
     30-day service periods; invoices occur at period start, collection is delayed.
@@ -178,8 +182,7 @@ def cash_path(p: Inputs, new_accounts_per_30_days: int, collection_delay_days: i
             due = day + collection_delay_days
             receivables[due] = receivables.get(due, 0) + bill
             cash -= new_accounts_per_30_days * (
-                p.acquisition_cash_per_new_account
-                + p.onboarding_hours_per_new_account * p.human_hour_cost
+                p.acquisition_cash_per_new_account + p.onboarding_hours_per_new_account * p.human_hour_cost
             )
         events = accounts * p.events_per_account_month
         retained += events / 30
@@ -194,19 +197,30 @@ def cash_path(p: Inputs, new_accounts_per_30_days: int, collection_delay_days: i
         if cash < 0 and first_negative is None:
             first_negative = day
         if day in (1, 7, 30, 90, 365, 1095):
-            snapshots.append({"day": day, "paying_accounts_assumed": accounts,
-                              "cash": cash, "human_hours_per_month": month_cost["human_hours"],
-                              "retained_events": retained})
-    return {"new_accounts_per_30_days": new_accounts_per_30_days,
-            "collection_delay_days": collection_delay_days,
-            "initial_cash_assumption": initial_cash,
-            "shock_day": shock_day, "shock_loss_assumption": shock_loss,
-            "first_negative_cash_day": first_negative,
-            "minimum_cash": minimum, "maximum_cash_drawdown": drawdown,
-            "minimum_initial_cash_to_fund_whole_path": initial_cash - minimum if minimum < initial_cash else 0,
-            "extra_capital_above_assumed_initial_cash": max(0, -minimum),
-            "probability_of_ruin": None, "survival_probability": None,
-            "snapshots": snapshots}
+            snapshots.append(
+                {
+                    "day": day,
+                    "paying_accounts_assumed": accounts,
+                    "cash": cash,
+                    "human_hours_per_month": month_cost["human_hours"],
+                    "retained_events": retained,
+                }
+            )
+    return {
+        "new_accounts_per_30_days": new_accounts_per_30_days,
+        "collection_delay_days": collection_delay_days,
+        "initial_cash_assumption": initial_cash,
+        "shock_day": shock_day,
+        "shock_loss_assumption": shock_loss,
+        "first_negative_cash_day": first_negative,
+        "minimum_cash": minimum,
+        "maximum_cash_drawdown": drawdown,
+        "minimum_initial_cash_to_fund_whole_path": initial_cash - minimum if minimum < initial_cash else 0,
+        "extra_capital_above_assumed_initial_cash": max(0, -minimum),
+        "probability_of_ruin": None,
+        "survival_probability": None,
+        "snapshots": snapshots,
+    }
 
 
 def self_test() -> list[str]:
@@ -230,16 +244,25 @@ def self_test() -> list[str]:
     a, b = monthly(999999, 1, p), monthly(1000000, 1, p)
     assert a["revenue"] == b["revenue"]
     assert b["service_surplus_before_core_overhead"] < a["service_surplus_before_core_overhead"]
-    for bad in (replace(p, human_hour_cost=-1), replace(p, attempts_per_infrastructure_block=0),
-                replace(p, payment_fraction=1.1), replace(p, compute_per_attempt=float("nan"))):
+    for bad in (
+        replace(p, human_hour_cost=-1),
+        replace(p, attempts_per_infrastructure_block=0),
+        replace(p, payment_fraction=1.1),
+        replace(p, compute_per_attempt=float("nan")),
+    ):
         try:
             monthly(1, 1, bad)
         except ValueError:
             pass
         else:
             raise AssertionError("invalid assumption accepted")
-    return ["one-account hand calculation", "staffing boundary", "zero-adoption burn/runway",
-            "millionth fixed-account event", "negative/zero/fraction/NaN inputs"]
+    return [
+        "one-account hand calculation",
+        "staffing boundary",
+        "zero-adoption burn/runway",
+        "millionth fixed-account event",
+        "negative/zero/fraction/NaN inputs",
+    ]
 
 
 def report() -> dict:
@@ -250,31 +273,39 @@ def report() -> dict:
         for n in scales:
             accounts = 1 if mode == "one_account_fixed_revenue" else ceil(n / p.events_per_account_month)
             row = monthly(n, accounts, p)
-            previous_accounts = (1 if mode == "one_account_fixed_revenue"
-                                 else ceil((n - 1) / p.events_per_account_month))
+            previous_accounts = 1 if mode == "one_account_fixed_revenue" else ceil((n - 1) / p.events_per_account_month)
             previous = monthly(n - 1, previous_accounts, p)
             row["mode"] = mode
             row["last_event_marginal_service_surplus"] = (
                 row["service_surplus_before_core_overhead"] - previous["service_surplus_before_core_overhead"]
             )
             rows.append(row)
-    variants = {"illustrative_base": p,
-                "five_percent_remediation": replace(p, remediation_cases_per_accepted_event=0.05),
-                "double_human_hour_cost": replace(p, human_hour_cost=120),
-                "inference_5_cents_each_attempt": replace(p, inference_per_attempt=0.05),
-                "loss_allowance_100_per_account": replace(p, loss_allowance_per_account_month=100),
-                "price_halved": replace(p, account_month_price=324.5)}
-    return {"status": "HYPOTHETICAL: not forecast or actual unit economics",
-            "economic_reality_level": 3, "inputs": asdict(p), "self_checks": self_test(),
-            "scale": rows,
-            "sensitivity": {name: {"inputs": asdict(v), "break_even": breakeven(v),
-                                    "at_100_accounts": monthly(500000, 100, v)}
-                            for name, v in variants.items()},
-            "time": {"zero_adoption": cash_path(p, 0, 0),
-                     "two_new_accounts_each_period": cash_path(p, 2, 30),
-                     "same_growth_90_day_collection": cash_path(p, 2, 90),
-                     "same_growth_high_remediation": cash_path(variants["five_percent_remediation"], 2, 30),
-                     "same_growth_50k_loss_day90": cash_path(p, 2, 30, shock_day=90, shock_loss=50000)}}
+    variants = {
+        "illustrative_base": p,
+        "five_percent_remediation": replace(p, remediation_cases_per_accepted_event=0.05),
+        "double_human_hour_cost": replace(p, human_hour_cost=120),
+        "inference_5_cents_each_attempt": replace(p, inference_per_attempt=0.05),
+        "loss_allowance_100_per_account": replace(p, loss_allowance_per_account_month=100),
+        "price_halved": replace(p, account_month_price=324.5),
+    }
+    return {
+        "status": "HYPOTHETICAL: not forecast or actual unit economics",
+        "economic_reality_level": 3,
+        "inputs": asdict(p),
+        "self_checks": self_test(),
+        "scale": rows,
+        "sensitivity": {
+            name: {"inputs": asdict(v), "break_even": breakeven(v), "at_100_accounts": monthly(500000, 100, v)}
+            for name, v in variants.items()
+        },
+        "time": {
+            "zero_adoption": cash_path(p, 0, 0),
+            "two_new_accounts_each_period": cash_path(p, 2, 30),
+            "same_growth_90_day_collection": cash_path(p, 2, 90),
+            "same_growth_high_remediation": cash_path(variants["five_percent_remediation"], 2, 30),
+            "same_growth_50k_loss_day90": cash_path(p, 2, 30, shock_day=90, shock_loss=50000),
+        },
+    }
 
 
 if __name__ == "__main__":

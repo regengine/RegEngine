@@ -472,6 +472,54 @@ describe('useAuth Hook', () => {
         });
     });
 
+    describe('API key cookie', () => {
+        it('publishes cookie-managed state only after the session cookie is stored', async () => {
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            await act(async () => {
+                await result.current.setApiKey('rge_test_api_key'); // pragma: allowlist secret
+            });
+
+            expect(result.current.apiKey).toBe('cookie-managed');
+            const sessionPostBodies = mockFetch.mock.calls
+                .filter(([, opts]) => (opts as RequestInit | undefined)?.method === 'POST')
+                .map(([, opts]) => JSON.parse((opts as RequestInit).body as string));
+            expect(sessionPostBodies.some((body) => body.api_key === 'rge_test_api_key')).toBe(true); // pragma: allowlist secret
+        });
+
+        it('rejects a failed cookie write and keeps API-key state unset', async () => {
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST') {
+                        return Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: false,
+                            has_api_key: false,
+                            has_credentials: false,
+                            tenant_id: null,
+                            user: null,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            await act(async () => {
+                await expect(
+                    result.current.setApiKey('rge_test_api_key'), // pragma: allowlist secret
+                ).rejects.toThrow('API key could not be saved');
+            });
+
+            expect(result.current.apiKey).toBeNull();
+        });
+    });
+
     describe('Logout', () => {
         it('clears user and token on logout', async () => {
             const mockUser = {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -76,10 +76,12 @@ export default function IngestPage() {
   const [file, setFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
-  const isPending = ingestMutation.isPending || ingestFileMutation.isPending;
+  const isPending = isSubmitting || ingestMutation.isPending || ingestFileMutation.isPending;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -93,7 +95,6 @@ export default function IngestPage() {
   // user-editable afterwards, so this cannot be a lazy initial value.
   useEffect(() => {
     if (storedApiKey && !apiKey) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setApiKey(storedApiKey);
     }
   }, [storedApiKey, apiKey]);
@@ -125,51 +126,69 @@ export default function IngestPage() {
     if (!apiKey) return;
     if (activeTab === 'url' && !url) return;
     if (activeTab === 'file' && !file) return;
+    if (submitInFlightRef.current) return;
 
-    // Store the API key for future use
-    if (apiKey !== storedApiKey) {
-      storeApiKey(apiKey);
-    }
-    setJobId(null);
-    setJobStatus('queued');
-    setStatusError(null);
-    setCsvResult(null);
-    setCsvError(null);
-
-    // Demonstration Override for the Sales Demo flow
-    if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
-      setJobId('demo-job-123');
-
-      // Simulate real ingestion stages over 3.5 seconds
-      setTimeout(() => setJobStatus('parsing'), 800);
-      setTimeout(() => setJobStatus('extracting'), 1800);
-      setTimeout(() => setJobStatus('completed'), 3500);
-      return;
-    }
-
+    submitInFlightRef.current = true;
+    setIsSubmitting(true);
     try {
-      if (activeTab === 'file') {
-        if (!file) return;
-        const result = await ingestFileMutation.mutateAsync({ apiKey, file });
-        setCsvResult(result);
-        if (result.accepted > 0) notifyDashboardRefresh();
+      // Store the API key for future use
+      if (apiKey !== storedApiKey) {
+        // The browser proxy reads the cookie written by setApiKey and ignores
+        // caller-supplied credential headers. Wait for that write before the
+        // upload so a stale key or tenant cannot win the request race.
+        try {
+          await storeApiKey(apiKey);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unable to save API key';
+          if (activeTab === 'file') setCsvError(message);
+          else setStatusError(message);
+          return;
+        }
+      }
+      setJobId(null);
+      setJobStatus('queued');
+      setStatusError(null);
+      setCsvResult(null);
+      setCsvError(null);
+
+      // Demonstration Override for the Sales Demo flow
+      if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
+        setJobId('demo-job-123');
+
+        // Simulate real ingestion stages over 3.5 seconds
+        setTimeout(() => setJobStatus('parsing'), 800);
+        setTimeout(() => setJobStatus('extracting'), 1800);
+        setTimeout(() => setJobStatus('completed'), 3500);
         return;
       }
 
-      const result = await ingestMutation.mutateAsync({ apiKey, url });
-      const returnedJobId = result.job_id || result.doc_id || null;
-      if (returnedJobId) {
-        setJobId(returnedJobId);
-        setJobStatus('queued');
-        setStatusError(null);
-        notifyDashboardRefresh();
+      try {
+        if (activeTab === 'file') {
+          if (!file) return;
+          const result = await ingestFileMutation.mutateAsync({ apiKey, file });
+          setCsvResult(result);
+          if (result.accepted > 0) notifyDashboardRefresh();
+          return;
+        }
+
+        const result = await ingestMutation.mutateAsync({ apiKey, url });
+        const returnedJobId = result.job_id || result.doc_id || null;
+        if (returnedJobId) {
+          setJobId(returnedJobId);
+          setJobStatus('queued');
+          setStatusError(null);
+          notifyDashboardRefresh();
+        }
+      } catch (error) {
+        if (activeTab === 'file') {
+          setCsvError(error instanceof Error ? error.message : 'CSV upload failed');
+        } else {
+          console.error('Ingestion failed:', error);
+        }
       }
-    } catch (error) {
-      if (activeTab === 'file') {
-        setCsvError(error instanceof Error ? error.message : 'CSV upload failed');
-      } else {
-        console.error('Ingestion failed:', error);
-      }
+    } finally {
+      submitInFlightRef.current = false;
+      setIsSubmitting(false);
     }
   };
 

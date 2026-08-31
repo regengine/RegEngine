@@ -8,7 +8,7 @@ Date: 2026-08-31. Role: `security_review`. Scope: local adjudication only; no pr
 
 **Adjudication: corroborated as a verification coverage gap.** Calling the actual `CTEPersistence.verify_chain()` against synthetic SQL tables returns `valid=True` after either quantity-only or KDE-only changes that demonstrably change `compute_event_hash()`. The chain and event count stay unchanged. A deliberately corrupted stored chain hash returns `valid=False`, confirming that the probe can detect the kind of corruption the verifier actually checks.
 
-The relevant implementation is [core.py:1515](../../../services/shared/cte_persistence/core.py#L1515). Its query reads stored digests and event existence, not the event payload:
+The relevant implementation is [verification.py:30](../../../services/shared/cte_persistence/verification.py#L30). Its query reads stored digests and event existence, not the event payload:
 
 ```sql
 SELECT hc.sequence_num, hc.event_hash,
@@ -41,7 +41,7 @@ It also checks sequence continuity, previous-chain linkage, orphan references, a
 
 The changes use fields that participate in [compute_event_hash](../../../services/shared/cte_persistence/hashing.py#L67). The experiment does not rely on changing `product_description`, which that helper intentionally excludes.
 
-**FDA export implication, established by source tracing rather than an HTTP experiment:** [query_events_by_tlc](../../../services/shared/cte_persistence/core.py#L1329) reads the current event fields and [current KDE values](../../../services/shared/cte_persistence/core.py#L1376). The [export handler](../../../services/ingestion/app/fda_export/router.py#L271) generates CSV from those rows and calls `verify_chain`; its [CSV response](../../../services/ingestion/app/fda_export/router.py#L469) uses:
+**FDA export implication, established by source tracing rather than an HTTP experiment:** [query_events_by_tlc](../../../services/shared/cte_persistence/queries.py#L197) reads the current event fields and [current KDE values](../../../services/shared/cte_persistence/queries.py#L313). The [export handler](../../../services/ingestion/app/fda_export/router.py#L271) generates CSV from those rows and calls `verify_chain`; its [CSV response](../../../services/ingestion/app/fda_export/router.py#L469) uses:
 
 ```python
 "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED"

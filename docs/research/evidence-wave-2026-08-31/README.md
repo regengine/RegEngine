@@ -7,10 +7,12 @@ user subsequently supplied `Operation_Deep_Market_Lab_Master_Prompt.docx` and
 explicitly requested applying it to this repository. The complete document was
 read and incorporated without modifying the attachment.
 
-Base: `41aa11c5`, branch `codex/evidence-wave-20260831`. Work is isolated from the
-original checkout and from the earlier `codex/inflow-gate-verification` worktree.
-No deployment, purchase, customer contact, credential access, database mutation,
-or recurring automation is authorized by this report or was needed for this wave.
+Baseline: `41aa11c5`, branch `codex/evidence-wave-20260831`. The wave was created
+in an isolated worktree. Its application changes were subsequently reconciled in
+a later integration pass, so this report preserves baseline observations and
+labels post-integration reruns separately. No deployment, purchase, customer
+contact, credential access, database mutation, or recurring automation is
+authorized by this report or was needed for this wave.
 
 ## Decision frame and organization
 
@@ -47,7 +49,7 @@ triggered repairs, not just additional agreement.
 | Surface | Current checked-in evidence | Limit of the observation |
 | --- | --- | --- |
 | Runtime | [server/main.py](../../../server/main.py) mounts webhook, CSV, Inflow, proof and FDA routers; most are conditional on router flags. | Deployment and enabled flags were not inspected. |
-| Intake | [csv_templates.py](../../../services/ingestion/app/csv_templates.py) normalizes CSV into webhook ingest events; [webhook_router_v2.py](../../../services/ingestion/app/webhook_router_v2.py) handles persistence/rule evaluation. | Not a real supplier ingestion observation. |
+| Intake | [csv_templates.py](../../../services/ingestion/app/csv_templates.py) normalizes CSV into webhook ingest events; [webhook_router_v2 routes](../../../services/ingestion/app/webhook_router_v2/routes.py) handle persistence/rule evaluation. | Not a real supplier ingestion observation. |
 | Validation | [enforcement.py](../../../services/shared/rules/enforcement.py) has off/cte_only/all modes and a manifest of participating routes. | The default is off; no-verdict is not rejection. Universal blocking cannot be inferred. |
 | Evidence store | [canonical ownership](../../../CANONICAL_OWNERSHIP.md) names traceability_events; [legacy persistence](../../../services/shared/cte_persistence/core.py) explicitly documents surviving dual-write callers and divergent idempotency keys. | Canonical-to-export reconciliation remains an experiment, not a proved invariant. |
 | Exports | [FDA router](../../../services/ingestion/app/fda_export/router.py), [public verifier](../../../frontend/public/sdk/verify_chain.py), and synthetic downloadable bundles. | Consistency, provenance, completeness, legal sufficiency and source accuracy are different claims. |
@@ -110,7 +112,7 @@ avoid turning a valid local observation into a broader assertion.
 | C01: RegEngine has verified paid demand. | [Market inspection](market.md): no located payment/finished study; current reality UNKNOWN; hypothesis L0–L1. | U01/U11 → E04; do not accelerate based on this wave. |
 | C02: Displayed plans and billing are a single coherent offer. | [Economics trace](economics.md): connected catalog/metadata disagreements, actual Stripe prices UNKNOWN; L1. | U07 → E06; reconcile before a paid offer. |
 | C03: Public hash verification authenticates the issuer. | [Security original/altered/recomputed cases](security-results.jsonl), independently [replicated](qa-artifact-results.json); falsified L5. | U03 → correct signing copy; do not infer source truth. |
-| C04: Current FDA generator packages work in advertised verifiers. | Two independent real-helper → verifier probes in [security](security.md) and [QA](qa.md); falsified L5. | U02/U03 → new E11 local artifact-contract repair. |
+| C04: Current FDA generator packages work in advertised verifiers. | Baseline falsified by two independent probes; post-integration [security](security-results-integrated.jsonl) and [QA](qa-artifact-results-integrated.json) reruns pass the real helper's valid-chain package through both verifiers. A self-consistent `UNVERIFIED` package fails both; L5. | U02/U03 → local format mismatch and invalid-chain acceptance closed; retain internal-consistency wording and test remaining package boundaries. |
 | C05: Chain-link validation rechecks stored event content. | [SQLite quantity-change probe](security.md): stored quantity changes without invalidating chain; falsified L5 in that model. | U03/U06 → content reconciliation, with historical hash formats respected. |
 | C06: Selected canonical writers bind tenant context before SQL. | [QA SQL-order and invalid-tenant probes](qa.md); L5 for emitted calls only. | U06 → disposable PostgreSQL test; no RLS readiness inference. |
 | C07: All focused existing tests are green. | [Raw baseline](qa-pytest-results.txt): 231 passed, five failed; falsified L5. | Preserve failures; stale SQL-spelling assertions do not establish a deployed tenant leak. |
@@ -143,15 +145,19 @@ measured return. Runs are independent where dependencies allow.
 | 8 / E08 | Do 500/501-row ingest and 10,000/10,001-row export remain explicit? | Medium / local fixture plus DB / hours estimate. | Boundary fixture, complete row accounting, rejection/partition UX. | Explicit complete result or explicit refusal / silently incomplete evidence. | Limits inspected; full database boundary exercise NOT RUN. |
 | 9 / E09 | Can evidence be recovered during cancellation/outage? | High / disposable environment / half-day estimate. | Inactive entitlement, backup restore, external viewer with retained artifact. | Authorized recovery and scoped guarantees / permanent loss or misleading claim. | NOT RUN → custody remains unknown. |
 | 10 / E10 | Does real remediation fit the economic envelope? | High / observation alongside E05. | Record event count, failure reasons, operator minutes, retries, variable provider usage. | Measured cost below agreed price at buyer's volume / negative contribution. | NOT RUN → replace hypothetical model inputs before scale decisions. |
-| Next local / E11 | Can a real generated package pass its intended verifier? | High / small local repair, no customer data needed. | One versioned artifact contract; generator → SDK/API, changed/missing/unsafe members and unsupported versions. | Supported format passes consistency checks; unsupported format distinguished from tampering; negative cases fail. | Both implementations currently reject generated packages → confidence in interoperability decreased → this is still actionable local work, not an external-data blocker. |
+| Completed locally / E11 | Can a real generated package pass its intended verifier? | High / small local repair, no customer data needed. | One artifact contract; generator → SDK/API plus negative package cases. | Valid `VERIFIED`/`PARTIAL` formats pass; changed content, `UNVERIFIED` chain, manifest/chain disagreement, and undeclared/duplicate/unsafe members fail. | Integrated helper passes both verifiers → local interoperability confidence increased. Unsupported-version and malformed-manifest behavior remain follow-up work. |
 
 E01 outcome: original UI tests reproduced 10 failures and a React rendering error;
 the repaired client/screens passed 35 focused tests independently. A QA challenge
 found three additional malformed-response cases; all passed after narrow guards.
 E02 outcome: original issuer-authenticity, generated-package interoperability,
-and failure-status claims were falsified. Copy and status precedence were repaired;
-the format/content findings remain open. E03 outcome: arithmetic replicated after
-one first-unit baseline correction. No actual profitability claim was promoted.
+and failure-status claims were falsified. During integration, review also
+reproduced and repaired a first-pass verifier acceptance of an invalid chain.
+Copy, status precedence, the local package format, chain-artifact cross-checks,
+and member coverage were repaired and rerun; issuer authenticity and
+stored-content rehash findings remain open. E03 outcome: arithmetic replicated
+after one first-unit baseline correction. No actual profitability claim was
+promoted.
 
 For ledger confidence/status: U01/U09/U11/U12/U15 remain UNKNOWN empirical claims;
 U02 is locally repaired but end-to-end UNKNOWN; U03/U07 have high-confidence
@@ -239,16 +245,17 @@ All tests below are local; overlapping runs are not summed into a unique total.
 | Change or check | Result | Boundary |
 | --- | --- | --- |
 | Shared CSV response type/client and two upload screens; three focused test files | Both screens show accepted/rejected counts, warnings and errors; zero acceptance is not success; malformed response shapes reject safely; URL job flow preserved. | No server ingest API, auth, CSRF, tenant header or persistence change. File controls now match CSV/5MB support. |
+| Post-integration CSV security review | Failed API-key cookie writes stop the upload; submission waits for a successful write and suppresses duplicates. Accepted events require a nonempty ID, two 64-hex evidence hashes, and no errors. The final ten-file security selection passes 145 tests; scoped tsc/ESLint pass. | Mocked client/UI behavior, not live cookie, tenant, network, or persistence verification. |
 | FDA helper status and existing helper tests | Invalid chain always UNVERIFIED; valid missing-hash case PARTIAL; valid complete case VERIFIED. Package instructions distinguish them. | Intentional correction to exported failure-status semantics; schema, tenant/auth, PII policy and billing unchanged. |
-| Public proof page and SDK docstring | Unsupported signing/whole-ZIP claims narrowed to declared-file/manifest consistency; no authenticity or source-truth promise. | No cryptographic behavior changed. |
+| Public proof API, SDK and wording | Claims are limited to internal consistency. FDA packages require matching chain metadata and reject failed chains, undeclared members and duplicates while preserving generic-bundle behavior. | No trusted root, issuer authentication, source-truth proof or independent persisted-chain recomputation. |
 | Backend red/green | Four regression failures reproduced before fix; helper/verification/PII selection 117 passed after. | Eight truth-table cases and generated ZIP assertions; no live DB. |
-| Independent security | 87 tests passed; rerun changed exactly the invalid-chain/missing-hash record, seven other records unchanged. | Format mismatch and stored-content blind spot remain. |
-| Frontend red/green and independent QA | Final six-file selection 35 passed, zero failed/skipped; scoped tsc and eslint passed. | Components/mock HTTP, not browser/service end to end. One preexisting scoped lint warning. |
+| Independent security | 87 tests passed after the status fix; final reproduction passes valid generated package through SDK/API, rejects a self-consistent `UNVERIFIED` package, and retains `UNVERIFIED` precedence. | Stored-content blind spot and untrusted-manifest limits remain; no deployment verification. |
+| Frontend red/green and independent QA | Original six-file selection passed 35; final ten-file security selection passed 145; current scoped tsc and changed-file eslint passed. | Components/mock HTTP, not browser/service end to end. |
 | Broader baseline | 231 passed, five failed, zero skipped. Current set_config tenant-binding order independently confirmed. | Five stale SQL-text assertions retained; no PostgreSQL RLS conclusion. |
 | Broad frontend lint/type check | Lint exit 0 with 62 warnings; full tsc fails unchanged dashboard-error-boundary.test.tsx:30 (TS2786). | Scoped types pass; do not label full typecheck green. |
-| Python static checks | Changed backend files Ruff pass; production helper mypy pass. Including helper test retains old line-184 inference error, confirmed with HEAD shadow file. Root's syntax/bug checks pass research scripts + SDK. | Repo-wide mypy not run. |
+| Python static checks | Changed backend/research Python files pass Ruff. Direct mypy on the export service reports eight preexisting FPDF annotation errors outside this diff; root config marks mypy nonblocking. Syntax checks pass research scripts and SDK. | Repo-wide mypy and remediation of the older FPDF annotations were not part of this change. |
 | Economic replication | Five self-check groups plus independent 14 monthly cases, six sensitivity searches, five cash paths and 30 snapshots matched corrected output. | Conditional arithmetic/scenarios only. |
-| Public sample | Root ran SDK on checked-in public sample; exit 0, two file hashes and Merkle root match. | This sample uses the compatible format; actual FDA generator incompatibility remains. |
+| Public sample and generated package | SDK public sample exits 0; the post-integration valid-chain generated package exits 0 with four declared hashes, Merkle root, and chain summary matching. A generated `UNVERIFIED` package exits 1. | Internal consistency only; neither passing result authenticates the issuer or proves source-data accuracy. |
 
 Exact commands and raw results: [QA](qa.md), [security](security.md),
 [economics](economics.md). No dependency was installed or lockfile changed.
@@ -267,18 +274,20 @@ Application/test files changed: [CSV type](../../../frontend/src/types/api.ts),
 [helper tests](../../../services/ingestion/tests/test_fda_export_service_1342.py),
 [proof page](../../../frontend/src/app/proof/page.tsx), and
 [SDK docstring](../../../frontend/public/sdk/verify_chain.py).
-Research files are all under this directory. Changes remain uncommitted in the
-isolated branch; nothing was pushed, deployed, charged or scheduled.
+Research files are all under this directory. The baseline wave began isolated;
+the post-integration artifacts describe the reconciled local tree. They do not
+assert that anything was deployed, charged, or scheduled.
 
-At closeout another active task was independently writing
-`docs/research/deep-market-lab-2026-08-31/` in the original checkout. That directory
-is not this wave's output and was left untouched. Do not combine its observations
-with this report's test counts without inspecting scope and base revision.
+At the original closeout, another task independently wrote
+`docs/research/deep-market-lab-2026-08-31/`. It is separate research output even
+after integration. Do not combine its observations with this report's test
+counts without inspecting scope and base revision.
 
 ## Next ten actions and resource allocation
 
-1. Settle and test generator/verifier artifact compatibility (E11), including an
-   explicit unsupported-format result; do not add issuer-authentication claims.
+1. Version the integrated generator/verifier contract and add explicit
+   unsupported-format plus predictable malformed-manifest results; do not add
+   issuer-authentication claims.
 2. Reconcile one advertised plan, checkout Price, billing interval and entitlement
    in test mode; choose commercial terms before any charge.
 3. Repair the five obsolete SQL-text assertions without weakening tenant/order

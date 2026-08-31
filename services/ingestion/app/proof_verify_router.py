@@ -10,19 +10,20 @@ The core production contract is::
 This router adds a public, tenantless surface in front of the *export*
 stage. It is the FSMA pipeline's audit-chain attestation surface: an
 external auditor, regulator, retailer, or trade-partner who has been
-handed a RegEngine FDA export bundle (ZIP) can independently verify
-the bundle's hash chain and Merkle root **without an account, without
-tenant context, and without reading any tenant data**. The endpoint
-operates purely on the bytes the caller uploaded.
+handed a RegEngine FDA export bundle (ZIP) can independently check its
+declared file hashes and Merkle root **without an account, without tenant
+context, and without reading any tenant data**. For FDA packages it also
+rejects a declared failed chain and cross-checks that summary against the
+hashed chain artifact. It does not independently recompute the persisted
+database chain or authenticate the package issuer. The endpoint operates
+purely on the bytes the caller uploaded.
 
-This is the public proof surface for the audit chain — it makes the
-hash-chain promise externally checkable, which is the whole point of
-having one. Because verification is purely structural (hash recompute,
-Merkle root recompute, manifest cross-check), there is nothing tenant
--scoped to leak. The endpoint MUST NOT touch any database, queue, or
-tenant-scoped store; static analysis of this module should show zero
-imports of ``shared.database``, ``CTEPersistence``, or any tenant-scoped
-client.
+This is the public proof surface for exported artifact consistency. Because
+verification is structural (hash recompute, Merkle root recompute, manifest
+cross-check), there is nothing tenant-scoped to leak. The endpoint MUST NOT
+touch any database, queue, or tenant-scoped store; static analysis of this
+module should show zero imports of ``shared.database``, ``CTEPersistence``,
+or any tenant-scoped client.
 
 Endpoint: ``POST /api/v1/proof/verify``
 - ``multipart/form-data`` with a single ``bundle`` field (ZIP, <= 5 MB)
@@ -273,6 +274,23 @@ def _verify_manifest_file_bundle(
         )
     )
 
+    declared_paths = [
+        entry.get("path") for entry in files if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    ]
+    duplicate_declared_paths = sorted(path for path in set(declared_paths) if declared_paths.count(path) > 1)
+    undeclared_members = sorted(set(names) - {"manifest.json", *declared_paths})
+    checks.append(
+        VerifyCheck(
+            name="manifest_covers_bundle_members",
+            passed=not duplicate_declared_paths and not undeclared_members,
+            detail=(
+                "manifest declares every bundle member exactly once"
+                if not duplicate_declared_paths and not undeclared_members
+                else (f"duplicate_declared_paths={duplicate_declared_paths} undeclared_members={undeclared_members}")
+            ),
+        )
+    )
+
     bad_entries: list[str] = []
     missing: list[str] = []
     mismatched: list[str] = []
@@ -388,6 +406,120 @@ def _verify_manifest_file_bundle(
         )
     )
 
+    # FDA packages carry a summary of the persisted-chain result in the
+    # manifest and the complete result in a manifest-declared JSON member.
+    # The manifest itself is not one of its own hashed members, so compare the
+    # summary with the already hash-checked chain artifact before accepting the
+    # package. Generic audit bundles without this FDA metadata keep their
+    # existing integrity-only behavior.
+    verification = manifest.get("verification")
+    chain_paths = [
+        entry.get("path")
+        for entry in files
+        if isinstance(entry, dict)
+        and isinstance(entry.get("path"), str)
+        and entry["path"].startswith("chain_verification_")
+        and entry["path"].endswith(".json")
+    ]
+    is_fda_package = manifest.get("export_type") == "fda_traceability_package" or bool(chain_paths)
+    if is_fda_package:
+        status: Any = None
+        chain_valid: Any = None
+        manifest_chain_length: Any = None
+        artifact_status: Any = None
+        artifact_chain_valid: Any = None
+        artifact_chain_length: Any = None
+        missing_record_hashes: Any = None
+        missing_chain_hashes: Any = None
+        metadata_error: Optional[str] = None
+
+        if not isinstance(verification, dict):
+            metadata_error = "FDA package manifest.verification must be present as an object"
+        elif len(chain_paths) != 1:
+            metadata_error = (
+                f"FDA package must declare exactly one chain_verification_*.json member; found {len(chain_paths)}"
+            )
+        else:
+            status = verification.get("status")
+            chain_valid = verification.get("chain_valid")
+            manifest_chain_length = verification.get("chain_length")
+            try:
+                chain_payload = json.loads(zf.read(chain_paths[0]).decode("utf-8"))
+            except (KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                metadata_error = f"chain verification artifact is unreadable: {exc}"
+            else:
+                if not isinstance(chain_payload, dict):
+                    metadata_error = "chain verification artifact must contain a JSON object"
+                else:
+                    chain_result = chain_payload.get("chain_verification")
+                    coverage = chain_payload.get("row_hash_coverage")
+                    if not isinstance(chain_result, dict) or not isinstance(coverage, dict):
+                        metadata_error = (
+                            "chain verification artifact is missing chain_verification or row_hash_coverage"
+                        )
+                    else:
+                        artifact_status = chain_payload.get("verification_status")
+                        artifact_chain_valid = chain_result.get("valid")
+                        artifact_chain_length = chain_result.get("chain_length")
+                        missing_record_hashes = coverage.get("missing_record_hashes")
+                        missing_chain_hashes = coverage.get("missing_chain_hashes")
+
+        counts_valid = all(
+            isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            for value in (missing_record_hashes, missing_chain_hashes)
+        )
+        lengths_valid = (
+            isinstance(artifact_chain_length, int)
+            and not isinstance(artifact_chain_length, bool)
+            and artifact_chain_length >= 0
+            and (
+                manifest_chain_length is None
+                or (
+                    isinstance(manifest_chain_length, int)
+                    and not isinstance(manifest_chain_length, bool)
+                    and manifest_chain_length >= 0
+                )
+            )
+        )
+        missing_hashes = missing_record_hashes + missing_chain_hashes if counts_valid else None
+        truth_table_valid = (
+            (status == "VERIFIED" and chain_valid is True and missing_hashes == 0)
+            or (status == "PARTIAL" and chain_valid is True and isinstance(missing_hashes, int) and missing_hashes > 0)
+            or (status == "UNVERIFIED" and chain_valid is False and counts_valid)
+        )
+        metadata_consistent = (
+            metadata_error is None
+            and truth_table_valid
+            and lengths_valid
+            and status == artifact_status
+            and chain_valid is artifact_chain_valid
+            and (manifest_chain_length is None or manifest_chain_length == artifact_chain_length)
+        )
+        checks.append(
+            VerifyCheck(
+                name="package_chain_metadata_consistent",
+                passed=metadata_consistent,
+                detail=(
+                    f"manifest status={status} matches the declared chain artifact"
+                    if metadata_consistent
+                    else metadata_error
+                    or ("manifest/chain status, validity, length, or row-hash coverage is inconsistent")
+                ),
+            )
+        )
+        chain_acceptable = metadata_consistent and status in {"VERIFIED", "PARTIAL"}
+        checks.append(
+            VerifyCheck(
+                name="package_persisted_chain_acceptable",
+                passed=chain_acceptable,
+                detail=(
+                    f"persisted chain status is {status}"
+                    if chain_acceptable
+                    else f"persisted chain status is not acceptable: {status!r}"
+                ),
+            )
+        )
+
     return VerifyResponse(
         verified=all(c.passed for c in checks),
         checks=checks,
@@ -416,6 +548,13 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
         raise HTTPException(
             status_code=400,
             detail=f"bundle has too many entries ({len(names)} > {MAX_ZIP_ENTRIES})",
+        )
+
+    duplicate_members = sorted(name for name in set(names) if names.count(name) > 1)
+    if duplicate_members:
+        raise HTTPException(
+            status_code=400,
+            detail=f"bundle contains duplicate ZIP entries: {duplicate_members}",
         )
 
     # Path-traversal / structural validation BEFORE any read.

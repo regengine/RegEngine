@@ -29,8 +29,8 @@ function csvResult(statuses: Array<'accepted' | 'rejected'>) {
             cte_type: 'shipping',
             status,
             event_id: status === 'accepted' ? `evt-${index + 1}` : null,
-            sha256_hash: status === 'accepted' ? `sha-${index + 1}` : null,
-            chain_hash: status === 'accepted' ? `chain-${index + 1}` : null,
+            sha256_hash: status === 'accepted' ? 'a'.repeat(64) : null,
+            chain_hash: status === 'accepted' ? 'b'.repeat(64) : null,
             errors: status === 'rejected' ? [`Row ${index + 2}: rejected`] : [],
         })),
     };
@@ -246,6 +246,37 @@ describe('apiClient review queue contract', () => {
         { total: 1, accepted: 0, rejected: 1, events: [null] },
         { total: 1, accepted: 0, rejected: 1, events: [{ status: 'rejected', errors: [{}] }] },
         { total: 1, accepted: 1, rejected: 0, events: [], kde_warnings: { message: 'not an array' } },
+        {
+            total: 1,
+            accepted: 1,
+            rejected: 0,
+            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            events: [{
+                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                event_id: '', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64), errors: [],
+            }],
+        },
+        {
+            total: 1,
+            accepted: 1,
+            rejected: 0,
+            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            events: [{
+                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                event_id: 'evt-1', sha256_hash: 'not-a-hash', chain_hash: 'b'.repeat(64), errors: [],
+            }],
+        },
+        {
+            total: 1,
+            accepted: 1,
+            rejected: 0,
+            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            events: [{
+                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                event_id: 'evt-1', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64),
+                errors: ['persistence warning'],
+            }],
+        },
     ])('rejects a CSV response without trustworthy counts: %j', async (result) => {
         fetchMock.mockResolvedValueOnce(jsonResponse(result));
         const { apiClient } = await importFreshClient();

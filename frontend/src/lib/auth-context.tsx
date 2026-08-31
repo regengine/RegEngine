@@ -338,7 +338,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // MUST await — middleware checks this cookie on the next request.
       // Setting state before the cookie is written causes a race condition
       // where the app appears authenticated but middleware rejects the request.
-      await setSessionCookies({ apiKey: key });
+      const cookiesOk = await setSessionCookies({ apiKey: key });
+      if (!cookiesOk) {
+        throw new Error('API key could not be saved. Please try again.');
+      }
       setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
     } else {
       setApiKeyState(null);

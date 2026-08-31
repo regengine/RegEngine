@@ -4,7 +4,7 @@ Date: 2026-08-31. Role: `security_review`. Scope: the ingestion → persisted ev
 
 ## Decision
 
-The repository has useful tenant, authorization, and export-failure controls, but the tested implementation does not yet support an unrestricted claim that exported records have been independently verified against their original content or that every export can be reproduced later. Two offline reproductions demonstrate concrete gaps. Treat these as release gates for a pilot that depends on verified regulatory evidence; they do not prevent an internal demonstration using synthetic records.
+The repository has useful tenant, authorization, and export-failure controls, but the tested implementation does not support an unrestricted claim that exported records have been independently verified against their original content or that every export can be reproduced later. Two offline reproductions at the inspected base demonstrated concrete gaps. The integration fixes package interoperability, rejects declared failed-chain and package-metadata disagreement cases, and repairs the historical verifier's privacy-mode/type mismatches. It does not independently recompute the persisted chain, establish current-content verification or immutable historical membership, or prove production enforcement. Treat those remaining limits as release gates for a pilot that depends on verified regulatory evidence; they do not prevent an internal demonstration using synthetic records.
 
 No unauthenticated cross-tenant disclosure was demonstrated. No production environment, database grants, deployed migration state, secrets, or external services were inspected. Statements in source comments about what regulation requires were not treated as legal evidence.
 
@@ -37,15 +37,17 @@ The impact reaches the normal export: the router calls this verifier (`services/
 
 **Gate/falsifier:** replay a persisted fixture, then independently alter each evidence-bearing field in an isolated database. Verification must flag changed content, missing records, added records, and sequence changes. Distinguish content verification from chain consistency in responses. Preserve a versioned canonical representation and an independently retained digest/checkpoint; no new ledger infrastructure is needed to establish this invariant. A mutation that continues to return “verified” falsifies the content-integrity claim.
 
-### S2 — High: export regeneration is not a reliable historical verifier
+### S2 — High: historical export regeneration remains incomplete
 
-Three discrepancies are concrete:
+Three discrepancies were concrete at the inspected base `41aa11c5`:
 
-1. The producer hashes `_generate_csv(events, include_pii=include_pii)` (`router.py:292`), but `verify_export_handler` calls `_generate_csv(events)` with its default redaction mode (`services/ingestion/app/fda_export/verification.py:106`). The export log query does not recover the original mode (`:41`). With the real CSV generator, unchanged fixture data, and fake database reads, an export originally generated with `include_pii=True` returned `hashes_match=false` and `MISMATCH_DETECTED`.
-2. Full-export generation stores `fda_export_all` or `fda_export_all_package` (`router.py:634`). The verifier recognizes no-TLC types `fda_spreadsheet` and `fda_package` (`verification.py:68`). Direct calls to the real handler with each producer type returned HTTP 409. Existing unit tests cover the verifier's accepted labels, not the producer-to-verifier contract.
+1. The producer hashed `_generate_csv(events, include_pii=include_pii)` (`router.py:292`), while the baseline `verify_export_handler` called `_generate_csv(events)` with its default redaction mode. The baseline export-log query did not recover the original mode. With the real CSV generator, unchanged fixture data, and fake database reads, an export originally generated with `include_pii=True` returned `hashes_match=false` and `MISMATCH_DETECTED`.
+2. Full-export generation stored `fda_export_all` or `fda_export_all_package` (`router.py:634`), while the baseline verifier recognized different no-TLC labels. Direct calls to the real handler with each producer type returned HTTP 409.
 3. The verifier rereads current rows and transformation membership using the original date/TLC filters (`verification.py:59`). It does not select a stored list of event versions or an as-of ingestion boundary. Legitimate later arrivals can change a historical result. Recall product/location filters are explicitly acknowledged as incompletely persisted (`:95`), so some recall exports cannot be regenerated from their audit rows.
 
-These defects primarily cause false alarms or unavailable verification; no data exfiltration was demonstrated. They nevertheless affect a product sold on proving what was exported at an earlier time. The existing package hash proves equality to a particular byte sequence only when that trusted hash and artifact are retained.
+**Post-integration update:** the verifier now reads the nine-column audit tuple, uses the recorded `include_pii` value, recognizes both full-export producer labels, and shares the producer's full-export reconstruction helper. The [updated offline probe](export_verification_probe.py) verifies unchanged single-TLC and full-export fixtures in both privacy modes and confirms that audit rows without a recorded privacy mode and recall rows with incomplete filters fail closed with HTTP 409. Its [integrated output](export_verification_results_integrated.json) preserves the [baseline output](export_verification_results.json) separately.
+
+The first two baseline defects caused false alarms or unavailable verification and are repaired locally. No data exfiltration was demonstrated. Current-row regeneration still cannot prove the exact historical member set after legitimate later arrivals. A retained package hash proves equality to a particular byte sequence only when that trusted hash and artifact are retained; the manifest alone does not authenticate its issuer.
 
 **Gate/falsifier:** test producer → durable artifact/log → verifier for CSV and package, filtered and full exports, both PII modes, empty results, and late-arriving events. Persist immutable event/version membership, formatter version, relevant filters, redaction mode, and the actual artifact or sufficient reproduction inputs. Verification must distinguish artifact corruption from legitimate changes to current data. An unchanged artifact that is called corrupt, or an ordinary producer type that receives 409, falsifies the regeneration claim.
 
@@ -84,23 +86,32 @@ System `python3 -m pytest ... -q --no-cov` initially failed with `No module name
 
 Five failures reference a missing old migration filename, `20260420_v073_cte_events_append_only_trigger_1334.py`. The replacement trigger exists in the forward-port migration cited above, so these failures do not prove triggers are absent. Four failures expect literal `SET LOCAL app.tenant_id`; current code calls `set_config(..., true)`. These are stale-test assertions, not demonstrated tenant leaks. They should be repaired without weakening behavioral coverage.
 
-The two original inline Python probes used `env -i`, test-only settings, the existing virtual environment, real production functions, and either SQLite memory tables or patched database reads. They contacted no database server. Their observed outputs are recorded under S1 and S2. S2 is preserved in `export_verification_probe.py`, which clears inherited environment settings, disables Python socket connections before application imports, and uses only synthetic patched database reads:
+The two original inline Python probes used `env -i`, test-only settings, the existing virtual environment, real production functions, and either SQLite memory tables or patched database reads. They contacted no database server. Their observed outputs are recorded under S1 and S2; the original S2 output remains in [the baseline JSON](export_verification_results.json). The updated `export_verification_probe.py` keeps the same environment clearing, network denial, and synthetic patched reads while checking the integrated contract:
 
 ```bash
 .venv/bin/python3 docs/research/deep-market-lab-2026-08-31/export_verification_probe.py
-# Exit 0: redacted control verifies; unchanged unredacted fixture mismatches;
-# fda_export_all and fda_export_all_package each receive HTTP 409.
+# Exit 0: single-TLC and both full-export labels verify in both privacy modes;
+# missing legacy privacy metadata and incomplete recall filters return HTTP 409.
 ```
 
-Here exit zero means the documented defects were reproduced, not that product acceptance criteria passed. No production code or source test suite was changed.
+Here exit zero confirms only the scoped repaired behaviors and intentional fail-closed cases. It is not a product acceptance result. No production code was changed by the original research run; the later integration changed the package and historical-verifier contracts with regression coverage.
+
+The post-integration package-verifier selection also ran locally:
+
+```bash
+.venv/bin/python3 -m pytest services/ingestion/tests/test_proof_verify_router.py -q --no-cov -o addopts=''
+# 21 passed
+```
+
+The selection covers API/SDK acceptance of declared `VERIFIED` and `PARTIAL` packages and rejection of byte tampering, a self-consistent `UNVERIFIED` chain, manifest/hashed-chain disagreement, and undeclared or duplicate ZIP members. It does not supply an independently trusted hash, authenticate the issuer, or independently recompute the persisted chain.
 
 ## Pilot acceptance and reporting
 
 Before relying on the product for a customer evidence workflow, require the S1–S3 falsifiers to pass, then test two tenants through actual HTTP routes and PostgreSQL using the intended application role. Cover hostile query/header/body/path tenant claims, missing credentials, expired/revoked keys, permission denial, pooled-session reuse, database/Redis loss, audit write failure, and restart recovery. Run fresh and upgraded-schema tests; inspecting SQL text cannot substitute for them. Verify separate retention of the downloaded artifact, hash, and all export actors.
 
-- **Files changed:** this report and `export_verification_probe.py` in the research directory.
-- **What changed:** documented bounded security findings, reproductions, supported controls, and release gates.
-- **Tests run / what passed:** 248 passed and 9 failed across the three explicit selections; two offline probes confirmed the reported gaps.
+- **Files changed:** this report, `export_verification_probe.py`, and its post-integration result in the research directory.
+- **What changed:** preserved the bounded baseline findings and added the integrated historical-verifier result without broadening its assurance claim.
+- **Tests run / what passed:** the original run recorded 248 passed and 9 stale-assertion failures across three explicit selections; the chain probe confirmed its gap, the updated export probe passed the repaired mode/type contract and two fail-closed controls, and 20 package-verifier tests passed positive and negative API/SDK cases.
 - **Not tested:** live PostgreSQL RLS/triggers/grants, external authentication, production secret configuration, deployed logging/retention, full HTTP exploit paths, deployment, load, recovery, or all services.
-- **Remaining risks:** event-content verification, historical export reproduction, audit-attempt completeness, and unverified deployment enforcement.
-- **Recommended next step:** add producer-to-verifier and payload-mutation regression cases first; fix those small evidence-boundary defects, then run the two-tenant PostgreSQL acceptance suite before making stronger claims or accepting a verified-evidence pilot.
+- **Remaining risks:** event-content verification, exact historical membership after later arrivals, audit-attempt completeness, and unverified deployment enforcement.
+- **Recommended next step:** keep the producer-to-verifier regression, add late-arrival/retained-membership and payload-mutation cases, then run the two-tenant PostgreSQL acceptance suite before making stronger claims or accepting a verified-evidence pilot.

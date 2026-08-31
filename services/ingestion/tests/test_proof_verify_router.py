@@ -332,6 +332,37 @@ class TestZipRoundTrip:
         assert names["merkle_root_matches_declared"]["passed"] is True
         assert len(data["merkle_root_recomputed"]) == 64
 
+    def test_generic_bundle_may_use_unrelated_verification_metadata(
+        self,
+        client: TestClient,
+        tmp_path: Path,
+    ):
+        """Only FDA markers activate persisted-chain status semantics."""
+        original = (REPO_ROOT / "frontend/public/proof/audit-bundle.zip").read_bytes()
+        modified = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(original), "r") as source:
+            with zipfile.ZipFile(modified, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    data = source.read(member.filename)
+                    if member.filename == "manifest.json":
+                        manifest = json.loads(data)
+                        manifest["verification"] = {"scheme": "external-example"}
+                        data = json.dumps(manifest).encode("utf-8")
+                    target.writestr(member, data)
+
+        bundle = modified.getvalue()
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("generic-bundle.zip", bundle, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is True, response.json()
+
+        sdk_verify_bundle = runpy.run_path(str(REPO_ROOT / "frontend/public/sdk/verify_chain.py"))["verify_bundle"]
+        bundle_path = tmp_path / "generic-bundle.zip"
+        bundle_path.write_bytes(bundle)
+        assert sdk_verify_bundle(str(bundle_path)) == 0
+
     def test_checked_in_tampered_public_audit_bundle_fails(self, client: TestClient):
         """The tampered ZIP linked from /proof must fail verification."""
         bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle-tampered.zip").read_bytes()
@@ -412,31 +443,50 @@ class TestZipRoundTrip:
             "missing_required_by_field": {},
             "missing_required_events": [],
         }
-        package_bytes, package_meta = _build_fda_package(
-            events=[
+
+        def chain_payload(
+            status: str,
+            *,
+            valid: bool,
+            missing_record_hashes: int = 0,
+            missing_chain_hashes: int = 0,
+        ) -> dict[str, Any]:
+            return {
+                "version": "1.0",
+                "verification_status": status,
+                "chain_verification": {
+                    "valid": valid,
+                    "chain_length": 1,
+                    "errors": [] if valid else ["synthetic broken link"],
+                    "checked_at": "2026-08-31T00:00:00+00:00",
+                },
+                "row_hash_coverage": {
+                    "records_with_hash": 1 - missing_record_hashes,
+                    "records_with_chain_hash": 1 - missing_chain_hashes,
+                    "missing_record_hashes": missing_record_hashes,
+                    "missing_chain_hashes": missing_chain_hashes,
+                },
+            }
+
+        package_args = {
+            "events": [
                 {
                     "id": "synthetic-event-1",
                     "event_type": "RECEIVING",
                     "traceability_lot_code": "SYNTHETIC-LOT-1",
                 }
             ],
-            csv_content=csv_content,
-            csv_hash=csv_hash,
-            chain_payload={
-                "version": "1.0",
-                "verification_status": "VERIFIED",
-                "chain_verification": {
-                    "valid": True,
-                    "chain_length": 1,
-                    "errors": [],
-                    "checked_at": "2026-08-31T00:00:00+00:00",
-                },
-            },
-            completeness_summary=completeness,
-            tenant_id="synthetic-tenant",
-            tlc="SYNTHETIC-LOT-1",
-            query_start_date=None,
-            query_end_date=None,
+            "csv_content": csv_content,
+            "csv_hash": csv_hash,
+            "completeness_summary": completeness,
+            "tenant_id": "synthetic-tenant",
+            "tlc": "SYNTHETIC-LOT-1",
+            "query_start_date": None,
+            "query_end_date": None,
+        }
+        package_bytes, package_meta = _build_fda_package(
+            **package_args,
+            chain_payload=chain_payload("VERIFIED", valid=True),
         )
 
         response = client.post(
@@ -450,6 +500,133 @@ class TestZipRoundTrip:
         package_path = tmp_path / "fda-package.zip"
         package_path.write_bytes(package_bytes)
         assert sdk_verify_bundle(str(package_path)) == 0
+
+        partial_bytes, _ = _build_fda_package(
+            **package_args,
+            chain_payload=chain_payload(
+                "PARTIAL",
+                valid=True,
+                missing_record_hashes=1,
+            ),
+        )
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package-partial.zip", partial_bytes, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is True, response.json()
+        partial_path = tmp_path / "fda-package-partial.zip"
+        partial_path.write_bytes(partial_bytes)
+        assert sdk_verify_bundle(str(partial_path)) == 0
+
+        unverified_bytes, _ = _build_fda_package(
+            **package_args,
+            chain_payload=chain_payload("UNVERIFIED", valid=False),
+        )
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package-unverified.zip", unverified_bytes, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is False
+        checks = {check["name"]: check for check in response.json()["checks"]}
+        assert checks["package_chain_metadata_consistent"]["passed"] is True
+        assert checks["package_persisted_chain_acceptable"]["passed"] is False
+        unverified_path = tmp_path / "fda-package-unverified.zip"
+        unverified_path.write_bytes(unverified_bytes)
+        assert sdk_verify_bundle(str(unverified_path)) == 1
+
+        # The manifest is not one of its own Merkle leaves. Changing only its
+        # summary must still fail because the hashed chain artifact disagrees.
+        inconsistent = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(unverified_bytes), "r") as source:
+            with zipfile.ZipFile(inconsistent, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    data = source.read(member.filename)
+                    if member.filename == "manifest.json":
+                        manifest = json.loads(data)
+                        manifest["verification"]["status"] = "VERIFIED"
+                        manifest["verification"]["chain_valid"] = True
+                        data = json.dumps(manifest).encode("utf-8")
+                    target.writestr(member, data)
+        inconsistent_bytes = inconsistent.getvalue()
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package-inconsistent.zip", inconsistent_bytes, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is False
+        checks = {check["name"]: check for check in response.json()["checks"]}
+        assert checks["package_chain_metadata_consistent"]["passed"] is False
+        inconsistent_path = tmp_path / "fda-package-inconsistent.zip"
+        inconsistent_path.write_bytes(inconsistent_bytes)
+        assert sdk_verify_bundle(str(inconsistent_path)) == 1
+
+        missing_summary = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(unverified_bytes), "r") as source:
+            with zipfile.ZipFile(missing_summary, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    data = source.read(member.filename)
+                    if member.filename == "manifest.json":
+                        manifest = json.loads(data)
+                        del manifest["verification"]
+                        data = json.dumps(manifest).encode("utf-8")
+                    target.writestr(member, data)
+        missing_summary_bytes = missing_summary.getvalue()
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={
+                "bundle": (
+                    "fda-package-missing-verification.zip",
+                    missing_summary_bytes,
+                    "application/zip",
+                )
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is False
+        checks = {check["name"]: check for check in response.json()["checks"]}
+        assert checks["package_chain_metadata_consistent"]["passed"] is False
+        missing_summary_path = tmp_path / "fda-package-missing-verification.zip"
+        missing_summary_path.write_bytes(missing_summary_bytes)
+        assert sdk_verify_bundle(str(missing_summary_path)) == 1
+
+        unlisted = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(package_bytes), "r") as source:
+            with zipfile.ZipFile(unlisted, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    target.writestr(member, source.read(member.filename))
+                target.writestr("fda_spreadsheet_forged.csv", b"forged evidence")
+        unlisted_bytes = unlisted.getvalue()
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package-unlisted.zip", unlisted_bytes, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is False
+        checks = {check["name"]: check for check in response.json()["checks"]}
+        assert checks["manifest_covers_bundle_members"]["passed"] is False
+        unlisted_path = tmp_path / "fda-package-unlisted.zip"
+        unlisted_path.write_bytes(unlisted_bytes)
+        assert sdk_verify_bundle(str(unlisted_path)) == 1
+
+        duplicate = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(package_bytes), "r") as source:
+            with zipfile.ZipFile(duplicate, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    target.writestr(member, source.read(member.filename))
+                with pytest.warns(UserWarning, match="Duplicate name"):
+                    target.writestr(package_meta["csv_name"], b"forged duplicate evidence")
+        duplicate_bytes = duplicate.getvalue()
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package-duplicate.zip", duplicate_bytes, "application/zip")},
+        )
+        assert response.status_code == 400, response.text
+        assert "duplicate ZIP entries" in response.json()["detail"]
+        duplicate_path = tmp_path / "fda-package-duplicate.zip"
+        duplicate_path.write_bytes(duplicate_bytes)
+        assert sdk_verify_bundle(str(duplicate_path)) == 1
 
         csv_name = package_meta["csv_name"]
         tampered = io.BytesIO()
@@ -474,4 +651,7 @@ class TestZipRoundTrip:
         tampered_path = tmp_path / "fda-package-tampered.zip"
         tampered_path.write_bytes(tampered_bytes)
         assert sdk_verify_bundle(str(tampered_path)) == 1
-        assert "verify: FAILED" in capsys.readouterr().out
+        output = capsys.readouterr().out
+        assert "verify: FAILED" in output
+        assert "result: bundle UNVERIFIED" in output
+        assert "result: bundle INVALID" in output

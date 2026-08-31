@@ -1,0 +1,62 @@
+{
+  "network_disabled": true,
+  "database": "synthetic patched reads only",
+  "historical_baseline": "export_verification_results.json",
+  "current_contract_passed": true,
+  "observations": [
+    {
+      "case": "single_tlc_round_trip",
+      "original_include_pii": false,
+      "hashes_match": true,
+      "data_integrity": "VERIFIED"
+    },
+    {
+      "case": "single_tlc_round_trip",
+      "original_include_pii": true,
+      "hashes_match": true,
+      "data_integrity": "VERIFIED"
+    },
+    {
+      "case": "full_export_round_trip",
+      "export_type": "fda_export_all",
+      "original_include_pii": false,
+      "query_event_type": "receiving",
+      "hashes_match": true,
+      "data_integrity": "VERIFIED"
+    },
+    {
+      "case": "full_export_round_trip",
+      "export_type": "fda_export_all",
+      "original_include_pii": true,
+      "query_event_type": "receiving",
+      "hashes_match": true,
+      "data_integrity": "VERIFIED"
+    },
+    {
+      "case": "full_export_round_trip",
+      "export_type": "fda_export_all_package",
+      "original_include_pii": false,
+      "query_event_type": "receiving",
+      "hashes_match": true,
+      "data_integrity": "VERIFIED"
+    },
+    {
+      "case": "full_export_round_trip",
+      "export_type": "fda_export_all_package",
+      "original_include_pii": true,
+      "query_event_type": "receiving",
+      "hashes_match": true,
+      "data_integrity": "VERIFIED"
+    },
+    {
+      "case": "legacy_missing_privacy_mode",
+      "verification_status": 409,
+      "detail": "Export 'synthetic-export-1' predates PII-disclosure capture in the audit log, so its bytes cannot be regenerated deterministically. This is not a tamper finding. Verify via package manifest and chain artifact."
+    },
+    {
+      "case": "unsupported_recall_filters",
+      "verification_status": 409,
+      "detail": "Export type 'recall' is not fully reproducible from stored audit filters. Verify via package manifest and chain artifact."
+    }
+  ]
+}

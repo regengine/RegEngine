@@ -6,12 +6,14 @@ controlled offline probes. Baseline commit:
 not edit application source. The parent task separately corrected public proof
 wording during this review.
 
-**Verdict: MODIFY the verification promise before a customer relies on it.**
-The implementation can detect selected inconsistencies, but its public sample
-format differs from the real FDA package, and its chain verifier does not
-establish that stored event content still matches the chain. These are narrower
-claims than proof that a supplier reported the truth. No customer, production
-deployment, real export, or regulatory submission was inspected.
+**Verdict: KEEP the verification promise limited to internal consistency.** At
+the baseline revision, the public sample format differed from the real FDA
+package. The integrated package contract now passes both public verifiers in
+local synthetic tests. The verifier still has no external trust anchor, and the
+chain verifier does not establish that stored event content still matches the
+chain. These checks do not prove who issued an archive or that a supplier
+reported the truth. No customer, production deployment, real export, or
+regulatory submission was inspected.
 
 ## Evidence and reproduction
 
@@ -27,8 +29,11 @@ env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
 The script uses synthetic records, temporary ZIPs, and in-memory SQLite. It
 denies Python socket connections. It neither queries a production database nor
 changes repository application code. Raw outputs are in
-`security-results.jsonl` (original) and `security-results-after.jsonl` (after
-the backend status fix). The table below records the original observations.
+`security-results.jsonl` (original), `security-results-after.jsonl` (after
+the backend status fix), and
+[`security-results-integrated.jsonl`](security-results-integrated.jsonl) (after
+the package-contract integration). The table below preserves the original
+observations and states the integrated result where behavior changed.
 The SQLite experiment deliberately models altered
 storage; it does **not** claim a remote attacker can bypass deployed PostgreSQL
 permissions or triggers. Those controls were not exercised.
@@ -38,10 +43,11 @@ permissions or triggers. Those controls were not exercised.
 | Synthetic original ZIP | SDK exit 0; public helper `verified=true` | 5 — controlled local experiment |
 | Change CSV, retain original manifest | SDK exit 1; public helper `verified=false` | 5 |
 | Change CSV and recompute its included manifest | SDK exit 0; public helper `verified=true` | 5 |
-| Actual FDA package helper → SDK/public helper | Both reject the newly generated package | 5 |
+| Actual FDA package helper → SDK/public helper | Baseline: both reject. Integrated: SDK exit 0 and public helper `verified=true` for all four declared members. | 5 |
+| Self-consistent generated package with `UNVERIFIED` persisted chain | Integrated hardening: SDK exit 1 with `bundle UNVERIFIED`; public helper fails `package_persisted_chain_acceptable`. | 5 |
 | Change persisted quantity from 10 to 99, retain stored hashes | Quantity's recomputed hash changes; `verify_chain().valid` remains true | 5, SQLite storage model |
 | Corrupt tenant A's stored chain hash | A fails; unrelated tenant B remains valid with one chain row | 5, SQL query-scope control, not PostgreSQL RLS proof |
-| Invalid chain plus missing row hash | Export status is `PARTIAL`, while nested chain validity is false | 5 |
+| Invalid chain plus missing row hash | Baseline: contradictory `PARTIAL`. Integrated: `UNVERIFIED`, with nested chain validity false. | 5 |
 | 64 nonhex characters, no declared root, JSON proof helper | `verified=true` | 5, supporting schema/meaning sentinel |
 
 ## SEC-01 — Public proof checks do not authenticate the issuer
@@ -77,39 +83,53 @@ contacted here. If issuer authentication is required, specify the trusted
 channel/key and rotation/revocation owner first. Do not add a large signing
 system before establishing that requirement.
 
-## SEC-02 — Real FDA packages cannot pass the advertised public verifiers
+## SEC-02 — Baseline FDA packages could not pass the advertised public verifiers
 
-Priority: **P1 workflow blocker for the advertised handoff**. Evidence: **Level
-5** for helper interoperability; authenticated HTTP export and deployment are
-unverified.
+Priority at baseline: **P1 workflow blocker for the advertised handoff**.
+Disposition after integration: **closed for the tested local package contract**.
+Evidence is **Level 5** for helper interoperability; authenticated HTTP export,
+deployed behavior, issuer identity, and source-data truth remain unverified.
 
-`_build_fda_package` emits `manifest.files` entries with `name` and `sha256`,
-and no `manifest.merkle` (`services/ingestion/app/fda_export_service.py:758`).
-The public verifier requires each entry's `path` and a `merkle.root`
-(`proof_verify_router.py:295`, `:381`). The offline SDK also requires that
-root (`frontend/public/sdk/verify_chain.py:86`).
+At baseline, `_build_fda_package` emitted `manifest.files` entries with `name`
+and `sha256`, and no `manifest.merkle`. The public verifier required each
+entry's `path` and a `merkle.root`; the offline SDK also required that root.
 
-The experiment calls the actual package helper with synthetic events and then
-passes its bytes directly to both actual verifiers. The SDK reports
-`manifest.merkle.root missing` and labels the package `TAMPERED`. The public
-helper returns false with `manifest_file_entries_well_formed` and
-`merkle_root_matches_declared` failing. Synthetic chain metadata was explicitly
-supplied as valid; this does not establish that the sample event was persisted.
-The failure concerns the output format, independent of database validity.
+The baseline experiment called the actual package helper with synthetic events
+and passed its bytes directly to both actual verifiers. The SDK reported
+`manifest.merkle.root missing` and labeled the package `TAMPERED`. The public
+helper returned false. This was a format interoperability failure, independent
+of database validity.
 
-Small repair: choose and version one package contract, then add a real
-generator-to-verifier test before changing the generator and both consumers.
-Preserve safe handling of older packages and distinguish "unsupported format"
-from "content changed". This touches a public artifact contract and should be
-called out as such, rather than silently changing what existing clients read.
-The result must still be described as internal consistency unless there is an
-external trust anchor.
+After integration, the generator emits `name`, `path`, `size`, and `sha256` for
+each declared file plus Merkle metadata. The unchanged reproduction now reports
+SDK exit 0 and public `verified=true`, with four of four declared hashes and the
+recomputed root matching. The generated-package contract tests also exercise a
+changed-member negative path. This closes the local format mismatch for the
+supported contract. Synthetic chain metadata was explicitly supplied as valid;
+the result does not establish persistence, completeness, issuer authenticity,
+or source-data accuracy.
 
-Required negative cases: original package succeeds; changed member fails;
-missing/duplicate/unsafe members fail; malformed manifest fails predictably;
-unsupported versions are distinct from tampering; package generation never
-copies another tenant's events. Test the latter with PostgreSQL RLS and two
-tenants after the local format contract works.
+An integration review found that the first format repair still accepted a
+self-consistent package whose persisted-chain status was `UNVERIFIED`. The
+verifiers now cross-check the manifest summary against the hashed chain artifact
+and reject an invalid persisted chain. The final reproduction records SDK exit 1
+with `bundle UNVERIFIED` and public `verified=false`. A manifest summary that
+disagrees with the hashed chain artifact also fails in the focused contract
+tests. `VERIFIED` and internally consistent `PARTIAL` packages remain accepted.
+
+The local repair chose one package contract and added generator-to-verifier
+coverage. The next contract test should preserve safe handling of older
+packages and distinguish "unsupported format" from "content changed". This is
+a public artifact contract and should be versioned explicitly. A passing result
+must still be described as internal consistency unless there is an external
+trust anchor.
+
+Covered negative cases now include changed, missing, duplicate, undeclared and
+unsafe members, a failed persisted chain, and manifest/chain-artifact
+disagreement. Remaining cases include predictable malformed-manifest handling,
+unsupported versions distinct from tampering, and proving that package
+generation never copies another tenant's events. Test the latter with PostgreSQL
+RLS and two tenants.
 
 ## SEC-03 — Stored content and failure status are weaker than the integrity label
 
@@ -172,11 +192,10 @@ invalid_chain_and_missing_hash:
   after:  chain_valid=false, status=UNVERIFIED
 ```
 
-The other seven result records are unchanged. In particular, genuine
-generator-to-verifier incompatibility and the stored-content hash blind spot
-remain reproducible. Original results were preserved; post-fix results are in
-`security-results-after.jsonl`. These are still Level 5 local experiments, not
-proof of a deployed fix or successful customer export.
+At that intermediate stage, the other seven result records were unchanged, so
+the generator-to-verifier incompatibility and stored-content hash blind spot
+both remained reproducible. Original and intermediate results were preserved in
+`security-results.jsonl` and `security-results-after.jsonl`.
 
 The public proof page and SDK docstring changes were also reviewed: both now
 say the checks establish internal consistency and neither authenticate the
@@ -185,11 +204,21 @@ that copy patch. Two adjacent absolute statements on the page (`:168`, `:202`)
 were flagged to the parent for tighter wording about the unchanged-manifest
 negative control; they are outside the two edited text passages.
 
+## Post-integration review
+
+The unchanged reproduction was run again after the package-contract merge.
+[`security-results-integrated.jsonl`](security-results-integrated.jsonl) shows
+the valid-chain FDA package passing both public verifiers, the self-consistent
+`UNVERIFIED` package failing both, and invalid chain plus missing row hash
+remaining `UNVERIFIED`. The stored-content mutation remains valid under
+`verify_chain()`, and a changed generic file still passes when its untrusted
+in-archive manifest is recomputed. These are Level 5 local experiments, not
+proof of a deployed fix or successful customer export.
+
 ## Verification and handoff
 
-- Files changed in this lane: `security.md`, `security_repro.py`, and
-  `security-results.jsonl` / `security-results-after.jsonl` under this evidence
-  directory.
+- Files changed in this lane: `security.md`, `security_repro.py`, and the three
+  `security-results*.jsonl` artifacts under this evidence directory.
 - What changed: durable review evidence and reproducible synthetic probes;
   no auth, schema, API, billing, deployment, or application source changes.
 - Tests run: the two existing focused suites
@@ -198,14 +227,18 @@ negative control; they are outside the two edited text passages.
   Python environment, an empty inherited environment, denied socket
   connections, `-o addopts= --no-cov -p no:cacheprovider`.
 - What passed: baseline **78 tests in 1.51 seconds**; independent post-fix
-  **87 tests in 1.57 seconds**. The standalone probe completed before and after
-  the fix. Its unsafe acceptance results are findings, not security passes.
+  **87 tests in 1.57 seconds**. The standalone probe completed at baseline,
+  after the status fix, and after final package hardening. Focused contract tests
+  cover valid `VERIFIED`/`PARTIAL`, failed `UNVERIFIED`, manifest/chain
+  disagreement, undeclared/duplicate members, and changed content. Unsafe
+  acceptance results that remain are findings, not security passes.
 - What was not tested: production HTTP routing, credentials, active PostgreSQL
   migrations/RLS, real supplier data, operator behavior, regulatory acceptance,
   live traffic, or customer willingness to pay.
-- Remaining risks: misleading integrity interpretation, real-package verifier
-  incompatibility, and stored-content blind spots. Contradictory failure status
-  is repaired and independently tested locally, not deployment-verified.
-- Recommended next step: preserve truthful public wording; converge package
-  format through a generator-to-verifier contract
-  test; then run an isolated two-tenant PostgreSQL reconciliation experiment.
+- Remaining risks: misleading integrity interpretation, stored-content blind
+  spots, unversioned/legacy-package behavior, and deployed tenant isolation.
+  Package interoperability and failure status are repaired and independently
+  tested locally, not deployment-verified.
+- Recommended next step: preserve truthful public wording; add explicit
+  unsupported-version and archive-member boundary tests; then run an isolated
+  two-tenant PostgreSQL reconciliation experiment.

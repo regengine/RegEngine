@@ -4,11 +4,15 @@
   "include": [
     "../../../frontend/src/types/api.ts",
     "../../../frontend/src/lib/api-client.ts",
+    "../../../frontend/src/lib/auth-context.tsx",
+    "../../../frontend/src/app/admin/page.tsx",
     "../../../frontend/src/app/ingest/page.tsx",
     "../../../frontend/src/app/tools/data-import/components/DataImportClient.tsx",
     "../../../frontend/src/__tests__/pages/ingest-csv.test.tsx",
     "../../../frontend/src/__tests__/pages/data-import.test.tsx",
     "../../../frontend/src/__tests__/lib/api-client-review.test.ts",
+    "../../../frontend/src/__tests__/hooks/useAuth.test.tsx",
+    "../../../frontend/src/__tests__/components/admin-page-auth.test.tsx",
     "../../../frontend/next-env.d.ts",
     "../../../frontend/src/__tests__/setup.ts"
   ]

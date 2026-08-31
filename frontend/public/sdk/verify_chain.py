@@ -4,9 +4,12 @@
 
 Recomputes each manifest-declared file's SHA-256 and the Merkle root inside
 an audit bundle, then compares them with the values in that same manifest.
-Exits non-zero on any mismatch. These checks establish internal consistency;
-they do not authenticate the issuer or establish that source data is accurate.
-No digital signature or independently trusted hash is verified.
+For FDA packages, it also rejects a declared failed chain and cross-checks the
+manifest summary against the hashed chain artifact. It does not independently
+recompute that persisted chain. Exits non-zero on a mismatch or failed chain.
+These checks establish internal consistency; they do not authenticate the
+issuer or establish that source data is accurate. No digital signature or
+independently trusted hash is verified.
 
 The Merkle algorithm matches services/shared/merkle_tree.py in production:
     leaf  = sha256("leaf|" + hex_file_sha256)
@@ -61,10 +64,10 @@ def _merkle_root(file_hashes: list[str]) -> str:
     return layer[0]
 
 
-def _fail(msg: str) -> int:
+def _fail(msg: str, *, result: str = "bundle TAMPERED") -> int:
     sys.stdout.flush()
     print(f"verify: FAILED — {msg}")
-    print("result: bundle TAMPERED")
+    print(f"result: {result}")
     return 1
 
 
@@ -75,7 +78,14 @@ def verify_bundle(zip_path: str) -> int:
         return _fail(f"could not open {zip_path}: {exc}")
 
     with bundle:
-        names = set(bundle.namelist())
+        name_list = bundle.namelist()
+        duplicate_members = sorted(name for name in set(name_list) if name_list.count(name) > 1)
+        if duplicate_members:
+            return _fail(
+                f"bundle contains duplicate ZIP entries: {duplicate_members}",
+                result="bundle INVALID",
+            )
+        names = set(name_list)
         if "manifest.json" not in names:
             return _fail("manifest.json missing from bundle")
 
@@ -90,6 +100,22 @@ def verify_bundle(zip_path: str) -> int:
             return _fail("manifest.files missing or empty")
         if not isinstance(merkle, dict) or "root" not in merkle:
             return _fail("manifest.merkle.root missing")
+
+        declared_paths = [
+            entry.get("path") for entry in files if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+        ]
+        duplicate_declared_paths = sorted(path for path in set(declared_paths) if declared_paths.count(path) > 1)
+        if duplicate_declared_paths:
+            return _fail(
+                f"manifest declares duplicate file paths: {duplicate_declared_paths}",
+                result="bundle INVALID",
+            )
+        undeclared_members = sorted(names - {"manifest.json", *declared_paths})
+        if undeclared_members:
+            return _fail(
+                f"bundle has members not declared in manifest: {undeclared_members}",
+                result="bundle INVALID",
+            )
 
         print("manifest: ok")
 
@@ -125,6 +151,109 @@ def verify_bundle(zip_path: str) -> int:
         if root != merkle["root"]:
             return _fail(f"merkle root mismatch (recomputed {root}, declared {merkle['root']})")
         print("merkle: root recomputed and matched")
+
+        # FDA packages summarize the persisted-chain result in the manifest
+        # and carry the complete result in a file covered by the checks above.
+        # Cross-check both because manifest.json cannot hash itself. Generic
+        # bundles without this metadata retain their integrity-only behavior.
+        verification = manifest.get("verification")
+        chain_paths = [
+            entry.get("path")
+            for entry in files
+            if isinstance(entry, dict)
+            and isinstance(entry.get("path"), str)
+            and entry["path"].startswith("chain_verification_")
+            and entry["path"].endswith(".json")
+        ]
+        is_fda_package = manifest.get("export_type") == "fda_traceability_package" or bool(chain_paths)
+        if is_fda_package:
+            if not isinstance(verification, dict):
+                return _fail(
+                    "FDA package manifest.verification must be present as an object",
+                    result="bundle UNVERIFIED",
+                )
+            if len(chain_paths) != 1:
+                return _fail(
+                    f"FDA package must declare exactly one chain_verification_*.json member; found {len(chain_paths)}",
+                    result="bundle UNVERIFIED",
+                )
+            try:
+                chain_payload = json.loads(bundle.read(chain_paths[0]).decode("utf-8"))
+            except (KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                return _fail(
+                    f"chain verification artifact is unreadable: {exc}",
+                    result="bundle UNVERIFIED",
+                )
+            if not isinstance(chain_payload, dict):
+                return _fail(
+                    "chain verification artifact must contain a JSON object",
+                    result="bundle UNVERIFIED",
+                )
+
+            chain_result = chain_payload.get("chain_verification")
+            coverage = chain_payload.get("row_hash_coverage")
+            if not isinstance(chain_result, dict) or not isinstance(coverage, dict):
+                return _fail(
+                    "chain verification artifact is missing chain_verification or row_hash_coverage",
+                    result="bundle UNVERIFIED",
+                )
+
+            status = verification.get("status")
+            chain_valid = verification.get("chain_valid")
+            manifest_chain_length = verification.get("chain_length")
+            artifact_status = chain_payload.get("verification_status")
+            artifact_chain_valid = chain_result.get("valid")
+            artifact_chain_length = chain_result.get("chain_length")
+            missing_counts = (
+                coverage.get("missing_record_hashes"),
+                coverage.get("missing_chain_hashes"),
+            )
+            counts_valid = all(
+                isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in missing_counts
+            )
+            lengths_valid = (
+                isinstance(artifact_chain_length, int)
+                and not isinstance(artifact_chain_length, bool)
+                and artifact_chain_length >= 0
+                and (
+                    manifest_chain_length is None
+                    or (
+                        isinstance(manifest_chain_length, int)
+                        and not isinstance(manifest_chain_length, bool)
+                        and manifest_chain_length >= 0
+                    )
+                )
+            )
+            missing_hashes = sum(missing_counts) if counts_valid else None
+            truth_table_valid = (
+                (status == "VERIFIED" and chain_valid is True and missing_hashes == 0)
+                or (
+                    status == "PARTIAL"
+                    and chain_valid is True
+                    and isinstance(missing_hashes, int)
+                    and missing_hashes > 0
+                )
+                or (status == "UNVERIFIED" and chain_valid is False and counts_valid)
+            )
+            metadata_consistent = (
+                truth_table_valid
+                and lengths_valid
+                and status == artifact_status
+                and chain_valid is artifact_chain_valid
+                and (manifest_chain_length is None or manifest_chain_length == artifact_chain_length)
+            )
+            if not metadata_consistent:
+                return _fail(
+                    "manifest/chain status, validity, length, or row-hash coverage is inconsistent",
+                    result="bundle UNVERIFIED",
+                )
+            if status == "UNVERIFIED":
+                return _fail(
+                    "persisted chain status is UNVERIFIED",
+                    result="bundle UNVERIFIED",
+                )
+            print(f"chain: persisted status {status} matches declared chain artifact")
+
         print("result: bundle intact")
         return 0
 

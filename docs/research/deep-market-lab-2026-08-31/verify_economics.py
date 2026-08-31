@@ -3,21 +3,21 @@
 Run: .venv/bin/python3 docs/research/deep-market-lab-2026-08-31/verify_economics.py
 Uses only the standard library and the sibling simulation, never application code.
 """
+
 from __future__ import annotations
 
-from contextlib import redirect_stdout
-from copy import deepcopy
-from io import StringIO
 import json
-from pathlib import Path
 import random
 import statistics
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from copy import deepcopy
+from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 import simulate_economics as model
-
 
 ROOT = Path(__file__).resolve().parent
 INPUTS = json.loads((ROOT / "economics_inputs.json").read_text())
@@ -26,14 +26,20 @@ INPUTS = json.loads((ROOT / "economics_inputs.json").read_text())
 def boundary_inputs() -> dict:
     """Four months, one certain win/month, known costs, no stochastic incidents."""
     cfg = deepcopy(INPUTS)
-    cfg.update(payment_percent=0, payment_fixed_usd=0,
-               fixed_cash_usd_month=10, founder_draw_usd_month=20)
+    cfg.update(payment_percent=0, payment_fixed_usd=0, fixed_cash_usd_month=10, founder_draw_usd_month=20)
     cfg["runway"].update(
-        months=4, price=100, qualified_opportunities_per_month=1,
-        win_probability=1, monthly_churn=0, monthly_incident_probability=0,
-        cac_cash_per_win=5, onboarding_hours_per_win=2,
-        support_hours_per_customer_month=3, direct_cash_per_customer_month=1,
-        founder_delivery_capacity_hours=4, outsourced_delivery_usd_hour=7,
+        months=4,
+        price=100,
+        qualified_opportunities_per_month=1,
+        win_probability=1,
+        monthly_churn=0,
+        monthly_incident_probability=0,
+        cac_cash_per_win=5,
+        onboarding_hours_per_win=2,
+        support_hours_per_customer_month=3,
+        direct_cash_per_customer_month=1,
+        founder_delivery_capacity_hours=4,
+        outsourced_delivery_usd_hour=7,
         opportunity_sales_hours=1,
     )
     return cfg
@@ -124,9 +130,13 @@ class EconomicsVerification(unittest.TestCase):
     def test_incident_churn_clamp_haircut_fee_and_cash_loss(self):
         cfg = boundary_inputs()
         cfg.update(payment_percent=0.1, payment_fixed_usd=2)
-        cfg["runway"].update(monthly_incident_probability=1, monthly_churn=0.2,
-                             incident_churn_multiplier=10, incident_revenue_haircut=0.5,
-                             incident_cash_cost=17)
+        cfg["runway"].update(
+            monthly_incident_probability=1,
+            monthly_churn=0.2,
+            incident_churn_multiplier=10,
+            incident_revenue_haircut=0.5,
+            incident_cash_cost=17,
+        )
         # Every month: $50 collection - $43 service/fixed - $7 fees - $17 incident.
         actual = model.runway_path(1, 0, cfg)
         self.assertEqual(actual["unfinanced_cumulative_cash"], [-17, -34, -51, -68])
@@ -135,12 +145,12 @@ class EconomicsVerification(unittest.TestCase):
     def test_imputed_labor_and_founder_cash_are_separate(self):
         cfg = deepcopy(INPUTS)
         cfg["founder_draw_usd_month"] += 100
-        self.assertEqual(model.unit(cfg["scenarios"]["base"], cfg),
-                         model.unit(INPUTS["scenarios"]["base"], INPUTS))
+        self.assertEqual(model.unit(cfg["scenarios"]["base"], cfg), model.unit(INPUTS["scenarios"]["base"], INPUTS))
         baseline = model.runway_path(2, 2, INPUTS)
         changed = model.runway_path(2, 2, cfg)
-        for month, (before, after) in enumerate(zip(
-                baseline["unfinanced_cumulative_cash"], changed["unfinanced_cumulative_cash"]), 1):
+        for month, (before, after) in enumerate(
+            zip(baseline["unfinanced_cumulative_cash"], changed["unfinanced_cumulative_cash"]), 1
+        ):
             self.assertAlmostEqual(after - before, -100 * month)
         cfg = deepcopy(INPUTS)
         cfg["labor_usd_hour"] *= 3
@@ -158,8 +168,7 @@ class EconomicsVerification(unittest.TestCase):
         for i in range(64):
             short = model.runway_path(INPUTS["seed"] + i, 2, INPUTS)
             long = model.runway_path(INPUTS["seed"] + i, 12, INPUTS)
-            for field in ("terminal_accounts", "max_delivery_hours",
-                          "max_founder_delivery_plus_sales_hours"):
+            for field in ("terminal_accounts", "max_delivery_hours", "max_founder_delivery_plus_sales_hours"):
                 self.assertEqual(short[field], long[field])
             self.assertGreaterEqual(long["capital_required"], short["capital_required"])
             for a, b in zip(short["unfinanced_cumulative_cash"], long["unfinanced_cumulative_cash"]):

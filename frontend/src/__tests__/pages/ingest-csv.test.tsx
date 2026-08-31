@@ -8,10 +8,11 @@ const mocks = vi.hoisted(() => ({
   ingestURL: vi.fn(),
   getIngestionJob: vi.fn(),
   refresh: vi.fn(),
+  storeApiKey: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-context', () => ({
-  useAuth: () => ({ apiKey: 'cookie-managed', setApiKey: vi.fn() }), // pragma: allowlist secret
+  useAuth: () => ({ apiKey: 'cookie-managed', setApiKey: mocks.storeApiKey }), // pragma: allowlist secret
 }));
 vi.mock('@/hooks/use-api', () => ({
   useIngestURL: () => ({ mutateAsync: mocks.ingestURL, reset: vi.fn() }),
@@ -62,6 +63,7 @@ function csvResult(accepted: number, rejected: number) {
 describe('CSV import results on /ingest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.storeApiKey.mockResolvedValue(undefined);
   });
 
   it.each([
@@ -107,6 +109,46 @@ describe('CSV import results on /ingest', () => {
     fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), { target: { value: 'https://example.org/document.pdf' } });
     await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
     expect(await screen.findByText('Job document-job-1')).toBeInTheDocument();
+    expect(mocks.ingestFile).not.toHaveBeenCalled();
+  });
+
+  it('waits for the API-key cookie write before uploading with a changed key', async () => {
+    let finishCookieWrite: (() => void) | undefined;
+    mocks.storeApiKey.mockReturnValue(new Promise<void>((resolve) => {
+      finishCookieWrite = resolve;
+    }));
+    mocks.ingestFile.mockResolvedValue(csvResult(1, 0));
+    render(<IngestPage />);
+    fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+    await userEvent.click(screen.getByRole('tab', { name: /file upload/i }));
+    fireEvent.change(document.getElementById('file-upload') as HTMLInputElement, {
+      target: { files: [new File(['cte_type,tlc\nshipping,LOT-1'], 'events.csv')] },
+    });
+    const submit = screen.getByRole('button', { name: /upload & process/i });
+    await userEvent.click(submit);
+
+    expect(mocks.storeApiKey).toHaveBeenCalledWith('rge_replacement_key'); // pragma: allowlist secret
+    expect(mocks.ingestFile).not.toHaveBeenCalled();
+    expect(submit).toBeDisabled();
+    fireEvent.submit(submit.closest('form') as HTMLFormElement);
+    expect(mocks.storeApiKey).toHaveBeenCalledTimes(1);
+    finishCookieWrite?.();
+
+    expect(await screen.findByText('CSV processed')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not upload when the API-key cookie cannot be saved', async () => {
+    mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
+    render(<IngestPage />);
+    fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+    await userEvent.click(screen.getByRole('tab', { name: /file upload/i }));
+    fireEvent.change(document.getElementById('file-upload') as HTMLInputElement, {
+      target: { files: [new File(['cte_type,tlc\nshipping,LOT-1'], 'events.csv')] },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /upload & process/i }));
+
+    expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
     expect(mocks.ingestFile).not.toHaveBeenCalled();
   });
 

@@ -446,6 +446,12 @@ class APIClient {
         )
         && result.total > 0
         && result.accepted + result.rejected === result.total;
+      const isNonEmptyString = (value: unknown): value is string => (
+        typeof value === 'string' && value.trim().length > 0
+      );
+      const isSha256 = (value: unknown): value is string => (
+        typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
+      );
       const eventsAreValid = Array.isArray(result?.events)
         && result.events.length === result.total
         && result.events.every(event => event
@@ -456,7 +462,13 @@ class APIClient {
           && event.errors.every(error => typeof error === 'string')
           && [event.event_id, event.sha256_hash, event.chain_hash].every(
             value => value === undefined || value === null || typeof value === 'string',
-          ))
+          )
+          && (event.status === 'rejected' || (
+            isNonEmptyString(event.event_id)
+            && isSha256(event.sha256_hash)
+            && isSha256(event.chain_hash)
+            && event.errors.length === 0
+          )))
         && result.events.filter(event => event.status === 'accepted').length === result.accepted
         && result.events.filter(event => event.status === 'rejected').length === result.rejected;
       const warningsAreValid = result?.kde_warnings === undefined
