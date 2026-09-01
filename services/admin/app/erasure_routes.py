@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import uuid
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -49,23 +48,6 @@ from .sqlalchemy_models import (
 
 logger = structlog.get_logger("erasure")
 
-
-@contextmanager
-def get_db():
-    """Compatibility seam for older tests that patch this name.
-
-    Production erasure uses the request-scoped ``get_session`` dependency so
-    tenant GUC and admin arming stay on the same connection as
-    ``get_current_user``.
-    """
-    from .database import SessionLocal
-
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.rollback()
-        db.close()
 
 # Cypher to detach-delete only graph nodes that represent the erased user.
 # tenant_id and user_id are always passed as parameters, never interpolated.
