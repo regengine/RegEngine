@@ -11,16 +11,19 @@ Provides immutable audit logging for all FSMA graph operations:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import os
 import threading
+import time as _time
 import uuid
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Deque, Dict, List, Optional, Union
 
 import structlog
 
@@ -71,31 +74,137 @@ def _get_audit_admin_engine():
 
         return get_admin_engine()
     except Exception as exc:  # pragma: no cover - startup/config fallback
-        logging.getLogger("fsma_audit").warning(
-            "Failed to obtain audit admin DB engine: %s", exc
-        )
+        logging.getLogger("fsma_audit").warning("Failed to obtain audit admin DB engine: %s", exc)
         return None
 
 
 _PERSIST_MAX_RETRIES = 3
 
+# #2850: cap on the in-process audit history. The DB is the source of truth
+# for every query path, so this only bounds the fallback/recent-history copy.
+# Sized to keep a meaningful recent window (enough to answer a chain-integrity
+# or by-target query during a DB outage) without unbounded growth in a
+# long-lived monolith.
+_DEFAULT_MEMORY_MAX_ENTRIES = 10_000
+_MEMORY_MAX_ENTRIES_ENV = "FSMA_AUDIT_MEMORY_MAX_ENTRIES"
 
-def _persist_audit_entry(entry) -> None:
-    """Persist an audit entry to Postgres with retry. Raises on total failure (#971)."""
+
+def _resolve_max_memory_entries(explicit: Optional[int] = None) -> int:
+    """Resolve the in-memory entry cap (#2850).
+
+    Precedence: explicit constructor argument, then
+    ``FSMA_AUDIT_MEMORY_MAX_ENTRIES``, then the default. A non-positive or
+    unparseable value falls back to the default rather than disabling the
+    log: ``maxlen=0`` would silently drop every entry and break both the
+    checksum chain and the DB-outage fallback.
+    """
+    if explicit is not None:
+        candidate: Any = explicit
+    else:
+        raw = os.getenv(_MEMORY_MAX_ENTRIES_ENV, "").strip()
+        if not raw:
+            return _DEFAULT_MEMORY_MAX_ENTRIES
+        candidate = raw
+
+    try:
+        value = int(candidate)
+    except (TypeError, ValueError):
+        logging.getLogger("fsma_audit").warning(
+            "Ignoring non-integer %s=%r; using default %d",
+            _MEMORY_MAX_ENTRIES_ENV,
+            candidate,
+            _DEFAULT_MEMORY_MAX_ENTRIES,
+        )
+        return _DEFAULT_MEMORY_MAX_ENTRIES
+
+    if value <= 0:
+        logging.getLogger("fsma_audit").warning(
+            "Ignoring non-positive audit memory cap %d; using default %d",
+            value,
+            _DEFAULT_MEMORY_MAX_ENTRIES,
+        )
+        return _DEFAULT_MEMORY_MAX_ENTRIES
+    return value
+
+
+# Warn loudly the first time we discover the audit DB is unconfigured, then
+# drop to DEBUG. Read endpoints emit a KDE_READ per request, so an
+# unconditional WARNING would bury the rest of the log — but a misconfigured
+# deploy silently discarding audit evidence must not be invisible either.
+_unconfigured_engine_warned = False
+
+
+class AuditPersistenceError(RuntimeError):
+    """Raised when an audit entry could not be confirmed as durably written.
+
+    Only surfaced to callers that explicitly opt in via
+    ``FSMAAuditLog.log(..., require_persistence=True)`` — see #2829. The
+    default remains best-effort so this stays a contained change rather
+    than turning every audit hiccup into a 5xx (the #971 risk call).
+    """
+
+
+def _on_event_loop() -> bool:
+    """True when called on a running asyncio event loop.
+
+    #2848: this module's persistence path is synchronous psycopg2 with
+    ``time.sleep`` backoff between retries. Called inline from an
+    ``async def`` handler that stalls the whole Uvicorn loop — every
+    concurrent request, health probes included — for the length of the
+    backoff. Async callers should dispatch via
+    :meth:`FSMAAuditLog.alog`; this predicate is the backstop for the
+    ones that have not been converted yet.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+def _persist_audit_entry(entry) -> bool:
+    """Persist an audit entry to Postgres with retry.
+
+    Returns ``True`` only when the INSERT was confirmed committed;
+    ``False`` when the write could not be confirmed — the audit DB is
+    unconfigured, or every retry failed. Callers that treat a return as
+    proof of durability (the ``audit_log_buffer`` reconciler stamping
+    ``replayed_at``) MUST check it: before #2829 this function returned
+    ``None`` on both success and total failure, so buffered FSMA /
+    KDE_READ events were stamped replayed and permanently lost while the
+    dead-letter counters and the ``audit_buffer_event_dead_lettered``
+    alert could never fire.
+    """
+    global _unconfigured_engine_warned
+
     if not entry.tenant_id:
         # The retired system-context GUC allowed a tenantless shared credential
         # to append globally.  Keep the in-memory event for compatibility, but
-        # never issue an unscoped database write.
+        # never issue an unscoped database write. Refusal is not durability:
+        # callers that require confirmation (#2829) must see this as a miss.
         logging.getLogger("fsma_audit").warning(
             "Refusing tenantless audit DB persistence: event_id=%s",
             entry.event_id,
         )
-        return
+        return False
+
     engine = _get_audit_db_engine()
     if engine is None:
-        return
-
-    import time as _time
+        # #2829: an unconfigured engine is NOT a successful write. Saying
+        # otherwise lets a misconfigured deploy discard audit evidence
+        # while every counter reads clean.
+        if not _unconfigured_engine_warned:
+            _unconfigured_engine_warned = True
+            logging.getLogger("fsma_audit").warning(
+                "Audit DB engine unconfigured (DATABASE_URL unset): audit entries are NOT being persisted. event_id=%s",
+                getattr(entry, "event_id", "?"),
+            )
+        else:
+            logging.getLogger("fsma_audit").debug(
+                "Audit DB engine unconfigured; entry not persisted: event_id=%s",
+                getattr(entry, "event_id", "?"),
+            )
+        return False
 
     from shared.tenant_context import tenant_scope
     from sqlalchemy import text
@@ -134,31 +243,37 @@ def _persist_audit_entry(entry) -> None:
     # class-level begin-hook applies it on these connections instead.
     # Tenant-bound entries write under the row's own tenant.  The global chain
     # checksum is read independently through ADMIN_DATABASE_URL.
+    # #2848: never sleep on an event loop. When a caller has not been
+    # converted to the off-loop path yet we still make the attempts, but
+    # back-to-back — one slow connect is bad, one slow connect plus ~3s
+    # of blocking sleep freezes every concurrent request in the process.
+    on_loop = _on_event_loop()
     with tenant_scope(entry.tenant_id):
         for attempt in range(_PERSIST_MAX_RETRIES):
             try:
                 with engine.connect() as conn:
                     conn.execute(_insert_sql, _params)
                     conn.commit()
-                return  # success
+                return True  # confirmed write
             except Exception as e:
                 last_exc = e
-                if attempt < _PERSIST_MAX_RETRIES - 1:
+                if attempt < _PERSIST_MAX_RETRIES - 1 and not on_loop:
                     _time.sleep(min(2**attempt, 4))
 
-    # All retries exhausted — log at ERROR and raise so caller knows
+    # All retries exhausted — the entry is NOT durable.
     logging.getLogger("fsma_audit").error(
         "CRITICAL: Audit entry lost after %d retries: event_id=%s error=%s",
         _PERSIST_MAX_RETRIES,
         entry.event_id,
         last_exc,
     )
-    # NOTE: #971 (make this raise on total failure instead of silently
-    # returning) was bundled into this branch and is deliberately NOT
-    # included here — it is an independent production behaviour change
-    # (audit failure would start 503-ing requests) and it regressed 3
-    # graph tests whose sqlite fixtures have neither fsma.fsma_audit_trail
-    # nor audit_log_buffer. Ship it as its own PR with its own risk call.
+    # #971/#2829: this branch no longer lies to its caller. It still does
+    # not *raise* by default — that would turn any audit hiccup into a
+    # 5xx for every existing call site, the production behaviour change
+    # #971 deliberately deferred — but the False return makes the failure
+    # observable, and callers that need durability confirmed opt in with
+    # ``log(..., require_persistence=True)``.
+    return False
 
 
 def _row_to_audit_entry(row) -> "FSMAAuditEntry":
@@ -428,12 +543,56 @@ class FSMAAuditLog:
     - Export for FDA audits
     """
 
-    def __init__(self):
-        self._entries: List[FSMAAuditEntry] = []
+    def __init__(self, max_entries: Optional[int] = None):
+        # #2850: bounded. This is a process-global singleton in a monolith
+        # that Railway never recycles, and every KDE_READ on a traceability
+        # route appends an entry that retains its full ``diff`` payload
+        # (record-id lists included). Unbounded, it is monotonic heap growth
+        # proportional to lifetime audit volume — and reads amplify it,
+        # because ``get_by_target``/``get_by_tenant`` log a READ entry of
+        # their own before querying, so a polling dashboard grows the
+        # structure on its own.
+        #
+        # Postgres (``fsma.fsma_audit_trail``) is the source of truth: every
+        # query path prefers ``_query_audit_trail`` and only falls back here
+        # when the DB is unreachable. So this is a bounded recent-history
+        # cache, not a store, and evicting the oldest entries costs nothing
+        # a working deployment relies on.
+        self._max_entries = _resolve_max_memory_entries(max_entries)
+        self._entries: Deque[FSMAAuditEntry] = deque(maxlen=self._max_entries)
         self._lock = threading.RLock()
-        self._by_target: Dict[str, List[str]] = {}  # target_id -> [event_ids]
-        self._by_tenant: Dict[str, List[str]] = {}  # tenant_id -> [event_ids]
+        self._by_target: Dict[str, Deque[str]] = {}  # target_id -> [event_ids]
+        self._by_tenant: Dict[str, Deque[str]] = {}  # tenant_id -> [event_ids]
         self._last_db_checksum: Optional[str] = self._load_last_checksum()
+
+    def _evict_from_indexes(self, entry: "FSMAAuditEntry") -> None:
+        """Drop ``entry``'s event_id from both indexes (#2850).
+
+        Called with the lock held, for the entry the deque just pushed out.
+        Bounding ``_entries`` alone would not bound memory: the two index
+        dicts would keep every event_id (and every target/tenant key) for the
+        life of the process. Entries are appended in order, so the evicted
+        id is the oldest for its target/tenant and sits at the head of its
+        index deque — ``popleft`` is the common case, with ``remove`` as the
+        fallback if anything ever appends out of order.
+        """
+        for index, key in ((self._by_target, entry.target_id), (self._by_tenant, entry.tenant_id)):
+            if not key:
+                continue
+            event_ids = index.get(key)
+            if event_ids is None:
+                continue
+            if event_ids and event_ids[0] == entry.event_id:
+                event_ids.popleft()
+            else:
+                try:
+                    event_ids.remove(entry.event_id)
+                except ValueError:
+                    pass
+            if not event_ids:
+                # Drop the key too, or the dicts grow one entry per distinct
+                # target/tenant forever even with the ids evicted.
+                del index[key]
 
     @staticmethod
     def _load_last_checksum() -> Optional[str]:
@@ -468,6 +627,7 @@ class FSMAAuditLog:
         tenant_id: Optional[str] = None,
         correlation_id: Optional[str] = None,
         confidence: Optional[float] = None,
+        require_persistence: bool = False,
         **kwargs,
     ) -> FSMAAuditEntry:
         """
@@ -484,9 +644,20 @@ class FSMAAuditLog:
             tenant_id: Tenant ID for multi-tenancy
             correlation_id: Request correlation ID
             confidence: AI extraction confidence (0.0-1.0)
+            require_persistence: When True, raise
+                :class:`AuditPersistenceError` unless the DB write is
+                confirmed (#2829). Default False keeps the historical
+                best-effort behaviour for every existing caller; opt in
+                where a silent failure would be mistaken for durability
+                — the ``audit_log_buffer`` replay path being the
+                motivating case.
 
         Returns:
             The created audit entry
+
+        Note:
+            This method performs a **blocking** DB write. From ``async``
+            code call :meth:`alog` instead — see #2848.
         """
         with self._lock:
             # Get previous checksum for chain (falls back to DB on first entry after restart)
@@ -510,21 +681,34 @@ class FSMAAuditLog:
                 previous_checksum=previous_checksum,
             )
 
+            # #2850: capture what the bounded deque is about to push out so
+            # the indexes can be evicted in step with it. ``deque.append``
+            # discards the oldest silently once maxlen is reached.
+            evicted = self._entries[0] if len(self._entries) == self._max_entries else None
             self._entries.append(entry)
 
-            # Persist to database (best-effort)
-            _persist_audit_entry(entry)
+            # Persist to database. Best-effort by default; verifiable on
+            # demand (#2829). The raise (if any) is deferred to the end of
+            # this block so the in-memory chain, indexes and log line stay
+            # consistent whichever way the DB write went.
+            persisted = _persist_audit_entry(entry)
 
             # Index by target
             if target_id not in self._by_target:
-                self._by_target[target_id] = []
+                self._by_target[target_id] = deque()
             self._by_target[target_id].append(entry.event_id)
 
             # Index by tenant
             if tenant_id:
                 if tenant_id not in self._by_tenant:
-                    self._by_tenant[tenant_id] = []
+                    self._by_tenant[tenant_id] = deque()
                 self._by_tenant[tenant_id].append(entry.event_id)
+
+            if evicted is not None:
+                # After indexing the new entry, so an evicted entry that
+                # shares a target/tenant key with it does not delete the key
+                # the new entry just claimed.
+                self._evict_from_indexes(evicted)
 
             logger.info(
                 "audit_entry_created",
@@ -533,9 +717,33 @@ class FSMAAuditLog:
                 target_type=target_type,
                 target_id=target_id,
                 actor=actor,
+                persisted=persisted,
             )
 
+            if require_persistence and not persisted:
+                raise AuditPersistenceError(
+                    f"Audit entry {entry.event_id} could not be confirmed written "
+                    f"(action={action.value}, target={target_type}:{target_id})"
+                )
+
             return entry
+
+    async def alog(self, *args, **kwargs) -> FSMAAuditEntry:
+        """Async-safe :meth:`log` — runs the blocking write off the loop.
+
+        #2848: :meth:`log` drives synchronous psycopg2 inserts with
+        backoff sleeps between retries. Called inline from an
+        ``async def`` handler it stalls the entire Uvicorn event loop —
+        freezing every concurrent request, health probes included — for
+        as long as Postgres is slow or unreachable. ``asyncio.to_thread``
+        moves the whole call (connect, insert, retries, backoff) onto a
+        worker thread; the loop stays responsive and the retry policy
+        keeps working at full strength off-loop.
+
+        Takes the same arguments as :meth:`log` and raises the same
+        exceptions (``require_persistence`` included).
+        """
+        return await asyncio.to_thread(lambda: self.log(*args, **kwargs))
 
     def get_by_target(
         self,
@@ -565,6 +773,8 @@ class FSMAAuditLog:
         )
         from shared.tenant_context import tenant_scope
 
+        # Tenant-scoped read when a tenant is supplied; the tenantless
+        # variant is a cross-tenant operator view via the admin engine.
         if tenant_id:
             with tenant_scope(tenant_id):
                 db_entries = _query_audit_trail(target_id=target_id)

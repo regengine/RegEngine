@@ -94,3 +94,31 @@ describe('#2980 use-fsma must not target unbacked wizard endpoints', () => {
         }
     });
 });
+
+/**
+ * #2980 group 1 — `drift/*`. Same absence proof as the wizard group (no
+ * drift route decorator exists anywhere in services/ or server/), but these
+ * four hooks had live consumers: DriftAlertsWidget on /fsma and the
+ * /admin/alerts page were permanently stuck in their failure states in every
+ * environment. Product call per the issue: delete the feature surface rather
+ * than ship a monitoring panel that has never monitored anything; git
+ * history preserves the UI if a drift backend is ever built.
+ */
+const REMOVED_DRIFT_HOOKS = [
+    'useDriftAlerts',
+    'useDriftHealth',
+    'useSupplierHealth',
+    'useAcknowledgeAlert',
+] as const;
+
+describe('#2980 use-fsma must not target unbacked drift endpoints', () => {
+    it('contains no `drift/` path segment at all', () => {
+        expect(HOOKS_SRC).not.toMatch(/\/drift\//);
+    });
+
+    it.each(REMOVED_DRIFT_HOOKS)('no longer exports %s', (hookName) => {
+        expect(HOOKS_SRC).not.toMatch(
+            new RegExp(`export\\s+function\\s+${hookName}\\b`),
+        );
+    });
+});

@@ -230,11 +230,38 @@ def test_lineage_history_invariant_rejects_cross_tenant_record():
 # =============================================================================
 
 
+def _flatten_route_paths(routes) -> list[str]:
+    """Full effective paths, resolving FastAPI >= 0.141 lazy includes.
+
+    ``include_router`` no longer copies ``APIRoute`` objects into the parent's
+    ``routes`` list; it appends a lazy ``_IncludedRouter`` whose children (and
+    their prefix-combined paths) are only materialized via
+    ``effective_candidates()``. Iterating ``app.routes`` for ``.path`` therefore
+    sees none of the included routers' endpoints — which made both route-net
+    tests below pass vacuously against an apparently empty app. Duck-typed so
+    older FastAPI (plain ``APIRoute`` entries with ``.path``) still works.
+    """
+    paths: list[str] = []
+    for route in routes:
+        if hasattr(route, "effective_candidates"):  # _IncludedRouter
+            paths.extend(_flatten_route_paths(route.effective_candidates()))
+        elif hasattr(route, "original_route"):  # _EffectiveRouteContext
+            paths.append(route.path)
+        else:
+            paths.append(getattr(route, "path", ""))
+    return paths
+
+
 def _assembled_paths() -> list[str]:
     """Every path the graph router serves under production's ``/api/v1`` mount."""
     app = FastAPI()
     app.include_router(graph_router, prefix="/api/v1")
-    return [getattr(route, "path", "") for route in app.routes]
+    paths = _flatten_route_paths(app.routes)
+    # Self-check against the vacuous-pass failure mode this helper replaces:
+    # the assembled graph app serves ~50 paths, so near-zero means flattening
+    # broke (e.g. another FastAPI routing rework), not that routes went away.
+    assert len(paths) > 10, f"route flattening returned only {len(paths)} paths: {paths}"
+    return paths
 
 
 def test_lineage_history_is_served_at_its_documented_path():
@@ -247,8 +274,7 @@ def test_lineage_history_is_served_at_its_documented_path():
     """
     paths = _assembled_paths()
     assert "/api/v1/lineage/{tlc}/history" in paths, (
-        "documented lineage history path is not served; lineage paths present: "
-        f"{[p for p in paths if 'lineage' in p]}"
+        f"documented lineage history path is not served; lineage paths present: {[p for p in paths if 'lineage' in p]}"
     )
     assert "/api/v1/lineage/lineage/{tlc}/history" not in paths, "doubled /lineage/lineage segment is still served"
 
