@@ -359,8 +359,11 @@ class TestGenerateReportRealMode:
         body = r.json()
         assert body["demo_mode"] is False
         assert body["demo_disclaimer"] is None
-        # time_to_respond_estimate is computed, not hardcoded
-        assert "hour(s) estimated" in body["time_to_respond_estimate"]
+        # #3042: response time is not measured anywhere in this service —
+        # real mode must say so instead of dressing a score formula up
+        # as a latency measurement.
+        assert "Not yet measured" in body["time_to_respond_estimate"]
+        assert "4.2" not in body["time_to_respond_estimate"]
 
         dims = {d["id"]: d for d in body["dimensions"]}
         # Trace speed: has_export → 90
@@ -379,6 +382,74 @@ class TestGenerateReportRealMode:
         assert "functional" in dims["export_readiness"]["findings"][0]
         # Trace depth score = min(100, 5/7*100) = 71 → team readiness = 500//10 = 50
         assert dims["team_readiness"]["score"] == 50
+
+    def test_real_mode_findings_contain_no_unverified_claims(self, client, monkeypatch):
+        """#3042: real-mode findings must state only queried facts —
+        the canned capability boasts belong to demo mode only."""
+        self._mock_scoring(monkeypatch, supplier_count=3, has_export=False)
+
+        body = client.get("/api/v1/recall/t/report").json()
+        assert body["demo_mode"] is False
+        all_findings = " | ".join(f for d in body["dimensions"] for f in d["findings"])
+        for fabricated in (
+            "All immutability triggers active",
+            "Portal engagement tracking active",
+            "Supply chain visibility improving",
+            "EPCIS 2.0 JSON-LD export: ready",
+            "System integration level: increasing",
+        ):
+            assert fabricated not in all_findings, (
+                f"real-mode findings contain the unverified claim {fabricated!r} (#3042)"
+            )
+
+    def test_real_mode_action_items_derive_from_actual_gaps(self, client, monkeypatch):
+        """#3042: the improvement plan must trace to the tenant's own
+        sub-80 dimensions, not the canned demo narrative."""
+        self._mock_scoring(
+            monkeypatch,
+            supplier_count=3,
+            has_export=False,
+            chain_length=0,
+            chain_gap_count=0,
+            cte_count=5,
+            cte_types=2,
+        )
+
+        body = client.get("/api/v1/recall/weak2/report").json()
+        assert body["demo_mode"] is False
+        weak_names = {d["name"] for d in body["dimensions"] if d["score"] < 80}
+        assert body["action_items"], "weak tenant must receive an improvement plan"
+        for item in body["action_items"]:
+            # every impact names a real sub-80 dimension with its live score
+            assert any(name in item["impact"] for name in weak_names), (
+                f"action item impact {item['impact']!r} names no actual gap"
+            )
+            assert "Collect missing GLNs from 3 supplier locations" != item["action"], (
+                "canned demo action leaked into real mode (#3042)"
+            )
+        # each action is one of the dimensions' own recommendations
+        all_recs = {r for d in body["dimensions"] for r in d["recommendations"]}
+        assert all(item["action"] in all_recs for item in body["action_items"])
+
+    def test_real_mode_all_strong_dimensions_yield_empty_plan(self, client, monkeypatch):
+        """A tenant with no sub-80 dimensions gets an empty plan — the
+        honest answer, not invented supplier/training gaps."""
+        self._mock_scoring(
+            monkeypatch,
+            supplier_count=20,
+            has_export=True,
+            chain_length=100,
+            chain_gap_count=0,
+            cte_types=7,
+            cte_count=5000,
+        )
+
+        body = client.get("/api/v1/recall/strong2/report").json()
+        assert body["demo_mode"] is False
+        assert all(d["score"] >= 80 for d in body["dimensions"]), (
+            "fixture drift: this scenario is meant to have no sub-80 dimensions"
+        )
+        assert body["action_items"] == []
 
     def test_real_mode_low_suppliers_no_export_no_chain(self, client, monkeypatch):
         """Covers supplier_count<5, chain_length=0, has_export=False."""

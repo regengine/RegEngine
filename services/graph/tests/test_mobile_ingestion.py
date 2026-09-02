@@ -109,7 +109,7 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
 
 
 def test_log_traceability_event_missing_responsible_party_contact(mock_neo4j_client, mock_validation):
-    """Verify that missing responsible_party_contact returns 422 per 21 CFR 1.1370(c)."""
+    """Verify that missing responsible_party_contact returns 422 (plan point of contact per 21 CFR 1.1315(a)(4); see #3040)."""
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
     from shared.rate_limit import add_rate_limiting

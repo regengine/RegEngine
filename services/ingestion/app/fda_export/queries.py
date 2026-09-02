@@ -330,11 +330,13 @@ def fetch_recall_events_canonical(
 def _verify_chain_for_export(persistence, db_session, tenant_id: str):
     """Chain verification for export handlers, honoring the WS-1b flag.
 
-    Behind ``CHAIN_VERIFY_READ_CANONICAL`` (default off) the export's
-    X-Chain-Integrity evidence verifies the canonical chain
-    (``verify_chain_canonical``, #2506) instead of the legacy one. Both
-    result types expose ``.valid``/``.errors``, which is all the export
-    handlers consume. Flip is a soak decision —
+    ``CHAIN_VERIFY_READ_CANONICAL`` defaults ON since #3039: the
+    export's X-Chain-Integrity evidence verifies the canonical chain
+    (``verify_chain_canonical``, #2506), which recomputes event digests
+    from row content — the legacy verifier only re-links stored hashes
+    and cannot detect content tampering. Both result types expose
+    ``.valid``/``.errors``, which is all the export handlers consume.
+    ``=0`` remains as an emergency rollback —
     docs/persistence/dual-write-cutover.md.
     """
     from shared.canonical_persistence.verification import chain_verify_reads_canonical
@@ -445,9 +447,7 @@ def reconstruct_full_export_events(
         limit=limit + 1,
     )
     if len(full_events) > limit:
-        raise ExportOverflowError(
-            available=len(full_events), limit=limit, stage="transformation-link expansion"
-        )
+        raise ExportOverflowError(available=len(full_events), limit=limit, stage="transformation-link expansion")
 
     # Deduplicate by event id (defensive — the set-based query returns each
     # event once, but a transformation link shared by two seeds must not

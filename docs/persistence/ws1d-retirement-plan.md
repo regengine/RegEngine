@@ -688,7 +688,7 @@ retirement, not WS-1d. Keep those concerns separate.
 |---|---|---|
 | P1 | **The four legacy-native writers in section 0 are retired.** This is the gating item, not the dual write. | `grep -rn "\.store_event(\|store_events_batch(" services/ --include="*.py"` returns only definitions in `services/shared/cte_persistence/`. |
 | P2 | `FDA_EXPORT_V1_READ_CANONICAL` is the **code default**, not just a prod env var. Today: default `"0"` at `services/ingestion/app/fda_export/queries.py:225`; prod flag observed set 2026-07-17 (`dual-write-cutover.md:36`). | `export_v1_reads_canonical()` returns `True` with no env set. |
-| P3 | `CHAIN_VERIFY_READ_CANONICAL` is the code default. Today: default `"0"` at `services/shared/canonical_persistence/verification.py:69`; prod flag observed set 2026-07-24 (`dual-write-cutover.md:39`). | `chain_verify_reads_canonical()` returns `True` with no env set. |
+| P3 | ✅ **Done 2026-09-02 (#3039)** — `CHAIN_VERIFY_READ_CANONICAL` is the code default (`services/shared/canonical_persistence/verification.py`); `=0` remains as emergency rollback. | `chain_verify_reads_canonical()` returns `True` with no env set. |
 | P4 | **Backfill complete and green.** `scripts/verify_canonical_parity_live.py` reports 0 legacy orphans over the full production corpus. | Its own exit code; contract at `verify_canonical_parity_live.py:59-70`. |
 | P5 | The two golden suites are re-based or frozen (see 6c). | — |
 | P6 | Production soak of P2+P3 defaults for one full release with no export/verification incident. | `dual-write-cutover.md:17-19` |

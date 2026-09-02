@@ -97,8 +97,8 @@ class TestRequiredFieldsProducibleByIngestion_Issue1223:
         at the graph layer, not per-event."""
         required = rules["validation"]["required_fsma_fields"]
         assert "responsible_party_contact" not in required, (
-            "responsible_party_contact is per-graph-event (21 CFR "
-            "1.1370(c)), not per-ingestion-event — keeping it in "
+            "responsible_party_contact is per-graph-event (plan point of "
+            "contact, 21 CFR 1.1315(a)(4)), not per-ingestion-event — keeping it in "
             "required_fsma_fields is the #1223 silent-drift bug. "
             "Document the enforcement split in "
             "responsible_party_enforcement instead."
@@ -125,9 +125,21 @@ class TestResponsiblePartyEnforcementDocumented_Issue1223:
         val = rules["validation"]
         assert "responsible_party_enforcement" in val, (
             "responsible_party_enforcement block missing — it documents "
-            "the 21 CFR 1.1370(c) enforcement split (graph-layer inline "
-            "vs ingestion reference fields) and prevents #1223-style "
-            "drift from recurring."
+            "the 21 CFR 1.1315(a)(4)/1.1455(c) enforcement split "
+            "(graph-layer inline vs ingestion reference fields) and "
+            "prevents #1223-style drift from recurring."
+        )
+
+    def test_no_fabricated_1370c_citation(self, rules):
+        """#3040 regression guard: 21 CFR 1.1370 is petition content for
+        modified requirements/exemptions — it mandates nothing about
+        responsible-party contacts. The correct bases are 1.1315(a)(4)
+        (plan point of contact) and 1.1455(c) (24-hour availability)."""
+        import json as _json
+
+        assert "1.1370" not in _json.dumps(rules), (
+            "fsma_rules.json cites 21 CFR 1.1370 — that section is "
+            "exemption-petition content, not a contact requirement (#3040)"
         )
 
     def test_reference_fields_cover_gln_and_name(self, rules):

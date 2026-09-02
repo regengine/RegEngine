@@ -1177,6 +1177,9 @@ class TestQueryScoringDataDegrades:
 
         import shared.cte_persistence as cte_pkg
 
+        # #3039: canonical verification is now the default; this test
+        # exercises the legacy degrade path, so pin the rollback flag.
+        monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "0")
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _BadPersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -1262,6 +1265,8 @@ class TestQueryScoringDataDegrades:
 
         import shared.cte_persistence as cte_pkg
 
+        # #3039: pin the legacy path — see test_verify_chain_fails_gracefully.
+        monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "0")
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FailPersistence)
 
         data = _query_scoring_data(session, "t1")

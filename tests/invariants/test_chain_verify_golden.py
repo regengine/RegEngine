@@ -140,14 +140,52 @@ class TestChainVerifyGolden:
         session, tenant_id = chained_corpus
         persistence = CTEPersistence(session)
 
+        # #3039: canonical is now the code default; "0" is the rollback.
         monkeypatch.delenv("CHAIN_VERIFY_READ_CANONICAL", raising=False)
+        default_result = _verify_chain_for_export(persistence, session, str(tenant_id))
+
+        monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "0")
         legacy_result = _verify_chain_for_export(persistence, session, str(tenant_id))
 
-        monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "1")
-        canonical_result = _verify_chain_for_export(persistence, session, str(tenant_id))
-
-        assert type(legacy_result) is not type(canonical_result), (
-            "flag did not switch verification stores"
+        assert type(legacy_result) is not type(default_result), "flag did not switch verification stores"
+        assert type(default_result).__name__ == "CanonicalChainVerification", (
+            "#3039: the no-env default must be the canonical (content-recompute) verifier"
         )
         assert legacy_result.valid is True
-        assert canonical_result.valid is True
+        assert default_result.valid is True
+
+    def test_content_tampering_detected_by_default_verifier(self, chained_corpus, monkeypatch):
+        """#3039 core regression: mutate row content while leaving
+        ``hash_chain`` untouched. The legacy verifier cannot see it; the
+        default (canonical) verifier must fail the chain."""
+        from shared.cte_persistence import CTEPersistence
+
+        from services.ingestion.app.fda_export.queries import _verify_chain_for_export
+
+        session, tenant_id = chained_corpus
+        persistence = CTEPersistence(session)
+
+        session.execute(
+            text(
+                "UPDATE fsma.traceability_events SET quantity = quantity + 1000 "
+                "WHERE tenant_id = :tid AND traceability_lot_code = 'TLC-CHAIN-000'"
+            ),
+            {"tid": str(tenant_id)},
+        )
+        try:
+            monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "0")
+            legacy_result = _verify_chain_for_export(persistence, session, str(tenant_id))
+            assert legacy_result.valid is True, (
+                "precondition: legacy verifier is blind to content tampering "
+                "(it only re-links stored hashes) — if this starts failing, "
+                "the legacy verifier learned content recompute and this test "
+                "plus the #3039 default flip rationale need revisiting"
+            )
+
+            monkeypatch.delenv("CHAIN_VERIFY_READ_CANONICAL", raising=False)
+            default_result = _verify_chain_for_export(persistence, session, str(tenant_id))
+            assert default_result.valid is False, (
+                "content tampering with intact hash_chain rows must fail default chain verification"
+            )
+        finally:
+            session.rollback()
