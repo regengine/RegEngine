@@ -63,8 +63,13 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
     assert checked_in == manifest
     assert checked_in["summary"] == {
         "enabled_operation_count": 246,
-        "disabled_operation_count": 177,
-        "disabled_unique_path_count": 160,
+        # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
+        # to the graph v1_router AFTER router.include_router(v1_router), so the
+        # eager route copies of fastapi < 0.137 (under which the previous
+        # manifest was generated) silently dropped it. The pinned fastapi
+        # resolves includes lazily and serves it, so the manifest must list it.
+        "disabled_operation_count": 178,
+        "disabled_unique_path_count": 161,
         "enabled_by_classification": {
             "global-sysadmin": 15,
             "public": 29,
@@ -76,9 +81,7 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
 
 def test_checkout_is_public_only_when_no_credential_is_present(manifest):
     checkout = next(
-        item
-        for item in manifest["enabled_operations"]
-        if item["operation"] == "billing:POST:/api/v1/billing/checkout"
+        item for item in manifest["enabled_operations"] if item["operation"] == "billing:POST:/api/v1/billing/checkout"
     )
 
     assert checkout == {
@@ -155,38 +158,23 @@ def test_webauthn_enrollment_requires_existing_high_assurance_session(manifest):
         ("POST", "/auth/webauthn/register/generate-options"),
         ("POST", "/auth/webauthn/register/verify"),
     }
-    assert all(
-        item["authentication"] == "opaque-session-cookie:webauthn-or-sso"
-        for item in enrollment.values()
-    )
-    assert all(
-        item["test_adapter"] == "tenant_high_assurance_session"
-        for item in enrollment.values()
-    )
+    assert all(item["authentication"] == "opaque-session-cookie:webauthn-or-sso" for item in enrollment.values())
+    assert all(item["test_adapter"] == "tenant_high_assurance_session" for item in enrollment.values())
 
 
 def test_dual_session_routes_record_cookie_tenancy_and_csrf_adapter(manifest):
-    dual = [
-        item
-        for item in manifest["enabled_operations"]
-        if item["test_adapter"] == "tenant_dual_session_csrf"
-    ]
+    dual = [item for item in manifest["enabled_operations"] if item["test_adapter"] == "tenant_dual_session_csrf"]
     mutations = [item for item in dual if item["method"] in {"POST", "PUT", "PATCH", "DELETE"}]
 
     assert len(dual) == 49
     assert len(mutations) == 22
     assert all(item["authentication"] == "bearer-token-or-opaque-session-cookie" for item in dual)
-    assert all(
-        item["storage_boundary"] == "admin-postgres:jwt-tenant-or-session-membership-tenant"
-        for item in dual
-    )
+    assert all(item["storage_boundary"] == "admin-postgres:jwt-tenant-or-session-membership-tenant" for item in dual)
 
 
 def test_account_erasure_records_exact_identity_global_self_service_contract(manifest):
     erasure = next(
-        item
-        for item in manifest["enabled_operations"]
-        if item["operation"] == "admin:POST:/v1/account/erasure"
+        item for item in manifest["enabled_operations"] if item["operation"] == "admin:POST:/v1/account/erasure"
     )
 
     assert erasure == {
@@ -206,9 +194,7 @@ def test_account_erasure_adapter_rejects_non_authenticated_user_target(inventory
     route = next(
         item
         for item in inventory_app.routes
-        if isinstance(item, APIRoute)
-        and route_owner(item) == "admin"
-        and item.path == "/v1/account/erasure"
+        if isinstance(item, APIRoute) and route_owner(item) == "admin" and item.path == "/v1/account/erasure"
     )
     endpoint = route.endpoint
 
@@ -230,9 +216,7 @@ def test_checkout_manifest_adapter_rejects_broad_auth_failure_downgrade(inventor
     route = next(
         item
         for item in inventory_app.routes
-        if isinstance(item, APIRoute)
-        and route_owner(item) == "billing"
-        and item.path == "/api/v1/billing/checkout"
+        if isinstance(item, APIRoute) and route_owner(item) == "billing" and item.path == "/api/v1/billing/checkout"
     )
     endpoint = route.endpoint
 
@@ -253,7 +237,7 @@ def test_checkout_manifest_adapter_rejects_broad_auth_failure_downgrade(inventor
 
 
 def test_every_omitted_router_path_returns_exact_404(production_route_app, manifest):
-    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 177
+    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 178
 
 
 def test_representative_auth_negative_contracts_are_not_vacuous(production_route_app):
