@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import AuditReviewPage from '@/app/audit/page';
-import AdminAlertsPage from '@/app/admin/alerts/page';
 import DashboardLayout from '@/app/dashboard/layout';
 import DashboardInflowLabPage from '@/app/dashboard/inflow-lab/page';
 import DashboardScanPage from '@/app/dashboard/scan/page';
@@ -18,11 +17,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth-context', () => ({
     useAuth: vi.fn(),
-}));
-
-vi.mock('@/hooks/use-fsma', () => ({
-    useDriftAlerts: vi.fn(() => ({ data: undefined, isLoading: false })),
-    useAcknowledgeAlert: vi.fn(() => ({ mutateAsync: vi.fn() })),
 }));
 
 vi.mock('@/components/dashboard/breadcrumb', () => ({
@@ -69,11 +63,6 @@ describe('experimental feature gating (flag off)', () => {
         render(<AuditReviewPage />);
         expect(screen.getByTestId('feature-not-enabled')).toBeInTheDocument();
         expect(screen.getByText(/Audit review is not enabled/i)).toBeInTheDocument();
-    });
-
-    it('renders a feature-not-enabled state instead of the admin alert center', () => {
-        render(<AdminAlertsPage />);
-        expect(screen.getByTestId('feature-not-enabled')).toBeInTheDocument();
     });
 
     it('renders a feature-not-enabled state instead of the dashboard Inflow Lab', () => {

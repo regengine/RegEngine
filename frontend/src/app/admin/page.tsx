@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -141,13 +140,6 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              {experimentalFeaturesEnabled() && (
-                <Link href="/admin/alerts">
-                  <Button variant="outline">
-                    Alert Center
-                  </Button>
-                </Link>
-              )}
               <Link href="/admin/api-console">
                 <Button variant="outline">
                   API Console

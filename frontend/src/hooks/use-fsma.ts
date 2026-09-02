@@ -9,8 +9,6 @@ import type {
   RecallDrill,
   RecallReadiness,
   FSMADashboard,
-  DriftAlert,
-  SupplierHealth,
   CreateRecallDrillRequest,
   RecallSchedule,
   KDEQualityMetrics,
@@ -231,50 +229,12 @@ export function useCreateRecallSchedule() {
 
 // ============== Data Quality Hooks ==============
 
-export function useDriftAlerts(limit = 20) {
-  const { isAuthenticated } = useAuth();
-  return useQuery({
-    queryKey: ['fsma', 'drift', 'alerts', limit],
-    queryFn: () => fsmaFetch<{ alerts: DriftAlert[] }>(`/drift/alerts?limit=${limit}`),
-    enabled: isAuthenticated,
-    refetchInterval: 30 * 1000,
-  });
-}
-
-export function useDriftHealth() {
-  const { isAuthenticated } = useAuth();
-  return useQuery({
-    queryKey: ['fsma', 'drift', 'health'],
-    queryFn: () => fsmaFetch<{
-      trace_completeness_rate: number;
-      average_ingest_latency_ms: number;
-      error_rate_percent: number;
-      status: string;
-      alerts: Array<{
-        id: string;
-        severity: string;
-        metric: string;
-        current_value?: number;
-        threshold?: number;
-        message: string;
-        timestamp: string;
-        source: string;
-      }>;
-    }>('/drift/health'),
-    enabled: isAuthenticated,
-    refetchInterval: 30 * 1000,
-  });
-}
-
-export function useSupplierHealth() {
-  const { isAuthenticated } = useAuth();
-  return useQuery({
-    queryKey: ['fsma', 'drift', 'suppliers'],
-    queryFn: () => fsmaFetch<{ suppliers: SupplierHealth[] }>('/drift/suppliers'),
-    enabled: isAuthenticated,
-    staleTime: 2 * 60 * 1000,
-  });
-}
+// #2980: the four `drift/*` hooks (useDriftAlerts, useDriftHealth,
+// useSupplierHealth, useAcknowledgeAlert) were removed. No backend has ever
+// registered a drift router, so they 404'd in every environment under every
+// flag — see src/__tests__/hooks/use-fsma-unbacked-endpoints.test.ts, which
+// pins both the wizard/* and drift/* surfaces as absent. DriftAlertsWidget
+// and /admin/alerts, their only consumers, were deleted with them.
 
 export function useKDEQuality() {
   const { isAuthenticated } = useAuth();
@@ -283,19 +243,6 @@ export function useKDEQuality() {
     queryFn: () => fsmaFetch<KDEQualityMetrics>('/metrics/quality'),
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
-  });
-}
-
-export function useAcknowledgeAlert() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (alertId: string) =>
-      fsmaFetch<{ success: boolean }>(`/drift/alerts/${alertId}/acknowledge`, {
-        method: 'POST',
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fsma', 'drift', 'alerts'] });
-    },
   });
 }
 

@@ -15,12 +15,12 @@ vi.mock('@/lib/auth-context', () => ({
 }));
 
 import {
-    useAcknowledgeAlert,
     useComplianceScore,
-    useDriftAlerts,
+    useCreateRecallDrill,
     useExportComplianceReport,
     useFSMADashboard,
     useForwardTrace,
+    useKDEQuality,
 } from '@/hooks/use-fsma';
 
 function createWrapper() {
@@ -104,7 +104,7 @@ describe('use-fsma hooks', () => {
         });
 
         const wrapper = createWrapper();
-        const { result } = renderHook(() => useDriftAlerts(20), { wrapper });
+        const { result } = renderHook(() => useKDEQuality(), { wrapper });
 
         expect(result.current.fetchStatus).toBe('idle');
         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
@@ -186,22 +186,22 @@ describe('use-fsma hooks', () => {
         );
     });
 
-    it('acknowledges drift alerts through the proxy without browser credentials headers', async () => {
+    it('posts mutations through the proxy without browser credentials headers', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,
-            json: async () => ({ success: true }),
+            json: async () => ({ id: 'drill-1', status: 'PENDING' }),
         });
 
         const wrapper = createWrapper();
-        const { result } = renderHook(() => useAcknowledgeAlert(), { wrapper });
+        const { result } = renderHook(() => useCreateRecallDrill(), { wrapper });
 
         await act(async () => {
-            await result.current.mutateAsync('alert-1');
+            await result.current.mutateAsync({ type: 'MOCK', target_tlc: 'LOT-1' } as any);
         });
 
         const [, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
         expect(fetchWithCsrfMock).toHaveBeenCalledWith(
-            '/api/fsma/drift/alerts/alert-1/acknowledge',
+            '/api/fsma/recall/drill',
             expect.objectContaining({
                 method: 'POST',
                 credentials: 'include',
