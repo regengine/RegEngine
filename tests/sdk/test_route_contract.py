@@ -1,49 +1,75 @@
-"""SDK <-> route contract test (#2531).
+"""SDK <-> route contract test (#2531, #2952).
 
 Guards against the SDK drifting from the real route table. Every path the
-``RegEngineClient`` issues must resolve to a route registered on the
-consolidated app. Previously the SDK hardcoded a ``/api/graph/fsma/...``
-prefix that does not exist on the deploy target, so every call 404'd.
+``RegEngineClient`` issues must be judged against the routers production
+actually mounts — not against a hand-built FastAPI app that always includes
+experimental graph routes.
 
-The test builds a minimal app from the SAME routers ``server/main.py`` mounts
-(graph routes under ``/api/v1`` + the canonical records router which carries
-its own ``/api/v1/records`` prefix), captures the (method, path) each SDK
-method issues, and asserts each one matches a registered route — comparing
-path templates segment-by-segment so ``{tlc}`` matches ``{event_id}`` etc.
+``server/main.py`` mounts graph only when ``_router_enabled("graph")``. Graph
+is in ``EXPERIMENTAL_ROUTERS`` and is not in the production allowlist, so it
+is off unless ``ENABLE_EXPERIMENTAL_ROUTERS`` is set (a non-production bypass
+that production policy rejects). This module builds the same two-router
+surface the original contract used (graph + canonical records) but applies
+that gate so 7 of 9 client methods are not certified against routes that 404.
 """
 
 from __future__ import annotations
 
+import os
 import re
 
 import pytest
 
-# sdk-ci runs this suite in a CLEAN venv (pytest + httpx + requests only) to
-# prove the installed package works without the backend dependency tree. The
-# route-contract half of this module needs the real routers, so it runs in
-# the full backend suite instead of sdk-ci.
-fastapi = pytest.importorskip("fastapi", reason="route-contract check requires the backend dependency tree")
-from fastapi import FastAPI  # noqa: E402
-from fastapi.routing import APIRoute  # noqa: E402
-
 from regengine import RegEngineClient
 from regengine.models import CTEType
 
+# SDK methods whose paths live on the graph router (``/api/v1/fsma/...``).
+# The two remaining public methods hit canonical records, which production
+# mounts.
+_GRAPH_PATH_MARKER = "/api/v1/fsma/"
 
-@pytest.fixture(scope="module")
-def registered_routes() -> set[tuple[str, str]]:
-    """(method, path_template) pairs for the real mounted route table."""
+
+def _experimental_routers_enabled() -> bool:
+    return os.environ.get("ENABLE_EXPERIMENTAL_ROUTERS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _graph_router_enabled() -> bool:
+    """Same production gate ``server/main.py`` uses for ``_router_enabled("graph")``.
+
+    Production mounts graph only if it is in the release allowlist.
+    ``ENABLE_EXPERIMENTAL_ROUTERS`` is the documented non-production bypass.
+    """
+    from server.router_policy import PRODUCTION_ENABLED_ROUTERS
+
+    if _experimental_routers_enabled():
+        return True
+    return "graph" in PRODUCTION_ENABLED_ROUTERS
+
+
+def _registered_routes() -> set[tuple[str, str]]:
+    """(method, path_template) pairs for the gated mount set.
+
+    FastAPI is required. A missing install must fail this helper, not skip.
+    """
+    from fastapi import FastAPI
+
     from shared.paths import ensure_shared_importable
 
     ensure_shared_importable()
-    from services.graph.app.routes import router as graph_router
     from services.ingestion.app.canonical_router import router as canonical_router
 
     app = FastAPI()
-    # Mounts mirror server/main.py: graph router at /api/v1, canonical router
-    # carries its own /api/v1/records prefix.
-    app.include_router(graph_router, prefix="/api/v1")
+    # Canonical records carry their own ``/api/v1/records`` prefix (production).
     app.include_router(canonical_router)
+    if _graph_router_enabled():
+        from services.graph.app.routes import router as graph_router
+
+        app.include_router(graph_router, prefix="/api/v1")
 
     from shared.route_introspection import iter_effective_routes
 
@@ -116,18 +142,77 @@ def _path_matches(sdk_path: str, route_path: str) -> bool:
     return True
 
 
-def test_every_sdk_path_resolves_to_a_registered_route(registered_routes):
-    """#2531: each (method, path) the SDK issues must hit a real route."""
+def _resolves(method: str, sdk_path: str, registered: set[tuple[str, str]]) -> bool:
+    return any(
+        method == r_method and _path_matches(sdk_path, r_path) for r_method, r_path in registered
+    )
+
+
+def _is_graph_backed(sdk_path: str) -> bool:
+    return _GRAPH_PATH_MARKER in sdk_path
+
+
+def test_production_sdk_paths_resolve_and_graph_is_not_certified(monkeypatch):
+    """#2531 + #2952: production-default mount set.
+
+    Canonical-records methods must resolve. Graph-backed methods must not be
+    certified as present while experimental routers are off.
+    """
+    from server.router_policy import EXPERIMENTAL_ROUTERS, PRODUCTION_ENABLED_ROUTERS
+
+    monkeypatch.delenv("ENABLE_EXPERIMENTAL_ROUTERS", raising=False)
+    assert "graph" in EXPERIMENTAL_ROUTERS
+    assert "graph" not in PRODUCTION_ENABLED_ROUTERS
+    assert not _graph_router_enabled()
+
+    registered = _registered_routes()
+    unresolved_production: list[tuple[str, str]] = []
+    certified_graph: list[tuple[str, str]] = []
+    missing_graph: list[tuple[str, str]] = []
+
+    for method, sdk_path in _captured_sdk_calls():
+        hit = _resolves(method, sdk_path, registered)
+        if _is_graph_backed(sdk_path):
+            if hit:
+                certified_graph.append((method, sdk_path))
+            else:
+                missing_graph.append((method, sdk_path))
+        elif not hit:
+            unresolved_production.append((method, sdk_path))
+
+    assert not unresolved_production, (
+        "SDK methods reference production paths with no registered route: "
+        + ", ".join(f"{m} {p}" for m, p in unresolved_production)
+    )
+    assert not certified_graph, (
+        "Graph-backed SDK methods must not be certified as present when "
+        "experimental routers are off: "
+        + ", ".join(f"{m} {p}" for m, p in certified_graph)
+    )
+    assert len(missing_graph) == 7, (
+        "expected 7 graph-backed SDK methods to be absent from the production "
+        f"route table; classified {len(missing_graph)}: "
+        + ", ".join(f"{m} {p}" for m, p in missing_graph)
+    )
+
+
+def test_experimental_routers_may_certify_graph_backed_sdk_methods(monkeypatch):
+    """#2952: when ENABLE_EXPERIMENTAL_ROUTERS is on, graph methods may resolve."""
+    monkeypatch.setenv("ENABLE_EXPERIMENTAL_ROUTERS", "true")
+    assert _graph_router_enabled()
+
+    registered = _registered_routes()
     unresolved: list[tuple[str, str]] = []
     for method, sdk_path in _captured_sdk_calls():
-        if not any(method == r_method and _path_matches(sdk_path, r_path) for r_method, r_path in registered_routes):
+        if not _resolves(method, sdk_path, registered):
             unresolved.append((method, sdk_path))
 
     assert not unresolved, (
-        "SDK methods reference paths with no registered route: "
+        "SDK methods reference paths with no registered route (experimental "
+        "routers on): "
         + ", ".join(f"{m} {p}" for m, p in unresolved)
-        + f". Registered fsma/records routes: "
-        + ", ".join(sorted(f"{m} {p}" for m, p in registered_routes if "fsma" in p or "/records" in p))
+        + ". Registered fsma/records routes: "
+        + ", ".join(sorted(f"{m} {p}" for m, p in registered if "fsma" in p or "/records" in p))
     )
 
 

@@ -47,8 +47,20 @@ class AuditLogger:
 
     @classmethod
     def get_instance(cls) -> "AuditLogger":
-        """Get singleton instance."""
+        """Get singleton instance.
+
+        #2854: production must not silently fall back to the in-memory
+        test backend. Configure a durable store at process start.
+        """
         if cls._instance is None:
+            from shared.env import is_production
+
+            if is_production():
+                raise RuntimeError(
+                    "AuditLogger is not configured with a durable backend. "
+                    "Call AuditLogger.configure(storage=PostgresHashChainAuditStorage()) "
+                    "during application startup."
+                )
             cls._instance = cls()
         return cls._instance
 

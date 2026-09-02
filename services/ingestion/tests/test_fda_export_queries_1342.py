@@ -332,7 +332,7 @@ class TestFetchRecallEvents:
         out = fetch_recall_events(session, "e.tenant_id = :tid", {"tid": "t"})
         assert out == [row]
         _stmt, params = session.executes[0]
-        assert params == {"tid": "t"}
+        assert params == {"tid": "t", "lim": 10001}
 
     def test_empty_result_returns_empty_list(self):
         session = _FakeSession(results=[_Result(rows=[])])

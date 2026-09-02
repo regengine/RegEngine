@@ -181,8 +181,10 @@ def _normalise_event(
     the CSV (issue #1108). FDA-export call paths must pass ``True``.
     """
 
-    kdes = event.get("kdes", {})
-    event_date_raw = kdes.get("event_date") or event.get("event_date") or ""
+    kdes = event.get("kdes") or {}
+    event_date_raw = (
+        kdes.get("event_date") or event.get("event_date") or event.get("event_timestamp") or ""
+    )
     event_date, event_time = _parse_timestamp(event_date_raw, strict=strict_dates)
     if kdes.get("event_time"):
         event_time = str(kdes["event_time"])
@@ -203,8 +205,14 @@ def _normalise_event(
         "product_description": event.get("product_description") or kdes.get("product_description") or "",
         "quantity": str(event.get("quantity") or kdes.get("quantity") or ""),
         "unit_of_measure": event.get("uom") or event.get("unit_of_measure") or kdes.get("unit_of_measure") or "",
-        "origin_gln": event.get("facility_gln") or kdes.get("ship_from_gln") or "",
-        "origin_name": event.get("facility_name") or kdes.get("ship_from_location") or "",
+        "origin_gln": event.get("facility_gln")
+        or event.get("location_gln")
+        or kdes.get("ship_from_gln")
+        or "",
+        "origin_name": event.get("facility_name")
+        or event.get("location_name")
+        or kdes.get("ship_from_location")
+        or "",
         "origin_address": event.get("facility_address") or event.get("ship_from_address") or "",
         "destination_gln": event.get("dest_gln") or kdes.get("ship_to_gln") or "",
         "destination_name": event.get("dest_name") or kdes.get("ship_to_location") or "",

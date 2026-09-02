@@ -66,8 +66,6 @@ env:
 
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   # ── Dependency Lock Freshness ────────────────────────────
@@ -628,8 +626,14 @@ jobs:
       - name: Build root Dockerfile
         run: docker build -t regengine:test -f Dockerfile .
 
-      - name: Verify image starts
-        run: docker run --rm regengine:test python -c "print('Build OK')"
+      - name: Verify image CMD and import surface
+        # #2890: do not override CMD with `python -c`. Prove the image
+        # actually ships the production entrypoint, then import it.
+        run: |
+          cmd=$(docker inspect --format '{{json .Config.Cmd}}' regengine:test)
+          echo "CMD=${cmd}"
+          echo "${cmd}" | grep -q gunicorn
+          docker run --rm --entrypoint python regengine:test -c "import server.main"
 
   # ── Security (Hard Gate) ─────────────────────────────────
   security:

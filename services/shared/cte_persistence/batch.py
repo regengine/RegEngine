@@ -279,6 +279,12 @@ class BatchWritePathMixin:
                     kde_completeness=1.0, alerts=alerts,
                 ))
 
+            # #2820: later rows in this same batch with the same key must
+            # reuse this result. Without this, the second occurrence
+            # advances previous_chain_hash for a row ON CONFLICT will drop,
+            # forking the in-memory chain from what actually persisted.
+            existing_map[p["idemp_key"]] = (event_id, sha256_hash, chain_hash)
+
         # --- Step 5: Batch INSERT (with lost-race reconciliation — #1248) ---
         # ON CONFLICT DO NOTHING silently discards rows whose idempotency
         # key collides with a concurrent writer's INSERT. Before #1248 we

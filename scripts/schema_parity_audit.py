@@ -5,25 +5,31 @@ The migration-consolidation acceptance criterion is that one executable
 migration system produces the whole schema. This tool makes that testable:
 
 * ``snapshot`` dumps the schema (every user table's columns with their
-  data types and nullability) of a database to a canonical JSON file —
+  data types and nullability, plus foreign-key name / referred table /
+  constrained and referred columns) of a database to a canonical JSON file —
   the checked-in contract lives at ``docs/schema/expected_schema.json``.
 * ``check`` compares a live database against that file and exits non-zero
-  on any missing table, missing/extra column, or type/nullability change.
+  on any missing table, missing/extra column, type/nullability change, or
+  foreign-key presence/target drift.
 
 Unlike the ORM drift gate (``alembic check``), this covers EVERY table —
 including the raw-SQL-managed canonical FSMA tables that have no ORM
 model — which is how ``verify_orm_db_type_alignment``'s type guarantees
 extend to the whole schema without inventing ORM overlays for raw tables.
 
+Foreign-key option churn (ondelete/match representation) is intentionally
+omitted from this contract so the gate stays on presence and targets
+(#2881). Alembic's ``include_object`` still skips FK option noise.
+
 Workflow when a migration intentionally changes the schema: run
 
     DATABASE_URL=... python scripts/schema_parity_audit.py snapshot
 
 against a freshly migrated database and commit the regenerated JSON in
-the same PR as the migration. The CI step in backend-ci.yml
-(repo-root-suite) fails if the migrated schema and the checked-in
-contract disagree — so schema changes are always deliberate, reviewable
-diffs rather than silent drift.
+the same PR as the migration. Regeneration needs a live migrated database;
+do not invent FK rows by hand. Until the snapshot is regenerated, ``check``
+compares columns as before and skips FK comparison on tables whose contract
+entry has no ``foreign_keys`` key.
 
 Usage:
     python scripts/schema_parity_audit.py snapshot [--out PATH]
@@ -55,6 +61,27 @@ def _connect(database_url: str):
     return create_engine(database_url)
 
 
+def _fk_record(fk: dict, table_schema: str) -> dict:
+    """Canonical FK contract: name + referred table + column lists. No options."""
+    return {
+        "name": fk.get("name") or "",
+        "referred_schema": fk.get("referred_schema") or table_schema,
+        "referred_table": fk.get("referred_table") or "",
+        "constrained_columns": list(fk.get("constrained_columns") or []),
+        "referred_columns": list(fk.get("referred_columns") or []),
+    }
+
+
+def _fk_identity(fk: dict) -> tuple:
+    return (
+        fk.get("name") or "",
+        fk.get("referred_schema") or "",
+        fk.get("referred_table") or "",
+        tuple(fk.get("constrained_columns") or []),
+        tuple(fk.get("referred_columns") or []),
+    )
+
+
 def dump_schema(database_url: str) -> dict:
     """Reflect every user table into a canonical, diff-stable dict."""
     from sqlalchemy import inspect
@@ -75,8 +102,13 @@ def dump_schema(database_url: str) -> dict:
                     "type": str(column["type"]).lower(),
                     "nullable": bool(column["nullable"]),
                 }
+            foreign_keys = [
+                _fk_record(fk, schema) for fk in inspector.get_foreign_keys(table, schema=schema)
+            ]
+            foreign_keys.sort(key=_fk_identity)
             result[f"{schema}.{table}"] = {
                 "columns": dict(sorted(columns.items())),
+                "foreign_keys": foreign_keys,
             }
 
     engine.dispose()
@@ -114,6 +146,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     actual = dump_schema(database_url)
 
     problems: list[str] = []
+    skipped_fk_tables = 0
 
     for table, spec in sorted(expected.items()):
         if table not in actual:
@@ -134,6 +167,29 @@ def cmd_check(args: argparse.Namespace) -> int:
                 "in this PR if intentional)"
             )
 
+        expected_fks = spec.get("foreign_keys")
+        if expected_fks is None:
+            skipped_fk_tables += 1
+        else:
+            actual_fks = actual[table].get("foreign_keys") or []
+            expected_map = {_fk_identity(fk): fk for fk in expected_fks}
+            actual_map = {_fk_identity(fk): fk for fk in actual_fks}
+            for identity in sorted(set(expected_map) - set(actual_map)):
+                fk = expected_map[identity]
+                problems.append(
+                    f"MISSING FK: {table} {fk['name'] or '(unnamed)'} -> "
+                    f"{fk['referred_schema']}.{fk['referred_table']} "
+                    f"({fk['constrained_columns']} -> {fk['referred_columns']})"
+                )
+            for identity in sorted(set(actual_map) - set(expected_map)):
+                fk = actual_map[identity]
+                problems.append(
+                    f"EXTRA FK: {table} {fk['name'] or '(unnamed)'} -> "
+                    f"{fk['referred_schema']}.{fk['referred_table']} "
+                    f"({fk['constrained_columns']} -> {fk['referred_columns']}) "
+                    "(migrations added it; regenerate the snapshot in this PR if intentional)"
+                )
+
     for table in sorted(set(actual) - set(expected)):
         problems.append(
             f"EXTRA TABLE: {table} (migrations created it; regenerate the snapshot in this "
@@ -153,6 +209,14 @@ def cmd_check(args: argparse.Namespace) -> int:
         return 1
 
     print(f"Schema parity audit OK — {len(expected)} tables match the contract.")
+    if skipped_fk_tables:
+        print(
+            f"NOTE: {skipped_fk_tables} contract table(s) have no foreign_keys key. "
+            "Regenerate docs/schema/expected_schema.json against a freshly migrated "
+            "database to enable the FK gate (#2881). Regeneration needs a live DB; "
+            "do not invent FK rows by hand.",
+            file=sys.stderr,
+        )
     return 0
 
 

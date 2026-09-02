@@ -328,7 +328,7 @@ jobs:
   e2e:
     name: Passwordless Auth E2E (Chromium)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       REGENGINE_ENV: test
       REGENGINE_E2E_MODE: "true"
@@ -428,9 +428,16 @@ jobs:
         id: run_e2e
         run: |
           cd frontend
+          # Passwordless OTP specs against the same local stack as auth-flow
+          # (#2878). rbac-gates / tenant-isolation / security-audit-fixes /
+          # invite_flow still drive the removed password login UI and would
+          # fail this gate; demo-smoke / inflow-lab / sandbox / snapshot
+          # specs need extra services or demo data.
           npm run test:e2e -- \
             tests/e2e/auth-flow.spec.ts \
             tests/e2e/security-release-gate.spec.ts \
+            tests/e2e/login-dashboard.spec.ts \
+            tests/e2e/authenticated-core-journeys.spec.ts \
             --project=chromium --reporter=list
 
       - name: Upload Playwright test results

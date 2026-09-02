@@ -130,8 +130,10 @@ jobs:
 
   # ── Repo-root execution shard ─────────────────────────────
   # Collection-only checks prove importability, but they do not catch broken
-  # assertions. Run a small offline repo-root slice so this workflow has at
-  # least one behavioral gate outside the per-service ``tests/`` directories.
+  # assertions. Run the offline repo-root slice so this workflow has a
+  # behavioral gate outside the per-service ``tests/`` directories (#2823).
+  # Live Postgres/Redis/Neo4j suites stay in backend-ci ``repo-root-suite``
+  # and ``live-db-suite`` — this job has no service containers.
   repo-root-fast-shard:
     name: Repo-root fast shard executes
     runs-on: ubuntu-latest
@@ -161,7 +163,24 @@ jobs:
             tests/scripts \
             tests/test_monolith_route_parity.py \
             tests/test_server_import_smoke.py \
-            -q
+            tests/shared \
+            tests/unit \
+            tests/invariants \
+            tests/test_shared \
+            tests/security \
+            --ignore-glob='tests/shared/test_*_live.py' \
+            --ignore-glob='tests/invariants/test_*_live.py' \
+            --ignore=tests/invariants/test_dual_write_parity.py \
+            --ignore=tests/invariants/test_fda_export_v1_golden.py \
+            --ignore=tests/invariants/test_chain_verify_golden.py \
+            --ignore=tests/invariants/test_backfill_canonical.py \
+            --ignore=tests/security/test_tenant_isolation_phase1.py \
+            --ignore=tests/security/test_account_erasure_identity_isolation_pg.py \
+            --ignore=tests/security/test_security_audit_fixes.py \
+            --ignore=tests/security/test_auth_coverage.py \
+            --ignore=tests/shared/test_visibility_timeout_2918.py \
+            --ignore=tests/shared/test_secret_validation.py \
+            -q --no-cov
 
   # ── Per-service collection checks ───────────────────────
   test-environment-check:

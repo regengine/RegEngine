@@ -45,38 +45,49 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_MAIN = _REPO_ROOT / "server" / "main.py"
+_POLICY = _REPO_ROOT / "server" / "router_policy.py"
 _DOC = _REPO_ROOT / "docs" / "engineering" / "ROUTER_SURFACE.md"
 
 _ALLOWLIST_LINE = re.compile(r"^ENABLED_ROUTERS=(.+)$", re.MULTILINE)
 
 
+def _collection_elts(node: ast.AST) -> list[ast.AST] | None:
+    if isinstance(node, (ast.Set, ast.List, ast.Tuple)):
+        return list(node.elts)
+    if isinstance(node, ast.Call) and node.args:
+        inner = node.args[0]
+        if isinstance(inner, (ast.Set, ast.List, ast.Tuple)):
+            return list(inner.elts)
+    return None
+
+
 def _set_literal(module: ast.Module, name: str) -> set[str]:
-    """Return the string members of a module-level ``name = {...}`` assignment."""
+    """Return the string members of a module-level ``name = frozenset({...})``."""
     for node in module.body:
         if not isinstance(node, ast.Assign):
             continue
         if not any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
             continue
-        if not isinstance(node.value, (ast.Set, ast.List, ast.Tuple)):
-            pytest.fail(f"{name} in server/main.py is no longer a literal collection")
-        return {e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
-    pytest.fail(f"{name} not found in server/main.py — has it been renamed? (#2838)")
+        elts = _collection_elts(node.value)
+        if elts is None:
+            pytest.fail(f"{name} in server/router_policy.py is no longer a literal collection")
+        return {e.value for e in elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
+    pytest.fail(f"{name} not found in server/router_policy.py — has it been renamed? (#2838)")
 
 
 @pytest.fixture(scope="module")
-def main_module() -> ast.Module:
-    return ast.parse(_MAIN.read_text(encoding="utf-8"))
+def policy_module() -> ast.Module:
+    return ast.parse(_POLICY.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
-def valid_routers(main_module) -> set[str]:
-    return _set_literal(main_module, "_VALID_ROUTER_NAMES")
+def valid_routers(policy_module) -> set[str]:
+    return _set_literal(policy_module, "VALID_ROUTER_NAMES")
 
 
 @pytest.fixture(scope="module")
-def experimental_routers(main_module) -> set[str]:
-    return _set_literal(main_module, "_EXPERIMENTAL_ROUTERS")
+def experimental_routers(policy_module) -> set[str]:
+    return _set_literal(policy_module, "EXPERIMENTAL_ROUTERS")
 
 
 @pytest.fixture(scope="module")
