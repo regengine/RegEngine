@@ -18,9 +18,10 @@ name: Production Uptime
 
 on:
   schedule:
-    # Every 15 minutes. GitHub delays or drops scheduled runs under load, so
+    # Hourly (was */15 until 2026-09-02: 96 runs/day alone exceeded the org's
+    # free Actions allowance). GitHub delays or drops scheduled runs under load, so
     # treat this as best-effort minutes-scale detection, not an SLA clock.
-    - cron: '*/15 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       base_url:

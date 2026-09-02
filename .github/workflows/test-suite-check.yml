@@ -23,6 +23,10 @@ on:
       - 'requirements.lock'
       - '.github/workflows/test-suite-check.yml'
 
+concurrency:
+  group: test-suite-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   checks: write
