@@ -510,8 +510,9 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         from shared.canonical_persistence.verification import chain_verify_reads_canonical
         from shared.cte_persistence import CTEPersistence
 
-        # WS-1b (#1335): behind CHAIN_VERIFY_READ_CANONICAL (default off)
-        # the score verifies the canonical chain instead of the legacy one.
+        # WS-1b (#1335) / #3039: CHAIN_VERIFY_READ_CANONICAL defaults ON —
+        # the score verifies the canonical chain (content recompute)
+        # unless explicitly rolled back with =0.
         if chain_verify_reads_canonical():
             from shared.canonical_persistence import CanonicalEventStore
 

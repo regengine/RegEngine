@@ -63,10 +63,18 @@ CHAIN_VERIFY_READ_CANONICAL_ENV = "CHAIN_VERIFY_READ_CANONICAL"
 
 
 def chain_verify_reads_canonical() -> bool:
-    """Are chain-verification read paths flagged onto the canonical store?"""
+    """Are chain-verification read paths flagged onto the canonical store?
+
+    Default ON since #3039 (WS-1d P3): the flag has been set in
+    production since 2026-07-24 and soaked. The canonical verifier
+    recomputes event digests from row *content*; the legacy verifier
+    only re-links stored ``event_hash`` values, so content tampering
+    that leaves ``hash_chain`` untouched passes legacy verification.
+    Set ``CHAIN_VERIFY_READ_CANONICAL=0`` only as an emergency rollback.
+    """
     import os
 
-    return os.getenv(CHAIN_VERIFY_READ_CANONICAL_ENV, "0").strip().lower() in {
+    return os.getenv(CHAIN_VERIFY_READ_CANONICAL_ENV, "1").strip().lower() in {
         "1",
         "true",
         "yes",

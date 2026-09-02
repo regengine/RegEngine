@@ -80,6 +80,16 @@ def _install_stubs(
     package_response_marker="PKG-RESP",
 ):
     """Install the dependency web. Returns (session, persistence, captured)."""
+    # #3039 flipped CHAIN_VERIFY_READ_CANONICAL's default ON; this harness
+    # fakes the *legacy* persistence object, so pin the legacy path. The
+    # canonical default (incl. tamper detection) is covered by
+    # tests/invariants/test_chain_verify_golden.py against live Postgres.
+    monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "0")
+    # Cache the real canonical_persistence package before shared.cte_persistence
+    # is replaced below — _verify_chain_for_export imports it at call time and
+    # canonical_persistence.models imports StoreResult from cte_persistence.
+    import shared.canonical_persistence.verification  # noqa: F401
+
     sess = session if session is not None else _FakeSession()
     persist = persistence if persistence is not None else _FakePersistence(sess)
     if verify_return is not None:

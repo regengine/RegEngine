@@ -23,7 +23,11 @@ from collections.abc import Callable, Iterable
 from typing import Any, TypeVar
 
 from fastapi import APIRouter, FastAPI
-from fastapi.routing import APIRoute
+
+# request_response must be fastapi's wrapper (not starlette's): it installs
+# the fastapi_inner_astack/fastapi_function_astack scope keys the request
+# handler asserts on.
+from fastapi.routing import APIRoute, request_response
 from starlette.routing import BaseRoute
 
 ROUTE_OWNER_ATTRIBUTE = "_regengine_route_owner"
@@ -51,7 +55,7 @@ def _materialized_api_route(context: Any) -> APIRoute:
 
     original = context.original_route
     route_class = type(original)
-    return route_class(
+    materialized = route_class(
         context.path,
         endpoint=original.endpoint,
         response_model=original.response_model,
@@ -80,6 +84,22 @@ def _materialized_api_route(context: Any) -> APIRoute:
         generate_unique_id_function=context.generate_unique_id_function,
         strict_content_type=context.strict_content_type,
     )
+    # Streaming state is lost by the flat copy: ``stream_item_type`` is
+    # derived in ``APIRoute.__init__`` only while ``response_model`` is
+    # still a DefaultPlaceholder, but we pass the original's *resolved*
+    # response_model (None for streaming generator endpoints), which
+    # short-circuits the derivation. Restore it and rebuild the request
+    # handler, which captured ``stream_item_field`` at construction time.
+    # (``is_json_stream``/``is_sse_stream`` re-derive correctly from the
+    # passed-through response_class.) No production route streams today —
+    # this keeps the materializer faithful when one does (CodeRabbit
+    # review of #3036).
+    original_stream_type = getattr(original, "stream_item_type", None)
+    if original_stream_type is not None and getattr(materialized, "stream_item_type", None) is None:
+        materialized.stream_item_type = original_stream_type
+        materialized.stream_item_field = original.stream_item_field
+        materialized.app = request_response(materialized.get_route_handler())
+    return materialized
 
 
 def _materialize_lazy_includes(app: FastAPI, start: int) -> None:

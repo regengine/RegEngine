@@ -8,6 +8,7 @@ without querying the database.
 import re
 from typing import Any, Dict, Optional, Tuple
 
+from shared.fsma_validation import verify_gs1_check_digit
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
 from shared.rules.uom import resolve_temperature_reading
 from shared.rules.utils import get_nested_value
@@ -137,10 +138,19 @@ def evaluate_multi_field_presence(
     logic: Dict[str, Any],
     rule: RuleDefinition,
 ) -> RuleEvaluationResult:
-    """Evaluate that at least one of several fields is present (OR logic)."""
-    fields = logic.get("params", {}).get("fields", [])
+    """Evaluate presence across several fields.
+
+    ``params.require`` selects the mode:
+      - ``"any"`` (default) — at least one field present (OR logic)
+      - ``"all"`` — every field present (AND logic), for rules whose
+        title/failure text promises multiple KDEs (#3041)
+    """
+    params = logic.get("params", {})
+    fields = params.get("fields", [])
+    require_all = params.get("require") == "all"
     evidence = []
-    any_present = False
+    present_flags = []
+    missing_fields = []
 
     for fp in fields:
         value = get_nested_value(event_data, fp)
@@ -152,10 +162,13 @@ def evaluate_multi_field_presence(
                 "present": is_present,
             }
         )
-        if is_present:
-            any_present = True
+        present_flags.append(is_present)
+        if not is_present:
+            missing_fields.append(fp)
 
-    if any_present:
+    passed = all(present_flags) if require_all else any(present_flags)
+
+    if passed:
         return RuleEvaluationResult(
             rule_id=rule.rule_id,
             rule_version=rule.rule_version,
@@ -167,10 +180,13 @@ def evaluate_multi_field_presence(
             category=rule.category,
         )
 
-    field_names = ", ".join(f.split(".")[-1].replace("_", " ") for f in fields)
+    # In require-all mode name only the missing fields so the operator
+    # knows exactly what to supply; in any-of mode name every alternate.
+    failed_fields = missing_fields if require_all else fields
+    field_names = ", ".join(f.split(".")[-1].replace("_", " ") for f in failed_fields)
     why_failed = rule.failure_reason_template.format(
         field_name=field_names,
-        field_path=", ".join(fields),
+        field_path=", ".join(failed_fields),
         citation=rule.citation_reference or "FSMA 204",
         event_type=event_data.get("event_type", "unknown"),
     )
@@ -383,6 +399,80 @@ def evaluate_numeric_range(
     )
 
 
+def evaluate_gs1_check_digit(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+) -> RuleEvaluationResult:
+    """Verify a GS1 identifier's check digit when one is provided (#3041).
+
+    Semantics (if-present):
+      - field missing/empty        → skip (presence is another rule's job)
+      - value contains non-digits  → skip (a location *description*, not a GLN)
+      - all digits                 → must be exactly 13 digits with a valid
+                                     GS1 mod-10 check digit, else fail
+
+    The old seed used ``field_format`` with a regex that accepted any 13
+    digits — the check digit the rule promised was never verified.
+    """
+    field_path = logic.get("field", "")
+    value = get_nested_value(event_data, field_path)
+    raw = str(value).strip() if value is not None else ""
+
+    evidence = [
+        {
+            "field": field_path,
+            "value": raw[:200] if raw else None,
+            "expected": "13-digit GS1 identifier with valid check digit",
+        }
+    ]
+
+    if not raw or not raw.isdigit():
+        evidence[0]["note"] = "no numeric identifier provided — check digit not applicable"
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="skip",
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            category=rule.category,
+        )
+
+    valid = len(raw) == 13 and verify_gs1_check_digit(raw)
+    evidence[0]["check_digit_valid"] = valid
+
+    if valid:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            category=rule.category,
+        )
+
+    reason = "wrong length" if len(raw) != 13 else "invalid GS1 check digit"
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
+        result="fail",
+        why_failed=(
+            f"{field_path.split('.')[-1]} value '{raw[:50]}' is not a valid GS1 identifier "
+            f"({reason}) — {rule.citation_reference or 'GS1 General Specifications'}"
+        ),
+        evidence_fields_inspected=evidence,
+        citation_reference=rule.citation_reference,
+        remediation_suggestion=rule.remediation_suggestion,
+        category=rule.category,
+    )
+
+
 # Evaluator dispatch — stateless (3-arg: event_data, logic, rule)
 EVALUATORS = {
     "field_presence": evaluate_field_presence,
@@ -390,4 +480,6 @@ EVALUATORS = {
     "multi_field_presence": evaluate_multi_field_presence,
     # #1364 — numeric-range validation (e.g. COOLING temperature threshold).
     "numeric_range": evaluate_numeric_range,
+    # #3041 — real GS1 check-digit verification for provided GLNs.
+    "gs1_check_digit": evaluate_gs1_check_digit,
 }
