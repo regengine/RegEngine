@@ -34,7 +34,14 @@ export default function AdminAlertsPage() {
 }
 
 function AdminAlertsContent() {
-    const { data: alertsData, isLoading } = useDriftAlerts();
+    // #2999: this page used to destructure only { data, isLoading } and feed
+    // `alertsData?.alerts.filter(...) || []` into the empty state, so a failed
+    // fetch rendered "System is operating within compliance thresholds" — an
+    // affirmative all-clear at precisely the moment the alert state was
+    // unknown. Error/no-data now renders an explicit unavailable state,
+    // following DriftAlertsWidget's precedent (#2837).
+    const { data: alertsData, isLoading, isError, error } = useDriftAlerts();
+    const alertsUnavailable = !isLoading && (isError || !alertsData);
     const acknowledge = useAcknowledgeAlert();
 
     const [filterSeverity, setFilterSeverity] = useState<string>('ALL');
@@ -79,9 +86,15 @@ function AdminAlertsContent() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="px-3 py-1">
-                        {filteredAlerts.length} Active Alerts
-                    </Badge>
+                    {alertsUnavailable ? (
+                        <Badge variant="outline" className="px-3 py-1 text-muted-foreground">
+                            Unavailable
+                        </Badge>
+                    ) : (
+                        <Badge variant="outline" className="px-3 py-1">
+                            {filteredAlerts.length} Active Alerts
+                        </Badge>
+                    )}
                 </div>
             </div>
 
@@ -113,6 +126,26 @@ function AdminAlertsContent() {
                 <div className="flex justify-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                 </div>
+            ) : alertsUnavailable ? (
+                // #2999: "could not fetch alerts" and "there are no alerts" are
+                // opposite conditions — never collapse the former into the
+                // all-clear copy below. The data source (GET /api/fsma/drift/
+                // alerts) has no backend router (#2980), so this is phrased as
+                // an unconnected capability rather than a retryable blip,
+                // matching DriftAlertsWidget.
+                <Card className="border-dashed">
+                    <CardContent role="status" className="py-12 text-center text-muted-foreground">
+                        <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-re-warning" />
+                        <p className="text-lg font-medium">Alerts unavailable</p>
+                        <p>
+                            Compliance alerts could not be loaded, so the current alert state is
+                            unknown. This is not an all-clear.
+                        </p>
+                        {isError && error instanceof Error && error.message ? (
+                            <p className="mt-2 text-xs opacity-80">Details: {error.message}</p>
+                        ) : null}
+                    </CardContent>
+                </Card>
             ) : filteredAlerts.length === 0 ? (
                 <Card className="border-dashed">
                     <CardContent className="py-12 text-center text-muted-foreground">

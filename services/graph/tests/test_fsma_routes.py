@@ -406,6 +406,88 @@ class TestExportEndpoints:
         assert len(lines) >= 1  # At least header
         assert "Traceability Lot Code" in lines[0]
 
+    def test_export_trace_csv_is_not_a_cartesian_product(self, mock_neo4j_client):
+        """#2945: the route must emit one row per observed association.
+
+        The old inline writer nested ``for event in result.events`` inside
+        ``for lot in result.lots`` with no join key (2 lots x 3 events = 6
+        rows) and stamped the first GLN-bearing facility on every row. This
+        pins the route to ``build_trace_csv_rows`` so the wiring cannot
+        regress independently of the exporter's own unit tests.
+        """
+        import csv as csv_mod
+        import io
+        import uuid
+
+        from fastapi import FastAPI
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+
+        from services.graph.app.fsma_utils import TraceResult
+
+        fac_pack = {"gln": "0614141000005", "name": "Packhouse", "address": "1 Grower Way"}
+        fac_dc = {"gln": "0614141000029", "name": "Regional DC", "address": "9 Dock St"}
+        lot_a = {"tlc": "LOT-A", "product_description": "Romaine", "quantity": 40, "unit_of_measure": "cases"}
+        lot_b = {"tlc": "LOT-B", "product_description": "Spinach", "quantity": 18, "unit_of_measure": "cases"}
+        evt_1 = {"event_id": "evt-1", "type": "HARVESTING", "event_date": "2026-03-01", "confidence": 0.97}
+        evt_2 = {"event_id": "evt-2", "type": "SHIPPING", "event_date": "2026-03-04", "confidence": 0.91}
+        evt_3 = {"event_id": "evt-3", "type": "RECEIVING", "event_date": "2026-03-06", "confidence": 0.88}
+
+        result = TraceResult(
+            lot_id="LOT-A",
+            direction="forward",
+            facilities=[fac_pack, fac_dc],
+            events=[evt_1, evt_2, evt_3],
+            lots=[lot_a, lot_b],
+            total_quantity=58.0,
+            query_time_ms=2.0,
+            hop_count=4,
+            trace_rows=[
+                {"lot": lot_a, "event": evt_1, "facility": fac_pack},
+                {"lot": lot_a, "event": evt_2, "facility": fac_pack},
+                {"lot": lot_b, "event": evt_3, "facility": fac_dc},
+            ],
+        )
+
+        with patch(
+            "services.graph.app.routers.fsma.compliance.trace_forward",
+            new_callable=AsyncMock,
+            return_value=result,
+        ):
+            app = FastAPI()
+            app.include_router(_build_fsma_router())
+            app.dependency_overrides[require_api_key] = lambda: {
+                "tenant_id": "test-tenant",
+                "key_id": "test-key",
+            }
+            app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+            client = TestClient(app)
+
+            response = client.get(
+                "/v1/fsma/export/trace/LOT-A?direction=forward",
+                headers=_AUTH_HEADERS,
+            )
+
+        assert response.status_code == 200
+        reader = csv_mod.reader(io.StringIO(response.content.decode("utf-8-sig")))
+        rows = [row for row in reader if row]
+        header, data_rows = rows[0], rows[1:]
+
+        assert len(data_rows) == 3, (
+            f"#2945: 2 lots x 3 events must produce 3 association rows, not a "
+            f"6-row cartesian product. Got {len(data_rows)}: {data_rows!r}"
+        )
+
+        tlc_idx = header.index("Traceability Lot Code (TLC)")
+        type_idx = header.index("Event Type")
+        gln_idx = header.index("Facility GLN")
+        emitted = {(r[tlc_idx], r[type_idx], r[gln_idx]) for r in data_rows}
+        assert emitted == {
+            ("LOT-A", "HARVESTING", "0614141000005"),
+            ("LOT-A", "SHIPPING", "0614141000005"),
+            ("LOT-B", "RECEIVING", "0614141000029"),
+        }, f"#2945: fabricated lot/event/facility associations in FDA CSV: {sorted(emitted)}"
+
     def test_export_recall_contacts(self, mock_neo4j_client, mock_trace_forward):
         """Test recall contacts CSV export."""
         from fastapi import FastAPI

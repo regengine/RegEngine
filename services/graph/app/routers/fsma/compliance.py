@@ -36,7 +36,7 @@ from shared.fsma_plan_builder import (
 from shared.middleware import get_current_tenant_id
 from shared.rate_limit import limiter
 
-from ...exporters import csv_safe, header_filename, xml_escape
+from ...exporters import TRACE_CSV_HEADER, build_trace_csv_rows, csv_safe, header_filename, xml_escape
 from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
 
@@ -459,68 +459,18 @@ async def export_trace_csv(
             else:
                 result = await trace_backward(client, tlc, max_depth, str(tenant_id))
 
-        # Generate CSV content
+        # Generate CSV content. #2945: rows come from the shared builder,
+        # which emits one row per observed lot<->event<->facility association
+        # (``result.trace_rows``) and leaves unknown cells blank — the old
+        # inline loop here paired every lot with every event and stamped the
+        # first GLN-bearing facility on all of them, fabricating associations
+        # on an FDA submission artifact. Cells are csv_safe()d (RE-SEC-002)
+        # inside the builder.
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
-
-        # FDA-oriented headers
-        writer.writerow(
-            [
-                "Traceability Lot Code (TLC)",
-                "Product Description",
-                "Quantity",
-                "Unit of Measure",
-                "Event Type",
-                "Event Date",
-                "Event Time",
-                "Facility Name",
-                "Facility GLN",
-                "Facility Address",
-                "Confidence Score",
-            ]
-        )
-
-        # Write lot data with associated events
-        for lot in result.lots:
-            # Find matching events for this lot
-            for event in result.events:
-                facility = next((f for f in result.facilities if f.get("gln")), {})
-                # RE-SEC-002: csv_safe() on every cell.
-                writer.writerow(
-                    [
-                        csv_safe(lot.get("tlc", tlc)),
-                        csv_safe(lot.get("product_description", "")),
-                        csv_safe(lot.get("quantity", "")),
-                        csv_safe(lot.get("unit_of_measure", "")),
-                        csv_safe(event.get("type", "")),
-                        csv_safe(event.get("event_date", "")),
-                        "",  # event_time
-                        csv_safe(facility.get("name", "")),
-                        csv_safe(facility.get("gln", "")),
-                        csv_safe(facility.get("address", "")),
-                        csv_safe(event.get("confidence", "")),
-                    ]
-                )
-
-        # If no lots but we have events, still output
-        if not result.lots and result.events:
-            for event in result.events:
-                facility = next((f for f in result.facilities if f.get("gln")), {})
-                writer.writerow(
-                    [
-                        csv_safe(tlc),
-                        "",
-                        "",
-                        "",
-                        csv_safe(event.get("type", "")),
-                        csv_safe(event.get("event_date", "")),
-                        "",
-                        csv_safe(facility.get("name", "")),
-                        csv_safe(facility.get("gln", "")),
-                        csv_safe(facility.get("address", "")),
-                        csv_safe(event.get("confidence", "")),
-                    ]
-                )
+        writer.writerow(TRACE_CSV_HEADER)
+        data_rows = build_trace_csv_rows(result, tlc)
+        writer.writerows(data_rows)
 
         csv_content = csv_buffer.getvalue()
 
@@ -528,11 +478,12 @@ async def export_trace_csv(
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = header_filename(f"fsma_trace_{direction}_{tlc}_{timestamp}.csv")
 
+        # #2945: report the number of rows actually written, not an estimate.
         logger.info(
             "csv_export_generated",
             tlc=tlc,
             direction=direction,
-            rows=len(result.lots) + len(result.events),
+            rows=len(data_rows),
         )
 
         return StreamingResponse(
