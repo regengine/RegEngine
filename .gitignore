@@ -214,6 +214,20 @@ frontend/test-results/
 launch_orchestrator/generated/
 launch_orchestrator/orchestration_result.json
 
+# ── Confidential business / fundraising material (#2811) ─────────────────────
+# Untracked at HEAD. Still present in git history; do not flip the repo public
+# without a history rewrite (see docs/security/PRE_PUBLIC_CHECKLIST.md).
+RegEngine_Investor_Outreach_Memo.docx
+RegEngine_Investor_Outreach_Memo_Inflow_Workbench_Update.docx
+docs/archive/REGENGINE_EVALUATION_2026-03-27.md
+docs/archive/RegEngine_PRD_Investor_Sprint.docx
+docs/product/DATA_ROOM_INDEX.md
+docs/product/HONEST_VALUATION_UPDATE_2026-04-30.md
+docs/product/Honest_Valuation_Update_2026-04-30.pdf
+launch_orchestrator/investors/
+launch_orchestrator/sales/fsma_investor_brief.md
+production_bundle/documentation/Investor_Whitepaper_v1.0.md
+
 # ── Re-includes for already-tracked paths (#2873) ────────────────────────────
 # `git ls-files | git check-ignore` reported 80 tracked files as ignored. Most
 # were negation patterns above doing their job. Twelve were real: rules aimed at

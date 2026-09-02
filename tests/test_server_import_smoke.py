@@ -37,6 +37,7 @@ def test_lifespan_verifies_admin_and_api_key_bases_at_startup():
     # are documented inline in server/main.py.
     assert "verify_orm_db_type_alignment(_admin_engine, _admin_base)" in src
     assert "verify_orm_db_type_alignment(_shared_engine, _api_key_base)" in src
+    assert "repair_null_email_fingerprints()" in src
 
 
 @pytest.mark.asyncio

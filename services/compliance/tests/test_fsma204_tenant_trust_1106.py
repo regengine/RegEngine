@@ -9,9 +9,8 @@ obtain another tenant's FDA package.
 
 These tests lock in two guarantees:
 
-1. The downstream graph call always uses the authenticated tenant id
-   (never the client-supplied header) and never forwards the
-   caller's raw ``X-RegEngine-API-Key``.
+1. The in-process event query always uses the authenticated tenant id
+   (never the client-supplied header).
 2. A client-supplied tenant header that disagrees with the API
    key's tenant is rejected with HTTP 409 ``E_TENANT_MISMATCH``.
 """
@@ -21,7 +20,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -56,35 +55,14 @@ class _StubPrincipal:
         self.key_id = "test-key"
 
 
-def _graph_cm_recording(captured: dict, events: list[dict]):
-    """Async-context-manager stub for ``resilient_client`` that
-    records the outbound ``headers`` / ``params`` so the test can
-    assert on what the compliance service sent to graph.
-    """
+def _recording_loader(captured: dict, events: list[dict]):
+    """Record kwargs passed to the in-process event loader."""
 
-    class _Resp:
-        status_code = 200
-        text = "ok"
+    def _load(**kwargs):
+        captured.update(kwargs)
+        return events
 
-        def json(self_inner):
-            return {"events": events, "has_more": False, "next_cursor": None}
-
-    async def _get(url, params=None, headers=None):
-        captured["url"] = url
-        captured["params"] = dict(params or {})
-        captured["headers"] = dict(headers or {})
-        return _Resp()
-
-    class _Ctx:
-        async def __aenter__(self_inner):
-            inner = AsyncMock()
-            inner.get = _get
-            return inner
-
-        async def __aexit__(self_inner, *exc):
-            return None
-
-    return _Ctx()
+    return _load
 
 
 def _make_client(tenant_id: str):
@@ -121,15 +99,14 @@ def _minimal_event() -> dict:
 
 def test_fsma204_ignores_client_tenant_header():
     """Authenticate as tenant A, pass no conflicting header — the
-    downstream call to graph-service carries tenant A's id. The
-    caller's raw ``X-RegEngine-API-Key`` must NOT be forwarded.
+    in-process query is scoped to tenant A's id.
     """
     client = _make_client(TENANT_A)
     captured: dict = {}
     with patch.object(
         client._routes_mod,
-        "resilient_client",
-        return_value=_graph_cm_recording(captured, [_minimal_event()]),
+        "_load_fsma_audit_events",
+        side_effect=_recording_loader(captured, [_minimal_event()]),
     ):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
@@ -138,24 +115,19 @@ def test_fsma204_ignores_client_tenant_header():
         )
 
     assert r.status_code == 200, r.text
-    # Downstream request used tenant A (from the API key), not anything
-    # the client tried to supply.
-    assert captured["headers"].get("X-RegEngine-Tenant-ID") == TENANT_A
-    # The caller's raw API key must NOT have been forwarded.
-    assert "X-RegEngine-API-Key" not in captured["headers"]
+    assert captured["tenant_id"] == TENANT_A
 
 
 def test_fsma204_ignores_client_tenant_header_matching_values():
     """When the client sends a matching header, it's still the
-    API-key-derived value that propagates (not a naive copy of the
-    client header).
+    API-key-derived value that scopes the query.
     """
     client = _make_client(TENANT_A)
     captured: dict = {}
     with patch.object(
         client._routes_mod,
-        "resilient_client",
-        return_value=_graph_cm_recording(captured, [_minimal_event()]),
+        "_load_fsma_audit_events",
+        side_effect=_recording_loader(captured, [_minimal_event()]),
     ):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
@@ -164,7 +136,7 @@ def test_fsma204_ignores_client_tenant_header_matching_values():
         )
 
     assert r.status_code == 200, r.text
-    assert captured["headers"].get("X-RegEngine-Tenant-ID") == TENANT_A
+    assert captured["tenant_id"] == TENANT_A
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +153,8 @@ def test_fsma204_rejects_mismatched_x_tenant_id_header():
     captured: dict = {}
     with patch.object(
         client._routes_mod,
-        "resilient_client",
-        return_value=_graph_cm_recording(captured, [_minimal_event()]),
+        "_load_fsma_audit_events",
+        side_effect=_recording_loader(captured, [_minimal_event()]),
     ):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
@@ -204,8 +176,8 @@ def test_fsma204_rejects_mismatched_x_regengine_tenant_id_header():
     captured: dict = {}
     with patch.object(
         client._routes_mod,
-        "resilient_client",
-        return_value=_graph_cm_recording(captured, [_minimal_event()]),
+        "_load_fsma_audit_events",
+        side_effect=_recording_loader(captured, [_minimal_event()]),
     ):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",

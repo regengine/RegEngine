@@ -14,8 +14,9 @@ repository to public.
 
 The paths below are business and fundraising material, outside the scope
 `REPO_PURPOSE.md` defines for this repository. They serve no build, test, or
-deploy purpose. **They are listed by path only; do not paste their contents into
-issues, pull requests, or commit messages** — those are repository artifacts too.
+deploy purpose. They are **untracked at HEAD** and gitignored (#2811). They
+remain readable in git history. **They are listed by path only; do not paste
+their contents into issues, pull requests, or commit messages.**
 
 <!-- The block below is parsed by tests/security/test_repo_visibility_claims_2811.py.
      Keep one path per line. Add a path here when confidential material is added

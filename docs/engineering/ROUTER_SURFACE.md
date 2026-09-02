@@ -66,6 +66,7 @@ These routers belong closest to the FSMA production story:
 - `canonical_records`
 - `rules`
 - `exceptions`
+- `remediation` (compliance repair workflow; disable-by-default — not in the recommended `ENABLED_ROUTERS` string)
 - `request_workflow`
 - `auditor`
 - `compliance_metrics`

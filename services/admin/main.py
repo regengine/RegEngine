@@ -83,6 +83,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise
         # Local development may continue to expose diagnostic health output.
 
+    # #2854: durable hash-chain backend. Without this, erasure audit
+    # records stay in an in-process list discarded on restart.
+    from shared.audit_logging import AuditLogger, PostgresHashChainAuditStorage
+
+    AuditLogger.configure(
+        storage=PostgresHashChainAuditStorage(),
+        environment="production" if is_production() else "development",
+        service_name="admin",
+    )
+
+    # #2883: fill user_emails.email_fingerprint left NULL when v094 ran
+    # without AUTH_OTP_HMAC_SECRET. Idempotent. Unset secret is a no-op in
+    # non-production and a startup RuntimeError in production (same as v094).
+    try:
+        from app.auth.fingerprint_repair import repair_null_email_fingerprints
+
+        repaired = repair_null_email_fingerprints()
+        if repaired:
+            log.info("email_fingerprint_repair_applied", rows=repaired)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        if is_production():
+            raise
+        log.warning("email_fingerprint_repair_skipped", error=str(exc))
+
     # Initialize API Key Store DB if enabled (non-blocking)
     if os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true":
         try:

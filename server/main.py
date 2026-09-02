@@ -156,6 +156,32 @@ async def lifespan(app: FastAPI):
 
     validate_runtime_database_posture(_shared_engine, _admin_engine)
 
+    # #2854: GDPR / FSMA audit events must join the hash chain, not an
+    # in-process list discarded on every Railway restart.
+    from shared.audit_logging import AuditLogger, PostgresHashChainAuditStorage
+
+    AuditLogger.configure(
+        storage=PostgresHashChainAuditStorage(),
+        environment="production" if _is_prod else "development",
+        service_name="regengine",
+    )
+
+    # #2883: fill user_emails.email_fingerprint left NULL when v094 ran
+    # without AUTH_OTP_HMAC_SECRET. Idempotent. Unset secret is a no-op in
+    # non-production and a startup RuntimeError in production (same as v094).
+    try:
+        from services.admin.app.auth.fingerprint_repair import repair_null_email_fingerprints
+
+        repaired = repair_null_email_fingerprints()
+        if repaired:
+            logger.info("email_fingerprint_repair_applied", rows=repaired)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        if _is_prod:
+            raise
+        logger.warning("email_fingerprint_repair_skipped", error=str(exc))
+
     # Authentication is a hard production dependency: Redis-backed JWT
     # revocation and the signing-key registry must be ready before any worker
     # or request handler can issue/accept credentials. The admin-owned runtime

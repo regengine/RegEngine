@@ -129,7 +129,7 @@ def build_recall_where_clause(
     return where_clause, params
 
 
-def fetch_recall_events(db_session, where_clause: str, params: dict) -> list:
+def fetch_recall_events(db_session, where_clause: str, params: dict, limit: int = 10001) -> list:
     """Execute the recall-filtered query and return raw rows.
 
     Legacy-store reader, used when ``FDA_EXPORT_V1_READ_CANONICAL`` is off.
@@ -138,7 +138,12 @@ def fetch_recall_events(db_session, where_clause: str, params: dict) -> list:
     live in production since 2026-07-17; this path remains as the flag-off
     fallback until the default flips after the soak (WS-1, #1335 —
     docs/persistence/dual-write-cutover.md).
+
+    ``limit`` defaults to 10001 so callers can detect overflow past the
+    10000-row synchronous recall cap. Bind the limit; never interpolate it.
     """
+    bound = dict(params)
+    bound["lim"] = limit
     rows = db_session.execute(
         text(f"""
             SELECT
@@ -153,9 +158,9 @@ def fetch_recall_events(db_session, where_clause: str, params: dict) -> list:
             LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
             WHERE {where_clause}
             ORDER BY e.event_timestamp ASC
-            LIMIT 10001
+            LIMIT :lim
         """),
-        params,
+        bound,
     ).fetchall()
     return rows
 
@@ -285,7 +290,9 @@ def build_recall_where_clause_canonical(
     return where_clause, params
 
 
-def fetch_recall_events_canonical(db_session, where_clause: str, params: dict) -> list:
+def fetch_recall_events_canonical(
+    db_session, where_clause: str, params: dict, limit: int = 10001
+) -> list:
     """Canonical-store twin of ``fetch_recall_events``.
 
     Column order and shapes match the legacy SELECT exactly so
@@ -293,6 +300,8 @@ def fetch_recall_events_canonical(db_session, where_clause: str, params: dict) -
     NULL-valued KDEs are stripped to mirror dual_write_legacy's skip of
     ``None`` values.
     """
+    bound = dict(params)
+    bound["lim"] = limit
     rows = db_session.execute(
         text(f"""
             SELECT
@@ -311,9 +320,9 @@ def fetch_recall_events_canonical(db_session, where_clause: str, params: dict) -
             LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
             WHERE {where_clause}
             ORDER BY e.event_timestamp ASC
-            LIMIT 10001
+            LIMIT :lim
         """),
-        params,
+        bound,
     ).fetchall()
     return rows
 
