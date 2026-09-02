@@ -688,7 +688,9 @@ class TaskWorker:
         updates zero rows rather than yanking the row out from under the
         new owner. Returns ``True`` when the release actually landed.
         """
-        with system_scope(), self.engine.begin() as conn:
+        # Queue mechanics are cross-tenant by design (ADR #1644): the admin
+        # engine's database role authorizes this, same as _release_stale_locks.
+        with self.engine.begin() as conn:
             result = conn.execute(
                 text(
                     """
