@@ -6,6 +6,7 @@ green while checking nothing (#2936, #2935, #2924, #2876), so every test here
 asserts a *failure* is produced for genuinely broken input, not merely that the
 checker runs.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -108,15 +109,15 @@ def test_line_and_anchor_suffixes_are_stripped(repo: Path, reference: str) -> No
 @pytest.mark.parametrize(
     "token",
     [
-        "https://example.com/a/b.py",     # URL
-        "/tmp/scratch.json",              # absolute filesystem path
-        "~/.claude/CLAUDE.md",            # home-relative
-        "postgresql+psycopg://host/db",   # connection URI
-        "tests/shared/test_*_live.py",    # glob
-        "/api/v1/",                       # API route, not a file
-        "chore/",                         # git branch prefix
-        "app/",                           # single bare segment
-        "pytest",                         # no separator at all
+        "https://example.com/a/b.py",  # URL
+        "/tmp/scratch.json",  # absolute filesystem path
+        "~/.claude/CLAUDE.md",  # home-relative
+        "postgresql+psycopg://host/db",  # connection URI
+        "tests/shared/test_*_live.py",  # glob
+        "/api/v1/",  # API route, not a file
+        "chore/",  # git branch prefix
+        "app/",  # single bare segment
+        "pytest",  # no separator at all
     ],
 )
 def test_non_repo_paths_are_ignored(repo: Path, token: str) -> None:
@@ -131,9 +132,7 @@ def test_allowlist_exempts_a_specific_document(repo: Path) -> None:
     doc = _write(repo, "GUIDE.md", "The old `services/shared/gone.py` was removed.\n")
     assert len(mod.check(repo, [doc])) == 1
 
-    (repo / mod.ALLOWLIST_NAME).write_text(
-        "# removed deliberately\nGUIDE.md::services/shared/gone.py\n"
-    )
+    (repo / mod.ALLOWLIST_NAME).write_text("# removed deliberately\nGUIDE.md::services/shared/gone.py\n")
     assert mod.check(repo, [doc]) == []
 
 
@@ -171,3 +170,20 @@ def test_main_returns_nonzero_on_failure(repo: Path, capsys: pytest.CaptureFixtu
 def test_main_returns_zero_when_clean(repo: Path) -> None:
     _write(repo, "GUIDE.md", "See `services/shared/auth.py`.\n")
     assert mod.main(["--repo-root", str(repo), "GUIDE.md"]) == 0
+
+
+# --- The gate itself ------------------------------------------------------------
+
+
+def test_repository_default_scope_is_clean(capsys: pytest.CaptureFixture) -> None:
+    """Run the real checker over the real repo's default scope.
+
+    #3007: no workflow invokes scripts/check_docs_links.py directly, so this
+    test IS the CI gate — everything above exercises fixtures, and without this
+    the checker could rot (or the guarded docs could go stale) while CI stayed
+    green. The default scope includes ``docs/compliance/``, where the RTM's
+    artifact citations are audit evidence.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    exit_code = mod.main(["--repo-root", str(repo_root)])
+    assert exit_code == 0, capsys.readouterr().out
