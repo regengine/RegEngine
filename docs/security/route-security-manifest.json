@@ -4082,6 +4082,15 @@
       "probe_path": "/api/v1/products/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000"
     },
     {
+      "operation": "graph:GET:/api/v1/provisions/by-request",
+      "owner": "graph",
+      "method": "GET",
+      "path": "/api/v1/provisions/by-request",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/provisions/by-request"
+    },
+    {
       "operation": "qr_decoder:POST:/api/v1/qr/decode",
       "owner": "qr_decoder",
       "method": "POST",
@@ -4777,8 +4786,8 @@
   ],
   "summary": {
     "enabled_operation_count": 246,
-    "disabled_operation_count": 177,
-    "disabled_unique_path_count": 160,
+    "disabled_operation_count": 178,
+    "disabled_unique_path_count": 161,
     "enabled_by_classification": {
       "global-sysadmin": 15,
       "public": 29,

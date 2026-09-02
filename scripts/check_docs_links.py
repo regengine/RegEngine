@@ -14,6 +14,7 @@ Some references name a path *in order to say it was removed*, which is correct
 documentation rather than a dangling pointer. Those are declared in the
 allowlist file with a reason, so the exemption is auditable rather than magic.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,8 +24,24 @@ from pathlib import Path
 
 # Extensions that make a slash-bearing token unambiguously a repo path.
 _SOURCE_SUFFIXES = {
-    ".py", ".md", ".yaml", ".yml", ".json", ".toml", ".sh", ".ts", ".tsx",
-    ".js", ".jsx", ".sql", ".txt", ".cfg", ".ini", ".env", ".lock", ".tf",
+    ".py",
+    ".md",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
+    ".sh",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".sql",
+    ".txt",
+    ".cfg",
+    ".ini",
+    ".env",
+    ".lock",
+    ".tf",
 }
 
 _BACKTICK = re.compile(r"`([^`\n]+)`")
@@ -40,15 +57,15 @@ ALLOWLIST_NAME = ".docs-link-allowlist"
 # describes the tree as it was on its date). Turning the gate on over that
 # backlog would make it noise, and a noisy gate gets ignored. Widening the
 # scope means triaging the backlog first -- see docs/CODEBASE_MAP.md section 8.
-DEFAULT_SCOPE = ("runbooks", "docs/CODEBASE_MAP.md")
+# ``docs/compliance`` joined the scope with #3007: the RTM is audit evidence,
+# so a dangling artifact citation there is a compliance defect, not staleness.
+DEFAULT_SCOPE = ("runbooks", "docs/CODEBASE_MAP.md", "docs/compliance")
 
 
 def _candidate_paths(text: str) -> set[str]:
     """Extract tokens from one markdown file that name a repo path."""
     found: set[str] = set()
-    for raw in [m.group(1) for m in _BACKTICK.finditer(text)] + [
-        m.group(1) for m in _MD_LINK.finditer(text)
-    ]:
+    for raw in [m.group(1) for m in _BACKTICK.finditer(text)] + [m.group(1) for m in _MD_LINK.finditer(text)]:
         token = raw.strip()
         # Drop anchors and line references before any other judgement.
         token = token.split("#", 1)[0]
@@ -132,9 +149,7 @@ def _discover(repo_root: Path, roots: list[str]) -> list[Path]:
         if target.is_file() and target.suffix == ".md":
             docs.append(target)
         elif target.is_dir():
-            docs.extend(
-                p for p in target.rglob("*.md") if "node_modules" not in p.parts
-            )
+            docs.extend(p for p in target.rglob("*.md") if "node_modules" not in p.parts)
     return docs
 
 

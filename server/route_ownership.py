@@ -1,9 +1,20 @@
 """Explicit ownership registration for consolidated FastAPI operations.
 
-FastAPI copies ``APIRoute`` objects when a router is included.  Recording the
-owner at inclusion time avoids fragile ownership guesses from URL prefixes or
-endpoint module names.  The security-manifest gate consumes the attribute set
-here and rejects any operation which bypasses these helpers.
+Ownership is recorded on per-app ``APIRoute`` copies at inclusion time, which
+avoids fragile ownership guesses from URL prefixes or endpoint module names.
+The security-manifest gate consumes the attribute set here and rejects any
+operation which bypasses these helpers.
+
+fastapi >= 0.137 no longer copies ``APIRoute`` objects on ``include_router``;
+it appends a single lazy ``_IncludedRouter`` wrapper and resolves effective
+routes per request. Everything in this security layer — owner stamping,
+operation exclusion, the manifest's route-table walks, and the exact-404
+probes — is built on flat per-app copies, so ``include_owned_router``
+materializes each lazy include back into real ``APIRoute`` objects (via
+fastapi's own ``_EffectiveRouteContext`` combination of prefix, tags,
+dependencies, and response defaults) before recording ownership. Without this
+the consolidated app raised ``RouteOwnershipError`` at import because the
+exclusion matcher saw no copied operations at all.
 """
 
 from __future__ import annotations
@@ -13,6 +24,7 @@ from typing import Any, TypeVar
 
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
+from starlette.routing import BaseRoute
 
 ROUTE_OWNER_ATTRIBUTE = "_regengine_route_owner"
 EXCLUDED_ROUTES_STATE_ATTRIBUTE = "_regengine_excluded_owned_routes"
@@ -26,6 +38,78 @@ class RouteOwnershipError(RuntimeError):
 
 def _api_routes_added_since(app: FastAPI, start: int) -> list[APIRoute]:
     return [route for route in app.routes[start:] if isinstance(route, APIRoute)]
+
+
+def _materialized_api_route(context: Any) -> APIRoute:
+    """Build a flat ``APIRoute`` copy from a fastapi lazy-include context.
+
+    ``_EffectiveRouteContext.from_api_route`` already combined the include
+    context with the original route (full path, merged tags/dependencies/
+    responses, resolved response-class defaults), so include-combined values
+    are read off the context and route-intrinsic values off the original.
+    """
+
+    original = context.original_route
+    route_class = type(original)
+    return route_class(
+        context.path,
+        endpoint=original.endpoint,
+        response_model=original.response_model,
+        status_code=original.status_code,
+        tags=list(context.tags or []),
+        dependencies=list(context.dependencies or []),
+        summary=original.summary,
+        description=original.description,
+        response_description=original.response_description,
+        responses=dict(context.responses or {}),
+        deprecated=context.deprecated,
+        name=original.name,
+        methods=list(original.methods or []),
+        operation_id=original.operation_id,
+        response_model_include=original.response_model_include,
+        response_model_exclude=original.response_model_exclude,
+        response_model_by_alias=original.response_model_by_alias,
+        response_model_exclude_unset=original.response_model_exclude_unset,
+        response_model_exclude_defaults=original.response_model_exclude_defaults,
+        response_model_exclude_none=original.response_model_exclude_none,
+        include_in_schema=context.include_in_schema,
+        response_class=context.response_class,
+        dependency_overrides_provider=context.dependency_overrides_provider,
+        callbacks=list(context.callbacks or []) or None,
+        openapi_extra=original.openapi_extra,
+        generate_unique_id_function=context.generate_unique_id_function,
+        strict_content_type=context.strict_content_type,
+    )
+
+
+def _materialize_lazy_includes(app: FastAPI, start: int) -> None:
+    """Replace lazy included-router entries appended since ``start`` with flat copies."""
+
+    tail: list[BaseRoute] = []
+    changed = False
+    for entry in app.routes[start:]:
+        if not hasattr(entry, "effective_route_contexts"):
+            tail.append(entry)
+            continue
+        changed = True
+        for context in entry.effective_route_contexts():
+            original = getattr(context, "original_route", None)
+            if isinstance(original, APIRoute):
+                tail.append(_materialized_api_route(context))
+                continue
+            starlette_route = getattr(context, "starlette_route", None)
+            if starlette_route is None:
+                raise RouteOwnershipError(
+                    f"Cannot materialize included route entry {original!r}; teach "
+                    "server/route_ownership.py about it rather than serving a route "
+                    "the ownership manifest cannot see"
+                )
+            tail.append(starlette_route)
+    if changed:
+        app.routes[start:] = tail
+        mark_changed = getattr(app.router, "_mark_routes_changed", None)
+        if callable(mark_changed):
+            mark_changed()
 
 
 def _assign_owner(routes: Iterable[APIRoute], owner: str) -> None:
@@ -55,6 +139,7 @@ def include_owned_router(
 
     start = len(app.routes)
     app.include_router(router, **include_kwargs)
+    _materialize_lazy_includes(app, start)
     added = _api_routes_added_since(app, start)
     excluded = {(method.upper(), path) for method, path in excluded_operations}
     if excluded:
