@@ -6,15 +6,19 @@ are not changed.  Duplicate canonical system roles are rejected because an
 ambiguous privilege template must be resolved before deployment.
 
 Revision ID: 6f4c2a9d8b17
-Revises: 51701aedee57
+Revises: e4a7c2d91b06
 Create Date: 2026-08-03
+
+Re-parented 2026-09-03: this branch was cut from v109 (51701aedee57) while
+main advanced to v116 (e4a7c2d91b06), leaving two heads. It now runs after
+v116 so the v111 runtime role grants cover every object main created since.
 """
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "6f4c2a9d8b17"  # pragma: allowlist secret
-down_revision = "51701aedee57"  # pragma: allowlist secret
+down_revision = "e4a7c2d91b06"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
