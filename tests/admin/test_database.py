@@ -223,7 +223,12 @@ class TestGetTenantSession:
                 pass
 
     def test_skips_set_when_tenant_id_null(self):
-        """Verify SET is not called when tenant_id is empty."""
+        """Verify ValueError is raised when tenant_id is empty (#2696).
+
+        Silently yielding a session with no app.tenant_id GUC would rely
+        solely on the RLS fail-closed predicate and hide the caller's bug.
+        The function now fails fast instead.
+        """
         from services.admin.app.database import get_tenant_session
 
         with patch("services.admin.app.database.SessionLocal") as mock_session_class:
@@ -231,16 +236,8 @@ class TestGetTenantSession:
             mock_session_class.return_value = mock_session
 
             gen = get_tenant_session("")
-            session = next(gen)
-
-            # Should not have executed SET when tenant_id is empty
-            # (falsy check in the code)
-            mock_session.execute.assert_not_called()
-
-            try:
+            with pytest.raises(ValueError, match="get_tenant_session requires a non-empty tenant_id"):
                 next(gen)
-            except StopIteration:
-                pass
 
     def test_closes_session_after_use(self):
         """Verify tenant session is closed."""
