@@ -22,9 +22,7 @@ export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
 ];
 
 export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
-    { icon: Leaf, label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
-    { icon: ShieldCheck, label: "Recall Readiness", desc: "Assess your recall response capability", href: "/tools/recall-readiness" },
-    { icon: Calculator, label: "ROI Calculator", desc: "Calculate your compliance cost savings", href: "/tools/roi-calculator" },
+    { icon: Leaf, label: "FTL List Checker", desc: "Look at the Food Traceability List. Not a determination.", href: "/tools/ftl-checker" },
 ];
 
 export const MARKETING_ALL_TOOLS_LINK: MarketingToolLink = {

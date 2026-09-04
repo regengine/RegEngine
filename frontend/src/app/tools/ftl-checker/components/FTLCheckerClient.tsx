@@ -696,18 +696,18 @@ export function FTLCheckerClient() {
                 <div className="ftl-hero-inner" style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 24px', textAlign: 'center' }}>
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '20px', background: T.successBg, border: `1px solid ${T.successBorder}`, fontSize: '12px', fontWeight: 600, color: T.accent, marginBottom: '16px' }}>
-                            Free Tool • No Login Required
+                            Free tool · no login · not a determination
                         </span>
                         <h1 style={{ fontSize: 'clamp(30px, 8vw, 40px)', fontWeight: 700, color: T.textPrimary, margin: '0 0 16px', lineHeight: 1.1 }}>
-                            FTL Coverage Checker
+                            FTL List Checker
                         </h1>
                         <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 24px', lineHeight: 1.6 }}>
-                            Self-check whether your products may fall under FDA FSMA 204 Food Traceability requirements. Informational; not a regulatory determination — verify against the FDA FTL.
+                            The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one. Verify every grouping against the current FDA FTL.
                         </p>
                         <div className="ftl-hero-bullets" style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Earliest enforcement: July 2028</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> FDA date: July 20, 2028</span>
                         </div>
                     </motion.div>
                 </div>
