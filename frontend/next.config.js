@@ -116,7 +116,12 @@ const nextConfig = {
             },
             {
                 source: '/walmart-readiness',
-                destination: '/retailer-readiness',
+                destination: '/buyer-programs',
+                permanent: true,
+            },
+            {
+                source: '/retailer-readiness',
+                destination: '/buyer-programs',
                 permanent: true,
             },
             {

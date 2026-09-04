@@ -43,7 +43,7 @@ const STACK_LAYERS = [
         layer: 'Backend',
         technology: 'FastAPI monolith on Railway',
         detail:
-            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance scoring, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
+            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance coverage and completeness checking, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
     },
     {
         Icon: Database,
@@ -65,7 +65,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before scoring.',
+        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before coverage checks.',
         color: 'bg-re-info/15 text-re-info',
     },
     {
@@ -77,13 +77,13 @@ const DATA_FLOW_STEPS = [
     {
         step: '3',
         title: 'Hash & Chain',
-        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
+        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Commit means accepted records are appended after checks you configure — not a certification. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
         color: 'bg-re-brand/15 text-re-brand',
     },
     {
         step: '4',
-        title: 'Score',
-        description: 'The compliance engine produces an advisory readiness signal across six weighted dimensions: export readiness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product coverage. Per-dimension maturity varies; rule enforcement is opt-in per workflow and is advisory in production today.',
+        title: 'Coverage & Completeness Checklist',
+        description: 'The compliance engine produces an advisory coverage and completeness checklist across six weighted dimensions: export-checklist completeness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product-list overlap. This is not a readiness score, not a badge, not an FDA or buyer decision. FTL overlap is list-membership, not a covered-person determination. Per-dimension maturity varies; rule enforcement is opt-in per workflow and is advisory in production today.',
         color: 'bg-re-warning/15 text-re-warning',
     },
     {
@@ -133,7 +133,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Server,
         title: 'Ingestion service',
-        detail: 'FastAPI validation, mapping, scoring, and workflow orchestration',
+        detail: 'FastAPI validation, mapping, coverage and completeness checking, and workflow orchestration',
         boundary: 'Server-side tenant context',
     },
     {
