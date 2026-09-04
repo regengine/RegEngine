@@ -61,6 +61,23 @@ def _get_audit_db_engine():
             return None
 
 
+def _get_audit_admin_engine():
+    """Return the canonical admin engine for global chain reads.
+
+    Global checksum continuity is a control-plane read.  Reusing the admin
+    engine keeps role posture and checkout GUC handling in one place instead
+    of creating a second privately armed pool.
+    """
+
+    try:
+        from services.admin.app.database import get_admin_engine
+
+        return get_admin_engine()
+    except Exception as exc:  # pragma: no cover - startup/config fallback
+        logging.getLogger("fsma_audit").warning("Failed to obtain audit admin DB engine: %s", exc)
+        return None
+
+
 _PERSIST_MAX_RETRIES = 3
 
 # #2850: cap on the in-process audit history. The DB is the source of truth
@@ -108,6 +125,7 @@ def _resolve_max_memory_entries(explicit: Optional[int] = None) -> int:
         )
         return _DEFAULT_MEMORY_MAX_ENTRIES
     return value
+
 
 # Warn loudly the first time we discover the audit DB is unconfigured, then
 # drop to DEBUG. Read endpoints emit a KDE_READ per request, so an
@@ -159,6 +177,17 @@ def _persist_audit_entry(entry) -> bool:
     """
     global _unconfigured_engine_warned
 
+    if not entry.tenant_id:
+        # The retired system-context GUC allowed a tenantless shared credential
+        # to append globally.  Keep the in-memory event for compatibility, but
+        # never issue an unscoped database write. Refusal is not durability:
+        # callers that require confirmation (#2829) must see this as a miss.
+        logging.getLogger("fsma_audit").warning(
+            "Refusing tenantless audit DB persistence: event_id=%s",
+            entry.event_id,
+        )
+        return False
+
     engine = _get_audit_db_engine()
     if engine is None:
         # #2829: an unconfigured engine is NOT a successful write. Saying
@@ -177,7 +206,7 @@ def _persist_audit_entry(entry) -> bool:
             )
         return False
 
-    from shared.tenant_context import system_scope, tenant_scope
+    from shared.tenant_context import tenant_scope
     from sqlalchemy import text
 
     _insert_sql = text("""
@@ -212,15 +241,14 @@ def _persist_audit_entry(entry) -> bool:
     # #2461: this module uses a PRIVATE engine, so any GUC set on the
     # request session never applies here — seed the contextvar so the
     # class-level begin-hook applies it on these connections instead.
-    # Tenant-bound entries write under the row's own tenant; tenantless
-    # entries run under system_scope (v095 fsma_audit_trail policy arm).
-    _rls_scope = tenant_scope(entry.tenant_id) if entry.tenant_id else system_scope()
+    # Tenant-bound entries write under the row's own tenant.  The global chain
+    # checksum is read independently through ADMIN_DATABASE_URL.
     # #2848: never sleep on an event loop. When a caller has not been
     # converted to the off-loop path yet we still make the attempts, but
     # back-to-back — one slow connect is bad, one slow connect plus ~3s
     # of blocking sleep freezes every concurrent request in the process.
     on_loop = _on_event_loop()
-    with _rls_scope:
+    with tenant_scope(entry.tenant_id):
         for attempt in range(_PERSIST_MAX_RETRIES):
             try:
                 with engine.connect() as conn:
@@ -301,12 +329,13 @@ def _query_audit_trail(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     limit: int = 200,
+    use_admin: bool = False,
 ) -> List["FSMAAuditEntry"]:
     """Execute a SELECT against fsma.fsma_audit_trail and return FSMAAuditEntry list.
 
     Uses typed filter kwargs instead of raw SQL strings to prevent injection (#968).
     """
-    engine = _get_audit_db_engine()
+    engine = _get_audit_admin_engine() if use_admin else _get_audit_db_engine()
     if engine is None:
         return []
     try:
@@ -341,6 +370,10 @@ def _query_audit_trail(
             LIMIT :_limit
         """
         with engine.connect() as conn:
+            if use_admin:
+                from services.admin.app.database import arm_global_admin_context
+
+                arm_global_admin_context(conn)
             rows = conn.execute(text(sql), params).fetchall()
         return [_row_to_audit_entry(r) for r in rows]
     except Exception as e:
@@ -564,18 +597,15 @@ class FSMAAuditLog:
     @staticmethod
     def _load_last_checksum() -> Optional[str]:
         """Bootstrap chain integrity from DB on restart (#986)."""
-        engine = _get_audit_db_engine()
+        engine = _get_audit_admin_engine()
         if engine is None:
             return None
         try:
-            from shared.tenant_context import system_scope
             from sqlalchemy import text
 
-            # #2461: the checksum chain is global (cross-tenant BY DESIGN
-            # — decision: keep the global chain and give
-            # fsma.fsma_audit_trail the v095 system arm rather than
-            # re-architecting to per-tenant chains).
-            with system_scope(), engine.connect() as conn:
+            # The checksum chain remains global, but the scan uses the exact
+            # audited control-plane role rather than a spoofable runtime GUC.
+            with engine.connect() as conn:
                 row = conn.execute(
                     text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY created_at DESC LIMIT 1")
                 ).fetchone()
@@ -741,12 +771,15 @@ class FSMAAuditLog:
             tenant_id=tenant_id,
             correlation_id=correlation_id,
         )
-        from shared.tenant_context import system_scope, tenant_scope
+        from shared.tenant_context import tenant_scope
 
-        # #2461: tenant-scoped read when a tenant is supplied; the
-        # tenantless variant is a cross-tenant operator view (system arm).
-        with tenant_scope(tenant_id) if tenant_id else system_scope():
-            db_entries = _query_audit_trail(target_id=target_id)
+        # Tenant-scoped read when a tenant is supplied; the tenantless
+        # variant is a cross-tenant operator view via the admin engine.
+        if tenant_id:
+            with tenant_scope(tenant_id):
+                db_entries = _query_audit_trail(target_id=target_id)
+        else:
+            db_entries = _query_audit_trail(target_id=target_id, use_admin=True)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -796,11 +829,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        from shared.tenant_context import system_scope
-
-        # #2461: cross-tenant chain view by design — system arm.
-        with system_scope():
-            db_entries = _query_audit_trail(action=action.value)
+        db_entries = _query_audit_trail(action=action.value, use_admin=True)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -813,10 +842,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        from shared.tenant_context import system_scope
-
-        with system_scope():
-            db_entries = _query_audit_trail(start=start, end=end)
+        db_entries = _query_audit_trail(start=start, end=end, use_admin=True)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -834,10 +860,7 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        from shared.tenant_context import system_scope
-
-        with system_scope():
-            db_entries = _query_audit_trail()
+        db_entries = _query_audit_trail(use_admin=True)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -855,14 +878,13 @@ class FSMAAuditLog:
             Dict with integrity status and any violations found
         """
         # Prefer DB entries; fall back to in-memory
-        engine = _get_audit_db_engine()
+        engine = _get_audit_admin_engine()
         if engine is not None:
             try:
-                from shared.tenant_context import system_scope
                 from sqlalchemy import text
 
-                # #2461: global checksum chain — cross-tenant by design.
-                with system_scope(), engine.connect() as conn:
+                # Global checksum verification is a control-plane read.
+                with engine.connect() as conn:
                     rows = conn.execute(
                         text("""
                             SELECT event_id, actor, actor_type, action, target_type,

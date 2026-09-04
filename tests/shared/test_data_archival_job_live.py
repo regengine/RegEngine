@@ -15,10 +15,13 @@ record-creation column is ``ingested_at``.
 
 A mocked-session test cannot catch either defect (only a real Postgres
 can object to a missing relation or column), which is exactly how both
-shipped. This test seeds expired + fresh rows, runs the real job body
-against a live database, and asserts the job completes and archives
-only the expired rows. Requires DATABASE_URL and skips without it
-(same pattern as tests/shared/test_exception_queue_uuid_arrays_live.py).
+shipped. This test seeds expired + fresh tenant CTE rows and sysadmin
+audit evidence, runs the real job body against a live database, and
+asserts the job archives only the expired CTE row while retaining both
+audit rows. Sysadmin audit retention is deferred until an approved,
+audited ``ADMIN_DATABASE_URL`` maintenance path exists. Requires
+DATABASE_URL and skips without it (same pattern as
+tests/shared/test_exception_queue_uuid_arrays_live.py).
 """
 
 from __future__ import annotations
@@ -136,8 +139,8 @@ def test_archive_expired_records_completes_and_archives() -> None:
                     text("SELECT id FROM audit.sysadmin_access_log WHERE table_name = 'archival_live_test'")
                 )
             }
-            assert old_audit_id not in audit_ids, "expired sysadmin access log (>2555 days) must be archived"
-            assert fresh_audit_id in audit_ids, "fresh sysadmin access log must be retained"
+            assert old_audit_id in audit_ids, "expired sysadmin audit evidence must remain until audited retention exists"
+            assert fresh_audit_id in audit_ids, "fresh sysadmin audit evidence must be retained"
     finally:
         with engine.connect() as conn:
             # cte_events is append-only (v078 trigger) — cleanup needs the

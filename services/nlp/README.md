@@ -5,9 +5,11 @@
 NLP is **not a separately deployed service**. It is a router domain mounted into the
 consolidated monolith (`server/main.py`) at `/api/v1`:
 
-- `nlp` is in `_EXPERIMENTAL_ROUTERS`, so the entire NLP router surface (including
-  `POST /api/v1/query/traceability` and the frontend `/api/nlp/ask` proxy) is
-  **auto-disabled in production** unless `ENABLE_EXPERIMENTAL_ROUTERS` is truthy.
+- `nlp` is excluded from the exact production `ENABLED_ROUTERS` release set, so
+  the entire NLP router surface (including `POST /api/v1/query/traceability`
+  and the frontend `/api/nlp/ask` proxy) is disabled. Promotion requires
+  route-manifest and tenant/auth coverage; the legacy experimental bypass is
+  rejected in production.
 - The standalone entrypoint `services/nlp/main.py` is local-debug only —
   `assert_legacy_entrypoint_not_in_production` blocks it in production.
 - The Kafka consumer pipeline (`app/consumer/`) is deprecated; it only starts from the

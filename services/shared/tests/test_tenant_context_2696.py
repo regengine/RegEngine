@@ -33,7 +33,12 @@ from fastapi import FastAPI, Request  # noqa: E402
 
 def _posture_cm(rolsuper: bool = False, rolbypassrls: bool = False):
     conn = mock.MagicMock()
-    conn.execute.return_value.fetchone.return_value = ("somerole", rolsuper, rolbypassrls)
+    conn.execute.return_value.fetchone.return_value = (
+        "somerole",
+        "somerole",
+        rolsuper,
+        rolbypassrls,
+    )
     cm = mock.MagicMock()
     cm.__enter__.return_value = conn
     cm.__exit__.return_value = False

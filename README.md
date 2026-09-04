@@ -136,7 +136,7 @@ Verified controls in the codebase:
 - The accepted API key is stored on `request.state.api_key`, and ingestion RBAC stores the accepted principal on `request.state.principal`.
 - [services/shared/tenant_context.py](services/shared/tenant_context.py) is the canonical resolver for tenant-scoped request authority.
 - Transaction-scoped setting of the PostgreSQL RLS tenant GUC (`app.tenant_id`) is converged on the canonical `set_tenant_guc` / `set_tenant_guc_if_uuid` helpers in [services/shared/tenant_context.py](services/shared/tenant_context.py); the `adhoc-tenant-guc-set-config` Semgrep rule in [.semgrep/tenant-trust.yaml](.semgrep/tenant-trust.yaml) fails CI ([.github/workflows/security.yml](.github/workflows/security.yml)) on inline `set_config('app.tenant_id', ...)` call sites. Two deliberate session-scoped exceptions set the GUC through the SQL `set_tenant_context()` function instead: [services/admin/app/models.py](services/admin/app/models.py) and [services/ingestion/regengine_ingestion/storage/database.py](services/ingestion/regengine_ingestion/storage/database.py). The Semgrep rule is defense-in-depth; the fail-hard RLS predicate remains the enforcement layer.
-- The tenant GUC is propagated app-wide through a SQLAlchemy Engine begin hook in [services/shared/database.py](services/shared/database.py), and an RLS enforcement boot guard (`REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`) fails startup if the connected database role is SUPERUSER or BYPASSRLS — so while the flag is set, pointing `DATABASE_URL` back at a bypassing role fails the deploy instead of silently making RLS policies decorative. Without the flag the inert posture is logged and exported as a metric but boot continues.
+- The tenant GUC is propagated app-wide through a SQLAlchemy Engine begin hook in [services/shared/database.py](services/shared/database.py). Production startup unconditionally verifies both `DATABASE_URL` and `ADMIN_DATABASE_URL` roles and aborts when either is SUPERUSER, BYPASSRLS, or has an unknown posture. `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` remains required deployment evidence, not an opt-out switch.
 - Ingestion authorization helpers live in [services/ingestion/app/authz.py](services/ingestion/app/authz.py).
 - Legacy ingestion routers use [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) to authenticate API keys and resolve `TenantContext` before route handlers read or write tenant data.
 - Admin auth routes and MFA code live under [services/admin/app/](services/admin/app/).
@@ -177,8 +177,10 @@ export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
 
 export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export ADMIN_DATABASE_URL="postgresql://regengine_sysadmin:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export MIGRATIONS_DATABASE_URL="postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine"
 export REDIS_URL="redis://localhost:6379/0"
-alembic upgrade head
+./scripts/run-migrations.sh
 ```
 
 Mint a local test API key against this stack (seeds the test tenant and its
@@ -195,10 +197,10 @@ process runs with `ENABLE_DB_API_KEYS=true`.
 To exercise the full customer experience against this stack — provisioning a
 tenant and API key, activating billing, ingesting from a simulated customer
 system, and verifying evidence — run the customer-journey harness in the
-[inflow-lab](https://github.com/regengine/inflow-lab) repo
-(`scripts/customer_journey.py --local` with `REGENGINE_ADMIN_KEY` set to this
-stack's `ADMIN_MASTER_KEY`). It seeds `billing:tenant:{tenant_id}` in Redis so
-the subscription gate passes.
+[inflow-lab](https://github.com/regengine/inflow-lab) repo. Provide a
+pre-provisioned, tenant-bound `REGENGINE_API_KEY`; automated demo callers may
+not mint live credentials. The harness seeds `billing:tenant:{tenant_id}` in
+Redis so the subscription gate passes.
 
 Run the persisted Inflow-to-RegEngine proof when you need real local evidence instead of DB-free simulation:
 
@@ -332,7 +334,7 @@ These are current repo facts, not speculation:
   `agent_artifact_reviews`) — see `server/main.py` startup. Extend that
   coverage deliberately if more ORM surfaces become part of the production
   contract; ORM surfaces outside these three Bases are not boot-checked.
-- CTE persistence is mid-retirement of a dual-write scheme (WS-1, #1335). `CanonicalEventStore` defaults to writing both the canonical hash-chain store (`fsma.traceability_events`) and the legacy store (`fsma.cte_events`); several newer ingest routes intentionally write canonical-only. The FDA v1 recall export and chain verification read the legacy store **in code default only** — both canonical read flags are already ON in production and soaking. Per [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md): `FDA_EXPORT_V1_READ_CANONICAL=1` was "set on Railway 2026-07-17, both stores were empty at flip, parity-checked", status "🟨 flag ON in prod (2026-07-17); soaking, then default flip"; `CHAIN_VERIFY_READ_CANONICAL=1` was "observed set on Railway, 2026-07-24", status "🟨 flag ON in prod; soaking". So the remaining decision is flipping the **code default**, not the flag. Do not infer production read behavior from the code default — check the cutover doc. CI enforces dual-write parity and legacy-vs-canonical golden equivalence in [tests/invariants/](tests/invariants/); plan, read-path inventory, and never-do list live in the same doc.
+- CTE persistence is mid-retirement of a dual-write scheme (WS-1, #1335). `CanonicalEventStore` defaults to writing both the canonical hash-chain store (`fsma.traceability_events`) and the legacy store (`fsma.cte_events`); several newer ingest routes intentionally write canonical-only. Chain verification reads the canonical store **by default** since #3039 (code default flipped 2026-09-02; `CHAIN_VERIFY_READ_CANONICAL=0` is the emergency rollback — the canonical verifier recomputes event digests from row content, which the legacy verifier cannot). The FDA v1 recall export still reads the legacy store in code default only: per [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md), `FDA_EXPORT_V1_READ_CANONICAL=1` was "set on Railway 2026-07-17, both stores were empty at flip, parity-checked", status "🟨 flag ON in prod (2026-07-17); soaking, then default flip" — for that flag the remaining decision is flipping the **code default**, not the flag. Do not infer production read behavior from the code default — check the cutover doc. CI enforces dual-write parity and legacy-vs-canonical golden equivalence in [tests/invariants/](tests/invariants/); plan, read-path inventory, and never-do list live in the same doc.
 - Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
 - Neo4j and Redpanda/Kafka-compatible code paths exist, but the default local dev compose file ([docker-compose.dev.yml](docker-compose.dev.yml)) starts only PostgreSQL and Redis — no Neo4j, no Kafka/Redpanda broker.

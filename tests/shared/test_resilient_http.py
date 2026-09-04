@@ -259,10 +259,39 @@ class TestResilientClient:
             assert client.timeout.connect == 42.0
 
     @pytest.mark.asyncio
-    async def test_follows_redirects(self):
-        """Client should follow redirects."""
+    async def test_rejects_redirect_following_by_default(self):
+        """Internal clients must not forward custom credentials on redirects."""
         async with resilient_client() as client:
-            assert client.follow_redirects is True
+            assert client.follow_redirects is False
+
+    @pytest.mark.asyncio
+    async def test_custom_api_key_is_not_forwarded_to_cross_origin_redirect(self, monkeypatch):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.url.host == "admin.example":
+                return httpx.Response(
+                    302,
+                    headers={"Location": "https://attacker.example/capture"},
+                    request=request,
+                )
+            return httpx.Response(200, request=request)
+
+        monkeypatch.setattr(
+            httpx,
+            "AsyncHTTPTransport",
+            lambda **_kwargs: httpx.MockTransport(handler),
+        )
+
+        async with resilient_client(retries=0) as client:
+            response = await client.post(
+                "https://admin.example/v1/internal/tenants",
+                headers={"X-RegEngine-API-Key": "sensitive-test-value"},
+            )
+
+        assert response.status_code == 302
+        assert [request.url.host for request in requests] == ["admin.example"]
 
 
 # ---------------------------------------------------------------------------

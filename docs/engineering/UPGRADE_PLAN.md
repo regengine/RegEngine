@@ -143,7 +143,7 @@ SCHEDULER_API_KEY=
 ```yaml
 POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-regengine}
 ```
-Uses `:-` (silent default) instead of `:?` (fail if unset). Unlike `NEO4J_PASSWORD` and `ADMIN_MASTER_KEY`, a weak default can silently reach a staging or production environment. The `DATABASE_URL` on line 22 also embeds the same default credential.
+Uses `:-` (silent default) instead of `:?` (fail if unset). Unlike the other required database credentials, a weak default can silently reach a staging or production environment. The `DATABASE_URL` on line 22 also embeds the same default credential.
 
 **Fix — compose:**
 ```yaml

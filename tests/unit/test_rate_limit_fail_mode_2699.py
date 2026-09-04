@@ -277,6 +277,42 @@ class TestBruteForceLimiter:
             limiter.record_failure("s2")
         assert limiter.is_limited("s2") is True
 
+    def test_required_shared_backend_missing_raises_503(self):
+        from shared.rate_limit import BruteForceLimiter
+        from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+        limiter = BruteForceLimiter(
+            namespace="strict2699",
+            max_failures=3,
+            window_seconds=60,
+            redis_client=None,
+            require_shared_backend=True,
+        )
+        limiter._redis = None
+
+        with pytest.raises(RateLimitBackendUnavailable):
+            limiter.is_limited("subject")
+        with pytest.raises(RateLimitBackendUnavailable):
+            limiter.record_failure("subject")
+
+    def test_required_shared_backend_error_raises_503_even_in_degrade_mode(self, monkeypatch):
+        from shared.rate_limit import BruteForceLimiter
+        from shared.tenant_rate_limiting import RateLimitBackendUnavailable
+
+        monkeypatch.setenv("RATE_LIMIT_FAIL_MODE", "degrade")
+        limiter = BruteForceLimiter(
+            namespace="strict2699",
+            max_failures=3,
+            window_seconds=60,
+            redis_client=_RaisingRedis(),
+            require_shared_backend=True,
+        )
+
+        with pytest.raises(RateLimitBackendUnavailable):
+            limiter.is_limited("subject")
+        with pytest.raises(RateLimitBackendUnavailable):
+            limiter.record_failure("subject")
+
 
 # ---------------------------------------------------------------------------
 # Circuit-breaker store: explicit redis backend fails loudly

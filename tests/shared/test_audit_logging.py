@@ -575,6 +575,58 @@ class TestInMemoryStorage:
         assert len(page2) == 10
         assert page1[0].event_id != page2[0].event_id
 
+class TestPostgresHashChainStorage:
+    """#2854: durable backend delegates to the hash-chain writer."""
+
+    @pytest.mark.asyncio
+    async def test_store_writes_chain_event_and_commits(self, actor):
+        from shared.audit_logging.storage import PostgresHashChainAuditStorage
+
+        event = AuditEvent(
+            event_id="evt-durable-1",
+            timestamp=datetime.now(timezone.utc),
+            event_type=AuditEventType.DATA_DELETE,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            severity=AuditSeverity.INFO,
+            actor=AuditActor(
+                actor_id="11111111-1111-1111-1111-111111111111",
+                actor_type="user",
+                tenant_id="22222222-2222-2222-2222-222222222222",
+            ),
+            action="gdpr_erasure",
+            outcome="success",
+        )
+        session = MagicMock()
+        storage = PostgresHashChainAuditStorage(session_factory=lambda: session)
+        with patch(
+            "services.admin.app.audit.AuditLogger.log_event",
+            return_value=99,
+        ) as log_event:
+            assert await storage.store(event) is True
+        log_event.assert_called_once()
+        session.commit.assert_called_once()
+        session.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_store_requires_tenant_id(self):
+        from shared.audit_logging.storage import PostgresHashChainAuditStorage
+
+        event = AuditEvent(
+            event_id="evt-no-tenant",
+            timestamp=datetime.now(timezone.utc),
+            event_type=AuditEventType.DATA_DELETE,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            severity=AuditSeverity.INFO,
+            actor=AuditActor(actor_id="system", actor_type="system"),
+            action="gdpr_erasure",
+            outcome="success",
+        )
+        storage = PostgresHashChainAuditStorage(session_factory=lambda: MagicMock())
+        with pytest.raises(ValueError, match="tenant_id"):
+            await storage.store(event)
+
+
+class TestInMemoryStorageTrim:
     @pytest.mark.asyncio
     async def test_max_events_trimming(self, actor):
         """Should trim old events when max reached."""
@@ -837,6 +889,13 @@ class TestSingleton:
 
         assert logger._service_name == "custom-service"
         assert logger._environment == "production"
+
+    def test_get_instance_refuses_inmemory_fallback_in_production(self, monkeypatch):
+        """#2854: production must not silently accept the test backend."""
+        AuditLogger._instance = None
+        monkeypatch.setattr("shared.env.is_production", lambda: True)
+        with pytest.raises(RuntimeError, match="durable backend"):
+            AuditLogger.get_instance()
 
 
 # =============================================================================

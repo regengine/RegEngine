@@ -136,10 +136,11 @@ describe('passwordless login', () => {
     });
   });
 
-  it('redirects immediately when the backend requires SSO', async () => {
+  it('does not honor identity-revealing redirect fields in a challenge response', async () => {
     const assign = mockLocationAssign();
     mocks.startEmailChallenge.mockResolvedValueOnce({
-      message: 'Organization requires Single Sign-On.',
+      detail: 'If this address is eligible, a sign-in code is on its way.',
+      challenge_id: '11111111-1111-4111-8111-111111111111',
       sso_redirect: true,
       organization_id: 'org-123',
     });
@@ -150,8 +151,13 @@ describe('passwordless login', () => {
     await user.click(screen.getByRole('button', { name: /^continue/i }));
 
     await waitFor(() => {
-      expect(assign).toHaveBeenCalledWith('/auth/sso/mock?organization_id=org-123');
-      expect(mocks.saveOtpChallengeState).not.toHaveBeenCalled();
+      expect(assign).not.toHaveBeenCalled();
+      expect(mocks.saveOtpChallengeState).toHaveBeenCalledWith({
+        email: 'person@sso.example',
+        challengeId: '11111111-1111-4111-8111-111111111111',
+        createdAt: expect.any(Number),
+      });
+      expect(mocks.routerPush).toHaveBeenCalledWith('/auth/verify');
     });
   });
 

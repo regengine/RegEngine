@@ -13,7 +13,6 @@ import {
   PackageCheck,
   ScanLine,
   ShieldCheck,
-  TimerReset,
 } from "lucide-react";
 import {
   CommitGate,
@@ -21,86 +20,77 @@ import {
   EvidenceCard,
   EvidencePackagePreview,
   HashVerificationStrip,
-  ReadinessScore,
-  RegulatoryCitationBlock,
 } from "@/components/compliance";
 import { sandboxCta } from "@/lib/sandbox-cta";
 
 export const metadata: Metadata = {
-  title: "RegEngine — Compliance OS for Food Traceability",
+  title: "RegEngine — FSMA 204 traceability evidence layer",
   description:
-    "RegEngine turns messy supplier data into FSMA 204 evidence packages with readiness scoring, supplier gap queues, commit gates, and FDA-oriented export packages.",
+    "Ingest CTE/KDE records, check coverage and completeness, commit append-only after checks you configure, export FDA-oriented and buyer-oriented spreadsheets. Early-stage. Design-partner. Pre-revenue. Not an FDA endorsement.",
   openGraph: {
-    title: "RegEngine — Compliance OS for Food Traceability",
+    title: "RegEngine — FSMA 204 traceability evidence layer",
     description:
-      "Preflight supplier data, find KDE gaps, gate evidence commits, and export FSMA 204 records.",
+      "Ingest CTE/KDE records, check coverage and completeness, commit append-only after checks you configure, export FDA-oriented and buyer-oriented spreadsheets.",
     url: "https://regengine.co",
     type: "website",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine food traceability command center" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 traceability evidence layer" }],
   },
 };
 
-const readinessMetrics = [
-  { label: "FTL coverage", value: "91%", state: "ready" as const },
-  { label: "KDE completeness", value: "84%", state: "needs-correction" as const },
-  { label: "Export eligibility", value: "72%", state: "blocked" as const },
-  { label: "Recall clock", value: "18h", state: "recall-ready" as const },
+const demoMetrics = [
+  { label: "FTL list overlap", value: "91%", sublabel: "Example", state: "needs-correction" as const },
+  { label: "KDE completeness", value: "84%", sublabel: "Gaps flagged", state: "needs-correction" as const },
+  { label: "Export checklist", value: "72%", sublabel: "Items open", state: "blocked" as const },
 ];
 
-const supplierGaps = [
+const supplierChecklistExamples = [
   {
     supplier: "FreshPack Central",
-    scope: "Shipping CTE",
     issue: "Ship-to location missing for 3 lots",
-    owner: "Supplier portal",
     state: "blocked" as const,
   },
   {
     supplier: "Valley Farms",
-    scope: "Harvesting CTE",
     issue: "Harvest date and quantity validated",
-    owner: "Evidence commit",
-    state: "ready" as const,
+    state: "committed" as const,
   },
   {
     supplier: "Cold Dock 7",
-    scope: "Cooling CTE",
     issue: "Temperature note requires review",
-    owner: "Ops review",
     state: "needs-correction" as const,
   },
 ];
 
 const evidenceCards = [
   {
-    title: "Supplier Gap Radar",
-    description: "Expose the supplier, CTE, lot, and field blocking export readiness before records enter the evidence boundary.",
-    state: "blocked" as const,
-    meta: "Readiness workbench",
+    title: "Ingest workspace",
+    description: "CTE/KDE records arrive through webhooks, CSV, EPCIS, or EDI and enter the inflow workbench for coverage checking.",
+    state: "needs-correction" as const,
+    meta: "Inflow workbench",
     icon: Gauge,
   },
   {
-    title: "Evidence Chain",
-    description: "Carry every accepted record forward with provenance, workspace scope, validation history, and hash verification.",
+    title: "Commit ledger",
+    description: "After checks you configure, accepted records enter the append-only evidence ledger with provenance and workspace scope.",
     state: "committed" as const,
     meta: "Evidence ledger",
     icon: GitBranch,
   },
   {
-    title: "24-hour Recall Clock",
-    description: "Keep recall response posture visible with package readiness, export state, and the work still blocking delivery.",
-    state: "recall-ready" as const,
-    meta: "Response posture",
-    icon: TimerReset,
+    title: "Export package state",
+    description: "Drafted, blocked on checklist, or exported. §1.1455 is the FDA records-request rule. This card does not claim we meet that clock.",
+    state: "needs-correction" as const,
+    meta: "Package state",
+    icon: PackageCheck,
   },
 ];
 
 const workflow = [
-  { label: "Intake", detail: "CSV, API, EDI, or portal files enter the workbench.", icon: ScanLine },
-  { label: "Interrogate", detail: "CTE/KDE coverage, identity, and facility scope are checked.", icon: Database },
-  { label: "Correct", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
-  { label: "Commit", detail: "Records pass commit gates for CTE/KDE coverage and supplier readiness before entering the evidence ledger.", icon: ShieldCheck },
-  { label: "Export", detail: "Build FDA-oriented, retailer, or internal evidence packets with producer-signed manifests.", icon: PackageCheck },
+  { label: "Ingest", detail: "Webhooks, CSV, EPCIS, or EDI files enter the workbench.", icon: ScanLine },
+  { label: "Check", detail: "CTE/KDE coverage and completeness are flagged in the inflow workbench.", icon: Database },
+  { label: "Fix", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
+  { label: "Commit", detail: "Commit is our append-only step. After the checks you configure, accepted records enter the evidence ledger. Commit is not a certification, not an FDA gate, and not a retailer gate.", icon: ShieldCheck },
+  { label: "Export", detail: "FDA-oriented, buyer-oriented, or internal packets with a hash manifest where enabled.", icon: PackageCheck },
 ];
 
 const destinations = [
@@ -138,14 +128,15 @@ function MetricRail() {
   return (
     <div className="mt-8">
       <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
-        Demo workspace · sample data
+        Synthetic demo · example numbers · not a customer workspace
       </p>
       <div className="re-home-command-rail">
-        {readinessMetrics.map((metric) => (
+        {demoMetrics.map((metric) => (
           <div key={metric.label} className="border-b border-r border-[var(--re-surface-border)] p-4 last:border-r-0 md:border-b-0">
             <p className="text-2xl font-semibold leading-none text-[var(--re-text-primary)]">{metric.value}</p>
             <div className="mt-3 flex flex-col gap-2">
               <p className="re-label">{metric.label}</p>
+              <p className="text-xs text-[var(--re-text-muted)]">{metric.sublabel}</p>
               <ComplianceStateBadge state={metric.state} />
             </div>
           </div>
@@ -155,32 +146,33 @@ function MetricRail() {
   );
 }
 
-function SupplierGapRadar() {
+function ChecklistRadar() {
   return (
     <section className="border bg-[var(--re-surface-elevated)] p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="re-label">Supplier Gap Radar</p>
-          <h2 className="mt-2 text-xl font-semibold leading-tight text-[var(--re-text-primary)]">What blocks export readiness</h2>
+          <p className="re-label">Demo workspace · synthetic data · 3 open checklist items</p>
+          <h2 className="mt-2 text-xl font-semibold leading-tight text-[var(--re-text-primary)]">What the export checklist still flags</h2>
         </div>
         <Boxes className="h-5 w-5 text-[var(--re-text-muted)]" aria-hidden="true" />
       </div>
       <div className="mt-4 grid gap-3">
-        {supplierGaps.map((gap) => (
-          <article key={gap.supplier} className="grid gap-3 border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+        {supplierChecklistExamples.map((item) => (
+          <article key={item.supplier} className="grid gap-3 border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-3 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{gap.supplier}</h3>
-                <ComplianceStateBadge state={gap.state} />
+                <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{item.supplier}</h3>
+                <ComplianceStateBadge state={item.state} />
               </div>
-              <p className="mt-2 text-sm leading-5 text-[var(--re-text-muted)]">{gap.issue}</p>
-            </div>
-            <div className="grid gap-1 text-left sm:text-right">
-              <span className="font-mono text-[11px] uppercase text-[var(--re-text-muted)]">{gap.scope}</span>
-              <span className="text-xs font-semibold text-[var(--re-text-secondary)]">{gap.owner}</span>
+              <p className="mt-2 text-sm leading-5 text-[var(--re-text-muted)]">{item.issue}</p>
             </div>
           </article>
         ))}
+      </div>
+      <div className="mt-4 border-t border-[var(--re-border-subtle)] pt-3">
+        <p className="text-xs leading-5 text-[var(--re-text-muted)]">
+          Export checklist (advisory) — checks configured in the workspace, not FDA certification, not retailer approval.
+        </p>
       </div>
     </section>
   );
@@ -194,21 +186,12 @@ function CommandCenterPreview() {
           Demo workspace
         </span>
       </div>
-      <div className="grid gap-3 xl:grid-cols-[250px_minmax(0,1fr)]">
-        <ReadinessScore
-          score={86}
-          label="Traceability readiness"
-          description="Facility scope, KDE coverage, supplier response, and export blockers scored before commit."
-          blockers={3}
-          size="sm"
-        />
-        <SupplierGapRadar />
-      </div>
+      <ChecklistRadar />
       <div className="mt-3 grid gap-3">
         <CommitGate
           status="blocked"
-          title="Export eligibility gate"
-          description="The FDA package can build after missing ship-to locations are corrected and revalidated."
+          title="Export checklist (advisory)"
+          description="The export package can build after missing ship-to locations are corrected and revalidated. Checklist is advisory; passing it is not FDA certification or retailer approval."
           criteria={[
             { label: "Workspace identity resolved", passed: true },
             { label: "CTE/KDE coverage above threshold", passed: true },
@@ -216,8 +199,8 @@ function CommandCenterPreview() {
           ]}
         />
         <HashVerificationStrip
-          hash="sample-package-chain-hash"
-          verifiedAt="verified 04:12 UTC"
+          hash="sample-demo-chain-hash-example"
+          verifiedAt="example/synthetic"
           state="committed"
         />
       </div>
@@ -230,12 +213,20 @@ export default function HomePage() {
     <main className="re-compliance-os min-h-screen">
       <section className="re-container grid min-h-[calc(100vh-56px)] items-start gap-8 py-10 lg:grid-cols-[0.9fr_1.1fr] lg:py-12">
         <div>
+          <p className="mb-4 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+            FSMA 204 evidence layer · design-partner · pre-revenue
+          </p>
           <h1 className="max-w-[720px] text-[clamp(40px,5.2vw,64px)] font-semibold leading-[0.98] text-[var(--re-text-primary)]">
             FSMA 204 traceability evidence layer.
           </h1>
           <p className="mt-6 max-w-[620px] text-[18px] leading-8 text-[var(--re-text-muted)]">
-            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Preflight in our Inflow Workbench. Persist with tamper-evidence after ingest. Export FDA- and retailer-formatted spreadsheets quickly.
+            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
           </p>
+          <div className="mt-6 rounded border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4">
+            <p className="text-sm leading-6 text-[var(--re-text-muted)]">
+              The federal compliance date for the Food Traceability Rule is <strong className="text-[var(--re-text-primary)]">July 20, 2028</strong>. That is the FDA date. Buyer programs are separate and must be confirmed with your buyer.
+            </p>
+          </div>
           <div className="mt-8 flex flex-wrap gap-3">
             <ActionLink href="/verify" primary>
               Verify a sample export
@@ -271,7 +262,7 @@ export default function HomePage() {
               Make every compliance object show its state.
             </h2>
             <p className="mt-5 max-w-[500px] text-base leading-7 text-[var(--re-text-muted)]">
-              Suppliers, records, exports, and facilities use the same state model everywhere, so teams know what is ready, blocked, corrected, committed, and recall-ready.
+              Teams can see blocked, needs correction, corrected, committed, or exported. We do not mark anyone recall-ready, retailer-ready, or FDA-ready.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -288,33 +279,43 @@ export default function HomePage() {
         <div className="re-container grid gap-8 lg:grid-cols-[1fr_0.9fr]">
           <div className="grid gap-4">
             <EvidencePackagePreview
-              packageId="FDA-204-PKG-0427"
+              packageId="RE-DEMO-PKG-0427"
               status="building"
               records={1284}
               kdeCoverage={94}
-              generatedAt="04:12"
+              generatedAt="example/synthetic"
               items={["Facility scope manifest", "Committed CTE/KDE records", "Supplier correction log", "Hash verification strip"]}
             />
             <HashVerificationStrip
-              hash="demo-signed-chain-hash"
-              verifiedAt="chain checked today"
+              hash="demo-example-chain-hash-synthetic"
+              verifiedAt="example/synthetic"
               state="signed"
             />
           </div>
           <div>
-            <RegulatoryCitationBlock citation="21 CFR 1.1455" title="Records must be sortable and provided within 24 hours.">
-              RegEngine helps you organize records so your team can respond inside the §1.1455 window. Regulatory acceptance and retention obligations remain with the operator; see the Trust Center for scope.
-            </RegulatoryCitationBlock>
+            <div className="rounded border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5">
+              <p className="mb-3 font-mono text-[11px] uppercase tracking-widest text-[var(--re-text-disabled)]">
+                What this is not
+              </p>
+              <ul className="space-y-2 text-sm leading-6 text-[var(--re-text-muted)]">
+                <li>• Not FDA endorsement</li>
+                <li>• Not a claim we meet §1.1455 24-hour request</li>
+                <li>• Not retailer-readiness score</li>
+                <li>• Not a commit-gate that certifies</li>
+                <li>• Not a 24-hour Recall Clock product</li>
+                <li>• Not live customer metrics</li>
+                <li>• Not legal advice</li>
+              </ul>
+            </div>
             <div className="mt-5">
               <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
-                Sample data · illustrative
+                Sample data · illustrative · synthetic
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   ["Records with full provenance", "1,184"],
                   ["Open supplier blockers", "3"],
                   ["Facilities scoped", "12/14"],
-                  ["Days since recall drill", "18"],
                 ].map(([label, value]) => (
                   <div key={label} className="border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
                     <p className="text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
@@ -327,13 +328,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* #2757 — the anchor the compare-page CTAs pointed at for months before
-          #2730 repointed them. Copy and destination come from sandboxCta() so
-          this section cannot promise a sandbox the deployment does not serve. */}
       <section id="sandbox" className="re-section border-y border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
         <div className="re-container">
           <h2 className="text-2xl font-semibold text-[var(--re-text-primary)]">
-            See it against your own data
+            Walk the synthetic workspace
           </h2>
           <p className="mt-3 max-w-[620px] text-sm leading-7 text-[var(--re-text-muted)]">
             {sandboxCta().blurb}
@@ -361,6 +359,17 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      <footer className="border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] py-8">
+        <div className="re-container">
+          <p className="text-sm text-[var(--re-text-muted)]">
+            RegEngine · Pasadena, CA · early-stage · design-partner · pre-revenue
+          </p>
+          <p className="mt-2 text-xs text-[var(--re-text-disabled)]">
+            FDA date July 20, 2028. Buyer programs are not FDA. No seals, certifications, or FDA logo.
+          </p>
+        </div>
+      </footer>
     </main>
   );
 }

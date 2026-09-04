@@ -35,10 +35,16 @@ name: QA Health Summary
 # `unavailable` rather than as month-old results stated with confidence.
 # Closing the loop properly means publishing this artifact somewhere the
 # service can read at runtime.
+# 2026-09-02: dropped the push trigger. Nothing consumes this artifact at
+# runtime (see above), and the ~26-minute full-suite run on every main push
+# was the single largest push-triggered cost in the repo during the
+# August budget exhaustion. Weekly keeps a fresh artifact available on
+# demand; restore `push:` once the artifact is actually published somewhere
+# the service reads.
 on:
   workflow_dispatch:
-  push:
-    branches: [main, develop]
+  schedule:
+    - cron: '0 7 * * 1'  # Weekly: Monday 07:00 UTC
 
 concurrency:
   group: qa-health-${{ github.ref }}
@@ -159,9 +165,6 @@ jobs:
           JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
           AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes # pragma: allowlist secret
           CSRF_SECRET: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
-          ADMIN_MASTER_KEY: playwright-local-admin-master-key-2026
-          API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
-          REGENGINE_API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
           REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
         run: |
           cd frontend

@@ -86,7 +86,13 @@ def upgrade() -> None:
     #    on legacy databases (v069/v078 already backfilled); it only
     #    matters for rows written with a NULL tenant_id since v078.
     # ------------------------------------------------------------------
+    # The migration credential is deliberately NOBYPASSRLS.  These tables were
+    # already FORCE-RLS in v078, so even their owner cannot run the repair DML
+    # while FORCE is active.  Temporarily restore the normal owner semantics
+    # inside this transactional migration, then force every table again after
+    # both parent and child backfills are complete.
     for table in _ORG_ID_TABLES:
+        op.execute(f"ALTER TABLE fsma.{table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"UPDATE fsma.{table} SET tenant_id = org_id WHERE tenant_id IS NULL")
         op.execute(f"ALTER TABLE fsma.{table} ALTER COLUMN tenant_id SET NOT NULL")
 
@@ -94,6 +100,8 @@ def upgrade() -> None:
     # 2. fsma.key_data_elements — direct tenant_id + FORCE RLS + policy.
     # ------------------------------------------------------------------
     op.execute("ALTER TABLE fsma.key_data_elements ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    # v069 may already have forced this table on the legacy/Flyway lineage.
+    op.execute("ALTER TABLE fsma.key_data_elements NO FORCE ROW LEVEL SECURITY")
     op.execute(
         """
         UPDATE fsma.key_data_elements kde
@@ -117,6 +125,9 @@ def upgrade() -> None:
             WITH CHECK (tenant_id = get_tenant_context())
         """
     )
+
+    for table in _ORG_ID_TABLES:
+        op.execute(f"ALTER TABLE fsma.{table} FORCE ROW LEVEL SECURITY")
 
     # ------------------------------------------------------------------
     # 3. fsma.rule_rejections — v080 enabled RLS but forgot FORCE.

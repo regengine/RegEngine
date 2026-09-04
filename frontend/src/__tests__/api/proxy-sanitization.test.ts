@@ -16,8 +16,6 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
 import {
-    requireAdminCapability,
-    requireFreshAdminCapability,
     requireProxyAuth,
     proxyError,
     sanitizePath,
@@ -28,10 +26,12 @@ import {
 } from '@/lib/api-proxy';
 import {
     applyCookieCredentials,
-    applyFirstPartyServiceCredentials,
+    finalizeCallerServiceCredentials,
+    appendOpaqueSessionCookies,
     createJsonProxy,
     createStreamProxy,
     passthroughRequestHeaders,
+    prepareTenantScopedProxyHeaders,
 } from '@/lib/proxy-factory';
 import type { NextRequest } from 'next/server';
 
@@ -40,23 +40,23 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const ORIGINAL_REGENGINE_API_KEY = process.env.REGENGINE_API_KEY;
+const ORIGINAL_REGENGINE_API_KEY_TENANT_ID = process.env.REGENGINE_API_KEY_TENANT_ID;
 const ORIGINAL_API_KEY = process.env.API_KEY;
 const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const ORIGINAL_ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY;
 
 afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    if (ORIGINAL_ADMIN_MASTER_KEY === undefined) {
-        delete process.env.ADMIN_MASTER_KEY;
-    } else {
-        process.env.ADMIN_MASTER_KEY = ORIGINAL_ADMIN_MASTER_KEY;
-    }
     if (ORIGINAL_REGENGINE_API_KEY === undefined) {
         delete process.env.REGENGINE_API_KEY;
     } else {
         process.env.REGENGINE_API_KEY = ORIGINAL_REGENGINE_API_KEY;
+    }
+    if (ORIGINAL_REGENGINE_API_KEY_TENANT_ID === undefined) {
+        delete process.env.REGENGINE_API_KEY_TENANT_ID;
+    } else {
+        process.env.REGENGINE_API_KEY_TENANT_ID = ORIGINAL_REGENGINE_API_KEY_TENANT_ID;
     }
     if (ORIGINAL_API_KEY === undefined) {
         delete process.env.API_KEY;
@@ -75,6 +75,13 @@ afterEach(() => {
     }
     vi.mocked(createServerClient).mockReset();
 });
+
+function configureFirstPartyServiceCredential(
+    tenantId = '11111111-1111-4111-8111-111111111111',
+) {
+    process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+    process.env.REGENGINE_API_KEY_TENANT_ID = tenantId;
+}
 
 function makeProxyRequest(
     headers: Record<string, string>,
@@ -239,6 +246,34 @@ describe('proxy 5xx error sanitization', () => {
         );
     });
 
+    it('refuses JSON redirects without forwarding a custom API key', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, {
+            status: 302,
+            headers: { location: 'https://attacker.example/capture' },
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+        const handlers = createJsonProxy({
+            serviceName: 'compliance',
+            buildTargetUrl: () => 'https://backend.example/check',
+            buildHeaders: () => new Headers({ 'x-regengine-api-key': 'sensitive-test-value' }),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['check'] }) },
+        );
+
+        expect(response.status).toBe(502);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://backend.example/check',
+            expect.objectContaining({ redirect: 'manual' }),
+        );
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('redirect refused'));
+    });
+
     it('keeps stream proxy attempt details out of all-target failure bodies', async () => {
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         vi.stubGlobal('fetch', vi.fn()
@@ -303,6 +338,34 @@ describe('proxy 5xx error sanitization', () => {
         );
     });
 
+    it('refuses stream redirects without trying the redirect target', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, {
+            status: 307,
+            headers: { location: 'https://attacker.example/capture' },
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+        const handlers = createStreamProxy({
+            serviceName: 'ingestion',
+            resolveTargetBases: () => ['https://backend.example'],
+            buildHeaders: () => new Headers({ 'x-regengine-api-key': 'sensitive-test-value' }),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['api', 'v1', 'records'] }) },
+        );
+
+        expect(response.status).toBe(502);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://backend.example/api/v1/records?debug=true',
+            expect.objectContaining({ redirect: 'manual' }),
+        );
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('redirect refused'));
+    });
+
     it('rejects stream proxy request bodies over the configured byte cap', async () => {
         vi.stubGlobal('fetch', vi.fn());
         const body = new ReadableStream<Uint8Array>({
@@ -355,7 +418,7 @@ describe('proxy 5xx error sanitization', () => {
 
 describe('requireProxyAuth', () => {
     it('does not treat REGENGINE_API_KEY as a caller credential', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        configureFirstPartyServiceCredential();
 
         const response = requireProxyAuth(makeProxyRequest({}));
 
@@ -363,19 +426,17 @@ describe('requireProxyAuth', () => {
     });
 
     it('does not treat cookie-managed placeholders as caller credentials', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        configureFirstPartyServiceCredential();
 
         const response = requireProxyAuth(makeProxyRequest(
             {
                 authorization: 'Bearer cookie-managed',
                 'x-regengine-api-key': 'cookie-managed',
-                'x-admin-key': 'cookie-managed',
                 'x-api-key': 'cookie-managed',
             },
             {
                 re_access_token: 'cookie-managed',
                 ['re_api_' + 'key']: 'cookie-managed',
-                re_admin_key: 'cookie-managed',
             },
         ));
 
@@ -386,6 +447,11 @@ describe('requireProxyAuth', () => {
         expect(requireProxyAuth(makeProxyRequest({}, { re_access_token: 'real-token' }))).toBeNull();
         expect(requireProxyAuth(makeProxyRequest({ authorization: 'Bearer real-token' }))).toBeNull();
         expect(requireProxyAuth(makeProxyRequest({ 'x-regengine-api-key': 'real-api-key' }))).toBeNull();
+    });
+
+    it('does not accept the retired administrative header or cookie as caller auth', () => {
+        expect(requireProxyAuth(makeProxyRequest({ 'x-admin-key': 'retired-secret' }))?.status).toBe(401);
+        expect(requireProxyAuth(makeProxyRequest({}, { re_admin_key: 'retired-secret' }))?.status).toBe(401);
     });
 
     it('detects Supabase cookies without treating them as raw caller credentials', () => {
@@ -411,138 +477,6 @@ describe('requireProxyAuth', () => {
         );
 
         expect(hasSupabaseSessionCookies(request)).toBe(true);
-    });
-});
-
-describe('requireAdminCapability', () => {
-    it('rejects authenticated callers without admin capability', () => {
-        const response = requireAdminCapability(
-            makeProxyRequest(
-                {},
-                {
-                    re_access_token: 'real-token',
-                    re_user: JSON.stringify({
-                        id: 'user-1',
-                        email: 'member@example.com',
-                        is_sysadmin: false,
-                        role_name: 'member',
-                        status: 'active',
-                    }),
-                },
-            ),
-        );
-
-        expect(response?.status).toBe(403);
-    });
-
-    it('does not trust client-readable user cookies as admin authority', () => {
-        const response = requireAdminCapability(
-            makeProxyRequest(
-                {},
-                {
-                    re_access_token: 'real-token',
-                    re_user: JSON.stringify({
-                        id: 'user-1',
-                        email: 'owner@example.com',
-                        is_sysadmin: false,
-                        role_name: 'owner',
-                        status: 'active',
-                    }),
-                },
-            ),
-        );
-
-        expect(response?.status).toBe(403);
-    });
-
-    it('allows explicit admin keys', () => {
-        // #2825: "explicit admin key" now means the caller actually holds
-        // ADMIN_MASTER_KEY. This used to pass on ANY non-empty string, which is
-        // what made the gate decorative — see admin-capability-gate.test.ts for
-        // the forged-value cases.
-        process.env.ADMIN_MASTER_KEY = 'synthetic-admin-master-key-for-tests'; // pragma: allowlist secret
-        expect(
-            requireAdminCapability(
-                makeProxyRequest({}, { re_admin_key: 'synthetic-admin-master-key-for-tests' }), // pragma: allowlist secret
-            ),
-        ).toBeNull();
-    });
-});
-
-describe('requireFreshAdminCapability', () => {
-    it('does not trust client-readable user cookies when the backend says member', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-            id: 'user-1',
-            email: 'owner-cookie@example.com',
-            status: 'active',
-            is_sysadmin: false,
-            role_name: 'member',
-            permissions: [],
-        }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-        })));
-
-        const response = await requireFreshAdminCapability(
-            makeProxyRequest(
-                {},
-                {
-                    re_access_token: 'real-token',
-                    re_user: JSON.stringify({
-                        id: 'user-1',
-                        email: 'owner-cookie@example.com',
-                        is_sysadmin: false,
-                        role_name: 'owner',
-                        status: 'active',
-                    }),
-                },
-            ),
-        );
-
-        expect(response?.status).toBe(403);
-        expect(fetch).toHaveBeenCalledWith(
-            'http://localhost:8400/auth/me',
-            expect.objectContaining({
-                headers: expect.objectContaining({
-                    authorization: 'Bearer real-token',
-                }),
-            }),
-        );
-    });
-
-    it('allows admin roles from the fresh backend session', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-            id: 'user-1',
-            email: 'admin@example.com',
-            status: 'active',
-            is_sysadmin: false,
-            role_name: 'Owner',
-            permissions: ['*'],
-        }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-        })));
-
-        const response = await requireFreshAdminCapability(
-            makeProxyRequest({}, { re_access_token: 'real-token' }),
-        );
-
-        expect(response).toBeNull();
-    });
-
-    it('allows explicit admin keys without a backend session check', async () => {
-        // #2825: the short-circuit is safe only because hasAdminCapability now
-        // verifies the value against ADMIN_MASTER_KEY; a forged cookie falls
-        // through to the /auth/me lookup and is rejected.
-        process.env.ADMIN_MASTER_KEY = 'synthetic-admin-master-key-for-tests'; // pragma: allowlist secret
-        vi.stubGlobal('fetch', vi.fn());
-
-        const response = await requireFreshAdminCapability(
-            makeProxyRequest({}, { re_admin_key: 'synthetic-admin-master-key-for-tests' }), // pragma: allowlist secret
-        );
-
-        expect(response).toBeNull();
-        expect(fetch).not.toHaveBeenCalled();
     });
 });
 
@@ -705,18 +639,17 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.get('x-tenant-id')).toBe('tenant-123');
     });
 
-    it('overrides placeholder auth with HTTP-only cookie credentials', () => {
+    it('overrides placeholder auth with supported HTTP-only cookie credentials', () => {
         const outgoing = new Headers({
             authorization: 'Bearer cookie-managed',
             'x-regengine-api-key': 'cookie-managed',
-            'x-admin-key': 'cookie-managed',
+            'x-admin-key': 'retired-secret',
         });
         const request = makeProxyRequest(
             { authorization: 'Bearer cookie-managed' },
             {
                 re_access_token: 'real-token',
                 re_api_key: 'real-api-key', // pragma: allowlist secret
-                re_admin_key: 'real-admin-key', // pragma: allowlist secret
             },
         );
 
@@ -724,11 +657,31 @@ describe('cookie-managed credential passthrough', () => {
 
         expect(outgoing.get('authorization')).toBe('Bearer real-token');
         expect(outgoing.get('x-regengine-api-key')).toBe('real-api-key');
-        expect(outgoing.get('x-admin-key')).toBe('real-admin-key');
+        expect(outgoing.has('x-admin-key')).toBe(false);
+    });
+
+    it('forwards only the selected opaque session cookie', () => {
+        const outgoing = new Headers({ cookie: 'attacker=controlled' });
+        const request = makeProxyRequest(
+            {},
+            {
+                '__Host-regengine_session': 'opaque-session',
+                regengine_auth_browser_nonce: 'browser-nonce',
+                unrelated_cookie: 'must-not-leak',
+            },
+        );
+
+        appendOpaqueSessionCookies(outgoing, request);
+        expect(outgoing.get('cookie')).toBe('__Host-regengine_session=opaque-session');
+
+        appendOpaqueSessionCookies(outgoing, request, { includeBrowserNonce: true });
+        expect(outgoing.get('cookie')).toBe(
+            '__Host-regengine_session=opaque-session; regengine_auth_browser_nonce=browser-nonce',
+        );
     });
 
     it('does not inject the server API key without a real caller credential', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        configureFirstPartyServiceCredential();
         const outgoing = new Headers();
         const request = makeProxyRequest({});
 
@@ -738,7 +691,7 @@ describe('cookie-managed credential passthrough', () => {
     });
 
     it('keeps cookie credential injection separate from server API key injection', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        configureFirstPartyServiceCredential();
         const outgoing = new Headers();
         const request = makeProxyRequest({}, { re_access_token: 'real-token' });
 
@@ -768,11 +721,11 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.get('x-regengine-api-key')).toBe('real-api-key');
     });
 
-    it('injects a server API key for first-party service calls with a valid tenant cookie', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+    it('never substitutes an ambient API key for a bearer-token caller', () => {
+        configureFirstPartyServiceCredential();
         const outgoing = new Headers();
         const request = makeProxyRequest(
-            {},
+            { origin: 'https://regengine.co' },
             {
                 re_access_token: 'real-token',
                 re_tenant_id: '11111111-1111-4111-8111-111111111111',
@@ -780,90 +733,33 @@ describe('cookie-managed credential passthrough', () => {
         );
 
         applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request);
 
         expect(error).toBeNull();
         expect(outgoing.get('authorization')).toBe('Bearer real-token');
-        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
         expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
     });
 
-    it('accepts the built-in system tenant context for first-party service calls', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
-        const outgoing = new Headers();
-        const request = makeProxyRequest(
-            {},
-            {
-                re_access_token: 'real-token',
-                re_tenant_id: '00000000-0000-0000-0000-000000000001',
-            },
-        );
-
-        applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
-
-        expect(error).toBeNull();
-        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
-        expect(outgoing.get('x-tenant-id')).toBe('00000000-0000-0000-0000-000000000001');
-    });
-
-    it('injects a server API key with a valid backend-provided tenant header', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
-        const outgoing = new Headers({
-            'x-tenant-id': '22222222-2222-4222-8222-222222222222',
-        });
-        const request = makeProxyRequest({}, { re_access_token: 'real-token' });
-
-        applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
-
-        expect(error).toBeNull();
-        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
-        expect(outgoing.get('x-tenant-id')).toBe('22222222-2222-4222-8222-222222222222');
-    });
-
-    it('preserves a cookie-managed API key for browser first-party service calls', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
-        const outgoing = new Headers();
-        const request = makeProxyRequest(
-            {
-                origin: 'https://regengine.co',
-            },
-            {
-                re_access_token: 'real-token',
-                re_api_key: 'scoped-cookie-key', // pragma: allowlist secret
-                re_tenant_id: '11111111-1111-4111-8111-111111111111',
-            },
-        );
-
-        applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
-
-        expect(error).toBeNull();
-        expect(outgoing.get('x-regengine-api-key')).toBe('scoped-cookie-key');
-        expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
-    });
-
-    it('does not overwrite a real direct client API key during first-party service injection', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+    it('preserves a direct non-browser caller API key for upstream validation', () => {
+        configureFirstPartyServiceCredential();
         const outgoing = new Headers({
             'x-regengine-api-key': 'caller-api-key',
             'x-tenant-id': '33333333-3333-4333-8333-333333333333',
         });
         const request = makeProxyRequest({}, { re_access_token: 'real-token' });
 
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request);
 
         expect(error).toBeNull();
         expect(outgoing.get('x-regengine-api-key')).toBe('caller-api-key');
         expect(outgoing.get('x-tenant-id')).toBe('33333333-3333-4333-8333-333333333333');
     });
 
-    it('overwrites browser-provided API keys with the server key when there is no API-key cookie', () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+    it('drops a browser-forged API key without replacing it from the environment', () => {
+        configureFirstPartyServiceCredential();
         const outgoing = new Headers({
             'x-regengine-api-key': 'browser-visible-key',
-            'x-tenant-id': '33333333-3333-4333-8333-333333333333',
         });
         const request = makeProxyRequest(
             {
@@ -877,46 +773,122 @@ describe('cookie-managed credential passthrough', () => {
         );
 
         applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request);
 
         expect(error).toBeNull();
-        expect(outgoing.get('x-regengine-api-key')).toBe('server-side-key');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
         expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
     });
 
-    it('fails closed when server API key injection lacks tenant context', async () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+    it('does not attach an ambient key to a fake opaque session', () => {
+        configureFirstPartyServiceCredential();
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            { origin: 'https://regengine.co' },
+            { '__Host-regengine_session': 'fake-opaque-session' },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        appendOpaqueSessionCookies(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('cookie')).toBe('__Host-regengine_session=fake-opaque-session');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+    });
+
+    it('does not attach an ambient key to an unsigned JWT-shaped cookie', () => {
+        configureFirstPartyServiceCredential();
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            { origin: 'https://regengine.co' },
+            {
+                re_access_token: 'eyJhbGciOiJub25lIn0.eyJ0ZW5hbnRfaWQiOiJmb3JnZWQifQ.', // pragma: allowlist secret
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('authorization')).toContain('eyJhbGciOiJub25lIn0');
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+    });
+
+    it('rejects an invalid explicit route tenant without attaching any key', async () => {
+        configureFirstPartyServiceCredential();
         const outgoing = new Headers();
         const request = makeProxyRequest({}, { re_access_token: 'real-token' });
 
         applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request, '../tenant');
 
-        expect(error?.status).toBe(401);
-        await expect(error?.json()).resolves.toMatchObject({
-            code: 'TENANT_CONTEXT_REQUIRED',
-        });
+        expect(error?.status).toBe(400);
+        await expect(error?.json()).resolves.toMatchObject({ code: 'INVALID_TENANT_CONTEXT' });
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
-    it('fails closed without forwarding the server API key when tenant cookie is invalid', async () => {
-        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+    it('binds the tenant assertion to the validated route without injecting an env key', () => {
+        configureFirstPartyServiceCredential('11111111-1111-4111-8111-111111111111');
+        const outgoing = new Headers({ 'content-type': 'application/json' });
+        const request = makeProxyRequest(
+            {},
+            {
+                re_access_token: 'real-token',
+                re_tenant_id: '22222222-2222-4222-8222-222222222222',
+            },
+        );
+
+        const error = prepareTenantScopedProxyHeaders(
+            outgoing,
+            request,
+            '11111111-1111-4111-8111-111111111111',
+        );
+
+        expect(error).toBeNull();
+        expect(outgoing.has('x-regengine-api-key')).toBe(false);
+        expect(outgoing.get('authorization')).toBe('Bearer real-token');
+        expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
+    });
+
+    it('forwards a caller-owned API key and path tenant without injecting the env key', () => {
+        configureFirstPartyServiceCredential('22222222-2222-4222-8222-222222222222');
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            { origin: 'https://regengine.co' },
+            {
+                re_api_key: 'caller-tenant-key', // pragma: allowlist secret
+                re_tenant_id: '11111111-1111-4111-8111-111111111111',
+            },
+        );
+
+        const error = prepareTenantScopedProxyHeaders(
+            outgoing,
+            request,
+            '11111111-1111-4111-8111-111111111111',
+        );
+
+        expect(error).toBeNull();
+        expect(outgoing.get('x-regengine-api-key')).toBe('caller-tenant-key');
+        expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
+    });
+
+    it('does not use either ambient API-key environment variable', () => {
+        process.env.REGENGINE_API_KEY = 'ambient-server-key'; // pragma: allowlist secret
+        process.env.API_KEY = 'retired-server-key'; // pragma: allowlist secret
         const outgoing = new Headers();
         const request = makeProxyRequest(
             {},
             {
                 re_access_token: 'real-token',
-                re_tenant_id: '../tenant',
+                re_tenant_id: '11111111-1111-4111-8111-111111111111',
             },
         );
 
         applyCookieCredentials(outgoing, request);
-        const error = applyFirstPartyServiceCredentials(outgoing, request);
+        const error = finalizeCallerServiceCredentials(outgoing, request);
 
-        expect(error?.status).toBe(401);
-        await expect(error?.json()).resolves.toMatchObject({
-            code: 'TENANT_CONTEXT_REQUIRED',
-        });
+        expect(error).toBeNull();
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 

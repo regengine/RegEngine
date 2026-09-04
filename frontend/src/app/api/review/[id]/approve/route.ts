@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerServiceURL } from '@/lib/api-config';
-import { getAdminMasterKey, requireAdminCapability, requireProxyAuth, validateProxySession, validateUuid } from '@/lib/api-proxy';
-
-const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
+import { fetchAdminSessionPath } from '@/lib/admin-session-fetch';
+import { rejectRetiredPrivilegedCredential, safeSegment } from '@/lib/api-proxy';
+import { appendOpaqueSessionCookies, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,55 +10,43 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    // Defense-in-depth: reject requests with no auth credentials before proxying
-    const authError = requireProxyAuth(request);
-    if (authError) return authError;
+    const retiredCredentialError = rejectRetiredPrivilegedCredential(request);
+    if (retiredCredentialError) return retiredCredentialError;
 
-    // Validate Supabase session tokens (expired/revoked sessions get 401)
-    const sessionError = await validateProxySession(request);
-    if (sessionError) return sessionError;
-
-    const adminError = requireAdminCapability(request);
-    if (adminError) return adminError;
-
-    const adminKey = getAdminMasterKey();
-    if (!adminKey) {
-        console.error('[review/approve] ADMIN_MASTER_KEY is not configured');
-        return NextResponse.json(
-            { error: 'Admin service is not configured — contact your administrator' },
-            { status: 503 }
-        );
-    }
-
-    const { id } = await params;
-    // Validate the caller-controlled segment before interpolating it into the
-    // upstream admin URL (#2907). Without this, an id containing `?`, `#` or an
-    // encoded `/` rewrites the outbound path while the request still carries the
-    // server's admin credential. Review ids are UUIDs — services/admin/app/metrics.py
-    // does `session.get(ReviewItemModel, UUID(review_id))`.
-    const reviewId = validateUuid(id);
-    if (!reviewId) {
-        return NextResponse.json(
-            { error: 'Invalid review identifier' },
-            { status: 400 }
-        );
+    const { id: rawId } = await params;
+    const id = safeSegment(rawId);
+    if (!id) {
+        return NextResponse.json({ error: 'Invalid review identifier' }, { status: 400 });
     }
 
     try {
-        const response = await fetch(
-            `${ADMIN_URL}/v1/admin/review/flagged-extractions/${reviewId}/approve`,
+        const headers = new Headers({
+            accept: 'application/json',
+            'content-type': 'application/json',
+        });
+        passthroughRequestHeaders(headers, request, [
+            'origin',
+            'referer',
+            'user-agent',
+            'x-csrf-token',
+            'x-request-id',
+            'x-tenant-id',
+        ]);
+        appendOpaqueSessionCookies(headers, request);
+        const attestationError = attestPrivilegedProxyClientIp(headers, request);
+        if (attestationError) return attestationError;
+        const response = await fetchAdminSessionPath(
+            `/v1/admin/review/flagged-extractions/${id}/approve`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Admin-Key': adminKey,
-                },
-                body: JSON.stringify({
-                    reviewer_id: 'web-frontend',
-                    notes: 'Approved via web interface',
-                }),
+                headers,
+                body: JSON.stringify({}),
             }
         );
+
+        if (!response) {
+            return NextResponse.json({ error: 'Review service unavailable' }, { status: 502 });
+        }
 
         const data = await response.json().catch(() => ({}));
 
@@ -71,11 +59,10 @@ export async function POST(
 
         return NextResponse.json(data);
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Approval failed';
         console.error('Approve error:', error);
         return NextResponse.json(
-            { error: message },
-            { status: 500 }
+            { error: 'Review service unavailable' },
+            { status: 502 }
         );
     }
 }

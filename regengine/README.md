@@ -25,18 +25,8 @@ client = RegEngineClient(
 # Look up a traceability record
 record = client.get_record("LOT-2026-001")
 
-# Trace forward through supply chain
-trace = client.trace_forward("LOT-2026-001", max_depth=10)
-print(f"Found {trace.hop_count} downstream facilities")
-
-# Trace backward to source
-source = client.trace_backward("LOT-2026-001")
-print(f"Traced to {len(source.source_lots)} source lots")
-
-# Export FDA-compliant spreadsheet
-csv_data = client.export_fda("LOT-2026-001", "2026-01-01", "2026-01-31")
-with open("fda_export.csv", "wb") as f:
-    f.write(csv_data)
+# Query records by date range
+records = client.query_records("2026-01-01", "2026-01-31")
 ```
 
 ## API Reference
@@ -45,6 +35,19 @@ with open("fda_export.csv", "wb") as f:
 
 #### `get_record(tlc)`
 Retrieve a record by Traceability Lot Code.
+
+#### `query_records(start_date, end_date, cte_type=None)`
+Query traceability records by date range and optional CTE type.
+
+### Experimental methods — NOT available on the hosted API
+
+The methods below target the graph FSMA routers, which the production
+deployment does not mount (they are excluded from the release-approved
+router allowlist). **Against `https://api.regengine.co` they return 404.**
+They work only against a self-hosted deployment that mounts the
+experimental graph routers. The set is declared in
+`RegEngineClient.EXPERIMENTAL_METHODS` and kept in sync with the production
+route table by `tests/sdk/test_route_contract.py`.
 
 #### `trace_forward(tlc, max_depth=10)`
 Trace a lot forward to downstream customers and products.
@@ -60,6 +63,9 @@ Generate FDA-compliant CSV export per 21 CFR 1.1455(b)(3).
 
 #### `start_recall_drill(tlc, severity="class_ii")`
 Initiate a mock recall drill.
+
+#### `get_recall_drills(limit=20)`
+Get history of mock recall drills.
 
 #### `get_readiness_score()`
 Get your FSMA 204 recall readiness score.

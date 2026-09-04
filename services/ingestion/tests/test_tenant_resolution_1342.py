@@ -31,6 +31,8 @@ from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_te
 from fastapi import HTTPException
 from shared.api_key_store import api_key_hash_candidates
 
+_VALID_API_KEY = "rge_test.secret-key-material"  # pragma: allowlist secret
+
 # ===========================================================================
 # Test fixtures
 # ===========================================================================
@@ -160,16 +162,22 @@ class TestApiKeyLookupHappyPath:
         out = resolve_tenant_id(
             explicit_tenant_id=None,
             x_tenant_id=None,
-            x_regengine_api_key="secret-key",
+            x_regengine_api_key=_VALID_API_KEY,
         )
         assert out == "tenant-xyz"
         assert db.closed is True
         # The query is parameterized and receives only API-key digests;
         # the raw key is neither interpolated nor sent to the database.
-        assert db.executed[0]["params"] == {"key_hashes": api_key_hash_candidates("secret-key")}
-        sql = db.executed[0]["statement"]
+        key_hashes = api_key_hash_candidates(_VALID_API_KEY)
+        assert db.executed[0]["params"] == {
+            "key_id": "rge_test",
+            "current_hash": key_hashes[0],
+            "legacy_hash": key_hashes[1] if len(key_hashes) > 1 else "",
+        }
+        assert db.executed[1]["params"] == {"key_hashes": key_hashes}
+        sql = db.executed[1]["statement"]
         assert "api_keys" in sql
-        assert "secret-key" not in sql  # never in the SQL text
+        assert _VALID_API_KEY not in repr(db.executed)  # raw secret is never sent to the database
 
     def test_api_key_row_coerced_to_string(self, monkeypatch):
         """UUIDs, ints, etc. get str()-coerced so callers always see str."""
@@ -180,27 +188,27 @@ class TestApiKeyLookupHappyPath:
 
         db = _FakeDb(fetch_row=_FakeRow(_Uuidish()))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "some-key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out == "coerced-tenant"
         assert isinstance(out, str)
 
     def test_api_key_numeric_row_coerced_to_string(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow(12345))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out == "12345"
 
     def test_api_key_tenant_matches_requested_tenant(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow("tenant-xyz"))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id("tenant-xyz", None, "secret-key")
+        out = resolve_tenant_id("tenant-xyz", None, _VALID_API_KEY)
         assert out == "tenant-xyz"
 
     def test_api_key_tenant_rejects_requested_mismatch(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow("tenant-xyz"))
         _install_db(monkeypatch, db)
         with pytest.raises(HTTPException) as exc:
-            resolve_tenant_id("other-tenant", None, "secret-key")
+            resolve_tenant_id("other-tenant", None, _VALID_API_KEY)
         assert exc.value.status_code == 403
         assert "Tenant mismatch" in exc.value.detail
 
@@ -225,7 +233,7 @@ class TestApiKeyLookupMisses:
     def test_api_key_no_row_returns_none(self, monkeypatch):
         db = _FakeDb(fetch_row=None)
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "bogus-key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out is None
         assert db.closed is True
 
@@ -233,14 +241,14 @@ class TestApiKeyLookupMisses:
         """``row[0]`` could be None (defensive — unusual but allowed)."""
         db = _FakeDb(fetch_row=_FakeRow(None))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out is None
         assert db.closed is True
 
     def test_api_key_row_with_empty_string_returns_none(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow(""))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out is None
         assert db.closed is True
 
@@ -314,7 +322,7 @@ class TestDbFailurePath:
         import logging
 
         with caplog.at_level(logging.WARNING, logger=tenant_resolution.__name__):
-            out = resolve_tenant_id(None, None, "key")
+            out = resolve_tenant_id(None, None, _VALID_API_KEY)
 
         assert out is None
         # Session MUST be closed even when execute() raised.
@@ -328,21 +336,21 @@ class TestDbFailurePath:
 
         db = _FakeDb(raise_on_execute=OperationalError("SELECT", {}, Exception("db gone")))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out is None
         assert db.closed is True
 
     def test_db_execute_value_error_swallowed(self, monkeypatch):
         db = _FakeDb(raise_on_execute=ValueError("boom"))
         _install_db(monkeypatch, db)
-        out = resolve_tenant_id(None, None, "key")
+        out = resolve_tenant_id(None, None, _VALID_API_KEY)
         assert out is None
         assert db.closed is True
 
     def test_db_close_always_called_even_on_success(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow("tenant"))
         _install_db(monkeypatch, db)
-        resolve_tenant_id(None, None, "key")
+        resolve_tenant_id(None, None, _VALID_API_KEY)
         assert db.closed is True
 
 
@@ -360,7 +368,7 @@ class TestPriorityOrderPairs:
             (None, "B", None, "B"),  # header alone
             (None, None, None, None),  # nothing
             ("", "B", None, "B"),  # explicit falsy → header
-            ("", "", "C", None),  # both falsy + api_key miss
+            ("", "", _VALID_API_KEY, None),  # both falsy + api_key miss
             ("", None, None, None),  # explicit falsy alone
         ],
     )

@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+import os
+from typing import Any, NoReturn
 
 import pytest
+
+
+def _skip_or_fail(reason: str) -> NoReturn:
+    """Keep optional local integration tests friendly but make CI gates strict."""
+    require_db = os.getenv("REGENGINE_REQUIRE_DB", "").strip().lower() in {"1", "true", "yes"}
+    if require_db:
+        pytest.fail(f"{reason} (REGENGINE_REQUIRE_DB=1 — integration gate must execute)")
+    pytest.skip(reason)
 
 
 def sqlalchemy_session_or_skip(database_url: str | None, *, reason: str):
     """Return ``(engine, session)`` or skip when the configured DB is unreachable."""
     if not database_url:
-        pytest.skip(f"{reason}: database URL is not set")
+        _skip_or_fail(f"{reason}: database URL is not set")
 
     from sqlalchemy import create_engine, text
     from sqlalchemy.orm import sessionmaker
@@ -21,7 +30,7 @@ def sqlalchemy_session_or_skip(database_url: str | None, *, reason: str):
             conn.execute(text("SELECT 1"))
     except Exception as exc:
         engine.dispose()
-        pytest.skip(f"{reason}: {exc}")
+        _skip_or_fail(f"{reason}: {exc}")
 
     Session = sessionmaker(bind=engine)
     return engine, Session()
@@ -30,7 +39,7 @@ def sqlalchemy_session_or_skip(database_url: str | None, *, reason: str):
 def psycopg_connect_or_skip(database_url: str | None, *, reason: str, **kwargs: Any):
     """Open a psycopg connection or skip when the configured DB is unreachable."""
     if not database_url:
-        pytest.skip(f"{reason}: database URL is not set")
+        _skip_or_fail(f"{reason}: database URL is not set")
 
     import psycopg
 
@@ -40,7 +49,7 @@ def psycopg_connect_or_skip(database_url: str | None, *, reason: str, **kwargs: 
     try:
         return psycopg.connect(normalized, **kwargs)
     except (psycopg.OperationalError, psycopg.ProgrammingError) as exc:
-        pytest.skip(f"{reason}: {exc}")
+        _skip_or_fail(f"{reason}: {exc}")
 
 
 def start_container_or_skip(container: Any, *, reason: str):

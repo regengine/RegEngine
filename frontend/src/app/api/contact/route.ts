@@ -1,18 +1,11 @@
 /**
  * /api/contact — Marketing site contact-form handler.
  *
- * Origin: mythos cleanup. The /contact page promises "We'll respond within
- * one business day," so this route must actually capture submissions even
- * when external infra is unconfigured. Previously this handler returned 503
- * whenever CONTACT_WEBHOOK_URL was unset, silently breaking the promise on
- * any environment that hadn't been bootstrapped.
- *
  * Behaviour:
  *   1. Validate payload (name, email, message required; email regex-checked).
- *   2. If CONTACT_WEBHOOK_URL is set, forward to it (Zapier/Make/n8n/etc).
- *   3. Always log a structured line to stdout so submissions are recoverable
- *      from Vercel function logs even when no provider is wired.
- *   4. Return 200 {ok:true} on success.
+ *   2. Require CONTACT_WEBHOOK_URL and forward without following redirects.
+ *   3. Log only a generated event ID and non-PII delivery metadata.
+ *   4. Return 200 only after the configured provider accepts the submission.
  *
  * TODO: wire to a real email provider (Resend most likely — already listed
  * as a subprocessor in /dpa). Target inbox: chris@regengine.co.
@@ -102,6 +95,7 @@ export async function POST(request: Request) {
   }
 
   const submission = {
+    submission_id: crypto.randomUUID(),
     source: 'regengine.co/contact',
     destination: DESTINATION,
     received_at: new Date().toISOString(),
@@ -111,29 +105,53 @@ export async function POST(request: Request) {
     message,
   };
 
-  // Always log so submissions are never lost, even if the webhook is unset
-  // or fails. Vercel captures stdout in function logs.
-  // TODO: wire to real email provider (Resend) so we don't depend on log scraping.
-  console.info('[contact] submission', JSON.stringify(submission));
+  // Never write contact content or identity to platform logs. The provider is
+  // the system of record; logs carry only a correlation handle and shape.
+  console.warn('[contact] submission_received', {
+    submissionId: submission.submission_id,
+    hasCompany: Boolean(company),
+    messageLength: message.length,
+  });
 
   const webhook = process.env.CONTACT_WEBHOOK_URL;
-  if (webhook) {
-    try {
-      const res = await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submission),
+  if (!webhook) {
+    console.error('[contact] delivery_unavailable', {
+      submissionId: submission.submission_id,
+      reason: 'webhook_not_configured',
+    });
+    return NextResponse.json(
+      { error: 'contact_service_unavailable' },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const res = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(submission),
+      redirect: 'manual',
+    });
+    if (res.status >= 300 && res.status < 400) {
+      console.error('[contact] delivery_refused', {
+        submissionId: submission.submission_id,
+        reason: 'redirect',
       });
-      if (!res.ok) {
-        console.error('[contact] webhook responded non-2xx', res.status);
-        // Don't 502 the user — we already logged the submission. Soft-success.
-      }
-    } catch (err) {
-      console.error('[contact] webhook unreachable', err);
-      // Same — soft-success. Submission is recoverable from logs.
+      return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
     }
-  } else {
-    console.warn('[contact] CONTACT_WEBHOOK_URL is unset; submission only logged');
+    if (!res.ok) {
+      console.error('[contact] delivery_refused', {
+        submissionId: submission.submission_id,
+        status: res.status,
+      });
+      return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
+    }
+  } catch (error) {
+    console.error('[contact] delivery_unavailable', {
+      submissionId: submission.submission_id,
+      errorClass: error instanceof Error ? error.name : 'UnknownError',
+    });
+    return NextResponse.json({ error: 'contact_service_unavailable' }, { status: 503 });
   }
 
   return NextResponse.json({ ok: true });

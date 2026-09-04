@@ -9,7 +9,6 @@ import {
     ChevronRight,
     Copy,
     Check,
-    Leaf,
     Database,
     FileDown,
 } from 'lucide-react';
@@ -140,10 +139,18 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/{event_id}',
-                description: 'Full record detail with provenance and inline rule evaluations: source document, applied FSMA 204 rules and their outcomes, and amendment chain. Rule evaluations are returned inline as rule_evaluations — there is no separate evaluations endpoint.',
+                description: 'Full record detail with provenance: source document, applied rules, evaluation results, and amendment chain.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "event_id": "evt_9f8e7d6c5b4a", "cte_type": "receiving", "kdes": {...}, "provenance": {...}, "rule_evaluations": [{ "rule_id": "...", "outcome": "pass" }] }',
+                response: '{ "event_id": "evt_9f8e7d6c5b4a", "cte_type": "receiving", "kdes": {...}, "provenance": {...} }',
+            },
+            {
+                method: 'GET',
+                path: '/{event_id}/evaluations',
+                description: 'Rule evaluations for a record — which FSMA 204 rules were applied and their outcomes',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                response: '{ "event_id": "evt_9f8e7d6c5b4a", "evaluations": [{ "rule_id": "...", "outcome": "pass" }] }',
             },
             {
                 method: 'GET',
@@ -159,7 +166,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         name: 'FDA Trace & Export API',
         baseUrl: '/api/v1/fda',
         icon: FileDown,
-        description: 'Lot tracing and traceability record exports from stored tenant evidence, with cryptographic verification',
+        description: 'Lot tracing and FDA-oriented exports from stored tenant evidence, with cryptographic verification',
         endpoints: [
             {
                 method: 'GET',
@@ -207,20 +214,11 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'POST',
                 path: '/export/verify',
-                description: 'Verify that a previously generated export reproduces the same hash. Requires the fda.verify scope and an active subscription. Both parameters are query parameters (not a request body). Pair with the public verify_chain.py script for independent verification.',
+                description: 'Verify the hash chain of a previously generated export. Requires the fda.verify scope. Pair with the public verify_chain.py script for independent verification.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['export_id=exp_1a2b3c4d', 'tenant_id={your-tenant-uuid}'],
-                response: JSON.stringify({
-                    export_id: "exp_1a2b3c4d",
-                    original_hash: "9f8e7d6c…",
-                    regenerated_hash: "9f8e7d6c…",
-                    hashes_match: true,
-                    original_record_count: 1204,
-                    current_record_count: 1204,
-                    data_integrity: "VERIFIED",
-                    verified_at: "2026-02-05T14:23:00Z"
-                }, null, 2),
+                body: JSON.stringify({ export_id: "exp_1a2b3c4d" }, null, 2),
+                response: '{ "export_id": "exp_1a2b3c4d", "chain_valid": true, "events_verified": 1204 }',
             },
             {
                 method: 'GET',
@@ -229,87 +227,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params: ['tenant_id={your-tenant-uuid}'],
-                response: '{ "tenant_id": "38e99859-...", "exports": [{ "id": "exp_1a2b3c4d", "export_type": "trace", "record_count": 1204, "export_hash": "9f8e7d6c…", "generated_at": "..." }], "total": 1 }',
-            },
-        ],
-    },
-    {
-        name: 'FSMA Traceability API',
-        baseUrl: '/v1/fsma',
-        icon: Leaf,
-        description: 'Supply chain tracing, mock recalls, and FDA 24-hour exports',
-        provisioned: true,
-        endpoints: [
-            {
-                method: 'GET',
-                path: '/trace/forward/{tlc}',
-                description: 'Trace forward from lot to downstream customers and products. Returns the full supply chain graph from this lot outward.',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                params: ['max_depth=10', 'enforce_time_arrow=true'],
-                params_table: [
-                    { name: 'tlc', type: 'string', required: true, desc: 'Traceability Lot Code (path parameter)' },
-                    { name: 'max_depth', type: 'number', required: false, desc: 'Max hops to trace (default: 10, max: 50)' },
-                    { name: 'enforce_time_arrow', type: 'boolean', required: false, desc: 'Only follow edges forward in time (default: true)' },
-                ],
-                response: JSON.stringify({
-                    lot_id: "TLC123",
-                    facilities: ["Distribution Center #4", "Retail Store #12"],
-                    events: [{ cte: "shipping", timestamp: "2026-02-06T08:00:00Z" }],
-                    hop_count: 5
-                }, null, 2),
-            },
-            {
-                method: 'GET',
-                path: '/trace/backward/{tlc}',
-                description: 'Trace backward from lot to source materials and suppliers',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                params: ['max_depth=10'],
-                response: '{ "lot_id": "TLC123", "source_lots": [...], "facilities": [...] }',
-            },
-            {
-                method: 'GET',
-                path: '/timeline/{tlc}',
-                description: 'Get chronological timeline of all events for a lot',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                response: '{ "lot_id": "TLC123", "events": [{ "cte": "RECEIVING", "date": "..." }] }',
-            },
-            {
-                method: 'GET',
-                path: '/coverage',
-                description: 'Get FSMA coverage status and enforcement timeline metadata',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                response: '{ "authority": "FDA FSMA 204", "compliance_deadline": "2028-07-20", "enforcement_status": "..." }',
-            },
-            {
-                method: 'GET',
-                path: '/export/fda-request',
-                description: 'Generate an FDA-oriented sortable spreadsheet (CSV)',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                params: ['start_date=2026-01-01', 'end_date=2026-01-31'],
-                response: 'CSV file download with FSMA-required columns',
-            },
-            {
-                method: 'GET',
-                path: '/recall/readiness',
-                description: 'Get recall readiness score (0-100) with actionable recommendations for improving recall response time.',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                response: JSON.stringify({
-                    readiness_score: 85,
-                    gaps: ["recall_drill_cadence", "facility_gln_coverage"],
-                    recommendations: [
-                        { priority: "high", action: "Run quarterly recall drill", impact: "+5 points" },
-                        { priority: "medium", action: "Add GLN to 3 facilities", impact: "+3 points" }
-                    ],
-                    last_drill: "2026-02-01T10:00:00Z",
-                    avg_response_hours: 6.2,
-                    sla_target_hours: 24
-                }, null, 2),
+                response: '{ "tenant_id": "38e99859-...", "exports": [{ "export_id": "exp_1a2b3c4d", "created_at": "...", "chain_valid": true }], "total": 0 }',
             },
         ],
     },
@@ -491,7 +409,7 @@ export function ApiReferenceClient() {
                                 </div>
                             </div>
                             <p className="text-sm">
-                                For multi-tenant isolation, include: <code className="bg-white dark:bg-re-surface-base px-1 rounded text-xs">X-Tenant-ID: tenant_uuid</code>
+                                Optional tenant assertion: <code className="bg-white dark:bg-re-surface-base px-1 rounded text-xs">X-Tenant-ID: tenant_uuid</code>. If supplied, it must match the API key&apos;s tenant; it does not authenticate the request.
                             </p>
                         </CardContent>
                     </Card>

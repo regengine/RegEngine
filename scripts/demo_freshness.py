@@ -10,7 +10,6 @@ INGEST_URL = "http://localhost:8002/v1/ingest"
 ADMIN_API_URL = "http://localhost:8400"
 TENANT_ID = os.environ.get("REGENGINE_TENANT_ID", "00000000-0000-0000-0000-000000000000")
 API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
-ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "")
 
 # Unique Source for this Demo
 SOURCE_URL = "http://demo.fda.gov/fsma-204-update-scenario"
@@ -44,7 +43,6 @@ CONTENT_NEW = """
 
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": ADMIN_MASTER_KEY,
     "X-Tenant-ID": TENANT_ID,
     "Content-Type": "application/json",
 }

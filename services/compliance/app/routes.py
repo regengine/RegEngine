@@ -2,34 +2,27 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from shared.auth import APIKey, require_api_key
-from shared.circuit_breaker import CircuitOpenError
 from shared.database import get_db_session
 from shared.fda_export import (
-    MAX_EXPORT_WINDOW_DAYS,
     ExportWindowError,
     safe_filename,
     safe_filename_token,
     validate_export_window,
 )
-from shared.resilient_http import resilient_client
 from shared.rules.engine import RulesEngine
 from shared.rules.ftl import FTL_CATEGORIES
 from shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-from .config import settings
-from .csv_safety import sanitize_cell
 from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
 
 # ---------------------------------------------------------------------------
@@ -43,13 +36,8 @@ from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
 # :func:`safe_filename` to build ``Content-Disposition`` headers — no
 # raw query-string values reach the header value.
 
-# Cursor-pagination parameters for the upstream graph service
-# (issue #1038). The graph service caps ``limit`` at 500; we request
-# that maximum and loop until ``has_more`` is false. The hard cap
-# bounds how much the compliance service is willing to buffer in
-# memory before producing the CSV — exceeding it returns HTTP 413
-# rather than silently truncating.
-_GRAPH_PAGE_SIZE = 500
+# Hard cap on events buffered into one synchronous FDA spreadsheet.
+# Exceeding it returns HTTP 413 rather than silently truncating (#1038).
 _MAX_EXPORT_EVENTS = 50_000
 
 # Requesting-entity is rendered into a CSV metadata row that an auditor
@@ -572,7 +560,75 @@ async def validate_compliance(
 # FDA Audit Spreadsheet Export
 # ---------------------------------------------------------------------------
 
-_GRAPH_SERVICE_URL = settings.graph_service_url
+
+class EventStorageUnavailable(Exception):
+    """Event store could not be reached. Must not be reported as an empty export."""
+
+
+def _load_fsma_audit_events(
+    *,
+    tenant_id: str,
+    start_date: str,
+    end_date: str,
+    tlc: str | None,
+    limit: int,
+) -> list[dict]:
+    """Load spreadsheet events in-process from Postgres (#2862).
+
+    Reuses the ingestion recall-export query (tenant + date window + optional
+    TLC). Graph HTTP is not used: that service is experimental, disabled in
+    production, and previously defaulted to a dead hostname whose connect
+    failures were indistinguishable from "no events".
+    """
+    from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
+
+    filters = {
+        "tenant_id": tenant_id,
+        "product": None,
+        "location": None,
+        "tlc": tlc,
+        "event_type": None,
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+    db_session = None
+    try:
+        from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
+
+        try:
+            from services.ingestion.app.fda_export.queries import (
+                build_recall_where_clause,
+                build_recall_where_clause_canonical,
+                export_v1_reads_canonical,
+                fetch_recall_events,
+                fetch_recall_events_canonical,
+                rows_to_event_dicts,
+            )
+        except ImportError:  # standalone compliance entrypoint has services/ on path
+            from ingestion.app.fda_export.queries import (
+                build_recall_where_clause,
+                build_recall_where_clause_canonical,
+                export_v1_reads_canonical,
+                fetch_recall_events,
+                fetch_recall_events_canonical,
+                rows_to_event_dicts,
+            )
+
+        db_session = SessionLocal()
+        CTEPersistence(db_session).set_tenant_context(tenant_id)
+        if export_v1_reads_canonical():
+            where_clause, params = build_recall_where_clause_canonical(**filters)
+            rows = fetch_recall_events_canonical(db_session, where_clause, params, limit=limit)
+        else:
+            where_clause, params = build_recall_where_clause(**filters)
+            rows = fetch_recall_events(db_session, where_clause, params, limit=limit)
+        return rows_to_event_dicts(rows)
+    except (OperationalError, InterfaceError, DBAPIError, OSError, ConnectionError, TimeoutError, ImportError) as exc:
+        raise EventStorageUnavailable(str(exc)) from exc
+    finally:
+        if db_session is not None:
+            db_session.close()
 
 
 @router.get("/v1/fsma/audit/spreadsheet")
@@ -603,6 +659,8 @@ async def fsma_audit_spreadsheet(
       second response header.
     * Zero-row exports return HTTP 404 with a structured body rather
       than an empty FDA-oriented CSV.
+    * Event storage connect/timeout failures return HTTP 503, never an
+      empty-result 404 (#2862).
     """
     # ---- Tenant binding (#1106) ------------------------------------------
     # The authenticated API key is the sole source of truth for tenant
@@ -649,137 +707,50 @@ async def fsma_audit_spreadsheet(
             ),
         )
 
-    # ---- Downstream request ----------------------------------------------
-    # Use the parsed ISO strings going forward so the graph service sees
-    # canonical values, never the raw query params.
-    base_params: dict[str, str] = {
-        "start_date": start.isoformat(),
-        "end_date": end.isoformat(),
-        "limit": str(_GRAPH_PAGE_SIZE),
-    }
-    if tlc:
-        base_params["tlc"] = tlc
-
-    # Build outbound headers. We forward the authenticated tenant_id
-    # (never the client-supplied header) and an internal service
-    # secret for service-to-service auth. We do NOT forward the
-    # caller's raw X-RegEngine-API-Key to the graph service — that
-    # header stays at the compliance boundary (#1106).
-    headers: dict[str, str] = {
-        "X-RegEngine-Tenant-ID": tenant_id,
-    }
-    internal_secret = settings.internal_service_secret
-    if internal_secret:
-        headers["X-RegEngine-Internal-Secret"] = internal_secret
-    request_id = request.headers.get("X-Request-ID")
-    if request_id:
-        headers["X-Request-ID"] = request_id
-
-    # ---- Cursor-paginated fetch (issue #1038) ----------------------------
-    # Graph service paginates at <=500 events and returns
-    # ``has_more=true`` + ``next_cursor`` when additional records exist.
-    # Loop until ``has_more`` is false OR the accumulated count exceeds
-    # :data:`_MAX_EXPORT_EVENTS` (the hard cap). We do NOT silently
-    # truncate the way the old single-page fetch did — exceeding the
-    # cap returns HTTP 413 so an operator sees "narrow your query"
-    # rather than "recall submission is missing 1500 events".
-    events: list[dict] = []
-    next_cursor: Optional[str] = None
+    # ---- In-process event load (#2862) -----------------------------------
+    # Postgres via the ingestion recall-export query. Do not HTTP to graph:
+    # that host is experimental and a connect failure must never look like
+    # an empty-result 404.
     try:
-        async with resilient_client(timeout=30.0, circuit_name="graph-service") as client:
-            while True:
-                params = dict(base_params)
-                if next_cursor:
-                    params["starting_after"] = next_cursor
-
-                resp = await client.get(
-                    f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
-                    params=params,
-                    headers=headers,
-                )
-
-                if resp.status_code >= 500:
-                    correlation_id = str(uuid.uuid4())
-                    _logger.error(
-                        "graph_service_5xx",
-                        extra={
-                            "status": resp.status_code,
-                            "body": resp.text[:200],
-                            "correlation_id": correlation_id,
-                        },
-                    )
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Upstream service temporarily unavailable (ref: {correlation_id})",
-                    )
-                if resp.status_code >= 400:
-                    correlation_id = str(uuid.uuid4())
-                    _logger.warning(
-                        "graph_service_4xx",
-                        extra={
-                            "status": resp.status_code,
-                            "body": resp.text[:200],
-                            "correlation_id": correlation_id,
-                        },
-                    )
-                    raise HTTPException(
-                        status_code=resp.status_code,
-                        detail=f"Request could not be processed (ref: {correlation_id})",
-                    )
-
-                data = resp.json()
-                page = data.get("events") or data.get("results") or []
-                events.extend(page)
-
-                if len(events) > _MAX_EXPORT_EVENTS:
-                    _logger.warning(
-                        "fda_export_exceeded_hard_cap",
-                        extra={
-                            "tenant_id": tenant_id,
-                            "cap": _MAX_EXPORT_EVENTS,
-                            "accumulated": len(events),
-                        },
-                    )
-                    raise HTTPException(
-                        status_code=413,
-                        detail=(
-                            f"Export exceeds the {_MAX_EXPORT_EVENTS:,}-event "
-                            "hard cap — narrow your date range, TLC, or "
-                            "contact support for an async batched job"
-                        ),
-                    )
-
-                has_more = bool(data.get("has_more"))
-                next_cursor = data.get("next_cursor")
-                if has_more and (not next_cursor or not page):
-                    # Upstream says more records exist but gave us no way to
-                    # fetch them. Breaking here would render the accumulated
-                    # PARTIAL list into an official FDA spreadsheet with no
-                    # marker — exactly the silent truncation the hard-cap
-                    # logic above refuses. Fail closed like the other
-                    # malformed-upstream cases.
-                    correlation_id = str(uuid.uuid4())
-                    _logger.error(
-                        "graph_service_malformed_pagination",
-                        extra={
-                            "has_more": has_more,
-                            "next_cursor": next_cursor,
-                            "page_size": len(page),
-                            "accumulated": len(events),
-                            "correlation_id": correlation_id,
-                        },
-                    )
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Upstream pagination malformed — export aborted (ref: {correlation_id})",
-                    )
-                if not has_more:
-                    break
-    except CircuitOpenError as exc:
+        events = _load_fsma_audit_events(
+            tenant_id=tenant_id,
+            start_date=start.isoformat(),
+            end_date=end.isoformat(),
+            tlc=tlc,
+            limit=_MAX_EXPORT_EVENTS + 1,
+        )
+    except EventStorageUnavailable as exc:
+        correlation_id = str(uuid.uuid4())
+        _logger.error(
+            "fda_export_storage_unavailable",
+            extra={
+                "tenant_id": tenant_id,
+                "error": str(exc),
+                "correlation_id": correlation_id,
+            },
+        )
         raise HTTPException(
             status_code=503,
-            detail=f"Graph service circuit open — retry after {exc.retry_after:.0f}s",
+            detail=f"Event storage unavailable (ref: {correlation_id})",
         ) from exc
+
+    if len(events) > _MAX_EXPORT_EVENTS:
+        _logger.warning(
+            "fda_export_exceeded_hard_cap",
+            extra={
+                "tenant_id": tenant_id,
+                "cap": _MAX_EXPORT_EVENTS,
+                "accumulated": len(events),
+            },
+        )
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Export exceeds the {_MAX_EXPORT_EVENTS:,}-event "
+                "hard cap — narrow your date range, TLC, or "
+                "contact support for an async batched job"
+            ),
+        )
 
     # Zero-row exports produce an auditor-facing empty "official"
     # FDA spreadsheet that's easy to misread as "no compliance

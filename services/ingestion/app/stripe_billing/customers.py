@@ -21,24 +21,35 @@ async def _create_tenant_via_admin(tenant_name: str) -> str:
     if not admin_service_url:
         raise RuntimeError("ADMIN_SERVICE_URL is required — set it in the service environment")
     admin_base_url = admin_service_url.rstrip("/")
-    admin_master_key = os.getenv("ADMIN_MASTER_KEY")
+    tenant_provisioner_key = os.getenv("REGENGINE_TENANT_PROVISIONER_KEY")
 
-    if not admin_master_key:
-        raise RuntimeError("ADMIN_MASTER_KEY is required to create tenants from Stripe webhooks")
+    if not tenant_provisioner_key:
+        raise RuntimeError(
+            "REGENGINE_TENANT_PROVISIONER_KEY is required to create tenants from Stripe webhooks"
+        )
 
-    async with resilient_client(timeout=20.0, circuit_name="admin-service") as client:
+    async with resilient_client(
+        timeout=20.0,
+        circuit_name="admin-service",
+        follow_redirects=False,
+    ) as client:
         response = await client.post(
-            f"{admin_base_url}/v1/admin/tenants",
-            headers={"X-Admin-Key": admin_master_key},
+            f"{admin_base_url}/v1/internal/tenants",
+            headers={"X-RegEngine-API-Key": tenant_provisioner_key},
             json={"name": tenant_name},
         )
+        if 300 <= response.status_code < 400:
+            # httpx preserves arbitrary custom headers across cross-origin
+            # redirects. Never follow or treat a redirect as a successful
+            # provisioning response while the workload key is attached.
+            raise RuntimeError("Admin tenant creation refused a redirect response")
         response.raise_for_status()
 
     # ``payload`` is the response body from the admin service, called over
-    # mTLS-equivalent X-Admin-Key auth and just instructed to create this
-    # tenant. The returned tenant_id is the canonical row id, not a client
-    # claim — this is the bootstrap path that mints the tenant in the first
-    # place, so there is no pre-existing principal to resolve from.
+    # a single-purpose, tenantless database API key and just instructed to
+    # create this tenant. The returned tenant_id is the canonical row id, not
+    # a client claim — this is the bootstrap path that mints the tenant in the
+    # first place, so there is no pre-existing principal to resolve from.
     payload = response.json()
     tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body
     if not tenant_id:

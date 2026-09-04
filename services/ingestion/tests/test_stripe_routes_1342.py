@@ -146,7 +146,11 @@ class TestCreateCheckoutErrorBranches:
 
         monkeypatch.setattr(stripe.checkout.Session, "create", lambda **kwargs: _Session())
 
-        response = await routes_mod.create_checkout(base_request, x_tenant_id=None, principal=_principal())
+        response = await routes_mod.create_checkout(
+            base_request,
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-error-path"),
+        )
         # Still returns a session — checkout is not blocked by Redis outage.
         assert response.session_id == "cs_test_123"
         assert response.plan == "growth"
@@ -202,7 +206,11 @@ class TestCreateCheckoutErrorBranches:
         monkeypatch.setattr(stripe.checkout.Session, "create", _raise)
 
         with pytest.raises(Exception) as excinfo:
-            await routes_mod.create_checkout(base_request, x_tenant_id=None, principal=_principal())
+            await routes_mod.create_checkout(
+                base_request,
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-error-path"),
+            )
         exc = excinfo.value
         assert getattr(exc, "status_code", None) == 502
         assert "Card declined" in getattr(exc, "detail", "")
@@ -306,7 +314,11 @@ class TestCreateCheckoutErrorBranches:
 
         monkeypatch.setattr(stripe.checkout.Session, "create", lambda **kwargs: _Session())
 
-        response = await routes_mod.create_checkout(base_request, x_tenant_id=None, principal=_principal())
+        response = await routes_mod.create_checkout(
+            base_request,
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-error-path"),
+        )
         # Redis failure on the hint is logged and swallowed.
         assert response.session_id == "cs_hint_failed"
 

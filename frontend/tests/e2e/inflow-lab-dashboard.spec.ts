@@ -5,7 +5,6 @@ import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
 import { csrfHeader, loginViaApi, logoutViaApi, type ApiSession } from './support/api-auth';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
-const ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
 const DEFAULT_ADMIN_DB = 'sqlite:////tmp/regengine-playwright-admin.db';
 
 async function loginToDashboardInflowLab(page: Page, email = TEST_USER_EMAIL): Promise<ApiSession> {
@@ -15,42 +14,12 @@ async function loginToDashboardInflowLab(page: Page, email = TEST_USER_EMAIL): P
     return session;
 }
 
-async function enableInflowWriteApiKey(page: Page, session: ApiSession) {
-    const tenantId = session.tenant_id;
-    expect(tenantId, 'Inflow write E2E requires an authenticated tenant').toBeTruthy();
-    expect(ADMIN_MASTER_KEY, 'Inflow write E2E requires ADMIN_MASTER_KEY to mint a scoped key').toBeTruthy();
-
-    const createdResponse = await page.request.post('/api/admin/v1/admin/keys', {
-        headers: {
-            'Content-Type': 'application/json',
-            Origin: new URL(page.url()).origin,
-            'x-admin-key': ADMIN_MASTER_KEY,
-            ...(await csrfHeader(page.context())),
-        },
-        data: {
-            name: `inflow-dashboard-e2e-${Date.now()}`,
-            tenant_id: tenantId,
-            scopes: ['inflow.read', 'inflow.write'],
-        },
-    });
-    expect(createdResponse.ok(), await createdResponse.text()).toBeTruthy();
-    const created = await createdResponse.json() as { api_key?: string };
-    const apiKey = String(created.api_key || '');
-    expect(apiKey, 'Admin API should return the scoped API key once').toBeTruthy();
-
-    await page.request.get('/api/session');
-    const response = await page.request.post('/api/session', {
-        headers: {
-            'Content-Type': 'application/json',
-            Origin: new URL(page.url()).origin,
-            ...(await csrfHeader(page.context())),
-        },
-        data: {
-            api_key: apiKey,
-            tenant_id: tenantId,
-        },
-    });
-    expect(response.ok(), await response.text()).toBeTruthy();
+function requireInflowWriteApiKey(session: ApiSession) {
+    expect(session.tenant_id, 'Inflow write E2E requires an authenticated tenant').toBeTruthy();
+    expect(
+        session.apiKey,
+        'Inflow write E2E requires a pre-provisioned REGENGINE_API_KEY or API_KEY with inflow.read and inflow.write scopes.',
+    ).toBeTruthy();
 }
 
 function resolveAdminSqlitePath() {
@@ -150,7 +119,7 @@ test.describe('Dashboard Inflow Lab', () => {
 
     test('records a saved workbench run only after the explicit save action', async ({ page }) => {
         const session = await loginToDashboardInflowLab(page);
-        await enableInflowWriteApiKey(page, session);
+        requireInflowWriteApiKey(session);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
@@ -203,7 +172,7 @@ test.describe('Dashboard Inflow Lab', () => {
     });
     test('reloads the latest saved workbench run after a successful save', async ({ page }) => {
         const session = await loginToDashboardInflowLab(page);
-        await enableInflowWriteApiKey(page, session);
+        requireInflowWriteApiKey(session);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(

@@ -34,13 +34,26 @@ import {
     isCookieManagedCredentialHeader,
     isUsableCallerCredential,
     hasSupabaseSessionCookies,
-    resolveOpaqueSessionTenantId,
 } from './api-proxy';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 
 const DEFAULT_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const METHODS_WITHOUT_BODY: ReadonlySet<HttpMethod> = new Set(['GET', 'OPTIONS']);
+
+/** Reject a credential-bearing upstream redirect without reflecting Location. */
+export function rejectUpstreamRedirect(
+    response: Pick<Response, 'status'>,
+    serviceName: string,
+): NextResponse | null {
+    if (response.status < 300 || response.status >= 400) return null;
+
+    console.error(`[proxy/${serviceName}] upstream redirect refused`);
+    return NextResponse.json(
+        { error: `${serviceName} upstream redirect refused` },
+        { status: 502 },
+    );
+}
 
 // ---------------------------------------------------------------------------
 // Handler export shape
@@ -86,6 +99,12 @@ export interface JsonProxyConfig {
     buildTargetUrl: (path: string, queryString: string, request: NextRequest) => string | undefined;
     /** Build outbound headers. Called per-request. */
     buildHeaders: (request: NextRequest, path: string) => Headers;
+    /** Optional post-auth transport metadata hook. */
+    prepareHeaders?: (
+        headers: Headers,
+        request: NextRequest,
+        path: string,
+    ) => NextResponse | null | Promise<NextResponse | null>;
     /** Optional: transform a parsed JSON body before forwarding. */
     transformBody?: (body: unknown, path: string) => unknown;
     /** Optional: synthesize a body when the incoming request has none. */
@@ -124,7 +143,12 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             }
 
             const headers = config.buildHeaders(request, path);
-            const fetchOptions: RequestInit = { method, headers };
+            const headerError = await config.prepareHeaders?.(headers, request, path);
+            if (headerError) return headerError;
+            // Never let fetch forward caller or scoped service credentials to
+            // a redirect target. Undici strips some standard auth headers but
+            // preserves custom X-RegEngine-API-Key values cross-origin.
+            const fetchOptions: RequestInit = { method, headers, redirect: 'manual' };
 
             if (!METHODS_WITHOUT_BODY.has(method)) {
                 let body: unknown = undefined;
@@ -146,6 +170,10 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             }
 
             const response = await fetch(targetUrl, fetchOptions);
+            if (response.status >= 300 && response.status < 400) {
+                console.error(`[proxy/${config.serviceName}] redirect refused`);
+                return proxyError(`${config.serviceName} request failed`, 502);
+            }
             const data = await response.json().catch(() => ({} as unknown));
 
             if (!response.ok) {
@@ -201,6 +229,8 @@ export interface StreamProxyConfig {
         request: NextRequest,
         path: string,
     ) => NextResponse | null | Promise<NextResponse | null>;
+    /** Run prepareHeaders for intentionally unauthenticated paths as well. */
+    prepareHeadersForUnauthenticatedPaths?: boolean;
     /** Upstream response headers to pass through to the client. */
     responseHeaderPassthrough?: string[];
     /** Methods to export. Defaults to GET/POST/PUT/PATCH/DELETE/OPTIONS. */
@@ -220,6 +250,8 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
     'x-fda-record-count',
 ];
 const AUTH_BROWSER_NONCE_COOKIE = 'regengine_auth_browser_nonce';
+const OPAQUE_SESSION_COOKIE = '__Host-regengine_session';
+const RETIRED_CREDENTIAL_HEADERS = new Set(['x-admin-key']);
 
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -342,11 +374,11 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             }
 
             const headers = config.buildHeaders(request);
-            if (!skipAuth) {
+            if (!skipAuth || config.prepareHeadersForUnauthenticatedPaths) {
                 const headerError = await config.prepareHeaders?.(headers, request, path);
                 if (headerError) return headerError;
             }
-            const fetchOptions: RequestInit = { method, headers };
+            const fetchOptions: RequestInit = { method, headers, redirect: 'manual' };
 
             const hasRequestBody = !METHODS_WITHOUT_BODY.has(method);
             let requestBody: ArrayBuffer | undefined;
@@ -369,6 +401,10 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                 const targetUrl = `${stripTrailingSlash(base)}/${path}${queryString}`;
                 try {
                     const response = await fetch(targetUrl, fetchOptions);
+                    if (response.status >= 300 && response.status < 400) {
+                        console.error(`[proxy/${config.serviceName}] redirect refused`);
+                        return proxyError(`${config.serviceName} request failed`, 502);
+                    }
                     if (shouldRetry(response, path)) {
                         attemptErrors.push(
                             `target=${base} status=${response.status} reason=${response.headers.get('x-vercel-error') || 'vercel_error'}`,
@@ -462,8 +498,39 @@ export function passthroughRequestHeaders(
     names: string[],
 ): Headers {
     for (const name of names) {
+        if (RETIRED_CREDENTIAL_HEADERS.has(name.toLowerCase())) continue;
         const value = request.headers.get(name);
         if (value && !isCookieManagedCredentialHeader(name, value)) headers.set(name, value);
+    }
+    return headers;
+}
+
+/** Forward only server-selected opaque auth cookies to a backend.
+ *
+ * Never copy the caller's raw Cookie header: doing so would disclose unrelated
+ * frontend cookies and make future cookies backend authentication inputs by
+ * accident. The browser nonce is needed only while completing an auth
+ * ceremony through the admin proxy.
+ */
+export function appendOpaqueSessionCookies(
+    headers: Headers,
+    request: NextRequest,
+    options: { includeBrowserNonce?: boolean } = {},
+): Headers {
+    const names = options.includeBrowserNonce
+        ? [OPAQUE_SESSION_COOKIE, AUTH_BROWSER_NONCE_COOKIE]
+        : [OPAQUE_SESSION_COOKIE];
+    const cookies = names
+        .map((name) => {
+            const value = request.cookies.get(name)?.value;
+            return value ? `${name}=${value}` : null;
+        })
+        .filter((cookie): cookie is string => cookie !== null);
+
+    if (cookies.length > 0) {
+        headers.set('cookie', cookies.join('; '));
+    } else {
+        headers.delete('cookie');
     }
     return headers;
 }
@@ -473,7 +540,6 @@ export function passthroughRequestHeaders(
  *  Populates (when present and not already set):
  *    - Authorization: Bearer {re_access_token}
  *    - X-RegEngine-API-Key: {re_api_key}
- *    - X-Admin-Key: {re_admin_key}
  *    - X-Tenant-ID: {re_tenant_id}
  *
  *  When `respectExistingAuthHeader` is true, an incoming Authorization header
@@ -485,6 +551,9 @@ export function applyCookieCredentials(
     request: NextRequest,
     options: { respectExistingAuthHeader?: boolean } = {},
 ): Headers {
+    // The retired shared administrative credential is never forwarded, even
+    // if a caller or future route accidentally pre-populates the header.
+    headers.delete('x-admin-key');
     const isBrowserRequest = Boolean(request.headers.get('origin') || request.headers.get('referer'));
     const cookieAccessToken = request.cookies.get('re_access_token')?.value;
     const headerAuth = headers.get('authorization');
@@ -517,17 +586,6 @@ export function applyCookieCredentials(
         }
     }
 
-    const existingAdminKey = headers.get('x-admin-key');
-    if (existingAdminKey && isCookieManagedCredentialHeader('x-admin-key', existingAdminKey)) {
-        headers.delete('x-admin-key');
-    }
-    if (!existingAdminKey || isCookieManagedCredentialHeader('x-admin-key', existingAdminKey)) {
-        const cookieAdminKey = request.cookies.get('re_admin_key')?.value;
-        if (isUsableCallerCredential(cookieAdminKey)) {
-            headers.set('x-admin-key', cookieAdminKey);
-        }
-    }
-
     const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
     if (cookieTenantId) {
         headers.set('x-tenant-id', cookieTenantId);
@@ -538,128 +596,95 @@ export function applyCookieCredentials(
     return headers;
 }
 
-const AUTH_SESSION_COOKIE = '__Host-regengine_session';
-
-/** True when the caller's only session credential is the opaque
- *  `__Host-regengine_session` cookie (SSO / passkey / email-OTP).
+/** Finalize caller-owned service credentials without privilege substitution.
  *
- *  JWT callers are excluded because `validateProxySession` already cross-checks
- *  the `re_access_token` `tenant_id` claim against the `re_tenant_id` cookie and
- *  403s on mismatch, so their tenant is server-anchored before we get here.
- *  Opaque-session callers have no such check — hence #2806.
+ * This helper deliberately never reads a server-held API key. A BFF may
+ * forward a caller's direct API key, API-key cookie, bearer token, or opaque
+ * session for authoritative validation by the upstream service, but an
+ * unverified browser credential must never be upgraded to ambient server
+ * authority. The sole scoped browser-to-workload bridge lives in
+ * `inflow-workbench-proxy.ts`, where `/auth/me` and the exact tenant are
+ * verified before a dedicated read-only key is attached.
  */
-function isOpaqueSessionOnlyCaller(request: NextRequest): boolean {
-    if (isUsableCallerCredential(request.cookies.get('re_access_token')?.value)) return false;
-    return isUsableCallerCredential(request.cookies.get(AUTH_SESSION_COOKIE)?.value);
-}
-
-/** Resolve the authoritative tenant for an opaque-session caller via the
- *  backend `/auth/me` (#2806). Returns `null` — and costs no network hop — for
- *  every other caller shape, whose tenant is already anchored elsewhere. */
-export async function resolveFirstPartySessionTenantId(
-    request: NextRequest,
-): Promise<string | null> {
-    if (!isOpaqueSessionOnlyCaller(request)) return null;
-    const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
-    return sessionToken ? resolveOpaqueSessionTenantId(sessionToken) : null;
-}
-
-/** Async form of `applyFirstPartyServiceCredentials` that resolves the opaque
- *  session's authoritative tenant server-side first. Route handlers and
- *  `prepareHeaders` hooks should call THIS one — the sync form fails closed for
- *  opaque-session callers precisely so that forgetting to is a 403, never a
- *  silent cross-tenant grant. */
-export async function applyFirstPartyServiceCredentialsForSession(
+export function finalizeCallerServiceCredentials(
     headers: Headers,
     request: NextRequest,
-): Promise<NextResponse | null> {
-    return applyFirstPartyServiceCredentials(headers, request, {
-        verifiedSessionTenantId: await resolveFirstPartySessionTenantId(request),
-    });
-}
-
-/** Inject first-party service credentials for server-side proxy calls.
- *
- * Browser JavaScript never receives the configured service API key. The proxy
- * only injects it after caller/session validation has already passed, and only
- * when a valid tenant context is present so backend RLS remains scoped.
- *
- * #2806: the injected key is `REGENGINE_API_KEY`, which
- * `services/ingestion/app/authz.py` maps to a `scopes=["*"]` principal for
- * WHATEVER tenant the `X-Tenant-ID` header names — membership is never checked,
- * by design, since "the legacy master key may authenticate ANY tenant". The
- * tenant here therefore has to be server-derived. It used to come from the
- * `re_tenant_id` cookie, which `app/api/session/route.ts` sets `httpOnly:false`
- * so the UI can read it — i.e. any script on an allowed origin could rewrite it
- * with `document.cookie` and have the proxy attach the master key to a victim
- * tenant. Opaque-session callers must now supply `verifiedSessionTenantId`
- * (see `applyFirstPartyServiceCredentialsForSession`) and it must agree with
- * the requested tenant.
- */
-export function applyFirstPartyServiceCredentials(
-    headers: Headers,
-    request: NextRequest,
-    options: { verifiedSessionTenantId?: string | null } = {},
+    requestedTenantId?: string,
 ): NextResponse | null {
-    const existingApiKey = headers.get('x-regengine-api-key');
-    const cookieApiKey = request.cookies.get('re_api_key')?.value;
-    const hasCookieManagedApiKey = Boolean(
-        isUsableCallerCredential(cookieApiKey) && existingApiKey === cookieApiKey,
-    );
-    const isBrowserRequest = Boolean(request.headers.get('origin') || request.headers.get('referer'));
-    if (hasCookieManagedApiKey) {
-        return null;
-    }
-    if (
-        existingApiKey &&
-        !isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey) &&
-        !isBrowserRequest
-    ) {
-        return null;
-    }
-
-    const serverApiKey = process.env.REGENGINE_API_KEY || process.env.API_KEY;
-    if (!isUsableCallerCredential(serverApiKey)) {
-        if (
-            existingApiKey &&
-            !isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey) &&
-            isBrowserRequest
-        ) {
-            headers.delete('x-regengine-api-key');
-            return proxyError('First-party service proxy is not configured', 503, {
-                code: 'SERVICE_CREDENTIAL_UNAVAILABLE',
-            });
-        }
-        return null;
-    }
-
-    const tenantId = validateProxyTenantId(request.cookies.get('re_tenant_id')?.value || headers.get('x-tenant-id'));
-    if (!tenantId) {
-        return proxyError('Tenant context required for first-party service proxy', 401, {
-            code: 'TENANT_CONTEXT_REQUIRED',
+    const explicitTenantId = requestedTenantId === undefined
+        ? null
+        : validateProxyTenantId(requestedTenantId);
+    if (requestedTenantId !== undefined && !explicitTenantId) {
+        headers.delete('x-regengine-api-key');
+        headers.delete('x-api-key');
+        return proxyError('Invalid tenant context for service proxy', 400, {
+            code: 'INVALID_TENANT_CONTEXT',
         });
     }
 
-    // #2806: for an opaque-session caller the requested tenant is forgeable, so
-    // it must be confirmed against the tenant the backend binds to the session.
-    // No verified tenant (route did not resolve one, session expired, backend
-    // unreachable) => fail closed rather than fall back to the cookie.
-    if (isOpaqueSessionOnlyCaller(request)) {
-        const verifiedTenantId = options.verifiedSessionTenantId;
-        if (!verifiedTenantId || verifiedTenantId !== tenantId) {
-            headers.delete('x-regengine-api-key');
-            headers.delete('x-tenant-id');
-            return proxyError('Tenant context does not match authenticated session', 403, {
-                code: 'TENANT_CONTEXT_MISMATCH',
-            });
-        }
-        headers.set('x-regengine-api-key', serverApiKey);
-        headers.set('x-tenant-id', verifiedTenantId);
-        return null;
+    const existingApiKey = headers.get('x-regengine-api-key');
+    const cookieApiKey = request.cookies.get('re_api_key')?.value;
+    const isBrowserRequest = Boolean(request.headers.get('origin') || request.headers.get('referer'));
+
+    // A browser can manufacture request headers. Preserve an API key only
+    // when it came from the server-read cookie; otherwise remove it and let
+    // the upstream reject the remaining credential rather than upgrading it.
+    if (
+        isBrowserRequest &&
+        existingApiKey &&
+        (!isUsableCallerCredential(cookieApiKey) || existingApiKey !== cookieApiKey)
+    ) {
+        headers.delete('x-regengine-api-key');
     }
 
-    headers.set('x-regengine-api-key', serverApiKey);
-    headers.set('x-tenant-id', tenantId);
+    // Never forward the historical alias after normalization. Public callers
+    // use X-RegEngine-API-Key and the upstream remains the credential authority.
+    headers.delete('x-api-key');
+    if (explicitTenantId) headers.set('x-tenant-id', explicitTenantId);
+    return null;
+}
+
+/** Build the complete authentication envelope for a tenant-named BFF route.
+ *
+ * Caller-owned API keys/tokens and the opaque session cookie are forwarded.
+ * No ambient server credential is attached; the upstream must validate the
+ * presented caller credential and its tenant binding.
+ */
+export function prepareTenantScopedProxyHeaders(
+    headers: Headers,
+    request: NextRequest,
+    tenantId: string,
+): NextResponse | null {
+    const validatedTenantId = validateProxyTenantId(tenantId);
+    if (!validatedTenantId) {
+        return proxyError('Invalid tenant context', 400, { code: 'INVALID_TENANT_CONTEXT' });
+    }
+
+    passthroughRequestHeaders(headers, request, [
+        'authorization',
+        'x-regengine-api-key',
+        'x-api-key',
+    ]);
+
+    // Normalize the historical header alias. Never send two API credentials
+    // upstream, and never synthesize one from server environment state.
+    const aliasApiKey = headers.get('x-api-key');
+    if (!headers.has('x-regengine-api-key') && isUsableCallerCredential(aliasApiKey)) {
+        headers.set('x-regengine-api-key', aliasApiKey);
+    }
+    headers.delete('x-api-key');
+
+    applyCookieCredentials(headers, request, { respectExistingAuthHeader: true });
+    appendOpaqueSessionCookies(headers, request);
+
+    const credentialError = finalizeCallerServiceCredentials(
+        headers,
+        request,
+        validatedTenantId,
+    );
+    if (credentialError) return credentialError;
+
+    headers.set('x-tenant-id', validatedTenantId);
     return null;
 }
 

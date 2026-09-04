@@ -28,6 +28,7 @@ from shared.audit_logging.schema import (  # noqa: F401
 from shared.audit_logging.storage import (  # noqa: F401
     AuditStorageBackend,
     InMemoryAuditStorage,
+    PostgresHashChainAuditStorage,
 )
 
 # Writer — main interface, convenience methods, decorator

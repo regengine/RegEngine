@@ -53,6 +53,21 @@ def _open_session():
     return SessionLocal()
 
 
+def _arm_tenant_rls(db_session: Any, tenant_id: str) -> None:
+    """Bind funnel access to one tenant for the current transaction.
+
+    ``public.funnel_events`` is FORCE-RLS.  Query predicates remain useful
+    defense in depth, but the database boundary is the transaction-local GUC;
+    it also auto-clears before a pooled connection is reused.
+    """
+    if _session_dialect_name(db_session) == "sqlite":
+        return
+
+    from shared.tenant_context import set_tenant_guc
+
+    set_tenant_guc(db_session, tenant_id)
+
+
 def emit_funnel_event(
     tenant_id: Optional[str],
     event_name: str,
@@ -98,6 +113,7 @@ def emit_funnel_event(
             )
             inserted = bool(getattr(result, "rowcount", 0) > 0)
         else:
+            _arm_tenant_rls(session, tenant)
             statement = text(
                 """
                 INSERT INTO funnel_events (tenant_id, event_name, metadata)
@@ -148,11 +164,19 @@ def emit_funnel_event(
             session.close()
 
 
-def get_funnel_stage_metrics(*, db_session: Any = None) -> list[dict[str, Any]]:
+def get_funnel_stage_metrics(
+    *,
+    tenant_id: str,
+    db_session: Any = None,
+) -> list[dict[str, Any]]:
     """
-    Return ordered stage metrics:
+    Return ordered stage metrics for exactly one authenticated tenant:
     [{name, count, conversion_from_previous_pct}, ...]
     """
+    tenant = str(tenant_id or "").strip()
+    if not tenant:
+        raise ValueError("tenant_id is required for funnel metrics")
+
     owns_session = db_session is None
     session = db_session
     if owns_session:
@@ -163,14 +187,17 @@ def get_funnel_stage_metrics(*, db_session: Any = None) -> list[dict[str, Any]]:
             return [{"name": stage, "count": 0, "conversion_from_previous_pct": 0.0} for stage in FUNNEL_STAGE_ORDER]
 
     try:
+        _arm_tenant_rls(session, tenant)
         rows = session.execute(
             text(
                 """
                 SELECT event_name, CAST(COUNT(*) AS INTEGER) AS tenant_count
                 FROM funnel_events
+                WHERE tenant_id = :tenant_id
                 GROUP BY event_name
                 """
-            )
+            ),
+            {"tenant_id": tenant},
         ).fetchall()
     except Exception as exc:
         logger.warning("funnel_metrics_query_failed error=%s", str(exc))

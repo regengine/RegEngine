@@ -83,7 +83,6 @@ describe('useAuth Hook', () => {
                     json: () => Promise.resolve({
                         authenticated: false,
                         has_api_key: false,
-                        has_admin_key: false,
                         has_credentials: false,
                         tenant_id: null,
                         user: null,
@@ -130,7 +129,6 @@ describe('useAuth Hook', () => {
                         json: () => Promise.resolve({
                             authenticated: true,
                             has_api_key: false,
-                            has_admin_key: false,
                             has_credentials: true,
                             tenant_id: 'tenant-123',
                             user: mockUser,
@@ -334,7 +332,6 @@ describe('useAuth Hook', () => {
                         json: () => Promise.resolve({
                             authenticated: true,
                             has_api_key: false,
-                            has_admin_key: false,
                             has_credentials: true,
                             tenant_id: 'tenant-123',
                             user: supabaseUser,
@@ -378,7 +375,6 @@ describe('useAuth Hook', () => {
                         json: () => Promise.resolve({
                             authenticated: true,
                             has_api_key: false,
-                            has_admin_key: false,
                             has_credentials: true,
                             tenant_id: 'tenant-456',
                             auth_method: 'webauthn',
@@ -430,7 +426,6 @@ describe('useAuth Hook', () => {
                         json: () => Promise.resolve({
                             authenticated: true,
                             has_api_key: false,
-                            has_admin_key: false,
                             has_credentials: true,
                             tenant_id: 'tenant-123',
                             user: supabaseUser,
@@ -474,6 +469,54 @@ describe('useAuth Hook', () => {
             // apiClient receives the placeholder, not the real token
             expect(apiClient.setAccessToken).toHaveBeenCalledWith('cookie-managed');
             expect(apiClient.setUser).toHaveBeenCalledWith(mockUser);
+        });
+    });
+
+    describe('API key cookie', () => {
+        it('publishes cookie-managed state only after the session cookie is stored', async () => {
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            await act(async () => {
+                await result.current.setApiKey('rge_test_api_key'); // pragma: allowlist secret
+            });
+
+            expect(result.current.apiKey).toBe('cookie-managed');
+            const sessionPostBodies = mockFetch.mock.calls
+                .filter(([, opts]) => (opts as RequestInit | undefined)?.method === 'POST')
+                .map(([, opts]) => JSON.parse((opts as RequestInit).body as string));
+            expect(sessionPostBodies.some((body) => body.api_key === 'rge_test_api_key')).toBe(true); // pragma: allowlist secret
+        });
+
+        it('rejects a failed cookie write and keeps API-key state unset', async () => {
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST') {
+                        return Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: false,
+                            has_api_key: false,
+                            has_credentials: false,
+                            tenant_id: null,
+                            user: null,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            await act(async () => {
+                await expect(
+                    result.current.setApiKey('rge_test_api_key'), // pragma: allowlist secret
+                ).rejects.toThrow('API key could not be saved');
+            });
+
+            expect(result.current.apiKey).toBeNull();
         });
     });
 
@@ -603,7 +646,6 @@ describe('useAuth Hook', () => {
                         json: () => Promise.resolve({
                             authenticated: false,
                             has_api_key: false,
-                            has_admin_key: false,
                             has_credentials: false,
                             tenant_id: null,
                             user: null,
@@ -731,7 +773,7 @@ describe('useAuth Hook', () => {
             expect(result.current.hasAdminSession).toBe(true);
         });
 
-        it('treats an explicit admin cookie session as admin capability', async () => {
+        it('does not grant privileged access from a retired key-only session field', async () => {
             mockFetch.mockImplementation((url: string, options?: RequestInit) => {
                 if (typeof url === 'string' && url.includes('/api/session')) {
                     if (options?.method === 'POST' || options?.method === 'DELETE') {
@@ -758,7 +800,7 @@ describe('useAuth Hook', () => {
                 expect(result.current.isHydrated).toBe(true);
             });
 
-            expect(result.current.hasAdminSession).toBe(true);
+            expect(result.current.hasAdminSession).toBe(false);
             expect(result.current.hasTenantSession).toBe(false);
         });
     });
@@ -803,7 +845,6 @@ describe('useAuth Hook', () => {
                         json: () => Promise.resolve({
                             authenticated: false,
                             has_api_key: false,
-                            has_admin_key: false,
                             has_credentials: false,
                             tenant_id: null,
                             user: staleUser,
@@ -865,40 +906,6 @@ describe('useAuth Hook', () => {
             expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
         });
 
-        it('still clears a stale user on an admin-key-only session without dropping admin capability', async () => {
-            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
-
-            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
-                if (typeof url === 'string' && url.includes('/api/session')) {
-                    if (options?.method === 'POST' || options?.method === 'DELETE') {
-                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-                    }
-                    return Promise.resolve({
-                        ok: true,
-                        json: () => Promise.resolve({
-                            authenticated: false,
-                            has_api_key: false,
-                            has_admin_key: true,
-                            has_credentials: true,
-                            tenant_id: null,
-                            user: null,
-                        }),
-                    });
-                }
-                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
-            });
-
-            const { result } = renderHook(() => useAuth(), { wrapper });
-
-            await waitFor(() => {
-                expect(result.current.isHydrated).toBe(true);
-            });
-
-            expect(result.current.user).toBeNull();
-            expect(localStorageMock.getItem('regengine_user')).toBeNull();
-            expect(result.current.hasAdminSession).toBe(true);
-        });
-
         it('does not wipe a login that completed while the hydrate session check was in flight', async () => {
             const mockUser = {
                 id: 'fresh-user',
@@ -949,7 +956,6 @@ describe('useAuth Hook', () => {
                     json: () => Promise.resolve({
                         authenticated: false,
                         has_api_key: false,
-                        has_admin_key: false,
                         has_credentials: false,
                         tenant_id: null,
                         user: null,

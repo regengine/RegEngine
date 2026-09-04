@@ -36,9 +36,14 @@ On a Redis error the per-process in-memory bucket keeps limiting, and:
   while degraded (TenantRateLimitMiddleware); `rate_limiter_degraded()`
   is exported for health payloads.
 * **Tightened budget** (see math below).
-* `BruteForceLimiter` (admin master key / login / MFA lockout) falls back
+* `BruteForceLimiter` (ordinary login / MFA lockout) falls back
   to its per-process counter with the same per-activation warning
   (`brute_force_limiter_backend_unavailable`) — never silently.
+
+Privileged staff-session and workload-key failures use the separate
+`PrivilegedAuthThrottle`: five failures per 60 seconds in shared Redis. In
+deployed staging and production it always fails closed with 503 when Redis is
+unavailable and does not honor the general degradation knob.
 
 ### `closed` (hard guarantee, availability trade-off)
 

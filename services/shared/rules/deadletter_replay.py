@@ -127,16 +127,16 @@ def replay_deadletter_for_tenant(session, tenant_id: str, *, batch_size: int = 2
 def replay_all_tenants(session, *, batch_size: int = 200) -> Dict[str, int]:
     """Tenant-iterating entry point for the scheduler job.
 
-    ``public.tenants`` is the discovery table (infra table, permissive
-    policy) because the RLS-forced dead-letter cannot be scanned
-    cross-tenant (#2461) — mirrors ``remediation.delivery.drain_all_tenants``.
+    Tenant UUID discovery uses the audited admin credential; the RLS-forced
+    dead-letter is then processed through the ordinary role one tenant at a
+    time.
     """
+    from shared.maintenance_tenants import list_maintenance_tenant_ids
     from shared.tenant_context import set_tenant_guc, tenant_scope
 
-    tenant_rows = session.execute(text("SELECT id FROM public.tenants")).fetchall()
+    tenant_ids = list_maintenance_tenant_ids()
     totals = {"attempted": 0, "replayed": 0, "failed": 0, "parked": 0}
-    for (tenant_id,) in tenant_rows:
-        tid = str(tenant_id)
+    for tid in tenant_ids:
         try:
             with tenant_scope(tid):
                 set_tenant_guc(session, tid)

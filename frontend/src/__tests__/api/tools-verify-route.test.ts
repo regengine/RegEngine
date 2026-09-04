@@ -43,11 +43,30 @@ describe('tools verify route', () => {
             'https://regengine-production.up.railway.app/api/v1/tools/verify-email',
             expect.objectContaining({
                 method: 'POST',
+                redirect: 'manual',
                 body: JSON.stringify({
                     email: 'user@example.com',
                     tool_name: 'ftl-checker',
                 }),
             }),
         );
+    });
+
+    it('rejects redirects without forwarding a Location response', async () => {
+        process.env.ADMIN_SERVICE_URL = 'https://admin.example.com';
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(null, {
+            status: 307,
+            headers: { location: 'http://127.0.0.1/internal' },
+        }));
+        const { POST } = await import('@/app/api/tools/verify/route');
+
+        const response = await POST(makeRequest({
+            action: 'confirm',
+            email: 'user@example.com',
+            code: '123456',
+        }));
+
+        expect(response.status).toBe(502);
+        expect(response.headers.get('location')).toBeNull();
     });
 });

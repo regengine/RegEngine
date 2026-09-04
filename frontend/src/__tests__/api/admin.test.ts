@@ -9,7 +9,7 @@
  * - Invite system
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { apiClient } from '@/lib/api-client';
 
 // Mock axios module
@@ -32,6 +32,10 @@ vi.mock('axios', () => ({
 describe('API Client - Admin Service', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     describe('Authentication', () => {
@@ -112,18 +116,26 @@ describe('API Client - Admin Service', () => {
             expect(apiClient.getCurrentTenant()).toBeNull();
         });
 
-        it('creates new tenant with admin key', () => {
-            const expectedPayload = {
+        it('creates a tenant through the session-backed BFF without a privileged header', async () => {
+            const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+                id: 'tenant-123',
                 name: 'Acme Corp',
-            };
+            }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }));
+            vi.stubGlobal('fetch', fetchMock);
 
-            const expectedHeaders = {
-                'X-Admin-Key': 'admin-secret',
-            };
+            const result = await apiClient.createTenant('Acme Corp');
 
-            // Verify we would call POST with correct structure
-            expect(expectedPayload.name).toBe('Acme Corp');
-            expect(expectedHeaders['X-Admin-Key']).toBe('admin-secret');
+            expect(result).toMatchObject({ id: 'tenant-123', name: 'Acme Corp' });
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+            expect(url).toContain('/api/admin/v1/admin/tenants');
+            expect(init.method).toBe('POST');
+            expect(JSON.parse(String(init.body))).toEqual({ name: 'Acme Corp' });
+            const headers = new Headers(init.headers);
+            expect(headers.has('x-admin-key')).toBe(false);
         });
     });
 

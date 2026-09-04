@@ -12,8 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from .database import get_session
+from .database import arm_global_admin_context, get_session
 from .dependencies import get_current_user
+from .privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
 from .sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 
 router = APIRouter(prefix="/tenants", tags=["Tenant Settings"])
@@ -44,13 +45,10 @@ def _get_tenant_for_user(tenant_id: UUID, user: UserModel, db: Session) -> Tenan
 def _get_user_role_name(tenant_id: UUID, user: UserModel, db: Session) -> Optional[str]:
     """Resolve the role name for (user, tenant) from the memberships table.
 
-    Returns the role name string or ``None`` if no active membership
-    exists. System sysadmins always return ``"Sysadmin"`` to bypass
-    tenant-scoped role checks.
+    Returns the role name string or ``None`` if no active membership exists.
+    Global sysadmin status is intentionally not a tenant-membership bypass;
+    cross-tenant control-plane changes use dedicated high-assurance routes.
     """
-    if getattr(user, "is_sysadmin", False):
-        return "Sysadmin"
-
     membership = db.execute(
         select(MembershipModel).where(
             MembershipModel.user_id == user.id,
@@ -68,7 +66,7 @@ def _get_user_role_name(tenant_id: UUID, user: UserModel, db: Session) -> Option
 
 
 def _require_tenant_admin(tenant_id: UUID, user: UserModel, db: Session) -> TenantModel:
-    """Load tenant after verifying the user has Owner/Admin/Sysadmin role.
+    """Load tenant after verifying the user has an Owner/Admin membership.
 
     Fixes #1386: the previous ``_get_tenant_for_user`` only verified a
     membership row existed, letting any Member or Viewer overwrite
@@ -79,7 +77,7 @@ def _require_tenant_admin(tenant_id: UUID, user: UserModel, db: Session) -> Tena
     if role_name is None:
         raise HTTPException(status_code=403, detail="Not a member of this tenant")
 
-    if role_name not in _ADMIN_ROLE_NAMES and role_name != "Sysadmin":
+    if role_name not in _ADMIN_ROLE_NAMES:
         logger.warning(
             "tenant_settings_non_admin_blocked",
             user_id=str(user.id),
@@ -160,6 +158,16 @@ class PartnerStatusResponse(BaseModel):
     partner_tier: str | None = None
 
 
+def _require_high_assurance_sysadmin_user(
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
+) -> UserModel:
+    """Return the user only after the shared step-up dependency succeeds."""
+    user = actor.user
+    if user is None or not user.is_sysadmin:
+        raise HTTPException(status_code=403, detail="Sysadmin access required")
+    return user
+
+
 def _strip_blocked_keys(value: dict, blocked: Iterable[str]) -> tuple[dict, list[str]]:
     """Return a copy of ``value`` with any blocked keys removed.
 
@@ -187,9 +195,8 @@ async def update_tenant_settings(
     """Merge-update tenant settings (workspace profile, onboarding state).
 
     Security hardening (#1386):
-    - The caller MUST hold a privileged role (Owner / Admin) or be a
-      Sysadmin. Members and Viewers get 403 even if they belong to the
-      tenant.
+    - The caller MUST hold an active Owner / Admin membership. Global
+      sysadmin status is not a cross-tenant bypass.
     - Blocked keys are stripped from the merge input. Security /
       billing / integration settings (retention_days, mfa_required,
       sso_config, webhook_url(s), custom_domain, partner_tier,
@@ -276,7 +283,7 @@ async def get_onboarding_status(
 async def update_partner_status(
     tenant_id: UUID,
     payload: PartnerStatusUpdate,
-    user: UserModel = Depends(get_current_user),
+    user: UserModel = Depends(_require_high_assurance_sysadmin_user),
     db: Session = Depends(get_session),
 ):
     """Set or clear a tenant's design partner tier. Requires sysadmin."""
@@ -289,6 +296,9 @@ async def update_partner_status(
             detail=f"Invalid tier. Must be one of: {', '.join(sorted(VALID_PARTNER_TIERS))}",
         )
 
+    # The high-assurance sysadmin dependency has succeeded.  This route is
+    # intentionally cross-tenant, so arm only its own transaction.
+    arm_global_admin_context(db)
     tenant = db.get(TenantModel, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")

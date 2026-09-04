@@ -146,7 +146,7 @@ def test_trusted_proxy_bad_cidr_skipped(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# #1414 — _get_client_ip respects the proxy gate
+# #1414 — raw proxy headers never become audit authority
 # ---------------------------------------------------------------------------
 
 
@@ -171,22 +171,22 @@ def test_get_client_ip_untrusted_ignores_xff(monkeypatch):
     assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
 
 
-def test_get_client_ip_trusted_uses_xff(monkeypatch):
+def test_get_client_ip_ignores_xff_even_when_legacy_proxy_cidr_matches(monkeypatch):
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
     req = _FakeRequest(
         headers={"x-forwarded-for": "1.2.3.4, 10.0.0.1"},
         client_host="192.168.1.100",
     )
-    assert AuditContextMiddleware._get_client_ip(req) == "1.2.3.4"
+    assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
 
 
-def test_get_client_ip_trusted_falls_back_to_x_real_ip(monkeypatch):
+def test_get_client_ip_ignores_x_real_ip_even_when_legacy_proxy_cidr_matches(monkeypatch):
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
     req = _FakeRequest(
         headers={"x-real-ip": "5.6.7.8"},
         client_host="192.168.1.100",
     )
-    assert AuditContextMiddleware._get_client_ip(req) == "5.6.7.8"
+    assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
 
 
 def test_get_client_ip_no_client():
@@ -215,25 +215,24 @@ def test_get_client_ip_trusted_empty_xff_falls_back(monkeypatch):
     assert AuditContextMiddleware._get_client_ip(req) == "192.168.1.100"
 
 
-def test_get_client_ip_trusted_ipv6_xff(monkeypatch):
-    """IPv6 hop in XFF from a trusted proxy is accepted."""
+def test_get_client_ip_ignores_ipv6_xff(monkeypatch):
+    """Unsigned IPv6 forwarding metadata never overrides the socket peer."""
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "2001:db8::/32")
     req = _FakeRequest(
         headers={"x-forwarded-for": "2001:db8::1, 10.0.0.1"},
         client_host="2001:db8::100",
     )
-    assert AuditContextMiddleware._get_client_ip(req) == "2001:db8::1"
+    assert AuditContextMiddleware._get_client_ip(req) == "2001:db8::100"
 
 
-def test_get_client_ip_trusted_ipv6_peer_ipv4_xff(monkeypatch):
-    """Trusted IPv6 peer forwarding an IPv4 XFF hop — should not crash
-    and should return the client-side IPv4."""
+def test_get_client_ip_ignores_ipv4_xff_from_ipv6_peer(monkeypatch):
+    """A legacy trusted CIDR cannot authenticate unsigned forwarding data."""
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "2001:db8::/32")
     req = _FakeRequest(
         headers={"x-forwarded-for": "203.0.113.7"},
         client_host="2001:db8::100",
     )
-    assert AuditContextMiddleware._get_client_ip(req) == "203.0.113.7"
+    assert AuditContextMiddleware._get_client_ip(req) == "2001:db8::100"
 
 
 def test_get_client_ip_trusted_malformed_real_ip_falls_back(monkeypatch):

@@ -3,10 +3,14 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from typing import Optional
 
 import jwt
 from cachetools import TTLCache
+from shared.env import requires_strict_auth_runtime
+
+from .auth_runtime import get_access_token_expire_minutes, validate_access_token_expiry_delta
 
 _logger = logging.getLogger("auth_utils")
 
@@ -17,10 +21,9 @@ _logger = logging.getLogger("auth_utils")
 # ──────────────────────────────────────────────────────────────
 _env_secret = os.getenv("AUTH_SECRET_KEY")
 if not _env_secret:
-    _is_production = os.getenv("REGENGINE_ENV", "").lower() == "production"
-    if _is_production:
+    if requires_strict_auth_runtime():
         raise RuntimeError(
-            "AUTH_SECRET_KEY must be set in production. "
+            "AUTH_SECRET_KEY must be set in strict auth environments. "
             "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
         )
     _env_secret = secrets.token_urlsafe(32)
@@ -47,7 +50,8 @@ SESSION_ISSUER = "regengine-admin"
 TOOL_ACCESS_AUDIENCE = "regengine-tool-access"
 
 # Session timeout configuration (configurable via env vars)
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+ACCESS_TOKEN_EXPIRE_MINUTES = get_access_token_expire_minutes()
+UNKNOWN_TOKEN_REVOCATION_TTL_SECONDS = 60 * 60
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "60"))
 
@@ -55,11 +59,12 @@ SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "60
 # #1069 — reject JWTs without a ``jti`` claim. ``revoke_token()`` can only
 # flag tokens by jti, so a pre-jti (legacy) token is un-revocable for its
 # full natural TTL. Forcing re-auth on these tokens closes the gap. Set
-# AUTH_ALLOW_LEGACY_JTI_FREE=true ONLY as a short-term rollback lever if
-# production traffic still contains pre-jti tokens (all tokens minted by
-# create_access_token now carry a jti, so the natural access-token TTL
-# bounds the rollback window).
+# AUTH_ALLOW_LEGACY_JTI_FREE=true is retained only as a local compatibility
+# lever. Strict staging and production always reject jti-free tokens, even if
+# the startup validation were bypassed.
 def _require_jti_default() -> bool:
+    if requires_strict_auth_runtime():
+        return True
     return os.getenv("AUTH_ALLOW_LEGACY_JTI_FREE", "").lower() not in ("true", "1", "yes")
 
 
@@ -84,6 +89,28 @@ _revoked_jtis: TTLCache[str, bool] = TTLCache(
     ttl=ACCESS_TOKEN_EXPIRE_MINUTES * 60 + 300,
 )
 _revocation_redis = None  # set by lifespan init
+_REVOCATION_KEY_PREFIX = "regengine:jwt:revoked:"
+_LEGACY_REVOCATION_SET_KEY = "regengine:jwt:revoked"
+_REVOKE_JTI_MAX_TTL_SCRIPT = """
+local requested = tonumber(ARGV[1])
+local current = redis.call('TTL', KEYS[1])
+if current == -2 then
+    redis.call('SET', KEYS[1], '1', 'EX', requested)
+    return requested
+end
+if current == -1 then
+    return current
+end
+if current < requested then
+    redis.call('EXPIRE', KEYS[1], requested)
+    return requested
+end
+return current
+"""
+
+
+class RevocationBackendUnavailable(RuntimeError):
+    """Raised when production cannot verify or persist JWT revocation state."""
 
 
 def _remember_revoked_jti(jti: str) -> None:
@@ -111,9 +138,26 @@ def _sync_keys_from_registry(signing_key, verification_keys) -> None:
     _verification_keys = {k.kid: k.secret for k in verification_keys}
 
 
+async def sync_keys_from_registry() -> None:
+    """Refresh this worker's signing and verification cache from Redis."""
+
+    from shared.jwt_key_registry import get_key_registry
+
+    registry = await get_key_registry()
+    signing_key, verification_keys = await registry.get_key_snapshot()
+    _sync_keys_from_registry(signing_key, verification_keys)
+
+
+def _revocation_key(jti: str) -> str:
+    """Return a fixed-width Redis key without exposing the raw JTI."""
+
+    return f"{_REVOCATION_KEY_PREFIX}{sha256(jti.encode()).hexdigest()}"
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    if expires_delta:
+    if expires_delta is not None:
+        validate_access_token_expiry_delta(expires_delta)
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -207,7 +251,17 @@ def decode_access_token(token: str) -> dict:
             except jwt.exceptions.InvalidSignatureError:
                 continue
 
-    # Final fallback — static env var key
+    # Before the async registry has initialized, local development can still
+    # use the static environment key as a bootstrap. Once `_active_kid` is set,
+    # the registry is authoritative: a kid-less token may use only a currently
+    # valid registry key. Falling back to SECRET_KEY here would let a caller
+    # with a revoked legacy signing secret bypass emergency key revocation by
+    # simply omitting the `kid` header.
+    if _active_kid is not None:
+        raise jwt.exceptions.InvalidSignatureError("Token is not signed by a currently valid registry key")
+
+    # Local/bootstrap fallback — unreachable in a successfully initialized
+    # production lifespan.
     payload = _decode_session_strict(token, SECRET_KEY)
     return _check_revoked(payload)
 
@@ -265,35 +319,59 @@ async def check_revoked_async(jti: str) -> bool:
         return False
     if jti in _revoked_jtis:
         return True
-    if _revocation_redis:
+    if _revocation_redis is not None:
         try:
-            if await _revocation_redis.sismember("regengine:jwt:revoked", jti):
+            # New format: one independently expiring key per JTI. During the
+            # rollout, continue reading the old shared set until its final TTL
+            # elapses; never add new members to it.
+            if await _revocation_redis.get(_revocation_key(jti)):
                 _remember_revoked_jti(jti)
                 return True
-        except Exception as exc:  # pragma: no cover — Redis best-effort
-            # If Redis is transiently unreachable, fall back to
-            # in-memory. The worker that issued the revocation still
-            # blocks the token, and the logout audit event is still in
-            # the DB. Better to be permissive on read than to fail
-            # every request when Redis hiccups.
-            _logger.warning("check_revoked_async_redis_error: %s", exc)
+            if await _revocation_redis.sismember(_LEGACY_REVOCATION_SET_KEY, jti):
+                _remember_revoked_jti(jti)
+                return True
+        except Exception as exc:
+            _logger.warning("check_revoked_async_redis_error: %s", type(exc).__name__)
+            if requires_strict_auth_runtime():
+                raise RevocationBackendUnavailable("JWT revocation backend read failed") from exc
+    else:
+        if requires_strict_auth_runtime():
+            raise RevocationBackendUnavailable("JWT revocation backend is not initialized")
     return False
 
 
 async def revoke_token(jti: str, ttl_seconds: Optional[int] = None) -> None:
-    """Revoke a token by its jti. TTL defaults to ACCESS_TOKEN_EXPIRE_MINUTES."""
+    """Revoke a token by JTI using an independently expiring Redis key.
+
+    One Redis script installs the revocation or extends its TTL to
+    ``max(existing, requested)`` atomically. Callers that decoded the token
+    should pass its actual remaining lifetime. Unknown tokens use a
+    conservative one-hour compatibility window for pre-hardening JWTs.
+    """
     if ttl_seconds is None:
-        ttl_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        ttl_seconds = UNKNOWN_TOKEN_REVOCATION_TTL_SECONDS
+    ttl_seconds = max(1, int(ttl_seconds))
 
     _remember_revoked_jti(jti)
-    _logger.warning("jwt_token_revoked: jti=%s", jti)
+    _logger.warning("jwt_token_revoked")
 
-    if _revocation_redis:
+    if _revocation_redis is not None:
         try:
-            await _revocation_redis.sadd("regengine:jwt:revoked", jti)
-            await _revocation_redis.expire("regengine:jwt:revoked", ttl_seconds + 300)
+            resulting_ttl = await _revocation_redis.eval(
+                _REVOKE_JTI_MAX_TTL_SCRIPT,
+                1,
+                _revocation_key(jti),
+                ttl_seconds,
+            )
+            if resulting_ttl is None or int(resulting_ttl) == -2:
+                raise RuntimeError("Redis did not persist the JWT revocation key")
         except Exception as exc:
-            _logger.warning("jwt_revoke_redis_failed: %s", exc)
+            _logger.warning("jwt_revoke_redis_failed: %s", type(exc).__name__)
+            if requires_strict_auth_runtime():
+                raise RevocationBackendUnavailable("JWT revocation backend write failed") from exc
+    else:
+        if requires_strict_auth_runtime():
+            raise RevocationBackendUnavailable("JWT revocation backend is not initialized")
 
 
 async def revoke_all_for_kid(kid: str) -> None:

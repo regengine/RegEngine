@@ -44,7 +44,6 @@ logger = logging.getLogger("fsma_auto_ingest")
 GRAPH_API_URL = os.getenv("GRAPH_API_URL", "http://localhost:8100")
 ADMIN_API_URL = os.getenv("ADMIN_API_URL", "http://localhost:8400")
 API_KEY = os.getenv("REGENGINE_API_KEY", "")
-ADMIN_KEY = os.getenv("ADMIN_MASTER_KEY", "")
 
 
 def generate_tlc() -> str:

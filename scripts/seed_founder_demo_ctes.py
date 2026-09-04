@@ -9,10 +9,10 @@ plus chain_integrity / provenance_complete / rules_evaluated.
 
 Mechanism (validated against main @ 8e6e4b6):
   POST {BASE}/api/v1/webhooks/ingest  — one request per source system.
-  Auth: preshared master key in X-RegEngine-API-Key (env REGENGINE_API_KEY)
-        + X-Tenant-ID = founder tenant  (auth.py:355-398 → tenant from header)
+  Auth: individually attributable tenant key in X-RegEngine-API-Key
+        (env REGENGINE_TENANT_API_KEY) + matching X-Tenant-ID assertion.
   Required headers the stock scripts/seed_demo_ctes.py omits:
-        X-Tenant-ID       (else 401 E_TENANT_HEADER_REQUIRED under master key)
+        X-Tenant-ID       (must match the credential-bound tenant)
         Idempotency-Key   (else 428/400 — routes.py:56,83 strict)
         X-Webhook-Signature: sha256=<hmac>  (prod HAS WEBHOOK_HMAC_SECRET set)
   Body tenant_id is intentionally NOT set (ignored; conflict -> 409).
@@ -20,7 +20,7 @@ Mechanism (validated against main @ 8e6e4b6):
 Timestamps are within the last ~90 days (route replay window, security.py:232).
 
 Secrets come from the environment ONLY (inject via `railway run`):
-  REGENGINE_API_KEY     (required) — prod preshared master key
+  REGENGINE_TENANT_API_KEY (required) — scoped founder-tenant key
   WEBHOOK_HMAC_SECRET   (required for the write; prod has it configured)
 
 Usage:
@@ -378,9 +378,9 @@ def check_health(base: str) -> None:
 
 def status(base: str, tenant: str) -> int:
     """Read-only: GET /api/v1/readiness/assessment for the founder tenant."""
-    api_key = os.getenv("REGENGINE_API_KEY", "").strip()
+    api_key = os.getenv("REGENGINE_TENANT_API_KEY", "").strip()
     if not api_key:
-        print("ERROR: REGENGINE_API_KEY not in environment (run under `railway run`).")
+        print("ERROR: REGENGINE_TENANT_API_KEY not in environment (run under `railway run`).")
         return 2
     ctx = _ssl_ctx(base)
     url = f"{base}/api/v1/readiness/assessment?tenant_id={tenant}"
@@ -479,9 +479,9 @@ def main() -> int:
         print("Refusing to seed: static validation failed.")
         return rc
 
-    api_key = os.getenv("REGENGINE_API_KEY", "").strip()
+    api_key = os.getenv("REGENGINE_TENANT_API_KEY", "").strip()
     if not api_key:
-        print("ERROR: REGENGINE_API_KEY (prod master key) not in environment.")
+        print("ERROR: REGENGINE_TENANT_API_KEY (scoped founder-tenant key) not in environment.")
         return 2
     hmac_secret = os.getenv("WEBHOOK_HMAC_SECRET", "").strip() or None
     print(

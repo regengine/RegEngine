@@ -10,8 +10,10 @@ from shared.base_config import BaseServiceSettings
 class Settings(BaseServiceSettings):
     """Environment-driven configuration for the compliance service."""
 
-    graph_service_url: str = Field(
-        default="http://graph-service:8200",
+    # Graph is experimental and disabled in production. Do not default to a
+    # Docker DNS hostname that looks configured but cannot be reached (#2862).
+    graph_service_url: Optional[str] = Field(
+        default=None,
         alias="GRAPH_SERVICE_URL",
     )
     graph_request_timeout_s: float = Field(

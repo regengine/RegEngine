@@ -62,11 +62,10 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1345(b)(2)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.receive_date",
-            "params": {"fields": ["kdes.receive_date", "event_timestamp"]},
-        },
+        # #3038: date KDEs must be the recorded KDE date, not the event
+        # envelope timestamp. event_timestamp exists on every canonical
+        # event, so listing it as an alternate made this rule a tautology.
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.receive_date"},
         "failure_reason_template": "Receiving event missing {field_name} required by {citation}",
         "remediation_suggestion": "Record the date the food was received at your facility",
     },
@@ -107,11 +106,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1340(b)(2)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.ship_date",
-            "params": {"fields": ["kdes.ship_date", "event_timestamp"]},
-        },
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.ship_date"},
         "failure_reason_template": "Shipping event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date the food was shipped",
     },
@@ -133,11 +128,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1327(b)(2)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.harvest_date",
-            "params": {"fields": ["kdes.harvest_date", "event_timestamp"]},
-        },
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.harvest_date"},
         "failure_reason_template": "Harvesting event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of harvest",
     },
@@ -163,11 +154,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1335(b)(4)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.packing_date",
-            "params": {"fields": ["kdes.packing_date", "event_timestamp"]},
-        },
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.packing_date"},
         "failure_reason_template": "Initial packing event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of initial packing",
     },
@@ -178,11 +165,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["transformation"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1350(b)(4)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.transformation_date",
-            "params": {"fields": ["kdes.transformation_date", "event_timestamp"]},
-        },
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.transformation_date"},
         "failure_reason_template": "Transformation event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of transformation",
     },
@@ -193,11 +176,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1325(b)(5)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.cooling_date",
-            "params": {"fields": ["kdes.cooling_date", "event_timestamp"]},
-        },
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.cooling_date"},
         "failure_reason_template": "Cooling event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of cooling",
     },
@@ -406,8 +385,14 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1310(b)(2)",
-        "evaluation_logic": {"type": "field_presence", "field": "quantity"},
-        "failure_reason_template": "Event missing quantity and unit of measure ({citation})",
+        # #3041: the title promises quantity AND unit of measure; the logic
+        # must check both (require: all), not quantity alone.
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "quantity",
+            "params": {"fields": ["quantity", "unit_of_measure"], "require": "all"},
+        },
+        "failure_reason_template": "Event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the quantity and unit of measure for this event",
     },
     {
@@ -440,12 +425,10 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "identifier_format",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "GS1 General Specifications \u00a73.4.2",
-        "evaluation_logic": {
-            "type": "field_format",
-            "field": "from_facility_reference",
-            "condition": "regex_if_present",
-            "params": {"pattern": r"^\d{13}$|^[^0-9].*$|^$"},
-        },
+        # #3041: the rule promises check-digit verification; the old regex
+        # accepted any 13 digits. gs1_check_digit actually verifies it
+        # (skips non-numeric references, which are location descriptions).
+        "evaluation_logic": {"type": "gs1_check_digit", "field": "from_facility_reference"},
         "failure_reason_template": "Facility GLN '{field_name}' is not a valid 13-digit GS1 identifier",
         "remediation_suggestion": "Verify the GLN is exactly 13 digits with a valid GS1 check digit",
     },
@@ -503,11 +486,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1325(b)(4)",
-        "evaluation_logic": {
-            "type": "multi_field_presence",
-            "field": "kdes.landing_date",
-            "params": {"fields": ["kdes.landing_date", "event_timestamp"]},
-        },
+        "evaluation_logic": {"type": "field_presence", "field": "kdes.landing_date"},
         "failure_reason_template": "First land-based receiving event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date the seafood was landed (date vessel arrived at port)",
     },
@@ -556,6 +535,25 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "failure_reason_template": "Initial packing event missing harvester business name ({citation})",
         "remediation_suggestion": "Record the harvester's business name and phone number",
     },
+    # #3041: \u00a71.1330(a)(7) requires the harvester's phone number alongside
+    # the business name; no seed enforced it. Kept as a separate rule so
+    # a from_entity_reference (resolvable to full contact details) still
+    # satisfies either half independently.
+    {
+        "title": "Initial Packing: Harvester Phone Required",
+        "description": "Initial packing events must include the harvester's phone number (or an entity reference resolvable to it)",
+        "severity": "warning",
+        "category": "kde_presence",
+        "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
+        "citation_reference": "21 CFR \u00a71.1330(a)(7)",
+        "evaluation_logic": {
+            "type": "multi_field_presence",
+            "field": "kdes.harvester_business_phone",
+            "params": {"fields": ["kdes.harvester_business_phone", "from_entity_reference"]},
+        },
+        "failure_reason_template": "Initial packing event missing harvester phone number ({citation})",
+        "remediation_suggestion": "Record the harvester's phone number",
+    },
     # --- Relational Rules (cross-event validation) ---
     {
         "title": "Temporal Order: CTE Chronology Must Be Causal",
@@ -566,7 +564,11 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
             "cte_types": ["shipping", "receiving", "transformation", "initial_packing", "cooling"],
             "ftl_scope": ["ALL"],
         },
-        "citation_reference": "21 CFR \u00a71.1310",
+        # #3041: previously cited a bare "21 CFR \u00a71.1310" (the definitions
+        # section \u2014 it mandates nothing). Chronology is an operational
+        # data-integrity control that supports the accuracy of the
+        # date KDEs; it is not itself a subpart S requirement.
+        "citation_reference": "Operational integrity control (supports 21 CFR \u00a7\u00a71.1325\u20131.1350 date KDE accuracy)",
         "evaluation_logic": {"type": "temporal_order"},
         "failure_reason_template": "Chronology paradox: {event_type} event timestamp violates supply chain lifecycle order for this TLC ({citation})",
         "remediation_suggestion": "Verify event timestamps \u2014 a later-stage CTE cannot occur before an earlier-stage CTE for the same traceability lot code",
@@ -595,10 +597,13 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
     {
         "title": "Mass Balance: Output Cannot Exceed Input for Same TLC",
         "description": "Total shipped/output quantity for a TLC cannot exceed total received/input quantity (within tolerance)",
-        "severity": "critical",
+        # #3041: demoted from critical \u2014 the 1% tolerance is a heuristic
+        # operational check, not a CFR mandate; a false positive should
+        # flag for review, not block a compliant shipment.
+        "severity": "warning",
         "category": "quantity_consistency",
         "applicability_conditions": {"cte_types": ["shipping", "transformation"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1310",
+        "citation_reference": "Operational integrity control (supports 21 CFR \u00a71.1350(a)(1) quantity linkage)",
         "evaluation_logic": {
             "type": "mass_balance",
             "params": {"tolerance_percent": 1.0},

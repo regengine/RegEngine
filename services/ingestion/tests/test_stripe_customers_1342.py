@@ -5,11 +5,10 @@ the async admin-service call path that existing Stripe webhook tests
 mock past rather than exercise.
 
 Pinned behaviors:
-  - ``_create_tenant_via_admin``: requires ADMIN_SERVICE_URL and
-    ADMIN_MASTER_KEY; both errors raise RuntimeError (never leak to
-    HTTP 500). On success, the ``tenant_id`` must be present in the
-    admin response or RuntimeError is raised — a silent tenant with no
-    id is a worse failure mode than a noisy rejection.
+  - ``_create_tenant_via_admin``: requires ADMIN_SERVICE_URL and the
+    single-purpose REGENGINE_TENANT_PROVISIONER_KEY; both errors raise
+    RuntimeError (never leak to HTTP 500). On success, the ``tenant_id``
+    must be present in the admin response or RuntimeError is raised.
   - ``_create_portal_session``: two SDK variants (``billing_portal.sessions``
     vs legacy ``billing_portal.Session``); plus the HTTPException(500)
     when neither is available.
@@ -99,9 +98,10 @@ def _install_fake_resilient_client(monkeypatch, *, payload: dict, status_code: i
     """
     captured: dict = {}
 
-    def _factory(*, timeout, circuit_name):
+    def _factory(*, timeout, circuit_name, follow_redirects):
         captured["timeout"] = timeout
         captured["circuit_name"] = circuit_name
+        captured["follow_redirects"] = follow_redirects
         return _FakeClient(_FakeResponse(payload, status_code), captured)
 
     monkeypatch.setattr(mod, "resilient_client", _factory)
@@ -111,43 +111,52 @@ def _install_fake_resilient_client(monkeypatch, *, payload: dict, status_code: i
 class TestCreateTenantViaAdmin:
     def test_missing_admin_service_url_raises_runtime_error(self, monkeypatch):
         monkeypatch.delenv("ADMIN_SERVICE_URL", raising=False)
-        monkeypatch.setenv("ADMIN_MASTER_KEY", "k")
+        monkeypatch.setenv("REGENGINE_TENANT_PROVISIONER_KEY", "k")
         with pytest.raises(RuntimeError) as ei:
             asyncio.run(mod._create_tenant_via_admin("Acme Inc."))
         assert "ADMIN_SERVICE_URL" in str(ei.value)
 
-    def test_missing_admin_master_key_raises_runtime_error(self, monkeypatch):
+    def test_missing_tenant_provisioner_key_raises_runtime_error(self, monkeypatch):
         # The key is only checked if the URL is set, so we test it
         # independently. Pins the security invariant: we NEVER hit the
-        # admin service without the master key, because the admin API
-        # treats missing X-Admin-Key as unauthenticated.
+        # internal service without its workload key.
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc")
-        monkeypatch.delenv("ADMIN_MASTER_KEY", raising=False)
+        monkeypatch.delenv("REGENGINE_TENANT_PROVISIONER_KEY", raising=False)
         with pytest.raises(RuntimeError) as ei:
             asyncio.run(mod._create_tenant_via_admin("Acme Inc."))
-        assert "ADMIN_MASTER_KEY" in str(ei.value)
+        assert "REGENGINE_TENANT_PROVISIONER_KEY" in str(ei.value)
 
     def test_happy_path_posts_and_returns_tenant_id(self, monkeypatch):
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc/")
-        monkeypatch.setenv("ADMIN_MASTER_KEY", "secret-key")
+        monkeypatch.setenv("REGENGINE_TENANT_PROVISIONER_KEY", "secret-key")
         captured = _install_fake_resilient_client(monkeypatch, payload={"tenant_id": "tenant-42"})
 
         result = asyncio.run(mod._create_tenant_via_admin("Acme Inc."))
 
         assert result == "tenant-42"
         # Trailing slash must be stripped so we don't emit
-        # ``//v1/admin/tenants``.
-        assert captured["url"] == "http://admin.svc/v1/admin/tenants"
-        assert captured["headers"]["X-Admin-Key"] == "secret-key"
+        # ``//v1/internal/tenants``.
+        assert captured["url"] == "http://admin.svc/v1/internal/tenants"
+        assert captured["headers"]["X-RegEngine-API-Key"] == "secret-key"
+        assert "X-Admin-Key" not in captured["headers"]
         assert captured["json"] == {"name": "Acme Inc."}
         assert captured["circuit_name"] == "admin-service"
         assert captured["timeout"] == 20.0
+        assert captured["follow_redirects"] is False
+
+    def test_redirect_is_rejected_without_parsing_or_following(self, monkeypatch):
+        monkeypatch.setenv("ADMIN_SERVICE_URL", "https://admin.svc")
+        monkeypatch.setenv("REGENGINE_TENANT_PROVISIONER_KEY", "secret")
+        _install_fake_resilient_client(monkeypatch, payload={"tenant_id": "wrong"}, status_code=302)
+
+        with pytest.raises(RuntimeError, match="refused a redirect"):
+            asyncio.run(mod._create_tenant_via_admin("Acme"))
 
     def test_http_error_propagates(self, monkeypatch):
         # ``raise_for_status()`` lets the underlying 5xx bubble up —
         # the outer Stripe webhook handler retries on that.
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc")
-        monkeypatch.setenv("ADMIN_MASTER_KEY", "secret")
+        monkeypatch.setenv("REGENGINE_TENANT_PROVISIONER_KEY", "secret")
         _install_fake_resilient_client(monkeypatch, payload={}, status_code=500)
         with pytest.raises(RuntimeError):
             asyncio.run(mod._create_tenant_via_admin("Acme"))
@@ -156,7 +165,7 @@ class TestCreateTenantViaAdmin:
         # Admin returning 200 but without ``tenant_id`` is worse than a
         # clean 5xx — it would silently orphan the Stripe customer.
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc")
-        monkeypatch.setenv("ADMIN_MASTER_KEY", "secret")
+        monkeypatch.setenv("REGENGINE_TENANT_PROVISIONER_KEY", "secret")
         _install_fake_resilient_client(monkeypatch, payload={"other": "x"})
         with pytest.raises(RuntimeError) as ei:
             asyncio.run(mod._create_tenant_via_admin("Acme"))
@@ -165,7 +174,7 @@ class TestCreateTenantViaAdmin:
     def test_empty_tenant_id_in_response_raises(self, monkeypatch):
         # ``if not tenant_id`` — empty string is falsy, same path.
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc")
-        monkeypatch.setenv("ADMIN_MASTER_KEY", "secret")
+        monkeypatch.setenv("REGENGINE_TENANT_PROVISIONER_KEY", "secret")
         _install_fake_resilient_client(monkeypatch, payload={"tenant_id": ""})
         with pytest.raises(RuntimeError):
             asyncio.run(mod._create_tenant_via_admin("Acme"))

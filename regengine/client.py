@@ -40,10 +40,37 @@ class RegEngineClient:
     Example:
         >>> client = RegEngineClient(api_key="rge_your_key")
         >>> record = client.get_record("LOT-2026-001")
+
+    Experimental surface (#2952): the methods listed in
+    ``EXPERIMENTAL_METHODS`` target the graph FSMA routers, which the
+    production deployment does not mount (they are excluded from the
+    release-approved ``ENABLED_ROUTERS`` allowlist). Against the hosted API
+    they return 404; they work only against a deployment that mounts the
+    experimental graph routers. ``tests/sdk/test_route_contract.py`` enforces
+    that this list exactly matches the set of client methods whose routes are
+    absent from the production route table.
     """
 
     DEFAULT_BASE_URL = "https://api.regengine.co"
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
+
+    # Client methods whose backing routes exist only when the experimental
+    # graph routers are mounted (not in production). Kept in exact sync with
+    # the production route table by the SDK route-contract test: a method may
+    # leave this set only when its route is promoted into the production
+    # allowlist, and may not be added to the client without either a
+    # production route or an entry here.
+    EXPERIMENTAL_METHODS = frozenset(
+        {
+            "trace_forward",
+            "trace_backward",
+            "get_timeline",
+            "start_recall_drill",
+            "get_recall_drills",
+            "get_readiness_score",
+            "export_fda",
+        }
+    )
 
     def __init__(
         self,

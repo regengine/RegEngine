@@ -184,7 +184,12 @@ async def update_user_role(
         raise HTTPException(status_code=404, detail="User not found in this tenant")
 
     target_role = db.get(RoleModel, update.role_id)
-    if not target_role:
+    if not target_role or (
+        target_role.tenant_id is not None and target_role.tenant_id != tenant_id
+    ):
+        # Treat a cross-tenant custom role exactly like an unknown role. A
+        # caller must never be able to attach another tenant's permissions to
+        # a membership or use this response as a role-enumeration oracle.
         raise HTTPException(status_code=400, detail="Role not found")
 
     current_role = db.get(RoleModel, membership.role_id)

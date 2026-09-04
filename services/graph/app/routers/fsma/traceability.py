@@ -577,7 +577,7 @@ class TraceabilityEventRequest(BaseModel):
     event_date: str
     tlc: str
     location_identifier: str
-    responsible_party_contact: str  # FSMA 204 KDE per 21 CFR 1.1370(c)
+    responsible_party_contact: str  # traceability-plan point of contact per 21 CFR 1.1315(a)(4) (#3040)
     quantity: Optional[float] = None
     uom: Optional[str] = None
     product_description: Optional[str] = None

@@ -7,8 +7,10 @@ Graph analytics service using Neo4j for relationship mapping, opportunity detect
 Graph is **not a separately deployed service**. It is a router domain mounted into the
 consolidated monolith (`server/main.py`) at `/api/v1`:
 
-- `graph` is in `_EXPERIMENTAL_ROUTERS`, so all graph routers are **auto-disabled in
-  production** unless `ENABLE_EXPERIMENTAL_ROUTERS` is truthy.
+- `graph` is excluded from the exact production `ENABLED_ROUTERS` release set,
+  so all graph routes return 404. Promotion requires route-manifest coverage
+  and the two-tenant matrix against Neo4j; the legacy experimental bypass is
+  rejected in production.
 - The standalone entrypoint `services/graph/app/main.py` is local-debug only —
   `assert_legacy_entrypoint_not_in_production` blocks it in production. The per-service
   Dockerfile/requirements.txt and dedicated ports (8003/8200) below describe the retired

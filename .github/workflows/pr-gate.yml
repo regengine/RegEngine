@@ -46,6 +46,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   checks: read
@@ -74,7 +78,9 @@ jobs:
               "alembic/**", "server/**", "services/**", "shared/**", "kernel/**",
               "plugins/fsma/**", "Dockerfile", "railway.toml", "requirements.in",
               "requirements.lock", "scripts/**", "tests/**", "sample_data/**",
-              "demo_exports/**", ".github/workflows/backend-ci.yml",
+              "demo_exports/**", "docs/security/route-security-manifest.json",
+              "docs/security/release-evidence/**",
+              ".github/workflows/backend-ci.yml",
               ".github/workflows/deploy.yml",
           ]
           base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]

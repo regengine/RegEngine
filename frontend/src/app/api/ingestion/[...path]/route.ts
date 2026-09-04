@@ -75,29 +75,11 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         passthroughRequestHeaders(headers, request, [
             'authorization',
             'x-api-key',
-            'x-admin-key',
             'x-regengine-api-key',
             'x-tenant-id',
         ]);
 
-        // Forward the real client IP so the backend's trusted-proxy resolver
-        // can apply per-IP rate limits (e.g. the unauthenticated sandbox
-        // endpoints) instead of lumping every public caller behind this
-        // proxy's egress IP into a single bucket. Vercel sets x-real-ip and
-        // the left-most x-forwarded-for hop to the true client IP at the edge;
-        // we normalize to a SINGLE X-Forwarded-For value (preferring the
-        // Vercel-trustworthy x-real-ip) so a client-supplied header can't
-        // forge extra hops. The backend still trusts this only when the peer
-        // is a configured trusted proxy — otherwise it uses the socket IP.
-        const realClientIp =
-            request.headers.get('x-real-ip')?.trim() ||
-            request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-        if (realClientIp) {
-            headers.set('x-forwarded-for', realClientIp);
-            headers.set('x-real-ip', realClientIp);
-        }
-
-        // Inject access token + API key + admin key + tenant ID from cookies.
+        // Inject access token + tenant API key + tenant ID from cookies.
         // Unlike admin, ingestion overwrites an incoming Authorization header
         // with the cookie token — preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);

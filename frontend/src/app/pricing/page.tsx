@@ -38,11 +38,9 @@ async function fetchBillingPlans(): Promise<BillingPlan[] | null> {
 
     try {
         const base = adminServiceUrl.replace(/\/+$/, '');
-        const apiKey = process.env.REGENGINE_API_KEY || '';
         const res = await fetch(`${base}/billing/plans`, {
             headers: {
                 'Content-Type': 'application/json',
-                ...(apiKey ? { 'X-RegEngine-API-Key': apiKey } : {}),
             },
             // next.js fetch cache: honour the page-level revalidate
             next: { revalidate: 3600 },

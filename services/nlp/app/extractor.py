@@ -106,6 +106,26 @@ _PROHIBITION_PATTERNS = re.compile(
 )
 
 
+# ---------------------------------------------------------------------------
+# Operative vs attributive "required" (#3009)
+# ---------------------------------------------------------------------------
+# "required" only expresses the sentence's own modality when it is the
+# predicate: "you are required to register", "records are required to be
+# maintained". As an attributive participle — "the required records",
+# "information required to be maintained under this subpart" — it names a
+# duty defined *elsewhere*, and the modal governing the main verb decides
+# this sentence's modality.
+#
+# A be-verb immediately before "required" marks the operative use. "required
+# to" alone does NOT: 21 CFR 1.1455(a)(1) has "electronic links to the
+# information required to be maintained under this subpart" as a reduced
+# relative clause sitting under a permissive "may include".
+_OPERATIVE_REQUIRED_PATTERN = re.compile(
+    r"\b(?:am|is|are|was|were|be|being|been)\s+required\b",
+    re.I,
+)
+
+
 def _tokenise(text: str) -> list:
     """Whitespace-split, strip trailing punctuation from each token."""
     return [t.strip(".,;:()[]\"'") for t in text.lower().split()]
@@ -135,9 +155,15 @@ def infer_obligation_type(text: str) -> dict:
        "no person shall") → PROHIBITED with ``negation_scope="prohibition"``.
     2. Conditional hedge ("unless", "except", "exempt") alongside a
        mandatory keyword → CONDITIONAL (WARNING logged).
-    3. Mandatory keywords ("shall", "must", "required") without negation
-       → MANDATORY.
+    3. Mandatory modals ("shall", "must") and the *operative* use of
+       "required" ("is required", "are required to register") without
+       negation → MANDATORY. #3009: an attributive "required" ("the
+       required records") no longer short-circuits here — the modal
+       governing the main verb is evaluated first (phase 4), and the bare
+       keyword only decides when no permissive modal governs (phase 4b).
     4. Permissive keywords ("may", "can") without negation → PERMITTED.
+    4b. Attributive "required" with no governing permissive modal
+        → MANDATORY.
     5. Negated permissive ("may not") caught by phase 1.
     6. Fallback → MANDATORY (conservative default).
     """
@@ -186,13 +212,27 @@ def infer_obligation_type(text: str) -> dict:
         }
 
     # --- Phase 3: positive mandatory keywords --------------------------------
-    for kw in _MANDATORY_KW:
+    # #3009: a mandatory *keyword* must not outrank the modal governing the
+    # main verb. "You may keep the required records in electronic form."
+    # grants a choice about format — "required" describes the records, not
+    # the action the modal governs — so matching it here manufactured an
+    # obligation the regulation left optional. Phase 3 claims MANDATORY only
+    # for the unambiguous mandatory modals and for the operative use of
+    # "required"; an attributive "required" defers to phase 4 and is picked
+    # up by phase 4b when no permissive modal governs the sentence.
+    for kw in ("shall", "must"):
         if kw in text_lower and not _has_negation_near(kw):
             return {
                 "obligation": "MANDATORY",
                 "negation_detected": False,
                 "negation_scope": None,
             }
+    if _OPERATIVE_REQUIRED_PATTERN.search(text) and not _has_negation_near("required"):
+        return {
+            "obligation": "MANDATORY",
+            "negation_detected": False,
+            "negation_scope": None,
+        }
 
     # --- Phase 4: positive permissive keywords --------------------------------
     _PERMISSIVE_KW = ["may", "can", "permitted", "allowed"]
@@ -203,6 +243,17 @@ def infer_obligation_type(text: str) -> dict:
                 "negation_detected": False,
                 "negation_scope": None,
             }
+
+    # --- Phase 4b: attributive "required" with no governing permissive modal --
+    # The keyword is the only modality signal left, so the pre-#3009 reading
+    # stands: sentences where "required" IS the operative word ("the required
+    # records: lot code, quantity, and date") remain MANDATORY.
+    if "required" in text_lower and not _has_negation_near("required"):
+        return {
+            "obligation": "MANDATORY",
+            "negation_detected": False,
+            "negation_scope": None,
+        }
 
     # --- Phase 5: negated permissive → PROHIBITED ----------------------------
     for kw in _PERMISSIVE_KW:

@@ -6,6 +6,7 @@ import type {
   APIKeyResponse,
   IngestURLRequest,
   IngestURLResponse,
+  IngestCSVResponse,
   ComplianceChecklist,
   Industry,
   TenantResponse,
@@ -365,10 +366,11 @@ class APIClient {
   }
 
 
-  async createAPIKey(
-    adminKey: string,
-    params: { name: string; description?: string; tenantId?: string },
-  ): Promise<APIKeyResponse> {
+  async createAPIKey(params: {
+    name: string;
+    description?: string;
+    tenantId?: string;
+  }): Promise<APIKeyResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/keys',
       {
@@ -376,34 +378,28 @@ class APIClient {
         description: params.description,
         tenant_id: params.tenantId,
       },
-      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
-  async generateAPIKey(adminKey: string, tenantId?: string): Promise<APIKeyResponse> {
+  async generateAPIKey(tenantId?: string): Promise<APIKeyResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/keys',
       {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
       },
-      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
-  async listAPIKeys(adminKey: string): Promise<APIKeyResponse[]> {
-    const { data } = await this.adminClient.get('/v1/admin/keys', {
-      headers: credentialHeader('X-Admin-Key', adminKey),
-    });
-    return data;
+  async listAPIKeys(): Promise<APIKeyResponse[]> {
+    const { data } = await this.adminClient.get<CollectionResponse<APIKeyResponse>>('/v1/admin/keys');
+    return normalizeCollection(data);
   }
 
-  async revokeAPIKey(adminKey: string, keyId: string): Promise<void> {
-    await this.adminClient.delete(`/v1/admin/keys/${keyId}`, {
-      headers: credentialHeader('X-Admin-Key', adminKey),
-    });
+  async revokeAPIKey(keyId: string): Promise<void> {
+    await this.adminClient.delete(`/v1/admin/keys/${keyId}`);
   }
 
   // Ingestion API
@@ -425,7 +421,7 @@ class APIClient {
   }
 
 
-  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestURLResponse> {
+  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'csv_upload', cteType?: string): Promise<IngestCSVResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', sourceSystem);
@@ -434,15 +430,74 @@ class APIClient {
       formData.append('cte_type', cteType);
     }
 
-    const response = await this.ingestionClient.post<IngestURLResponse>(
-      '/api/v1/ingest/csv',
-      formData,
-      {
-        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
-        timeout: 300000 // Longer timeout for large files (5 minutes)
+    try {
+      const response = await this.ingestionClient.post<IngestCSVResponse>(
+        '/api/v1/ingest/csv',
+        formData,
+        {
+          headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+          timeout: 300000 // Longer timeout for large files (5 minutes)
+        }
+      );
+      const result = response.data;
+      const countsAreValid = result
+        && [result.total, result.accepted, result.rejected].every(
+          value => Number.isInteger(value) && value >= 0,
+        )
+        && result.total > 0
+        && result.accepted + result.rejected === result.total;
+      const isNonEmptyString = (value: unknown): value is string => (
+        typeof value === 'string' && value.trim().length > 0
+      );
+      const isSha256 = (value: unknown): value is string => (
+        typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
+      );
+      const eventsAreValid = Array.isArray(result?.events)
+        && result.events.length === result.total
+        && result.events.every(event => event
+          && typeof event.traceability_lot_code === 'string'
+          && typeof event.cte_type === 'string'
+          && (event.status === 'accepted' || event.status === 'rejected')
+          && Array.isArray(event.errors)
+          && event.errors.every(error => typeof error === 'string')
+          && [event.event_id, event.sha256_hash, event.chain_hash].every(
+            value => value === undefined || value === null || typeof value === 'string',
+          )
+          && (event.status === 'rejected' || (
+            isNonEmptyString(event.event_id)
+            && isSha256(event.sha256_hash)
+            && isSha256(event.chain_hash)
+            && event.errors.length === 0
+          )))
+        && result.events.filter(event => event.status === 'accepted').length === result.accepted
+        && result.events.filter(event => event.status === 'rejected').length === result.rejected;
+      const warningsAreValid = result?.kde_warnings === undefined
+        || (Array.isArray(result.kde_warnings)
+          && result.kde_warnings.every(warning => typeof warning === 'string'));
+      const warningCountIsValid = result?.kde_warning_count === undefined
+        || (Number.isInteger(result.kde_warning_count)
+          && result.kde_warning_count >= 0
+          && result.kde_warning_count === (result.kde_warnings?.length ?? 0));
+      if (!countsAreValid || !eventsAreValid
+        || typeof result.ingestion_timestamp !== 'string' || !result.ingestion_timestamp.trim()
+        || !warningsAreValid || !warningCountIsValid) {
+        throw new Error('Unexpected CSV ingestion response');
       }
-    );
-    return response.data;
+      return result;
+    } catch (error) {
+      // CSV parsing uses a detail object; request validation uses a detail array.
+      // Keep the original HTTP response for callers while making its message safe to render.
+      if (error instanceof Error) {
+        const detail = asRecord(asRecord(asRecord(error).response).data).detail;
+        const detailRecord = asRecord(detail);
+        const messages = typeof detail === 'string' ? [detail]
+          : Array.isArray(detail) ? detail.map(item => asRecord(item).msg)
+          : [detailRecord.message, ...(Array.isArray(detailRecord.errors) ? detailRecord.errors : [])];
+        const message = messages.filter((value): value is string => typeof value === 'string').join(': ');
+        if (message) error.message = message;
+      }
+      throw error;
+    }
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
@@ -579,42 +634,30 @@ class APIClient {
     return data;
   }
 
-  async createTenant(adminKey: string, name: string): Promise<TenantResponse> {
+  async createTenant(name: string): Promise<TenantResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/tenants',
       { name },
-      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
   // Review Workflow
-  async getReviewItems(adminKey: string, status: string = 'PENDING'): Promise<ReviewItem[]> {
+  async getReviewItems(status: string = 'PENDING'): Promise<ReviewItem[]> {
     const { data } = await this.adminClient.get<ReviewQueueResponse>('/v1/admin/review/flagged-extractions', {
       params: { status_filter: status, limit: 50 },
-      headers: credentialHeader('X-Admin-Key', adminKey)
     });
 
     const items = normalizeCollection(data);
     return items.map(normalizeReviewItem).filter((item) => item.id);
   }
 
-  async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {
-      reviewer_id: 'web-frontend',
-      notes: 'Approved via web interface',
-    }, {
-      headers: credentialHeader('X-Admin-Key', adminKey)
-    });
+  async approveReviewItem(itemId: string): Promise<void> {
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {});
   }
 
-  async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {
-      reviewer_id: 'web-frontend',
-      notes: 'Rejected via web interface',
-    }, {
-      headers: credentialHeader('X-Admin-Key', adminKey)
-    });
+  async rejectReviewItem(itemId: string): Promise<void> {
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {});
   }
 
   // --- User Management ---

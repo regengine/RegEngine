@@ -20,12 +20,12 @@ from __future__ import annotations
 import socket
 import ssl
 from ipaddress import ip_address
-from typing import Any, Callable, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 from urllib.parse import urlparse, urlunparse
 
 import httpx
 import structlog
-from shared.url_validation import BLOCKED_NETWORKS, SSRFError, validate_url
+from shared.url_validation import SSRFError, validate_url
 
 logger = structlog.get_logger("safe-http")
 
@@ -81,6 +81,10 @@ class _IPPinnedAsyncTransport(httpx.AsyncHTTPTransport):
             if original_url.port is not None and original_url.port not in (80, 443)
             else self._original_host
         )
+        # httpcore otherwise derives TLS SNI and certificate verification from
+        # the rewritten IP literal.  Preserve the validated hostname while the
+        # TCP connection remains pinned to the selected address.
+        request.extensions["sni_hostname"] = self._original_host
         return await super().handle_async_request(request)
 
 
@@ -102,6 +106,7 @@ class _IPPinnedSyncTransport(httpx.HTTPTransport):
             if original_url.port is not None and original_url.port not in (80, 443)
             else self._original_host
         )
+        request.extensions["sni_hostname"] = self._original_host
         return super().handle_request(request)
 
 
@@ -130,9 +135,9 @@ def _validate_and_pin(url: str) -> tuple[str, str]:
             resolved = ip_address(addr)
         except ValueError:
             continue
-        for network in BLOCKED_NETWORKS:
-            if resolved in network:
-                raise SSRFError(f"Resolved IP {resolved} is in blocked network {network}")
+        mapped = getattr(resolved, "ipv4_mapped", None)
+        if not (mapped or resolved).is_global:
+            raise SSRFError(f"Resolved IP {resolved} is not a public global address")
         return addr, host
     raise SSRFError(f"No addresses for host: {host}")
 
@@ -268,6 +273,53 @@ async def safe_httpx_post_async(
         return await client.post(current_url, json=json, data=data)
 
 
+class PinnedHTTPSession:
+    """Small sync session facade whose every request uses a pinned client.
+
+    This deliberately offers only the ``get``/``post`` surface needed by the
+    embedded scheduler.  It preserves the familiar mutable ``headers`` and
+    ``close`` seams used by existing tests without retaining a raw
+    ``httpx.Client`` that could bypass per-request DNS validation.
+    """
+
+    def __init__(self, *, headers: Optional[dict] = None) -> None:
+        self.headers: dict = dict(headers or {})
+        self.closed = False
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> httpx.Response:
+        if self.closed:
+            raise RuntimeError("HTTP session is closed")
+        request_url = str(httpx.URL(url).copy_merge_params(params)) if params else url
+        return safe_httpx_get_sync(request_url, headers=self.headers, timeout=timeout)
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Optional[Any] = None,
+        data: Optional[Any] = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> httpx.Response:
+        if self.closed:
+            raise RuntimeError("HTTP session is closed")
+        return safe_httpx_post_sync(
+            url,
+            headers=self.headers,
+            json=json,
+            data=data,
+            timeout=timeout,
+        )
+
+    def close(self) -> None:
+        self.closed = True
+
+
 async def follow_redirects_safely(
     url: str,
     *,
@@ -351,6 +403,7 @@ def safe_fetch_content(
 
 
 __all__ = [
+    "PinnedHTTPSession",
     "STANDARD_BROWSER_HEADERS",
     "safe_httpx_client",
     "safe_httpx_get_sync",

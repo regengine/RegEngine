@@ -5,7 +5,8 @@ Usage:
     python3 scripts/seed_demo_ctes.py [BASE_URL] [API_KEY]
 
 Defaults to the production ingestion service URL.
-Uses REGENGINE_API_KEY env var if no CLI arg, then falls back to preshared key.
+Uses an individually attributable tenant key from REGENGINE_TENANT_API_KEY
+when no CLI key is supplied.
 """
 
 import json
@@ -15,9 +16,9 @@ import sys
 import urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "https://regengine-production.up.railway.app"
-API_KEY = sys.argv[2] if len(sys.argv) > 2 else os.getenv("REGENGINE_API_KEY", "")
+API_KEY = sys.argv[2] if len(sys.argv) > 2 else os.getenv("REGENGINE_TENANT_API_KEY", "")
 if not API_KEY:
-    print("Error: No API key. Pass as 2nd arg or set REGENGINE_API_KEY env var.")
+    print("Error: No API key. Pass as 2nd arg or set REGENGINE_TENANT_API_KEY.")
     sys.exit(1)
 
 ENDPOINT = f"{BASE}/api/v1/webhooks/ingest"

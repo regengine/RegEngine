@@ -5,26 +5,11 @@
 # Uses PostgreSQL advisory lock to prevent concurrent migration execution
 # across multiple service instances (e.g. Railway scaling events).
 #
-# Safe for both fresh databases and existing ones:
-#   - alembic_version exists AND holds a revision  → `alembic upgrade head`
-#   - no RegEngine schema at all (truly empty DB)  → `alembic upgrade head`
-#     (the chain runs from base, so no stamping is involved)
-#   - RegEngine schema present but alembic_version missing/EMPTY → AMBIGUOUS.
-#     We cannot tell how much of the chain is applied, so we FAIL LOUDLY and
-#     require an explicit operator opt-in (REGENGINE_ALLOW_AUTO_STAMP=1).
-#
-# #2826: this last branch used to be decided purely from "does an `fsma`
-# schema exist" — true for every database that ever ran the V002 baseline —
-# and then ran `alembic stamp head`, which marks the database as fully
-# migrated without applying anything. The following `alembic upgrade head`
-# became a no-op and ~70 revisions (RLS policies included) never applied.
-# Auto-stamping an unknown database is unsafe in BOTH directions:
-#   - stamp too high → migrations silently skipped (the #2826 bug)
-#   - stamp too low  → the chain replays DDL over existing objects
-# so the ambiguous case is now an operator decision, not a guess. When the
-# operator does opt in, we stamp the BASELINE revision
-# (REGENGINE_AUTO_STAMP_REVISION, default 97588ba8edf3) so the subsequent
-# `alembic upgrade head` actually replays the chain.
+# Safe for fresh and already Alembic-managed databases:
+#   - If alembic_version table exists and is populated → just run upgrade
+#   - If nothing exists → full upgrade from scratch
+#   - If application tables exist without a revision → fail for reviewed
+#     baseline recovery; never stamp an unknown schema to head
 #
 # Lock acquisition uses pg_try_advisory_xact_lock with bounded retries so a
 # blocked deploy fails LOUDLY (stderr, non-zero exit) within
@@ -35,18 +20,9 @@
 # transaction ends or the backend dies. See incident 2026-04-17 through
 # 2026-04-20.
 #
-# Usage:  DATABASE_URL=postgresql://... ./scripts/run-migrations.sh
+# Usage:  MIGRATIONS_DATABASE_URL=postgresql://... ./scripts/run-migrations.sh
 # ---------------------------------------------------------------------------
 set -euo pipefail
-
-# #2826 operator opt-in for the AMBIGUOUS case (RegEngine schema present but
-# alembic_version missing/empty). Unset/0 => refuse to guess and exit non-zero.
-REGENGINE_ALLOW_AUTO_STAMP=${REGENGINE_ALLOW_AUTO_STAMP:-0}
-# Revision stamped before replaying the chain when auto-stamp is authorised.
-# Defaults to the consolidated V002–V042 baseline. An operator who knows the
-# database is further along may point this at the revision it really is at.
-REGENGINE_AUTO_STAMP_REVISION=${REGENGINE_AUTO_STAMP_REVISION:-97588ba8edf3}  # pragma: allowlist secret
-export REGENGINE_ALLOW_AUTO_STAMP REGENGINE_AUTO_STAMP_REVISION
 
 # Advisory lock ID for migrations (distinct from scheduler lock 4294967295)
 MIGRATION_LOCK_ID=4294967294
@@ -56,23 +32,45 @@ MIGRATION_LOCK_ID=4294967294
 # to leave room for the actual migration + app boot after the lock is acquired.
 MIGRATION_LOCK_TIMEOUT_S=${MIGRATION_LOCK_TIMEOUT_S:-90}
 
-# #2461: after the least-privilege cutover the runtime DATABASE_URL connects
-# as the RLS-enforced `regengine` role, which does not own the schema.
-# Migrations (DDL) must keep running as the owner role, so when
-# MIGRATIONS_DATABASE_URL is set (Railway production) it overrides
-# DATABASE_URL for this runner and the alembic subprocesses it spawns. The
-# override is scoped to this script's process tree — the app that starts
-# after this script still sees the original runtime DATABASE_URL. CI and
-# local dev set only DATABASE_URL; behavior there is unchanged.
-if [ -n "${MIGRATIONS_DATABASE_URL:-}" ]; then
-  DATABASE_URL="${MIGRATIONS_DATABASE_URL}"
-  export DATABASE_URL
+# Deployed DDL always uses the schema-owner credential.  Keep DATABASE_URL as
+# the RLS-enforced application credential; never overwrite or reuse it here.
+DEPLOYED_MIGRATION_RUN=false
+case "${REGENGINE_ENV:-${ENVIRONMENT:-${ENV:-}}}" in
+  production|staging) DEPLOYED_MIGRATION_RUN=true ;;
+esac
+for marker in RAILWAY_ENVIRONMENT RAILWAY_ENVIRONMENT_NAME RAILWAY_ENVIRONMENT_ID RAILWAY_PROJECT_NAME RAILWAY_PROJECT_ID RAILWAY_SERVICE_NAME RAILWAY_SERVICE_ID VERCEL_ENV VERCEL_URL RENDER FLY_APP_NAME KUBERNETES_SERVICE_HOST; do
+  if [ -n "${!marker:-}" ]; then
+    DEPLOYED_MIGRATION_RUN=true
+    break
+  fi
+done
+
+if [ -z "${MIGRATIONS_DATABASE_URL:-}" ] && [ "$DEPLOYED_MIGRATION_RUN" = true ]; then
+  echo "!! MIGRATIONS_DATABASE_URL is required for deployed migrations." >&2
+  echo "!! Refusing to use DATABASE_URL for schema-owner DDL." >&2
+  exit 64
 fi
 
-if [ -z "${DATABASE_URL:-}" ]; then
-  echo "!! DATABASE_URL must be set before running migrations." >&2
+MIGRATION_RUNNER_URL="${MIGRATIONS_DATABASE_URL:-${DATABASE_URL:-}}"
+export MIGRATION_RUNNER_URL
+if [ -z "$MIGRATION_RUNNER_URL" ]; then
+  echo "!! MIGRATIONS_DATABASE_URL is required (DATABASE_URL is accepted only for local/CI scratch databases)." >&2
   echo "!! Refusing to fall back to development database defaults in deploy/runtime paths." >&2
   exit 64  # EX_USAGE
+fi
+
+# The supported runner is always a dedicated-owner path, including local/CI
+# rehearsals. Export the selected URL so v111 can derive and prove the exact
+# login identity even when a local caller used the legacy DATABASE_URL input.
+export MIGRATIONS_DATABASE_URL="$MIGRATION_RUNNER_URL"
+export REGENGINE_ENFORCE_MIGRATION_ROLE=1
+
+MIGRATION_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_ROLE_CUTOVER_SCRIPT="${MIGRATION_SCRIPT_DIR}/apply_runtime_role_cutover.py"
+export RUNTIME_ROLE_CUTOVER_SCRIPT
+if [ ! -f "$RUNTIME_ROLE_CUTOVER_SCRIPT" ]; then
+  echo "!! Runtime-role cutover helper is missing: $RUNTIME_ROLE_CUTOVER_SCRIPT" >&2
+  exit 66  # EX_NOINPUT
 fi
 
 PYTHON_BIN=${PYTHON_BIN:-python3}
@@ -97,7 +95,7 @@ import os, sys, subprocess, time
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
-url = os.environ['DATABASE_URL']
+url = os.environ['MIGRATION_RUNNER_URL']
 timeout_s = int(os.environ.get('MIGRATION_LOCK_TIMEOUT_S', '${MIGRATION_LOCK_TIMEOUT_S}'))
 # NullPool: closing a connection really disconnects it instead of parking an
 # idle backend in the pool for the whole alembic run — the probe connection
@@ -176,99 +174,61 @@ try:
     # (2026-07-15 deploy incident). State probes run on a separate
     # connection that is CLOSED before Alembic starts.
     # ---- Detect DB state (dedicated probe connection) ----
-    #
-    # #2826: three facts, kept separate, because the old code collapsed them
-    # into one 'NEEDS_STAMP' verdict:
-    #   has_alembic   — the alembic_version table exists
-    #   stamped_rows  — how many revisions it records (0 == knows nothing)
-    #   has_schema    — RegEngine relations already exist in this database
-    # The presence of the fsma schema proves only that SOMETHING ran (the
-    # V002 baseline creates it); it says nothing about how far the chain got.
     probe = engine.connect()
     try:
-        has_alembic = bool(probe.execute(text(
-            \"SELECT to_regclass('alembic_version') IS NOT NULL\"
-        )).scalar())
+        result = probe.execute(text(
+            \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version')\"
+        ))
+        has_alembic = result.scalar()
 
-        stamped_rows = 0
-        if has_alembic:
-            stamped_rows = probe.execute(text('SELECT count(*) FROM alembic_version')).scalar() or 0
-
-        has_schema = bool(probe.execute(text(
-            \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma') \"
-            \"    OR to_regclass('public.regulations') IS NOT NULL \"
-            \"    OR to_regclass('public.obligations') IS NOT NULL\"
-        )).scalar())
+        if not has_alembic:
+            result2 = probe.execute(text(
+                \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
+            ))
+            state = 'NEEDS_BASELINE_REVIEW' if result2.scalar() else 'FRESH'
+        else:
+            result3 = probe.execute(text('SELECT count(*) FROM alembic_version'))
+            if result3.scalar() > 0:
+                state = 'ALREADY_MANAGED'
+            else:
+                result4 = probe.execute(text(
+                    \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
+                ))
+                state = 'NEEDS_BASELINE_REVIEW' if result4.scalar() else 'FRESH'
     finally:
         probe.close()
 
-    if stamped_rows > 0:
-        state = 'ALREADY_MANAGED'
-    elif not has_schema:
-        state = 'FRESH'
-    else:
-        state = 'AMBIGUOUS'
-
-    print(
-        f'    DB state: {state} '
-        f'(alembic_version={has_alembic}, revisions_recorded={stamped_rows}, regengine_schema={has_schema})',
-        flush=True,
-    )
+    print(f'    DB state: {state}', flush=True)
 
     # ---- Run migrations ----
-    if state == 'ALREADY_MANAGED':
-        print('==> Alembic already managing this database — upgrading to head...', flush=True)
-        subprocess.check_call(['alembic', 'upgrade', 'head'])
-    elif state == 'FRESH':
-        print('==> Fresh database — running the full migration chain from base...', flush=True)
-        subprocess.check_call(['alembic', 'upgrade', 'head'])
-    else:
-        # AMBIGUOUS — RegEngine relations exist but alembic_version is absent
-        # or empty (partial restore, pre-Alembic bootstrap, manual DELETE).
-        # There is no safe guess here, so require an explicit decision.
-        allow_auto_stamp = os.environ.get('REGENGINE_ALLOW_AUTO_STAMP', '0')
-        # 97588ba8edf3 is the baseline alembic revision id, not a credential.
-        stamp_revision = os.environ.get('REGENGINE_AUTO_STAMP_REVISION', '97588ba8edf3')  # pragma: allowlist secret
-        if allow_auto_stamp != '1':
-            print(
-                '!! AMBIGUOUS database state: RegEngine relations exist but the '
-                'alembic_version table is missing or holds no revision.',
-                file=sys.stderr, flush=True,
-            )
-            print(
-                '!! Refusing to guess. Stamping the wrong revision either skips '
-                'migrations silently (the #2826 regression: ~70 revisions, RLS '
-                'policies included, never applied) or replays DDL over existing '
-                'objects.',
-                file=sys.stderr, flush=True,
-            )
-            print(
-                '!! Remediation — establish the real state, then re-deploy:\n'
-                '!!   1. Inspect the database and decide which revision it is '
-                'actually at (alembic history, compared against the schema).\n'
-                '!!   2. Stamp it explicitly:  alembic stamp <revision>\n'
-                '!!      then re-deploy so this runner takes the ALREADY_MANAGED '
-                'path.\n'
-                '!!   3. OR, if the database is known to hold only the '
-                'V002-V042 baseline, authorise the automatic path by setting '
-                'REGENGINE_ALLOW_AUTO_STAMP=1 (optionally with '
-                'REGENGINE_AUTO_STAMP_REVISION=<revision>, default '
-                f'{stamp_revision}). The runner then stamps that revision and '
-                'replays the remainder of the chain.',
-                file=sys.stderr, flush=True,
-            )
-            tx.rollback()
-            sys.exit(78)  # EX_CONFIG — operator decision required
+    if state == 'NEEDS_BASELINE_REVIEW':
         print(
-            f'==> REGENGINE_ALLOW_AUTO_STAMP=1 — stamping baseline revision '
-            f'{stamp_revision} (NOT head) so the chain actually replays...',
+            '!! Existing application schema has no trusted Alembic revision. '
+            'Refusing to stamp an unknown schema to head. Restore migration '
+            'metadata or execute an operator-reviewed baseline recovery before retrying.',
+            file=sys.stderr,
             flush=True,
         )
-        subprocess.check_call(['alembic', 'stamp', stamp_revision])
-        print('==> Baseline stamped. Applying every revision after it...', flush=True)
+        raise SystemExit(65)  # EX_DATAERR
+    elif state == 'ALREADY_MANAGED':
+        print('==> Alembic already managing this database — upgrading...', flush=True)
+        subprocess.check_call(['alembic', 'upgrade', 'head'])
+    else:
+        print('==> Fresh database — running full migration...', flush=True)
         subprocess.check_call(['alembic', 'upgrade', 'head'])
 
-    print('==> Migrations complete.', flush=True)
+    # Reapply the convergent v111 cutover after every managed migration run so
+    # privilege/policy drift is repaired before startup. Pass the already-
+    # selected schema-owner URL only to this child process; never replace
+    # DATABASE_URL.
+    cutover_env = os.environ.copy()
+    cutover_env['MIGRATIONS_DATABASE_URL'] = url
+    subprocess.check_call(
+        [sys.executable, os.environ['RUNTIME_ROLE_CUTOVER_SCRIPT']],
+        env=cutover_env,
+    )
+
+    print('==> Migrations and runtime-role cutover complete.', flush=True)
     tx.commit()
 
 except BaseException:

@@ -7,12 +7,10 @@ import requests
 INGEST_URL = "http://localhost:8002/v1/ingest"
 LIVE_FDA_URL = "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods"
 API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
-ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "")
 TENANT_ID = os.environ.get("REGENGINE_TENANT_ID", "00000000-0000-0000-0000-000000000000")
 
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": ADMIN_MASTER_KEY,
     "X-Tenant-ID": TENANT_ID,
     "Content-Type": "application/json",
 }

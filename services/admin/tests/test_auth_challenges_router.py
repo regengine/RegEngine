@@ -140,6 +140,26 @@ class FakeResult:
         return self._first
 
 
+def _is_security_guc(statement) -> bool:
+    return "set_config('regengine.is_sysadmin'" in str(statement)
+
+
+def _data_execute_statements(db):
+    return [
+        statement
+        for statement in db.execute_statements
+        if not _is_security_guc(statement)
+    ]
+
+
+def _data_execute_calls(db):
+    return [
+        call
+        for call in db.execute.call_args_list
+        if not _is_security_guc(call.args[0])
+    ]
+
+
 class FakeTransaction:
     def __init__(self, db):
         self.db = db
@@ -170,6 +190,8 @@ class FakeDb:
 
     def execute(self, statement):
         self.execute_statements.append(statement)
+        if _is_security_guc(statement):
+            return FakeResult()
         if not self.results:
             raise AssertionError("unexpected execute")
         return self.results.pop(0)
@@ -222,6 +244,8 @@ class LockedFakeDb:
 
     def execute(self, statement):
         self.execute_statements.append(statement)
+        if _is_security_guc(statement):
+            return FakeResult()
         if not self.challenge_loaded:
             self.challenge_loaded = True
             if not self.store.row_lock.acquire(timeout=2):
@@ -267,13 +291,13 @@ def _identity():
 _DEFAULT_IDENTITY = object()
 
 
-def _mock_db_for_org_lookup(organization=None, identity=_DEFAULT_IDENTITY):
+def _mock_db_for_identity(identity=_DEFAULT_IDENTITY):
     db = MagicMock()
-    org_result = MagicMock()
-    org_result.scalar_one_or_none.return_value = organization
     identity_result = MagicMock()
     identity_result.first.return_value = _identity() if identity is _DEFAULT_IDENTITY else identity
-    db.execute.side_effect = [org_result, identity_result]
+    db.execute.side_effect = lambda statement: (
+        MagicMock() if _is_security_guc(statement) else identity_result
+    )
     return db
 
 
@@ -282,7 +306,7 @@ async def test_create_auth_challenge_persists_digest_sets_cookie_and_queues_plai
     fixed_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     monkeypatch.setattr(cr.uuid, "uuid4", lambda: fixed_id)
 
-    db = _mock_db_for_org_lookup()
+    db = _mock_db_for_identity()
     response = Response()
     background_tasks = BackgroundTasks()
     crypto = FakeCrypto()
@@ -339,23 +363,19 @@ async def test_create_auth_challenge_persists_digest_sets_cookie_and_queues_plai
     assert "HttpOnly" in set_cookie
     assert "Secure" in set_cookie
     assert "SameSite=lax" in set_cookie
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
 
 
 @pytest.mark.asyncio
-async def test_sso_only_domain_returns_redirect_payload_without_generating_otp(monkeypatch):
-    organization_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
-    organization = SimpleNamespace(
-        id=organization_id,
-        domain_name="enterprise.example",
-        enforced_auth_policy="sso_only",
-        domain_verified=True,
-    )
-    db = _mock_db_for_org_lookup(organization)
+async def test_verified_sso_only_identity_gets_generic_contract_without_email(monkeypatch):
+    fixed_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
+    db = _mock_db_for_identity(identity=None)
     response = Response()
     background_tasks = BackgroundTasks()
     crypto = FakeCrypto()
     rate_limit = FakeRateLimit()
-    monkeypatch.setattr(cr.uuid, "uuid4", lambda: pytest.fail("SSO-only flow must not create a challenge id"))
+    monkeypatch.setattr(cr.uuid, "uuid4", lambda: fixed_id)
 
     result = await cr.create_auth_challenge(
         payload=ChallengeCreateRequest(email="Leader@Enterprise.Example"),
@@ -368,30 +388,22 @@ async def test_sso_only_domain_returns_redirect_payload_without_generating_otp(m
     )
 
     assert result.model_dump(exclude_none=True) == {
-        "message": cr.AUTH_SSO_REQUIRED_MESSAGE,
-        "sso_redirect": True,
-        "organization_id": str(organization_id),
+        "detail": cr.AUTH_CHALLENGE_DETAIL,
+        "challenge_id": str(fixed_id),
     }
-    db.add.assert_not_called()
-    db.commit.assert_not_called()
-    assert crypto.generated_nonces == 0
-    assert crypto.hash_otp_calls == []
-    assert rate_limit.calls == []
+    db.add.assert_called_once()
+    db.commit.assert_called_once()
+    assert len(crypto.hash_otp_calls) == 1
+    assert len(rate_limit.calls) == 1
     assert background_tasks.tasks == []
-    assert "set-cookie" not in response.headers
+    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in response.headers["set-cookie"]
 
 
 @pytest.mark.asyncio
 async def test_unverified_sso_only_domain_uses_normal_otp_flow(monkeypatch):
     fixed_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     monkeypatch.setattr(cr.uuid, "uuid4", lambda: fixed_id)
-    organization = SimpleNamespace(
-        id=uuid.UUID("55555555-5555-4555-8555-555555555555"),
-        domain_name="unverified.example",
-        enforced_auth_policy="sso_only",
-        domain_verified=False,
-    )
-    db = _mock_db_for_org_lookup(organization)
+    db = _mock_db_for_identity()
     response = Response()
     background_tasks = BackgroundTasks()
     crypto = FakeCrypto()
@@ -423,12 +435,7 @@ async def test_unverified_sso_only_domain_uses_normal_otp_flow(monkeypatch):
 async def test_standard_domain_still_uses_normal_otp_flow(monkeypatch):
     fixed_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     monkeypatch.setattr(cr.uuid, "uuid4", lambda: fixed_id)
-    organization = SimpleNamespace(
-        id=uuid.UUID("55555555-5555-4555-8555-555555555555"),
-        domain_name="standard.example",
-        enforced_auth_policy="standard",
-    )
-    db = _mock_db_for_org_lookup(organization)
+    db = _mock_db_for_identity()
     response = Response()
     background_tasks = BackgroundTasks()
     crypto = FakeCrypto()
@@ -458,7 +465,7 @@ async def test_standard_domain_still_uses_normal_otp_flow(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_existing_browser_nonce_is_reused_for_binding_and_cookie():
-    db = _mock_db_for_org_lookup()
+    db = _mock_db_for_identity()
     response = Response()
     crypto = FakeCrypto()
     rate_limit = FakeRateLimit()
@@ -480,7 +487,7 @@ async def test_existing_browser_nonce_is_reused_for_binding_and_cookie():
 
 @pytest.mark.asyncio
 async def test_rate_limit_exceeded_does_not_persist_or_enqueue_or_set_cookie():
-    db = _mock_db_for_org_lookup()
+    db = _mock_db_for_identity()
     response = Response()
     background_tasks = BackgroundTasks()
     rate_limit = FakeRateLimit(
@@ -513,39 +520,22 @@ async def test_rate_limit_exceeded_does_not_persist_or_enqueue_or_set_cookie():
 
 
 @pytest.mark.asyncio
-async def test_organization_policy_lookup_failure_returns_503_without_generating_otp():
+async def test_passwordless_identity_query_joins_organization_policy():
     db = MagicMock()
-    db.execute.side_effect = RuntimeError("database unavailable")
-    response = Response()
-    background_tasks = BackgroundTasks()
-    crypto = FakeCrypto()
-    rate_limit = FakeRateLimit()
+    db.execute.return_value.first.return_value = None
 
-    with pytest.raises(HTTPException) as exc_info:
-        await cr.create_auth_challenge(
-            payload=ChallengeCreateRequest(email="user@example.com"),
-            request=_make_request(),
-            response=response,
-            background_tasks=background_tasks,
-            db=db,
-            rate_limit_service=rate_limit,
-            crypto_service=crypto,
-        )
+    assert cr._load_valid_identity(db=db, email_fingerprint="fingerprint:user@example.com") is None
 
-    assert exc_info.value.status_code == 503
-    db.add.assert_not_called()
-    db.commit.assert_not_called()
-    assert crypto.generated_nonces == 0
-    assert crypto.hash_otp_calls == []
-    assert rate_limit.calls == []
-    assert background_tasks.tasks == []
-    assert "set-cookie" not in response.headers
+    statement = str(db.execute.call_args.args[0]).lower()
+    assert "join organizations" in statement
+    assert "enforced_auth_policy" in statement
+    assert "domain_verified" in statement
 
 
 @pytest.mark.asyncio
 async def test_known_and_unknown_email_get_same_response_but_only_known_identity_receives_code():
     async def call(email: str, identity):
-        db = _mock_db_for_org_lookup(identity=identity)
+        db = _mock_db_for_identity(identity=identity)
         response = Response()
         background_tasks = BackgroundTasks()
         result = await cr.create_auth_challenge(
@@ -565,9 +555,11 @@ async def test_known_and_unknown_email_get_same_response_but_only_known_identity
     assert known.detail == unknown.detail == cr.AUTH_CHALLENGE_DETAIL
     assert known.challenge_id
     assert unknown.challenge_id
-    assert known_db.execute.call_count == unknown_db.execute.call_count == 2
-    assert "organizations" in str(known_db.execute.call_args_list[0].args[0])
-    assert "users" in str(known_db.execute.call_args_list[1].args[0])
+    known_queries = _data_execute_calls(known_db)
+    unknown_queries = _data_execute_calls(unknown_db)
+    assert len(known_queries) == len(unknown_queries) == 1
+    assert "organizations" in str(known_queries[0].args[0])
+    assert "users" in str(known_queries[0].args[0])
     assert known_db.add.call_count == unknown_db.add.call_count == 1
     assert known_db.commit.call_count == unknown_db.commit.call_count == 1
     assert bool(known_response.headers.get("set-cookie")) == bool(unknown_response.headers.get("set-cookie"))
@@ -577,10 +569,13 @@ async def test_known_and_unknown_email_get_same_response_but_only_known_identity
 
 @pytest.mark.asyncio
 async def test_identity_lookup_failure_returns_503_without_generating_otp():
-    org_result = MagicMock()
-    org_result.scalar_one_or_none.return_value = None
     db = MagicMock()
-    db.execute.side_effect = [org_result, RuntimeError("identity lookup failed")]
+    def _execute(statement):
+        if _is_security_guc(statement):
+            return MagicMock()
+        raise RuntimeError("identity lookup failed")
+
+    db.execute.side_effect = _execute
     response = Response()
     background_tasks = BackgroundTasks()
     crypto = FakeCrypto()
@@ -636,7 +631,7 @@ async def test_verify_auth_challenge_consumes_challenge_creates_session_and_sets
     assert db.begin_count == 1
     assert db.commit_count == 1
     assert db.rollback_count == 0
-    assert db.execute_statements[0]._for_update_arg is not None
+    assert _data_execute_statements(db)[0]._for_update_arg is not None
     assert len(db.added) == 1
     session = db.added[0]
     assert isinstance(session, SessionModel)
@@ -885,7 +880,7 @@ def test_challenge_verify_request_validates_code_syntax():
 
 @pytest.mark.asyncio
 async def test_db_failure_rolls_back_and_does_not_enqueue_or_set_cookie():
-    db = _mock_db_for_org_lookup()
+    db = _mock_db_for_identity()
     db.commit.side_effect = RuntimeError("database unavailable")
     response = Response()
     background_tasks = BackgroundTasks()
@@ -993,7 +988,7 @@ def test_plaintext_otp_outbox_fatally_rejects_e2e_mode_in_production(monkeypatch
 def test_route_returns_202_with_generic_body_and_secure_cookie(monkeypatch):
     app = FastAPI()
     app.include_router(cr.router, prefix="/auth")
-    db = _mock_db_for_org_lookup()
+    db = _mock_db_for_identity()
     crypto = FakeCrypto()
     rate_limit = FakeRateLimit()
     monkeypatch.setattr(cr, "_dispatch_sign_in_code_email", lambda *args: None)
@@ -1014,20 +1009,14 @@ def test_route_returns_202_with_generic_body_and_secure_cookie(monkeypatch):
     assert "HttpOnly" in set_cookie
     assert "Secure" in set_cookie
     assert "SameSite=lax" in set_cookie
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
 
 
-def test_route_sso_only_domain_returns_exact_redirect_payload():
+def test_route_sso_only_identity_returns_same_202_contract_and_cookie():
     app = FastAPI()
     app.include_router(cr.router, prefix="/auth")
-    organization_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
-    db = _mock_db_for_org_lookup(
-        SimpleNamespace(
-            id=organization_id,
-            domain_name="enterprise.example",
-            enforced_auth_policy="sso_only",
-            domain_verified=True,
-        )
-    )
+    db = _mock_db_for_identity(identity=None)
 
     app.dependency_overrides[cr.get_session] = lambda: db
     app.dependency_overrides[cr.get_auth_crypto_service] = lambda: FakeCrypto()
@@ -1037,14 +1026,13 @@ def test_route_sso_only_domain_returns_exact_redirect_payload():
     response = client.post("/auth/challenges", json={"email": "user@enterprise.example"})
 
     assert response.status_code == 202
-    assert response.json() == {
-        "message": cr.AUTH_SSO_REQUIRED_MESSAGE,
-        "sso_redirect": True,
-        "organization_id": str(organization_id),
-    }
-    db.add.assert_not_called()
-    db.commit.assert_not_called()
-    assert "set-cookie" not in response.headers
+    assert response.json()["detail"] == cr.AUTH_CHALLENGE_DETAIL
+    assert uuid.UUID(response.json()["challenge_id"])
+    db.add.assert_called_once()
+    db.commit.assert_called_once()
+    assert response.cookies.get(cr.AUTH_BROWSER_NONCE_COOKIE) == "browser-nonce"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
 
 
 def test_verify_route_returns_200_and_host_session_cookie(monkeypatch):

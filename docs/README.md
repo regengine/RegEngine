@@ -33,7 +33,6 @@
 - [Roadmap](product/ROADMAP.md)
 - [Positioning](product/POSITIONING.md)
 - [Pitch Deck](product/PITCH_DECK.md)
-- [Data Room Index](product/DATA_ROOM_INDEX.md)
 - [Website Copy](product/WEBSITE_COPY.md)
 
 ## Engineering

@@ -101,12 +101,13 @@ def _provision_app_roles(database_url: str) -> None:
 
 
 def _run_alembic(cmd: list[str], database_url: str, extra_env: dict | None = None) -> subprocess.CompletedProcess:
-    """Invoke alembic as a subprocess with DATABASE_URL set.
+    """Invoke Alembic with the explicit schema-owner migration URL.
 
     A subprocess keeps the test isolated from any alembic state the
     parent pytest process might hold (env.py caching, etc.).
     """
     env = os.environ.copy()
+    env["MIGRATIONS_DATABASE_URL"] = database_url
     env["DATABASE_URL"] = database_url
     if extra_env:
         env.update(extra_env)
@@ -260,7 +261,13 @@ def test_task_queue_policy_fail_closed(pg_engine: Engine) -> None:
     original OR-empty-string bypass."""
     with pg_engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT policyname, qual FROM pg_policies WHERE schemaname = 'fsma' AND tablename = 'task_queue'")
+            # ``qual`` is NULL for FOR INSERT policies — their predicate lives
+            # in ``with_check`` (v111 runtime-role grants split task_queue into
+            # per-command policies). Read whichever column carries it.
+            text(
+                "SELECT policyname, COALESCE(qual, with_check) AS qual "
+                "FROM pg_policies WHERE schemaname = 'fsma' AND tablename = 'task_queue'"
+            )
         ).fetchall()
     assert rows, "task_queue has no RLS policies after v061"
     for row in rows:
@@ -268,9 +275,15 @@ def test_task_queue_policy_fail_closed(pg_engine: Engine) -> None:
         assert "current_setting('app.tenant_id', true) = ''" not in qual, (
             f"v050 fail-open bypass still present in policy {row.policyname}: {qual}"
         )
-        # Either get_tenant_context() (preferred) or a direct GUC
-        # comparison without the empty-string escape hatch.
-        assert "get_tenant_context" in qual or "nullif" in qual.lower(), (
+        # Either get_tenant_context() (preferred), a direct GUC comparison
+        # without the empty-string escape hatch, or the v111 sysadmin-worker
+        # policies, which are scoped TO regengine_sysadmin and gated on the
+        # ``regengine.is_sysadmin`` GUC rather than on a tenant id.
+        assert (
+            "get_tenant_context" in qual
+            or "nullif" in qual.lower()
+            or "regengine.is_sysadmin" in qual
+        ), (
             f"Policy {row.policyname} doesn't use a fail-hard resolver: {qual}"
         )
 

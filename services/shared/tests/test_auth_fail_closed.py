@@ -36,6 +36,7 @@ def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
             "JWT_SECRET",
             "REGENGINE_ENV",
             "AUTH_TEST_BYPASS_TOKEN",
+            "REGENGINE_AUTH_STRICT",
             "REGENGINE_API_KEY",
             "API_KEY",
         )
@@ -128,7 +129,7 @@ class TestAuthConfigValidation:
         )
         assert result.returncode == 0
         assert "auth_config_validation_failed" in result.stdout
-        assert "AUTH_TEST_BYPASS_TOKEN is set in production" in result.stdout
+        assert "AUTH_TEST_BYPASS_TOKEN is set in a strict auth environment" in result.stdout
         assert "STARTED_OK" in result.stdout
 
     # ── #2512: cloud-marker + ephemeral-secret fail-fast ─────────────────────
@@ -152,10 +153,11 @@ class TestAuthConfigValidation:
             }
         )
         assert result.returncode != 0
-        assert "ephemeral signing key is active" in result.stderr
+        assert "Auth config validation failed" in result.stderr
+        assert "AUTH_SECRET_KEY / JWT_SECRET not set" in result.stderr
         assert "STARTED_OK" not in result.stdout
 
-    def test_cloud_marker_development_env_is_forced_production_and_starts(self):
+    def test_cloud_marker_development_env_is_forced_production_with_explicit_secrets(self):
         """A cloud marker with REGENGINE_ENV=development is forced to production
         by the central gate, so the ephemeral-secret branch is skipped and
         startup proceeds — proving the fail-fast aligns with the gate (#2512)."""
@@ -165,6 +167,8 @@ class TestAuthConfigValidation:
                 "GITHUB_ACTIONS": "",
                 "RENDER": "1",
                 "REGENGINE_ENV": "development",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+                "TOOL_ACCESS_SECRET": "another-valid-secret-key-long-enough",
             }
         )
         assert result.returncode == 0

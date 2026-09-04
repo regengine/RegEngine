@@ -186,8 +186,10 @@ class TestReplayForTenant:
 
 class TestReplayAllTenants:
     def test_iterates_tenants_with_guc(self, monkeypatch) -> None:
+        import shared.maintenance_tenants as maintenance_mod
         import shared.tenant_context as tc_mod
 
+        monkeypatch.setattr(maintenance_mod, "list_maintenance_tenant_ids", lambda: ["t-1", "t-2"])
         guc_calls = []
         monkeypatch.setattr(tc_mod, "set_tenant_guc", lambda s, t: guc_calls.append(t))
 
@@ -201,7 +203,6 @@ class TestReplayAllTenants:
         )
 
         session = MagicMock()
-        session.execute.return_value.fetchall.return_value = [("t-1",), ("t-2",)]
 
         totals = replay_mod.replay_all_tenants(session)
 
@@ -210,8 +211,10 @@ class TestReplayAllTenants:
         assert totals["replayed"] == 2
 
     def test_one_tenant_failure_does_not_poison_tick(self, monkeypatch) -> None:
+        import shared.maintenance_tenants as maintenance_mod
         import shared.tenant_context as tc_mod
 
+        monkeypatch.setattr(maintenance_mod, "list_maintenance_tenant_ids", lambda: ["t-1", "t-2"])
         monkeypatch.setattr(tc_mod, "set_tenant_guc", lambda s, t: None)
 
         def _per_tenant(session, tid, batch_size=200):
@@ -222,7 +225,6 @@ class TestReplayAllTenants:
         monkeypatch.setattr(replay_mod, "replay_deadletter_for_tenant", _per_tenant)
 
         session = MagicMock()
-        session.execute.return_value.fetchall.return_value = [("t-1",), ("t-2",)]
 
         totals = replay_mod.replay_all_tenants(session)
         assert totals["replayed"] == 1

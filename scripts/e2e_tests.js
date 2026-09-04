@@ -16,33 +16,12 @@
  *   node scripts/e2e_tests.js
  */
 
-const fs = require('fs');
-const path = require('path');
-
-// Load admin key from .env
-function getAdminKey() {
-    const envPath = path.resolve(__dirname, '..', '.env');
-    if (!fs.existsSync(envPath)) {
-        console.error('ERROR: .env file not found');
-        process.exit(1);
-    }
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    const match = envContent.match(/ADMIN_MASTER_KEY=(.*)$/m);
-    if (!match || !match[1]) {
-        console.error('ERROR: ADMIN_MASTER_KEY not found in .env');
-        process.exit(1);
-    }
-    let key = match[1].trim();
-    if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-        key = key.slice(1, -1);
-    }
-    return key;
-}
-
 const ADMIN_URL = 'http://localhost:8400';
 const INGESTION_URL = 'http://localhost:8000';
 const COMPLIANCE_URL = 'http://localhost:8500';
 const FRONTEND_URL = 'http://localhost:3000';
+const API_KEY = process.env.REGENGINE_API_KEY || '';
+const TENANT_ID = process.env.REGENGINE_TENANT_ID || '';
 
 let passed = 0;
 let failed = 0;
@@ -72,7 +51,8 @@ async function runTests() {
     console.log('Running E2E Integration Tests...\n');
     console.log('='.repeat(50));
 
-    const adminKey = getAdminKey();
+    assert(API_KEY, 'REGENGINE_API_KEY must contain a pre-provisioned tenant credential');
+    assert(TENANT_ID, 'REGENGINE_TENANT_ID must match the credential-bound tenant');
 
     // ========================================
     // Health Check Tests
@@ -101,65 +81,6 @@ async function runTests() {
     });
 
     // ========================================
-    // Admin API Tests
-    // ========================================
-    console.log('\n📋 Admin API\n');
-
-    let tenantId;
-    await test('Create tenant', async () => {
-        const res = await fetch(`${ADMIN_URL}/v1/admin/tenants`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Admin-Key': adminKey,
-            },
-            body: JSON.stringify({ name: 'E2E Test Tenant' }),
-        });
-        const text = await res.text();
-        assert(res.ok, `Expected 200, got ${res.status}: ${text}`);
-        const data = JSON.parse(text);
-        assert(data.tenant_id, 'Expected tenant_id in response');
-        tenantId = data.tenant_id;
-    });
-
-    let apiKey;
-    await test('Create API key', async () => {
-        const res = await fetch(`${ADMIN_URL}/v1/admin/keys`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Admin-Key': adminKey,
-            },
-            body: JSON.stringify({
-                name: 'E2E Test Key',
-                tenant_id: tenantId,
-            }),
-        });
-        assert(res.ok, `Expected 200, got ${res.status}`);
-        const data = await res.json();
-        assert(data.api_key, 'Expected api_key in response');
-        apiKey = data.api_key;
-    });
-
-    await test('List API keys', async () => {
-        const res = await fetch(`${ADMIN_URL}/v1/admin/keys`, {
-            headers: { 'X-Admin-Key': adminKey },
-        });
-        assert(res.ok, `Expected 200, got ${res.status}`);
-        const data = await res.json();
-        assert(Array.isArray(data), 'Expected array of keys');
-    });
-
-    await test('Get review queue', async () => {
-        const res = await fetch(`${ADMIN_URL}/v1/admin/review/hallucinations`, {
-            headers: { 'X-Admin-Key': adminKey },
-        });
-        assert(res.ok, `Expected 200, got ${res.status}`);
-        const data = await res.json();
-        assert('items' in data, 'Expected items in response');
-    });
-
-    // ========================================
     // Ingestion Service Tests
     // ========================================
     console.log('\n📋 Ingestion Service\n');
@@ -181,7 +102,8 @@ async function runTests() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': apiKey,
+                'X-RegEngine-API-Key': API_KEY,
+                'X-Tenant-ID': TENANT_ID,
             },
             body: JSON.stringify({ url: 'https://example.com/doc.pdf' }),
         });

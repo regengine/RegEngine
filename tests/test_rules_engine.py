@@ -260,7 +260,8 @@ class TestRuleApplicability:
 
 class TestRuleSeedData:
     def test_seed_count(self):
-        assert len(FSMA_RULE_SEEDS) == 36
+        # 37 = 36 + "Initial Packing: Harvester Phone Required" (#3041)
+        assert len(FSMA_RULE_SEEDS) == 37
 
     def test_all_seeds_have_required_fields(self):
         required = {"title", "severity", "category", "evaluation_logic", "failure_reason_template"}

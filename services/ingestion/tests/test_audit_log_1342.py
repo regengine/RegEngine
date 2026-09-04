@@ -1,4 +1,4 @@
-"""Coverage for app/audit_log.py — cross-database audit log aggregator.
+"""Coverage for app/audit_log.py — tenant-bound audit log aggregator.
 
 Locks the event-type / category normalization tables, each of the four
 query helpers (admin audit + CTE + export + alert), and the merge /
@@ -18,7 +18,6 @@ from app import audit_log as al
 from app.audit_log import (
     AuditEntry,
     AuditLogResponse,
-    _get_admin_db_session,
     _normalize_audit_event_type,
     _normalize_category,
     _query_admin_audit_logs,
@@ -54,14 +53,6 @@ def client(app):
     return TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def _reset_admin_session_factory(monkeypatch):
-    # Reset module-level lazy factory and the "we warned once" flag
-    monkeypatch.setattr(al, "_admin_session_factory", None, raising=False)
-    monkeypatch.setattr(al, "_admin_url_warned", False, raising=False)
-    yield
-
-
 def _mock_session_with_queries(results_by_sql):
     """MagicMock session whose execute() returns different fetchall/fetchone
     shapes based on the SQL text."""
@@ -81,20 +72,6 @@ def _mock_session_with_queries(results_by_sql):
 
     session.execute.side_effect = execute
     return session
-
-
-def _stub_counts(monkeypatch, *, admin=0, cte=0, exports=0, alerts=0):
-    """Pin the per-source COUNT(*) helpers the endpoint uses for ``total``.
-
-    #2864 gave the audit-log endpoint real row counts, so ``total`` no longer
-    equals ``len(entries)``. Tests that stub ``_query_*`` now stub the
-    matching ``_count_*`` the same way, otherwise a bare MagicMock session
-    answers the COUNT queries with fabricated values.
-    """
-    monkeypatch.setattr(al, "_count_admin_audit_logs", lambda s, t: admin)
-    monkeypatch.setattr(al, "_count_cte_events", lambda s, t: cte)
-    monkeypatch.setattr(al, "_count_exports", lambda s, t: exports)
-    monkeypatch.setattr(al, "_count_alert_events", lambda s, t: alerts)
 
 
 # ---------------------------------------------------------------------------
@@ -213,64 +190,6 @@ class TestNormalizeCategory:
 
 
 # ---------------------------------------------------------------------------
-# _get_admin_db_session
-# ---------------------------------------------------------------------------
-
-
-class TestGetAdminDbSession:
-    def test_no_env_returns_none(self, monkeypatch):
-        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
-        assert _get_admin_db_session() is None
-
-    def test_no_env_warns_only_once(self, monkeypatch, caplog):
-        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
-        with caplog.at_level("WARNING"):
-            _get_admin_db_session()
-            _get_admin_db_session()
-        # Only one "ADMIN_DATABASE_URL is not set" warning
-        msgs = [r for r in caplog.records if "ADMIN_DATABASE_URL" in r.message]
-        assert len(msgs) == 1
-
-    def test_with_env_initializes_factory(self, monkeypatch):
-        monkeypatch.setenv("ADMIN_DATABASE_URL", "postgresql+psycopg://u:p@h/db")
-        fake_session = MagicMock()
-        fake_factory = MagicMock(return_value=fake_session)
-        factory_calls = []
-
-        def fake_sessionmaker(**kwargs):
-            factory_calls.append(kwargs)
-            return fake_factory
-
-        def fake_create_engine(url, **kwargs):
-            return MagicMock(url=url)
-
-        monkeypatch.setattr(al, "sessionmaker", fake_sessionmaker)
-        monkeypatch.setattr(al, "create_engine", fake_create_engine)
-
-        result = _get_admin_db_session()
-        assert result is fake_session
-
-    def test_session_creation_failure_returns_none(self, monkeypatch, caplog):
-        monkeypatch.setenv("ADMIN_DATABASE_URL", "postgresql://u:p@h/db")
-
-        def boom():
-            raise RuntimeError("session-failed")
-
-        fake_factory = MagicMock(side_effect=boom)
-
-        def fake_sessionmaker(**kwargs):
-            return fake_factory
-
-        monkeypatch.setattr(al, "sessionmaker", fake_sessionmaker)
-        monkeypatch.setattr(al, "create_engine", lambda *a, **k: MagicMock())
-
-        with caplog.at_level("ERROR"):
-            result = _get_admin_db_session()
-        assert result is None
-        assert any("audit_log_admin_db_session_failed" in r.message for r in caplog.records)
-
-
-# ---------------------------------------------------------------------------
 # _table_exists
 # ---------------------------------------------------------------------------
 
@@ -378,6 +297,51 @@ class TestQueryAdminAuditLogs:
         assert entries[0].resource == "audit"  # resource None -> fallback
         assert entries[0].ip_address == ""
         assert entries[0].hash == ""
+
+    def test_query_applies_persisted_erasure_markers_before_returning_actor_email(self):
+        session = MagicMock()
+        to_regclass_result = MagicMock()
+        to_regclass_result.fetchone.return_value = ("public.audit_logs",)
+        rows_result = MagicMock()
+        rows_result.fetchall.return_value = []
+        session.execute.side_effect = [to_regclass_result, rows_result]
+
+        _query_admin_audit_logs(session, "t1", 200)
+
+        query_text = str(session.execute.call_args_list[1].args[0])
+        assert "gdpr_anonymize_user" in query_text
+        assert "[REDACTED]" in query_text
+        assert "marker.metadata" in query_text
+
+    def test_erasure_marker_redacts_all_actor_pii_and_resource_details(self):
+        session = MagicMock()
+        to_regclass_result = MagicMock()
+        to_regclass_result.fetchone.return_value = ("public.audit_logs",)
+        rows_result = MagicMock()
+        rows_result.fetchall.return_value = [
+            SimpleNamespace(
+                id="erased-event",
+                timestamp=datetime(2026, 4, 18, 10, 0, tzinfo=timezone.utc),
+                event_type="api_call",
+                event_category="data_access",
+                actor="person@example.com",
+                actor_id="00000000-0000-0000-0000-000000000001",
+                actor_erased=True,
+                action="view",
+                resource="profile:person@example.com",
+                details={"email": "person@example.com", "ip": "203.0.113.42"},
+                ip_address="203.0.113.42",
+                integrity_hash="hash",
+            )
+        ]
+        session.execute.side_effect = [to_regclass_result, rows_result]
+
+        entry = _query_admin_audit_logs(session, "t1", 200)[0]
+
+        assert entry.actor == "[REDACTED]"
+        assert entry.resource == "[REDACTED]"
+        assert entry.details == {"redacted": True}
+        assert entry.ip_address == ""
 
 
 # ---------------------------------------------------------------------------
@@ -648,11 +612,8 @@ class TestGetAuditLogEndpoint:
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [export])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
 
-        # Fake admin session so try block hits _query_admin_audit_logs
-        admin_session = MagicMock()
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: admin_session)
-        # Fake ingestion DB
-        monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        db_session = MagicMock()
+        monkeypatch.setattr(al, "get_db_safe", lambda: db_session)
 
         resp = client.get("/api/v1/audit-log/t1")
         assert resp.status_code == 200
@@ -662,48 +623,25 @@ class TestGetAuditLogEndpoint:
         # Sorted desc by timestamp: admin (13) > cte (12) > export (11)
         ids = [e["id"] for e in body["entries"]]
         assert ids == ["admin-1", "cte-1", "export-1"]
-        admin_session.close.assert_called_once()
+        db_session.close.assert_called_once()
 
-    def test_admin_session_none_skips_admin_query(self, client, monkeypatch):
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
-        monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
-        _stub_counts(monkeypatch)
-        monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [])
-        monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
-        monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
-
-        resp = client.get("/api/v1/audit-log/t1")
-        assert resp.status_code == 200
-        assert resp.json()["total"] == 0
-
-    def test_admin_query_exception_swallowed(self, client, monkeypatch):
-        admin_session = MagicMock()
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: admin_session)
-
+    def test_query_failure_returns_503_instead_of_partial_audit(self, client, monkeypatch):
+        db_session = MagicMock()
+        monkeypatch.setattr(al, "get_db_safe", lambda: db_session)
         def boom(*a, **kw):
             raise RuntimeError("admin-broken")
 
         monkeypatch.setattr(al, "_query_admin_audit_logs", boom)
-        monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
-        _stub_counts(monkeypatch)
-        monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [])
-        monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
-        monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
 
         resp = client.get("/api/v1/audit-log/t1")
-        assert resp.status_code == 200
-        assert resp.json()["total"] == 0
+        assert resp.status_code == 503
+        db_session.rollback.assert_called_once()
+        db_session.close.assert_called_once()
 
-    def test_ingestion_db_exception_swallowed(self, client, monkeypatch):
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
-
-        def boom():
-            raise RuntimeError("ingestion-broken")
-
-        monkeypatch.setattr(al, "get_db_safe", boom)
+    def test_session_unavailable_returns_503(self, client, monkeypatch):
+        monkeypatch.setattr(al, "get_db_safe", lambda: None)
         resp = client.get("/api/v1/audit-log/t1")
-        assert resp.status_code == 200
-        assert resp.json()["total"] == 0
+        assert resp.status_code == 503
 
     def test_event_type_filter(self, client, monkeypatch):
         entries = [
@@ -726,8 +664,8 @@ class TestGetAuditLogEndpoint:
                 resource="r",
             ),
         ]
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries[:1])
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: entries[1:])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
@@ -758,13 +696,11 @@ class TestGetAuditLogEndpoint:
                 resource="r",
             ),
         ]
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [entries[1]])
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [entries[0]])
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: MagicMock())
 
         resp = client.get("/api/v1/audit-log/t1?category=auth")
         body = resp.json()
@@ -784,8 +720,8 @@ class TestGetAuditLogEndpoint:
             )
             for i in range(30)
         ]
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
@@ -810,8 +746,8 @@ class TestGetAuditLogEndpoint:
             )
             for i in range(5)
         ]
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
@@ -833,9 +769,8 @@ class TestGetAuditLogEndpoint:
                 resource="r",
             ),
         ]
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
-        _stub_counts(monkeypatch, cte=1)
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])

@@ -36,11 +36,12 @@ function sessionRequest(tenantId = TENANT_A): NextRequest {
     });
 }
 
-function authMeResponse(organizationId: string): Response {
+function authMeResponse(tenantId: string): Response {
     return new Response(JSON.stringify({
         user_id: '33333333-3333-4333-8333-333333333333',
         email: 'owner@example.com',
-        organization_id: organizationId,
+        organization_id: TENANT_B,
+        tenant_id: tenantId,
         role: 'owner',
         auth_method: 'webauthn',
     }), {

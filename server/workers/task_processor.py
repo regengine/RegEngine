@@ -29,12 +29,11 @@ from __future__ import annotations
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
 import structlog
-from shared.task_types import NON_WORKER_TASK_TYPES as _SHARED_NON_WORKER_TASK_TYPES
-from shared.tenant_context import system_scope, tenant_scope
+from shared.tenant_context import tenant_scope
 
 logger = structlog.get_logger("task-processor")
 
@@ -61,12 +60,10 @@ _current_task_attempts: int = 0
 # overhead of the trigger (#1185).
 POLL_INTERVAL = float(os.getenv("TASK_POLL_INTERVAL", "0.5"))
 
-# #2918 — ``LOCK_TIMEOUT_MINUTES`` / ``TASK_LOCK_TIMEOUT_MINUTES`` is GONE.
-# It computed ``locked_until`` in Python *before the task type was known*,
-# so every claimed row was pinned to a 15-minute steal-back window and the
-# per-task-type map below never reached the only column that matters.
-# ``locked_until`` is now resolved inside the claim SQL. The remaining ops
-# knob is ``TASK_DEFAULT_TIMEOUT_SECONDS`` (see DEFAULT_TIMEOUT_SECONDS).
+# How long a task can be locked before it's considered abandoned.
+# Kept for backwards-compat: the new per-task-type map below is authoritative
+# when present, and this value is the legacy global fallback (#1210).
+LOCK_TIMEOUT_MINUTES = int(os.getenv("TASK_LOCK_TIMEOUT_MINUTES", "15"))
 
 # Per-task-type visibility timeouts (#1210). Each value is the number of
 # seconds a claimed task may hold its lock before another worker is allowed
@@ -79,55 +76,13 @@ TASK_TIMEOUTS_SECONDS: Dict[str, int] = {
     "review_item": 30,  # near-instant, trivial DB write
 }
 
-# Fallback for task types not present in TASK_TIMEOUTS_SECONDS, and the
-# last-resort arm of the claim's COALESCE. Matches
-# ``shared.task_queue.DEFAULT_LOCK_DURATION_SECONDS`` in intent: the two
-# worker implementations should not disagree about an unmapped type.
-DEFAULT_TIMEOUT_SECONDS = int(os.getenv("TASK_DEFAULT_TIMEOUT_SECONDS", "120"))
+# Fallback for task types not present in TASK_TIMEOUTS_SECONDS.
+DEFAULT_TIMEOUT_SECONDS = 120
 
-# Floor for the heartbeat cadence (#2918). Below this the heartbeat costs
-# more in DB round-trips than the recovery latency it buys.
-HEARTBEAT_MIN_INTERVAL_SECONDS = 5
-
-
-def _heartbeat_interval_for(timeout_seconds: int) -> int:
-    """Heartbeat cadence for a task with ``timeout_seconds`` of visibility.
-
-    #2918: the cadence used to be a hardcoded 60s regardless of the task's
-    visibility window. For any timeout at or below 60s the FIRST heartbeat
-    would land after the lock had already expired — and because
-    ``_heartbeat_extend`` sets ``locked_until = NOW() + timeout``, a short
-    timeout also *shrinks* the lock below the heartbeat's own refresh
-    interval, guaranteeing the row is stolen while the handler still runs.
-
-    Targets timeout/3 so the lock is refreshed at least twice inside its
-    own window even if a tick is late. Raises on a timeout too small to
-    heartbeat safely: failing the task loudly beats running it with a lock
-    that is certain to be stolen (duplicate LLM calls, duplicate graph
-    upserts).
-    """
-    timeout = int(timeout_seconds)
-    if timeout <= 0:
-        raise ValueError(f"visibility timeout must be positive, got {timeout_seconds!r}")
-    interval = max(HEARTBEAT_MIN_INTERVAL_SECONDS, timeout // 3)
-    if interval * 2 >= timeout:
-        raise ValueError(
-            f"visibility timeout {timeout}s cannot be heartbeated safely: the "
-            f"minimum cadence is {HEARTBEAT_MIN_INTERVAL_SECONDS}s and the lock "
-            f"must be refreshed at least twice per window (need > "
-            f"{HEARTBEAT_MIN_INTERVAL_SECONDS * 2}s)"
-        )
-    return interval
-
-
-# #2918: reject a misconfigured map at import rather than at 3am. Every
-# statically configured timeout — and the default — must be heartbeatable.
-for _tt, _secs in list(TASK_TIMEOUTS_SECONDS.items()) + [("<default>", DEFAULT_TIMEOUT_SECONDS)]:
-    try:
-        _heartbeat_interval_for(_secs)
-    except ValueError as _exc:  # pragma: no cover — guards a config edit
-        raise RuntimeError(f"task_processor: unusable visibility timeout for {_tt!r}: {_exc}") from _exc
-del _tt, _secs
+# How often the heartbeat thread should extend a running task's lock (#1172).
+# Chosen so that even if the heartbeat is slightly late, the next tick
+# still lands comfortably inside the visibility window.
+HEARTBEAT_INTERVAL_SECONDS = 60
 
 # How long ``stop_task_worker`` waits for the in-flight handler to return
 # before emitting an "abandoned" log and releasing the row's lock so another
@@ -237,11 +192,9 @@ def _run_hardened_extraction(
                         "document_id": doc_id,
                         "source_url": source_url,
                         "extractor": "fsma_extractor",
-                        # Full routing envelope (to_review_event) so the
-                        # reviewer sees every CTE — including the ones the
-                        # KDE gate withheld from the graph, each tagged with
-                        # its missing_kdes (#2932) — plus warnings, mirroring
-                        # the payload the Kafka path puts on nlp.needs_review.
+                        # Full routing envelope (to_graph_event) so the
+                        # reviewer sees CTEs/KDEs/warnings, mirroring the
+                        # payload the Kafka path puts on nlp.needs_review.
                         "fsma_envelope": routing["payload"],
                     },
                 },
@@ -459,15 +412,14 @@ TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any], Optional[str]], None]] = {
 # #1199: recall_drill and recall (the state machine row) are persisted in
 # fsma.task_queue for historical/state tracking, NOT as background work.
 # The worker must never claim them even if they somehow end up with
-# status='pending'.
-#
-# #2903: this set used to be defined here and read only here, while the
-# scheduler's 30-day retention purge deleted by ``status`` alone with no
-# task_type predicate — so the purge destroyed the very rows this set
-# exists to protect. The classification now lives in ONE module and is
-# imported by both sides; re-exported here so existing
-# ``task_processor.NON_WORKER_TASK_TYPES`` readers keep working.
-NON_WORKER_TASK_TYPES = _SHARED_NON_WORKER_TASK_TYPES
+# status='pending'. Keep this list narrowly scoped and update it when a
+# new non-handler task_type starts sharing the queue.
+NON_WORKER_TASK_TYPES = frozenset(
+    {
+        "recall_drill",  # #1199 — recall drill history rows
+        "recall",  # #1199 — recall state machine rows (future)
+    }
+)
 
 
 # ── Core worker loop ─────────────────────────────────────────────
@@ -493,31 +445,26 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
         raised ``NameError`` under the outer try/except and no task
         was ever claimed in production.
       * ``row[5]`` read a sixth column that RETURNING never projected.
-        Added ``visibility_timeout_seconds`` to RETURNING.
-
-    #2918: ``locked_until`` is resolved INSIDE the claim SQL from the
-    row's own ``visibility_timeout_seconds``, falling back to the
-    per-task-type :data:`TASK_TIMEOUTS_SECONDS` map and finally to
-    :data:`DEFAULT_TIMEOUT_SECONDS`. It used to be computed in Python
-    from a 15-minute global constant *before the task type was known*,
-    so the #1210 per-type feature never reached the column that governs
-    steal-back — crash recovery was uniformly 15 minutes. The in-memory
-    fallback chain below mirrors those same three arms, off the same
-    constants, so the heartbeat extends the deadline the database holds.
+        Added ``visibility_timeout_seconds`` to RETURNING with a
+        COALESCE default so ``row[5]`` is always a non-null int.
     """
     now = datetime.now(timezone.utc)
     default_timeout_seconds = DEFAULT_TIMEOUT_SECONDS
+    # `lock_until` is the visibility deadline for this claim — after
+    # this instant another worker may steal the row if we haven't
+    # completed or heartbeated. Kept in minutes for ops ergonomics
+    # (LOCK_TIMEOUT_MINUTES env).
+    lock_until = now + timedelta(minutes=LOCK_TIMEOUT_MINUTES)
 
     # Only claim tasks whose task_type has a registered handler.  This
     # prevents us from fighting with recall_drill rows (which are owned
     # by the recall engine, not the worker).
     handler_types = list(TASK_HANDLERS.keys())
 
-    # #2461: the claim scan is cross-tenant by design — system_scope +
-    # the Engine begin-hook set regengine.system_context so the v095
-    # task_queue policy arm admits it under the least-privilege role.
-    with system_scope():
-        row = _execute_claim(db, handler_types, now, default_timeout_seconds)
+    # Cross-tenant queue mechanics run on the canonical admin session.  RLS
+    # requires the exact regengine_sysadmin role; no caller-controlled GUC is
+    # an authorization input.
+    row = _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds)
 
     if row:
         task_type = row[1]
@@ -538,59 +485,21 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     return None
 
 
-# #2918: the effective visibility timeout, resolved inside the claim SQL
-# so the value written to ``locked_until`` matches the task's type from
-# the first instant. Three arms, most specific first:
-#
-#   1. ``q.visibility_timeout_seconds`` — the producer's explicit choice
-#      (shared.task_queue.enqueue_task / agent_task_bridge set it);
-#   2. the per-task-type TASK_TIMEOUTS_SECONDS map, bound as two parallel
-#      arrays and unnested into a correlated scalar subquery;
-#   3. DEFAULT_TIMEOUT_SECONDS.
-#
-# A plain correlated subquery rather than a CTE: this expression sits in
-# an UPDATE ... SET, where sub-selects are unambiguously in scope.
-_EFFECTIVE_TIMEOUT_SQL = """COALESCE(
-                    q.visibility_timeout_seconds,
-                    (
-                        SELECT t.secs
-                        FROM unnest(
-                            CAST(:timeout_types AS text[]),
-                            CAST(:timeout_secs AS int[])
-                        ) AS t(ttype, secs)
-                        WHERE t.ttype = q.task_type
-                    ),
-                    :default_timeout
-                )"""
-
-
-def _execute_claim(db, handler_types, now, default_timeout_seconds):
-    """Run the claim UPDATE...SKIP LOCKED and commit when a row was won.
-
-    #2918: ``RETURNING`` projects ``visibility_timeout_seconds`` RAW —
-    deliberately not COALESCEd. The old COALESCE-to-120 made ``row[5]``
-    never NULL, which short-circuited
-    ``row[5] or TASK_TIMEOUTS_SECONDS.get(...)`` in :func:`_claim_task`
-    and left the per-task-type map unreachable in memory as well as
-    unpersisted. Raw here, resolved there, with both arms fed by the same
-    ``TASK_TIMEOUTS_SECONDS`` constant that the SQL binds.
-    """
+def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
+    """Run the claim UPDATE...SKIP LOCKED and commit when a row was won."""
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
-    timeout_types = list(TASK_TIMEOUTS_SECONDS.keys())
-    timeout_secs = [TASK_TIMEOUTS_SECONDS[t] for t in timeout_types]
-
+    arm_global_admin_context(db)
     row = db.execute(
-        text(f"""
-            UPDATE fsma.task_queue AS q
+        text("""
+            UPDATE fsma.task_queue
             SET status = 'processing',
                 started_at = :now,
                 locked_by = :worker,
-                locked_until = :now + make_interval(
-                    secs => {_EFFECTIVE_TIMEOUT_SQL}
-                ),
-                attempts = q.attempts + 1
-            WHERE q.id = (
+                locked_until = :lock_until,
+                attempts = attempts + 1
+            WHERE id = (
                 SELECT id FROM fsma.task_queue
                 WHERE task_type = ANY(:handler_types)
                   AND (
@@ -601,16 +510,15 @@ def _execute_claim(db, handler_types, now, default_timeout_seconds):
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING q.id, q.task_type, q.payload, q.attempts, q.max_attempts,
-                      q.visibility_timeout_seconds,
-                      q.tenant_id
+            RETURNING id, task_type, payload, attempts, max_attempts,
+                      COALESCE(visibility_timeout_seconds, :default_timeout),
+                      tenant_id
         """),
         {
             "now": now,
             "worker": WORKER_ID,
+            "lock_until": lock_until,
             "handler_types": handler_types,
-            "timeout_types": timeout_types,
-            "timeout_secs": timeout_secs,
             "default_timeout": default_timeout_seconds,
         },
     ).fetchone()
@@ -620,50 +528,24 @@ def _execute_claim(db, handler_types, now, default_timeout_seconds):
     return row
 
 
-def _complete_task(db, task_id: int) -> bool:
-    """Mark a task completed — but only while this worker still owns the lock.
-
-    #2831: the ``locked_by = :worker`` predicate is the ownership check
-    the ``_run_handler_with_heartbeat`` docstring has always promised.
-    When the heartbeat detects a lost lock it returns, but the handler
-    keeps running to completion and lands here; without the predicate
-    this UPDATE stamped ``completed`` over a row another worker had
-    re-claimed and was actively re-executing — masking a genuine
-    failure as success and silently dropping the second execution's
-    outcome. Zero affected rows now means "we lost the race"; the
-    worker that owns the lock decides the row's fate.
-
-    Returns True when this worker's completion actually landed.
-    """
+def _complete_task(db, task_id: int) -> None:
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
-    # #2461: queue-state transition — system_scope (see _claim_task).
-    with system_scope():
-        result = db.execute(
-            text("""
-                UPDATE fsma.task_queue
-                SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
-                WHERE id = :id
-                  AND locked_by = :worker
-            """),
-            {"id": task_id, "worker": WORKER_ID},
-        )
-        db.commit()
-
-    if result.rowcount == 0:
-        logger.warning(
-            "complete_task_lost_lock",
-            task_id=task_id,
-            worker=WORKER_ID,
-            detail=(
-                "Task was re-claimed by another worker (or already "
-                "finalized) while this worker's handler was still "
-                "running; completion discarded so the current owner's "
-                "outcome stands."
-            ),
-        )
-        return False
-    return True
+    arm_global_admin_context(db)
+    result = db.execute(
+        text("""
+            UPDATE fsma.task_queue
+            SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
+            WHERE id = :id
+              AND locked_by = :worker
+              AND status = 'processing'
+        """),
+        {"id": task_id, "worker": WORKER_ID},
+    )
+    if not result.rowcount:
+        logger.warning("task_complete_skipped_lost_lock", task_id=task_id, worker_id=WORKER_ID)
+    db.commit()
 
 
 def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
@@ -676,24 +558,22 @@ def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
     The ``locked_by = :worker`` predicate is the safety: if we no longer
     own the task we must NOT extend the lock.
     """
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
-    # #2461: runs in the heartbeat THREAD — contextvars do not inherit
-    # into threading.Thread bodies, so the system scope is entered here,
-    # inside the function that actually executes the SQL.
-    with system_scope():
-        result = db.execute(
-            text(
-                """
-                UPDATE fsma.task_queue
-                SET locked_until = NOW() + (:seconds || ' seconds')::interval
-                WHERE id = :id
-                  AND locked_by = :worker
-                """
-            ),
-            {"id": task_id, "worker": WORKER_ID, "seconds": int(timeout_seconds)},
-        )
-        db.commit()
+    arm_global_admin_context(db)
+    result = db.execute(
+        text(
+            """
+            UPDATE fsma.task_queue
+            SET locked_until = NOW() + (:seconds || ' seconds')::interval
+            WHERE id = :id
+              AND locked_by = :worker
+            """
+        ),
+        {"id": task_id, "worker": WORKER_ID, "seconds": int(timeout_seconds)},
+    )
+    db.commit()
     return bool(result.rowcount)
 
 
@@ -709,32 +589,21 @@ def _run_handler_with_heartbeat(
 ) -> None:
     """Execute ``handler`` while a background thread extends the task lock.
 
-    The heartbeat thread runs every
-    ``_heartbeat_interval_for(timeout_seconds)`` seconds (#2918 — derived
-    from the task's own visibility window, so the lock is refreshed at
-    least twice inside it; it used to be a flat 60s, which for a 30s
-    ``review_item`` meant the first heartbeat landed after the lock had
-    already expired) and bumps ``locked_until`` by ``timeout_seconds``.
-    If the heartbeat UPDATE
+    The heartbeat thread runs every :data:`HEARTBEAT_INTERVAL_SECONDS` and
+    bumps ``locked_until`` by ``timeout_seconds``. If the heartbeat UPDATE
     affects zero rows (we lost the lock — another worker stole the task
     after visibility expired), the heartbeat thread exits quietly; the
-    handler continues to run but its results are ignored by
-    ``_complete_task`` / ``_fail_task`` if the lock was re-claimed —
-    both pin ``locked_by = WORKER_ID`` in their UPDATE predicate and log
-    ``complete_task_lost_lock`` / ``fail_task_lost_lock`` on a zero-row
-    update rather than overwriting the current owner's outcome (#2831).
+    handler continues to run but its results will be ignored by
+    ``_complete_task`` if the lock was re-claimed.
 
     Uses ``db_factory`` (a callable returning a fresh Session) to obtain
     its own DB session so the heartbeat does not share state with the
     handler's session.
     """
     stop = stop_event or threading.Event()
-    # #2918: raises on a timeout too short to heartbeat safely. Failing the
-    # task loudly beats running it under a lock certain to be stolen.
-    heartbeat_interval = _heartbeat_interval_for(timeout_seconds)
 
     def _heartbeat_loop() -> None:
-        while not stop.wait(timeout=heartbeat_interval):
+        while not stop.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
             hb_db = None
             try:
                 hb_db = db_factory()
@@ -772,7 +641,7 @@ def _run_handler_with_heartbeat(
         handler(payload, tenant_id)
     finally:
         stop.set()
-        heartbeat_thread.join(timeout=heartbeat_interval + 5)
+        heartbeat_thread.join(timeout=HEARTBEAT_INTERVAL_SECONDS + 5)
         # Clear the in-flight marker — once the handler returns (whether
         # success or exception) the task is no longer at risk of mid-run
         # abandonment, so don't let a racing shutdown mistake it for
@@ -800,7 +669,7 @@ def _retry_delay_seconds(attempts: int, cap_seconds: int = 3600) -> int:
     return min(int(delay), cap_seconds)
 
 
-def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -> bool:
+def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
     """Transition a task to a retry or terminal state.
 
     When ``attempts < max_attempts``:
@@ -810,21 +679,15 @@ def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -
     When ``attempts >= max_attempts``:
         - status  → 'dead'
         - locks cleared; scheduled_at left alone (dead never runs again).
-
-    #2831: both UPDATEs are guarded by ``locked_by = :worker``. A worker
-    whose lock expired mid-handler must not push a row another worker is
-    re-executing into backoff — or worse, dead-letter it — on the
-    strength of its own stale failure. Returns True when the transition
-    landed, False when the lock had already moved on.
     """
-    # #2461: queue-state transition — system_scope (see _claim_task).
-    with system_scope():
-        return _fail_task_inner(db, task_id, error, attempts, max_attempts)
+    _fail_task_inner(db, task_id, error, attempts, max_attempts)
 
 
-def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> bool:
+def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
+    arm_global_admin_context(db)
     if attempts >= max_attempts:
         result = db.execute(
             text(
@@ -836,6 +699,7 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                     locked_until = NULL
                 WHERE id = :id
                   AND locked_by = :worker
+                  AND status = 'processing'
                 """
             ),
             {"id": task_id, "error": error[:2000], "worker": WORKER_ID},
@@ -858,6 +722,7 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                     scheduled_at = NOW() + (:delay_seconds || ' seconds')::interval
                 WHERE id = :id
                   AND locked_by = :worker
+                  AND status = 'processing'
                 """
             ),
             {
@@ -867,23 +732,9 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                 "worker": WORKER_ID,
             },
         )
+    if not result.rowcount:
+        logger.warning("task_fail_skipped_lost_lock", task_id=task_id, worker_id=WORKER_ID)
     db.commit()
-
-    if result.rowcount == 0:
-        logger.warning(
-            "fail_task_lost_lock",
-            task_id=task_id,
-            worker=WORKER_ID,
-            terminal=attempts >= max_attempts,
-            detail=(
-                "Task was re-claimed by another worker (or already "
-                "finalized) while this worker's handler was still "
-                "running; failure transition discarded so the current "
-                "owner's outcome stands."
-            ),
-        )
-        return False
-    return True
 
 
 def _worker_loop() -> None:
@@ -892,7 +743,10 @@ def _worker_loop() -> None:
 
     # Try to get a database session
     try:
-        from shared.database import SessionLocal
+        from services.admin.app.database import (
+            SessionLocal,
+            arm_global_admin_context,
+        )
     except ImportError:
         logger.warning("task_worker_no_database_session_factory")
         return
@@ -930,7 +784,7 @@ def _worker_loop() -> None:
                 # every transaction the handler opens carries the tenant
                 # GUC via the Engine begin-hook. The heartbeat thread does
                 # NOT inherit this contextvar — _heartbeat_extend enters
-                # its own system_scope.
+                # its own admin control-plane session.
                 if task.get("tenant_id"):
                     with tenant_scope(task["tenant_id"]):
                         _run_handler_with_heartbeat(
@@ -952,11 +806,8 @@ def _worker_loop() -> None:
                         attempts=task["attempts"],
                         tenant_id=task.get("tenant_id"),
                     )
-                # #2831: _complete_task no-ops (and warns) if this worker
-                # lost the lock mid-handler — the current owner's
-                # re-execution decides the row's final state.
-                if _complete_task(db, task["id"]):
-                    logger.debug("task_completed", task_id=task["id"], task_type=task_type)
+                _complete_task(db, task["id"])
+                logger.debug("task_completed", task_id=task["id"], task_type=task_type)
             except Exception as exc:
                 logger.warning(
                     "task_failed",
@@ -1006,40 +857,6 @@ def enqueue_task(
     ID — the task is enqueued exactly once. If the key is ``None`` the
     legacy behavior is preserved (duplicates are possible).
 
-    Tenantless rows (#2852)
-    -----------------------
-    ``tenant_id=None`` with a key is legal here and dedupes like any
-    other row — but only because migration v113 rebuilt
-    ``idx_task_queue_idempotency`` with ``NULLS NOT DISTINCT``. Under the
-    v063 definition PostgreSQL's default NULLS-DISTINCT semantics meant
-    two NULL tenants never conflicted, so the ON CONFLICT below could not
-    fire and every re-run of a tenantless ``nlp_extraction`` task appended
-    another copy of the same ``review_item`` — a duplicate
-    human-in-the-loop review item per retry, invisible in metrics because
-    the ``enqueue_task_idempotent_hit`` branch never ran. Tenanted rows
-    were never affected.
-
-    Note this deliberately diverges from
-    ``services.shared.task_queue.enqueue_task``, which rejects a
-    tenantless key with ``ValueError``. Raising is not an option on this
-    path: the ``except Exception`` below swallows it into ``return None``,
-    which turns a duplicated review item into a silently dropped one.
-    The conflict-recovery SELECT further down already reads
-    ``tenant_id IS NOT DISTINCT FROM :tenant_id``, so it is NULL-safe and
-    needs no change.
-
-    Both INSERTs below cast with ``CAST(:payload AS jsonb)``, never
-    ``:payload::jsonb``. SQLAlchemy's ``text()`` bind regex is
-    ``(?<![:\\w\\x5c]):(\\w+)(?!:)`` — a name may not be followed by a
-    colon — so in ``:payload::jsonb`` it backtracks and binds a parameter
-    named ``payloa``. The supplied ``payload`` key then goes unused, the
-    unbound name reaches the driver, and psycopg raises a syntax error
-    which ``except Exception`` below turns into a silent ``return None``:
-    every enqueue on this path failed and the caller only saw "no task
-    id". ``services.shared.task_queue`` has always used the CAST form.
-    Unit tests never caught it because they stub ``enqueue_task`` itself;
-    it only reproduces against a real database.
-
     Recommended keys:
 
     * NLP extraction: ``f"nlp_extraction:{document_id}"``
@@ -1065,7 +882,7 @@ def enqueue_task(
                         INSERT INTO fsma.task_queue
                             (task_type, payload, tenant_id, priority, idempotency_key)
                         VALUES
-                            (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority, :key)
+                            (:task_type, :payload::jsonb, :tenant_id, :priority, :key)
                         ON CONFLICT (tenant_id, idempotency_key)
                             WHERE idempotency_key IS NOT NULL
                             DO NOTHING
@@ -1119,7 +936,7 @@ def enqueue_task(
             row = db.execute(
                 text("""
                     INSERT INTO fsma.task_queue (task_type, payload, tenant_id, priority)
-                    VALUES (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority)
+                    VALUES (:task_type, :payload::jsonb, :tenant_id, :priority)
                     RETURNING id
                 """),
                 {
@@ -1166,7 +983,7 @@ def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
     not block process exit.
     """
     try:
-        from shared.database import SessionLocal
+        from services.admin.app.database import SessionLocal, arm_global_admin_context
         from sqlalchemy import text
     except ImportError:
         logger.warning("abandoned_task_release_no_db_module", task_id=task_id)
@@ -1175,26 +992,23 @@ def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
     db = None
     try:
         db = SessionLocal()
-        # #2461: shutdown-path queue mechanics — system_scope. Runs in
-        # the stop_task_worker caller's thread, so the scope is entered
-        # here, around the statement that needs it.
-        with system_scope():
-            result = db.execute(
-                text(
-                    """
-                    UPDATE fsma.task_queue
-                    SET status = 'pending',
-                        locked_by = NULL,
-                        locked_until = NULL,
-                        attempts = GREATEST(attempts - 1, 0)
-                    WHERE id = :id
-                      AND locked_by = :worker
-                      AND status = 'processing'
-                    """
-                ),
-                {"id": task_id, "worker": WORKER_ID},
-            )
-            db.commit()
+        arm_global_admin_context(db)
+        result = db.execute(
+            text(
+                """
+                UPDATE fsma.task_queue
+                SET status = 'pending',
+                    locked_by = NULL,
+                    locked_until = NULL,
+                    attempts = GREATEST(attempts - 1, 0)
+                WHERE id = :id
+                  AND locked_by = :worker
+                  AND status = 'processing'
+                """
+            ),
+            {"id": task_id, "worker": WORKER_ID},
+        )
+        db.commit()
         released = bool(result.rowcount)
         logger.warning(
             "task_abandoned_on_shutdown",

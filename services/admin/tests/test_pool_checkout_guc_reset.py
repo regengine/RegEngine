@@ -41,8 +41,16 @@ def _postgres_engine(monkeypatch):
 
 
 class TestCheckoutGucReset:
+    @staticmethod
+    def _idle_connection(cursor: MagicMock | None = None) -> MagicMock:
+        connection = MagicMock()
+        connection.get_transaction_status.return_value = 0
+        if cursor is not None:
+            connection.cursor.return_value = cursor
+        return connection
+
     def test_reset_failure_discards_connection(self, _postgres_engine):
-        dbapi_connection = MagicMock()
+        dbapi_connection = self._idle_connection()
         dbapi_connection.cursor.side_effect = RuntimeError("socket torn down")
 
         with pytest.raises(DisconnectionError):
@@ -51,8 +59,7 @@ class TestCheckoutGucReset:
     def test_cursor_error_mid_reset_discards_connection(self, _postgres_engine):
         cursor = MagicMock()
         cursor.execute.side_effect = RuntimeError("server closed the connection")
-        dbapi_connection = MagicMock()
-        dbapi_connection.cursor.return_value = cursor
+        dbapi_connection = self._idle_connection(cursor)
 
         with pytest.raises(DisconnectionError):
             admin_database._reset_tenant_guc_on_checkout(dbapi_connection, MagicMock(), MagicMock())
@@ -60,8 +67,7 @@ class TestCheckoutGucReset:
 
     def test_successful_reset_hands_out_connection(self, _postgres_engine):
         cursor = MagicMock()
-        dbapi_connection = MagicMock()
-        dbapi_connection.cursor.return_value = cursor
+        dbapi_connection = self._idle_connection(cursor)
 
         # No exception — checkout proceeds.
         admin_database._reset_tenant_guc_on_checkout(dbapi_connection, MagicMock(), MagicMock())
@@ -70,6 +76,21 @@ class TestCheckoutGucReset:
         assert "app.tenant_id" in executed
         assert "regengine.is_sysadmin" in executed
         cursor.close.assert_called_once()
+        dbapi_connection.commit.assert_called_once_with()
+
+    def test_non_idle_connection_is_discarded_without_commit(self, _postgres_engine):
+        dbapi_connection = MagicMock()
+        dbapi_connection.get_transaction_status.return_value = 2
+
+        with pytest.raises(DisconnectionError):
+            admin_database._reset_tenant_guc_on_checkout(
+                dbapi_connection,
+                MagicMock(),
+                MagicMock(),
+            )
+
+        dbapi_connection.cursor.assert_not_called()
+        dbapi_connection.commit.assert_not_called()
 
     def test_reset_clears_the_per_user_identity_guc(self, _postgres_engine):
         """#2853: ``regengine.user_id`` must be cleared like the other two.

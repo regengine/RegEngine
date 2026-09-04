@@ -13,6 +13,7 @@ from typing import List, Optional
 
 import httpx
 import structlog
+from shared.safe_http import PinnedHTTPSession
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
 from .base import BaseScraper, fetch_with_retry
@@ -44,7 +45,7 @@ class FDARecallsScraper(BaseScraper):
     def __init__(self, timeout: int = 30, limit: int = 100):
         self.timeout = timeout
         self.limit = limit
-        self.session = httpx.Client(timeout=30.0)
+        self.session = PinnedHTTPSession()
         self.session.headers.update(
             {
                 "User-Agent": "RegEngine/1.0 (Regulatory Compliance Platform)",

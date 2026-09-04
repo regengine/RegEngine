@@ -6,7 +6,6 @@ Automatically loads test environment variables before any test imports.
 import os
 
 # Set test environment variables BEFORE pydantic tries to validate
-os.environ.setdefault("ADMIN_MASTER_KEY", "admin-master-key-dev")
 # sqlite, NOT the live dev regengine_admin URL: a Postgres dev default here
 # armed every reachable-DB test against the developer's real database
 # (2026-07-25 incident). CI exports real service-container URLs explicitly.

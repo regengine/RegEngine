@@ -6,6 +6,8 @@ Covers:
   ``/v1/fsma/audit/spreadsheet``.
 * #1291 — zero-row exports no longer return a 200 with an empty
   "official" FSMA spreadsheet; they 404.
+* #2862 — event-storage connect/timeout is HTTP 503, never an
+  empty-result 404.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -73,87 +75,12 @@ def client(monkeypatch):
         yield c
 
 
-def _mock_graph_response(events: list[dict]):
-    """Single-page graph response (``has_more=False``).
-
-    The handler drives a cursor-pagination loop even for small result
-    sets, so the stub must always return a terminator payload.
-    """
-
-    class _Resp:
-        status_code = 200
-
-        def __init__(self, payload):
-            self._payload = payload
-            self.text = "ok"
-
-        def json(self):
-            return self._payload
-
-    resp = _Resp({"events": events, "has_more": False, "next_cursor": None})
-
-    class _Ctx:
-        async def __aenter__(self_inner):
-            client = AsyncMock()
-            client.get = AsyncMock(return_value=resp)
-            return client
-
-        async def __aexit__(self_inner, *args):
-            return None
-
-    return _Ctx()
-
-
-def _mock_paginated_graph_response(pages: list[dict]):
-    """Multi-page graph response. ``pages`` is a list of ``{"events":
-    [...], "has_more": bool, "next_cursor": str|None}`` dicts that
-    will be returned in order on successive ``client.get`` calls.
-    """
-
-    class _Resp:
-        status_code = 200
-
-        def __init__(self, payload):
-            self._payload = payload
-            self.text = "ok"
-
-        def json(self):
-            return self._payload
-
-    responses = [_Resp(p) for p in pages]
-    response_iter = iter(responses)
-
-    async def _get(*args, **kwargs):
-        return next(response_iter)
-
-    class _Ctx:
-        async def __aenter__(self_inner):
-            client = AsyncMock()
-            client.get = _get
-            return client
-
-        async def __aexit__(self_inner, *args):
-            return None
-
-    return _Ctx()
-
-
-def _patch_graph(client: TestClient, events: list[dict]):
-    """Patch the same ``resilient_client`` attribute that the fixture's
-    router module is currently using.
-    """
+def _patch_events(client: TestClient, events: list[dict]):
+    """Patch the in-process event loader the spreadsheet handler calls."""
     return patch.object(
         client._compliance_routes_mod,  # type: ignore[attr-defined]
-        "resilient_client",
-        return_value=_mock_graph_response(events),
-    )
-
-
-def _patch_graph_paginated(client: TestClient, pages: list[dict]):
-    return patch.object(
-        client._compliance_routes_mod,  # type: ignore[attr-defined]
-        "resilient_client",
-        return_value=_mock_paginated_graph_response(pages),
+        "_load_fsma_audit_events",
+        return_value=events,
     )
 
 
@@ -242,7 +169,7 @@ def test_1283_content_disposition_uses_parsed_dates(client):
             "kdes": {"event_date": "2026-04-10T10:00:00+00:00"},
         }
     ]
-    with _patch_graph(client, events):
+    with _patch_events(client, events):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={
@@ -270,7 +197,7 @@ def test_1283_content_disposition_uses_parsed_dates(client):
 
 
 def test_1291_zero_events_returns_404(client):
-    with _patch_graph(client, []):
+    with _patch_events(client, []):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
@@ -285,7 +212,7 @@ def test_1291_zero_events_returns_404(client):
 
 def test_1291_zero_events_still_records_empty_audit_line(client, caplog):
     caplog.set_level(logging.INFO, logger="compliance-audit")
-    with _patch_graph(client, []):
+    with _patch_events(client, []):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
@@ -317,7 +244,7 @@ def test_1108_malformed_event_date_in_graph_response_returns_400(client):
             "kdes": {"event_date": "yesterday"},  # unparseable
         }
     ]
-    with _patch_graph(client, bad_events):
+    with _patch_events(client, bad_events):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
@@ -328,7 +255,7 @@ def test_1108_malformed_event_date_in_graph_response_returns_400(client):
 
 
 # ---------------------------------------------------------------------------
-# #1038 — cursor pagination replaces single-page truncation
+# #1038 — hard cap still refuses a truncated FDA spreadsheet
 # ---------------------------------------------------------------------------
 
 
@@ -343,27 +270,17 @@ def _make_event(i: int) -> dict:
     }
 
 
-def test_1038_walks_all_pages_until_has_more_false(client):
-    """A 2-page result set must be fully consumed; the CSV contains
-    every row, not just the first page.
-    """
-    page_1 = [_make_event(i) for i in range(500)]
-    page_2 = [_make_event(i + 500) for i in range(123)]
-    pages = [
-        {"events": page_1, "has_more": True, "next_cursor": "cursor-abc"},
-        {"events": page_2, "has_more": False, "next_cursor": None},
-    ]
-    with _patch_graph_paginated(client, pages):
+def test_1038_returns_every_loaded_event(client):
+    """The CSV must contain every event the in-process query returned."""
+    events = [_make_event(i) for i in range(623)]
+    with _patch_events(client, events):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
         )
     assert r.status_code == 200
-    # Record Count metadata row appears in the CSV cover block.
     body = r.text
     assert "Record Count" in body
-    # All 623 events should be represented. Count the data-row TLCs
-    # (the TLCs are unique per event).
     data_rows = [line for line in body.splitlines() if "TLC-" in line]
     assert len(data_rows) == 623, f"expected 623 data rows, got {len(data_rows)}"
 
@@ -373,17 +290,8 @@ def test_1038_exceeding_hard_cap_returns_413(client):
     handler must 413 (Payload Too Large) rather than silently
     producing a partial CSV.
     """
-    # Build 101 pages of 500 → 50,500 events, just over the default cap.
-    pages = []
-    for i in range(101):
-        pages.append(
-            {
-                "events": [_make_event(i * 500 + j) for j in range(500)],
-                "has_more": i < 100,
-                "next_cursor": f"cursor-{i}" if i < 100 else None,
-            }
-        )
-    with _patch_graph_paginated(client, pages):
+    events = [_make_event(i) for i in range(50_001)]
+    with _patch_events(client, events):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
@@ -408,7 +316,7 @@ def test_valid_request_returns_csv(client):
             "kdes": {"event_date": "2026-04-10T10:00:00+00:00"},
         }
     ]
-    with _patch_graph(client, events):
+    with _patch_events(client, events):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={
@@ -422,36 +330,36 @@ def test_valid_request_returns_csv(client):
     assert "TLC-001" in r.text
 
 
-def test_malformed_pagination_returns_502_not_partial_csv(client):
-    """Silent-failure sweep: ``has_more=true`` with a missing
-    ``next_cursor`` previously broke the loop and rendered the
-    accumulated PARTIAL event list into an official FDA spreadsheet
-    with no marker. Fail closed like the other malformed-upstream
-    cases."""
-    page_1 = [_make_event(i) for i in range(10)]
-    pages = [
-        {"events": page_1, "has_more": True, "next_cursor": None},
-    ]
-    with _patch_graph_paginated(client, pages):
+# ---------------------------------------------------------------------------
+# #2862 — storage connect/timeout is 503, never empty-result 404
+# ---------------------------------------------------------------------------
+
+
+def test_2862_storage_connect_failure_is_not_empty_result_404(client):
+    """A dead event store must not be reported as "no FSMA 204 events"."""
+    mod = client._compliance_routes_mod  # type: ignore[attr-defined]
+    with patch.object(
+        mod,
+        "_load_fsma_audit_events",
+        side_effect=mod.EventStorageUnavailable("connection refused"),
+    ):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
         )
-    assert r.status_code == 502
-    assert "pagination" in r.json()["detail"].lower()
+    assert r.status_code == 503
+    detail = r.json()["detail"]
+    assert "storage unavailable" in detail.lower()
+    assert "No FSMA 204 events" not in detail
+    assert "Content-Disposition" not in r.headers
 
 
-def test_malformed_pagination_empty_page_returns_502(client):
-    """``has_more=true`` with an empty page is the same malformed
-    upstream shape — abort, do not render a partial export."""
-    page_1 = [_make_event(i) for i in range(10)]
-    pages = [
-        {"events": page_1, "has_more": True, "next_cursor": "cursor-abc"},
-        {"events": [], "has_more": True, "next_cursor": "cursor-def"},
-    ]
-    with _patch_graph_paginated(client, pages):
+def test_2862_empty_query_is_still_404(client):
+    """Successful empty result remains 404 so auditors do not get a blank CSV."""
+    with _patch_events(client, []):
         r = client.get(
             "/v1/fsma/audit/spreadsheet",
             params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
         )
-    assert r.status_code == 502
+    assert r.status_code == 404
+    assert "No FSMA 204 events" in r.json()["detail"]

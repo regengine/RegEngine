@@ -9,14 +9,14 @@ Two slices of the module are exercised here:
   to ``ipaddress.ip_network("")`` and log a spurious
   ``audit_trusted_proxy_cidr_invalid`` warning for benign operator input.
 
-* ``AuditContextMiddleware.dispatch`` lines 100-114 — the full request
-  wrapper: skip-path fast-path, audit-context attachment on the happy
-  path, and the ``_get_client_ip`` proxy-aware IP resolver.
+* ``AuditContextMiddleware.dispatch`` — the full request wrapper: skip-path
+  fast-path, audit-context attachment on the happy path, and the signed
+  proxy-attribution IP resolver.
 
 Why this matters: ``audit_middleware`` sits on the critical tamper-evidence
-path for the EPIC-K #1414 story — it decides which sockets are allowed to
-forge ``actor_ip`` via ``X-Forwarded-For``. Ops teams routinely hand-edit
-``AUDIT_TRUSTED_PROXY_CIDRS`` (Railway edge rollout, dev overrides), and
+path for the EPIC-K #1414 story — raw forwarding headers cannot forge
+``actor_ip``; only fresh metadata signed by the privileged BFF can override
+the socket peer. Legacy CIDR parsing remains covered for compatibility, and
 every request that reaches an admin route runs through ``dispatch``, so
 both slices must stay exercised.
 
@@ -26,11 +26,17 @@ This file holds pure, no-DB tests that mirror the style of
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import sys
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 
 service_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(service_dir))
@@ -44,7 +50,30 @@ from app.audit_middleware import (  # noqa: E402
     _is_trusted_proxy,
     _should_skip,
     _trusted_proxy_cidrs,
+    _verified_proxy_client_ip,
 )
+from shared.middleware.request_id import RequestIDMiddleware  # noqa: E402
+
+_PROXY_HMAC_KEY = "test-proxy-ip-hmac-key-material-32-bytes"
+
+
+def _proxy_ip_headers(
+    *,
+    ip: str = "203.0.113.9",
+    method: str = "GET",
+    request_id: str = "canonical-request-id",
+    timestamp: int | None = None,
+) -> dict[str, str]:
+    timestamp_text = str(timestamp if timestamp is not None else int(time.time()))
+    payload = f"v1\n{ip}\n{timestamp_text}\n{method}\n{request_id}".encode()
+    digest = hmac.new(_PROXY_HMAC_KEY.encode(), payload, hashlib.sha256).digest()
+    signature = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return {
+        "x-request-id": request_id,
+        "x-regengine-proxy-client-ip": ip,
+        "x-regengine-proxy-timestamp": timestamp_text,
+        "x-regengine-proxy-signature": f"v1={signature}",
+    }
 
 # ---------------------------------------------------------------------------
 # #1342 — tolerant parsing of AUDIT_TRUSTED_PROXY_CIDRS
@@ -133,7 +162,7 @@ def _make_request(
     ``BaseHTTPMiddleware.dispatch`` only reads:
       - ``request.url.path`` (skip check + endpoint string)
       - ``request.method`` (endpoint string)
-      - ``request.headers.get(...)`` (user-agent, XFF, X-Real-IP)
+      - ``request.headers.get(...)`` (user-agent, signed proxy metadata)
       - ``request.client.host`` (raw socket peer)
       - ``request.state`` (write target for audit_context)
 
@@ -209,6 +238,167 @@ async def test_dispatch_attaches_audit_context_on_happy_path():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_reuses_canonical_request_id_from_request_state():
+    """The consolidated RequestIDMiddleware owns the per-hop request ID.
+
+    Audit context must reuse that value so the response header, structured
+    logs, and privileged audit evidence all correlate to one request.
+    """
+    mw = AuditContextMiddleware(app=MagicMock())
+    req = _make_request(path="/v1/admin/keys")
+    req.state.request_id = "canonical-request-id"
+
+    async def _call_next(r):
+        return MagicMock()
+
+    await mw.dispatch(req, _call_next)
+
+    assert req.state.audit_context["request_id"] == "canonical-request-id"
+
+
+def test_request_id_and_signed_proxy_context_share_real_middleware_boundary(monkeypatch):
+    """Exercise signed Vercel-to-Railway attribution through real middleware."""
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", _PROXY_HMAC_KEY)
+    app = FastAPI()
+    app.add_middleware(AuditContextMiddleware)
+    app.add_middleware(RequestIDMiddleware)
+
+    @app.get("/v1/admin/audit-context")
+    async def _audit_context(request: Request):
+        return request.state.audit_context
+
+    response = TestClient(app, client=("10.1.2.3", 50000)).get(
+        "/v1/admin/audit-context",
+        headers=_proxy_ip_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "canonical-request-id"
+    assert response.json()["request_id"] == "canonical-request-id"
+    assert response.json()["actor_ip"] == "203.0.113.9"
+
+
+@pytest.mark.parametrize("backend_key", [None, "different-backend-key-material-32-bytes"])
+def test_real_middleware_rejects_missing_or_mismatched_attestation_key(
+    monkeypatch,
+    backend_key,
+):
+    if backend_key is None:
+        monkeypatch.delenv("REGENGINE_PROXY_IP_HMAC_KEY", raising=False)
+    else:
+        monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", backend_key)
+    app = FastAPI()
+    app.add_middleware(AuditContextMiddleware)
+    app.add_middleware(RequestIDMiddleware)
+
+    @app.get("/v1/admin/audit-context")
+    async def _audit_context(request: Request):
+        return request.state.audit_context
+
+    response = TestClient(app, client=("10.1.2.3", 50000)).get(
+        "/v1/admin/audit-context",
+        headers=_proxy_ip_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["actor_ip"] == "10.1.2.3"
+
+
+@pytest.mark.parametrize(
+    ("ip", "request_id", "signature"),
+    [
+        (
+            "2001:db8::1",
+            "request-123",
+            "v1=1Y7_BGRt1lVOWOqB8hw-L9J4VkdJ2jtL_z3r9aWoNIY",  # pragma: allowlist secret
+        ),
+        (
+            "::ffff:c000:280",
+            "mapped-request",
+            "v1=qVJMaVaSaoPwYjonRlfFP8QZzhHkFWHdRj-Gxq6BNnA",  # pragma: allowlist secret
+        ),
+    ],
+    ids=["ipv6", "ipv4-mapped-ipv6"],
+)
+def test_proxy_attestation_wire_format_matches_frontend_golden_vector(
+    monkeypatch,
+    ip,
+    request_id,
+    signature,
+):
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", _PROXY_HMAC_KEY)
+    req = _make_request(
+        method="POST",
+        headers={
+            "x-request-id": request_id,
+            "x-regengine-proxy-client-ip": ip,
+            "x-regengine-proxy-timestamp": "1786000000",
+            "x-regengine-proxy-signature": signature,
+        },
+    )
+
+    assert _verified_proxy_client_ip(req, now=1_786_000_000) == ip
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda headers: headers.__setitem__("x-regengine-proxy-client-ip", "198.51.100.10"),
+        lambda headers: headers.__setitem__("x-regengine-proxy-signature", "v1=invalid"),
+    ],
+    ids=["tampered-ip", "invalid-signature"],
+)
+def test_invalid_proxy_attestation_falls_back_to_socket(monkeypatch, mutate):
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", _PROXY_HMAC_KEY)
+    headers = _proxy_ip_headers()
+    mutate(headers)
+    req = _make_request(client_host="10.1.2.3", headers=headers)
+
+    assert AuditContextMiddleware._get_client_ip(req) == "10.1.2.3"
+
+
+@pytest.mark.parametrize("offset", [-61, 61], ids=["stale", "future"])
+def test_out_of_window_proxy_attestation_falls_back_to_socket(monkeypatch, offset):
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", _PROXY_HMAC_KEY)
+    headers = _proxy_ip_headers(timestamp=int(time.time()) + offset)
+    req = _make_request(client_host="10.1.2.3", headers=headers)
+
+    assert AuditContextMiddleware._get_client_ip(req) == "10.1.2.3"
+
+
+@pytest.mark.parametrize(
+    "ip",
+    ["203.0.113.9, 198.51.100.8", "not-an-ip", "fe80::1%eth0"],
+    ids=["forwarding-chain", "malformed", "ipv6-zone-id"],
+)
+def test_non_singular_proxy_ip_falls_back_to_socket(monkeypatch, ip):
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", _PROXY_HMAC_KEY)
+    req = _make_request(client_host="10.1.2.3", headers=_proxy_ip_headers(ip=ip))
+
+    assert AuditContextMiddleware._get_client_ip(req) == "10.1.2.3"
+
+
+def test_raw_forwarding_headers_never_override_socket_even_for_legacy_trusted_peer(monkeypatch):
+    monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+    req = _make_request(
+        client_host="10.1.2.3",
+        headers={
+            "x-forwarded-for": "203.0.113.9, 10.1.2.3",
+            "x-real-ip": "203.0.113.50",
+        },
+    )
+
+    assert AuditContextMiddleware._get_client_ip(req) == "10.1.2.3"
+
+
+def test_short_proxy_attestation_key_falls_back_to_socket(monkeypatch):
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", "too-short")
+    req = _make_request(client_host="10.1.2.3", headers=_proxy_ip_headers())
+
+    assert AuditContextMiddleware._get_client_ip(req) == "10.1.2.3"
+
+
+@pytest.mark.asyncio
 async def test_dispatch_truncates_long_user_agent():
     """``actor_ua`` slices to 512 chars to bound audit-row width (line 109)."""
     mw = AuditContextMiddleware(app=MagicMock())
@@ -223,9 +413,8 @@ async def test_dispatch_truncates_long_user_agent():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_honors_xff_when_peer_is_trusted_proxy(monkeypatch):
-    """When the socket peer is inside AUDIT_TRUSTED_PROXY_CIDRS, the
-    left-most X-Forwarded-For hop becomes actor_ip (lines 128-131)."""
+async def test_dispatch_ignores_xff_when_legacy_proxy_cidr_matches(monkeypatch):
+    """A peer CIDR does not authenticate caller-controlled XFF."""
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
     mw = AuditContextMiddleware(app=MagicMock())
     req = _make_request(
@@ -237,12 +426,12 @@ async def test_dispatch_honors_xff_when_peer_is_trusted_proxy(monkeypatch):
         return MagicMock()
 
     await mw.dispatch(req, _call_next)
-    assert req.state.audit_context["actor_ip"] == "203.0.113.9"
+    assert req.state.audit_context["actor_ip"] == "10.1.2.3"
 
 
 @pytest.mark.asyncio
-async def test_dispatch_falls_back_to_x_real_ip_when_trusted(monkeypatch):
-    """Trusted proxy + no XFF: X-Real-IP becomes actor_ip (lines 132-134)."""
+async def test_dispatch_ignores_x_real_ip_when_legacy_proxy_cidr_matches(monkeypatch):
+    """A peer CIDR does not authenticate caller-controlled X-Real-IP."""
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
     mw = AuditContextMiddleware(app=MagicMock())
     req = _make_request(
@@ -254,7 +443,7 @@ async def test_dispatch_falls_back_to_x_real_ip_when_trusted(monkeypatch):
         return MagicMock()
 
     await mw.dispatch(req, _call_next)
-    assert req.state.audit_context["actor_ip"] == "203.0.113.50"
+    assert req.state.audit_context["actor_ip"] == "10.1.2.3"
 
 
 @pytest.mark.asyncio

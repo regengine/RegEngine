@@ -1,51 +1,35 @@
 # Security Policy
 
-## Supported Versions
+## Supported releases
 
-| Version | Supported |
-|---------|-----------|
-| Latest  | Yes       |
+Security support applies to the current deployed release identified by the
+release-evidence record. Source on `main`, staging, and production may differ;
+include the observed deployment URL and version when reporting an issue.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-We take security seriously at RegEngine. If you discover a vulnerability,
-please report it responsibly.
+Email **security@regengine.co**. Do not open a public issue or include
+credentials, customer data, or unnecessary personal information.
 
-**Do NOT open a public GitHub issue for security vulnerabilities.**
+Include the affected URL or operation, reproduction steps using disposable
+accounts and synthetic data, observed impact, and a secure contact method.
+The public policy is available at
+<https://regengine.co/legal/vulnerability-disclosure>.
 
-### How to Report
+## Scope
 
-1. **Email**: Send details to **security@regengine.co**
-2. **Include**:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
+The current RegEngine frontend, consolidated API deployment, authentication,
+authorization, tenant isolation, API-key handling, and evidence/export
+integrity are in scope when tested with accounts and tenants you control.
 
-### What to Expect
+Denial of service, social engineering, physical attacks, unsolicited messages,
+access to another party's data, and testing third-party providers are out of
+scope. Stop and report immediately if non-synthetic data becomes visible.
 
-- **Acknowledgment**: Within 48 hours of your report
-- **Assessment**: We will evaluate severity within 5 business days
-- **Resolution**: Critical vulnerabilities are patched within 7 days; high within 30 days
-- **Disclosure**: We will coordinate public disclosure timing with you
+## What to expect
 
-### Scope
-
-The following are in scope:
-- RegEngine API services (admin, ingestion, compliance, graph, NLP, scheduler)
-- RegEngine frontend application
-- Authentication and authorization mechanisms
-- Data isolation and tenant separation
-- API key and credential handling
-
-### Out of Scope
-
-- Denial of service attacks
-- Social engineering
-- Physical security
-- Third-party services we integrate with
-
-### Recognition
-
-We appreciate responsible disclosure and will credit reporters (with permission)
-in our security advisories.
+RegEngine will acknowledge reports when the security inbox is monitored,
+validate scope and impact, and coordinate remediation and disclosure based on
+the specific finding. Any response-time estimates are operational targets, not
+contractual service levels. RegEngine does not currently operate a public
+bounty program.

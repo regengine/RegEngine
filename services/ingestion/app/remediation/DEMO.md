@@ -21,7 +21,7 @@ cd services/ingestion && pytest tests/remediation -q
 
 ```bash
 BASE=http://localhost:8000        # monolith
-AUTH="Authorization: Bearer $API_KEY"
+AUTH="X-RegEngine-API-Key: $API_KEY"
 
 # 1. Supplier CSV arrives; RegEngine preserves bytes + SHA-256, validates,
 #    stages rows, and opens exception + remediation cases for defects.

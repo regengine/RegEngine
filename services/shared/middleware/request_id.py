@@ -16,7 +16,12 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # Generate or extract request ID
-        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+        # Make the canonical per-hop ID available to downstream middleware and
+        # handlers. AuditContextMiddleware reuses this exact value so response
+        # headers, logs, and privileged audit evidence remain correlatable.
+        request.state.request_id = request_id
 
         # Set in context var
         token = request_id_ctx.set(request_id)

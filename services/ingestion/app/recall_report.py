@@ -179,6 +179,31 @@ def _status(score: int) -> str:
     return "critical"
 
 
+def _derive_action_items(dimensions: list["RecallDimension"]) -> list[dict]:
+    """Build the improvement plan from the tenant's actual gaps (#3042).
+
+    Every item traces to a dimension scoring below 80 and reuses that
+    dimension's own recommendations. Impact is stated as the dimension
+    and its current score — no invented point estimates. A tenant with
+    no gaps gets an empty plan, which is the honest answer.
+    """
+    items: list[dict] = []
+    for dim in sorted(dimensions, key=lambda d: d.score):
+        if dim.score >= 80:
+            continue
+        priority = "HIGH" if dim.status == "critical" else "MEDIUM"
+        for rec in dim.recommendations[:2]:
+            items.append(
+                {
+                    "priority": priority,
+                    "action": rec,
+                    "impact": f"Improves {dim.name} (currently {dim.score}/100)",
+                    "effort": "Not estimated",
+                }
+            )
+    return items[:6]
+
+
 @router.get(
     "/{tenant_id}/report",
     response_model=RecallReport,
@@ -275,12 +300,13 @@ async def generate_report(
                 score=chain_integrity_score,
                 grade=_grade(chain_integrity_score),
                 status=_status(chain_integrity_score),
+                # #3042: findings state only what was queried — no
+                # unverified capability claims in real mode.
                 findings=[
                     f"SHA-256 hash chain length: {chain_length} entries",
                     f"Sequence gaps detected: {chain_gap_count}"
                     if chain_gap_count > 0
                     else "No gaps in event sequence",
-                    "All immutability triggers active",
                 ]
                 if chain_length > 0
                 else [
@@ -306,8 +332,7 @@ async def generate_report(
                 status=_status(supply_chain_score),
                 findings=[
                     f"Suppliers in system: {supplier_count}",
-                    "Portal engagement tracking active",
-                    "Supply chain visibility improving",
+                    f"CTE event types represented: {cte_types} / 7",
                 ],
                 recommendations=[
                     "Expand supplier network to key trading partners",
@@ -323,9 +348,12 @@ async def generate_report(
                 grade=_grade(90 if has_export else 50),
                 status=_status(90 if has_export else 50),
                 findings=[
-                    f"FDA sortable export: {'functional' if has_export else 'not yet enabled'}",
-                    "EPCIS 2.0 JSON-LD export: ready",
-                    "Export includes SHA-256 verification hashes",
+                    "FDA sortable export: functional",
+                    "Exports include SHA-256 verification hashes",
+                ]
+                if has_export
+                else [
+                    "FDA sortable export: not yet enabled",
                 ],
                 recommendations=[
                     "Enable FDA export capability",
@@ -342,8 +370,7 @@ async def generate_report(
                 status=_status(team_readiness_score),
                 findings=[
                     f"Data maturity indicators: {cte_count} events in system",
-                    "System integration level: increasing",
-                    "Team training: recommended",
+                    "Training and drill history are not tracked by this report",
                 ],
                 recommendations=[
                     "Generate SOP via /api/v1/sop/generate",
@@ -474,44 +501,50 @@ async def generate_report(
         f"Addressing any gaps below 80 would raise the overall grade to B or above."
     )
 
-    action_items = [
-        {
-            "priority": "HIGH",
-            "action": "Collect missing GLNs from 3 supplier locations",
-            "impact": "+5 to Data Completeness",
-            "effort": "Low",
-        },
-        {
-            "priority": "HIGH",
-            "action": "Re-engage 2 inactive suppliers via portal reminders",
-            "impact": "+10 to Supplier Coverage",
-            "effort": "Low",
-        },
-        {
-            "priority": "MEDIUM",
-            "action": "Generate and distribute FSMA 204 SOP",
-            "impact": "+8 to Team Readiness",
-            "effort": "Low",
-        },
-        {
-            "priority": "MEDIUM",
-            "action": "Complete FSMA training for 3 remaining team members",
-            "impact": "+10 to Team Readiness",
-            "effort": "Medium",
-        },
-        {
-            "priority": "MEDIUM",
-            "action": "Reduce CTE entry delay to under 2 hours",
-            "impact": "+7 to Trace Speed",
-            "effort": "Medium",
-        },
-        {
-            "priority": "LOW",
-            "action": "Test EPCIS exports with retailer portals",
-            "impact": "+5 to Export Readiness",
-            "effort": "Low",
-        },
-    ]
+    # #3042: the improvement plan must come from the tenant's actual
+    # computed gaps. Only the demo scenario ships the canned narrative
+    # (its dimension findings are equally illustrative).
+    if use_demo_mode:
+        action_items = [
+            {
+                "priority": "HIGH",
+                "action": "Collect missing GLNs from 3 supplier locations",
+                "impact": "+5 to Data Completeness",
+                "effort": "Low",
+            },
+            {
+                "priority": "HIGH",
+                "action": "Re-engage 2 inactive suppliers via portal reminders",
+                "impact": "+10 to Supplier Coverage",
+                "effort": "Low",
+            },
+            {
+                "priority": "MEDIUM",
+                "action": "Generate and distribute FSMA 204 SOP",
+                "impact": "+8 to Team Readiness",
+                "effort": "Low",
+            },
+            {
+                "priority": "MEDIUM",
+                "action": "Complete FSMA training for 3 remaining team members",
+                "impact": "+10 to Team Readiness",
+                "effort": "Medium",
+            },
+            {
+                "priority": "MEDIUM",
+                "action": "Reduce CTE entry delay to under 2 hours",
+                "impact": "+7 to Trace Speed",
+                "effort": "Medium",
+            },
+            {
+                "priority": "LOW",
+                "action": "Test EPCIS exports with retailer portals",
+                "impact": "+5 to Export Readiness",
+                "effort": "Low",
+            },
+        ]
+    else:
+        action_items = _derive_action_items(dimensions)
 
     return RecallReport(
         tenant_id=tenant_id,
@@ -520,9 +553,12 @@ async def generate_report(
         overall_score=overall,
         overall_grade=_grade(overall),
         overall_status=_status(overall),
+        # #3042: the previous real-mode value (overall/100*24 hours) was a
+        # score formula formatted as a latency measurement. Response time
+        # is not measured anywhere in this service, so say so.
         time_to_respond_estimate="4.2 hours (target: < 24 hours)"
         if use_demo_mode
-        else f"{int(overall / 100 * 24)} hour(s) estimated",
+        else "Not yet measured — run a recall drill to establish a baseline (target: < 24 hours per 21 CFR 1.1455(c))",
         dimensions=dimensions,
         executive_summary=executive_summary,
         action_items=action_items,

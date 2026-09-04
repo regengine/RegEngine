@@ -18,6 +18,24 @@ function jsonResponse(data: unknown): Response {
     });
 }
 
+function csvResult(statuses: Array<'accepted' | 'rejected'>) {
+    return {
+        total: statuses.length,
+        accepted: statuses.filter(status => status === 'accepted').length,
+        rejected: statuses.filter(status => status === 'rejected').length,
+        ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+        events: statuses.map((status, index) => ({
+            traceability_lot_code: `LOT-${index + 1}`,
+            cte_type: 'shipping',
+            status,
+            event_id: status === 'accepted' ? `evt-${index + 1}` : null,
+            sha256_hash: status === 'accepted' ? 'a'.repeat(64) : null,
+            chain_hash: status === 'accepted' ? 'b'.repeat(64) : null,
+            errors: status === 'rejected' ? [`Row ${index + 2}: rejected`] : [],
+        })),
+    };
+}
+
 async function importFreshClient() {
     vi.resetModules();
     vi.stubGlobal('fetch', fetchMock);
@@ -48,7 +66,7 @@ describe('apiClient review queue contract', () => {
         }));
 
         const { apiClient } = await importFreshClient();
-        const items = await apiClient.getReviewItems('cookie-managed');
+        const items = await apiClient.getReviewItems();
 
         expect(fetchMock).toHaveBeenCalledWith(
             '/api/admin/v1/admin/review/flagged-extractions?status_filter=PENDING&limit=50',
@@ -72,14 +90,14 @@ describe('apiClient review queue contract', () => {
         ]);
     });
 
-    it('sends reviewer metadata with approve and reject decisions', async () => {
+    it('derives reviewer identity server-side and sends no privileged key header', async () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse({}))
             .mockResolvedValueOnce(jsonResponse({}));
 
         const { apiClient } = await importFreshClient();
-        await apiClient.approveReviewItem('admin-key', 'rev-1');
-        await apiClient.rejectReviewItem('admin-key', 'rev-1');
+        await apiClient.approveReviewItem('rev-1');
+        await apiClient.rejectReviewItem('rev-1');
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
@@ -87,11 +105,11 @@ describe('apiClient review queue contract', () => {
             expect.objectContaining({
                 method: 'POST',
                 headers: {
-                    'X-Admin-Key': 'admin-key',
                     'X-CSRF-Token': 'csrf-token',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ reviewer_id: 'web-frontend', notes: 'Approved via web interface' }),
+                body: JSON.stringify({}),
+                credentials: 'include',
             }),
         );
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -100,21 +118,70 @@ describe('apiClient review queue contract', () => {
             expect.objectContaining({
                 method: 'POST',
                 headers: {
-                    'X-Admin-Key': 'admin-key',
                     'X-CSRF-Token': 'csrf-token',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ reviewer_id: 'web-frontend', notes: 'Rejected via web interface' }),
+                body: JSON.stringify({}),
+                credentials: 'include',
             }),
         );
+
+        for (const [, init] of fetchMock.mock.calls) {
+            const headers = new Headers(init.headers);
+            expect(headers.has('x-admin-key')).toBe(false);
+        }
+    });
+
+    it('manages tenants and live keys through the opaque browser session contract', async () => {
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ key_id: 'key-1', api_key: 'raw-once' }))
+            .mockResolvedValueOnce(jsonResponse({
+                items: [{
+                    id: 'key-1',
+                    key_id: 'key-1',
+                    name: 'Deploy key',
+                    created_at: '2026-08-03T12:00:00Z',
+                }],
+                total: 1,
+                skip: 0,
+                limit: 100,
+            }))
+            .mockResolvedValueOnce(new Response(null, { status: 204 }))
+            .mockResolvedValueOnce(jsonResponse({ id: 'tenant-1', name: 'Acme' }));
+
+        const { apiClient } = await importFreshClient();
+        await apiClient.createAPIKey({ name: 'Deploy key', tenantId: 'tenant-1' });
+        const keys = await apiClient.listAPIKeys();
+        await apiClient.revokeAPIKey('key-1');
+        await apiClient.createTenant('Acme');
+
+        expect(keys).toEqual([{
+            id: 'key-1',
+            key_id: 'key-1',
+            name: 'Deploy key',
+            created_at: '2026-08-03T12:00:00Z',
+        }]);
+
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+            '/api/admin/v1/admin/keys',
+            '/api/admin/v1/admin/keys',
+            '/api/admin/v1/admin/keys/key-1',
+            '/api/admin/v1/admin/tenants',
+        ]);
+        for (const [, init] of fetchMock.mock.calls) {
+            const headers = new Headers(init.headers);
+            expect(init.credentials).toBe('include');
+            expect(headers.has('x-admin-key')).toBe(false);
+        }
     });
 
     it('omits X-RegEngine-API-Key for cookie-backed file ingest calls when no apiKey is provided', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse({ job_id: 'job-1' }));
+        const result = csvResult(['accepted']);
+        fetchMock.mockResolvedValueOnce(jsonResponse(result));
 
         const { apiClient } = await importFreshClient();
         const file = new File(['csv,data'], 'upload.csv', { type: 'text/csv' });
-        await apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline');
+        await expect(apiClient.ingestFile(null, file, 'mobile_capture_pwa_offline')).resolves.toEqual(result);
 
         const [, init] = fetchMock.mock.calls[0];
         expect(fetchMock.mock.calls[0][0]).toBe('/api/ingestion/api/v1/ingest/csv');
@@ -151,6 +218,82 @@ describe('apiClient review queue contract', () => {
                 credentials: 'include',
             }),
         );
+    });
+
+    it.each([
+        [400, { message: 'No valid rows found', errors: ['Row 2: No CTE type'] }, 'No valid rows found: Row 2: No CTE type'],
+        [400, 'CSV contained no data rows', 'CSV contained no data rows'],
+        [422, [{ loc: ['body', 'file'], msg: 'Field required', type: 'missing' }], 'Field required'],
+        [401, 'Authentication required', 'Authentication required'],
+        [403, 'Tenant mismatch', 'Tenant mismatch'],
+        [500, { unexpected: { value: 'not a display message' } }, 'Request failed'],
+    ])('normalizes CSV failure status %i without losing the HTTP response', async (status, detail, message) => {
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ detail }), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+        }));
+        const { apiClient } = await importFreshClient();
+        await expect(apiClient.ingestFile(null, new File([''], 'events.csv'))).rejects.toMatchObject({
+            message,
+            response: { status, data: { detail } },
+        });
+    });
+
+    it.each([
+        { job_id: 'legacy-job-1' },
+        { total: 2, accepted: 2, rejected: 1, events: [] },
+        { total: 1, accepted: -1, rejected: 2, events: [] },
+        { total: 1, accepted: 0, rejected: 1, events: [null] },
+        { total: 1, accepted: 0, rejected: 1, events: [{ status: 'rejected', errors: [{}] }] },
+        { total: 1, accepted: 1, rejected: 0, events: [], kde_warnings: { message: 'not an array' } },
+        {
+            total: 1,
+            accepted: 1,
+            rejected: 0,
+            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            events: [{
+                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                event_id: '', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64), errors: [],
+            }],
+        },
+        {
+            total: 1,
+            accepted: 1,
+            rejected: 0,
+            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            events: [{
+                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                event_id: 'evt-1', sha256_hash: 'not-a-hash', chain_hash: 'b'.repeat(64), errors: [],
+            }],
+        },
+        {
+            total: 1,
+            accepted: 1,
+            rejected: 0,
+            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            events: [{
+                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                event_id: 'evt-1', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64),
+                errors: ['persistence warning'],
+            }],
+        },
+    ])('rejects a CSV response without trustworthy counts: %j', async (result) => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(result));
+        const { apiClient } = await importFreshClient();
+        await expect(apiClient.ingestFile(null, new File([''], 'events.csv'))).rejects.toThrow('Unexpected CSV ingestion response');
+    });
+
+    it('preserves the selected tenant and CSV source without fabricating a job', async () => {
+        const result = csvResult(['rejected', 'rejected']);
+        fetchMock.mockResolvedValueOnce(jsonResponse(result));
+        const { apiClient } = await importFreshClient();
+        apiClient.setCurrentTenant('tenant-123');
+        await expect(apiClient.ingestFile('cookie-managed', new File([''], 'events.csv'), 'fsma', 'shipping')).resolves.toEqual(result);
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers).toEqual({ 'X-CSRF-Token': 'csrf-token', 'X-Tenant-ID': 'tenant-123' });
+        expect(init.body.get('source')).toBe('fsma');
+        expect(init.body.get('cte_type')).toBe('shipping');
+        expect(init.body.has('tenant_id')).toBe(false);
     });
 
     it('unwraps paginated admin user-management responses', async () => {

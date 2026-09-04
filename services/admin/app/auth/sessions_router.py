@@ -10,7 +10,9 @@ Exposes:
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
+from typing import Awaitable, Callable, TypeVar
 from uuid import UUID
 
 import structlog
@@ -19,17 +21,26 @@ from shared.pagination import PaginationParams
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from ..auth_utils import decode_access_token, revoke_token
+from ..auth_utils import RevocationBackendUnavailable, decode_access_token, revoke_token
 from ..database import get_session
 from ..dependencies import get_current_user, get_session_store
 from ..models import RevokeAllSessionsResponse, SessionListResponse, SessionRevokeResponse
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import SessionModel, UserModel
 from .elevation_helpers import _revoke_all_elevation_tokens_for_user
-from .session_auth import AUTH_SESSION_COOKIE, ActiveSessionContext, get_current_active_session_context
+from .session_auth import AUTH_SESSION_COOKIE, ActiveSessionContext, get_scoped_active_session_context
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
+_CleanupResult = TypeVar("_CleanupResult")
+
+
+def _revocation_service_unavailable(exc: Exception) -> HTTPException:
+    logger.error("session_revocation_backend_unavailable", error_type=type(exc).__name__)
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Authentication service temporarily unavailable",
+    )
 
 
 def _bearer_token_from_request(request: Request) -> str:
@@ -41,6 +52,37 @@ def _bearer_token_from_request(request: Request) -> str:
             headers={"WWW-Authenticate": "Bearer"},
         )
     return auth_header[7:]
+
+
+def _remaining_token_ttl_seconds(payload: dict) -> int | None:
+    """Return the decoded token's remaining lifetime, rounded up."""
+
+    exp = payload.get("exp")
+    if isinstance(exp, datetime):
+        expires_at = exp.timestamp()
+    else:
+        try:
+            expires_at = float(exp)
+        except (TypeError, ValueError):
+            return None
+    return max(1, math.ceil(expires_at - datetime.now(timezone.utc).timestamp()))
+
+
+async def _retry_idempotent_cleanup(
+    operation: Callable[[], Awaitable[_CleanupResult]],
+) -> _CleanupResult:
+    """Retry one transient failure without requiring an invalidated caller."""
+
+    first_error: Exception | None = None
+    for _attempt in range(2):
+        try:
+            return await operation()
+        except Exception as exc:
+            if first_error is None:
+                first_error = exc
+    if first_error is None:  # pragma: no cover - loop always executes twice
+        raise RuntimeError("cleanup retry exhausted without an error")
+    raise first_error
 
 
 @router.get("/sessions", response_model=SessionListResponse, dependencies=[Depends(get_current_user)])
@@ -78,12 +120,18 @@ async def revoke_session(
     current_user: UserModel = Depends(get_current_user),
     session_store: RedisSessionStore = Depends(get_session_store),
 ):
-    session = await session_store.get_session(session_id)
+    try:
+        session = await session_store.get_session(session_id)
+    except Exception as exc:
+        raise _revocation_service_unavailable(exc) from exc
 
     if not session or session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    await session_store.revoke_session(session_id)
+    try:
+        await session_store.revoke_session(session_id)
+    except Exception as exc:
+        raise _revocation_service_unavailable(exc) from exc
 
     logger.info("session_revoked", session_id=str(session_id), user_id=str(current_user.id))
 
@@ -98,34 +146,68 @@ async def logout(
 ):
     """Logout the current bearer-token session.
 
-    Multiple active sessions are allowed; this endpoint only revokes the
-    presented access token and, for session-bound local JWTs, its Redis
-    session. Legacy local tokens without sid/session_id still get their jti
-    revoked so replay of the bearer token fails.
+    Multiple active sessions are allowed; this endpoint revokes the presented
+    access token, its Redis refresh session, and any short-lived elevation
+    tokens. Other ordinary sessions remain active when the JWT carries a bound
+    session ID. Legacy local tokens without sid/session_id revoke all of the
+    user's refresh sessions because no narrower family can be proven.
     """
     token = _bearer_token_from_request(request)
     payload = decode_access_token(token)
 
-    jti = payload.get("jti")
-    if jti:
-        await revoke_token(str(jti))
+    # Keep the bearer/session valid when an early cleanup step fails so the
+    # caller can retry. Once the refresh session has been revoked, its binding
+    # also blocks this bearer if the final JTI write fails.
+    try:
+        await _retry_idempotent_cleanup(lambda: _revoke_all_elevation_tokens_for_user(session_store, current_user.id))
+    except Exception as exc:
+        raise _revocation_service_unavailable(exc) from exc
 
     sid_raw = payload.get("sid") or payload.get("session_id")
     session_revoked = False
+    revoke_all_user_sessions = not sid_raw
     if sid_raw:
         try:
             session_id = UUID(str(sid_raw))
         except (TypeError, ValueError):
             session_id = None
+            revoke_all_user_sessions = True
         if session_id is not None:
-            session = await session_store.get_session(session_id)
-            if session and session.user_id == current_user.id:
-                session_revoked = await session_store.revoke_session(session_id)
+            try:
+                session = await _retry_idempotent_cleanup(lambda: session_store.get_session(session_id))
+                if session and session.user_id == current_user.id:
+                    session_revoked = await _retry_idempotent_cleanup(lambda: session_store.revoke_session(session_id))
+            except Exception as exc:
+                raise _revocation_service_unavailable(exc) from exc
+
+    # Legacy local JWTs did not carry a sid. Revoking only their JTI leaves
+    # the bearer token dead but its refresh-token family reusable. Fail closed
+    # by revoking every refresh session for that user before writing the JTI.
+    if revoke_all_user_sessions:
+        try:
+            revoked_count = await _retry_idempotent_cleanup(
+                lambda: session_store.revoke_all_user_sessions(current_user.id)
+            )
+            session_revoked = bool(revoked_count)
+        except Exception as exc:
+            raise _revocation_service_unavailable(exc) from exc
+
+    jti = payload.get("jti")
+    if jti:
+        try:
+            await _retry_idempotent_cleanup(
+                lambda: revoke_token(
+                    str(jti),
+                    ttl_seconds=_remaining_token_ttl_seconds(payload),
+                )
+            )
+        except RevocationBackendUnavailable as exc:
+            raise _revocation_service_unavailable(exc) from exc
 
     logger.info(
         "logout_success",
         user_id=str(current_user.id),
-        jti=str(jti) if jti else None,
+        jti_present=bool(jti),
         session_id=str(sid_raw) if sid_raw else None,
         session_revoked=session_revoked,
     )
@@ -136,7 +218,7 @@ async def logout(
 @router.post("/session/logout")
 async def logout_browser_session(
     response: Response,
-    context: ActiveSessionContext = Depends(get_current_active_session_context),
+    context: ActiveSessionContext = Depends(get_scoped_active_session_context),
     db: Session = Depends(get_session),
 ):
     """Logout the opaque browser-cookie session (passwordless auth).
@@ -191,13 +273,13 @@ async def revoke_all_sessions(
     access token minted before this call. The same mechanism is used by
     logout-all and account-security invalidation flows.
     """
-    # 1. Revoke Redis session rows (future /refresh attempts will 401).
-    count = await session_store.revoke_all_user_sessions(current_user.id)
-
-    # 1b. Revoke opaque browser-session rows too. Passwordless sessions
+    # 1. Durably invalidate every access-token generation and opaque browser
+    # session before attempting Redis cleanup. If Redis is unavailable, the
+    # request returns 503 but replay is still blocked by these DB changes.
+    # Passwordless sessions
     # authenticate from the __Host-regengine_session cookie against the
     # sessions table — they carry no token_version claim, so the bump in
-    # step 2 alone would leave them alive.
+    # token_version alone would leave them alive.
     cookie_sessions_revoked = db.execute(
         update(SessionModel)
         .where(
@@ -207,7 +289,7 @@ async def revoke_all_sessions(
         .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
     ).rowcount
 
-    # 2. Bump token_version to kill outstanding access tokens immediately.
+    # Bump token_version to kill outstanding access tokens immediately.
     user = db.get(UserModel, current_user.id)
     if user is not None:
         current_version = int(getattr(user, "token_version", 0) or 0)
@@ -215,10 +297,31 @@ async def revoke_all_sessions(
         db.commit()
         new_version = user.token_version
     else:
-        new_version = None
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable",
+        )
 
-    # 3. Revoke any outstanding elevation tokens too.
-    elevation_revoked = await _revoke_all_elevation_tokens_for_user(session_store, current_user.id)
+    # 2. Revoke Redis refresh/session state and outstanding elevation tokens.
+    # A backend failure must never be surfaced as a successful logout. The DB
+    # invalidation above remains committed, so residual credentials stay
+    # unusable while each idempotent cleanup is retried internally.
+    count = 0
+    elevation_revoked = 0
+    cleanup_errors: list[Exception] = []
+    try:
+        count = await _retry_idempotent_cleanup(lambda: session_store.revoke_all_user_sessions(current_user.id))
+    except Exception as exc:
+        cleanup_errors.append(exc)
+    try:
+        elevation_revoked = await _retry_idempotent_cleanup(
+            lambda: _revoke_all_elevation_tokens_for_user(session_store, current_user.id)
+        )
+    except Exception as exc:
+        cleanup_errors.append(exc)
+    if cleanup_errors:
+        raise _revocation_service_unavailable(cleanup_errors[0]) from cleanup_errors[0]
 
     logger.info(
         "all_sessions_revoked",

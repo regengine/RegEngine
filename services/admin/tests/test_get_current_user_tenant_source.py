@@ -31,10 +31,35 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 USER_ID = uuid.uuid4()
 TENANT_A = uuid.uuid4()
 TENANT_B = uuid.uuid4()
+
+
+def test_optional_bearer_parser_has_no_stale_oauth_token_endpoint() -> None:
+    from services.admin.app.dependencies import _optional_bearer_token
+
+    bearer_request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(b"authorization", b"Bearer signed-token")],
+        }
+    )
+    basic_request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(b"authorization", b"Basic dXNlcjpwYXNz")],
+        }
+    )
+
+    assert _optional_bearer_token(bearer_request) == "signed-token"
+    assert _optional_bearer_token(basic_request) is None
 
 
 def _fake_sb_user(*, app_metadata: dict | None = None, user_metadata: dict | None = None):
@@ -61,6 +86,7 @@ class _FakeDB:
         self._user_mock = user_mock
         self._memberships = memberships  # list of MembershipModel mocks
         self.bind = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+        self.info: dict[str, str | bool] = {}
         self._execute_calls = 0
 
     def execute(self, *_args, **_kwargs):
@@ -126,6 +152,8 @@ def test_user_metadata_tenant_is_ignored(monkeypatch):
     result = _run(deps.get_current_user(token="stub", db=db))
 
     assert result is user_mock
+    assert db.info["authenticated_user_id"] == str(USER_ID)
+    assert db.info["is_admin"] is False
     # The only way to tell which tenant the dep resolved is to look at the
     # final membership-check execute args; easier: re-derive via the
     # fallback — confirm it matched tenant A, not tenant B.
@@ -148,6 +176,7 @@ def test_app_metadata_tenant_used(monkeypatch):
 
     result = _run(deps.get_current_user(token="stub", db=db))
     assert result is user_mock
+    assert db.info["authenticated_user_id"] == str(USER_ID)
 
 
 @pytest.mark.security
@@ -211,11 +240,12 @@ def test_supabase_invalid_jwt_can_fall_back_to_regengine_jwt(monkeypatch):
 
     assert result is user_mock
     deps.check_revoked_async.assert_awaited_once()
+    assert db.info["authenticated_user_id"] == str(USER_ID)
 
 
 @pytest.mark.security
-def test_supabase_retryable_error_fails_closed_in_production(monkeypatch):
-    """Supabase outages must not be treated as token rejection fallback in prod."""
+def test_production_bearer_skips_supabase_and_fails_closed_on_local_registry(monkeypatch):
+    """Production bearer auth belongs exclusively to the local revocation domain."""
     from services.admin.app import dependencies as deps
 
     class AuthRetryableError(Exception):
@@ -229,6 +259,11 @@ def test_supabase_retryable_error_fails_closed_in_production(monkeypatch):
 
     decode_access_token = MagicMock()
     monkeypatch.setattr(deps, "decode_access_token", decode_access_token)
+    monkeypatch.setattr(
+        deps,
+        "sync_keys_from_registry",
+        AsyncMock(side_effect=deps.JWTKeyRegistryBackendUnavailable("redis down")),
+    )
 
     user_mock = MagicMock(id=USER_ID, is_sysadmin=False)
     db = _FakeDB(memberships=[_membership(TENANT_A)], user_mock=user_mock)
@@ -236,7 +271,8 @@ def test_supabase_retryable_error_fails_closed_in_production(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _run(deps.get_current_user(token="maybe-local-token", db=db))
 
-    assert exc.value.status_code == 401
+    assert exc.value.status_code == 503
+    fake_sb.auth.get_user.assert_not_called()
     decode_access_token.assert_not_called()
 
 
@@ -255,6 +291,8 @@ def test_sole_membership_used_when_no_claim(monkeypatch):
 
     result = _run(deps.get_current_user(token="stub", db=db))
     assert result is user_mock
+    assert db.info["authenticated_user_id"] == str(USER_ID)
+    assert db.info["is_admin"] is False
 
 
 @pytest.mark.security
@@ -277,6 +315,8 @@ def test_multi_tenant_without_claim_rejected(monkeypatch):
         _run(deps.get_current_user(token="stub", db=db))
     assert exc.value.status_code == 401
     assert "Tenant selection required" in exc.value.detail
+    assert db.info["authenticated_user_id"] == str(USER_ID)
+    assert db.info["is_admin"] is False
 
 
 @pytest.mark.security
@@ -297,3 +337,5 @@ def test_multi_tenant_sysadmin_allowed(monkeypatch):
 
     result = _run(deps.get_current_user(token="stub", db=db))
     assert result is user_mock
+    assert db.info["authenticated_user_id"] == str(USER_ID)
+    assert db.info["is_admin"] is False

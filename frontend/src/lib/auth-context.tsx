@@ -11,8 +11,6 @@ interface AuthContextType {
   accessToken: string | null;
   /** @deprecated Use hasTenantSession or hasAdminSession instead. */
   apiKey: string | null;
-  /** @deprecated Use hasAdminSession instead. */
-  adminKey: string | null;
   tenantId: string | null;
   hasTenantSession: boolean;
   hasAdminSession: boolean;
@@ -22,7 +20,6 @@ interface AuthContextType {
   isHydrated: boolean;
   demoMode: boolean;
   setApiKey: (key: string | null) => Promise<void>;
-  setAdminKey: (key: string | null) => Promise<void>;
   setTenantId: (id: string | null) => Promise<void>;
   setDemoMode: (enabled: boolean) => void;
   completeOnboarding: () => void;
@@ -41,19 +38,19 @@ type LoginOptions = {
 /**
  * HTTP-only cookie auth — CRITICAL #2 fix complete.
  *
- * Sensitive credentials (access_token, api_key, admin_key) are stored
+ * Sensitive credentials (access_token and tenant API keys) are stored
  * ONLY in HTTP-only cookies via /api/session. They are never readable
  * by client-side JavaScript, eliminating XSS credential theft.
  *
  * Non-sensitive data (tenant_id, onboarded, demo_mode, user profile)
  * remains in localStorage for fast hydration.
  *
- * The apiKey/adminKey fields in the context are still set to a placeholder
- * value ("cookie-managed") for transitional compatibility. New code should
- * gate on hasTenantSession / hasAdminSession instead of placeholder secrets.
+ * The deprecated apiKey field in the context is still set to a placeholder
+ * value ("cookie-managed") for transitional compatibility. Human privileged
+ * access is derived from the authenticated user session, never from a key.
  */
 
-/** Placeholder value for apiKey/adminKey — indicates credentials are
+/** Placeholder value for apiKey — indicates credentials are
  *  managed server-side in HTTP-only cookies. NOT the real key. */
 const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
 
@@ -64,7 +61,6 @@ const STORAGE_KEYS = {
   USER: 'regengine_user',
   // DEPRECATED — migrated to HTTP-only cookies, then removed from localStorage
   _LEGACY_API_KEY: 'regengine_api_key',
-  _LEGACY_ADMIN_KEY: 'regengine_admin_key',
   _LEGACY_ACCESS_TOKEN: 'regengine_access_token',
 };
 
@@ -77,7 +73,6 @@ const STORAGE_KEYS = {
 async function setSessionCookies(params: {
   accessToken?: string | null;
   apiKey?: string | null;
-  adminKey?: string | null;
   tenantId?: string | null;
   user?: User | null;
   remember?: boolean;
@@ -86,7 +81,6 @@ async function setSessionCookies(params: {
   const body: Record<string, unknown> = {};
   if (params.accessToken) body.access_token = params.accessToken;
   if (params.apiKey) body.api_key = params.apiKey;
-  if (params.adminKey) body.admin_key = params.adminKey;
   if (params.tenantId) body.tenant_id = params.tenantId;
   if (params.user) body.user = params.user;
   if (Object.keys(body).length === 0) return true;
@@ -143,7 +137,6 @@ async function clearSessionCookies(): Promise<void> {
 async function getSessionInfo(): Promise<{
   authenticated: boolean;
   has_api_key: boolean;
-  has_admin_key: boolean;
   has_credentials: boolean;
   tenant_id: string | null;
   user: User | null;
@@ -183,10 +176,18 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   if (typeof window === 'undefined') return;
 
   const legacyApiKey = localStorage.getItem(STORAGE_KEYS._LEGACY_API_KEY);
-  const legacyAdminKey = localStorage.getItem(STORAGE_KEYS._LEGACY_ADMIN_KEY);
   const legacyAccessToken = localStorage.getItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
-  if (!legacyApiKey && !legacyAdminKey && !legacyAccessToken) return;
+  // Remove any retired RegEngine credential entries left by older builds,
+  // including credential types that no longer have a runtime representation.
+  // Capture the two supported migration values above before clearing them.
+  for (const key of Object.keys(localStorage)) {
+    if (/^regengine_.*(?:_key|_token)$/.test(key)) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  if (!legacyApiKey && !legacyAccessToken) return;
 
   if (process.env.NODE_ENV !== 'production') {
     // eslint-disable-next-line no-console
@@ -202,14 +203,14 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   await setSessionCookies({
     accessToken: legacyAccessToken,
     apiKey: legacyApiKey,
-    adminKey: legacyAdminKey,
     tenantId,
     user,
   });
 
-  // Remove sensitive keys from localStorage permanently
+  // Remove sensitive keys from localStorage permanently. These explicit
+  // removals also support non-browser Storage mocks whose keys are not
+  // enumerable.
   localStorage.removeItem(STORAGE_KEYS._LEGACY_API_KEY);
-  localStorage.removeItem(STORAGE_KEYS._LEGACY_ADMIN_KEY);
   localStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
   if (process.env.NODE_ENV !== 'production') {
@@ -224,7 +225,6 @@ async function migrateLocalStorageToCookies(): Promise<void> {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
-  const [adminKey, setAdminKeyState] = useState<string | null>(null);
   const [tenantId, setTenantIdState] = useState<string | null>(null);
   const [accessToken, setAccessTokenState] = useState<string | null>(null);
   const [authMethod, setAuthMethodState] = useState<SessionAuthMethod | null>(null);
@@ -306,7 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // was cleared server-side. Drop the localStorage-hydrated user (and
           // ignore any session.user echoed back from a stale re_user cookie)
           // so pages can't render an authenticated shell from stale state.
-          // Key-only sessions (has_api_key / has_admin_key) never store a
+          // Tenant API-key-only sessions never store a
           // user profile, so this doesn't affect them.
           setUserState(null);
           apiClient.setUser(null);
@@ -315,17 +315,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session.has_api_key) {
           setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
         }
-        if (session.has_admin_key) {
-          setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
-        }
       } else {
         // The session check itself failed (network error or non-2xx —
         // /api/session GET otherwise always answers 200 with an
         // `authenticated` boolean). Indeterminate: keep the
         // localStorage-hydrated state rather than logging the user out of
         // the UI shell over a transient failure.
-        // NEXT_PUBLIC_API_KEY fallback removed: proxy routes inject
-        // server-side API keys; baking secrets into the JS bundle is unsafe.
+        // NEXT_PUBLIC_API_KEY fallback was removed because baking secrets into
+        // the JS bundle is unsafe. BFF routes forward caller-owned credentials;
+        // they do not substitute an ambient tenant key.
         setAuthMethodState(null);
       }
 
@@ -340,20 +338,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // MUST await — middleware checks this cookie on the next request.
       // Setting state before the cookie is written causes a race condition
       // where the app appears authenticated but middleware rejects the request.
-      await setSessionCookies({ apiKey: key });
+      const cookiesOk = await setSessionCookies({ apiKey: key });
+      if (!cookiesOk) {
+        throw new Error('API key could not be saved. Please try again.');
+      }
       setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
     } else {
       setApiKeyState(null);
-    }
-  }, []);
-
-  const setAdminKey = useCallback(async (key: string | null) => {
-    if (key) {
-      // MUST await — see setApiKey comment.
-      await setSessionCookies({ adminKey: key });
-      setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
-    } else {
-      setAdminKeyState(null);
     }
   }, []);
 
@@ -453,7 +444,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearCredentials = useCallback(async () => {
     setApiKeyState(null);
-    setAdminKeyState(null);
     setTenantIdState(null);
     setAccessTokenState(null);
     setAuthMethodState(null);
@@ -481,10 +471,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
   const hasTenantSession = isAuthenticated && !!tenantId;
   const hasAdminSession = Boolean(
-    adminKey ||
-    user?.is_sysadmin ||
-    normalizedRoleName === 'admin' ||
-    normalizedRoleName === 'owner',
+    isAuthenticated && (
+      user?.is_sysadmin ||
+      normalizedRoleName === 'admin' ||
+      normalizedRoleName === 'owner' ||
+      user?.permissions?.includes('review.read') ||
+      user?.permissions?.includes('review.decide')
+    ),
   );
   const isHighAssuranceSession = authMethod === 'webauthn' || authMethod === 'sso';
 
@@ -492,7 +485,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         apiKey,
-        adminKey,
         tenantId,
         hasTenantSession,
         hasAdminSession,
@@ -504,7 +496,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isHydrated,
         demoMode,
         setApiKey,
-        setAdminKey,
         setTenantId,
         setDemoMode,
         completeOnboarding,

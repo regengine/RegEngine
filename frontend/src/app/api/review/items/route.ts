@@ -1,41 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerServiceURL } from '@/lib/api-config';
-import { getAdminMasterKey, requireAdminCapability, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { fetchAdminSessionPath } from '@/lib/admin-session-fetch';
+import { rejectRetiredPrivilegedCredential } from '@/lib/api-proxy';
+import { appendOpaqueSessionCookies, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 export const dynamic = 'force-dynamic';
 
-const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
-
 export async function GET(request: NextRequest) {
-    // Defense-in-depth: reject requests with no auth credentials before proxying
-    const authError = requireProxyAuth(request);
-    if (authError) return authError;
-
-    // Validate Supabase session tokens (expired/revoked sessions get 401)
-    const sessionError = await validateProxySession(request);
-    if (sessionError) return sessionError;
-
-    const adminError = requireAdminCapability(request);
-    if (adminError) return adminError;
-
-    const adminKey = getAdminMasterKey();
-
-    if (!adminKey) {
-        return NextResponse.json(
-            { error: 'Admin Master Key not configured on server' },
-            { status: 500 }
-        );
-    }
+    const retiredCredentialError = rejectRetiredPrivilegedCredential(request);
+    if (retiredCredentialError) return retiredCredentialError;
 
     try {
-        const res = await fetch(`${ADMIN_URL}/v1/admin/review/flagged-extractions?status_filter=PENDING&limit=50`, {
-            headers: {
-                'X-Admin-Key': adminKey,
+        const headers = new Headers({ accept: 'application/json' });
+        passthroughRequestHeaders(headers, request, [
+            'origin',
+            'referer',
+            'user-agent',
+            'x-csrf-token',
+            'x-request-id',
+            'x-tenant-id',
+        ]);
+        appendOpaqueSessionCookies(headers, request);
+        const attestationError = attestPrivilegedProxyClientIp(headers, request);
+        if (attestationError) return attestationError;
+
+        const res = await fetchAdminSessionPath(
+            '/v1/admin/review/flagged-extractions?status_filter=PENDING&limit=50',
+            {
+                headers,
+                cache: 'no-store',
             },
-        });
+        );
+
+        if (!res) {
+            return NextResponse.json({ error: 'Review service unavailable' }, { status: 502 });
+        }
 
         if (!res.ok) {
-            throw new Error(`Failed to fetch review queue: ${res.statusText}`);
+            const error = await res.json().catch(() => ({}));
+            return NextResponse.json(
+                { error: error.detail || 'Failed to load review queue' },
+                { status: res.status },
+            );
         }
 
         const data = await res.json();
@@ -49,7 +55,7 @@ export async function GET(request: NextRequest) {
             updated_at?: string;
             status?: string;
             tenant_id?: string;
-            text_raw?: string;
+            text_preview?: string;
             extraction?: Record<string, unknown>;
         }
         const items = (data.items || []).map((item: ReviewItemRaw) => ({
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest) {
             updated_at: item.updated_at || item.created_at,
             status: item.status || 'PENDING',
             tenant_id: item.tenant_id || '',
-            source_text: item.text_raw || '',
+            source_text: item.text_preview || '',
             extracted_data: item.extraction || {},
         }));
 
@@ -68,10 +74,9 @@ export async function GET(request: NextRequest) {
 
     } catch (error: unknown) {
         console.error('Review queue fetch failed:', error);
-        const message = error instanceof Error ? error.message : 'Failed to load review queue';
         return NextResponse.json(
-            { error: message },
-            { status: 500 }
+            { error: 'Review service unavailable' },
+            { status: 502 }
         );
     }
 }

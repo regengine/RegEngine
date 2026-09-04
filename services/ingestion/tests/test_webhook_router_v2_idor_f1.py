@@ -230,19 +230,19 @@ class TestPermissionEnforced:
 class TestWildcardPrincipalBypass:
     """Wildcard ``*`` is permission BREADTH, not tenant BREADTH.
 
-    Only unbound principals (``tenant_id=None``, e.g. legacy_master /
-    dev_open) keep cross-tenant access. A tenant-bound key carrying
+    Only the local dev-open principal (``tenant_id=None``) keeps cross-tenant
+    access. A tenant-bound key carrying
     ``*`` or ``admin.*`` MUST NOT pivot to another tenant — that was
     the third instance of the antipattern fixed in PR #2328.
     """
 
-    def test_unbound_master_can_query_any_tenant(self, monkeypatch):
-        """``tenant_id=None`` + ``*`` = legitimate master key, cross-tenant ok."""
+    def test_dev_open_can_query_any_tenant(self, monkeypatch):
+        """The explicitly local dev-open principal can select a test tenant."""
         principal = IngestionPrincipal(
-            key_id="master",
+            key_id="dev-open",
             scopes=["*"],
             tenant_id=None,
-            auth_mode="test",
+            auth_mode="dev_open",
         )
         client = _client(monkeypatch, principal=principal)
         resp = client.get(

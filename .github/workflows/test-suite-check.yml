@@ -7,6 +7,10 @@ on:
       - 'shared/**'
       - 'kernel/**'
       - 'tests/**'
+      # regengine/** so a strictly SDK-only PR still runs the route-contract
+      # test with the backend dependency tree present (#2952); sdk-ci's clean
+      # venv importorskips it.
+      - 'regengine/**'
       - 'pyproject.toml'
       - 'requirements.in'
       - 'requirements.lock'
@@ -18,10 +22,15 @@ on:
       - 'shared/**'
       - 'kernel/**'
       - 'tests/**'
+      - 'regengine/**'
       - 'pyproject.toml'
       - 'requirements.in'
       - 'requirements.lock'
       - '.github/workflows/test-suite-check.yml'
+
+concurrency:
+  group: test-suite-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -126,8 +135,10 @@ jobs:
 
   # ── Repo-root execution shard ─────────────────────────────
   # Collection-only checks prove importability, but they do not catch broken
-  # assertions. Run a small offline repo-root slice so this workflow has at
-  # least one behavioral gate outside the per-service ``tests/`` directories.
+  # assertions. Run the offline repo-root slice so this workflow has a
+  # behavioral gate outside the per-service ``tests/`` directories (#2823).
+  # Live Postgres/Redis/Neo4j suites stay in backend-ci ``repo-root-suite``
+  # and ``live-db-suite`` — this job has no service containers.
   repo-root-fast-shard:
     name: Repo-root fast shard executes
     runs-on: ubuntu-latest
@@ -157,7 +168,24 @@ jobs:
             tests/scripts \
             tests/test_monolith_route_parity.py \
             tests/test_server_import_smoke.py \
-            -q
+            tests/shared \
+            tests/unit \
+            tests/invariants \
+            tests/test_shared \
+            tests/security \
+            --ignore-glob='tests/shared/test_*_live.py' \
+            --ignore-glob='tests/invariants/test_*_live.py' \
+            --ignore=tests/invariants/test_dual_write_parity.py \
+            --ignore=tests/invariants/test_fda_export_v1_golden.py \
+            --ignore=tests/invariants/test_chain_verify_golden.py \
+            --ignore=tests/invariants/test_backfill_canonical.py \
+            --ignore=tests/security/test_tenant_isolation_phase1.py \
+            --ignore=tests/security/test_account_erasure_identity_isolation_pg.py \
+            --ignore=tests/security/test_security_audit_fixes.py \
+            --ignore=tests/security/test_auth_coverage.py \
+            --ignore=tests/shared/test_visibility_timeout_2918.py \
+            --ignore=tests/shared/test_secret_validation.py \
+            -q --no-cov
 
   # ── Per-service collection checks ───────────────────────
   test-environment-check:
@@ -173,14 +201,14 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
-      
+
       - name: Setup Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.11'
-      
 
-      
+
+
       - name: Install Dependencies
         run: |
           # Install from the root requirements.lock — the single source of
@@ -190,7 +218,7 @@ jobs:
           if [ -f requirements.lock ]; then
             pip install --require-hashes -r requirements.lock
           fi
-      
+
       - name: Setup Shared Module Bridge
         run: |
           # The graph service Dockerfile copies root shared/ into /app/shared/,
@@ -208,7 +236,7 @@ jobs:
             done
             echo "✓ Shared module bridge configured"
           fi
-      
+
       - name: Check Test Collection
         run: |
           cd services/${{ matrix.service }}
@@ -222,7 +250,7 @@ jobs:
             exit 1
           }
           echo "✓ Test collection passed"
-      
+
       # services/shared is not a FastAPI service: it has no ``app/`` package
       # (backend-ci special-cases its coverage target for the same reason) and
       # no per-service conftest.py — its tests resolve against the repo-root
@@ -242,7 +270,7 @@ jobs:
               exit 1
             fi
             echo "✓ conftest.py exists"
-      
+
       - name: Run Smoke Tests
         run: |
           cd services/${{ matrix.service }}
@@ -255,4 +283,3 @@ jobs:
             exit 0
           fi
           python3 -m pytest "${smoke_tests[@]}" -v
-  

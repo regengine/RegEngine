@@ -13,6 +13,7 @@ Covers:
 - Redis-down fallback to in-memory cache
 """
 
+import asyncio
 import json
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -58,7 +59,9 @@ class TestGenerateSigningSecret:
 class TestSigningKey:
     def test_round_trip(self):
         key = SigningKey(
-            kid="re-test-0001", secret="s3cret", algorithm="HS256"  # pragma: allowlist secret
+            kid="re-test-0001",
+            secret="s3cret",  # pragma: allowlist secret
+            algorithm="HS256",  # pragma: allowlist secret
         )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         d = key.to_dict()
         restored = SigningKey.from_dict(d)
@@ -77,12 +80,43 @@ class FakeAsyncRedis:
 
     def __init__(self):
         self.store: dict[str, str] = {}
+        self._mutation_lock = asyncio.Lock()
 
     async def get(self, key: str):
         return self.store.get(key)
 
     async def set(self, key: str, value: str):
         self.store[key] = value
+        return True
+
+    async def eval(
+        self,
+        _script: str,
+        _num_keys: int,
+        key: str,
+        expected_present: str,
+        expected: str,
+        replacement: str,
+    ) -> int:
+        current = self.store.get(key)
+        matches = (expected_present == "0" and current is None) or (expected_present == "1" and current == expected)
+        if not matches:
+            return 0
+        self.store[key] = replacement
+        return 1
+
+    def lock(self, _name: str, **_kwargs):
+        lock = self._mutation_lock
+
+        class FakeLock:
+            async def acquire(self) -> bool:
+                await lock.acquire()
+                return True
+
+            async def release(self) -> None:
+                lock.release()
+
+        return FakeLock()
 
 
 # ── Registry Tests ───────────────────────────────────────────────────
@@ -138,7 +172,8 @@ class TestRegistryInitialize:
         redis = FakeAsyncRedis()
 
         existing = SigningKey(
-            kid="re-existing-0001", secret="pre-existing"  # pragma: allowlist secret
+            kid="re-existing-0001",
+            secret="pre-existing",  # pragma: allowlist secret
         )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         redis.store[REDIS_KEY] = json.dumps([existing.to_dict()])
 

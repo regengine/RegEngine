@@ -1,0 +1,158 @@
+{"dependencies": {"python": "3.12.2", "executable": "<repo>/.venv/bin/python", "pytest": "9.0.3", "pytest-asyncio": "1.3.0", "fastapi": "0.136.0", "pydantic": "2.13.2", "SQLAlchemy": "2.0.49", "httpx": "0.28.1", "fpdf2": "2.8.7"}, "isolation": "no network, no DB, no subprocess"}
+pytest arguments: ['tests/shared/test_canonical_event_idempotency_key.py', 'tests/shared/test_canonical_persistence_hardening.py', 'tests/shared/test_canonical_persistence_tenant_context.py', 'services/ingestion/tests/test_webhook_router_v2_enforcement.py', 'services/ingestion/tests/test_fda_export_service_1342.py', 'services/ingestion/tests/test_fda_export_queries_1342.py', 'services/ingestion/tests/test_fda_export_audit_logging.py', 'services/ingestion/tests/test_fda_export_router_1342.py']
+................F..FFF..F............................................... [ 30%]
+........................................................................ [ 61%]
+........................................................................ [ 91%]
+....................                                                     [100%]
+=================================== FAILURES ===================================
+_ TestCompleteIngestionRunTenantScope_Issue1263.test_update_sets_rls_tenant_context_for_defence_in_depth _
+
+self = <tests.shared.test_canonical_persistence_hardening.TestCompleteIngestionRunTenantScope_Issue1263 object at 0x1196886b0>
+
+    def test_update_sets_rls_tenant_context_for_defence_in_depth(self):
+        """Defence in depth: also bind the RLS GUC.
+
+        If a future refactor accidentally drops the explicit WHERE
+        filter, the RLS policy on fsma.ingestion_runs will still reject
+        cross-tenant rows — but only if the GUC is set.
+        """
+        session = FakeSession()
+        session.add_rule(r"UPDATE fsma\.ingestion_runs", _RowcountResult(rowcount=1))
+
+        # Use a real UUID — the canonical ``set_tenant_guc`` helper now
+        # validates ``tenant_id`` up front (Phase B / #1934). Synthetic
+        # non-UUID strings would raise ValueError before any SQL runs,
+        # which is louder than the prior silent "set a non-UUID GUC and
+        # break RLS comparisons" failure mode.
+        TENANT = "22222222-2222-2222-2222-222222222222"
+        store = self._new_store(session)
+        store.complete_ingestion_run(
+            run_id="11111111-1111-1111-1111-111111111111",
+            tenant_id=TENANT,
+            accepted=1,
+            rejected=0,
+        )
+
+        rls_calls = [c for c in session.calls if "SET LOCAL app.tenant_id" in c[0]]
+>       assert rls_calls, (
+            "complete_ingestion_run must also set RLS context as a "
+            "defence-in-depth guard against future refactors"
+        )
+E       AssertionError: complete_ingestion_run must also set RLS context as a defence-in-depth guard against future refactors
+E       assert []
+
+tests/shared/test_canonical_persistence_hardening.py:444: AssertionError
+_ TestTenantContext_Issue1265_PersistEvent.test_persist_event_sets_tenant_context_before_advisory_lock _
+
+self = <tests.shared.test_canonical_persistence_tenant_context.TestTenantContext_Issue1265_PersistEvent object at 0x11963b140>
+
+    def test_persist_event_sets_tenant_context_before_advisory_lock(self):
+        session = FakeSession()
+        session.add_rule(r"SELECT event_id, sha256_hash, chain_hash", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        store = CanonicalEventStore(
+            session=session, dual_write=False, skip_chain_write=True,
+        )
+        evt = _make_event()
+        store.persist_event(evt)
+
+        set_idx = _first_call_containing(session, "SET LOCAL app.tenant_id")
+        lock_idx = _first_call_containing(session, "pg_advisory_xact_lock")
+>       assert set_idx is not None, (
+            "persist_event must set the RLS tenant context (#1265)"
+        )
+E       AssertionError: persist_event must set the RLS tenant context (#1265)
+E       assert None is not None
+
+tests/shared/test_canonical_persistence_tenant_context.py:75: AssertionError
+_ TestTenantContext_Issue1265_PersistEvent.test_persist_event_binds_tenant_id_from_event _
+
+self = <tests.shared.test_canonical_persistence_tenant_context.TestTenantContext_Issue1265_PersistEvent object at 0x11963b5f0>
+
+    def test_persist_event_binds_tenant_id_from_event(self):
+        session = FakeSession()
+        session.add_rule(r"SELECT event_id, sha256_hash, chain_hash", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        tid = uuid4()
+        store = CanonicalEventStore(
+            session=session, dual_write=False, skip_chain_write=True,
+        )
+        evt = _make_event(tenant_id=tid)
+        store.persist_event(evt)
+
+        set_params = _set_tenant_context_params(session)
+>       assert set_params, "no SET LOCAL app.tenant_id call was issued"
+E       AssertionError: no SET LOCAL app.tenant_id call was issued
+E       assert []
+
+tests/shared/test_canonical_persistence_tenant_context.py:98: AssertionError
+_ TestTenantContext_Issue1265_PersistEventsBatch.test_batch_sets_tenant_context_before_advisory_lock _
+
+self = <tests.shared.test_canonical_persistence_tenant_context.TestTenantContext_Issue1265_PersistEventsBatch object at 0x11963b920>
+
+    def test_batch_sets_tenant_context_before_advisory_lock(self):
+        session = FakeSession()
+        session.add_rule(r"SELECT idempotency_key", _FakeResult(rows=[]))
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
+
+        store = CanonicalEventStore(
+            session=session, dual_write=False, skip_chain_write=True,
+        )
+        tid = uuid4()
+        store.persist_events_batch([_make_event(tenant_id=tid)])
+
+        set_idx = _first_call_containing(session, "SET LOCAL app.tenant_id")
+        lock_idx = _first_call_containing(session, "pg_advisory_xact_lock")
+>       assert set_idx is not None, "batch must set RLS tenant context (#1265)"
+E       AssertionError: batch must set RLS tenant context (#1265)
+E       assert None is not None
+
+tests/shared/test_canonical_persistence_tenant_context.py:125: AssertionError
+_ TestTenantContext_Issue1265_CreateIngestionRun.test_create_ingestion_run_sets_tenant_context_before_insert _
+
+self = <tests.shared.test_canonical_persistence_tenant_context.TestTenantContext_Issue1265_CreateIngestionRun object at 0x119688cb0>
+
+    def test_create_ingestion_run_sets_tenant_context_before_insert(self):
+        from shared.canonical_event import IngestionRun, IngestionSource
+
+        tid = uuid4()
+        run = IngestionRun(
+            id=uuid4(),
+            tenant_id=tid,
+            source_system=IngestionSource.WEBHOOK_API,
+            source_file_name="fixture.xml",
+            source_file_hash="a" * 64,
+            source_file_size=128,
+            record_count=1,
+            mapper_version="v1",
+            schema_version="v1",
+            status="processing",
+            initiated_by="test",
+        )
+
+        session = FakeSession()
+        store = CanonicalEventStore(
+            session=session, dual_write=False, skip_chain_write=True,
+        )
+        store.create_ingestion_run(run)
+
+        set_idx = _first_call_containing(session, "SET LOCAL app.tenant_id")
+        insert_idx = _first_call_containing(
+            session, "INSERT INTO fsma.ingestion_runs"
+        )
+>       assert set_idx is not None, (
+            "create_ingestion_run must set RLS tenant context (#1265)"
+        )
+E       AssertionError: create_ingestion_run must set RLS tenant context (#1265)
+E       assert None is not None
+
+tests/shared/test_canonical_persistence_tenant_context.py:197: AssertionError
+=========================== short test summary info ============================
+FAILED tests/shared/test_canonical_persistence_hardening.py::TestCompleteIngestionRunTenantScope_Issue1263::test_update_sets_rls_tenant_context_for_defence_in_depth
+FAILED tests/shared/test_canonical_persistence_tenant_context.py::TestTenantContext_Issue1265_PersistEvent::test_persist_event_sets_tenant_context_before_advisory_lock
+FAILED tests/shared/test_canonical_persistence_tenant_context.py::TestTenantContext_Issue1265_PersistEvent::test_persist_event_binds_tenant_id_from_event
+FAILED tests/shared/test_canonical_persistence_tenant_context.py::TestTenantContext_Issue1265_PersistEventsBatch::test_batch_sets_tenant_context_before_advisory_lock
+FAILED tests/shared/test_canonical_persistence_tenant_context.py::TestTenantContext_Issue1265_CreateIngestionRun::test_create_ingestion_run_sets_tenant_context_before_insert
+5 failed, 231 passed in 4.20s

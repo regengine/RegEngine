@@ -236,12 +236,9 @@ class TestRequireTenantAdmin_MissingTenant_1342:
         assert exc.value.status_code == 404
         assert exc.value.detail == "Tenant not found"
 
-    def test_sysadmin_also_404s_when_tenant_missing(self, monkeypatch) -> None:
-        """Sysadmin bypasses the role check but still hits the tenant
-        load; the 404 on line 107 must fire for them too, not just for
-        tenant-scoped admins."""
+    def test_sysadmin_without_membership_is_denied_before_tenant_lookup(self, monkeypatch) -> None:
+        """Global staff status cannot select a tenant without membership."""
         mod = _load_routes(monkeypatch)
-        # No membership needed — sysadmin branch returns "Sysadmin".
         db = _install_db(tenant=None, membership=None)
 
         with pytest.raises(HTTPException) as exc:
@@ -253,5 +250,5 @@ class TestRequireTenantAdmin_MissingTenant_1342:
                     db=db,
                 )
             )
-        assert exc.value.status_code == 404
-        assert exc.value.detail == "Tenant not found"
+        assert exc.value.status_code == 403
+        assert exc.value.detail == "Not a member of this tenant"

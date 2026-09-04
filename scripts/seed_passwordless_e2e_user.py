@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -40,6 +41,15 @@ def _is_sysadmin() -> bool:
     return os.getenv("REGENGINE_E2E_IS_SYSADMIN", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _session_auth_method() -> str | None:
+    value = os.getenv("REGENGINE_E2E_SESSION_AUTH_METHOD", "").strip().lower()
+    if not value:
+        return None
+    if value not in {"email_otp", "webauthn", "sso"}:
+        raise SystemExit("REGENGINE_E2E_SESSION_AUTH_METHOD must be email_otp, webauthn, or sso")
+    return value
+
+
 def main() -> int:
     _require_e2e_mode()
 
@@ -50,6 +60,7 @@ def main() -> int:
         OrganizationMembershipModel,
         OrganizationModel,
         RoleModel,
+        SessionModel,
         TenantModel,
         UserEmailModel,
         UserModel,
@@ -63,6 +74,7 @@ def main() -> int:
     crypto = AuthCryptoService()
     fingerprint = crypto.fingerprint_email(email)
     is_sysadmin = _is_sysadmin()
+    session_auth_method = _session_auth_method()
 
     with SessionLocal() as db:
         organization = db.execute(
@@ -187,6 +199,29 @@ def main() -> int:
 
         db.commit()
 
+        if session_auth_method is not None:
+            now = datetime.now(timezone.utc)
+            active_session = db.execute(
+                select(SessionModel)
+                .where(
+                    SessionModel.user_id == user.id,
+                    SessionModel.is_revoked.is_(False),
+                    SessionModel.revoked_at.is_(None),
+                    SessionModel.expires_at > now,
+                )
+                .order_by(SessionModel.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if active_session is None:
+                print(
+                    "passwordless seed committed without an active session; "
+                    "session_auth_method was not applied",
+                    file=sys.stderr,
+                )
+            else:
+                active_session.auth_method = session_auth_method
+                db.commit()
+
         print(
             json.dumps(
                 {
@@ -196,6 +231,7 @@ def main() -> int:
                     "membership_id": str(membership.id),
                     "tenant_id": str(tenant.id),
                     "is_sysadmin": bool(user.is_sysadmin),
+                    "session_auth_method": session_auth_method,
                 },
                 sort_keys=True,
             )

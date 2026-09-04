@@ -43,7 +43,6 @@ fi
 export REGENGINE_ENV="${REGENGINE_ENV:-development}"
 export AUTH_SECRET_KEY="${AUTH_SECRET_KEY:-playwright-local-jwt-signing-key-2026}"
 export JWT_SIGNING_KEY="${JWT_SIGNING_KEY:-$AUTH_SECRET_KEY}"
-export ADMIN_MASTER_KEY="${ADMIN_MASTER_KEY:-playwright-local-admin-master-key-2026}"
 export DATABASE_URL="${DATABASE_URL:-sqlite:///$shared_db_path}"
 export ADMIN_FALLBACK_SQLITE="${ADMIN_FALLBACK_SQLITE:-sqlite:///$admin_db_path}"
 export DISABLE_TASK_WORKER="${DISABLE_TASK_WORKER:-true}"

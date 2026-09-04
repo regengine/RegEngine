@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth_crypto import AuthCryptoService
-from ..database import get_session
+from ..database import arm_global_admin_context, disarm_global_admin_context, get_session
 from ..sqlalchemy_models import (
     OrganizationMembershipModel,
     SessionModel,
@@ -29,7 +29,7 @@ from ..sqlalchemy_models import (
     WebAuthnChallengeModel,
     WebAuthnCredentialModel,
 )
-from .session_auth import AUTH_SESSION_COOKIE, get_auth_crypto_service, get_current_active_user
+from .session_auth import AUTH_SESSION_COOKIE, get_auth_crypto_service, require_high_assurance_session
 
 router = APIRouter()
 logger = structlog.get_logger("auth.webauthn")
@@ -348,9 +348,10 @@ def _resolve_new_sign_count(current: int, verified) -> int:
 @router.post("/webauthn/register/generate-options")
 async def generate_webauthn_registration_options(
     db: Session = Depends(get_session),
-    current_user: UserModel = Depends(get_current_active_user),
+    current_user: UserModel = Depends(require_high_assurance_session),
 ) -> dict[str, Any]:
     try:
+        arm_global_admin_context(db)
         existing_credentials = _load_existing_credentials(db, current_user.id)
         options, challenge = _webauthn_generate_registration_options(
             user=current_user,
@@ -371,6 +372,8 @@ async def generate_webauthn_registration_options(
         db.rollback()
         logger.error("webauthn_registration_options_failed", user_id=str(current_user.id), error=str(exc))
         raise _temporarily_unavailable() from exc
+    finally:
+        disarm_global_admin_context(db)
 
 
 @router.post("/webauthn/register/verify", status_code=status.HTTP_200_OK)
@@ -378,7 +381,7 @@ async def verify_webauthn_registration(
     payload: WebAuthnCredentialPayload,
     request: Request,
     db: Session = Depends(get_session),
-    current_user: UserModel = Depends(get_current_active_user),
+    current_user: UserModel = Depends(require_high_assurance_session),
 ) -> dict[str, str]:
     current_user_id = current_user.id
     try:
@@ -390,6 +393,7 @@ async def verify_webauthn_registration(
         if db.in_transaction():
             db.rollback()
         with db.begin():
+            arm_global_admin_context(db)
             now = datetime.now(timezone.utc)
             challenge = _load_challenge_for_update(
                 db=db,
@@ -427,6 +431,8 @@ async def verify_webauthn_registration(
     except Exception as exc:
         logger.error("webauthn_registration_verify_failed", user_id=str(current_user_id), error=str(exc))
         raise _temporarily_unavailable() from exc
+    finally:
+        disarm_global_admin_context(db)
 
     return {"status": "verified"}
 
@@ -439,6 +445,7 @@ async def generate_webauthn_login_options(
     started_at = time.perf_counter()
     normalized_email = str(payload.email).strip().lower()
     try:
+        arm_global_admin_context(db)
         user = _load_user_by_email(db, normalized_email)
         if user is None:
             options = _fake_authentication_options()
@@ -466,6 +473,8 @@ async def generate_webauthn_login_options(
         db.rollback()
         logger.error("webauthn_login_options_failed", error=str(exc))
         raise _temporarily_unavailable() from exc
+    finally:
+        disarm_global_admin_context(db)
 
 
 @router.post("/webauthn/login/verify", status_code=status.HTTP_200_OK)
@@ -486,6 +495,7 @@ async def verify_webauthn_login(
 
     try:
         with db.begin():
+            arm_global_admin_context(db)
             now = datetime.now(timezone.utc)
             challenge = _load_challenge_for_update(
                 db=db,
@@ -539,6 +549,8 @@ async def verify_webauthn_login(
     except Exception as exc:
         logger.error("webauthn_login_verify_failed", error=str(exc))
         raise _temporarily_unavailable() from exc
+    finally:
+        disarm_global_admin_context(db)
 
     if session_token is None:
         raise _invalid_webauthn()

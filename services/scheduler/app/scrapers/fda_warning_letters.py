@@ -14,6 +14,7 @@ from typing import List, Optional
 import httpx
 import structlog
 from defusedxml import ElementTree
+from shared.safe_http import PinnedHTTPSession
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
 from .base import BaseScraper, fetch_with_retry
@@ -39,7 +40,7 @@ class FDAWarningLettersScraper(BaseScraper):
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.session = httpx.Client(timeout=30.0)
+        self.session = PinnedHTTPSession()
         self.session.headers.update(
             {
                 "User-Agent": "RegEngine/1.0 (Regulatory Compliance Platform)",

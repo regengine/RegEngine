@@ -1,12 +1,12 @@
 /**
  * enforceTenantMatch cross-tenant authorization tests (#2501).
  *
- * The `[tenantId]` compliance proxy routes inject a privileged first-party API
- * key, so enforceTenantMatch is the IDOR backstop binding a request to the
- * caller's authoritative tenant. The fix for #2501 stops trusting the
+ * The `[tenantId]` compliance proxy routes forward caller credentials without
+ * ambient privilege. enforceTenantMatch is a defense-in-depth IDOR backstop
+ * binding a request to the caller's server-derived tenant. The fix for #2501 stops trusting the
  * client-writable `re_tenant_id` cookie for opaque (`__Host-regengine_session`)
  * sessions and derives the authoritative tenant from the backend `/auth/me`
- * `organization_id` instead, failing closed when none is available.
+ * `tenant_id` instead, failing closed when none is available.
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
@@ -72,10 +72,10 @@ describe('enforceTenantMatch — RegEngine JWT sessions', () => {
         expect(result?.status).toBe(403);
     });
 
-    it('allows a tenant-unbound principal (no tenant claim) through', async () => {
+    it('fails closed for a tenant-unbound token on a tenant-named route', async () => {
         const token = signToken({ role: 'sysadmin' });
         const result = await enforceTenantMatch(makeRequest({ re_access_token: token }), TENANT_B);
-        expect(result).toBeNull();
+        expect(result?.status).toBe(403);
     });
 });
 
@@ -93,15 +93,21 @@ describe('enforceTenantMatch — opaque __Host-regengine_session sessions (#2501
         vi.unstubAllGlobals();
     });
 
-    function authMeResponse(organizationId: string | null, status = 200): Response {
+    function authMeResponse(tenantId: string | null, status = 200): Response {
         return {
             ok: status >= 200 && status < 300,
             status,
-            json: async () => ({ user_id: 'u1', email: 'u@example.com', organization_id: organizationId, auth_method: 'sso' }),
+            json: async () => ({
+                user_id: 'u1',
+                email: 'u@example.com',
+                organization_id: TENANT_B,
+                tenant_id: tenantId,
+                auth_method: 'sso',
+            }),
         } as unknown as Response;
     }
 
-    it('derives the authoritative tenant from /auth/me organization_id and allows a match', async () => {
+    it('derives the authoritative tenant from /auth/me tenant_id and allows a match', async () => {
         mockFetch.mockResolvedValue(authMeResponse(TENANT_A));
         const result = await enforceTenantMatch(
             makeRequest({ '__Host-regengine_session': 'opaque-token' }),
@@ -132,7 +138,7 @@ describe('enforceTenantMatch — opaque __Host-regengine_session sessions (#2501
         expect(result?.status).toBe(403);
     });
 
-    it('fails closed when /auth/me yields no organization_id', async () => {
+    it('fails closed when /auth/me yields no tenant_id', async () => {
         mockFetch.mockResolvedValue(authMeResponse(null));
         const result = await enforceTenantMatch(
             makeRequest({ '__Host-regengine_session': 'opaque-token' }),
