@@ -152,14 +152,13 @@ export function RecordsRequestChecklistClient() {
         setSubmitError('');
         const formData = new FormData(e.currentTarget);
         const data: AssessmentFormData = {
+            name: formData.get('name') as string,
             email: formData.get('email') as string,
-            firstName: formData.get('firstName') as string,
-            lastName: formData.get('lastName') as string,
             company: formData.get('company') as string || '',
+            role: formData.get('role') as string || 'Unknown',
             phone: formData.get('phone') as string || '',
-            industryRole: 'Unknown',
-            toolContext: {
-                source: 'records-request-checklist',
+            source: 'records-request-checklist',
+            toolInputs: {
                 score: lastScore.score,
                 grade: lastScore.grade,
                 answers: lastAnswers
@@ -262,22 +261,13 @@ export function RecordsRequestChecklistClient() {
                     <div className="re-panel p-8">
                         <h3 className="re-title-3 mb-4 text-center">Want to Discuss Your Checklist?</h3>
                         <form onSubmit={handleLeadSubmit} className="max-w-md mx-auto space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <input
-                                    type="text"
-                                    name="firstName"
-                                    placeholder="First Name"
-                                    required
-                                    className="re-input"
-                                />
-                                <input
-                                    type="text"
-                                    name="lastName"
-                                    placeholder="Last Name"
-                                    required
-                                    className="re-input"
-                                />
-                            </div>
+                            <input
+                                type="text"
+                                name="name"
+                                placeholder="Full Name"
+                                required
+                                className="re-input w-full"
+                            />
                             <input
                                 type="email"
                                 name="email"
@@ -296,6 +286,11 @@ export function RecordsRequestChecklistClient() {
                                 name="phone"
                                 placeholder="Phone (Optional)"
                                 className="re-input w-full"
+                            />
+                            <input
+                                type="hidden"
+                                name="role"
+                                value="Unknown"
                             />
                             {submitError && (
                                 <div className="text-sm text-re-danger">{submitError}</div>
