@@ -43,7 +43,7 @@ const STACK_LAYERS = [
         layer: 'Backend',
         technology: 'FastAPI monolith on Railway',
         detail:
-            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance scoring, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
+            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance coverage and completeness checking, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
     },
     {
         Icon: Database,
@@ -65,7 +65,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before scoring.',
+        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before coverage checks.',
         color: 'bg-re-info/15 text-re-info',
     },
     {
@@ -133,7 +133,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Server,
         title: 'Ingestion service',
-        detail: 'FastAPI validation, mapping, scoring, and workflow orchestration',
+        detail: 'FastAPI validation, mapping, coverage and completeness checking, and workflow orchestration',
         boundary: 'Server-side tenant context',
     },
     {
