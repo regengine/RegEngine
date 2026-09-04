@@ -51,6 +51,6 @@ export function sandboxCta(): SandboxCta {
         href: '/demo',
         label: 'Explore the interactive demo',
         blurb:
-            'Walk through a FSMA 204 readiness dashboard built on synthetic data. No signup required.',
+            'Walk through a synthetic FSMA 204 evidence-layer demo. No signup required.',
     };
 }
