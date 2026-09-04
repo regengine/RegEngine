@@ -29,18 +29,12 @@ const CATEGORIES: { id: Category; label: string }[] = [
 ];
 
 const TOOLS = [
-    ['ftl-checker', 'FTL Coverage Checker', 'Check whether a product sits on the Food Traceability List.', Leaf, 'validate'],
-    ['cte-mapper', 'CTE Coverage Mapper', 'Map who owes which traceability events across a supply chain.', Map, 'validate'],
-    ['kde-checker', 'KDE Completeness Checker', 'Turn role and product context into required data elements.', ClipboardList, 'validate'],
-    ['tlc-validator', 'TLC Validator', 'Check traceability lot code format and uniqueness assumptions.', FlaskConical, 'validate'],
-    ['readiness-assessment', 'FSMA 204 Readiness Assessment', 'Score product coverage, event capture, KDEs, and systems.', ShieldCheck, 'assess'],
-    ['recall-readiness', 'FSMA 204 Readiness Self-Check', 'Self-check whether you can answer a §1.1455(c) 24-hour records request.', Timer, 'assess'],
-    ['inflow-lab', 'Inflow Lab', 'Preflight messy supplier data and review the commit gate.', Database, 'simulate'],
-    ['fsma-unified', 'Cold Chain Anomaly Simulator', 'Explore anomaly detection on synthetic cold-chain data.', BarChart3, 'simulate'],
-    ['roi-calculator', 'FSMA 204 Savings Estimator', 'Illustrative comparison of manual compliance effort vs automated traceability — not a forecast.', BarChart3, 'assess'],
-    ['data-import', 'Data Import Assistant', 'Map existing spreadsheets into FSMA-ready CTE/KDE structures.', Upload, 'operate'],
-    ['scan', 'GS1 Barcode Scanner', 'Scan GS1 identifiers and fill traceability fields in the browser.', ScanBarcode, 'operate'],
-    ['export', 'FDA Export Package Generator', 'Generate a regulator-ready package from verified records.', FileOutput, 'operate'],
+    ['ftl-checker', 'FTL List Checker', 'Look at the Food Traceability List. This page does not decide if you are a covered person.', Leaf, 'validate'],
+    ['cte-mapper', 'CTE Mapper', 'Map the 7 Critical Tracking Events across a supply chain.', Map, 'validate'],
+    ['kde-checker', 'KDE Field Checklist', 'Check whether CTE/KDE fields are present for each FTL product and CTE type.', ClipboardList, 'validate'],
+    ['tlc-validator', 'TLC Format Check', 'Check traceability lot code format and uniqueness assumptions.', FlaskConical, 'validate'],
+    ['self-reported-checklist', 'Self-Reported Checklist', 'You answer. We echo what you reported. Not a readiness score.', ShieldCheck, 'assess'],
+    ['records-request-checklist', 'Records-Request Checklist', 'Self-reported checklist. Not a 24-hour capability test.', Timer, 'assess'],
 ] as const;
 
 export function ToolsLandingClient() {
@@ -54,19 +48,22 @@ export function ToolsLandingClient() {
                 <div>
                     <p className="re-label mb-5">Tools</p>
                     <h1 className="re-hero-title max-w-[620px]">
-                        Instruments for finding traceability gaps.
+                        Small tools for list checks and field checks.
                     </h1>
                     <p className="re-hero-copy mt-6">
-                        Small utilities for checking product scope, data completeness, recall readiness, and evidence export before the work reaches production.
+                        These pages help you look at the Food Traceability List, CTE/KDE fields, and a self-reported records-request checklist. They do not score readiness, they do not decide if you are a covered person, and they do not claim you can meet §1.1455's clock.
+                    </p>
+                    <p className="re-hero-copy mt-4 text-sm" style={{ color: 'var(--re-text-muted)' }}>
+                        The federal Food Traceability Rule compliance date is July 20, 2028.
                     </p>
                 </div>
                 <div className="re-panel self-start overflow-hidden">
                     <table className="re-rule-table">
                         <tbody>
                             {[
-                                ['Start', 'FTL coverage'],
+                                ['Start', 'FTL list'],
                                 ['Map', 'CTEs and KDEs'],
-                                ['Test', 'Recall readiness'],
+                                ['Check', 'Self-reported fields'],
                                 ['Operate', 'Inflow and export'],
                             ].map(([label, value]) => (
                                 <tr key={label}>
