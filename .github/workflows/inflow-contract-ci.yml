@@ -184,10 +184,18 @@ jobs:
         env:
           PGPASSWORD: postgres  # pragma: allowlist secret
         run: |
+          # Same attribute set as backend-ci.yml and scripts/init-postgres.sh.
+          # The roles carry no credential of their own because every step in
+          # this job connects as postgres. No
+          # `GRANT regengine TO regengine_sysadmin`: migration v111
+          # (alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.py)
+          # raises "runtime roles must have no incoming or outgoing memberships"
+          # when either role has any membership, and applies the production
+          # grants itself, so a test-only grant makes `alembic upgrade head`
+          # exit 1.
           psql -h localhost -U postgres -d regengine_contract -v ON_ERROR_STOP=1 \
-            -c "DO \$\$ BEGIN CREATE ROLE regengine LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
-            -c "DO \$\$ BEGIN CREATE ROLE regengine_sysadmin LOGIN INHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
-            -c "GRANT regengine TO regengine_sysadmin;" \
+            -c "DO \$\$ BEGIN CREATE ROLE regengine LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
+            -c "DO \$\$ BEGIN CREATE ROLE regengine_sysadmin LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;" \
             -c "CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS \$\$ DECLARE tid TEXT; BEGIN tid := NULLIF(current_setting('app.tenant_id', TRUE), ''); IF tid IS NULL THEN RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS'; END IF; RETURN tid::UUID; END; \$\$ LANGUAGE plpgsql;"
 
       - name: Apply RegEngine migrations

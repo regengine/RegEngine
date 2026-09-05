@@ -201,3 +201,20 @@ after the fixes and a second migration regression pass. `actionlint` passed for
 both changed workflows. The new live v120 regression is explicitly included in
 the existing PostgreSQL RLS CI gate, so it cannot silently be omitted by the
 per-service test selection.
+
+## Delivery status
+
+Drafts: [RegEngine #3067](https://github.com/regengine/RegEngine/pull/3067) and
+[Inflow #238](https://github.com/regengine/inflow-lab/pull/238).
+
+Before delivery, upstream advanced to `1596771d`. Its tools copy, CI runtime-role
+setup and test-environment webhook-auth fixes were merged into this branch. The
+only conflict was the Inflow pin; the v2 pin was retained and includes the earlier
+live-trial cleanup fix already present in its `2a752aa` parent. No force push was
+used. The initial baseline test evidence above remains tied to `b980a9b0`.
+
+Inflow's hosted CI jobs could not start. GitHub's check-run annotation states:
+“The job was not started because your account is locked due to a billing issue.”
+This blocks hosted validation despite the passing local Linux suite. An account
+owner must resolve the billing lock and rerun hosted checks before merge. No
+billing/account settings were changed. Production rollout remains unverified.
