@@ -234,7 +234,7 @@ export const FREE_TOOLS = [
     {
         id: 'cte-mapper',
         title: 'CTE Mapper',
-        description: 'Map the 7 Critical Tracking Events your supply chain must document under FSMA 204.',
+        description: 'Map the 7 Critical Tracking Events your supply chain often records under FSMA 204.',
         icon: Truck,
         href: '/tools/cte-mapper'
     },
