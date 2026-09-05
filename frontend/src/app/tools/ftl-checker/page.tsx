@@ -6,14 +6,14 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "FTL Checker | Is Your Food on the FDA Traceability List? | RegEngine",
-    description: "Free tool to check if your food products are covered by FDA FSMA 204. Search the Food Traceability List by product name or category. No signup needed.",
+    title: "FTL List Checker | RegEngine",
+    description: "The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one. Verify every grouping against the current FDA FTL.",
     alternates: {
         canonical: "https://regengine.co/tools/ftl-checker",
     },
     openGraph: {
-        title: "FTL Checker — RegEngine",
-        description: "Free tool to check if your food products are covered by FDA FSMA 204. Search the Food Traceability List by product name or category.",
+        title: "FTL List Checker — RegEngine",
+        description: "The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one.",
         type: "website",
         url: "https://regengine.co/tools/ftl-checker",
     },
@@ -22,10 +22,10 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "FTL Coverage Checker",
+    "name": "FTL List Checker",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Self-check whether your food products may fall under FDA FSMA 204 requirements. Informational; not a regulatory determination.",
+    "description": "Look at the Food Traceability List. This page does not decide if you are a covered person. Verify every grouping against the current FDA FTL.",
     "offers": {
         "@type": "Offer",
         "price": "0",
@@ -92,8 +92,7 @@ export default function FTLCheckerPage() {
             </Suspense>
             <RelatedTools tools={[
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Events your supply chain must document under FSMA 204." },
-                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate your customized Key Data Element checklist for each FTL product and CTE type." },
-                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your facility's overall FSMA 204 compliance readiness across all requirement areas." },
+                { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether CTE/KDE fields are present for each FTL product and CTE type." },
             ]} />
         </>
     );

@@ -696,18 +696,17 @@ export function FTLCheckerClient() {
                 <div className="ftl-hero-inner" style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 24px', textAlign: 'center' }}>
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '20px', background: T.successBg, border: `1px solid ${T.successBorder}`, fontSize: '12px', fontWeight: 600, color: T.accent, marginBottom: '16px' }}>
-                            Free Tool • No Login Required
+                            Free tool · no login · not a determination
                         </span>
                         <h1 style={{ fontSize: 'clamp(30px, 8vw, 40px)', fontWeight: 700, color: T.textPrimary, margin: '0 0 16px', lineHeight: 1.1 }}>
-                            FTL Coverage Checker
+                            FTL List Checker
                         </h1>
                         <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 24px', lineHeight: 1.6 }}>
-                            Self-check whether your products may fall under FDA FSMA 204 Food Traceability requirements. Informational; not a regulatory determination — verify against the FDA FTL.
+                            The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one. Verify every grouping against the current FDA FTL.
                         </p>
                         <div className="ftl-hero-bullets" style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Earliest enforcement: July 2028</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> FDA date: July 20, 2028</span>
                         </div>
                     </motion.div>
                 </div>
@@ -801,7 +800,7 @@ export function FTLCheckerClient() {
                                                                 <Icon size={14} style={{ color: isSelected ? T.accent : T.textDim }} />
                                                                 <span style={{ fontWeight: 500, color: T.textPrimary, fontSize: '14px' }}>{category.name}</span>
                                                                 <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim, border: `1px solid ${category.covered ? T.successBorder : T.border}` }}>
-                                                                    {category.covered ? 'Likely on FTL' : 'Likely not on FTL'}
+                                                                    {category.covered ? 'Listed' : 'Not listed'}
                                                                 </span>
                                                             </div>
                                                             <p style={{ fontSize: '12px', color: T.textMuted, marginTop: '4px', lineHeight: 1.4 }}>{category.examples}</p>
@@ -824,7 +823,7 @@ export function FTLCheckerClient() {
                                             fontSize: '14px', fontWeight: 600, transition: 'all 0.15s',
                                         }}
                                     >
-                                        Check My Coverage <ArrowRight size={16} />
+                                        Check Listed Groupings <ArrowRight size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -1011,7 +1010,7 @@ export function FTLCheckerClient() {
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         {category.outbreakFrequency === 'HIGH' && <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: T.dangerBg, color: T.danger, border: `1px solid ${T.dangerBorder}` }}>Higher Outbreak Frequency</span>}
-                                                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'Likely on FTL — verify' : 'Likely not on FTL — verify'}</span>
+                                                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'Listed grouping — verify' : 'Not listed — verify'}</span>
                                                     </div>
                                                 </div>
                                                 {/* CTE/KDE Requirements - Only for covered categories */}
@@ -1165,7 +1164,7 @@ export function FTLCheckerClient() {
                 </AnimatePresence>
 
                 <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['recall-readiness', 'kde-checker', 'roi-calculator'].includes(t.id))}
+                    tools={FREE_TOOLS.filter(t => ['cte-mapper', 'kde-checker'].includes(t.id))}
                 />
             </div>
 

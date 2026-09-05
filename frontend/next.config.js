@@ -134,6 +134,17 @@ const nextConfig = {
                 destination: '/security',
                 permanent: true,
             },
+            // Tools honesty rewrite redirects (2026-09-04)
+            {
+                source: '/tools/recall-readiness',
+                destination: '/tools/records-request-checklist',
+                permanent: true,
+            },
+            {
+                source: '/tools/readiness-assessment',
+                destination: '/tools/self-reported-checklist',
+                permanent: true,
+            },
             // HIGH #5 — Consolidate duplicate routes (UI Debug Audit 2026-03-19)
             // Canonical path for retailer readiness is /retailer-readiness (content lives there)
             // /tools/retailer-readiness redirects TO /retailer-readiness via page.tsx

@@ -138,7 +138,7 @@ export function DesktopNav({
                         Log In
                     </Link>
                     <Link
-                        href="/retailer-readiness"
+                        href="/tools"
                         style={{
                             fontSize: "12px",
                             fontWeight: 600,
@@ -157,7 +157,7 @@ export function DesktopNav({
                         onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-secondary)"; }}
                         onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-primary)"; }}
                     >
-                        Check Readiness
+                        Free Tools
                     </Link>
                 </>
             )}

@@ -184,8 +184,8 @@ import {
 export const FREE_TOOLS = [
     {
         id: 'ftl-checker',
-        title: 'FTL Coverage Checker',
-        description: 'Check whether your food products may fall under the FDA Food Traceability List.',
+        title: 'FTL List Checker',
+        description: 'Look at the Food Traceability List. This page does not decide if you are a covered person.',
         icon: Leaf,
         href: '/tools/ftl-checker'
     },
@@ -219,8 +219,8 @@ export const FREE_TOOLS = [
     },
     {
         id: 'kde-checker',
-        title: 'KDE Checklist Builder',
-        description: 'Build your CTE-specific KDE checklist, including §1.1335 First Land-Based Receiving for seafood.',
+        title: 'KDE Field Checklist',
+        description: 'Check which CTE/KDE fields you need for each FTL product and CTE type.',
         icon: ClipboardList,
         href: '/tools/kde-checker'
     },
@@ -233,8 +233,8 @@ export const FREE_TOOLS = [
     },
     {
         id: 'cte-mapper',
-        title: 'CTE Coverage Mapper',
-        description: 'Map roles to required CTEs, with §1.1305(j) restaurant/RFE exemptions surfaced.',
+        title: 'CTE Mapper',
+        description: 'Map the 7 Critical Tracking Events your supply chain must document under FSMA 204.',
         icon: Truck,
         href: '/tools/cte-mapper'
     },

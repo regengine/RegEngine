@@ -4,11 +4,11 @@ import { ToolsLandingClient } from "./components/ToolsLandingClient";
 import { JSONLD } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
-    title: "Free Strategic Compliance Tools | RegEngine",
-    description: "Free FSMA 204 compliance tools including FTL checker, CTE/KDE validators, readiness assessments, and traceability workflow utilities.",
+    title: "Tools | RegEngine",
+    description: "Small utilities for list-checking foods against the FDA Food Traceability List, checking whether CTE/KDE fields are present, and walking a self-reported records-request checklist. Educational. Not an FDA determination.",
     openGraph: {
-        title: "FSMA 204 Free Tools — RegEngine",
-        description: "Free FSMA 204 compliance tools for traceability readiness.",
+        title: "Tools — RegEngine",
+        description: "Small utilities for list-checking foods against the FDA Food Traceability List, checking whether CTE/KDE fields are present, and walking a self-reported records-request checklist.",
         type: "website",
         url: "https://regengine.co/tools",
     },
@@ -17,8 +17,8 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    "name": "RegEngine FSMA 204 Compliance Toolkit",
-    "description": "A collection of free interactive tools for FSMA 204 food traceability compliance.",
+    "name": "RegEngine Tools",
+    "description": "Small tools for list checks and field checks. Educational. Not an FDA determination.",
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -26,13 +26,12 @@ const jsonLd = {
     "mainEntity": {
         "@type": "ItemList",
         "itemListElement": [
-            { "url": "https://regengine.co/tools/ftl-checker", "name": "FTL Coverage Checker" },
-            { "url": "https://regengine.co/tools/fsma-unified", "name": "Cold Chain Anomaly Simulator" },
-            { "url": "https://regengine.co/tools/kde-checker", "name": "KDE Completeness Checker" },
-            { "url": "https://regengine.co/tools/cte-mapper", "name": "CTE Coverage Mapper" },
-            { "url": "https://regengine.co/tools/recall-readiness", "name": "FSMA 204 Readiness Self-Check" },
-            { "url": "https://regengine.co/tools/roi-calculator", "name": "FSMA 204 Savings Estimator" },
-            { "url": "https://regengine.co/tools/inflow-lab", "name": "Inflow Lab" },
+            { "url": "https://regengine.co/tools/ftl-checker", "name": "FTL List Checker" },
+            { "url": "https://regengine.co/tools/cte-mapper", "name": "CTE Mapper" },
+            { "url": "https://regengine.co/tools/kde-checker", "name": "KDE Field Checklist" },
+            { "url": "https://regengine.co/tools/tlc-validator", "name": "TLC Format Check" },
+            { "url": "https://regengine.co/tools/self-reported-checklist", "name": "Self-Reported Checklist" },
+            { "url": "https://regengine.co/tools/records-request-checklist", "name": "Records-Request Checklist" },
         ]
             .filter((item) => !isExperimentalToolHrefHidden(item.url.replace("https://regengine.co", "")))
             .map((item, index) => ({ "@type": "ListItem", "position": index + 1, ...item }))
