@@ -350,7 +350,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version-file: .nvmrc
+          # authenticated-core-journeys uses the built-in node:sqlite module.
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 

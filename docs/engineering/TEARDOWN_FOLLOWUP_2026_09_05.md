@@ -92,7 +92,8 @@ The restored main-branch runs exposed an invalid setup-node pin, a vulnerable
 stale UI/auth test expectations, and a redirect URL in the sitemap. The
 follow-up uses the verified existing setup-node v6 pin, updates only fast-uri
 3.1.5 to 3.1.7 in the lockfile, and supplies a synthetic E2E-only integrity
-key. The copy gate remains intact; ambiguous negative-claim wording was
+key. The E2E job uses Node 24 because authenticated-core-journeys imports
+`node:sqlite`, which the previous Node 20 runtime could not load. The copy gate remains intact; ambiguous negative-claim wording was
 clarified without adding allowlisted files.
 
 Review approve/reject routes now validate and normalize UUIDs before building
