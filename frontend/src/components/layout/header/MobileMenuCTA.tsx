@@ -81,7 +81,7 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
             ) : (
                 <>
                     <Link
-                        href="/retailer-readiness"
+                        href="/tools"
                         onClick={() => setMobileOpen(false)}
                         style={{
                             display: "flex",
@@ -100,7 +100,7 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
                             transition: "all 0.2s",
                         }}
                     >
-                        Check readiness
+                        Free Tools
                     </Link>
                     <Link
                         href="/login"

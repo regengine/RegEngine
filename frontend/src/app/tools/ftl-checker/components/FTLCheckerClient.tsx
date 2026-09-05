@@ -706,7 +706,6 @@ export function FTLCheckerClient() {
                         </p>
                         <div className="ftl-hero-bullets" style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> FDA date: July 20, 2028</span>
                         </div>
                     </motion.div>
@@ -801,7 +800,7 @@ export function FTLCheckerClient() {
                                                                 <Icon size={14} style={{ color: isSelected ? T.accent : T.textDim }} />
                                                                 <span style={{ fontWeight: 500, color: T.textPrimary, fontSize: '14px' }}>{category.name}</span>
                                                                 <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim, border: `1px solid ${category.covered ? T.successBorder : T.border}` }}>
-                                                                    {category.covered ? 'Likely on FTL' : 'Likely not on FTL'}
+                                                                    {category.covered ? 'Listed' : 'Not listed'}
                                                                 </span>
                                                             </div>
                                                             <p style={{ fontSize: '12px', color: T.textMuted, marginTop: '4px', lineHeight: 1.4 }}>{category.examples}</p>
@@ -824,7 +823,7 @@ export function FTLCheckerClient() {
                                             fontSize: '14px', fontWeight: 600, transition: 'all 0.15s',
                                         }}
                                     >
-                                        Check My Coverage <ArrowRight size={16} />
+                                        Check Listed Groupings <ArrowRight size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -1011,7 +1010,7 @@ export function FTLCheckerClient() {
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         {category.outbreakFrequency === 'HIGH' && <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: T.dangerBg, color: T.danger, border: `1px solid ${T.dangerBorder}` }}>Higher Outbreak Frequency</span>}
-                                                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'Likely on FTL — verify' : 'Likely not on FTL — verify'}</span>
+                                                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'Listed grouping — verify' : 'Not listed — verify'}</span>
                                                     </div>
                                                 </div>
                                                 {/* CTE/KDE Requirements - Only for covered categories */}
