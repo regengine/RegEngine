@@ -33,15 +33,15 @@ from services.shared.rules.seeds import FSMA_RULE_SEEDS
 # are not counted; they exist but #1102 was specifically about
 # per-CTE KDE presence.
 _CTE_KDE_FLOORS: dict[str, int] = {
-    # 21 CFR §1.1327 — Harvest Date, Farm Location, Commodity+Variety
+    # 21 CFR §1.1325 — Harvest Date, Farm Location, Commodity+Variety
     "harvesting": 3,
     # §1.1325 — Cooling Date, Cooling Location. Temperature thresholds are
     # operational checks, not FSMA 204 KDE presence blockers.
     "cooling": 2,
-    # §1.1335 — Packing Date, Harvester Business Name, Packing Location
+    # §1.1330 — Packing Date, Harvester Business Name, Packing Location
     # (new), Harvest Location Ref (new)
     "initial_packing": 4,
-    # §1.1325 — Landing Date, Entry Point (new), Source Vessel (new)
+    # §1.1335 — Landing Date, Entry Point (new), Source Vessel (new)
     "first_land_based_receiving": 3,
     # §1.1340 — Ship-From, Ship-To, Ship Date (Reference Document and
     # TLC Source Reference live in other categories)
@@ -104,9 +104,9 @@ def test_citation_references_are_21_cfr_and_not_receiving_only():
         cite = seed.get("citation_reference", "")
         # Match the section token only; whitespace formatting varies.
         for section in (
-            "\u00a71.1325",  # first_land_based_receiving
-            "\u00a71.1327",  # harvesting
-            "\u00a71.1335",  # initial_packing
+            "\u00a71.1325",  # harvesting / cooling
+            "\u00a71.1330",  # initial_packing
+            "\u00a71.1335",  # first_land_based_receiving
             "\u00a71.1340",  # shipping
             "\u00a71.1350",  # transformation
         ):
@@ -119,7 +119,7 @@ def test_citation_references_are_21_cfr_and_not_receiving_only():
         s
         for s in (
             "\u00a71.1325",
-            "\u00a71.1327",
+            "\u00a71.1330",
             "\u00a71.1335",
             "\u00a71.1340",
             "\u00a71.1350",

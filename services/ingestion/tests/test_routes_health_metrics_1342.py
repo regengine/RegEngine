@@ -164,6 +164,9 @@ class TestHealthKafkaUnconfigured:
         assert {key: value for key, value in result.items() if key != "build"} == {
             "status": "healthy",
             "service": "regengine",
+            "probe": "liveness",
+            "readiness_url": "/readiness",
+            "dependencies_verified": False,
             "kafka": "not_configured",
             "webhook_hmac_configured": False,
             "inflow_contract_version": INFLOW_CONTRACT_VERSION,
@@ -215,6 +218,9 @@ class TestHealthKafkaAvailable:
         assert {key: value for key, value in result.items() if key != "build"} == {
             "status": "healthy",
             "service": "regengine",
+            "probe": "liveness",
+            "readiness_url": "/readiness",
+            "dependencies_verified": False,
             "kafka": "available",
             "webhook_hmac_configured": False,
             "inflow_contract_version": INFLOW_CONTRACT_VERSION,
@@ -257,6 +263,9 @@ class TestHealthKafkaUnavailable:
         assert {key: value for key, value in result.items() if key != "build"} == {
             "status": "degraded",
             "service": "regengine",
+            "probe": "liveness",
+            "readiness_url": "/readiness",
+            "dependencies_verified": False,
             "kafka": "unavailable",
             "webhook_hmac_configured": False,
             "inflow_contract_version": INFLOW_CONTRACT_VERSION,

@@ -249,7 +249,7 @@ async def get_recall_readiness(
     last 90 days.  A CTE is considered *complete* when all three required
     KDEs are present: quantity, unit_of_measure, and product_description.
 
-    Score = complete_ctes / total_ctes * 100  (0 when no CTEs exist).
+    Score = complete_ctes / total_ctes * 100  (null with INSUFFICIENT_DATA when no CTEs exist).
     Tenant is sourced from authentication (#1244).
     """
     engine = get_recall_engine()
@@ -299,31 +299,17 @@ async def get_recall_readiness(
         logger.warning("recall_readiness_cte_query_failed", error=str(exc))
         neo4j_error = str(exc)
 
-    # Derive score from CTE completeness; fall back to drill-based heuristic
-    # when Neo4j is unavailable (so the endpoint always returns a useful value).
-    if neo4j_error is None:
-        score = int(complete_cte_count / cte_count * 100) if cte_count > 0 else 0
-    else:
-        sla_metrics = engine.get_sla_metrics(tenant_str)
-        score = 100
-        if not sla_metrics.get("last_drill_at"):
-            score -= 50
-        compliance_rate = sla_metrics.get("sla_compliance_rate", 100)
-        if compliance_rate < 90:
-            score -= int((90 - compliance_rate) * 2)
-        score = max(0, min(100, score))
-
-    response: dict = {
+    if neo4j_error is not None:
+        raise HTTPException(status_code=503, detail="Recall readiness data is unavailable")
+    score = int(complete_cte_count / cte_count * 100) if cte_count else None
+    return {
         "readiness_score": score,
-        "status": "READY" if score > 80 else "AT_RISK",
+        "status": "INSUFFICIENT_DATA" if score is None else ("READY" if score > 80 else "AT_RISK"),
         "cte_count": cte_count,
         "complete_cte_count": complete_cte_count,
         "incomplete_kde_count": incomplete_kde_count,
         "tenant_id": tenant_str,
     }
-    if neo4j_error:
-        response["warning"] = f"CTE quality data unavailable ({neo4j_error}); score derived from drill history"
-    return response
 
 
 @router.get("/sla")

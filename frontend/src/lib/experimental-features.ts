@@ -59,6 +59,9 @@ export function filterExperimentalToolLinks<T extends { href: string }>(tools: T
 
 /** Non-/tools pages gated behind the flag (each has its own page-level guard). */
 export const EXPERIMENTAL_PAGE_HREFS: ReadonlySet<string> = new Set([
+    '/identity',
+    '/dashboard/alerts',
+    '/dashboard/heartbeat',
     '/dashboard/inflow-lab', // Inflow Lab dashboard (per-tool override: 'inflow-lab')
     '/dashboard/scan', // launcher (QR + link) for /fsma/field-capture
     '/ingest/curation', // discovery-router curation queue

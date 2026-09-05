@@ -70,8 +70,17 @@ def test_empty_chain_with_no_events_stays_vacuously_valid() -> None:
     assert not getattr(result, "no_chain_evidence", False)
 
 
-def test_populated_chain_unaffected() -> None:
+def test_populated_chain_requires_content_verification(monkeypatch) -> None:
     """Chains with rows verify via the Merkle tree as before."""
+    from types import SimpleNamespace
+
+    from shared.canonical_persistence import CanonicalEventStore
+
+    monkeypatch.setattr(
+        CanonicalEventStore,
+        "verify_chain_canonical",
+        lambda self, tenant_id: SimpleNamespace(valid=True, errors=[], chain_length=2, legacy_chain_rows=[]),
+    )
     session = _MerkleSession(chain_hashes=["a" * 64, "b" * 64], event_count=2)
     result = CTEPersistence(session).verify_chain_merkle("tenant-1")
 

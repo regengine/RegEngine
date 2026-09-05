@@ -70,8 +70,9 @@ async def get_coverage_card(
         ],
         "check_interval": "24 hours",
         "enforcement_status": "FDA not enforcing before July 20, 2028 (Congressional directive)",
-        # last_request_at reflects the time of this API call, not an actual verification event
-        "last_request_at": datetime.now(timezone.utc).isoformat(),
+        # No durable verification run backs this coverage card.
+        "last_request_at": None,
+        "verification_status": "not_verified",
         "compliance_deadline": "2028-07-20",
     }
 
@@ -943,10 +944,10 @@ class ComplianceScoreResponse(BaseModel):
     }
 
     tenant_id: str
-    overall_score: float
-    obligation_coverage: float
-    control_effectiveness: float
-    evidence_freshness: float
+    overall_score: Optional[float]
+    obligation_coverage: Optional[float]
+    control_effectiveness: Optional[float]
+    evidence_freshness: Optional[float]
     total_obligations: int
     controls_mapped: int
     evidence_items: int
@@ -971,7 +972,7 @@ async def get_compliance_score(
     - **evidence_freshness**: % of evidence items created within the last 90 days
     - **overall_score**: geometric mean of the three above
 
-    Falls back to a plausible demo payload when the tenant has no graph data.
+    Returns unmeasured dimensions for an empty graph; database failures return 503.
     """
     generated_at = datetime.now(timezone.utc).isoformat()
 
@@ -1018,18 +1019,17 @@ async def get_compliance_score(
         avg_eff = row["avg_effectiveness"] if row and row["avg_effectiveness"] else 0.0
         fresh_evidence = row["fresh_evidence"] if row else 0
 
-        # If tenant has no data yet, return a demo payload so the UI is useful
         if total_obligations == 0:
             return ComplianceScoreResponse(
                 tenant_id=str(tenant_id),
-                overall_score=78.5,
-                obligation_coverage=82.0,
-                control_effectiveness=76.0,
-                evidence_freshness=95.0,
-                total_obligations=24,
-                controls_mapped=20,
-                evidence_items=47,
-                is_demo=True,
+                overall_score=None,
+                obligation_coverage=None,
+                control_effectiveness=None,
+                evidence_freshness=None,
+                total_obligations=0,
+                controls_mapped=0,
+                evidence_items=0,
+                is_demo=False,
                 generated_at=generated_at,
             )
 
@@ -1058,16 +1058,4 @@ async def get_compliance_score(
 
     except Exception as exc:
         logger.error("compliance_score_failed", tenant_id=tenant_id, error=str(exc))
-        # Surface a demo payload so the pilot dashboard never white-screens
-        return ComplianceScoreResponse(
-            tenant_id=str(tenant_id),
-            overall_score=78.5,
-            obligation_coverage=82.0,
-            control_effectiveness=76.0,
-            evidence_freshness=95.0,
-            total_obligations=24,
-            controls_mapped=20,
-            evidence_items=47,
-            is_demo=True,
-            generated_at=generated_at,
-        )
+        raise HTTPException(status_code=503, detail="Compliance measurements are unavailable") from None

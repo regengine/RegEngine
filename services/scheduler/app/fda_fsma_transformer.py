@@ -1,17 +1,13 @@
-"""FDA Recall to FSMA Event Transformer.
+"""Experimental FDA recall alert projection, disabled by default.
 
-Converts FDA recall EnforcementItems into FSMA TraceEvents for graph ingestion.
-This bridges the scheduler's FDA scrapers to the graph service's FSMA consumer.
-
-FSMA 204 Context:
-- FDA recalls often involve products that require 24-hour traceability
-- Class I and II recalls are CRITICAL/HIGH severity and trigger immediate trace requirements
-- We create RECEIVING events at the affected facilities to enable forward/backward trace
+Recall notices are external alerts, not evidence that a CTE occurred. The
+legacy Kafka topic has no consumer. Enable only after a reviewed consumer
+contract exists; unknown identifiers are never synthesized.
 """
 
 from __future__ import annotations
 
-import hashlib
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -19,33 +15,29 @@ from uuid import uuid4
 
 import structlog
 
-from .models import EnforcementItem, EnforcementSeverity, SourceType
+from .models import EnforcementItem, SourceType
 
 logger = structlog.get_logger("fda_fsma_transformer")
 
 
 class FSMAEventTransformer:
-    """Transforms FDA enforcement items into FSMA-compatible events.
+    """Extract known fields from FDA recall alerts for experimental review.
 
-    This transformer extracts FSMA-relevant data from FDA recalls and creates
-    TraceEvent-compatible payloads that can be consumed by the graph service.
+    These payloads are not CTEs or traceability evidence. No graph consumer is
+    connected; batch publication requires an explicit experimental opt-in.
     """
-
-    # FSMA CTE Types
-    CTE_RECEIVING = "RECEIVING"
-    CTE_SHIPPING = "SHIPPING"
 
     # FSMA Kafka Topic
     FSMA_TOPIC = "fsma.events.extracted"
 
     def transform(self, item: EnforcementItem) -> Optional[Dict[str, Any]]:
-        """Transform an EnforcementItem into an FSMA event payload.
+        """Transform an EnforcementItem into an external-alert payload.
 
         Args:
             item: FDA enforcement item (recall, warning letter, etc.)
 
         Returns:
-            FSMA-compatible event dict, or None if not transformable
+            External-alert dict, or None if not transformable
         """
         # Only transform FDA recalls for now
         if item.source_type != SourceType.FDA_RECALL:
@@ -62,13 +54,13 @@ class FSMAEventTransformer:
         """Transform an FDA recall into FSMA event format."""
         raw_data = item.raw_data or {}
 
-        # Generate a unique TLC from recall data
+        # Only preserve a TLC explicitly present in the source
         recall_number = raw_data.get("recall_number", item.source_id)
-        tlc = self._generate_tlc(recall_number, item.affected_products)
+        tlc = self._source_text(raw_data, "traceability_lot_code")
 
         # Extract facility info from raw data
         facility_gln = self._extract_gln(raw_data)
-        facility_name = item.affected_companies[0] if item.affected_companies else "Unknown Facility"
+        facility_name = item.affected_companies[0] if item.affected_companies else None
 
         # Map classification to risk level
         classification = raw_data.get("classification", "")
@@ -82,7 +74,8 @@ class FSMAEventTransformer:
         fsma_event = {
             "event_id": event_id,
             "event_type": "FSMA_RECALL_ALERT",
-            "cte_type": self.CTE_RECEIVING,  # Recalls trigger receiving investigations
+            "cte_type": None,  # A recall notice does not establish a receiving event.
+            "is_traceability_evidence": False,
             "event_date": event_date,
             "event_time": event_time,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -91,7 +84,7 @@ class FSMAEventTransformer:
                 "tlc": tlc,
                 "product_description": self._get_product_description(item),
                 "quantity": self._parse_quantity(raw_data.get("product_quantity", "")),
-                "unit_of_measure": "units",  # FDA doesn't always specify
+                "unit_of_measure": self._source_text(raw_data, "unit_of_measure"),
             },
             # Facility information
             "facility": {
@@ -99,8 +92,8 @@ class FSMAEventTransformer:
                 "name": facility_name,
                 "city": raw_data.get("city", ""),
                 "state": raw_data.get("state", ""),
-                "country": "US",
-                "facility_type": "PROCESSOR",  # Most recalls are from processors
+                "country": self._source_text(raw_data, "country"),
+                "facility_type": None,
             },
             # Source document (FDA recall page)
             "document": {
@@ -116,14 +109,28 @@ class FSMAEventTransformer:
                 "severity": item.severity.value,
                 "reason_for_recall": item.summary,
                 "distribution_pattern": raw_data.get("distribution_pattern", ""),
-                "status": raw_data.get("status", "Ongoing"),
+                "status": raw_data.get("status"),
                 "voluntary_mandated": raw_data.get("voluntary_mandated", ""),
                 "risk_flags": risk_flags,
             },
             # Confidence and validation
-            "confidence": 0.95 if classification else 0.85,
+            # Completeness of directly supplied traceability fields, not a
+            # calibrated probability that the notice describes a valid CTE.
+            "confidence": sum(
+                bool(v)
+                for v in (
+                    tlc,
+                    facility_gln,
+                    facility_name,
+                    item.affected_products,
+                    raw_data.get("product_quantity"),
+                    raw_data.get("unit_of_measure"),
+                )
+            )
+            / 6,
+            "confidence_basis": "source_field_completeness",
             "source": "fda_recall_scraper",
-            "requires_review": item.severity == EnforcementSeverity.CRITICAL,
+            "requires_review": True,
         }
 
         logger.info(
@@ -136,46 +143,25 @@ class FSMAEventTransformer:
 
         return fsma_event
 
-    def _generate_tlc(self, recall_number: str, products: List[str]) -> str:
-        """Generate a Traceability Lot Code from recall data.
+    @staticmethod
+    def _source_text(raw_data: Dict[str, Any], key: str) -> Optional[str]:
+        value = raw_data.get(key)
+        return value.strip() or None if isinstance(value, str) else None
 
-        FSMA 204 requires a unique TLC for each lot. We generate one from
-        the recall number and first product description.
-        """
-        product_str = products[0] if products else "unknown"
-        # Create a hash-based TLC to ensure uniqueness
-        hash_input = f"{recall_number}:{product_str}"
-        hash_suffix = hashlib.sha256(hash_input.encode()).hexdigest()[:8].upper()
+    def _extract_gln(self, raw_data: Dict[str, Any]) -> Optional[str]:
+        """Accept only an explicitly supplied, GS1-valid location number."""
+        from shared.fsma_validation import verify_gs1_check_digit
 
-        # Format: FDA-YEAR-RECALLNUM-HASH
-        year = datetime.now().year
-        clean_recall = re.sub(r"[^A-Za-z0-9]", "", recall_number)[:12]
+        gln = self._source_text(raw_data, "gln")
+        if gln and re.fullmatch(r"[0-9]{13}", gln) and verify_gs1_check_digit(gln):
+            return gln
+        return None
 
-        return f"FDA-{year}-{clean_recall}-{hash_suffix}"
-
-    def _extract_gln(self, raw_data: Dict[str, Any]) -> str:
-        """Extract or generate a GLN from recall data.
-
-        FDA doesn't provide GLNs, so we generate a placeholder that can be
-        matched later if the real facility is ingested.
-        """
-        # Create a stable GLN-like identifier from firm info
-        firm_name = raw_data.get("recalling_firm", "")
-        state = raw_data.get("state", "XX")
-
-        if firm_name:
-            # Create a hash-based GLN placeholder (13 digits)
-            hash_input = f"{firm_name}:{state}"
-            hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest()[:12], 16)
-            return f"FDA{hash_val % 10**10:010d}"
-
-        return f"FDAUNKNOWN{uuid4().hex[:3].upper()}"
-
-    def _get_product_description(self, item: EnforcementItem) -> str:
+    def _get_product_description(self, item: EnforcementItem) -> Optional[str]:
         """Extract product description from enforcement item."""
         if item.affected_products:
             return "; ".join(item.affected_products[:3])  # Max 3 products
-        return item.title[:200] if item.title else "FDA Recalled Product"
+        return None
 
     def _parse_quantity(self, quantity_str: str) -> Optional[float]:
         """Parse product quantity from FDA string format."""
@@ -195,11 +181,11 @@ class FSMAEventTransformer:
         """Map FDA classification to FSMA risk flags."""
         flags = []
 
-        if "Class I" in classification:
+        if classification == "Class I":
             flags.extend(["FDA_CLASS_I", "IMMEDIATE_ACTION", "CRITICAL_RECALL"])
-        elif "Class II" in classification:
+        elif classification == "Class II":
             flags.extend(["FDA_CLASS_II", "HIGH_PRIORITY"])
-        elif "Class III" in classification:
+        elif classification == "Class III":
             flags.append("FDA_CLASS_III")
 
         return flags
@@ -213,6 +199,8 @@ class FSMAEventTransformer:
         Returns:
             List of FSMA event dicts (excludes non-transformable items)
         """
+        if os.getenv("REGENGINE_ENABLE_EXPERIMENTAL_RECALL_EVENTS") != "1":
+            return []
         events = []
         for item in items:
             event = self.transform(item)

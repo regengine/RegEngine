@@ -220,7 +220,9 @@ class ChainVerificationMixin:
 
         This provides O(log n) inclusion proofs as a complement to the
         linear verify_chain() method. The Merkle tree is computed in memory
-        from the ordered event_hashes stored in fsma.hash_chain.
+        from the ordered event_hashes stored in fsma.hash_chain. Validity also
+        requires independent canonical content and chain verification. The root
+        is a current-state digest, not an externally anchored checkpoint.
         """
         from shared.merkle_tree import MerkleTree
 
@@ -299,15 +301,18 @@ class ChainVerificationMixin:
                 checked_at=datetime.now(timezone.utc).isoformat(),
             )
 
-        # Verify every leaf can produce a valid proof back to the root
-        for i, event_hash in enumerate(hashes):
-            try:
-                proof = tree.generate_proof(i)
-                if not MerkleTree.verify_proof(event_hash, proof, merkle_root):
-                    errors.append(f"Merkle proof verification failed for event at index {i}")
-            except Exception as e:
-                _core.logger.warning(f"Merkle proof generation failed at index {i}", exc_info=True)
-                errors.append(f"Merkle proof generation failed at index {i}: {e}")
+        # Inclusion proofs generated from the same tree do not attest stored
+        # content. Independently recompute the canonical events and chain links.
+        from shared.canonical_persistence import CanonicalEventStore
+
+        verification = CanonicalEventStore(self.session, dual_write=False).verify_chain_canonical(tenant_id)
+        errors.extend(verification.errors or [])
+        if not verification.valid and not errors:
+            errors.append("Canonical chain verification failed")
+        if verification.chain_length != len(hashes):
+            errors.append("Chain changed during Merkle verification; retry")
+        if verification.legacy_chain_rows:
+            errors.append("Legacy-only event content cannot be attested by the canonical verifier")
 
         return _core.MerkleVerification(
             valid=len(errors) == 0,

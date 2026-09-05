@@ -42,10 +42,8 @@ router = APIRouter(tags=["health-metrics"])
 def health() -> dict[str, object]:
     """Liveness / ingestion-posture endpoint.
 
-    Returns ``"healthy"`` when all dependencies are reachable, or
-    ``"degraded"`` when optional dependencies (e.g. Kafka) are
-    unavailable.  Monitoring tools can alert on *degraded* without
-    treating the service as fully down.
+    Reports process liveness and optional Kafka posture only. A healthy
+    response does not attest PostgreSQL, Redis, or evidence availability.
 
     This is deliberately shallow: ``/readiness`` (server/main.py) is the
     dependency-gated probe Railway polls, and ``/health/deep`` verifies
@@ -82,8 +80,6 @@ def health() -> dict[str, object]:
     # Advertise the ingest contract version so integrators (inflow-lab's
     # test-connection probe, the Inflow Lab Contract CI) can detect
     # cross-deploy contract skew instead of failing silently on live posts.
-    from .webhook_models import INFLOW_CONTRACT_VERSION
-
     # Which commit is answering. Without this, a rollout that fails its
     # healthcheck and reverts under railway.toml's ON_FAILURE restart policy
     # is invisible: the deploy workflow has already gone green and every probe
@@ -91,9 +87,14 @@ def health() -> dict[str, object]:
     # the field deploy.yml's post-deploy check compares against github.sha.
     from shared.build_info import current_build_info
 
+    from .webhook_models import INFLOW_CONTRACT_VERSION
+
     return {
         "status": overall_status,
         "service": "regengine",
+        "probe": "liveness",
+        "readiness_url": "/readiness",
+        "dependencies_verified": False,
         "kafka": kafka_status,
         "webhook_hmac_configured": hmac_configured,
         "inflow_contract_version": INFLOW_CONTRACT_VERSION,

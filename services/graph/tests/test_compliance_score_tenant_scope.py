@@ -213,3 +213,24 @@ async def test_endpoint_passes_caller_tenant_id_as_param():
     assert kwargs.get("tenant_id") == str(TENANT_A), (
         f"endpoint must bind $tenant_id to the caller's tenant; actual kwargs: {kwargs!r}"
     )
+
+
+@pytest.mark.asyncio
+async def test_empty_graph_has_no_measured_score():
+    ctx, _, _ = _make_mock_neo4j_client(
+        {"total_obligations": 0, "controls_mapped": 0, "evidence_items": 0, "avg_effectiveness": 0, "fresh_evidence": 0}
+    )
+    result = await _call_endpoint(ctx)
+    assert result.overall_score is None
+    assert result.is_demo is False
+
+
+@pytest.mark.asyncio
+async def test_unavailable_graph_returns_503():
+    from fastapi import HTTPException
+
+    ctx, _, session = _make_mock_neo4j_client(None)
+    session.run.side_effect = RuntimeError("unavailable")
+    with pytest.raises(HTTPException) as exc:
+        await _call_endpoint(ctx)
+    assert exc.value.status_code == 503

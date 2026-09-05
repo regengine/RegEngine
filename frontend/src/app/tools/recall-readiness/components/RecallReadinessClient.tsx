@@ -22,7 +22,7 @@ const READINESS_TOOL_CONFIG: ToolConfig = {
                 id: 'pull_24h',
                 text: 'Can you provide all required traceability records to the FDA within 24 hours of request?',
                 type: 'select',
-                hint: 'Ref: 21 CFR §1.1455(b)(3)',
+                hint: 'Ref: 21 CFR §1.1455(c)(1)',
                 options: [
                     { label: 'Yes, systematically', value: 'yes', weight: 20 },
                     { label: 'Mostly (delayed)', value: 'mostly', weight: 10 },
@@ -33,7 +33,7 @@ const READINESS_TOOL_CONFIG: ToolConfig = {
                 id: 'sortable_spreadsheet',
                 text: 'Can you produce an electronic sortable spreadsheet of requested KDEs within 24 hours?',
                 type: 'select',
-                hint: 'Ref: 21 CFR §1.1455(b)(3)(ii)',
+                hint: 'Ref: 21 CFR §1.1455(c)(3)(ii)',
                 options: [
                     { label: 'Yes, one-click export', value: 'yes', weight: 15 },
                     { label: 'Manual assembly required', value: 'mostly', weight: 5 },
@@ -182,8 +182,8 @@ export function RecallReadinessClient() {
         }
 
         const gaps: string[] = [];
-        if (answers.pull_24h !== 'yes') gaps.push('Gap indicated: self-reported inability to assemble required records within 24 hours (21 CFR §1.1455(b)(3))');
-        if (answers.sortable_spreadsheet !== 'yes') gaps.push('Gap indicated: no electronic sortable spreadsheet workflow reported (21 CFR §1.1455(b)(3)(ii))');
+        if (answers.pull_24h !== 'yes') gaps.push('Gap indicated: self-reported inability to assemble required records within 24 hours (21 CFR §1.1455(c)(1))');
+        if (answers.sortable_spreadsheet !== 'yes') gaps.push('Gap indicated: no electronic sortable spreadsheet workflow reported (21 CFR §1.1455(c)(3)(ii))');
         if (answers.digital_search !== 'yes') gaps.push('Risk indicated: manual/paper records make a 24-hour assembly harder');
         if (answers.tlc_stability === 'no') gaps.push('Gap indicated: TLC stability concern reported — risks data linkage breaks');
         if (answers.cte_coverage === 'no') gaps.push('Gap indicated: missing Critical Tracking Event recordkeeping for your role');

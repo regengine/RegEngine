@@ -181,17 +181,19 @@ class TestPersistVerificationResult:
     def test_exception_triggers_rollback(self):
         db = MagicMock()
         db.execute.side_effect = RuntimeError("insert failed")
-        _persist_verification_result(db, "j1", "t1", True, 5, [], "2026-01-01T00:00:00Z")
-        # Should silently roll back, not raise
+        with pytest.raises(RuntimeError, match="durably recorded"):
+            _persist_verification_result(db, "j1", "t1", True, 5, [], "2026-01-01T00:00:00Z")
+        # Failed persistence rolls back and propagates.
         assert db.rollback.called
 
     def test_rollback_failure_swallowed(self):
-        """When both insert AND rollback raise, we must not propagate."""
+        """When insert and rollback fail, the job still fails."""
         db = MagicMock()
         db.execute.side_effect = RuntimeError("insert failed")
         db.rollback.side_effect = RuntimeError("rollback failed too")
-        # Must not raise
-        _persist_verification_result(db, "j1", "t1", True, 5, [], "2026-01-01T00:00:00Z")
+        # Rollback failure must not hide the storage failure.
+        with pytest.raises(RuntimeError, match="durably recorded"):
+            _persist_verification_result(db, "j1", "t1", True, 5, [], "2026-01-01T00:00:00Z")
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +280,9 @@ class TestRunVerification:
         entry = _verification_jobs["j1"]
         assert entry["status"] == "completed"
         assert entry["chain_valid"] is False
-        assert entry["errors"] == ["Event tamper at seq=3: block 3 tampered"]
+        assert entry["errors"] == ["Event tamper at seq=3: block 3 tampered", "block 3 tampered"]
         assert "FAILED" in entry["message"]
-        assert "1 error" in entry["message"]
+        assert "2 error" in entry["message"]
 
     def test_outer_exception_sets_failed_state(self, monkeypatch):
         _seed_job("j1", "t1")

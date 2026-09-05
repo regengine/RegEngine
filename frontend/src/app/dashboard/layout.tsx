@@ -69,7 +69,7 @@ const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
     { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimentalPage: true },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
-    { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
+    { label: 'Alerts', href: '/dashboard/alerts', icon: Bell, experimentalPage: true },
     { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
 ];
 
@@ -109,7 +109,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Records', href: '/records', icon: FileCheck },
             { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle },
             { label: 'Requests', href: '/requests', icon: ClipboardList },
-            { label: 'Identity', href: '/identity', icon: Fingerprint },
+            { label: 'Identity', href: '/identity', icon: Fingerprint, experimentalPage: true },
             { label: 'Review', href: '/review', icon: Eye },
             { label: 'Agent reviews', href: '/dashboard/agent-reviews', icon: Bot },
             { label: 'QA Health', href: '/dashboard/qa-health', icon: ShieldAlert, sysadminOnly: true },
@@ -126,7 +126,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             { label: 'Team', href: '/settings/users', icon: UserCog },
             { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-            { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
+            { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity, experimentalPage: true },
             { label: 'Developer Portal', href: '/developer/portal', icon: Code2 },
         ],
     },

@@ -1,5 +1,8 @@
 'use client';
 
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -91,7 +94,7 @@ function formatTimeAgo(iso: string): string {
     }
 }
 
-export default function AlertsDashboardPage() {
+function AlertsDashboardPageContent() {
     const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
@@ -477,4 +480,10 @@ export default function AlertsDashboardPage() {
             </div>
         </div>
     );
+}
+
+export default function AlertsDashboardPage() {
+    return experimentalFeaturesEnabled()
+        ? <AlertsDashboardPageContent />
+        : <FeatureNotEnabled featureName="Alerts" backHref="/dashboard" backLabel="Back to dashboard" />;
 }

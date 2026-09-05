@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..webhook_models import IngestEvent
@@ -29,6 +30,7 @@ def _get_persistence(db_session=None):
         return None
     try:
         from shared.cte_persistence import CTEPersistence
+
         return CTEPersistence(db_session)
     except ImportError:
         _pkg.logger.warning("cte_persistence module not available")
@@ -74,11 +76,12 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     to unpack``. Restored consistent 3-tuple here. See spawned task.
     """
     from shared.rules.enforcement import (  # noqa: PLC0415
-        current_mode,
-        should_reject,
         EnforcementMode,
+        current_mode,
         handle_preeval_exception,
+        should_reject,
     )
+
     if current_mode() == EnforcementMode.OFF:
         return False, None, None
 
@@ -86,6 +89,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     try:
         canonical = _pkg.normalize_webhook_event(event, tenant_id)
         from shared.rules_engine import RulesEngine  # noqa: PLC0415
+
         engine = RulesEngine(db_session)
         event_data = {
             "event_id": str(canonical.event_id),
@@ -101,8 +105,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
             "kdes": canonical.kdes,
         }
         summary = engine.evaluate_event(event_data, persist=False, tenant_id=tenant_id)
-    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError,
-            AttributeError, KeyError) as err:
+    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, AttributeError, KeyError) as err:
         # Finding A — fail loud under cte_only/all; HTTPException(500)
         # bubbles up to ingest_events and the route returns 5xx instead
         # of silently accepting because a rule crashed.
@@ -117,9 +120,10 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
         # event rejected. Independent session = survives outer rollback.
         try:
             from shared.rules.rejection_audit import (  # noqa: PLC0415
-                record_rejection,
                 reasons_from_summary,
+                record_rejection,
             )
+
             _first_crit = (summary.critical_failures or [None])[0]
             record_rejection(
                 tenant_id=tenant_id,
@@ -132,6 +136,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
             )
         except Exception:  # noqa: BLE001
             _pkg.logger.error("webhook_v2_rejection_audit_inline_error")
+            raise HTTPException(status_code=503, detail="Rejection audit storage is unavailable") from None
     return reject, reason, summary
 
 
@@ -224,9 +229,8 @@ def _persist_canonical_and_eval(
 
     if not summary.compliant:
         from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
-        ExceptionQueueService(db_session).create_exceptions_from_evaluation(
-            tenant_id, summary
-        )
+
+        ExceptionQueueService(db_session).create_exceptions_from_evaluation(tenant_id, summary)
 
 
 def _persist_required_canonical_and_eval(

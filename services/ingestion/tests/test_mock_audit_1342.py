@@ -41,9 +41,11 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
-def _clear_drills():
+def _clear_drills(monkeypatch):
     """Reset the in-memory drill store between tests."""
     _active_drills.clear()
+    monkeypatch.setattr(ma, "_persist_drill", lambda *a: None)
+    monkeypatch.setattr(ma, "_mark_drill_completed", lambda *a: None)
     yield
     _active_drills.clear()
 
@@ -369,10 +371,12 @@ class TestSubmitDrillResponse:
         body = r.json()
         assert body["grade"] == "A"
         assert body["score"] == 100
-        assert body["passed"] is True
+        assert body["passed"] is None
+        assert body["verified"] is False
+        assert body["assessment_basis"] == "self_reported"
         # All breakdown items PASS
         for key, entry in body["breakdown"].items():
-            assert entry["status"] == "PASS"
+            assert entry["status"] == "SELF_REPORTED_PASS"
         # Should include the bonus time message
         assert any("Excellent response time" in f for f in body["feedback"])
 
@@ -386,7 +390,9 @@ class TestSubmitDrillResponse:
         # 20 + 20 + 15 + 15 + 0 + 15 = 85 → B
         assert body["score"] == 85
         assert body["grade"] == "B"
-        assert body["passed"] is True
+        assert body["passed"] is None
+        assert body["verified"] is False
+        assert body["assessment_basis"] == "self_reported"
 
     def test_grade_c(self, client):
         """Partial CTEs/KDEs/EPCIS but no lot_genealogy → C-range."""
@@ -406,7 +412,7 @@ class TestSubmitDrillResponse:
         body = r.json()
         assert body["grade"] == "D"
         assert body["score"] == 65
-        assert body["passed"] is False
+        assert body["passed"] is None
 
     def test_grade_c(self, client):
         """Score in [70, 79] → C."""
@@ -419,7 +425,9 @@ class TestSubmitDrillResponse:
         body = r.json()
         assert body["score"] == 75
         assert body["grade"] == "C"
-        assert body["passed"] is True
+        assert body["passed"] is None
+        assert body["verified"] is False
+        assert body["assessment_basis"] == "self_reported"
 
     def test_grade_d_boundary(self, client):
         """Score exactly 60 → D."""
@@ -450,7 +458,7 @@ class TestSubmitDrillResponse:
         # 0 + 0 + 5 + 5 + 0 + 5 = 15 → F
         assert body["grade"] == "F"
         assert body["score"] == 15
-        assert body["passed"] is False
+        assert body["passed"] is None
         # Critical failures surfaced
         assert any("CRITICAL" in f for f in body["feedback"])
 
@@ -541,7 +549,8 @@ class TestSubmitDrillResponse:
         body = r.json()
         # time bonus prepends so feedback is non-empty
         assert body["feedback"]
-        assert "Excellent" in body["feedback"][0]
+        assert "Self-reported" in body["feedback"][0]
+        assert any("Excellent" in item for item in body["feedback"])
 
 
 # ---------------------------------------------------------------------------
@@ -555,3 +564,35 @@ class TestRouterSurface:
         assert "/api/v1/audit/drill/start" in paths
         assert "/api/v1/audit/drill/{drill_id}" in paths
         assert "/api/v1/audit/drill/{drill_id}/submit" in paths
+
+
+def test_status_hides_other_tenant_drill(client):
+    drill_id = _seed_drill(0)
+    _active_drills[drill_id]["tenant_id"] = "another-tenant"
+    assert client.get(f"/api/v1/audit/drill/{drill_id}").status_code == 404
+
+
+def test_failed_completion_does_not_update_cache(client, monkeypatch):
+    from fastapi import HTTPException
+
+    drill_id = _seed_drill(0)
+
+    def fail(*args):
+        raise HTTPException(status_code=503, detail="Drill result could not be saved")
+
+    monkeypatch.setattr(ma, "_mark_drill_completed", fail)
+    response = client.post(f"/api/v1/audit/drill/{drill_id}/submit", json=_all_true_payload(drill_id))
+    assert response.status_code == 503
+    assert _active_drills[drill_id]["status"] == "active"
+
+
+def test_failed_start_does_not_cache_a_drill(client, monkeypatch):
+    from fastapi import HTTPException
+
+    def fail(*args):
+        raise HTTPException(status_code=503, detail="Drill could not be saved")
+
+    monkeypatch.setattr(ma, "_persist_drill", fail)
+    monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
+    assert client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"}).status_code == 503
+    assert not _active_drills

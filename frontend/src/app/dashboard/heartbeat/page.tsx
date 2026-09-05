@@ -1,5 +1,8 @@
 'use client';
 
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -337,7 +340,7 @@ function HeartbeatSkeleton() {
 
 // ── Page ──
 
-export default function HeartbeatPage() {
+function HeartbeatPageContent() {
     const { user, isHydrated, isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const router = useRouter();
@@ -853,4 +856,10 @@ export default function HeartbeatPage() {
             </PageContainer>
         </div>
     );
+}
+
+export default function HeartbeatPage() {
+    return experimentalFeaturesEnabled()
+        ? <HeartbeatPageContent />
+        : <FeatureNotEnabled featureName="Heartbeat" backHref="/dashboard" backLabel="Back to dashboard" />;
 }

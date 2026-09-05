@@ -90,6 +90,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("input_lot_codes", "TOM-0226-F3-001", "Source lot code(s), comma-separated if multiple"),
         ("reference_document", "PACK-2026-0226-007", "Packing record or reference document number"),
         ("harvester_business_name", "Valley Fresh Farms LLC", "Business name of the harvester"),
+        ("harvester_business_phone", "+1-202-555-0100", "Phone number of the harvester; sample number only"),
     ],
     "shipping": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code being shipped"),

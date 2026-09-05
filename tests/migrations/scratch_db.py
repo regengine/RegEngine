@@ -52,7 +52,7 @@ def scratch_database_engine(db_name: str) -> Iterator[Engine]:
         if (url.database or "") == db_name:
             raise ValueError(f"scratch database {db_name!r} must differ from the borrowed database")
 
-        admin_url = _normalize_psycopg(str(url.set(database=_MAINTENANCE_DB)))
+        admin_url = _normalize_psycopg(url.set(database=_MAINTENANCE_DB).render_as_string(hide_password=False))
         admin = create_engine(admin_url, isolation_level="AUTOCOMMIT", future=True)
         created = False
         try:
@@ -65,7 +65,9 @@ def scratch_database_engine(db_name: str) -> Iterator[Engine]:
                 skip_or_fail_db(f"cannot create a disposable database {db_name!r}: {exc}")
                 return
 
-            target = create_engine(_normalize_psycopg(str(url.set(database=db_name))), future=True)
+            target = create_engine(
+                _normalize_psycopg(url.set(database=db_name).render_as_string(hide_password=False)), future=True
+            )
             try:
                 yield target
             finally:

@@ -66,4 +66,4 @@ def install_health_router(app: FastAPI, service_name: str, health_check: Optiona
 
 # --- Legacy Health Functions (for backward compatibility) ---
 def check_health() -> Dict[str, Any]:
-    return {"status": "healthy", "timestamp": time.time()}
+    return {"status": "healthy", "probe": "liveness", "dependencies_verified": False, "timestamp": time.time()}

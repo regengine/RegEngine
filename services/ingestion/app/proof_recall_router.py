@@ -115,7 +115,7 @@ _FROZEN_STEPS: tuple[dict, ...] = (
         "duration_ms": 1600,
         "status": "ok",
         "detail": (
-            "Wrote § 204.2(g) Key Data Elements for each downstream "
+            "Wrote 21 CFR §§1.1325–1.1350 Key Data Elements for each downstream "
             "lot. Hash-anchored each record (SHA-256 chain integrity "
             "preserved)."
         ),

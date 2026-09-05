@@ -236,7 +236,10 @@ class TestMockRecallEngine:
     def setup_method(self):
         """Reset engine before each test."""
         reset_recall_engine()
-        self.engine = MockRecallEngine()
+        self.engine = MockRecallEngine(
+            trace_forward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+            trace_backward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+        )
 
     def test_create_drill(self):
         """Test creating a new drill."""
@@ -309,7 +312,9 @@ class TestMockRecallEngine:
 
         result = await self.engine.execute_drill(drill)
 
-        assert result.success is True
+        assert result.success is False
+        assert result.simulated is True
+        assert result.lots_traced == 0
         assert len(result.warnings) > 0  # Should have mass balance warning
 
     @pytest.mark.asyncio
@@ -324,8 +329,10 @@ class TestMockRecallEngine:
 
         result = await self.engine.execute_drill(drill)
 
-        assert result.success is True
-        assert any(f.gln == "1234567890123" for f in result.affected_facilities)
+        assert result.success is False
+        assert result.simulated is True
+        assert result.affected_facilities == []
+        assert result.lots_traced == 0
 
     @pytest.mark.asyncio
     async def test_drill_sla_compliance(self):
@@ -367,6 +374,7 @@ class TestMockRecallEngine:
             drill = self.engine.create_drill(
                 tenant_id="tenant_1",
                 drill_type=RecallType.FORWARD_TRACE,
+                target_lot="LOT-TEST",
             )
             await self.engine.execute_drill(drill)
 
@@ -380,6 +388,7 @@ class TestMockRecallEngine:
         drill1 = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
+            target_lot="LOT-TEST",
         )
         await self.engine.execute_drill(drill1)
 
@@ -416,6 +425,7 @@ class TestMockRecallEngine:
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
+            target_lot="LOT-TEST",
         )
 
         success = self.engine.cancel_drill(drill)
@@ -429,6 +439,7 @@ class TestMockRecallEngine:
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
+            target_lot="LOT-TEST",
         )
         await self.engine.execute_drill(drill)
 
@@ -449,14 +460,17 @@ class TestSLAMetrics:
     def setup_method(self):
         """Reset engine before each test."""
         reset_recall_engine()
-        self.engine = MockRecallEngine()
+        self.engine = MockRecallEngine(
+            trace_forward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+            trace_backward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+        )
 
     def test_initial_sla_metrics(self):
         """Test initial SLA metrics for new tenant."""
         metrics = self.engine.get_sla_metrics("new_tenant")
 
         assert metrics["total_drills"] == 0
-        assert metrics["sla_compliance_rate"] == 100.0
+        assert metrics["sla_compliance_rate"] is None
 
     @pytest.mark.asyncio
     async def test_sla_metrics_after_drill(self):
@@ -464,6 +478,7 @@ class TestSLAMetrics:
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
+            target_lot="LOT-TEST",
         )
         await self.engine.execute_drill(drill)
 
@@ -481,6 +496,7 @@ class TestSLAMetrics:
             drill = self.engine.create_drill(
                 tenant_id="tenant_1",
                 drill_type=RecallType.FORWARD_TRACE,
+                target_lot="LOT-TEST",
             )
             await self.engine.execute_drill(drill)
 
@@ -501,7 +517,10 @@ class TestRecallScheduling:
     def setup_method(self):
         """Reset engine before each test."""
         reset_recall_engine()
-        self.engine = MockRecallEngine()
+        self.engine = MockRecallEngine(
+            trace_forward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+            trace_backward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+        )
 
     def test_create_schedule(self):
         """Test creating a drill schedule."""
@@ -714,7 +733,10 @@ class TestReadinessReport:
     def setup_method(self):
         """Reset engine before each test."""
         reset_recall_engine()
-        self.engine = MockRecallEngine()
+        self.engine = MockRecallEngine(
+            trace_forward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+            trace_backward_fn=lambda lot, tenant_id: {"lots": [lot], "hop_count": 1},
+        )
 
     def test_readiness_report_empty(self):
         """Test readiness report for tenant with no drills."""
@@ -733,6 +755,7 @@ class TestReadinessReport:
             drill = self.engine.create_drill(
                 tenant_id="tenant_1",
                 drill_type=RecallType.FULL_TRACE,
+                target_lot="LOT-TEST",
             )
             await self.engine.execute_drill(drill)
 
@@ -756,6 +779,7 @@ class TestReadinessReport:
             drill = self.engine.create_drill(
                 tenant_id="tenant_1",
                 drill_type=RecallType.FULL_TRACE,
+                target_lot="LOT-TEST",
             )
             await self.engine.execute_drill(drill)
 
@@ -952,3 +976,15 @@ class TestSelectRandomTargetLot:
         conn.execute.side_effect = RuntimeError("db gone")
 
         assert _select_random_target_lot(engine, "tenant_1") is None
+
+
+@pytest.mark.asyncio
+async def test_unavailable_drills_do_not_measure_readiness():
+    engine = MockRecallEngine()
+    drill = engine.create_drill(tenant_id="unmeasured", drill_type=RecallType.FULL_TRACE)
+    result = await engine.execute_drill(drill)
+    assert result.simulated and not result.success
+    report = engine.get_readiness_report("unmeasured")
+    assert report["data_quality"]["avg_completeness_pct"] is None
+    assert report["sla_compliance"]["rate_pct"] is None
+    assert not any("data gaps" in item for item in report["recommendations"])

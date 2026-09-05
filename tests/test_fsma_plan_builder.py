@@ -261,7 +261,8 @@ class TestPlanExport:
         assert "**Company:** Fresh Foods Processing Co" in md
         assert "## Food Traceability List (FTL) Commodities" in md
         assert "Lettuce" in md
-        assert "## Certification" in md
+        assert "## Plan Review" in md
+        assert "I certify" not in md
 
     def test_export_markdown_has_all_sections(self, sample_firm):
         """Test Markdown export includes all required sections for a processor."""
@@ -392,7 +393,7 @@ class TestPlanBuilderIntegration:
         assert plan.tlc_assignment_procedure
 
     def test_distributor_plan_no_transformation(self):
-        """Test that distributors get holding but not transformation."""
+        """Holding is not a subpart S CTE."""
         firm = FirmInfo(
             name="Metro Cold Storage",
             address="500 Logistics Ave, Newark, NJ 07105",
@@ -405,9 +406,10 @@ class TestPlanBuilderIntegration:
         builder = TraceabilityPlanBuilder(firm)
         plan = builder.build()
 
-        # Distributor gets receiving, holding, shipping
+        # Distributor gets receiving and shipping CTEs.
         assert "Metro Cold Storage" in plan.receiving_procedure
-        assert "Metro Cold Storage" in plan.holding_procedure
+        assert plan.holding_procedure == ""
+        assert "holding" not in plan.to_dict()["procedures"]
         assert "Metro Cold Storage" in plan.shipping_procedure
 
         # Distributor should NOT get transformation or harvesting
@@ -456,3 +458,15 @@ class TestPlanBuilderIntegration:
         # Universal procedures always present
         assert "tlc_assignment" in procedures
         assert "recall" in procedures
+
+
+def test_first_land_based_receiver_has_reachable_procedure():
+    firm = FirmInfo(name="Seafood Landing", address="Dock 1", firm_type=FirmType.FIRST_LAND_BASED_RECEIVER)
+    plan = TraceabilityPlanBuilder(firm).build()
+    assert "§1.1335" in plan.first_land_receiving_procedure
+    assert "first_land_receiving" in export_plan_json(plan)["procedures"]
+    assert "First Land-Based Receiving" in export_plan_markdown(plan)
+
+
+def test_firm_ctes_exclude_holding():
+    assert all("holding" not in procedures for procedures in FIRM_TYPE_PROCEDURES.values())

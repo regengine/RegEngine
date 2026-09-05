@@ -425,3 +425,32 @@ class TestEnforceAll:
         )
         assert resp.accepted == 1
         assert ("commit", "sp-0") in sess.actions
+
+
+@pytest.fixture(autouse=True)
+def rejection_audit_writer(monkeypatch):
+    from unittest.mock import Mock
+
+    import shared.rules.rejection_audit as audit
+
+    writer = Mock()
+    monkeypatch.setattr(audit, "record_rejection", writer)
+    return writer
+
+
+def test_audit_storage_failure_rolls_back_ingestion(monkeypatch, rejection_audit_writer):
+    from fastapi import HTTPException
+
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+    sess, persist, cap = _install(monkeypatch, summary=_critical_summary())
+    rejection_audit_writer.side_effect = RuntimeError("storage unavailable")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]), principal_tenant_id="t-enforce", x_regengine_api_key="k"
+            )
+        )
+    assert exc.value.status_code == 503
+    assert sess.commit_count == 0
+    assert sess.rollback_count == 1
+    assert not cap["publish_graph_calls"]

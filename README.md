@@ -344,6 +344,8 @@ These are current repo facts, not speculation:
 
 ## Documentation Map
 
+- [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.
+
 - [ARCHITECTURE.md](ARCHITECTURE.md) - current runtime shape, system map, and debt register.
 - [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
 - [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.
