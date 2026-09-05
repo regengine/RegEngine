@@ -29,7 +29,13 @@ env:
   # had changed since, so this job was exercising a simulator that no longer
   # resembled the deployed one. Both sides still advertise
   # INFLOW_CONTRACT_VERSION "1"; this is staleness, not a wire-contract bump.
-  INFLOW_LAB_REF: d6bbe988cdbdf39d61e1188e60a76c00ecb07dde  # pragma: allowlist secret
+  # Advanced again from d6bbe98: that ref carried a regression in
+  # scripts/live_trial.py -- the script this job runs -- where the cleanup
+  # `finally` closed its own HTTP client before the stop/revert calls that
+  # use it, so the run died on "Cannot send a request, as the client has
+  # been closed" and, worse, never disarmed live delivery. inflow-lab#236
+  # fixes that; this ref is the first main commit that carries the fix.
+  INFLOW_LAB_REF: 2a752aa2b33b65b2a3e679460c4bd2f90fd9cbc4  # pragma: allowlist secret
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
   CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret
