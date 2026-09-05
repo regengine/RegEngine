@@ -218,7 +218,7 @@ export function LeadGate({
                             {!submitting && <ArrowRight className="h-4 w-4" />}
                         </button>
                         <p className="text-[10px] text-center text-[var(--re-text-disabled)]">
-                            No spam. Your data is encrypted and never shared.
+                            We'll only use your details for this tool.
                         </p>
                     </form>
                 </div>
