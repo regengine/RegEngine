@@ -207,6 +207,20 @@ class TestRequireApiKeyBypass:
         result = _run(require_api_key(_make_request(), "let-me-in"))
         assert result.tenant_id == _VALID_TENANT_UUID
 
+    def test_bypass_key_satisfies_the_webhook_ingest_permission(self, monkeypatch):
+        """The Inflow Lab contract job posts with this credential to a route
+        gated by ``require_permission("webhooks.ingest")``. ``admin`` is not a
+        wildcard for ``permission_implies``, so the scope has to be explicit or
+        every ingest from that job is a 403 (#3064)."""
+        from shared.permissions import has_permission
+
+        monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "let-me-in")
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        result = _run(require_api_key(_make_request(), "let-me-in"))
+        assert has_permission(result.scopes, "webhooks.ingest")
+        # Still not a wildcard credential: nothing outside the listed scopes.
+        assert not has_permission(result.scopes, "simulations.write")
+
     def test_bypass_blocked_when_token_does_not_match(self, monkeypatch):
         """Wrong bypass value falls through and is rejected by the keystore path."""
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "let-me-in")

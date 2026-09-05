@@ -340,7 +340,13 @@ async def require_api_key(
             created_at=datetime.now(timezone.utc),
             rate_limit_per_minute=1000,
             enabled=True,
-            scopes=["read", "write", "admin"],
+            # "webhooks.ingest" is the one permission-style scope here: the
+            # Inflow Lab contract job authenticates with this credential and
+            # posts to /api/v1/webhooks/ingest, which is gated by
+            # require_permission("webhooks.ingest"). permission_implies()
+            # treats "admin" as a plain scope, not a wildcard, so without it
+            # every ingest from that job is a 403 (#3064).
+            scopes=["read", "write", "admin", "webhooks.ingest"],
             billing_tier="ENTERPRISE",
             allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
         )
