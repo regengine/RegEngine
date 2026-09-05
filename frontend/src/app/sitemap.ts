@@ -81,7 +81,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Resource pages
     const resourcePages = [
         { url: `${baseUrl}/tools`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/retailer-readiness`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.6 },
     ];

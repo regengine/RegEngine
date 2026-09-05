@@ -19,22 +19,22 @@ describe("HomePage Compliance OS foundation", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders proof modules in the first viewport", () => {
+  it("labels the demo checklist and advisory checks", () => {
     render(<HomePage />);
 
-    expect(screen.getByText("Traceability readiness")).toBeInTheDocument();
-    expect(screen.getAllByText("Supplier Gap Radar").length).toBeGreaterThan(0);
-    expect(screen.getByText("Export eligibility gate")).toBeInTheDocument();
+    expect(screen.getByText("What the export checklist still flags")).toBeInTheDocument();
+    expect(screen.getAllByText("FreshPack Central").length).toBeGreaterThan(0);
+    expect(screen.getByText("Export checklist (advisory)")).toBeInTheDocument();
     expect(screen.getAllByText("Hash verified").length).toBeGreaterThan(0);
   });
 
   it("uses compliance-specific metrics instead of generic SaaS proof", () => {
     render(<HomePage />);
 
-    expect(screen.getByText("Demo workspace · sample data")).toBeInTheDocument();
-    expect(screen.getByText("FTL coverage")).toBeInTheDocument();
+    expect(screen.getByText("Demo workspace · synthetic data · 3 open checklist items")).toBeInTheDocument();
+    expect(screen.getByText("FTL list overlap")).toBeInTheDocument();
     expect(screen.getByText("KDE completeness")).toBeInTheDocument();
-    expect(screen.getByText("Records with full provenance")).toBeInTheDocument();
+    expect(screen.getByText("Export checklist")).toBeInTheDocument();
     expect(screen.queryByText(/save time/i)).not.toBeInTheDocument();
   });
 });

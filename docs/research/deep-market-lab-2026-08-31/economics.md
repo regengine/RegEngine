@@ -84,7 +84,7 @@ At flat subscription revenue, one more event inside the same allowance adds zero
 
 Economies may come from reusable mappings, batching and amortizing shared overhead. Diseconomies come from long retained history, concentrated tenant locks, complete-history verification, capacity steps, support queues and simultaneous recalls. The [scaling review](scaling.md) derives six volume levels without pretending to benchmark the millionth event. At one million events/day, average traffic is only 11.57 events/second, but two years at an assumed 8 KiB/event is approximately 5,569 GiB before backups and other amplification. Observed throughput, bytes/event and marginal cloud costs are unknown.
 
-The millionth event is **not proven better or worse** than the first in total economics. It may have lower marginal compute cost while generating negative marginal contribution; an account's accumulated history may make exports more expensive. Do not offer unlimited service, lifetime price guarantees or an SLA without a measured envelope.
+The millionth event is **not proven better or worse** than the first in total economics. It may have lower marginal compute cost while generating negative marginal contribution; an account's accumulated history may make exports more expensive. Do not offer unlimited service, fixed lifetime prices or an SLA without a measured envelope.
 
 ## Verification, unknowns and next experiment
 

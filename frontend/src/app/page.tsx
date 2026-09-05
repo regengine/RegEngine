@@ -262,7 +262,7 @@ export default function HomePage() {
               Make every compliance object show its state.
             </h2>
             <p className="mt-5 max-w-[500px] text-base leading-7 text-[var(--re-text-muted)]">
-              Teams can see blocked, needs correction, corrected, committed, or exported. We do not mark anyone recall-ready, retailer-ready, or FDA-ready.
+              Teams can see blocked, needs correction, corrected, committed, or exported. These statuses do not establish readiness for a recall, a retailer, or an FDA request.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

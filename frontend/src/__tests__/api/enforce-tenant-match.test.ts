@@ -165,31 +165,17 @@ describe('enforceTenantMatch — non-session callers', () => {
         expect(result?.status).toBe(403);
     });
 
-    // #2896: these three previously returned null (ALLOW). "Defer to the
-    // backend" was unreachable — the `[tenantId]` routes attach the server's
-    // own privileged key via getServerApiKey() and never forward the caller's
-    // key, so the backend could not bind key→tenant and the path tenantId went
-    // unchecked. Any non-empty string in one of these slots was a cross-tenant
-    // read/write of another tenant's frozen compliance evidence.
-    it('fails closed for API-key callers (re_api_key cookie) — the key is never forwarded upstream', async () => {
-        const result = await enforceTenantMatch(makeRequest({ re_api_key: 'k-123' }), TENANT_B);
-        expect(result?.status).toBe(403);
-        await expect(result?.json()).resolves.toMatchObject({ code: 'E_APIKEY_TENANT_UNVERIFIABLE' });
-    });
-
-    it('fails closed for API-key callers (x-regengine-api-key header)', async () => {
-        const result = await enforceTenantMatch(makeRequest({}, { 'x-regengine-api-key': 'k-123' }), TENANT_B);
-        expect(result?.status).toBe(403);
-        await expect(result?.json()).resolves.toMatchObject({ code: 'E_APIKEY_TENANT_UNVERIFIABLE' });
-    });
-
-    it('fails closed for a junk x-api-key header — not a backend auth header at all', async () => {
-        // services/shared/auth.py reads X-RegEngine-API-Key; `x-api-key` unlocked
-        // the hatch while being meaningless upstream, so an anonymous caller with
-        // a single junk header reached any tenant UUID.
-        const result = await enforceTenantMatch(makeRequest({}, { 'x-api-key': 'junk' }), TENANT_B);
-        expect(result?.status).toBe(403);
-        await expect(result?.json()).resolves.toMatchObject({ code: 'E_APIKEY_TENANT_UNVERIFIABLE' });
+    // Tenant-named routes now forward caller credentials and never substitute
+    // an ambient server key. A null result here delegates API-key validation;
+    // it does not establish tenant authority. The route-level credential and
+    // upstream rejection contract is covered in compliance-proxy-auth-boundary.
+    it.each([
+        ['API-key cookie', { re_api_key: 'k-123' }, {}],
+        ['canonical API-key header', {}, { 'x-regengine-api-key': 'k-123' }],
+        ['legacy header alias', {}, { 'x-api-key': 'junk' }],
+    ] as [string, Record<string, string>, Record<string, string>][])('delegates %s validation to the backend', async (_name, cookies, headers) => {
+        const result = await enforceTenantMatch(makeRequest(cookies, headers), TENANT_B);
+        expect(result).toBeNull();
     });
 
     it('still allows an API-key caller whose JWT tenant claim matches the path tenant', async () => {

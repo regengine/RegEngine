@@ -34,7 +34,7 @@ for _p in (_SERVICE_DIR, _SERVICES_DIR, _REPO_ROOT):
 
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from shared.auth import APIKey, require_api_key  # noqa: E402
+from shared.auth import APIKey, APIKeyStore, require_api_key  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
@@ -427,6 +427,79 @@ def test_missing_api_key_is_401(engine) -> None:
     client = TestClient(app)
     response = client.get(f"/v1/compliance/snapshots/{TENANT_A}")
     assert response.status_code == 401
+
+
+@pytest.fixture()
+def authenticated_client(engine, monkeypatch):
+    """Exercise real authentication and tenant resolution with local test keys.
+
+    Only the key storage adapter is local/in-memory; neither FastAPI security
+    dependency is overridden. PostgreSQL key storage and RLS have separate gates.
+    """
+    import shared.auth as auth
+
+    store = APIKeyStore()
+    monkeypatch.setattr(auth, "get_key_store", lambda: store)
+    monkeypatch.delenv("AUTH_TEST_BYPASS_TOKEN", raising=False)
+    client = _make_client(engine, TENANT_A)
+    del client.app.dependency_overrides[require_api_key]
+    with client:
+        yield client, store
+
+
+@pytest.mark.parametrize("credential_state", ["invalid", "expired", "revoked"])
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_real_auth_rejects_unusable_keys(authenticated_client, credential_state, method):
+    client, store = authenticated_client
+    key, metadata = store.create_key(
+        "Boundary test",
+        tenant_id=TENANT_A,
+        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1) if credential_state == "expired" else None,
+    )
+    if credential_state == "invalid":
+        key = "invalid-caller-key"
+    elif credential_state == "revoked":
+        store.revoke_key(metadata.key_id)
+
+    response = client.request(
+        method,
+        f"/v1/compliance/snapshots/{TENANT_A}",
+        headers={"X-RegEngine-API-Key": key, "X-Tenant-ID": TENANT_A},
+        json={"snapshot_name": "Unauthorized freeze", "created_by": "boundary-test"} if method == "POST" else None,
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_real_auth_rejects_key_path_tenant_mismatch(authenticated_client, method):
+    client, store = authenticated_client
+    key, _ = store.create_key("Tenant A", tenant_id=TENANT_A)
+    response = client.request(
+        method,
+        f"/v1/compliance/snapshots/{TENANT_B}",
+        headers={"X-RegEngine-API-Key": key, "X-Tenant-ID": TENANT_B},
+        json={"snapshot_name": "Wrong tenant freeze", "created_by": "boundary-test"} if method == "POST" else None,
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "E_TENANT_MISMATCH"
+
+
+def test_real_auth_preserves_two_tenant_snapshot_isolation(authenticated_client):
+    client, store = authenticated_client
+    key_a, _ = store.create_key("Tenant A", tenant_id=TENANT_A)
+    key_b, _ = store.create_key("Tenant B", tenant_id=TENANT_B)
+    created = client.post(
+        f"/v1/compliance/snapshots/{TENANT_A}",
+        headers={"X-RegEngine-API-Key": key_a},
+        json={"snapshot_name": "Tenant A freeze", "created_by": "boundary-test"},
+    )
+    assert created.status_code == 201
+    own = client.get(f"/v1/compliance/snapshots/{TENANT_A}", headers={"X-RegEngine-API-Key": key_a})
+    assert own.status_code == 200
+    assert [item["id"] for item in own.json()["items"]] == [created.json()["id"]]
+    other = client.get(f"/v1/compliance/snapshots/{TENANT_B}", headers={"X-RegEngine-API-Key": key_b})
+    assert other.status_code == 200
+    assert other.json()["items"] == []
 
 
 # ---------------------------------------------------------------------------
