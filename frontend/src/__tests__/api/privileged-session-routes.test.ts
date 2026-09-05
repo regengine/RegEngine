@@ -115,7 +115,7 @@ describe('privileged frontend session forwarding', () => {
     it('sends no reviewer identity or retired credential on a decision', async () => {
         fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
             status: 'approved',
-            review_id: 'review-1',
+            review_id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8',
             updated: true,
         }), {
             status: 200,
@@ -123,8 +123,8 @@ describe('privileged frontend session forwarding', () => {
         }));
 
         const response = await approveReviewItem(
-            browserRequest('https://app.regengine.test/api/review/review-1/approve', 'POST'),
-            { params: Promise.resolve({ id: 'review-1' }) },
+            browserRequest('https://app.regengine.test/api/review/6ba7b810-9dad-41d1-a0b4-00c04fd430c8/approve', 'POST'),
+            { params: Promise.resolve({ id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8' }) },
         );
 
         expect(response.status).toBe(200);
@@ -201,7 +201,7 @@ describe('privileged frontend session forwarding', () => {
         )],
         ['review reject', async () => rejectReviewItem(
             browserRequest(
-                'https://app.regengine.test/api/review/review-1/reject',
+                'https://app.regengine.test/api/review/6ba7b810-9dad-41d1-a0b4-00c04fd430c8/reject',
                 'POST',
                 {
                     extraHeaders: {
@@ -214,7 +214,7 @@ describe('privileged frontend session forwarding', () => {
                     },
                 },
             ),
-            { params: Promise.resolve({ id: 'review-1' }) },
+            { params: Promise.resolve({ id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8' }) },
         )],
     ])('attests the platform client IP on the %s privileged proxy', async (_label, invoke) => {
         vi.stubEnv('VERCEL', '1');
@@ -253,8 +253,8 @@ describe('privileged frontend session forwarding', () => {
             { params: Promise.resolve({ path: ['flagged-extractions'] }) },
         )],
         ['review reject', async () => rejectReviewItem(
-            browserRequest('https://app.regengine.test/api/review/review-1/reject', 'POST'),
-            { params: Promise.resolve({ id: 'review-1' }) },
+            browserRequest('https://app.regengine.test/api/review/6ba7b810-9dad-41d1-a0b4-00c04fd430c8/reject', 'POST'),
+            { params: Promise.resolve({ id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8' }) },
         )],
     ])('fails the %s privileged proxy closed when Vercel omits the platform IP', async (_label, invoke) => {
         vi.stubEnv('VERCEL', '1');

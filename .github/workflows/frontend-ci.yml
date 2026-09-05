@@ -133,12 +133,14 @@ jobs:
       - name: Bundle size report
         run: |
           cd frontend
-          echo "### 📦 Bundle Size Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          du -sh .next >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          du -sh .next/static/chunks/ >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### 📦 Bundle Size Report"
+            echo '```'
+            du -sh .next
+            echo ""
+            du -sh .next/static/chunks/
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ── Lint ─────────────────────────────────────────────────
   lint:
@@ -336,6 +338,7 @@ jobs:
       AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
       JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
       AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes # pragma: allowlist secret
+      AUDIT_INTEGRITY_KEY: playwright-local-audit-integrity-key-2026-minimum-32-bytes # pragma: allowlist secret
       CSRF_SECRET: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
       ALLOW_INMEMORY_SESSION_STORE: "true"
       DISABLE_TASK_WORKER: "true"

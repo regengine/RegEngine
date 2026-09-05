@@ -13,31 +13,6 @@ vi.mock('@/lib/api-config', () => ({
     getServerServiceURL: () => 'http://admin.test',
 }));
 
-const {
-    mockRequireProxyAuth,
-    mockValidateProxySession,
-    mockRequireAdminCapability,
-    mockGetAdminMasterKey,
-} = vi.hoisted(() => ({
-    mockRequireProxyAuth: vi.fn(() => null),
-    mockValidateProxySession: vi.fn(async () => null),
-    mockRequireAdminCapability: vi.fn(() => null),
-    mockGetAdminMasterKey: vi.fn(() => 'admin-master-key'),
-}));
-
-// Keep the real validateUuid — it is the subject under test. Only the preflight
-// gates are stubbed, exactly as compliance-snapshots-proxy.test.ts does.
-vi.mock('@/lib/api-proxy', async () => {
-    const actual = await vi.importActual<typeof import('@/lib/api-proxy')>('@/lib/api-proxy');
-    return {
-        ...actual,
-        requireProxyAuth: mockRequireProxyAuth,
-        validateProxySession: mockValidateProxySession,
-        requireAdminCapability: mockRequireAdminCapability,
-        getAdminMasterKey: mockGetAdminMasterKey,
-    };
-});
-
 const VALID_ID = '6ba7b810-9dad-41d1-a0b4-00c04fd430c8';
 
 function makeRequest(): NextRequest {
@@ -60,10 +35,6 @@ describe.each([
 ])('review %s proxy — [id] segment validation (#2907)', (action, handler) => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockRequireProxyAuth.mockReturnValue(null);
-        mockValidateProxySession.mockResolvedValue(null);
-        mockRequireAdminCapability.mockReturnValue(null);
-        mockGetAdminMasterKey.mockReturnValue('admin-master-key');
         vi.stubGlobal('fetch', mockFetch);
     });
 
@@ -74,6 +45,7 @@ describe.each([
     it.each([
         ['path traversal via a decoded slash', '../../admin/keys'],
         ['a bare slash', 'a/b'],
+        ['an encoded slash', `${VALID_ID}%2Fapprove`],
         ['query injection needing no encoding trick', `${VALID_ID}?q=1`],
         ['fragment injection', `${VALID_ID}#frag`],
         ['an empty segment', ''],
@@ -85,16 +57,12 @@ describe.each([
         await expect(response.json()).resolves.toMatchObject({
             error: 'Invalid review identifier',
         });
-        // The admin credential must never leave the process for a crafted id.
+        // Invalid IDs must fail before any upstream request.
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('still forwards a valid UUID to the intended upstream path', async () => {
-        mockFetch.mockResolvedValue({
-            ok: true,
-            status: 200,
-            json: async () => ({ status: `${action}d`, review_id: VALID_ID }),
-        });
+        mockFetch.mockResolvedValue(Response.json({ status: `${action}d`, review_id: VALID_ID }));
 
         const response = await handler(makeRequest(), {
             params: Promise.resolve({ id: VALID_ID }),
@@ -110,7 +78,7 @@ describe.each([
     });
 
     it('normalises an uppercase UUID rather than interpolating it raw', async () => {
-        mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+        mockFetch.mockResolvedValue(Response.json({}));
 
         await handler(makeRequest(), {
             params: Promise.resolve({ id: VALID_ID.toUpperCase() }),

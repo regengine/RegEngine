@@ -98,7 +98,7 @@ describe('experimental feature gating (flag off)', () => {
     it('hides experimental tools from the tools landing grid', () => {
         render(<ToolsLandingClient />);
         expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
-        expect(screen.getByText('FTL Coverage Checker')).toBeInTheDocument();
+        expect(screen.getByText('FTL List Checker')).toBeInTheDocument();
     });
 });
 
@@ -145,8 +145,9 @@ describe('experimental feature gating (flag on)', () => {
         expect(screen.queryByTestId('feature-not-enabled')).not.toBeInTheDocument();
     });
 
-    it('shows experimental tools on the tools landing grid', () => {
+    it('keeps the public tools grid curated when experimental routes are enabled', () => {
         render(<ToolsLandingClient />);
-        expect(screen.getByText('Inflow Lab')).toBeInTheDocument();
+        expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
+        expect(screen.getByText('FTL List Checker')).toBeInTheDocument();
     });
 });

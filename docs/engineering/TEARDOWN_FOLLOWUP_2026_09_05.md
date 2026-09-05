@@ -79,8 +79,41 @@ runtime-role separation before running the supported migration runner.
 [Frontend CI run 33996665060](https://github.com/regengine/RegEngine/actions/runs/33996665060)
 and PR Gate annotations report that jobs could not start because of an account
 billing lock. The organization billing UI confirms failed payment authorization.
-The account owner must resolve that authorization, then rerun checks on the
-intended release SHA. No payment, budget change, or plan change was performed.
+At the initial audit, payment authorization had not been retried. Following
+the user's explicit retry request, GitHub processed the authorization and
+cleared the failure banner. Attempt 2 of those main-branch checks acquired
+hosted runners. This establishes restored runner access, not a green release.
+No budget or subscription plan was changed.
+
+## Hosted CI restoration and migration preparation
+
+The restored main-branch runs exposed an invalid setup-node pin, a vulnerable
+`fast-uri` lock entry, a missing audit-integrity key in the isolated E2E job,
+stale UI/auth test expectations, and a redirect URL in the sitemap. The
+follow-up uses the verified existing setup-node v6 pin, updates only fast-uri
+3.1.5 to 3.1.7 in the lockfile, and supplies a synthetic E2E-only integrity
+key. The copy gate remains intact; ambiguous negative-claim wording was
+clarified without adding allowlisted files.
+
+Review approve/reject routes now validate and normalize UUIDs before building
+the upstream URL. This tightens the accepted identifier input to the backend
+review-item UUID model; session forwarding, IP attestation, and backend
+authorization remain covered by negative tests. Stale fixtures now use UUIDs
+and real Response objects so they exercise those boundaries.
+
+Local verification on the restored-CI changes: **887 frontend tests passed,
+2 pre-existing skips**, all coverage thresholds passed; full ESLint and
+TypeScript passed; **4 Chromium security tests passed** against disposable
+SQLite storage; **133 focused Python tests passed**. The production npm audit
+reported no vulnerabilities after the lock update. These are local results;
+record the draft PR's exact hosted SHA and results separately.
+
+The read-only live catalog preflight and restricted-owner v079 rehearsal
+identified additional migration blockers. See the
+[controlled migration preparation](../operations/MIGRATION_V079_TO_V120_2026_09_05.md)
+and its reusable SQL preflight. The restricted-owner upgrade failed at v116;
+the earlier superuser-based local migration checks do not establish that the
+production migration can succeed. No production migration was executed.
 
 Do not squash revisions still needed by the v079 environment or retire legacy
 writes from these local results. The existing WS-1d gates still require live

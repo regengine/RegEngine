@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAdminSessionPath } from '@/lib/admin-session-fetch';
-import { rejectRetiredPrivilegedCredential, safeSegment } from '@/lib/api-proxy';
+import { rejectRetiredPrivilegedCredential, validateUuid } from '@/lib/api-proxy';
 import { appendOpaqueSessionCookies, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
@@ -14,7 +14,7 @@ export async function POST(
     if (retiredCredentialError) return retiredCredentialError;
 
     const { id: rawId } = await params;
-    const id = safeSegment(rawId);
+    const id = validateUuid(rawId);
     if (!id) {
         return NextResponse.json({ error: 'Invalid review identifier' }, { status: 400 });
     }
