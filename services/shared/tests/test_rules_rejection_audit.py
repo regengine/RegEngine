@@ -101,7 +101,7 @@ def test_record_rejection_writes_row_and_commits(patched_session):
     assert decoded[0]["rule_id"] == "R_CRIT"
 
 
-def test_record_rejection_never_raises_on_commit_failure(monkeypatch):
+def test_record_rejection_fails_closed_on_commit_failure(monkeypatch):
     """The reject decision is more important than the audit row.
     A failed audit-write must not turn a reject into a 500 — it must
     log+Sentry and return cleanly."""
@@ -117,16 +117,16 @@ def test_record_rejection_never_raises_on_commit_failure(monkeypatch):
     fake_db.SessionLocal = _factory
     monkeypatch.setitem(sys.modules, "shared.database", fake_db)
 
-    from services.shared.rules.rejection_audit import record_rejection
+    from services.shared.rules.rejection_audit import RejectionAuditUnavailable, record_rejection
 
-    # Must not raise.
-    record_rejection(
-        tenant_id="t-1",
-        rule_id="R_CRIT",
-        rule_version=1,
-        reasons="x",
-        event_id=None,
-    )
+    with pytest.raises(RejectionAuditUnavailable, match="storage is unavailable"):
+        record_rejection(
+            tenant_id="t-1",
+            rule_id="R_CRIT",
+            rule_version=1,
+            reasons="x",
+            event_id=None,
+        )
     assert sessions[0].rolled_back is True
     assert sessions[0].closed is True
 

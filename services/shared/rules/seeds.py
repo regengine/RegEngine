@@ -18,7 +18,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1345(b)(7)",
+        "citation_reference": "21 CFR §1.1345(a)(7)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.tlc_source_reference",
@@ -33,7 +33,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1345(b)(5)",
+        "citation_reference": "21 CFR §1.1345(a)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_entity_reference",
@@ -50,7 +50,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "source_reference",
         "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1345(b)(6)",
+        "citation_reference": "21 CFR §1.1345(a)(8)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.reference_document"},
         "failure_reason_template": "Receiving event missing {field_name} (BOL, invoice, or purchase order number) required by {citation}",
         "remediation_suggestion": "Record the reference document type and number (e.g., BOL #12345, Invoice #INV-2026-001)",
@@ -61,7 +61,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1345(b)(2)",
+        "citation_reference": "21 CFR §1.1345(a)(6)",
         # #3038: date KDEs must be the recorded KDE date, not the event
         # envelope timestamp. event_timestamp exists on every canonical
         # event, so listing it as an alternate made this rule a tautology.
@@ -75,7 +75,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1340(b)(3)",
+        "citation_reference": "21 CFR §1.1340(a)(5)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_facility_reference",
@@ -90,7 +90,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1340(b)(4)",
+        "citation_reference": "21 CFR §1.1340(a)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "to_facility_reference",
@@ -105,7 +105,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1340(b)(2)",
+        "citation_reference": "21 CFR §1.1340(a)(6)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.ship_date"},
         "failure_reason_template": "Shipping event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date the food was shipped",
@@ -116,7 +116,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "source_reference",
         "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1340(b)(6)",
+        "citation_reference": "21 CFR §1.1340(a)(8)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.reference_document"},
         "failure_reason_template": "Shipping event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the reference document type and number (BOL, invoice, or PO)",
@@ -127,7 +127,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1327(b)(2)",
+        "citation_reference": "21 CFR §1.1325(a)(1)(vii)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.harvest_date"},
         "failure_reason_template": "Harvesting event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of harvest",
@@ -138,7 +138,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1327(b)(3)",
+        "citation_reference": "21 CFR §1.1325(a)(1)(iv)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_facility_reference",
@@ -153,7 +153,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1335(b)(4)",
+        "citation_reference": "21 CFR §1.1330(a)(15)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.packing_date"},
         "failure_reason_template": "Initial packing event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of initial packing",
@@ -164,7 +164,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["transformation"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1350(b)(4)",
+        "citation_reference": "21 CFR §1.1350(a)(2)(iii)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.transformation_date"},
         "failure_reason_template": "Transformation event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of transformation",
@@ -175,7 +175,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1325(b)(5)",
+        "citation_reference": "21 CFR §1.1325(b)(1)(v)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.cooling_date"},
         "failure_reason_template": "Cooling event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date of cooling",
@@ -189,7 +189,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["cooling"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1325(b)(4)",
+        "citation_reference": "21 CFR §1.1325(b)(1)(iv)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.cooling_location",
@@ -272,7 +272,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1335(b)(2)",
+        "citation_reference": "21 CFR §1.1330(a)(14)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.packing_location",
@@ -293,7 +293,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1335(b)(3)",
+        "citation_reference": "21 CFR §1.1330(a)(4)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.harvest_location_ref",
@@ -314,7 +314,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1325(c)(4)",
+        "citation_reference": "21 CFR §1.1335(e)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.entry_point",
@@ -335,7 +335,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1325(c)(5)",
+        "citation_reference": "Operational source-vessel identification (supports 21 CFR §1.1335(d) harvest provenance)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.source_vessel_name",
@@ -358,7 +358,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1310",
+        "citation_reference": "Operational lot linkage (supports 21 CFR §1.1320; harvesting and cooling precede TLC assignment)",
         "evaluation_logic": {"type": "field_presence", "field": "traceability_lot_code"},
         "failure_reason_template": "Event missing traceability lot code ({citation})",
         "remediation_suggestion": "Assign a traceability lot code to this event",
@@ -369,7 +369,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1310(b)(1)",
+        "citation_reference": "21 CFR §§1.1325(a)(1)(ii), 1.1325(b)(1)(ii), 1.1330(a)(12), 1.1335(b), 1.1340(a)(3), 1.1345(a)(3), 1.1350(a)(2)(iv)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "product_reference",
@@ -384,7 +384,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1310(b)(2)",
+        "citation_reference": "21 CFR §§1.1325(a)(1)(iii), 1.1325(b)(1)(iii), 1.1330(a)(13), 1.1335(c), 1.1340(a)(2), 1.1345(a)(2), 1.1350(a)(2)(v)",
         # #3041: the title promises quantity AND unit of measure; the logic
         # must check both (require: all), not quantity alone.
         "evaluation_logic": {
@@ -401,7 +401,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1310(b)(3)",
+        "citation_reference": "21 CFR §§1.1325(a)(1)(iv), 1.1325(b)(1)(iv), 1.1330(a)(14), 1.1335(e), 1.1340(a)(5), 1.1345(a)(5), 1.1350(a)(2)(ii)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_facility_reference",
@@ -424,7 +424,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "identifier_format",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
-        "citation_reference": "GS1 General Specifications \u00a73.4.2",
+        "citation_reference": "GS1 General Specifications (GS1 check digit)",
         # #3041: the rule promises check-digit verification; the old regex
         # accepted any 13 digits. gs1_check_digit actually verifies it
         # (skips non-numeric references, which are location descriptions).
@@ -439,7 +439,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "lot_linkage",
         "applicability_conditions": {"cte_types": ["shipping"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1340(b)(7)",
+        "citation_reference": "21 CFR §1.1340(a)(7)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.tlc_source_reference",
@@ -454,7 +454,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "lot_linkage",
         "applicability_conditions": {"cte_types": ["transformation"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1350(a)(4)",
+        "citation_reference": "21 CFR §1.1350(a)(1)(i)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.input_traceability_lot_codes",
@@ -470,7 +470,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "source_reference",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1310(c)",
+        "citation_reference": "21 CFR §§1.1325(a)(1)(viii), 1.1325(b)(1)(vii), 1.1330(a)(16), 1.1335(g), 1.1340(a)(8), 1.1345(a)(8), 1.1350(a)(2)(vi)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.reference_document",
@@ -485,7 +485,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["first_land_based_receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1325(b)(4)",
+        "citation_reference": "21 CFR §1.1335(f)",
         "evaluation_logic": {"type": "field_presence", "field": "kdes.landing_date"},
         "failure_reason_template": "First land-based receiving event missing {field_name} ({citation})",
         "remediation_suggestion": "Record the date the seafood was landed (date vessel arrived at port)",
@@ -496,7 +496,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["harvesting"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1327(b)(1)",
+        "citation_reference": "21 CFR §1.1325(a)(1)(ii)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "product_reference",
@@ -511,7 +511,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1345(b)(4)",
+        "citation_reference": "21 CFR §1.1345(a)(5)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "to_facility_reference",
@@ -526,7 +526,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
-        "citation_reference": "21 CFR \u00a71.1335(b)(8)",
+        "citation_reference": "21 CFR §1.1330(a)(7)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "kdes.harvester_business_name",
@@ -537,19 +537,17 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
     },
     # #3041: \u00a71.1330(a)(7) requires the harvester's phone number alongside
     # the business name; no seed enforced it. Kept as a separate rule so
-    # a from_entity_reference (resolvable to full contact details) still
-    # satisfies either half independently.
+    # An unresolved entity reference cannot substitute for the phone KDE.
     {
         "title": "Initial Packing: Harvester Phone Required",
-        "description": "Initial packing events must include the harvester's phone number (or an entity reference resolvable to it)",
+        "description": "Initial packing events must include the harvester's phone number",
         "severity": "warning",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": ["initial_packing"], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR \u00a71.1330(a)(7)",
         "evaluation_logic": {
-            "type": "multi_field_presence",
+            "type": "field_presence",
             "field": "kdes.harvester_business_phone",
-            "params": {"fields": ["kdes.harvester_business_phone", "from_entity_reference"]},
         },
         "failure_reason_template": "Initial packing event missing harvester phone number ({citation})",
         "remediation_suggestion": "Record the harvester's phone number",
@@ -589,7 +587,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
             ],
             "ftl_scope": ["ALL"],
         },
-        "citation_reference": "21 CFR \u00a71.1310(a)",
+        "citation_reference": "Operational product identity consistency (supports 21 CFR §1.1320 lot linkage)",
         "evaluation_logic": {"type": "identity_consistency"},
         "failure_reason_template": "Product identity changed for TLC: {event_type} event has a different product than prior events ({citation})",
         "remediation_suggestion": "Verify the product description matches across all events for this traceability lot code. If the product was legitimately transformed, use a transformation event",
@@ -625,7 +623,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "critical",
         "category": "ftl_scoping",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["NON_FTL"]},
-        "citation_reference": "21 CFR \u00a71.1300",
+        "citation_reference": "Operational FTL classification (supports 21 CFR §1.1300 scope determination)",
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "ftl_covered",

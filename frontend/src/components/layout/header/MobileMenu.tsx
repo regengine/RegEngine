@@ -1,5 +1,6 @@
 'use client';
 
+import { filterExperimentalLinks } from '@/lib/experimental-features';
 import Link from 'next/link';
 import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
@@ -93,7 +94,7 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
 
                 {/* Primary Nav Links */}
                 <div style={{ padding: "8px 12px" }}>
-                    {(user ? [
+                    {filterExperimentalLinks(user ? [
                         { label: 'Dashboard', href: '/dashboard' },
                         { label: 'Heartbeat', href: '/dashboard/heartbeat' },
                         { label: 'Compliance', href: '/dashboard/compliance' },

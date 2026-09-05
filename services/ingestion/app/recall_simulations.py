@@ -314,6 +314,11 @@ def _get_simulation_or_404(simulation_id: str, tenant_id: str) -> dict:
             _simulation_store[(tenant_id, simulation_id)] = simulation
     if not simulation:
         raise HTTPException(status_code=404, detail=f"Simulation '{simulation_id}' not found")
+    # Historical records were incorrectly marked measured when tenant counts
+    # merely scaled a canned scenario. Preserve the disclaimer on every read.
+    simulation["is_illustrative"] = True
+    simulation["data_source"] = "demo_with_tenant_context" if simulation.get("tenant_metrics") else "demo"
+    simulation["demo_disclaimer"] = SIMULATION_DISCLAIMER
     return simulation
 
 
@@ -461,8 +466,8 @@ async def run_recall_simulation(
     if resolved_tenant_id:
         tenant_data = _query_tenant_recall_metrics(resolved_tenant_id)
         if tenant_data and tenant_data.get("cte_count", 0) > 0:
-            is_illustrative = False
-            data_source = "tenant"
+            is_illustrative = True
+            data_source = "demo_with_tenant_context"
             real_metrics = {
                 "cte_events": tenant_data["cte_count"],
                 "suppliers": tenant_data["supplier_count"],

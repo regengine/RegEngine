@@ -93,7 +93,7 @@ VALID_UNITS_OF_MEASURE = {
 # validation semantics. Exposed via /health as inflow_contract_version so
 # deployed instances can detect skew; the Inflow Lab Contract CI asserts
 # cross-repo equality.
-INFLOW_CONTRACT_VERSION = "1"
+INFLOW_CONTRACT_VERSION = "2"
 
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
@@ -125,6 +125,7 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "location_name",
         "reference_document",  # §1.1330(a)(16)
         "harvester_business_name",  # §1.1330(a)(7)
+        "harvester_business_phone",  # §1.1330(a)(7); contract v2
     ],
     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
         "traceability_lot_code",

@@ -42,13 +42,13 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
     );
   }
 
-  if (!readiness) {
+  if (!readiness || readiness.overall_score == null) {
     return (
       <Card className={className}>
         <CardContent className="pt-6">
           <div className="text-center py-8 text-muted-foreground">
             <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Unable to load compliance readiness</p>
+            <p>{readiness ? "Compliance readiness has not been measured" : "Unable to load compliance readiness"}</p>
           </div>
         </CardContent>
       </Card>

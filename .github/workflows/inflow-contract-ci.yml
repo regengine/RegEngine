@@ -19,23 +19,10 @@ concurrency:
 env:
   PYTHON_VERSION: '3.11'
   INFLOW_LAB_REPOSITORY: regengine/inflow-lab
-  # Verified Inflow Lab guardrail candidate; update this pin when simulator
-  # contract fixtures intentionally change. This ref must advertise
-  # contract_version via /api/healthz (inflow-lab main @ #73 or later) for
-  # the cross-repo contract-version assertion below.
-  # Advanced from 4651e1a (#235): that commit was 74+ behind inflow-lab main
-  # and every file in the contract surface -- regengine_client, controller,
-  # contract, cte_rules, mock_service, schemas/*, scripts/live_trial.py --
-  # had changed since, so this job was exercising a simulator that no longer
-  # resembled the deployed one. Both sides still advertise
-  # INFLOW_CONTRACT_VERSION "1"; this is staleness, not a wire-contract bump.
-  # Advanced again from d6bbe98: that ref carried a regression in
-  # scripts/live_trial.py -- the script this job runs -- where the cleanup
-  # `finally` closed its own HTTP client before the stop/revert calls that
-  # use it, so the run died on "Cannot send a request, as the client has
-  # been closed" and, worse, never disarmed live delivery. inflow-lab#236
-  # fixes that; this ref is the first main commit that carries the fix.
-  INFLOW_LAB_REF: 2a752aa2b33b65b2a3e679460c4bd2f90fd9cbc4  # pragma: allowlist secret
+  # Coordinated contract v2: initial packing includes an explicit harvester
+  # phone. This immutable pin includes the matching simulator validation,
+  # fictional fixtures and snapshot of RegEngine contract commit 71c0aebb.
+  INFLOW_LAB_REF: 368c606e54493fa39a775bf89afb119a77f4fd05  # pragma: allowlist secret
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
   CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret

@@ -332,7 +332,7 @@ export default function FSMA204GuidePage() {
                             padding: '8px 16px',
                             borderBottom: `1px solid ${T.border}`,
                         }}>
-                            <span className="text-xs text-re-text-muted">GET /v1/fsma/export/fda-request</span>
+                            <span className="text-xs text-re-text-muted">GET /api/v1/fda/export/recall</span>
                         </div>
                         <pre style={{
                             padding: '20px',
@@ -342,10 +342,11 @@ export default function FSMA204GuidePage() {
                             overflowX: 'auto',
                             color: 'var(--re-text-primary)',
                         }}>
-                            <code>{`curl https://regengine.co/v1/fsma/export/fda-request \\
+                            <code>{`curl https://regengine.co/api/v1/fda/export/recall \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
   -G \\
+  -d "tenant_id=YOUR_TENANT_UUID" \\
   -d "start_date=2026-01-01" \\
   -d "end_date=2026-02-05" \\
   -o fda_response.csv`}</code>
@@ -353,7 +354,7 @@ export default function FSMA204GuidePage() {
                     </div>
 
                     <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                        The export contains the FDA-mandated 11-column format:
+                        The export includes traceability fields such as the following; FDA does not mandate this particular column layout:
                     </p>
 
                     <div style={{
@@ -440,7 +441,7 @@ export default function FSMA204GuidePage() {
                     <div className="grid gap-3">
                         {[
                             { path: 'POST /api/v1/webhooks/ingest', desc: 'Create compliance events' },
-                            { path: 'GET /v1/fsma/export/fda-request', desc: 'Generate §1.1455-formatted sortable spreadsheet' },
+                            { path: 'GET /api/v1/fda/export/recall', desc: 'Generate §1.1455-formatted sortable spreadsheet' },
                             { path: 'GET /v1/fsma/trace/forward/{tlc}', desc: 'Forward supply chain trace' },
                             { path: 'GET /v1/fsma/trace/backward/{tlc}', desc: 'Backward supply chain trace' },
                             { path: 'GET /v1/fsma/coverage', desc: 'Coverage status and freshness' },

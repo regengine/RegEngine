@@ -19,14 +19,13 @@ import sys
 import uuid
 from typing import Optional
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-
-from ..authz import require_permission, IngestionPrincipal, get_ingestion_principal
-from ..subscription_gate import require_active_subscription
 from shared.database import get_db_session
 from shared.idempotency import IdempotencyDependency
+from sqlalchemy.exc import SQLAlchemyError
+
+from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from ..subscription_gate import require_active_subscription
 from ..webhook_models import (
     ChainVerifyResponse,
     EventResult,
@@ -34,7 +33,6 @@ from ..webhook_models import (
     RecentEventsResponse,
     WebhookPayload,
 )
-
 from .security import (
     _verify_api_key,
     _verify_api_key_present,
@@ -139,6 +137,7 @@ async def ingest_events(
         )
     try:
         from shared.cte_persistence import CTEPersistence
+
         persistence = CTEPersistence(db_session)
     except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
         _pkg.logger.error("db_init_failed — rejecting ingest: %s", str(e))
@@ -154,12 +153,14 @@ async def ingest_events(
             # Batch deduplication — skip identical events in same request
             dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}"
             if dedup_key in seen_in_batch:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
+                    )
+                )
                 rejected += 1
                 continue
             seen_in_batch.add(dedup_key)
@@ -172,15 +173,19 @@ async def ingest_events(
             if replay_error:
                 _pkg.logger.warning(
                     "webhook_replay_window_rejected tenant=%s tlc=%s ts=%s",
-                    tenant_id, event.traceability_lot_code, event.timestamp,
+                    tenant_id,
+                    event.traceability_lot_code,
+                    event.timestamp,
                 )
                 _pkg._record_replay_rejection(event.timestamp)
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=[replay_error],
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=[replay_error],
+                    )
+                )
                 rejected += 1
                 continue
 
@@ -188,12 +193,14 @@ async def ingest_events(
             errors = _pkg._validate_event_kdes(event)
 
             if errors:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=errors,
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=errors,
+                    )
+                )
                 rejected += 1
                 continue
 
@@ -221,12 +228,14 @@ async def ingest_events(
             for _event, _alerts in valid_events:
                 _reject, _reason, _summary = _pkg._rules_preeval_reject(_event, db_session, tenant_id)
                 if _reject:
-                    results.append(EventResult(
-                        traceability_lot_code=_event.traceability_lot_code,
-                        cte_type=_event.cte_type.value,
-                        status="rejected",
-                        errors=[f"rule_violation: {_reason}"],
-                    ))
+                    results.append(
+                        EventResult(
+                            traceability_lot_code=_event.traceability_lot_code,
+                            cte_type=_event.cte_type.value,
+                            status="rejected",
+                            errors=[f"rule_violation: {_reason}"],
+                        )
+                    )
                     rejected += 1
                     continue
                 _filtered.append((_event, _alerts))
@@ -238,24 +247,26 @@ async def ingest_events(
             batch_dicts = []
             event_objs = []
             for event, alerts in valid_events:
-                batch_dicts.append({
-                    "event_type": event.cte_type.value,
-                    "traceability_lot_code": event.traceability_lot_code,
-                    "product_description": event.product_description,
-                    "quantity": event.quantity,
-                    "unit_of_measure": event.unit_of_measure,
-                    "event_timestamp": event.timestamp,
-                    "location_gln": event.location_gln,
-                    "location_name": event.location_name,
-                    "kdes": event.kdes,
-                    # #2902 — without this key ``store_events_batch`` reads an
-                    # empty alert list, derives validation_status='valid' for
-                    # every event and writes no compliance_alerts row, while
-                    # the per-event fallback below persists both. Always pass
-                    # the list (even when empty) so "no alerts" is stated
-                    # rather than inferred from a missing key.
-                    "alerts": alerts,
-                })
+                batch_dicts.append(
+                    {
+                        "event_type": event.cte_type.value,
+                        "traceability_lot_code": event.traceability_lot_code,
+                        "product_description": event.product_description,
+                        "quantity": event.quantity,
+                        "unit_of_measure": event.unit_of_measure,
+                        "event_timestamp": event.timestamp,
+                        "location_gln": event.location_gln,
+                        "location_name": event.location_name,
+                        "kdes": event.kdes,
+                        # #2902 — without this key ``store_events_batch`` reads an
+                        # empty alert list, derives validation_status='valid' for
+                        # every event and writes no compliance_alerts row, while
+                        # the per-event fallback below persists both. Always pass
+                        # the list (even when empty) so "no alerts" is stated
+                        # rather than inferred from a missing key.
+                        "alerts": alerts,
+                    }
+                )
                 event_objs.append(event)
 
             try:
@@ -265,17 +276,17 @@ async def ingest_events(
                     source=payload.source,
                 )
 
-                for store_result, event, precomputed_summary in zip(
-                    store_results, event_objs, pre_eval_summaries
-                ):
-                    results.append(EventResult(
-                        traceability_lot_code=event.traceability_lot_code,
-                        cte_type=event.cte_type.value,
-                        status="accepted",
-                        event_id=store_result.event_id,
-                        sha256_hash=store_result.sha256_hash,
-                        chain_hash=store_result.chain_hash,
-                    ))
+                for store_result, event, precomputed_summary in zip(store_results, event_objs, pre_eval_summaries):
+                    results.append(
+                        EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="accepted",
+                            event_id=store_result.event_id,
+                            sha256_hash=store_result.sha256_hash,
+                            chain_hash=store_result.chain_hash,
+                        )
+                    )
                     accepted += 1
 
                     # Tenant-configured obligation-CTE rules (#2901). Runs
@@ -287,9 +298,7 @@ async def ingest_events(
                     # accepted events into validation_status='rejected'.
                     # An unmet obligation is a detection signal, not an ingest
                     # gate — gating on it is a separate product decision.
-                    _pkg._check_obligations(
-                        db_session, event, store_result.event_id, tenant_id
-                    )
+                    _pkg._check_obligations(db_session, event, store_result.event_id, tenant_id)
 
                     # Canonical normalization + rule evaluation + exception creation.
                     # This is required evidence now: it runs synchronously in the
@@ -310,6 +319,7 @@ async def ingest_events(
                     # Auto-learn product catalog from confirmed scans
                     try:
                         from ..product_catalog import learn_from_event
+
                         learn_from_event(
                             tenant_id=tenant_id,
                             event={
@@ -335,9 +345,7 @@ async def ingest_events(
                 try:
                     db_session.rollback()
                 except SQLAlchemyError as rb_err:
-                    _pkg.logger.warning(
-                        "fallback_pre_rollback_failed: %s", str(rb_err)
-                    )
+                    _pkg.logger.warning("fallback_pre_rollback_failed: %s", str(rb_err))
                 # Fall back to per-event persistence
                 for event, alerts in valid_events:
                     # Enforcement: same pre-eval gate as the happy path.
@@ -349,12 +357,14 @@ async def ingest_events(
                     # still honors the enforcement policy.
                     _fb_reject, _fb_reason, _fb_summary = _pkg._rules_preeval_reject(event, db_session, tenant_id)
                     if _fb_reject:
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="rejected",
-                            errors=[f"rule_violation: {_fb_reason}"],
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="rejected",
+                                errors=[f"rule_violation: {_fb_reason}"],
+                            )
+                        )
                         rejected += 1
                         continue
                     # Each event gets its own savepoint (same pattern as the
@@ -385,9 +395,7 @@ async def ingest_events(
                         # obligation coverage. Inside the per-event savepoint,
                         # so an obligation-query failure cannot poison the
                         # shared transaction.
-                        _pkg._check_obligations(
-                            db_session, event, store_result.event_id, tenant_id
-                        )
+                        _pkg._check_obligations(db_session, event, store_result.event_id, tenant_id)
 
                         # Canonical normalization + rule evaluation. Required in
                         # the same transaction as the legacy fallback write.
@@ -401,19 +409,22 @@ async def ingest_events(
                         )
                         savepoint.commit()
 
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="accepted",
-                            event_id=store_result.event_id,
-                            sha256_hash=store_result.sha256_hash,
-                            chain_hash=store_result.chain_hash,
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="accepted",
+                                event_id=store_result.event_id,
+                                sha256_hash=store_result.sha256_hash,
+                                chain_hash=store_result.chain_hash,
+                            )
+                        )
                         accepted += 1
 
                         _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
                             from ..product_catalog import learn_from_event
+
                             learn_from_event(
                                 tenant_id=tenant_id,
                                 event={
@@ -429,9 +440,7 @@ async def ingest_events(
                         try:
                             savepoint.rollback()
                         except SQLAlchemyError as sp_err:
-                            _pkg.logger.warning(
-                                "fallback_savepoint_rollback_failed: %s", str(sp_err)
-                            )
+                            _pkg.logger.warning("fallback_savepoint_rollback_failed: %s", str(sp_err))
                         # F-3: don't leak SQL/bound-params from SQLAlchemyError.__str__
                         # to the API caller. Full detail goes to server logs with a
                         # correlation_id; the response carries only the correlation_id.
@@ -443,12 +452,14 @@ async def ingest_events(
                             error=str(inner_e),
                             error_type=type(inner_e).__name__,
                         )
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="rejected",
-                            errors=[f"Internal storage error (correlation: {correlation_id})"],
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="rejected",
+                                errors=[f"Internal storage error (correlation: {correlation_id})"],
+                            )
+                        )
                         rejected += 1
 
         if accepted > 0:
@@ -469,6 +480,8 @@ async def ingest_events(
     except Exception as e:
         if db_session:
             db_session.rollback()
+        if isinstance(e, HTTPException) and e.status_code == 503:
+            raise
         diagnostics = _failure_diagnostics(request, e)
         # ``.exception`` captures the traceback via the structlog chain's
         # ``format_exc_info`` processor — the old ``error(..., extra={...})``
@@ -483,10 +496,7 @@ async def ingest_events(
         )
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Ingestion failed. Check server logs for details "
-                f"(correlation: {diagnostics['correlation_id']})."
-            ),
+            detail=(f"Ingestion failed. Check server logs for details (correlation: {diagnostics['correlation_id']})."),
         )
     finally:
         if db_session:
@@ -504,6 +514,7 @@ async def ingest_events(
 # Chain Verification Endpoint
 # ---------------------------------------------------------------------------
 
+
 async def get_recent_events(
     tenant_id: str,
     limit: int = 10,
@@ -517,6 +528,7 @@ async def get_recent_events(
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text as _text
+
         db_session = SessionLocal()
         rows = db_session.execute(
             _text("""
@@ -640,8 +652,7 @@ async def recent_events_endpoint(
     response_model=ChainVerifyResponse,
     summary="Verify hash chain integrity",
     description=(
-        "Walk the tenant's entire hash chain from genesis to head, "
-        "recomputing each link and checking for tampering."
+        "Walk the tenant's entire hash chain from genesis to head, recomputing each link and checking for tampering."
     ),
 )
 async def verify_chain(
@@ -661,8 +672,8 @@ async def verify_chain(
     _pkg._check_read_rate_limit(tenant_id, scope="chain_verify", request=request)
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)

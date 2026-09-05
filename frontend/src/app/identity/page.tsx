@@ -1,5 +1,8 @@
 'use client';
 
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -66,7 +69,7 @@ const MATCH_TYPE_BADGE: Record<string, { variant: 'default' | 'destructive' | 'w
   unresolved: { variant: 'destructive', label: 'Unresolved' },
 };
 
-export default function IdentityResolutionPage() {
+function IdentityResolutionPageContent() {
   const { tenantId } = useAuth();
   const tid = tenantId || '';
 
@@ -328,4 +331,10 @@ export default function IdentityResolutionPage() {
       </Tabs>
     </PageContainer>
   );
+}
+
+export default function IdentityResolutionPage() {
+    return experimentalFeaturesEnabled()
+        ? <IdentityResolutionPageContent />
+        : <FeatureNotEnabled featureName="Identity" backHref="/dashboard" backLabel="Back to dashboard" />;
 }

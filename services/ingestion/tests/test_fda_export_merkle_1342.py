@@ -114,6 +114,8 @@ class TestMerkleRootHandler:
         assert out == {
             "tenant_id": "tenant-1",
             "valid": True,
+            "verification_scope": "canonical_content_and_chain",
+            "externally_anchored": False,
             "merkle_root": "0xabc",
             "chain_length": 7,
             "tree_depth": 3,

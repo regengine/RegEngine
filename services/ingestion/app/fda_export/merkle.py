@@ -31,6 +31,8 @@ async def get_merkle_root_handler(tenant_id: str) -> dict:
         return {
             "tenant_id": tenant_id,
             "valid": result.valid,
+            "verification_scope": "canonical_content_and_chain",
+            "externally_anchored": False,
             "merkle_root": result.merkle_root,
             "chain_length": result.chain_length,
             "tree_depth": result.tree_depth,

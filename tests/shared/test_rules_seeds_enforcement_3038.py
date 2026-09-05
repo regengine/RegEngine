@@ -14,8 +14,8 @@ These tests run the **actual seeds** through the engine:
 - quantity without unit of measure must FAIL (#3041);
 - a 13-digit GLN with a bad check digit must FAIL, and a location
   *description* must not trip the GLN rule (#3041);
-- initial packing without a harvester phone (and without an entity
-  reference) must FAIL (#3041).
+- initial packing without a harvester phone must FAIL even with an
+  unresolved entity reference (#3041).
 """
 
 from __future__ import annotations
@@ -209,3 +209,8 @@ def test_no_seed_date_rule_accepts_event_timestamp():
             assert "event_timestamp" not in fields, (
                 f"seed {seed['title']!r} lists event_timestamp as an alternate for a date KDE — #3038 regression"
             )
+
+
+def test_entity_reference_cannot_replace_harvester_phone():
+    results = _results_by_title(_engine(), _event("initial_packing", from_entity_reference="entity-1"))
+    assert results["Initial Packing: Harvester Phone Required"].result == "fail"

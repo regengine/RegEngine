@@ -992,7 +992,7 @@ export function FTLCheckerClient() {
                                                 <div>
                                                     <h4 style={{ fontWeight: 600, color: T.info, margin: '0 0 8px' }}>"Same Form" Ingredient Rule</h4>
                                                     <p style={{ fontSize: '13px', color: T.textMuted, margin: '0 0 8px' }}>If you use FTL foods as ingredients in other products (e.g., peppers in fresh salsa) and they remain in the same form (fresh, not cooked/canned), those finished products inherit FSMA 204 requirements.</p>
-                                                    <a href="https://www.ecfr.gov/current/title-21/section-1.1310" target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', fontFamily: T.mono, color: T.accent, textDecoration: 'none' }}>21 CFR § 1.1310(b)</a>
+                                                    <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', fontFamily: T.mono, color: T.accent, textDecoration: 'none' }}>FDA Food Traceability List</a>
                                                 </div>
                                             </div>
                                         </div>

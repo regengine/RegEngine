@@ -703,7 +703,7 @@ export default function IngestPage() {
                     <div className="flex items-center gap-2">
                       <CheckCircle className="h-5 w-5 text-re-brand" />
                       <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                        Document Successfully Normalized
+                        Ingestion request completed
                       </h3>
                     </div>
                     <Button

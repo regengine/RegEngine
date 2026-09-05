@@ -135,7 +135,9 @@ def _generate_cte_procedures(company_type: str, products: list[str], has_iot: bo
 **Responsible**: Receiving/Warehouse Manager""")
 
     if company_type in ("importer", "distributor"):
-        sections.append(f"""### 4.5 First Land-Based Receiving CTE (§1.1325(c))
+        sections.append(f"""### 4.5 First Land-Based Receiving CTE (§1.1335) — conditional
+
+**Applicability review required:** Use this section only if the operation actually takes first land-based possession of food obtained from a fishing vessel. Importer or distributor status alone does not establish this activity.
 
 **Scope**: All first land-based receiving of FTL products imported or landed from vessels
 
@@ -290,7 +292,7 @@ Example: `ROM-0226-F3-001` (Romaine Lettuce, Feb 26, Facility 3, Lot 001)
 
 - All CTE events are entered into RegEngine via {"API integration" if request.has_erp_integration else "manual entry or CSV upload"}
 - Each event is cryptographically hashed (SHA-256) and chained to an immutable audit trail
-- Records are retained for a minimum of 2 years per 21 CFR 1.1455(c)
+- Records are retained for a minimum of 2 years per 21 CFR 1.1455(d)
 
 ### 5.2 Data Entry Timelines
 | CTE Type | Maximum Entry Delay |

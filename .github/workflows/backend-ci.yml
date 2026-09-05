@@ -140,7 +140,7 @@ jobs:
           --health-retries 5
 
       neo4j:
-        image: neo4j:5.24-community
+        image: ${{ matrix.service == 'graph' && 'neo4j:5.24-community' || '' }}
         env:
           NEO4J_AUTH: neo4j/test-password-for-ci
         ports:
@@ -210,6 +210,7 @@ jobs:
           SUPABASE_URL: http://localhost:54321
           SUPABASE_KEY: test-key-for-ci
           NEO4J_URI: bolt://localhost:7687
+          REGENGINE_REQUIRE_NEO4J: ${{ matrix.service == 'graph' && '1' || '0' }}
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test-password-for-ci
           OBJECT_STORAGE_ACCESS_KEY_ID: ci-test-key
@@ -249,7 +250,11 @@ jobs:
           # Tests that require live external services should be marked with
           # @pytest.mark.integration and can be skipped via -m "not integration"
           # in environments without those services.
-          pytest tests/ -v --cov=$COV_TARGET --cov-report=term \
+          INTEGRATION_ARGS=()
+          if [ "${{ matrix.service }}" = "graph" ]; then
+            INTEGRATION_ARGS+=(--run-integration)
+          fi
+          pytest tests/ "${INTEGRATION_ARGS[@]}" -v --cov=$COV_TARGET --cov-report=term \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=$THRESHOLD \
             -o "testpaths=tests"
@@ -890,6 +895,7 @@ jobs:
             tests/invariants/test_chain_verify_golden.py \
             tests/migrations/test_v097_pin_get_tenant_context.py \
             tests/migrations/test_v099_set_tenant_context.py \
+            tests/migrations/test_v120_rule_citations.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS enforcement e2e (live Postgres — #2461 fail-closed proof)

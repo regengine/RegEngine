@@ -49,11 +49,7 @@ def _get_real_tlc(tenant_id: str) -> str | None:
 
 
 def _persist_drill(drill_id: str, drill: dict) -> None:
-    """Insert a drill row into fsma.mock_audit_drills (best-effort).
-
-    Persistence failures degrade to the in-memory store — the drill API keeps
-    working, but the drill won't survive a restart.
-    """
+    """Persist a self-assessment drill before acknowledging it."""
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
@@ -84,7 +80,7 @@ def _persist_drill(drill_id: str, drill: dict) -> None:
         finally:
             db.close()
     except Exception:
-        logger.warning("Mock audit drill persist failed", exc_info=True)
+        raise HTTPException(status_code=503, detail="Drill storage is unavailable") from None
 
 
 def _load_drill(drill_id: str) -> dict | None:
@@ -126,14 +122,14 @@ def _load_drill(drill_id: str) -> dict | None:
 
 
 def _mark_drill_completed(drill_id: str, tenant_id: str, grade: str, score: int) -> None:
-    """Record a graded submission on the persisted drill row (best-effort)."""
+    """Save a self-reported submission before returning it as completed."""
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         try:
-            db.execute(
+            result = db.execute(
                 text(
                     "UPDATE fsma.mock_audit_drills "
                     "SET status = 'completed', grade = :grade, score = :score, "
@@ -142,11 +138,13 @@ def _mark_drill_completed(drill_id: str, tenant_id: str, grade: str, score: int)
                 ),
                 {"drill_id": drill_id, "tid": tenant_id, "grade": grade, "score": score},
             )
+            if result.rowcount != 1:
+                raise RuntimeError("Drill record was not updated")
             db.commit()
         finally:
             db.close()
     except Exception:
-        logger.warning("Mock audit drill completion persist failed", exc_info=True)
+        raise HTTPException(status_code=503, detail="Drill result could not be saved") from None
 
 
 router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])
@@ -226,6 +224,9 @@ class DrillStatus(BaseModel):
     grade: Optional[str] = None
     score: Optional[int] = None
     feedback: list[str] = Field(default_factory=list)
+    assessment_basis: str = "self_reported"
+    verified: bool = False
+    disclaimer: str = "Practice drill based on client assertions; supporting evidence has not been verified."
     demo_mode: bool = Field(
         default=False,
         description="True when drill uses demo TLCs instead of real tenant data.",
@@ -252,7 +253,12 @@ class DrillGrade(BaseModel):
     grade: str  # A, B, C, D, F
     score: int  # 0-100
     time_to_respond: str
-    passed: bool
+    passed: Optional[bool]
+    assessment_basis: str = "self_reported"
+    verified: bool = False
+    disclaimer: str = (
+        "Self-reported practice assessment; no server-side evidence verification or compliance determination."
+    )
     feedback: list[str]
     breakdown: dict[str, dict]
 
@@ -286,7 +292,7 @@ async def start_drill(
     now = datetime.now(timezone.utc)
     deadline = now + timedelta(hours=24)
 
-    _active_drills[drill_id] = {
+    drill = {
         "tenant_id": tenant_id,
         "scenario": scenario,
         "started_at": now.isoformat(),
@@ -294,7 +300,8 @@ async def start_drill(
         "status": "active",
         "grade": None,
     }
-    _persist_drill(drill_id, _active_drills[drill_id])
+    _persist_drill(drill_id, drill)
+    _active_drills[drill_id] = drill
 
     logger.info("drill_started", extra={"drill_id": drill_id, "scenario": scenario["scenario"]})
 
@@ -323,10 +330,10 @@ async def start_drill(
     response_model=DrillStatus,
     summary="Check drill status",
 )
-async def get_drill_status(drill_id: str) -> DrillStatus:
+async def get_drill_status(drill_id: str, ctx: TenantContext = Depends(require_tenant_context)) -> DrillStatus:
     """Get current status of an active drill."""
     drill = _active_drills.get(drill_id) or _load_drill(drill_id)
-    if not drill:
+    if not drill or drill.get("tenant_id") != ctx.tenant_id:
         raise HTTPException(status_code=404, detail="Drill not found")
 
     scenario = drill["scenario"]
@@ -464,14 +471,17 @@ async def submit_drill_response(
     else:
         grade = "F"
 
-    passed = total >= 70
+    passed = None  # Client assertions cannot establish an audit pass.
+    for entry in breakdown.values():
+        entry["status"] = "SELF_REPORTED_" + entry["status"]
+    feedback.insert(0, "Self-reported practice score only; supporting evidence has not been verified.")
 
     # Update drill state (drill may have been loaded from DB after a restart)
+    _mark_drill_completed(drill_id, ctx.tenant_id, grade, total)
     drill["status"] = "completed"
     drill["grade"] = grade
     drill["score"] = total
     _active_drills[drill_id] = drill
-    _mark_drill_completed(drill_id, ctx.tenant_id, grade, total)
 
     if not feedback:
         feedback.append("Perfect score. You're audit-ready.")

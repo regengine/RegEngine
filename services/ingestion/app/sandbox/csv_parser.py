@@ -199,6 +199,7 @@ _KDE_FIELD_ALIASES = {
     "freight_carrier": "carrier",
     # Harvester
     "harvester_business_name": "harvester_business_name",
+    "harvester_business_phone": "harvester_business_phone",
     "harvester": "harvester_business_name",
     "harvester_name": "harvester_business_name",
     "grower": "harvester_business_name",

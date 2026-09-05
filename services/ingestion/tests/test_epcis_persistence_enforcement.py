@@ -343,16 +343,12 @@ class TestEnforceCteOnly:
         the sibling test above pins.
         """
         from fastapi import HTTPException
-
         from shared.canonical_event import UnmappedBizStepError
 
         _FakeEngine.summary_to_return = _critical_summary()
 
         def _raise_unmapped(event: Any, tenant_id: str) -> Any:
-            raise UnmappedBizStepError(
-                "bizStep 'urn:fsma:traceability:growing' maps to the non-CTE "
-                "activity 'growing'"
-            )
+            raise UnmappedBizStepError("bizStep 'urn:fsma:traceability:growing' maps to the non-CTE activity 'growing'")
 
         import shared.canonical_event as _canon_mod
 
@@ -557,3 +553,28 @@ class TestThreadedBlockFallbackWhenNoPreComputedSummary:
         assert _FakeEngine.evaluate_event_call_count == 2
         assert _FakeEngine.evaluate_event_persist_true_count == 1
         assert len(_FakeEngine.persist_summary_calls) == 0
+
+
+@pytest.fixture(autouse=True)
+def rejection_audit_writer(monkeypatch):
+    from unittest.mock import Mock
+
+    import shared.rules.rejection_audit as audit
+
+    writer = Mock()
+    monkeypatch.setattr(audit, "record_rejection", writer)
+    return writer
+
+
+def test_audit_storage_failure_is_503_without_event_write(monkeypatch, rejection_audit_writer):
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+    rejection_audit_writer.side_effect = RuntimeError("storage unavailable")
+    _FakeEngine.summary_to_return = _critical_summary()
+    from app.epcis import persistence as persistence_mod
+
+    with pytest.raises(HTTPException) as exc:
+        persistence_mod._persist_prepared_event_in_session(
+            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared()
+        )
+    assert exc.value.status_code == 503
+    assert not _FakeCTEPersistence.last_called

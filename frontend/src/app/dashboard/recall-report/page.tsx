@@ -137,7 +137,17 @@ export default function RecallReportPage() {
         staleTime: 5 * 60 * 1000, // 5 min — report is expensive to compute
     });
 
-    const isDemo = report?.demo_mode ?? true;
+    if (error || (!isLoading && !report)) {
+        return (
+            <div className="p-8" role="alert">
+                <h1 className="text-2xl font-semibold">Recall report unavailable</h1>
+                <p>No recall result could be loaded. Try again when your connection is available.</p>
+                <Button onClick={() => refetch()}>Retry</Button>
+            </div>
+        );
+    }
+
+    const isDemo = report?.demo_mode === true;
     const dimensions = report?.dimensions ?? [];
     const actionItems = report?.action_items ?? [];
     const overallScore = report?.overall_score ?? 0;
@@ -253,7 +263,7 @@ export default function RecallReportPage() {
                 {error && (
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-orange-500/[0.06] border border-orange-500/20 text-orange-400 text-xs">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span>Could not load report — showing sample scenario.</span>
+                        <span>Could not load report.</span>
                     </div>
                 )}
 

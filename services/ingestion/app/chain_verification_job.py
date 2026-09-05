@@ -77,43 +77,23 @@ class VerificationResultResponse(BaseModel):
 
 
 def _combine_verifications(canonical_result, legacy_result):
-    """Combine the canonical and legacy chain verifications (#2506).
+    """Combine content verification with legacy missing-chain diagnostics.
 
-    Both verifiers walk the SAME ``fsma.hash_chain`` rows (sequence,
-    linkage, and ``chain_hash`` recompute are store-independent and
-    identical). They diverge only on:
-      * the orphan check — store-specific: the canonical verifier flags a
-        row whose ``event_id`` is absent from ``traceability_events``, the
-        legacy one whose id is absent from ``cte_events``;
-      * event-content tamper — a canonical-only capability (re-derives
-        ``sha256_hash`` from the canonical row).
-
-    During the dual-write migration a chain row legitimately lives in only
-    one store. So a row is a TRUE orphan only when BOTH stores miss it. A
-    canonical event-content tamper, or a sequence/linkage/chain_hash break,
-    is real regardless of store. Returns ``(valid, chain_length, errors)``.
+    The canonical verifier already joins both event stores, so its orphan
+    verdict means neither store contains the referenced event. Keep that
+    verdict and every canonical content/linkage failure. Only the legacy
+    verifier's store-specific orphan messages can be ignored; it cannot see
+    canonical-only events. Legacy missing-chain failures remain relevant.
     """
-    canonical_orphans = set(canonical_result.orphan_chain_rows or [])
-    legacy_orphans = set(legacy_result.orphan_chain_rows or [])
-    true_orphans = sorted(canonical_orphans & legacy_orphans)
-
-    # Non-orphan failures from the canonical verifier: tamper (event +
-    # chain_hash), sequence gaps, linkage breaks. The canonical verifier
-    # skips event-hash recompute for rows it considers orphaned, so its
-    # ``tamper_rows`` never contains a legacy-only (canonical-orphan) row.
-    canonical_non_orphan_break = bool(canonical_result.tamper_rows) or any(
-        "Sequence gap" in e or "Chain break" in e or "Genesis entry" in e for e in (canonical_result.errors or [])
-    )
-
-    valid = not true_orphans and not canonical_non_orphan_break
-    chain_length = max(canonical_result.chain_length, legacy_result.chain_length)
-
-    errors: list[str] = []
-    if canonical_non_orphan_break:
-        errors.extend(e for e in (canonical_result.errors or []) if "Orphan chain row" not in e)
-    if true_orphans:
-        errors.append(f"Orphan chain rows missing from BOTH stores: {true_orphans}")
-    return valid, chain_length, errors
+    errors = list(canonical_result.errors or [])
+    # Legacy verifier's orphan rows may be canonical-only records; its
+    # missing-chain rows and linkage failures remain relevant.
+    legacy_errors = [e for e in (legacy_result.errors or []) if "Orphan chain row" not in e]
+    for error in legacy_errors:
+        if error not in errors:
+            errors.append(error)
+    valid = bool(canonical_result.valid) and not legacy_errors
+    return valid, max(canonical_result.chain_length, legacy_result.chain_length), errors
 
 
 def _run_verification(job_id: str, tenant_id: str) -> None:
@@ -215,7 +195,7 @@ def _persist_verification_result(
     errors: list[str],
     completed_at: str,
 ) -> None:
-    """Try to write result to fsma.chain_verification_log; fall back silently."""
+    """Persist before publishing completed status; failure fails the job."""
     try:
         import json
 
@@ -239,14 +219,10 @@ def _persist_verification_result(
         )
         db.commit()
     except Exception as exc:
-        logger.debug(
-            "chain_verification_log_persist_skipped reason=%s (using in-memory fallback)",
-            str(exc),
-        )
         try:
             db.rollback()
-        except Exception:
-            logger.debug("chain_verification_rollback_failed", exc_info=True)
+        finally:
+            raise RuntimeError("Verification result could not be durably recorded") from exc
 
 
 def _log_verification_audit(

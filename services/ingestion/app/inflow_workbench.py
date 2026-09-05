@@ -38,24 +38,24 @@ CommitMode = Literal["simulation", "preflight", "staging", "production_evidence"
 
 _STORE_LOCK = threading.Lock()
 
-COMPLETE_ROMAINE_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref
-harvesting,TLC-FEED-001,Romaine Lettuce,120,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-001,SRC-HARV-001,Valley Fresh Farms,Valley Fresh Farms Field 7
-cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-001,SRC-COOL-001,,Valley Fresh Farms Field 7
-initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-001,SRC-PACK-001,Valley Fresh Farms,Valley Fresh Farms Field 7
-shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,Bay Area DC,,,BOL-001,SRC-PACK-001,,Valley Fresh Farms Field 7
-receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-001,SRC-PACK-001,,Valley Fresh Farms Field 7"""
+COMPLETE_ROMAINE_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref,harvester_business_phone
+harvesting,TLC-FEED-001,Romaine Lettuce,120,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-001,SRC-HARV-001,Valley Fresh Farms,Valley Fresh Farms Field 7,
+cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-001,SRC-COOL-001,,Valley Fresh Farms Field 7,
+initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-001,SRC-PACK-001,Valley Fresh Farms,Valley Fresh Farms Field 7,+1-202-555-0100
+shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,Bay Area DC,,,BOL-001,SRC-PACK-001,,Valley Fresh Farms Field 7,
+receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-001,SRC-PACK-001,,Valley Fresh Farms Field 7,"""
 
-MISSING_DESTINATION_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref
-harvesting,TLC-FEED-002,Romaine Lettuce,104,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-002,SRC-HARV-002,Valley Fresh Farms,Valley Fresh Farms Field 11
-cooling,TLC-FEED-002,Romaine Lettuce,104,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-002,SRC-COOL-002,,Valley Fresh Farms Field 11
-initial_packing,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-002,SRC-PACK-002,Valley Fresh Farms,Valley Fresh Farms Field 11
-shipping,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,,,,BOL-002,SRC-PACK-002,,Valley Fresh Farms Field 11
-receiving,TLC-FEED-002,Romaine Lettuce,103,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-002,SRC-PACK-002,,Valley Fresh Farms Field 11"""
+MISSING_DESTINATION_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref,harvester_business_phone
+harvesting,TLC-FEED-002,Romaine Lettuce,104,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-002,SRC-HARV-002,Valley Fresh Farms,Valley Fresh Farms Field 11,
+cooling,TLC-FEED-002,Romaine Lettuce,104,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-002,SRC-COOL-002,,Valley Fresh Farms Field 11,
+initial_packing,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-002,SRC-PACK-002,Valley Fresh Farms,Valley Fresh Farms Field 11,+1-202-555-0100
+shipping,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,,,,BOL-002,SRC-PACK-002,,Valley Fresh Farms Field 11,
+receiving,TLC-FEED-002,Romaine Lettuce,103,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-002,SRC-PACK-002,,Valley Fresh Farms Field 11,"""
 
-BROKEN_LINEAGE_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref,transformation_date,input_traceability_lot_codes
-harvesting,TLC-FEED-003,Romaine Lettuce,220,cases,Desert Bloom Farm,2026-04-26T14:43:00Z,2026-04-26,,,,,,,,,HARV-003,SRC-HARV-003,Desert Bloom Farm,Desert Bloom Farm Block 3,,
-cooling,TLC-FEED-003,Romaine Lettuce,220,cases,Imperial Pre-Cool Facility,2026-04-26T17:51:00Z,,2026-04-26,,,,,,,,COOL-003,SRC-COOL-003,,Desert Bloom Farm Block 3,,
-transformation,TLC-FEED-003-CUT,Romaine Lettuce,218,cases,LA Fresh Cut Kitchen,2026-04-27T00:10:00Z,,,,,,,,,,TRANS-003,SRC-MISSING-PACK,,Desert Bloom Farm Block 3,2026-04-27,"""
+BROKEN_LINEAGE_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref,transformation_date,input_traceability_lot_codes,harvester_business_phone
+harvesting,TLC-FEED-003,Romaine Lettuce,220,cases,Desert Bloom Farm,2026-04-26T14:43:00Z,2026-04-26,,,,,,,,,HARV-003,SRC-HARV-003,Desert Bloom Farm,Desert Bloom Farm Block 3,,,
+cooling,TLC-FEED-003,Romaine Lettuce,220,cases,Imperial Pre-Cool Facility,2026-04-26T17:51:00Z,,2026-04-26,,,,,,,,COOL-003,SRC-COOL-003,,Desert Bloom Farm Block 3,,,
+transformation,TLC-FEED-003-CUT,Romaine Lettuce,218,cases,LA Fresh Cut Kitchen,2026-04-27T00:10:00Z,,,,,,,,,,TRANS-003,SRC-MISSING-PACK,,Desert Bloom Farm Block 3,2026-04-27,,"""
 
 BUILT_IN_SCENARIOS = [
     {

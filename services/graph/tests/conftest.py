@@ -13,14 +13,10 @@ Activation:
   integration tests (selection via marker, no gating applied).
 - Default ``pytest services/graph/tests`` — auto-skips integration tests.
 
-CI (corrected, #2877): this gate DOES apply to the ``Test graph`` matrix
-leg — an earlier version of this docstring claimed CI was unaffected,
-which was wrong and was half of the double guard that made the Neo4j
-test run nowhere. The matrix leg still skips it (no ``--run-integration``,
-and that leg has no Neo4j). It is run for real by the dedicated
-``graph-neo4j-integration`` job, which provisions Neo4j, passes
-``--run-integration``, and sets ``REGENGINE_REQUIRE_NEO4J=1`` so a
-missing Neo4j fails instead of skipping.
+CI (#2877): the Test graph matrix leg provisions Neo4j, passes
+--run-integration, and sets REGENGINE_REQUIRE_NEO4J=1. Other matrix legs
+provision no Neo4j container. An unreachable graph dependency fails the
+integration test instead of silently skipping it.
 """
 
 from __future__ import annotations

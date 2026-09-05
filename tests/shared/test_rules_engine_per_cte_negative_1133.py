@@ -121,25 +121,14 @@ def _ftl_event_base(event_type: str) -> Dict[str, Any]:
 
 # (cte_type, dotted.field.path, 21 CFR citation)
 _CTE_REQUIRED_KDE: list[tuple[str, str, str]] = [
-    # §1.1327 — harvesting
-    ("harvesting", "kdes.harvest_date", "21 CFR \u00a71.1327"),
-    # §1.1330 — cooling
-    ("cooling", "kdes.cooling_date", "21 CFR \u00a71.1330"),
-    ("cooling", "kdes.temperature", "21 CFR \u00a71.1330"),
-    # §1.1335 — initial packing
-    ("initial_packing", "kdes.packing_date", "21 CFR \u00a71.1335"),
-    # §1.1325 — first land-based receiving
-    (
-        "first_land_based_receiving",
-        "kdes.landing_date",
-        "21 CFR \u00a71.1325",
-    ),
-    # §1.1340 — shipping
-    ("shipping", "kdes.ship_date", "21 CFR \u00a71.1340"),
-    # §1.1345 — receiving
-    ("receiving", "kdes.receive_date", "21 CFR \u00a71.1345"),
-    # §1.1350 — transformation
-    ("transformation", "kdes.transformation_date", "21 CFR \u00a71.1350"),
+    ("harvesting", "kdes.harvest_date", "21 CFR §1.1325(a)(1)(vii)"),
+    ("cooling", "kdes.cooling_date", "21 CFR §1.1325(b)(1)(v)"),
+    ("cooling", "kdes.temperature", "Operational cold-chain check"),
+    ("initial_packing", "kdes.packing_date", "21 CFR §1.1330(a)(15)"),
+    ("first_land_based_receiving", "kdes.landing_date", "21 CFR §1.1335(f)"),
+    ("shipping", "kdes.ship_date", "21 CFR §1.1340(a)(6)"),
+    ("receiving", "kdes.receive_date", "21 CFR §1.1345(a)(6)"),
+    ("transformation", "kdes.transformation_date", "21 CFR §1.1350(a)(2)(iii)"),
 ]
 
 

@@ -190,13 +190,14 @@ describe('RecallReportPage', () => {
     });
   });
 
-  it('falls back to demo when API call fails', async () => {
+  it('shows an error without fabricated results when the API fails', async () => {
     mockFetchRecallReport.mockRejectedValue(new Error('API unavailable'));
     render(<RecallReportPage />, { wrapper: createWrapper() });
-    // Should still show the demo scenario (isDemo defaults to true when report is undefined)
     await waitFor(() => {
-      expect(screen.getByText(/Romaine Lettuce/)).toBeInTheDocument();
+      expect(screen.getByText('Recall report unavailable')).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Romaine Lettuce/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/SLA Met/)).not.toBeInTheDocument();
   });
 
   it('does not fetch when credentials are missing', () => {

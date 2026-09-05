@@ -315,7 +315,7 @@ class TestRunSimulationTenantBranch:
         # Stub out set_tenant_data so DB writes don't touch real infra.
         monkeypatch.setattr(rs_module, "set_tenant_data", lambda *a, **kw: None)
 
-    def test_tenant_branch_marks_non_illustrative_and_scales_metrics(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_tenant_context_keeps_simulation_disclaimer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._setup_tenant_metrics(
             monkeypatch,
             {
@@ -332,8 +332,8 @@ class TestRunSimulationTenantBranch:
         )
         assert resp.status_code == 201
         body = resp.json()
-        assert body["is_illustrative"] is False
-        assert body["data_source"] == "tenant"
+        assert body["is_illustrative"] is True
+        assert body["data_source"] == "demo_with_tenant_context"
         assert body["tenant_metrics"] == {
             "cte_events": 200,
             "suppliers": 5,
@@ -347,7 +347,7 @@ class TestRunSimulationTenantBranch:
         # Completeness bumped by +0.01, capped at 1.0 (0.98 + 0.01 = 0.99).
         assert body["metrics"]["with_regengine"]["kde_completeness"] == pytest.approx(0.99)
         # Disclaimer suppressed for non-illustrative runs.
-        assert body["demo_disclaimer"] is None
+        assert body["demo_disclaimer"]
 
     def test_tenant_branch_without_export_keeps_baseline_response_minutes(
         self, monkeypatch: pytest.MonkeyPatch
@@ -460,3 +460,18 @@ class TestGetSimulationEndpoint:
         resp = _client(tenant_id="tenant-A").get("/api/v1/simulations/does-not-exist")
         assert resp.status_code == 404
         assert "'does-not-exist'" in resp.json()["detail"]
+
+
+def test_historical_tenant_scaled_scenario_is_still_illustrative(monkeypatch):
+    record = {
+        "id": "old",
+        "is_illustrative": False,
+        "demo_disclaimer": None,
+        "tenant_metrics": {"cte_events": 20},
+        "data_source": "tenant",
+    }
+    monkeypatch.setattr(rs_module, "get_tenant_data", lambda *a: record)
+    result = rs_module._get_simulation_or_404("old", "tenant-a")
+    assert result["is_illustrative"] is True
+    assert result["demo_disclaimer"]
+    assert result["data_source"] == "demo_with_tenant_context"

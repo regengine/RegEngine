@@ -824,6 +824,7 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
                     logger.error(
                         "epcis_rejection_audit_inline_error",
                     )
+                    raise HTTPException(status_code=503, detail="Rejection audit storage is unavailable") from None
 
                 # Raise HTTPException so the caller's db_session.rollback()
                 # unwinds any in-flight state and the HTTP layer returns
@@ -1102,9 +1103,7 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
         # The canonical path runs unguarded whenever the event is not
         # idempotent, so this is reachable under the DEFAULT
         # ``RULES_ENGINE_ENFORCE=off`` too, not only under enforcement.
-        if type(exc).__name__ == "UnmappedBizStepError" or (
-            "is not a recognized FSMA 204 CTE type" in str(exc)
-        ):
+        if type(exc).__name__ == "UnmappedBizStepError" or ("is not a recognized FSMA 204 CTE type" in str(exc)):
             logger.warning(
                 "epcis_ingest_refused_unsupported_cte_type tenant=%s error=%s",
                 tenant_id,

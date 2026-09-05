@@ -33,7 +33,7 @@ from .persistence import (
 # engine falls back to hardcoded demo counts. Without it the fallback's 5/3 and
 # 3/2 are indistinguishable from a real trace's numbers — and healthier-looking
 # than the zeroes the real path used to record.
-SIMULATED_TRACE_WARNING = "simulated trace: no graph backend wired — counts below are demo values, not traced data"
+SIMULATED_TRACE_WARNING = "trace unavailable: missing target lot or graph backend; no trace evidence generated"
 
 
 def _trace_field(trace_result: Any, name: str, default: Any, required: bool = True) -> Any:
@@ -193,7 +193,7 @@ class MockRecallEngine:
         max_forward = 0
         max_backward = 0
         trace_time = 0.0
-        # #2943: set when a trace branch falls back to hardcoded demo counts.
+        # Set when the requested trace cannot be measured.
         simulated = False
 
         try:
@@ -215,20 +215,8 @@ class MockRecallEngine:
                         max_forward = _trace_field(result, "hop_count", 0) or 0
                         facilities.extend(self._extract_facilities(result, "downstream"))
                 else:
-                    # Simulate trace for testing — #2943: flagged, so the
-                    # stored record cannot be mistaken for a real trace.
+                    # Missing trace inputs/backends cannot create trace evidence.
                     simulated = True
-                    lots_traced += 5
-                    max_forward = 3
-                    facilities.append(
-                        AffectedFacility(
-                            gln="1234567890123",
-                            name="Demo Processor",
-                            facility_type="processor",
-                            lots_affected=[drill.target_lot or "DEMO-001"],
-                            quantity_affected=100.0,
-                        )
-                    )
 
             if drill.drill_type in (RecallType.BACKWARD_TRACE, RecallType.FULL_TRACE):
                 if self._trace_backward and drill.target_lot:
@@ -243,45 +231,16 @@ class MockRecallEngine:
                         max_backward = _trace_field(result, "hop_count", 0) or 0
                         facilities.extend(self._extract_facilities(result, "upstream"))
                 else:
-                    # Simulate trace for testing — #2943: flagged.
+                    # Missing trace inputs/backends cannot create trace evidence.
                     simulated = True
-                    lots_traced += 3
-                    max_backward = 2
-                    facilities.append(
-                        AffectedFacility(
-                            gln="9876543210987",
-                            name="Demo Grower",
-                            facility_type="grower",
-                            lots_affected=[drill.target_lot or "RAW-001"],
-                            quantity_affected=200.0,
-                        )
-                    )
 
-            if drill.drill_type == RecallType.MASS_BALANCE:
-                # Quantity reconciliation check
-                warnings.append("Mass balance drill - verify quantities manually")
-                lots_traced = 1
-
-            if drill.drill_type == RecallType.TARGETED:
-                # Single facility targeted drill
-                if drill.target_facility_gln:
-                    facilities.append(
-                        AffectedFacility(
-                            gln=drill.target_facility_gln,
-                            name="Targeted Facility",
-                            facility_type="unknown",
-                            lots_affected=([drill.target_lot] if drill.target_lot else []),
-                            quantity_affected=0.0,
-                        )
-                    )
-                    lots_traced = 1
+            if drill.drill_type in (RecallType.MASS_BALANCE, RecallType.TARGETED):
+                # These workflows do not yet execute a measured graph trace.
+                simulated = True
+                warnings.append("This drill type requires manual verification; no trace was measured")
 
             trace_time = time.time() - trace_start
 
-            # #2943: say so on the record, not just in the logs. A drill with
-            # no graph backend reports 5/3 and 3/2, which looks healthier than
-            # a real trace — nobody reading the retained evidence would guess
-            # the numbers were invented.
             if simulated:
                 warnings.append(SIMULATED_TRACE_WARNING)
 
@@ -311,17 +270,17 @@ class MockRecallEngine:
             total_time = time.time() - start_time
 
             # Determine SLA compliance
-            sla_compliant = total_time < self.SLA_LIMIT_SECONDS
+            sla_compliant = not simulated and lots_traced > 0 and total_time < self.SLA_LIMIT_SECONDS
 
             # Calculate data completeness
             total_quantity = sum(f.quantity_affected for f in facilities)
             gaps = len([f for f in facilities if not f.lots_affected])
-            completeness = 100.0 if not facilities else (((len(facilities) - gaps) / len(facilities)) * 100)
+            completeness = 0.0 if not facilities else (((len(facilities) - gaps) / len(facilities)) * 100)
 
             # Create result
             result = RecallResult(
                 drill_id=drill.drill_id,
-                success=True,
+                success=not simulated and lots_traced > 0,
                 lots_traced=lots_traced,
                 facilities_identified=len(facilities),
                 total_quantity_affected=total_quantity,
@@ -401,7 +360,9 @@ class MockRecallEngine:
         return facilities
 
     def _update_sla_metrics(self, tenant_id: str, result: RecallResult) -> None:
-        """Update SLA metrics cache for tenant."""
+        """Update SLA metrics cache for measured traces only."""
+        if result.simulated:
+            return
         if tenant_id not in self._sla_metrics:
             self._sla_metrics[tenant_id] = {
                 "total_drills": 0,
@@ -516,7 +477,7 @@ class MockRecallEngine:
                 "total_drills": 0,
                 "successful_drills": 0,
                 "sla_compliant_drills": 0,
-                "sla_compliance_rate": 100.0,
+                "sla_compliance_rate": None,
                 "avg_trace_time": 0.0,
                 "last_drill_at": None,
             },
@@ -679,7 +640,9 @@ class MockRecallEngine:
         sla_metrics = self.get_sla_metrics(tenant_id)
 
         # Calculate additional metrics
-        completed_drills = [d for d in drills if d.status == RecallStatus.COMPLETED]
+        completed_drills = [
+            d for d in drills if d.status == RecallStatus.COMPLETED and d.result and not d.result.simulated
+        ]
         recent_drills = [
             d
             for d in completed_drills
@@ -696,19 +659,27 @@ class MockRecallEngine:
         )
 
         # Data quality from results
-        avg_completeness = 0.0
+        avg_completeness = None
         if recent_drills:
             completeness_values = [d.result.data_completeness_pct for d in recent_drills if d.result]
-            avg_completeness = sum(completeness_values) / len(completeness_values) if completeness_values else 0.0
+            avg_completeness = sum(completeness_values) / len(completeness_values) if completeness_values else None
 
         return {
             "tenant_id": tenant_id,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "overall_readiness": ("ready" if sla_metrics.get("sla_compliance_rate", 0) >= 95 else "needs_improvement"),
+            "overall_readiness": (
+                "insufficient_data"
+                if sla_metrics.get("sla_compliance_rate") is None
+                else ("ready" if sla_metrics["sla_compliance_rate"] >= 95 else "needs_improvement")
+            ),
             "sla_compliance": {
-                "rate_pct": sla_metrics.get("sla_compliance_rate", 100.0),
+                "rate_pct": sla_metrics.get("sla_compliance_rate"),
                 "target_pct": 100.0,
-                "status": ("compliant" if sla_metrics.get("sla_compliance_rate", 100) >= 95 else "at_risk"),
+                "status": (
+                    "unmeasured"
+                    if sla_metrics.get("sla_compliance_rate") is None
+                    else ("compliant" if sla_metrics["sla_compliance_rate"] >= 95 else "at_risk")
+                ),
             },
             "drill_metrics": {
                 "total_drills": len(drills),
@@ -736,7 +707,7 @@ class MockRecallEngine:
         self,
         sla_metrics: Dict[str, Any],
         quarterly_drills: int,
-        avg_completeness: float,
+        avg_completeness: Optional[float],
     ) -> List[str]:
         """Generate improvement recommendations."""
         recommendations = []
@@ -744,10 +715,10 @@ class MockRecallEngine:
         if quarterly_drills < 1:
             recommendations.append("Schedule quarterly mock recalls to maintain FDA readiness")
 
-        if sla_metrics.get("sla_compliance_rate", 100) < 95:
+        if sla_metrics.get("sla_compliance_rate") is not None and sla_metrics["sla_compliance_rate"] < 95:
             recommendations.append("Improve trace query performance to meet 24-hour SLA consistently")
 
-        if avg_completeness < 95:
+        if avg_completeness is not None and avg_completeness < 95:
             recommendations.append("Address data gaps to improve traceability completeness")
 
         if not recommendations:

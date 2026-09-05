@@ -171,7 +171,7 @@ async def test_facilities_are_extracted_from_a_trace_result_object():
 
 @pytest.mark.asyncio
 async def test_unwired_drill_is_flagged_as_simulated():
-    """With no trace function wired the drill emits demo numbers — say so."""
+    """With no trace function wired the drill cannot produce trace evidence."""
     engine = MockRecallEngine()
     drill = engine.create_drill(
         tenant_id=TENANT,
@@ -185,8 +185,11 @@ async def test_unwired_drill_is_flagged_as_simulated():
         "#2943: an unwired drill emits hardcoded demo counts (5/3 and 3/2) that "
         "look healthier than a real trace. The stored record must mark itself simulated."
     )
-    assert any("simulated" in w.lower() for w in result.warnings), (
-        f"#2943: expected a 'simulated trace' warning on the drill record; got warnings={result.warnings!r}"
+    assert result.lots_traced == 0
+    assert result.affected_facilities == []
+    assert not result.success
+    assert any("unavailable" in w.lower() for w in result.warnings), (
+        f"#2943: expected an unavailable-trace warning on the drill record; got warnings={result.warnings!r}"
     )
     assert result.to_dict()["simulated"] is True
 

@@ -196,6 +196,7 @@ def build_demo_events(tenant_id: str = DEMO_TENANT_ID) -> list[TraceabilityEvent
                 "packing_date": (NOW - timedelta(hours=66)).strftime("%Y-%m-%d"),
                 "reference_document": "PACK-2026-0322-001",
                 "harvester_business_name": "Fresh Farms LLC",
+                "harvester_business_phone": "+1-202-555-0100",
                 "contact_phone": "831-555-0100",
             },
         )
@@ -334,6 +335,7 @@ def build_demo_events(tenant_id: str = DEMO_TENANT_ID) -> list[TraceabilityEvent
                 "packing_date": (NOW - timedelta(hours=90)).strftime("%Y-%m-%d"),
                 "reference_document": "PACK-TOM-001",
                 "harvester_business_name": "Fresh Farms LLC",
+                "harvester_business_phone": "+1-202-555-0100",
             },
         )
     )
@@ -480,6 +482,7 @@ def build_demo_events(tenant_id: str = DEMO_TENANT_ID) -> list[TraceabilityEvent
                 "packing_date": (NOW - timedelta(hours=30)).strftime("%Y-%m-%d"),
                 "reference_document": "PACK-2026-0324-002",
                 "harvester_business_name": "Fresh Farms LLC",
+                "harvester_business_phone": "+1-202-555-0100",
                 "contact_phone": "831-555-0100",
             },
         )

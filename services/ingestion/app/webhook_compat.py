@@ -20,7 +20,7 @@ import logging
 import uuid
 from typing import Optional, Union
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
 from shared.database import get_db_session as _get_db_session
@@ -274,6 +274,9 @@ async def ingest_events(
                             )
                         except Exception:  # noqa: BLE001
                             logger.error("compat_rejection_audit_inline_error")
+                            raise HTTPException(
+                                status_code=503, detail="Rejection audit storage is unavailable"
+                            ) from None
 
                         savepoint.rollback()
                         results.append(

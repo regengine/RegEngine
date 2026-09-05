@@ -92,7 +92,7 @@ const DEFAULT_DRILL_STEPS: DrillStep[] = [
     {
         label: 'Generating FDA-oriented sortable recall CSV from sample data',
         detailLines: [
-            'Wrote Section 204.2(g) Key Data Elements for each downstream lot',
+            'Wrote 21 CFR §§1.1325–1.1350 Key Data Elements for each downstream lot',
             'Hash-anchored each record (SHA-256 chain integrity preserved)',
         ],
         durationMs: 1600,
@@ -545,7 +545,7 @@ export default function RecallDrillPage() {
                                     Recall CSV ready
                                 </div>
                                 <div className="text-[13px]" style={{ color: T.textDim }}>
-                                    FDA Section 204.2(g) Key Data Elements · 11 rows · synthetic data
+                                    21 CFR §§1.1325–1.1350 Key Data Elements · 11 rows · synthetic data
                                 </div>
                             </div>
                             <a

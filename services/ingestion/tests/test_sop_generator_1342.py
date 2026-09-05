@@ -85,7 +85,7 @@ class TestGenerateCteProceduresByCompanyType:
     def test_distributor_gets_flbr_not_harvest(self):
         out = _generate_cte_procedures("distributor", ["Leafy Greens"], has_iot=False)
         assert "First Land-Based Receiving CTE" in out
-        assert "§1.1325(c)" in out
+        assert "§1.1335" in out
         # Distributor does NOT assign new TLCs at harvest.
         assert "Harvesting CTE" not in out
         assert "Transformation CTE" not in out

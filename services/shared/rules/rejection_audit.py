@@ -19,14 +19,9 @@ Compliance-defensibility contract
 ---------------------------------
 Callers MUST invoke ``record_rejection`` BEFORE raising the 422 (or
 before rolling back the outer savepoint) so the audit row reaches the
-DB even if the request connection dies mid-rejection. The helper never
-raises — a failed audit-write logs at error level and is captured to
-Sentry, but does not block the reject decision. The product behavior
-(reject the event) is more important than the audit row; without the
-audit row we still hold an exception-log trail.
-
-The helper is idempotent on ``(tenant_id, event_id, rule_id, created_at)``
-via the table's UNIQUE constraint so retries do not duplicate rows.
+DB even if the request connection dies mid-rejection. A failed durable write
+raises RejectionAuditUnavailable. Callers must keep the event rejected and
+surface service unavailability so a client can retry; logs are not evidence.
 """
 
 from __future__ import annotations
@@ -38,6 +33,10 @@ import uuid
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+class RejectionAuditUnavailable(RuntimeError):
+    """A rejection could not be recorded durably; ingestion must fail closed."""
 
 
 def _opt_str(value: Any) -> Optional[str]:
@@ -62,10 +61,8 @@ def record_rejection(
     independently of the caller's transaction. Caller's outer
     ``rollback()`` or ``HTTPException`` cannot wipe this row.
 
-    Never raises — all exceptions are caught, logged, and reported to
-    Sentry. The caller's reject decision is more important than the
-    audit row; failing the audit must not turn a reject into an accept
-    or a 500.
+    Raises RejectionAuditUnavailable on storage failure. The caller must not
+    accept the event or report a durably recorded rejection in that case.
 
     The schema is intentionally minimal (see V080 migration):
     ``(id, tenant_id, event_id, rule_id, rule_version, result='rejected',
@@ -79,7 +76,7 @@ def record_rejection(
     except Exception:  # pragma: no cover  # noqa: BLE001
         logger.error("rule_rejection_audit_no_session_factory")
         _capture_sentry("rule_rejection_audit_no_session_factory", {})
-        return
+        raise RejectionAuditUnavailable("Rejection audit storage is unavailable") from None
 
     if isinstance(reasons, (dict, list)):
         reasons_json = json.dumps(reasons, default=str)
@@ -122,26 +119,27 @@ def record_rejection(
         )
         session.commit()
     except Exception as err:  # noqa: BLE001
-        # Best-effort: never fail the request because the audit row failed.
+        # Keep rejection fail-closed and make loss of durable evidence visible.
         try:
             if session is not None:
                 session.rollback()
         except Exception:  # noqa: BLE001
             pass
         logger.error(
-            "rule_rejection_audit_failed tenant=%s rule=%s err=%s",
+            "rule_rejection_audit_failed tenant=%s rule=%s error_type=%s",
             tenant_id,
             rule_id,
-            err,
+            type(err).__name__,
         )
         _capture_sentry(
             "rule_rejection_audit_failed",
             {
                 "tenant_id": str(tenant_id),
                 "rule_id": str(rule_id) if rule_id else None,
-                "error": str(err),
+                "error_type": type(err).__name__,
             },
         )
+        raise RejectionAuditUnavailable("Rejection audit storage is unavailable") from None
     finally:
         if session is not None:
             try:
@@ -162,7 +160,7 @@ def _capture_sentry(message: str, extras: dict) -> None:
         )
     except Exception:  # noqa: BLE001
         # Sentry is best-effort. The structured log line above is the
-        # durable record when Sentry itself is unavailable.
+        # diagnostic fallback; neither substitutes for the required DB audit.
         logger.debug("sentry_capture_failed component=rejection_audit")
 
 

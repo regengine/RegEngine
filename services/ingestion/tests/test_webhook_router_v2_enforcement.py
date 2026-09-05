@@ -445,3 +445,23 @@ class TestPreEvalReturnsSummary:
         assert reject is False
         assert reason is None
         assert summary is None
+
+
+@pytest.fixture(autouse=True)
+def rejection_audit_writer(monkeypatch):
+    from unittest.mock import Mock
+
+    import shared.rules.rejection_audit as audit
+
+    writer = Mock()
+    monkeypatch.setattr(audit, "record_rejection", writer)
+    return writer
+
+
+def test_audit_failure_cannot_return_a_normal_rejection(monkeypatch, _make_event, rejection_audit_writer):
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+    _install(monkeypatch, summary=_critical_summary())
+    rejection_audit_writer.side_effect = RuntimeError("storage unavailable")
+    with pytest.raises(HTTPException) as exc:
+        wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+    assert exc.value.status_code == 503

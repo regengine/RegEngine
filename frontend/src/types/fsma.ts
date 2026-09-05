@@ -143,8 +143,8 @@ export interface RecallDrill {
 
 // Recall readiness report
 export interface RecallReadiness {
-  overall_score: number; // 0-100
-  sla_compliance: number; // % of drills meeting 24hr SLA
+  overall_score: number | null; // 0-100; null until measured
+  sla_compliance: number | null; // % of measured drills meeting the response objective
   average_response_time_hours: number;
   last_drill_date?: string;
   total_drills: number;
@@ -231,4 +231,3 @@ export interface KDEQualityMetrics {
   trend: 'IMPROVING' | 'STABLE' | 'DEGRADING';
   missing_kde_counts: Record<string, number>;
 }
-

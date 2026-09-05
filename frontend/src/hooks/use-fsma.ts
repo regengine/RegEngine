@@ -320,10 +320,10 @@ export function useExportComplianceReport() {
 
 export interface ComplianceScoreResult {
   tenant_id: string;
-  overall_score: number;
-  obligation_coverage: number;
-  control_effectiveness: number;
-  evidence_freshness: number;
+  overall_score: number | null;
+  obligation_coverage: number | null;
+  control_effectiveness: number | null;
+  evidence_freshness: number | null;
   total_obligations: number;
   controls_mapped: number;
   evidence_items: number;
@@ -333,7 +333,7 @@ export interface ComplianceScoreResult {
 
 /**
  * Fetch the tenant-scoped FSMA compliance score.
- * Returns a demo payload when the graph has no tenant data yet.
+ * Returns null measurements when the graph has no tenant data; outages raise an error.
  */
 export function useComplianceScore() {
   const { isAuthenticated } = useAuth();

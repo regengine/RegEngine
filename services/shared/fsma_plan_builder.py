@@ -33,6 +33,7 @@ class FirmType(str, Enum):
     DISTRIBUTOR = "distributor"
     RETAILER = "retailer"
     RESTAURANT = "restaurant"
+    FIRST_LAND_BASED_RECEIVER = "first_land_based_receiver"
 
 
 class RecordRetentionPeriod(str, Enum):
@@ -547,7 +548,9 @@ Applies to all first land-based receiving of finfish, crustaceans, and molluscan
 """
 
 HOLDING_PROCEDURE_TEMPLATE = """
-## Holding & Storage Procedure for {firm_name}
+## Optional Holding & Storage Procedure for {firm_name}
+
+This is an operational procedure, not a Critical Tracking Event under subpart S.
 
 ### Purpose
 Document how TLC integrity is maintained during storage and holding operations.
@@ -614,12 +617,10 @@ FIRM_TYPE_PROCEDURES: Dict[FirmType, List[str]] = {
     ],
     FirmType.HOLDER: [
         "receiving",
-        "holding",
         "shipping",
     ],
     FirmType.DISTRIBUTOR: [
         "receiving",
-        "holding",
         "shipping",
     ],
     FirmType.RETAILER: [
@@ -627,6 +628,10 @@ FIRM_TYPE_PROCEDURES: Dict[FirmType, List[str]] = {
     ],
     FirmType.RESTAURANT: [
         "receiving",
+    ],
+    FirmType.FIRST_LAND_BASED_RECEIVER: [
+        "first_land_receiving",
+        "shipping",
     ],
 }
 
@@ -835,22 +840,22 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
     """Export plan as Markdown document."""
     md = f"""# FSMA 204 Traceability Plan
 
-**Company:** {plan.firm.name}  
-**Address:** {plan.firm.address}  
-**FDA Registration:** {plan.firm.fda_registration or "N/A"}  
-**GLN:** {plan.firm.gln or "N/A"}  
+- **Company:** {plan.firm.name}
+- **Address:** {plan.firm.address}
+- **FDA Registration:** {plan.firm.fda_registration or "N/A"}
+- **GLN:** {plan.firm.gln or "N/A"}
 
-**Plan Version:** {plan.version}  
-**Created:** {plan.created_date}  
-**Last Updated:** {plan.last_updated}  
+- **Plan Version:** {plan.version}
+- **Created:** {plan.created_date}
+- **Last Updated:** {plan.last_updated}
 
 ---
 
 ## Traceability Contact
 
-**Name:** {plan.firm.contact_name}  
-**Email:** {plan.firm.contact_email}  
-**Phone:** {plan.firm.contact_phone}  
+- **Name:** {plan.firm.contact_name}
+- **Email:** {plan.firm.contact_email}
+- **Phone:** {plan.firm.contact_phone}
 
 ---
 
@@ -884,7 +889,7 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
 
 ## TLC Format
 
-**Format:** `{plan.tlc_format}`
+- **Format:** `{plan.tlc_format}`
 
 """
 
@@ -922,15 +927,17 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
 
 ---
 
-## Certification
+## Plan Review
 
-I certify that this Traceability Plan meets the requirements of FSMA Section 204.
+This generated template requires review against the firm's actual operations and
+21 CFR §1.1315. It does not establish or certify regulatory compliance. Complete
+missing information and verify the procedures before approving this plan for use.
 
-**Signature:** _________________________
+- **Signature:** _________________________
 
-**Date:** _________________________
+- **Date:** _________________________
 
-**Title:** _________________________
+- **Title:** _________________________
 """
 
     return md

@@ -1,9 +1,9 @@
 """Mock-audit drill persistence — fsma.mock_audit_drills storage layer.
 
 Locks:
-- _persist_drill: insert params, commit, close, swallow-and-log on failure
+- _persist_drill: insert params, commit, close, 503 on failure
 - _load_drill: row -> in-memory-shaped dict, None on no-row / DB failure
-- _mark_drill_completed: update params, swallow-and-log on failure
+- _mark_drill_completed: update params, 503 on failure
 - POST /drill/start persists the drill row
 - GET /drill/{id} and POST /drill/{id}/submit fall back to the DB row when
   the in-process cache is empty (restart survival), including the
@@ -28,7 +28,7 @@ from app.mock_audit import (
     _persist_drill,
     router,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
@@ -117,11 +117,13 @@ class TestPersistDrill:
         assert session.commit.called
         assert session.close.called
 
-    def test_swallows_db_failure(self, monkeypatch):
+    def test_surfaces_db_failure(self, monkeypatch):
         session = _fake_session(monkeypatch)
         session.execute.side_effect = RuntimeError("DB gone")
 
-        _persist_drill("drill-123", _drill_dict())  # must not raise
+        with pytest.raises(HTTPException) as exc:
+            _persist_drill("drill-123", _drill_dict())
+        assert exc.value.status_code == 503
 
         assert session.close.called
 
@@ -172,6 +174,7 @@ class TestMarkDrillCompleted:
     def test_updates_grade_and_score(self, monkeypatch):
         session = _fake_session(monkeypatch)
 
+        session.execute.return_value.rowcount = 1
         _mark_drill_completed("drill-123", "t1", "A", 100)
 
         sql = str(session.execute.call_args[0][0])
@@ -181,11 +184,13 @@ class TestMarkDrillCompleted:
         assert session.commit.called
         assert session.close.called
 
-    def test_swallows_db_failure(self, monkeypatch):
+    def test_surfaces_db_failure(self, monkeypatch):
         session = _fake_session(monkeypatch)
         session.execute.side_effect = RuntimeError("DB gone")
 
-        _mark_drill_completed("drill-123", "t1", "A", 100)  # must not raise
+        with pytest.raises(HTTPException) as exc:
+            _mark_drill_completed("drill-123", "t1", "A", 100)
+        assert exc.value.status_code == 503
 
 
 # ---------------------------------------------------------------------------

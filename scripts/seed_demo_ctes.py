@@ -72,6 +72,7 @@ EVENTS = [
             "upc": "0011110838001",
             "reference_document": "PACK-VFF-2026-0326",
             "harvester_business_name": "Valley Fresh Farms LLC",
+            "harvester_business_phone": "+1-202-555-0100",
         },
     },
     {

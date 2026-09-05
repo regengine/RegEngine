@@ -23,6 +23,7 @@ _pkg = sys.modules[__package__]
 # KDE Validation
 # ---------------------------------------------------------------------------
 
+
 def _validate_event_kdes(event: IngestEvent) -> list[str]:
     """Validate that an event has all required KDEs for its CTE type."""
     errors: list[str] = []
@@ -40,7 +41,9 @@ def _validate_event_kdes(event: IngestEvent) -> list[str]:
 
     for kde_name in required:
         val = available.get(kde_name)
-        if val is None or (isinstance(val, str) and val.strip() == ""):
+        if kde_name == "harvester_business_phone" and not isinstance(val, str):
+            errors.append("Harvester business phone must be a non-empty string")
+        elif val is None or (isinstance(val, str) and val.strip() == ""):
             errors.append(f"Missing required KDE '{kde_name}' for {event.cte_type.value} CTE")
 
     return errors
@@ -50,19 +53,24 @@ def _validate_event_kdes(event: IngestEvent) -> list[str]:
 # Compliance Alerts
 # ---------------------------------------------------------------------------
 
+
 def _generate_alerts(event: IngestEvent) -> list[dict]:
     """Generate compliance alerts for an event."""
     alerts: list[dict] = []
 
     if event.cte_type.value in ("shipping", "receiving"):
         has_source = event.kdes.get("ship_from_location") or event.kdes.get("ship_from_gln")
-        has_dest = event.kdes.get("ship_to_location") or event.kdes.get("ship_to_gln") or event.kdes.get("receiving_location")
+        has_dest = (
+            event.kdes.get("ship_to_location") or event.kdes.get("ship_to_gln") or event.kdes.get("receiving_location")
+        )
         if not has_source or not has_dest:
-            alerts.append({
-                "severity": "warning",
-                "alert_type": "incomplete_route",
-                "message": "Shipping/receiving event missing source or destination identifiers",
-            })
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "alert_type": "incomplete_route",
+                    "message": "Shipping/receiving event missing source or destination identifiers",
+                }
+            )
 
     return alerts
 
@@ -70,6 +78,7 @@ def _generate_alerts(event: IngestEvent) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Post-Ingest Obligation Check
 # ---------------------------------------------------------------------------
+
 
 def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id: str) -> list[dict]:
     """
@@ -158,10 +167,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                         or available.get("immediate_previous_source")
                     )
                 elif event.cte_type.value == "shipping":
-                    passed = bool(
-                        available.get("ship_to_location")
-                        or available.get("ship_to_gln")
-                    )
+                    passed = bool(available.get("ship_to_location") or available.get("ship_to_gln"))
                 else:
                     passed = True
             elif validation_rule == "record_exists":
@@ -215,12 +221,14 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             "sev": severity,
                             "atype": "chain_break",
                             "msg": f"Missing KDE '{kde_key}' required by obligation",
-                            "details": json.dumps({
-                                "obligation_id": str(obl_id),
-                                "obligation_text": obl_text[:200],
-                                "risk_category": risk,
-                                "missing_kde": kde_key,
-                            }),
+                            "details": json.dumps(
+                                {
+                                    "obligation_id": str(obl_id),
+                                    "obligation_text": obl_text[:200],
+                                    "risk_category": risk,
+                                    "missing_kde": kde_key,
+                                }
+                            ),
                         },
                     )
                     alert_sp.commit()
