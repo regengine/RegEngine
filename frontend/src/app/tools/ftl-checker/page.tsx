@@ -91,7 +91,7 @@ export default function FTLCheckerPage() {
                 </EmailGate>
             </Suspense>
             <RelatedTools tools={[
-                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Events your supply chain must document under FSMA 204." },
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Events your supply chain often records under FSMA 204." },
                 { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether CTE/KDE fields are present for each FTL product and CTE type." },
             ]} />
         </>
