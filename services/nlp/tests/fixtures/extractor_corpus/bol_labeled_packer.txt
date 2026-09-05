@@ -1,8 +1,0 @@
-Bill of Lading
-Ship From: GLN 0011111111116
-Ship To: GLN 0022222222225
-Packed By: GLN 0033333333334
-TLC: 00012345678901-RM-2024-A
-Product: Romaine Lettuce Hearts
-QTY: 40 cases
-Ship Date: 03/10/2026

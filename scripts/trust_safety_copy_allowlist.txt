@@ -1,2 +1,0 @@
-# One relative path per line. Keep exceptions narrow and explain why they exist.
-frontend/src/__tests__/components/sandbox-diagnosis.test.ts  # negative assertion pins banned outcome-promise phrases remain absent from UI copy

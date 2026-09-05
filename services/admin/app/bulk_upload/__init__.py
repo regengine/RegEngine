@@ -1,1 +1,0 @@
-"""Supplier bulk-upload module."""

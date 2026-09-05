@@ -1,6 +1,0 @@
-Landing Report
-Source Vessel: FV Northern Star
-Port of Landing: Seattle
-Lot: 00012345678901-LR-2
-QTY: 500 lbs
-Date: 2026-03-07

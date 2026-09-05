@@ -1,7 +1,0 @@
-Bill of Lading
-Carrier: ColdExpress
-GLN: 0012345678905
-Delivery address GLN 0098765432108
-Lot: 00099999999999-LOT-7
-Quantity: 12 pallets
-Date: 2026-03-12

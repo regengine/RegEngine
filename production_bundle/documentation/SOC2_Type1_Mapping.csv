@@ -1,4 +1,0 @@
-Control,Requirement,Mapped Feature
-Access Control,SOC2 CC6.1,JWT + RLS
-System Operations,CC7.1,Audit Trail
-Change Management,CC8.1,Provenance Hash Chain

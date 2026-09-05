@@ -1,5 +1,0 @@
-# Mechanical reformat commits — ignored by git blame.
-# Configure once: git config blame.ignoreRevsFile .git-blame-ignore-revs
-
-# style: apply ruff format + import sort across repo
-9120a382a45f58ccadec2578badd849afba3a378

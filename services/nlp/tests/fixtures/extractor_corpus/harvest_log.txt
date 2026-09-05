@@ -1,7 +1,0 @@
-Harvest Log
-Harvester: Green Valley Crew
-Field ID: FLD-22
-Lot: 00012345678901-HV-9
-Product: Spinach
-QTY: 30 bins
-Date: 2026-03-09
