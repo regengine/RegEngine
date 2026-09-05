@@ -69,13 +69,10 @@ export function FreeToolPageShell({
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
                             <div className="text-sm font-medium">
-                                Compliance Note
+                                Educational Tool
                             </div>
                             <div className="text-sm text-muted-foreground">
-                                Free compliance tools powered by RegEngine&apos;s
-                                high-integrity data engine. Built on the same
-                                technology used for production FSMA 204
-                                traceability.
+                                Free self-check tool. Not a compliance certification or regulatory determination.
                             </div>
                         </div>
                         <Badge variant="secondary" className="rounded-xl">
