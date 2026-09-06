@@ -261,6 +261,8 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                     errors=[],
                 )
 
+        # The advisory lock above serializes every writer, including genesis.
+        # A row lock would unnecessarily require UPDATE on this append-only table.
         # --- Get chain head ---
         chain_head = self.session.execute(
             text("""
@@ -269,7 +271,6 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                 WHERE tenant_id = :tid
                 ORDER BY sequence_num DESC
                 LIMIT 1
-                FOR UPDATE
             """),
             {"tid": tenant_id},
         ).fetchone()
@@ -278,6 +279,21 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         next_sequence = (chain_head[1] + 1) if chain_head else 1
 
         chain_hash = compute_chain_hash(event.sha256_hash, previous_chain_hash)
+        if self.skip_chain_write:
+            # Webhook dual persistence shares one ledger entry. Reuse its
+            # hash rather than calculating a fictitious second chain link.
+            linked = self.session.execute(
+                text("""
+                    SELECT event_hash, chain_hash, sequence_num
+                    FROM fsma.hash_chain
+                    WHERE tenant_id = :tid AND cte_event_id = :event_id
+                """),
+                {"tid": tenant_id, "event_id": str(event.event_id)},
+            ).fetchone()
+            if linked:
+                if linked[0] != event.sha256_hash:
+                    raise ValueError("Canonical content does not match the existing ledger event hash")
+                chain_hash, next_sequence = linked[1], linked[2]
         event.chain_hash = chain_hash
 
         # --- Insert canonical event (fix #1252: ON CONFLICT DO NOTHING) ---
@@ -452,6 +468,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
             for row in rows:
                 existing_map[row[0]] = (str(row[1]), row[2], row[3])
 
+        # The tenant advisory lock protects this append-only read as well.
         # --- Get chain head ---
         chain_head = self.session.execute(
             text("""
@@ -460,7 +477,6 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                 WHERE tenant_id = :tid
                 ORDER BY sequence_num DESC
                 LIMIT 1
-                FOR UPDATE
             """),
             {"tid": tenant_id},
         ).fetchone()

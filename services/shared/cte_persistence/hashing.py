@@ -110,6 +110,23 @@ def compute_event_hash(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def compute_canonical_event_hash(event_id: str, tenant_id: str, event: Any) -> str:
+    """Hash the server-normalized webhook projection using the persisted ID.
+
+    The webhook writes one shared ledger entry for its legacy and canonical
+    rows. That entry must bind the canonical content that export verifies.
+    Never use a cached/caller-supplied digest or mutate the supplied projection.
+    Other legacy callers retain their existing digest format.
+    """
+    from shared.canonical_event import TraceabilityEvent
+
+    if not isinstance(event, TraceabilityEvent):
+        raise TypeError("canonical_event must be a normalized TraceabilityEvent")
+    if str(event.tenant_id) != tenant_id:
+        raise ValueError("canonical_event tenant does not match persistence tenant")
+    return event.model_copy(update={"event_id": UUID(event_id)}).compute_sha256_hash()
+
+
 def compute_chain_hash(event_hash: str, previous_chain_hash: Optional[str]) -> str:
     """
     Chain this event's hash to the previous chain hash.

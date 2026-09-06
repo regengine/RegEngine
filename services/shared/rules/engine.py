@@ -701,6 +701,7 @@ class RulesEngine:
         savepoint = self.session.begin_nested()
         try:
             self.session.execute(insert_stmt, insert_params)
+            savepoint.commit()
         except Exception as e:
             # The accept decision stands and the persist failure is absorbed
             # by the savepoint (#1372) — but the rows are salvaged
@@ -730,6 +731,7 @@ class RulesEngine:
             row_savepoint = self.session.begin_nested()
             try:
                 self.session.execute(insert_stmt, row_params)
+                row_savepoint.commit()
             except (SQLAlchemyError, Exception) as row_err:
                 row_savepoint.rollback()
                 logger.error(
@@ -874,6 +876,7 @@ class RulesEngine:
             savepoint = self.session.begin_nested()
             try:
                 self.session.execute(insert_stmt, value_dicts)
+                savepoint.commit()
             except (SQLAlchemyError, Exception) as e:
                 savepoint.rollback()
                 logger.error(

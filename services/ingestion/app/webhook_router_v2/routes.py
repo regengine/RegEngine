@@ -258,6 +258,10 @@ async def ingest_events(
                         "location_gln": event.location_gln,
                         "location_name": event.location_name,
                         "kdes": event.kdes,
+                        # One ledger entry serves both persisted projections.
+                        # Construct its canonical content on the server; never
+                        # accept a digest or projection from the request body.
+                        "_canonical_event": _pkg.normalize_webhook_event(event, tenant_id, source=payload.source),
                         # #2902 — without this key ``store_events_batch`` reads an
                         # empty alert list, derives validation_status='valid' for
                         # every event and writes no compliance_alerts row, while
@@ -388,6 +392,7 @@ async def ingest_events(
                             location_name=event.location_name,
                             kdes=event.kdes,
                             alerts=alerts,
+                            canonical_event=_pkg.normalize_webhook_event(event, tenant_id, source=payload.source),
                         )
 
                         # Obligation-CTE rules (#2901) — same call as the batch

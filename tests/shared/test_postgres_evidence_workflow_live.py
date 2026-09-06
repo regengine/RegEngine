@@ -1,0 +1,269 @@
+"""Real migrated PostgreSQL regressions; opt in with an owned scratch cluster.
+
+REGENGINE_EVIDENCE_TEST_DATABASE_URL must also be DATABASE_URL, use the
+regengine runtime role, and name an ue_* database on the private Unix socket
+created by the local measurement runner. No existing development DB is used.
+"""
+
+import copy
+import importlib.util
+import json
+import os
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from threading import Barrier
+from types import SimpleNamespace
+from uuid import uuid4
+
+import psycopg2
+import pytest
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+
+ROOT = Path(__file__).resolve().parents[2]
+DATABASE = os.getenv("REGENGINE_EVIDENCE_TEST_DATABASE_URL")
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(not DATABASE, reason="Explicit disposable PostgreSQL required"),
+]
+
+
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def workflow(monkeypatch):
+    url = make_url(DATABASE)
+    assert DATABASE == os.environ["DATABASE_URL"]
+    assert url.username == "regengine" and url.database.startswith("ue_")
+    assert not url.host and url.query["host"].startswith("/tmp/regengine-ue-pg-")
+    connect = socket.socket.connect
+
+    def unix_only(sock, address):
+        if sock.family != socket.AF_UNIX:
+            raise OSError("External network disabled in PostgreSQL regression")
+        return connect(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", unix_only)
+    proof = _load("pg_evidence_proof", ROOT / "scripts/verify_inflow_to_regengine_e2e.py")
+    proof._configure_paths()
+    admin = psycopg2.connect(
+        dbname=url.database, user="ue_cluster_admin", host=url.query["host"], port=url.query["port"]
+    )
+    admin.autocommit = True
+    tenant, other = str(uuid4()), str(uuid4())
+    with admin.cursor() as cur:
+        for tid in (tenant, other):
+            cur.execute(
+                "INSERT INTO public.tenants(id,name,slug,status) VALUES (%s,%s,%s,'active')",
+                (tid, "Synthetic PostgreSQL regression", f"pg-test-{tid}"),
+            )
+    client = proof._build_app(tenant)
+    headers = proof._auth_headers(SimpleNamespace(api_key=os.environ["API_KEY"]), tenant)
+    start = datetime.now(timezone.utc).date() - timedelta(days=2)
+    end = start + timedelta(days=1)
+    template = json.loads(
+        json.dumps(proof._events_from_csv()).replace("2026-04-26", str(start)).replace("2026-04-27", str(end))
+    )
+
+    def events(count):
+        result = []
+        for lot in range(count // 5):
+            for original in template:
+                event = copy.deepcopy(original)
+                event["traceability_lot_code"] = f"PG-REGRESSION-{lot}"
+                result.append(event)
+        return result
+
+    def post(values, claimed_tenant=tenant):
+        return proof._post_json(
+            client,
+            "/api/v1/webhooks/ingest",
+            {"tenant_id": claimed_tenant, "source": "pg-evidence-regression", "events": values},
+            headers,
+        )
+
+    def query(statement, tid=tenant):
+        from shared.database import SessionLocal
+        from shared.tenant_context import set_tenant_guc
+
+        with SessionLocal() as db:
+            set_tenant_guc(db, tid)
+            return db.execute(text(statement)).fetchall()
+
+    def package():
+        return client.get(
+            f"/api/v1/fda/export/all?tenant_id={tenant}&start_date={start}&end_date={end}&format=package",
+            headers=headers,
+        )
+
+    yield SimpleNamespace(
+        proof=proof,
+        client=client,
+        headers=headers,
+        admin=admin,
+        tenant=tenant,
+        other=other,
+        events=events,
+        post=post,
+        query=query,
+        package=package,
+    )
+    client.close()
+    admin.close()
+
+
+def _assert_package(workflow, tmp_path, *, verified):
+    response = workflow.package()
+    assert response.status_code == 200, response.text[:300]
+    path = tmp_path / "package.zip"
+    path.write_bytes(response.content)
+    verifier = _load("pg_evidence_verifier", ROOT / "frontend/public/sdk/verify_chain.py")
+    assert verifier.verify_bundle(str(path)) == (0 if verified else 1)
+
+
+def test_full_500_event_request_retry_alerts_and_verified_export(workflow, tmp_path):
+    w = workflow
+    roles = w.query(
+        "SELECT current_user, rolsuper, rolbypassrls, has_any_column_privilege(current_user,'fsma.hash_chain','UPDATE') FROM pg_roles WHERE rolname=current_user"
+    )[0]
+    assert tuple(roles) == ("regengine", False, False, False)
+    response = w.post(w.events(500))
+    assert response.status_code == 200, response.text[:1000]
+    assert response.json()["accepted"] == 500 and response.json()["rejected"] == 0
+    assert w.query("SELECT COUNT(*) FROM fsma.cte_events")[0][0] == 500
+    assert w.query("SELECT COUNT(*) FROM fsma.traceability_events")[0][0] == 500
+    assert w.query("SELECT COUNT(*) FROM fsma.hash_chain")[0][0] == 500
+    assert w.query("SELECT COUNT(*) FROM fsma.compliance_alerts")[0][0] == 100
+    assert (
+        w.query("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE cte_event_id IS DISTINCT FROM event_id")[0][0] == 0
+    )
+    assert (
+        w.query("""SELECT COUNT(*) FROM fsma.traceability_events t
+          JOIN fsma.cte_events e ON e.id=t.event_id AND e.tenant_id=t.tenant_id
+          JOIN fsma.hash_chain h ON h.cte_event_id=t.event_id AND h.tenant_id=t.tenant_id
+          WHERE t.sha256_hash<>h.event_hash OR e.sha256_hash<>h.event_hash
+             OR t.chain_hash<>h.chain_hash OR e.chain_hash<>h.chain_hash""")[0][0]
+        == 0
+    )
+    retry = w.post(w.events(500))
+    assert retry.status_code == 200
+    assert retry.json()["events"] == response.json()["events"]
+    assert w.query("SELECT COUNT(*) FROM fsma.hash_chain")[0][0] == 500
+    assert w.query("SELECT COUNT(*) FROM fsma.compliance_alerts")[0][0] == 100
+    _assert_package(w, tmp_path, verified=True)
+
+
+def test_concurrent_replays_keep_one_event_and_chain_population(workflow, tmp_path):
+    w = workflow
+    ready = Barrier(2)
+
+    def submit(_):
+        ready.wait(timeout=10)
+        return w.post(w.events(5))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(submit, range(2)))
+    assert all(r.status_code == 200 and r.json()["accepted"] == 5 for r in responses)
+    assert responses[0].json()["events"] == responses[1].json()["events"]
+    assert w.query("SELECT COUNT(*) FROM fsma.cte_events")[0][0] == 5
+    assert w.query("SELECT COUNT(*) FROM fsma.hash_chain")[0][0] == 5
+    _assert_package(w, tmp_path, verified=True)
+
+
+def test_tenant_obligation_alert_is_durable_without_rejecting_event(workflow, tmp_path):
+    w = workflow
+    with w.admin.cursor() as cur:
+        cur.execute(
+            "INSERT INTO public.obligations(tenant_id,obligation_text,risk_category) VALUES (%s,%s,'CRITICAL') RETURNING id",
+            (w.tenant, "Synthetic required field"),
+        )
+        obligation = cur.fetchone()[0]
+        cur.execute(
+            """INSERT INTO public.obligation_cte_rules(obligation_id,cte_type,required_kde_key,validation_rule)
+                       VALUES (%s,'harvesting','synthetic_missing_kde','present')""",
+            (obligation,),
+        )
+    response = w.post(w.events(5))
+    assert response.status_code == 200 and response.json()["accepted"] == 5
+    alerts = w.query(
+        "SELECT cte_event_id,event_id,details FROM fsma.compliance_alerts WHERE alert_type='chain_break' AND severity='critical'"
+    )
+    assert len(alerts) == 1 and alerts[0][0] == alerts[0][1]
+    assert alerts[0][2]["obligation_id"] == str(obligation)
+    _assert_package(w, tmp_path, verified=True)
+
+
+def test_single_event_fallback_preserves_canonical_hash_and_alerts(workflow, tmp_path, monkeypatch):
+    from shared.cte_persistence import CTEPersistence
+
+    def unavailable_batch(*args, **kwargs):
+        raise RuntimeError("Synthetic batch failure to exercise per-event recovery")
+
+    monkeypatch.setattr(CTEPersistence, "store_events_batch", unavailable_batch)
+    response = workflow.post(workflow.events(5))
+    assert response.status_code == 200 and response.json()["accepted"] == 5
+    assert workflow.query("SELECT COUNT(*) FROM fsma.compliance_alerts")[0][0] == 1
+    assert workflow.query("SELECT COUNT(*) FROM fsma.hash_chain")[0][0] == 5
+    _assert_package(workflow, tmp_path, verified=True)
+
+
+@pytest.mark.parametrize("column", ["quantity", "event_timestamp"])
+def test_canonical_content_tampering_is_rejected(workflow, tmp_path, column):
+    w = workflow
+    assert w.post(w.events(5)).status_code == 200
+    _assert_package(w, tmp_path, verified=True)
+    # Simulate corruption by a cluster administrator; runtime ACLs stay intact.
+    expression = "quantity + 0.25" if column == "quantity" else "event_timestamp + interval '1 minute'"
+    with w.admin.cursor() as cur:
+        cur.execute(f"UPDATE fsma.traceability_events SET {column}={expression} WHERE tenant_id=%s", (w.tenant,))
+    _assert_package(w, tmp_path, verified=False)
+
+
+def test_runtime_tenant_and_input_boundaries(workflow):
+    from shared.database import SessionLocal
+
+    w = workflow
+    assert w.post(w.events(5)).status_code == 200
+    for table in ("fsma.cte_events", "fsma.traceability_events", "fsma.hash_chain"):
+        assert w.query(f"SELECT COUNT(*) FROM {table}", w.other)[0][0] == 0
+        with SessionLocal() as db, pytest.raises(Exception, match="tenant context required"):
+            db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+    mismatch = w.post(w.events(5), w.other)
+    assert mismatch.status_code == 409 and mismatch.json()["detail"]["code"] == "E_TENANT_MISMATCH"
+    invalid = w.events(5)
+    invalid[0]["quantity"] = "invalid-number"
+    assert w.post(invalid).status_code == 422
+    denied = w.client.post(
+        "/api/v1/webhooks/ingest",
+        json={"tenant_id": w.tenant, "events": w.events(5)},
+        headers={
+            **w.headers,
+            "X-Webhook-Signature": "sha256=" + "0" * 64,
+            "Idempotency-Key": "invalid-signature-regression",
+        },
+    )
+    assert denied.status_code == 401
+    assert w.query("SELECT COUNT(*) FROM fsma.hash_chain")[0][0] == 5
+
+
+def test_canonical_single_and_batch_writers_need_no_chain_update_privilege(workflow):
+    from app.webhook_models import IngestEvent
+    from shared.canonical_event import normalize_webhook_event
+    from shared.canonical_persistence import CanonicalEventStore
+    from shared.database import SessionLocal
+
+    events = [normalize_webhook_event(IngestEvent(**e), workflow.tenant) for e in workflow.events(5)]
+    with SessionLocal() as db:
+        store = CanonicalEventStore(db, dual_write=True)
+        assert store.persist_event(events[0]).success
+        assert all(r.success for r in store.persist_events_batch(events[1:]))
+        db.commit()
+        store.set_tenant_context(workflow.tenant)
+        assert store.verify_chain_canonical(workflow.tenant).valid
