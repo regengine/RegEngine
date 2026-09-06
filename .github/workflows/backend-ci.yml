@@ -101,7 +101,9 @@ jobs:
     name: Test ${{ matrix.service }}
     needs: dependency-lock
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Ingestion's ~5,000 coverage tests reached 98% before the old 10-minute
+    # job deadline, which also includes service startup and dependency install.
+    timeout-minutes: ${{ matrix.service == 'ingestion' && 15 || 10 }}
 
     strategy:
       fail-fast: false
