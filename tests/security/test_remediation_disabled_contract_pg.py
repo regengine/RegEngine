@@ -43,12 +43,10 @@ def test_production_rejects_remediation_enablement():
 def runtime_connection():
     designated = guarded_live_database_url()
     if not designated:
-        pytest.skip("no designated migrated scratch database")
+        pytest.fail("a designated migrated scratch database is required for direct-role proof")
     raw = os.getenv("REMEDIATION_TEST_APP_DSN")
     if not raw:
-        if os.getenv("REGENGINE_REQUIRE_DB") == "1":
-            pytest.fail("REMEDIATION_TEST_APP_DSN is required for direct-role proof")
-        pytest.skip("no direct remediation runtime test credential")
+        pytest.fail("REMEDIATION_TEST_APP_DSN is required for direct-role proof")
     target, runtime = make_url(designated), make_url(raw)
     assert (target.host, target.port, target.database) == (runtime.host, runtime.port, runtime.database)
     engine = create_engine(raw)
