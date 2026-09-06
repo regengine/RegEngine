@@ -1,8 +1,8 @@
 """Real migrated PostgreSQL regressions; opt in with an owned scratch cluster.
 
-REGENGINE_EVIDENCE_TEST_DATABASE_URL must also be DATABASE_URL, use the
-regengine runtime role, and name an ue_* database on the private Unix socket
-created by the local measurement runner. No existing development DB is used.
+REGENGINE_EVIDENCE_TEST_DATABASE_URL must also be DATABASE_URL and use the
+regengine runtime role. Only the local measurement runner's private Unix
+socket or the explicitly designated CI live_suite database is accepted.
 """
 
 import copy
@@ -41,8 +41,23 @@ def _load(name, path):
 def workflow(monkeypatch):
     url = make_url(DATABASE)
     assert DATABASE == os.environ["DATABASE_URL"]
-    assert url.username == "regengine" and url.database.startswith("ue_")
-    assert not url.host and url.query["host"].startswith("/tmp/regengine-ue-pg-")
+    assert url.username == "regengine"
+    if url.host:
+        # The CI job provisions this isolated service database. Never reuse a
+        # developer or hosted database just because credentials are available.
+        assert os.getenv("CI") == "true" and os.getenv("REGENGINE_REQUIRE_DB") == "1"
+        assert url.host in {"localhost", "127.0.0.1"} and url.port == 5432 and url.database == "live_suite"
+        admin_url = make_url(os.environ["REGENGINE_EVIDENCE_ADMIN_DATABASE_URL"])
+        assert (admin_url.host, admin_url.port, admin_url.database) == (url.host, url.port, url.database)
+        assert admin_url.username == "postgres"
+        admin_connect = dict(
+            dbname=url.database, user=admin_url.username, password=admin_url.password, host=url.host, port=url.port
+        )
+    else:
+        assert url.database.startswith("ue_") and url.query["host"].startswith("/tmp/regengine-ue-pg-")
+        admin_connect = dict(
+            dbname=url.database, user="ue_cluster_admin", host=url.query["host"], port=url.query["port"]
+        )
     connect = socket.socket.connect
 
     def unix_only(sock, address):
@@ -53,9 +68,7 @@ def workflow(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", unix_only)
     proof = _load("pg_evidence_proof", ROOT / "scripts/verify_inflow_to_regengine_e2e.py")
     proof._configure_paths()
-    admin = psycopg2.connect(
-        dbname=url.database, user="ue_cluster_admin", host=url.query["host"], port=url.query["port"]
-    )
+    admin = psycopg2.connect(**admin_connect)
     admin.autocommit = True
     tenant, other = str(uuid4()), str(uuid4())
     with admin.cursor() as cur:

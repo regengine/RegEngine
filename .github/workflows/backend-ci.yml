@@ -1288,6 +1288,36 @@ jobs:
             exit 1
           fi
 
+      - name: Verify ingestion and exports with the restricted runtime role
+        env:
+          # Separate process from the provider-credential live suite above.
+          DATABASE_URL: postgresql://regengine:runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          REGENGINE_EVIDENCE_TEST_DATABASE_URL: postgresql://regengine:runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          REGENGINE_EVIDENCE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+          PYTHON_DOTENV_DISABLED: "1"
+          REGENGINE_ENV: test
+          ENV: test
+          ENVIRONMENT: test
+          ENABLE_NEO4J_SYNC: "false"
+          RULES_ENGINE_ENFORCE: "off"
+          FDA_EXPORT_V1_READ_CANONICAL: "0"
+          API_KEY: local-synthetic-measurement-key  # pragma: allowlist secret
+          REGENGINE_API_KEY: local-synthetic-measurement-key  # pragma: allowlist secret
+          WEBHOOK_HMAC_SECRET: local-synthetic-measurement-signature-only  # pragma: allowlist secret
+          REDIS_URL: redis://127.0.0.1:1/0
+          WEBHOOK_INGEST_RATE_LIMIT_RPM: "1000"
+          WEBHOOK_READ_RATE_LIMIT_RPM: "1000"
+          INGESTION_RBAC_RATE_LIMIT_DEFAULT_RPM: "1000"
+        run: |
+          export PYTHONPATH="${PWD}:${PWD}/services:${PWD}/services/ingestion:${PYTHONPATH}"
+          set -o pipefail
+          pytest tests/shared/test_postgres_evidence_workflow_pg.py \
+            -v -rs --no-cov -o "testpaths=tests" | tee /tmp/evidence-workflow.log
+          if grep -qE '[0-9]+ skipped' /tmp/evidence-workflow.log; then
+            echo "::error::restricted-role evidence workflow skipped"
+            exit 1
+          fi
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     # Distinct name from the frontend gate ("Frontend CI Status Gate"). The
