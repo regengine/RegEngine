@@ -25,7 +25,7 @@ const localEmailOutboxPath =
     process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
     '/tmp/regengine-playwright-email-outbox.jsonl';
 const localSharedDatabaseUrl =
-    process.env.DATABASE_URL || 'sqlite:////tmp/regengine-playwright-shared.db';
+    process.env.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/playwright_shared'; // pragma: allowlist secret — local test service
 const localAdminDatabaseUrl =
     process.env.ADMIN_FALLBACK_SQLITE || 'sqlite:////tmp/regengine-playwright-admin.db';
 const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
@@ -45,6 +45,8 @@ if (!externalBaseURL) {
     process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
     process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
     process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
+    process.env.ENABLE_DB_API_KEYS = 'true';
+    process.env.REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379/0';
     process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
     process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
     process.env.DATABASE_URL = localSharedDatabaseUrl;

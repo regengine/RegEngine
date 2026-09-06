@@ -34,9 +34,7 @@ CLASSIFICATIONS = frozenset({"public", "tenant-scoped", "global-sysadmin", "work
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 DISALLOWED_GATE_STATUSES = frozenset({404, 405, 422})
 IDENTITY_OBSERVER_OPERATION = "admin:GET:/auth/me"
-IDENTITY_OBSERVER_POINTERS = frozenset(
-    {"/email", "/is_sysadmin", "/role", "/tenant_id", "/user_id"}
-)
+IDENTITY_OBSERVER_POINTERS = frozenset({"/email", "/is_sysadmin", "/role", "/tenant_id", "/user_id"})
 ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 PATH_PARAMETER_RE = re.compile(r"\{([^}:]+)(?::([^}]+))?\}")
@@ -380,10 +378,7 @@ def _require_identity_observer_operation(
         and operation["method"] == "GET"
         and operation["path"] == "/auth/me"
     ):
-        raise GateError(
-            f"{location} must use the canonical authenticated identity read "
-            f"{IDENTITY_OBSERVER_OPERATION}"
-        )
+        raise GateError(f"{location} must use the canonical authenticated identity read {IDENTITY_OBSERVER_OPERATION}")
     return operation
 
 
@@ -814,9 +809,7 @@ def validate_gate_configuration(
                 actor, kind=kind, request=request, protected_tenant=protected_tenant, adapter=adapter
             )
             if kind == "identity-isolation-write" and actor_name == contract_actors[operation_id]:
-                raise GateError(
-                    f"{probe_location}.actor must differ from the already-erased operation contract actor"
-                )
+                raise GateError(f"{probe_location}.actor must differ from the already-erased operation contract actor")
             _validate_expected_statuses(probe.get("expect"), kind=kind, location=f"{probe_location}.expect")
             used_variables |= _validate_request(
                 request, operation, variables, plan_dir=plan_dir, location=f"{probe_location}.request"
@@ -886,22 +879,15 @@ def validate_gate_configuration(
                             f"{probe_location}.observe actor must be an active non-sysadmin session "
                             "in the protected tenant"
                         )
-                    if (
-                        observe_actor_name == actor_name
-                        or observe_actor["credential_env"] == actor["credential_env"]
-                    ):
-                        raise GateError(
-                            f"{probe_location} mutation and observation actors must use distinct sessions"
-                        )
+                    if observe_actor_name == actor_name or observe_actor["credential_env"] == actor["credential_env"]:
+                        raise GateError(f"{probe_location} mutation and observation actors must use distinct sessions")
                     if observe_actor_name == contract_actors[operation_id]:
                         raise GateError(
                             f"{probe_location}.observe actor must differ from the already-erased "
                             "operation contract actor"
                         )
                     if observe_statuses != [200]:
-                        raise GateError(
-                            f"{probe_location}.observe.expect.status must be exactly [200]"
-                        )
+                        raise GateError(f"{probe_location}.observe.expect.status must be exactly [200]")
                     _assert_actor_for_contract(observe_actor, observe_operation)
                 pointers = observe.get("json_pointers")
                 if (
@@ -936,9 +922,7 @@ def validate_gate_configuration(
                 )
             if kind == "identity-isolation-write":
                 if not isinstance(mutator_observe, dict):
-                    raise GateError(
-                        f"{probe_location}.mutator_observe is required for identity-isolation-write"
-                    )
+                    raise GateError(f"{probe_location}.mutator_observe is required for identity-isolation-write")
                 _exact_keys(
                     mutator_observe,
                     {"expect", "operation", "post_expect", "request"},
@@ -960,18 +944,14 @@ def validate_gate_configuration(
                     location=f"{probe_location}.mutator_observe.expect",
                 )
                 if mutator_statuses != [200]:
-                    raise GateError(
-                        f"{probe_location}.mutator_observe.expect.status must be exactly [200]"
-                    )
+                    raise GateError(f"{probe_location}.mutator_observe.expect.status must be exactly [200]")
                 mutator_post_statuses = _validate_expected_statuses(
                     mutator_observe.get("post_expect"),
                     kind="unauthenticated",
                     location=f"{probe_location}.mutator_observe.post_expect",
                 )
                 if mutator_post_statuses != [401]:
-                    raise GateError(
-                        f"{probe_location}.mutator_observe.post_expect.status must be exactly [401]"
-                    )
+                    raise GateError(f"{probe_location}.mutator_observe.post_expect.status must be exactly [401]")
                 used_variables |= _validate_request(
                     mutator_observe.get("request", {}),
                     mutator_operation,
@@ -991,9 +971,7 @@ def validate_gate_configuration(
                 )
                 request_count += 2
             elif mutator_observe is not None:
-                raise GateError(
-                    f"{probe_location}.mutator_observe is only valid for identity-isolation-write"
-                )
+                raise GateError(f"{probe_location}.mutator_observe is only valid for identity-isolation-write")
             request_count += 1
 
         required = _adapter_requirements(adapter, by_adapter[adapter])
@@ -1180,16 +1158,16 @@ def _assert_identity_isolation_preflight(
     protected_tenant_id: str,
 ) -> None:
     identities = (("mutator", mutator), ("observer", observer))
-    for label, payload in identities:
-        user_id = payload.get("user_id")
+    for label, identity_response in identities:
+        user_id = identity_response.get("user_id")
         if not isinstance(user_id, str) or not user_id:
             raise GateError(f"identity-isolation-write {label} /auth/me must return a non-empty user_id")
-        if payload.get("tenant_id") != protected_tenant_id:
+        if identity_response.get("tenant_id") != protected_tenant_id:
             raise GateError(
                 f"identity-isolation-write {label} /auth/me tenant_id did not match "
                 "the resolved protected tenant fixture"
             )
-        if payload.get("is_sysadmin") is not False:
+        if identity_response.get("is_sysadmin") is not False:
             raise GateError(f"identity-isolation-write {label} /auth/me must report is_sysadmin false")
     if mutator["user_id"] == observer["user_id"]:
         raise GateError(
@@ -1469,8 +1447,7 @@ def execute_gate(
                     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                         raise GateError(f"{operation['operation']} mutation observation did not return JSON") from exc
                 before = [
-                    _observation_value_bytes(_json_pointer(payload, pointer))
-                    for pointer in observe["json_pointers"]
+                    _observation_value_bytes(_json_pointer(payload, pointer)) for pointer in observe["json_pointers"]
                 ]
 
             if probe["kind"] == "identity-isolation-write":
@@ -1539,8 +1516,7 @@ def execute_gate(
                     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                         raise GateError(f"{operation['operation']} mutation observation did not return JSON") from exc
                 after = [
-                    _observation_value_bytes(_json_pointer(payload, pointer))
-                    for pointer in observe["json_pointers"]
+                    _observation_value_bytes(_json_pointer(payload, pointer)) for pointer in observe["json_pointers"]
                 ]
                 if before != after:
                     if probe["kind"] == "identity-isolation-write":

@@ -32,8 +32,10 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import app.authz as authz  # noqa: E402
-from app import audit_log as al  # noqa: E402
-from app import identity_router  # noqa: E402
+from app import (
+    audit_log as al,  # noqa: E402
+    identity_router,  # noqa: E402
+)
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.canonical_router import _get_db_session, router as canonical_router  # noqa: E402
 from app.webhook_compat import _verify_api_key  # noqa: E402
@@ -181,12 +183,10 @@ class TestIngestionRunsTotal:
         assert resp.status_code == 200
         listing_sql = [s for s in session.seen_sql if s.startswith("SELECT id, source_system")]
         assert listing_sql, "expected the ingestion-runs listing query to run"
-        assert "OFFSET" in listing_sql[0], (
-            "ingestion-runs must paginate in SQL, not by capping at :lim (#2864)"
+        assert "OFFSET" in listing_sql[0], "ingestion-runs must paginate in SQL, not by capping at :lim (#2864)"
+        assert any(isinstance(p, dict) and p.get("off") == 40 for p in session.seen_params), (
+            "the requested offset must be bound into the query (#2864)"
         )
-        assert any(
-            isinstance(p, dict) and p.get("off") == 40 for p in session.seen_params
-        ), "the requested offset must be bound into the query (#2864)"
 
 
 # ---------------------------------------------------------------------------
@@ -206,10 +206,7 @@ class TestIdentityEntitiesTotal:
 
     def test_total_reports_full_count_not_page_size(self, principal) -> None:
         """137 entities exist; the 100-row page must still report total=137."""
-        page = [
-            (f"ent-{i:03d}", "location", f"Facility {i}", None, None, "verified", 1.0)
-            for i in range(100)
-        ]
+        page = [(f"ent-{i:03d}", "location", f"Facility {i}", None, None, "verified", 1.0) for i in range(100)]
         session = _SqlRoutedSession(
             {
                 "SELECT COUNT(*) FROM fsma.canonical_entities": _Result(row=(137,)),
@@ -243,13 +240,11 @@ class TestIdentityEntitiesTotal:
         listing_sql = [s for s in session.seen_sql if s.startswith("SELECT entity_id, entity_type")]
         assert listing_sql, "expected the entity listing query to run"
         assert "LIMIT :lim" in listing_sql[0] and "OFFSET :off" in listing_sql[0], (
-            "identity/entities must paginate in SQL rather than hard-code "
-            "LIMIT 100 (#2864)"
+            "identity/entities must paginate in SQL rather than hard-code LIMIT 100 (#2864)"
         )
-        assert any(
-            isinstance(p, dict) and p.get("lim") == 25 and p.get("off") == 50
-            for p in session.seen_params
-        ), "the requested limit/offset must be bound into the query (#2864)"
+        assert any(isinstance(p, dict) and p.get("lim") == 25 and p.get("off") == 50 for p in session.seen_params), (
+            "the requested limit/offset must be bound into the query (#2864)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +294,6 @@ class TestAuditLogTotal:
             "COUNT(*) FROM fsma.fda_export_log": _Result(row=(counts["export"],)),
             "COUNT(*) FROM fsma.compliance_alerts": _Result(row=(counts["alert"],)),
         }
-        monkeypatch.setattr(al, "_get_admin_db_session", lambda: _SqlRoutedSession(routes))
         monkeypatch.setattr(al, "get_db_safe", lambda: _SqlRoutedSession(routes))
 
     @pytest.fixture(autouse=True)
@@ -310,21 +304,11 @@ class TestAuditLogTotal:
         merged list is short while the tenant's real audit trail is far
         larger.
         """
-        monkeypatch.setattr(
-            al, "_query_admin_audit_logs", lambda s, t, limit: self._entries("admin", limit)
-        )
-        monkeypatch.setattr(
-            al, "_query_cte_events", lambda s, t, limit: self._entries("cte", limit)
-        )
-        monkeypatch.setattr(
-            al, "_query_exports", lambda s, t, limit: self._entries("exp", limit)
-        )
-        monkeypatch.setattr(
-            al, "_query_alert_events", lambda s, t, limit: self._entries("alert", limit)
-        )
-        self._install_sessions(
-            monkeypatch, {"admin": 500, "cte": 500, "export": 500, "alert": 500}
-        )
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: self._entries("admin", limit))
+        monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: self._entries("cte", limit))
+        monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: self._entries("exp", limit))
+        monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: self._entries("alert", limit))
+        self._install_sessions(monkeypatch, {"admin": 500, "cte": 500, "export": 500, "alert": 500})
         yield
 
     def test_total_exceeds_returned_window(self, client: TestClient) -> None:
@@ -345,45 +329,32 @@ class TestAuditLogTotal:
         resp = client.get(f"/api/v1/audit-log/{TENANT_ID}", params={"page": 1, "page_size": 20})
         body = resp.json()
         assert "truncated" in body, (
-            "the audit-log response must tell the caller when the merged "
-            "window does not cover every record (#2864)"
+            "the audit-log response must tell the caller when the merged window does not cover every record (#2864)"
         )
         assert body["truncated"] is True
 
     def test_not_truncated_when_sources_fit(self, client: TestClient, monkeypatch) -> None:
         """A tenant whose whole trail fits must not be flagged truncated."""
-        monkeypatch.setattr(
-            al, "_query_admin_audit_logs", lambda s, t, limit: self._entries("admin", 3)
-        )
-        monkeypatch.setattr(
-            al, "_query_cte_events", lambda s, t, limit: self._entries("cte", 3)
-        )
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: self._entries("admin", 3))
+        monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: self._entries("cte", 3))
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
-        self._install_sessions(
-            monkeypatch, {"admin": 3, "cte": 3, "export": 0, "alert": 0}
-        )
+        self._install_sessions(monkeypatch, {"admin": 3, "cte": 3, "export": 0, "alert": 0})
 
         resp = client.get(f"/api/v1/audit-log/{TENANT_ID}", params={"page": 1, "page_size": 20})
         body = resp.json()
         assert body["total"] == 6
         assert body["truncated"] is False
 
-    def test_unreachable_source_is_flagged_not_counted_as_zero(
-        self, client: TestClient, monkeypatch
-    ) -> None:
+    def test_unreachable_source_is_flagged_not_counted_as_zero(self, client: TestClient, monkeypatch) -> None:
         """A database outage must never read as a complete, empty trail.
 
         Failing closed matters here: a silent 0 would let a caller conclude
         the tenant has no audit history when the truth is that we could not
         look.
         """
-        monkeypatch.setattr(
-            al, "_query_admin_audit_logs", lambda s, t, limit: self._entries("admin", 3)
-        )
-        self._install_sessions(
-            monkeypatch, {"admin": 3, "cte": 0, "export": 0, "alert": 0}
-        )
+        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: self._entries("admin", 3))
+        self._install_sessions(monkeypatch, {"admin": 3, "cte": 0, "export": 0, "alert": 0})
 
         def _boom():
             raise RuntimeError("ingestion database unavailable")
@@ -391,12 +362,8 @@ class TestAuditLogTotal:
         monkeypatch.setattr(al, "get_db_safe", _boom)
 
         resp = client.get(f"/api/v1/audit-log/{TENANT_ID}", params={"page": 1, "page_size": 20})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["truncated"] is True, (
-            "an unreachable audit source must be reported as an incomplete "
-            "view, never as a confirmed-empty one (#2864)"
-        )
+        assert resp.status_code == 503
+        assert "temporarily unavailable" in resp.json()["detail"]
 
     def test_deep_page_is_served_from_a_widened_window(self, client: TestClient) -> None:
         """A page past the old 600-row ceiling must contain rows.
@@ -417,3 +384,16 @@ class TestAuditLogTotal:
             "deep pages were empty because each source was capped at a fixed "
             "limit regardless of the requested page (#2864)"
         )
+
+
+@pytest.mark.parametrize("params", [{"page": 0}, {"page_size": 0}, {"page_size": 201}, {"page": 501}])
+def test_audit_pagination_rejects_invalid_or_unbounded_windows(params, monkeypatch):
+    app = FastAPI()
+    app.include_router(al.router)
+    install_tenant_context_override(app)
+
+    def unexpected_database_read():
+        raise AssertionError("invalid pagination must not reach the database")
+
+    monkeypatch.setattr(al, "get_db_safe", unexpected_database_read)
+    assert TestClient(app).get(f"/api/v1/audit-log/{TENANT_ID}", params=params).status_code == 422

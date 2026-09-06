@@ -123,14 +123,22 @@ def test_checklist_exists_and_states_the_history_caveat():
 
 
 @pytest.mark.parametrize("path", _CONFIDENTIAL)
-def test_checklist_entries_are_real_paths(path: str):
-    """Keep the checklist honest.
+def test_checklist_entries_are_tracked_or_explicitly_quarantined(path: str):
+    """Removed HEAD files remain on the historical disclosure checklist.
 
-    An entry naming a file that is neither tracked nor present has been
-    relocated or renamed; leaving it listed makes the checklist read as though
-    more is outstanding than really is, and erodes trust in the whole list.
+    Require an explicit ignore rule when a path no longer exists, so the
+    checklist still prevents accidental recommits after relocation.
     """
-    assert _tracked(path) or (_REPO_ROOT / path).exists(), (
+    ignored = (
+        subprocess.run(
+            ["git", "check-ignore", "--no-index", "--", path],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    )
+    assert _tracked(path) or (_REPO_ROOT / path).exists() or ignored, (
         f"{_CHECKLIST.relative_to(_REPO_ROOT)} lists {path!r}, which is neither "
-        f"tracked by git nor present on disk. If it was removed, delete the entry."
+        "tracked, present, nor quarantined by an ignore rule."
     )

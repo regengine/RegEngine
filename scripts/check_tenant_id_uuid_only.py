@@ -102,6 +102,12 @@ _PAT_TENANT_TEXT = re.compile(
 # for task_queue) supersede in the live chain; v078/v080 use the
 # NULLIF-guarded fail-closed form. New migrations get no such pass.
 POLICY_PREDICATE_GRANDFATHERED = {
+    # v111 is the reviewed login-role cutover. Identity bootstrap must deny
+    # absent context with NULL (not raise before a tenant is resolved). Every
+    # tenant-GUC reference is NULLIF-guarded; the direct-role DB suite checks
+    # unset/cross-tenant denial and runtime escalation. Keep new migrations
+    # on get_tenant_context(); the dedicated regression below pins this seam.
+    "alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.py",
     "alembic/sql/V052__ensure_tenant_tables.sql",
     "alembic/versions/20260327_v048_operational_hardening.py",
     "alembic/versions/20260327_v049_fsma_audit_trail.py",

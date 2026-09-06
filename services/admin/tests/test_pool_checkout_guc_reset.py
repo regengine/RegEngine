@@ -101,8 +101,7 @@ class TestCheckoutGucReset:
         caller's id — the isolation predicate applied to the wrong principal.
         """
         cursor = MagicMock()
-        dbapi_connection = MagicMock()
-        dbapi_connection.cursor.return_value = cursor
+        dbapi_connection = self._idle_connection(cursor)
 
         admin_database._reset_tenant_guc_on_checkout(dbapi_connection, MagicMock(), MagicMock())
 
@@ -126,22 +125,15 @@ class TestIdentityGucIsTransactionScoped:
         COMMIT/ROLLBACK, matching the shared engine's canonical primitive
         (``shared.tenant_context.set_tenant_guc``).
         """
-        import inspect
-
-        from services.admin.app import dependencies as admin_dependencies
-
-        source = inspect.getsource(admin_dependencies)
-        writes = [
-            line.strip()
-            for line in source.splitlines()
-            if "set_config('regengine.user_id'" in line and "db.execute" in line
-        ]
-        assert writes, "no regengine.user_id write found — did the GUC move?"
-        for line in writes:
-            assert ", true)" in line, (
-                "regengine.user_id is written SESSION-scoped; it will survive "
-                f"the request on the pooled connection: {line}"
-            )
+        db = MagicMock()
+        db.bind = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+        user_id = "11111111-1111-4111-8111-111111111111"
+        admin_database.bind_authenticated_user_context(db, user_id)
+        statement, params = db.execute.call_args.args
+        assert "regengine.user_id" in str(statement)
+        assert ", true)" in str(statement)
+        assert user_id not in str(statement)
+        assert params == {"user_id": user_id}
 
     def test_sqlite_engine_skips_silently(self, monkeypatch):
         # SQLite does not honor set_config and does not use RLS — the

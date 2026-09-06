@@ -10,7 +10,7 @@ repository to public.
 
 ---
 
-## 1. Confidential material is still tracked
+## 1. Confidential material remains in history
 
 The paths below are business and fundraising material, outside the scope
 `REPO_PURPOSE.md` defines for this repository. They serve no build, test, or
@@ -19,8 +19,8 @@ remain readable in git history. **They are listed by path only; do not paste
 their contents into issues, pull requests, or commit messages.**
 
 <!-- The block below is parsed by tests/security/test_repo_visibility_claims_2811.py.
-     Keep one path per line. Add a path here when confidential material is added
-     to the tree; remove one only when it is genuinely untracked. -->
+     Keep one path per line. Relocated paths remain listed and gitignored
+     until their history has been deliberately purged and verified. -->
 
 ```confidential-paths
 RegEngine_Investor_Outreach_Memo.docx

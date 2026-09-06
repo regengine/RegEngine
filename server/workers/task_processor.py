@@ -414,13 +414,7 @@ TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any], Optional[str]], None]] = {
 # The worker must never claim them even if they somehow end up with
 # status='pending'. Keep this list narrowly scoped and update it when a
 # new non-handler task_type starts sharing the queue.
-NON_WORKER_TASK_TYPES = frozenset(
-    {
-        "recall_drill",  # #1199 — recall drill history rows
-        "recall",  # #1199 — recall state machine rows (future)
-    }
-)
-
+from shared.task_types import NON_WORKER_TASK_TYPES
 
 # ── Core worker loop ─────────────────────────────────────────────
 
@@ -487,8 +481,9 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
 
 def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
     """Run the claim UPDATE...SKIP LOCKED and commit when a row was won."""
-    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
+
+    from services.admin.app.database import arm_global_admin_context
 
     arm_global_admin_context(db)
     row = db.execute(
@@ -528,9 +523,10 @@ def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
     return row
 
 
-def _complete_task(db, task_id: int) -> None:
-    from services.admin.app.database import arm_global_admin_context
+def _complete_task(db, task_id: int) -> bool:
     from sqlalchemy import text
+
+    from services.admin.app.database import arm_global_admin_context
 
     arm_global_admin_context(db)
     result = db.execute(
@@ -546,6 +542,7 @@ def _complete_task(db, task_id: int) -> None:
     if not result.rowcount:
         logger.warning("task_complete_skipped_lost_lock", task_id=task_id, worker_id=WORKER_ID)
     db.commit()
+    return result.rowcount == 1
 
 
 def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
@@ -558,8 +555,9 @@ def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
     The ``locked_by = :worker`` predicate is the safety: if we no longer
     own the task we must NOT extend the lock.
     """
-    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
+
+    from services.admin.app.database import arm_global_admin_context
 
     arm_global_admin_context(db)
     result = db.execute(
@@ -669,7 +667,7 @@ def _retry_delay_seconds(attempts: int, cap_seconds: int = 3600) -> int:
     return min(int(delay), cap_seconds)
 
 
-def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
+def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -> bool:
     """Transition a task to a retry or terminal state.
 
     When ``attempts < max_attempts``:
@@ -680,12 +678,13 @@ def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -
         - status  → 'dead'
         - locks cleared; scheduled_at left alone (dead never runs again).
     """
-    _fail_task_inner(db, task_id, error, attempts, max_attempts)
+    return _fail_task_inner(db, task_id, error, attempts, max_attempts)
 
 
-def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
-    from services.admin.app.database import arm_global_admin_context
+def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> bool:
     from sqlalchemy import text
+
+    from services.admin.app.database import arm_global_admin_context
 
     arm_global_admin_context(db)
     if attempts >= max_attempts:
@@ -735,6 +734,7 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
     if not result.rowcount:
         logger.warning("task_fail_skipped_lost_lock", task_id=task_id, worker_id=WORKER_ID)
     db.commit()
+    return result.rowcount == 1
 
 
 def _worker_loop() -> None:
@@ -983,8 +983,9 @@ def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
     not block process exit.
     """
     try:
-        from services.admin.app.database import SessionLocal, arm_global_admin_context
         from sqlalchemy import text
+
+        from services.admin.app.database import SessionLocal, arm_global_admin_context
     except ImportError:
         logger.warning("abandoned_task_release_no_db_module", task_id=task_id)
         return

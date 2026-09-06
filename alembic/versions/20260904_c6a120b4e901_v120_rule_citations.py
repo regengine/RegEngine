@@ -7,6 +7,7 @@ only rows still carrying this migration's citation and also records an audit row
 """
 
 import json
+from contextlib import contextmanager
 
 import sqlalchemy as sa
 
@@ -187,11 +188,40 @@ def _phone_rule(reverse=False):
         )
 
 
+@contextmanager
+def _rule_owner_writes():
+    """Scope owner visibility to this transaction; runtime policies stay intact.
+
+    The dedicated owner has NOBYPASSRLS. ALTER takes a table lock until
+    commit, so no other session can observe the temporary NO FORCE state.
+    On failure PostgreSQL rolls back both the data and RLS changes.
+    """
+    conn = op.get_bind()
+    forced = (
+        conn.execute(
+            sa.text("""SELECT relname FROM pg_class
+                   WHERE oid IN ('fsma.rule_definitions'::regclass,
+                                 'fsma.rule_audit_log'::regclass)
+                     AND relforcerowsecurity ORDER BY relname""")
+        )
+        .scalars()
+        .all()
+    )
+    for table in forced:
+        # Names come only from the two fixed regclass values above.
+        conn.execute(sa.text(f"ALTER TABLE fsma.{table} NO FORCE ROW LEVEL SECURITY"))
+    yield
+    for table in forced:
+        conn.execute(sa.text(f"ALTER TABLE fsma.{table} FORCE ROW LEVEL SECURITY"))
+
+
 def upgrade():
-    _apply()
-    _phone_rule()
+    with _rule_owner_writes():
+        _apply()
+        _phone_rule()
 
 
 def downgrade():
-    _phone_rule(reverse=True)
-    _apply(reverse=True)
+    with _rule_owner_writes():
+        _phone_rule(reverse=True)
+        _apply(reverse=True)

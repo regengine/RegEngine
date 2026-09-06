@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.tenant_context import TenantContext, set_tenant_guc_if_uuid
@@ -48,6 +48,8 @@ class AuditLogResponse(BaseModel):
     page: int
     page_size: int
     entries: list[AuditEntry]
+    truncated: bool = False
+    total_is_exact: bool = True
 
 
 def _to_iso(value: Any) -> str:
@@ -316,6 +318,38 @@ def _query_alert_events(db_session, tenant_id: str, limit: int) -> list[AuditEnt
     return entries
 
 
+def _count_sources(db_session, tenant_id: str) -> int:
+    """Count the same tenant's physical source rows without list-window caps."""
+    queries = {
+        "audit_logs": "SELECT COUNT(*) FROM audit_logs WHERE tenant_id = :tenant_id",
+        "fsma.cte_events": "SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tenant_id",
+        "fsma.fda_export_log": "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tenant_id",
+        "fsma.compliance_alerts": "SELECT COUNT(*) FROM fsma.compliance_alerts WHERE tenant_id = :tenant_id",
+    }
+    total = 0
+    for table, query in queries.items():
+        schema, name = table.split(".") if "." in table else ("public", table)
+        if not _table_exists(db_session, name, schema):
+            continue
+        if name == "compliance_alerts":
+            columns = {
+                row[0]
+                for row in db_session.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'fsma' AND table_name = 'compliance_alerts'"
+                    )
+                ).fetchall()
+            }
+            if "tenant_id" not in columns:
+                if "org_id" not in columns:
+                    continue
+                query = "SELECT COUNT(*) FROM fsma.compliance_alerts WHERE org_id = :tenant_id"
+        row = db_session.execute(text(query), {"tenant_id": tenant_id}).fetchone()
+        total += int(row[0])
+    return total
+
+
 @router.get(
     "/{tenant_id}",
     response_model=AuditLogResponse,
@@ -323,8 +357,8 @@ def _query_alert_events(db_session, tenant_id: str, limit: int) -> list[AuditEnt
 )
 async def get_audit_log(
     tenant_id: str,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
     event_type: str | None = None,
     category: str | None = None,
     ctx: TenantContext = Depends(require_tenant_context),
@@ -333,7 +367,13 @@ async def get_audit_log(
     validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
 
-    db_session = get_db_safe()
+    window = max(200, page * page_size)
+    if window > 10000:
+        raise HTTPException(status_code=422, detail="Audit window exceeds 10000 rows; use the audit export")
+    try:
+        db_session = get_db_safe()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Audit data is temporarily unavailable") from exc
     if db_session is None:
         raise HTTPException(status_code=503, detail="Audit data is temporarily unavailable")
 
@@ -342,10 +382,11 @@ async def get_audit_log(
         # local slug-based fixtures working; UUID tenants always receive the
         # transaction-scoped RLS context before the first application read.
         set_tenant_guc_if_uuid(db_session, tenant_id)
-        entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=200))
-        entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
-        entries.extend(_query_exports(db_session, tenant_id, limit=100))
-        entries.extend(_query_alert_events(db_session, tenant_id, limit=100))
+        source_total = _count_sources(db_session, tenant_id)
+        entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=window))
+        entries.extend(_query_cte_events(db_session, tenant_id, limit=window))
+        entries.extend(_query_exports(db_session, tenant_id, limit=window))
+        entries.extend(_query_alert_events(db_session, tenant_id, limit=window))
     except Exception as exc:
         db_session.rollback()
         logger.error("audit_log_query_failed error=%s tenant_id=%s", str(exc), tenant_id)
@@ -359,12 +400,13 @@ async def get_audit_log(
     entries = list(dedup.values())
     entries.sort(key=lambda item: item.timestamp, reverse=True)
 
+    truncated = source_total > len(entries)
     if event_type:
         entries = [entry for entry in entries if entry.event_type == event_type]
     if category:
         entries = [entry for entry in entries if entry.category == category]
 
-    total = len(entries)
+    total = len(entries) if event_type or category else source_total
     start = max((page - 1) * page_size, 0)
     paged_entries = entries[start : start + page_size]
 
@@ -374,4 +416,6 @@ async def get_audit_log(
         page=page,
         page_size=page_size,
         entries=paged_entries,
+        truncated=truncated,
+        total_is_exact=not (truncated and (event_type or category)),
     )

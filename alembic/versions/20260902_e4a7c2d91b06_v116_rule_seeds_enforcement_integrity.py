@@ -42,6 +42,7 @@ Downgrade restores the previous logic/citation/severity verbatim.
 """
 
 import json
+from contextlib import contextmanager
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -114,7 +115,34 @@ def _update_rule(conn, title: str, changed: str, **cols) -> None:
     )
 
 
-def upgrade() -> None:
+@contextmanager
+def _rule_owner_writes():
+    """Scope owner visibility to this transaction; runtime policies stay intact.
+
+    The dedicated owner has NOBYPASSRLS. ALTER takes a table lock until
+    commit, so no other session can observe the temporary NO FORCE state.
+    On failure PostgreSQL rolls back both the data and RLS changes.
+    """
+    conn = op.get_bind()
+    forced = (
+        conn.execute(
+            sa.text("""SELECT relname FROM pg_class
+                   WHERE oid IN ('fsma.rule_definitions'::regclass,
+                                 'fsma.rule_audit_log'::regclass)
+                     AND relforcerowsecurity ORDER BY relname""")
+        )
+        .scalars()
+        .all()
+    )
+    for table in forced:
+        # Names come only from the two fixed regclass values above.
+        conn.execute(sa.text(f"ALTER TABLE fsma.{table} NO FORCE ROW LEVEL SECURITY"))
+    yield
+    for table in forced:
+        conn.execute(sa.text(f"ALTER TABLE fsma.{table} FORCE ROW LEVEL SECURITY"))
+
+
+def _upgrade() -> None:
     conn = op.get_bind()
 
     # #3038 — date rules: require the actual KDE date, drop the
@@ -207,7 +235,7 @@ def upgrade() -> None:
         )
 
 
-def downgrade() -> None:
+def _downgrade() -> None:
     conn = op.get_bind()
 
     for title, (field,) in _DATE_RULE_LOGIC.items():
@@ -268,3 +296,13 @@ def downgrade() -> None:
         sa.text("DELETE FROM fsma.rule_definitions WHERE title = :t"),
         {"t": _HARVESTER_PHONE_RULE["title"]},
     )
+
+
+def upgrade() -> None:
+    with _rule_owner_writes():
+        _upgrade()
+
+
+def downgrade() -> None:
+    with _rule_owner_writes():
+        _downgrade()

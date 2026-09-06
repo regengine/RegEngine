@@ -44,7 +44,7 @@ def _build_scheduler_service_without_init():
 def _run_purge_and_capture():
     """Run purge_old_tasks against a mock session; return (sql, params)."""
     svc = _build_scheduler_service_without_init()
-    with patch("shared.database.SessionLocal") as session_factory:
+    with patch("services.admin.app.database.SessionLocal") as session_factory:
         db = MagicMock()
         db.execute.return_value.fetchall.return_value = []
         session_factory.return_value = db
@@ -291,7 +291,7 @@ class TestPurgeTelemetry:
         from services.scheduler import service as scheduler_service
 
         with (
-            patch("shared.database.SessionLocal") as session_factory,
+            patch("services.admin.app.database.SessionLocal") as session_factory,
             patch.object(scheduler_service.logger, "info") as log_info,
         ):
             db = MagicMock()

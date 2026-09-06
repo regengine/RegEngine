@@ -99,7 +99,7 @@ def test_merkle_root_handler_forwards_no_chain_evidence(monkeypatch) -> None:
     ingestion_dir = Path(__file__).resolve().parent.parent.parent / "services" / "ingestion"
     if str(ingestion_dir) not in sys.path:
         sys.path.insert(0, str(ingestion_dir))
-    from app.fda_export import merkle as merkle_mod
+    from services.ingestion.app.fda_export import merkle as merkle_mod
 
     session = _MerkleSession(chain_hashes=[], event_count=3)
 

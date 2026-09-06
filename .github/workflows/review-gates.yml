@@ -185,6 +185,8 @@ jobs:
           # upgrade created is expected. Lines are blanked, not deleted, so the
           # line numbers reported below still match the real file. Helper
           # functions defined after downgrade() are still scanned.
+          # Keep awk's $0 literal for awk, not shell expansion.
+          # shellcheck disable=SC2016
           UPGRADE_ONLY='/^def downgrade/{d=1} d && /^[A-Za-z@_]/ && !/^def downgrade/{d=0} {print (d ? "" : $0)}'
           FAILED=0
           for f in $CHANGED_MIGRATIONS; do
@@ -266,7 +268,11 @@ jobs:
           CREATE_RE='op\.create_table\(|CREATE TABLE'
           for f in $CHANGED_MIGRATIONS; do
             [ -f "$f" ] || continue
-            if grep -Eq "$CREATE_RE" "$f"; then
+            # Repairs to historical data backfills do not create tables.
+            # Check newly added create operations, including additions to an
+            # existing migration, instead of every old operation in the file.
+            ADDED=$(git diff --unified=0 origin/main...HEAD -- "$f" | grep '^+[^+]' || true)
+            if echo "$ADDED" | grep -Eq "$CREATE_RE"; then
               if ! grep -qi "ENABLE ROW LEVEL SECURITY" "$f"; then
                 echo "::error::Migration $f creates a table without enabling RLS — add op.execute(\"ALTER TABLE ... ENABLE ROW LEVEL SECURITY\")"
                 exit 1

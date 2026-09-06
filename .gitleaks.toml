@@ -33,6 +33,10 @@ regexes = [
 ]
 
 paths = [
+  # detect-secrets stores SHA-1 fingerprints and line metadata here, never
+  # plaintext credentials. Scanning those hashes creates recursive findings.
+  '''^\.secrets\.baseline$''',
+
   # Example / sample env files (never real credentials)
   '''\.env\.example$''',
   '''\.env\.sample$''',

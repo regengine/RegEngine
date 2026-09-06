@@ -92,9 +92,7 @@ def test_every_public_database_operation_uses_tenant_transaction_boundary() -> N
     """New operations must not bypass the transaction-local GUC helper."""
 
     tree = ast.parse(inspect.getsource(database_module))
-    manager = next(
-        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "DatabaseManager"
-    )
+    manager = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "DatabaseManager")
     lifecycle_methods = {"connect", "close", "set_tenant_context"}
     violations: list[str] = []
     for method in (node for node in manager.body if isinstance(node, ast.FunctionDef)):
@@ -133,7 +131,8 @@ def test_connect_disables_autocommit_and_is_idempotent(monkeypatch) -> None:
         return connection
 
     monkeypatch.setattr(
-        "regengine_ingestion.storage.database.psycopg.connect",
+        database_module.psycopg,
+        "connect",
         _connect,
     )
     manager = DatabaseManager(DatabaseConfig())

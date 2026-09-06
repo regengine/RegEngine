@@ -55,12 +55,9 @@ class TestCombineVerifications_Issue2506:
     def test_pure_legacy_tenant_is_valid(self):
         """Pure-legacy tenant (no canonical rows): canonical orphan-flags
         every row, legacy passes. Combined must be VALID."""
-        canonical = _canonical(
-            valid=False,
-            orphans=[1, 2],
-            errors=["Orphan chain row at seq=1: ...", "Orphan chain row at seq=2: ..."],
-            length=2,
-        )
+        # The canonical verifier now resolves legacy event content too;
+        # a pure legacy chain has a clean canonical verdict.
+        canonical = _canonical(valid=True, length=2)
         legacy = _legacy(valid=True, length=2)
         valid, length, errors = _combine_verifications(canonical, legacy)
         assert valid is True
@@ -71,7 +68,7 @@ class TestCombineVerifications_Issue2506:
         legacy = _legacy(valid=False, orphans=[2], errors=["Orphan chain row at seq=2: ..."], length=3)
         valid, length, errors = _combine_verifications(canonical, legacy)
         assert valid is False
-        assert any("BOTH stores" in e for e in errors)
+        assert "Orphan chain row at seq=2: ..." in errors
 
     def test_canonical_event_tamper_always_fails(self):
         """A canonical event-content tamper is real even if the legacy

@@ -628,6 +628,7 @@ class TestGetAuditLogEndpoint:
     def test_query_failure_returns_503_instead_of_partial_audit(self, client, monkeypatch):
         db_session = MagicMock()
         monkeypatch.setattr(al, "get_db_safe", lambda: db_session)
+
         def boom(*a, **kw):
             raise RuntimeError("admin-broken")
 
@@ -721,6 +722,7 @@ class TestGetAuditLogEndpoint:
             for i in range(30)
         ]
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        monkeypatch.setattr(al, "_count_sources", lambda s, t: 30)
         monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
@@ -733,29 +735,13 @@ class TestGetAuditLogEndpoint:
         assert body["page_size"] == 10
         assert len(body["entries"]) == 10
 
-    def test_page_less_than_one_treated_as_zero_offset(self, client, monkeypatch):
-        entries = [
-            AuditEntry(
-                id=f"e-{i}",
-                timestamp=f"2026-04-18T00:00:{i:02d}+00:00",
-                event_type="x",
-                category="y",
-                actor="a",
-                action="a",
-                resource="r",
-            )
-            for i in range(5)
-        ]
-        monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
-        monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
-        monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
-        monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
-        monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
+    def test_page_less_than_one_is_rejected(self, client, monkeypatch):
+        def unexpected_read():
+            raise AssertionError("invalid pagination must not query the database")
 
-        resp = client.get("/api/v1/audit-log/t1?page=0&page_size=3")
-        body = resp.json()
-        # max((0-1)*3, 0) = 0, so returns first 3
-        assert len(body["entries"]) == 3
+        monkeypatch.setattr(al, "get_db_safe", unexpected_read)
+        response = client.get("/api/v1/audit-log/t1", params={"page": 0})
+        assert response.status_code == 422
 
     def test_page_beyond_total_returns_empty(self, client, monkeypatch):
         entries = [
@@ -770,6 +756,7 @@ class TestGetAuditLogEndpoint:
             ),
         ]
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        monkeypatch.setattr(al, "_count_sources", lambda s, t: 1)
         monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])

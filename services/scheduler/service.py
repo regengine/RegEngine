@@ -47,6 +47,7 @@ from pytz import utc
 from shared.event_backbone import kafka_enabled
 from shared.observability import setup_standalone_observability
 from shared.observability.context import wrap_job_with_new_correlation
+from shared.task_types import NON_WORKER_TASK_TYPES, PURGEABLE_TASK_TYPES
 from sqlalchemy.exc import SQLAlchemyError
 
 from services.scheduler.app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
@@ -83,10 +84,8 @@ _STALE_COVERAGE_ZERO_RUNS = 7
 def _strict_database_role_cutover_enabled() -> bool:
     """Return whether control-plane work must be absent from DATABASE_URL."""
     environment = (
-        os.getenv("REGENGINE_ENV", "")
-        or os.getenv("ENVIRONMENT", "")
-        or os.getenv("ENV", "")
-    ).strip().lower()
+        (os.getenv("REGENGINE_ENV", "") or os.getenv("ENVIRONMENT", "") or os.getenv("ENV", "")).strip().lower()
+    )
     return environment in {"staging", "production"} or os.getenv(
         "REGENGINE_REQUIRE_RLS_ENFORCEMENT", ""
     ).strip().lower() in {"1", "true", "yes", "on"}
@@ -95,7 +94,13 @@ def _strict_database_role_cutover_enabled() -> bool:
 class SchedulerService:
     """Main scheduler service orchestrating all components."""
 
+    DEADLINE_TENANT_SCAN_LIMIT = 5000
+    DEADLINE_RENOTIFY_SECONDS = 3600
+    DEADLINE_ALERT_STATE_MAX = 10000
+
     def __init__(self):
+        self._deadline_alert_state = {}
+        self._deadline_alert_entries = 0
         self.settings = get_settings()
         self.state_manager = StateManager()
         # #1150 — pass the on-disk outbox path so failed deliveries
@@ -660,6 +665,7 @@ class SchedulerService:
             job_id="deadline_monitor",
             trigger=IntervalTrigger(minutes=5),
             name="FDA Request Deadline Monitor",
+            max_instances=1,
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
@@ -915,11 +921,12 @@ class SchedulerService:
         Postgres.
         """
         try:
+            from sqlalchemy import text as _sqltext
+
             from services.admin.app.database import (
                 SessionLocal,
                 arm_global_admin_context,
             )
-            from sqlalchemy import text as _sqltext
 
             db = SessionLocal()
             try:
@@ -932,16 +939,26 @@ class SchedulerService:
                         """
                         DELETE FROM fsma.task_queue
                         WHERE status IN ('completed', 'dead')
+                          AND task_type = ANY(:purgeable_task_types)
+                          AND NOT (task_type = ANY(:protected_task_types))
                           AND COALESCE(completed_at, created_at)
                               < NOW() - INTERVAL '30 days'
-                        RETURNING id
+                        RETURNING id, task_type
                         """
-                    )
+                    ),
+                    {
+                        "purgeable_task_types": sorted(PURGEABLE_TASK_TYPES),
+                        "protected_task_types": sorted(NON_WORKER_TASK_TYPES),
+                    },
                 )
                 rows = result.fetchall()
                 db.commit()
                 if rows:
-                    logger.info("task_queue_purged", rows=len(rows))
+                    by_type = {}
+                    for row in rows:
+                        kind = row[1] if len(row) > 1 else "unknown"
+                        by_type[kind] = by_type.get(kind, 0) + 1
+                    logger.info("task_queue_purged", rows=len(rows), by_task_type=by_type)
                 else:
                     logger.debug("task_queue_purge_noop")
             finally:
@@ -1010,6 +1027,21 @@ class SchedulerService:
         with _tracer.start_as_current_span("scheduler.check_request_deadlines"):
             self._check_request_deadlines_inner()
 
+    def _deadline_alert_due(self, tenant_id, urgency, case_id):
+        now = time.monotonic()
+        key = (urgency, case_id)
+        bucket = self._deadline_alert_state.get(tenant_id, {})
+        previous = bucket.get(key)
+        if previous is not None and now - previous < self.DEADLINE_RENOTIFY_SECONDS:
+            return False, False
+        # Untracked overflow is reported rather than silently suppressing a
+        # breach. The cache never grows beyond the configured process bound.
+        if previous is not None or self._deadline_alert_entries < self.DEADLINE_ALERT_STATE_MAX:
+            if previous is None:
+                self._deadline_alert_entries += 1
+            self._deadline_alert_state.setdefault(tenant_id, {})[key] = now
+        return True, previous is not None
+
     def _check_request_deadlines_inner(self) -> None:
         try:
             from shared.database import SessionLocal
@@ -1028,7 +1060,9 @@ class SchedulerService:
                 # check_deadline_status find the active cases.
                 from shared.maintenance_tenants import list_maintenance_tenant_ids  # noqa: PLC0415
 
-                tenant_ids = list_maintenance_tenant_ids()
+                tenant_ids = list_maintenance_tenant_ids(limit=self.DEADLINE_TENANT_SCAN_LIMIT)
+                if len(tenant_ids) >= self.DEADLINE_TENANT_SCAN_LIMIT:
+                    logger.error("deadline_monitor_tenant_scan_truncated", limit=self.DEADLINE_TENANT_SCAN_LIMIT)
 
                 total_overdue = 0
                 total_critical = 0
@@ -1048,21 +1082,40 @@ class SchedulerService:
                     total_overdue += len(overdue)
                     total_critical += len(critical)
 
+                    active = {(c["urgency"], c["request_case_id"]) for c in overdue + critical}
+                    bucket = self._deadline_alert_state.get(tid, {})
+                    for key in list(bucket):
+                        if key not in active:
+                            del bucket[key]
+                            self._deadline_alert_entries -= 1
+                    if not bucket:
+                        self._deadline_alert_state.pop(tid, None)
+
                     for case in overdue:
+                        emit, renotify = self._deadline_alert_due(tid, "overdue", case["request_case_id"])
+                        if not emit:
+                            logger.debug("deadline_overdue_repeat", tenant_id=tid, case_id=case["request_case_id"])
+                            continue
                         logger.error(
                             "deadline_overdue",
                             tenant_id=tid,
                             case_id=case["request_case_id"],
+                            renotify=renotify,
                             hours_overdue=abs(case["hours_remaining"]),
                             status=case["package_status"],
                             requesting_party=case["requesting_party"],
                         )
 
                     for case in critical:
+                        emit, renotify = self._deadline_alert_due(tid, "critical", case["request_case_id"])
+                        if not emit:
+                            logger.debug("deadline_critical_repeat", tenant_id=tid, case_id=case["request_case_id"])
+                            continue
                         logger.warning(
                             "deadline_critical",
                             tenant_id=tid,
                             case_id=case["request_case_id"],
+                            renotify=renotify,
                             hours_remaining=case["hours_remaining"],
                             status=case["package_status"],
                         )

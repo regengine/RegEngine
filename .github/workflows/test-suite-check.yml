@@ -72,7 +72,7 @@ jobs:
         run: |
           # --continue-on-collection-errors: pytest otherwise aborts at the
           # first ERROR and the summary line is never printed.
-          # No -q so the "N tests collected, M errors" line survives.
+          # Clear inherited -q; exactly one -q emits nodeids and the summary.
           set +e
           # ``-q`` is passed EXPLICITLY, not inherited from pyproject addopts.
           # The root-representation grep below is path-anchored ("^tests/"),
@@ -82,11 +82,15 @@ jobs:
           # on every run. Flagged by review on #2990 — refuted today only
           # because addopts happens to carry -q, so pin it here instead of
           # depending on that.
-          OUTPUT=$(python3 -m pytest --collect-only -q --continue-on-collection-errors 2>&1)
+          OUTPUT=$(python3 -m pytest -o addopts= --import-mode=importlib --asyncio-mode=auto --collect-only -q --continue-on-collection-errors 2>&1)
           STATUS=$?
           set -e
           echo "--- pytest output (tail) ---"
           echo "$OUTPUT" | tail -30
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::pytest collection failed (exit $STATUS)"
+            exit "$STATUS"
+          fi
           SUMMARY=$(echo "$OUTPUT" | grep -E '[0-9]+ tests? collected' | tail -1)
           COUNT=$(echo "$SUMMARY" | grep -oE '[0-9]+ tests? collected' | grep -oE '[0-9]+' || echo "0")
           ERRORS=$(echo "$SUMMARY" | grep -oE '[0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
@@ -181,6 +185,7 @@ jobs:
             --ignore=tests/invariants/test_backfill_canonical.py \
             --ignore=tests/security/test_tenant_isolation_phase1.py \
             --ignore=tests/security/test_account_erasure_identity_isolation_pg.py \
+            --ignore=tests/security/test_remediation_disabled_contract_pg.py \
             --ignore=tests/security/test_security_audit_fixes.py \
             --ignore=tests/security/test_auth_coverage.py \
             --ignore=tests/shared/test_visibility_timeout_2918.py \

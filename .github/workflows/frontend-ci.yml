@@ -329,9 +329,34 @@ jobs:
   # ── E2E Tests (Playwright) ───────────────────────────────
   e2e:
     name: Passwordless Auth E2E (Chromium)
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: playwright_shared
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_shared # pragma: allowlist secret
+      PGOPTIONS: "-c timezone=UTC -c search_path=public,fsma,extensions"
       REGENGINE_ENV: test
       REGENGINE_E2E_MODE: "true"
       REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
@@ -427,6 +452,9 @@ jobs:
             echo "::warning::playwright install chromium attempt ${attempt} failed or stalled past 6m"
           done
           exit 1
+
+      - name: Prepare isolated PostgreSQL E2E fixture
+        run: python scripts/setup_e2e_postgres.py
 
       - name: Run E2E tests
         id: run_e2e

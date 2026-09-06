@@ -112,11 +112,76 @@ record the draft PR's exact hosted SHA and results separately.
 The read-only live catalog preflight and restricted-owner v079 rehearsal
 identified additional migration blockers. See the
 [controlled migration preparation](../operations/MIGRATION_V079_TO_V120_2026_09_05.md)
-and its reusable SQL preflight. The restricted-owner upgrade failed at v116;
-the earlier superuser-based local migration checks do not establish that the
-production migration can succeed. No production migration was executed.
+and its reusable SQL preflight. Repairs to v084, v116, and v120 now pass a
+PostgreSQL 17.11 dump/restore of a synthetic v079 fixture as the restricted
+migration owner, including a managed rerun and evidence/identity preservation.
+The approved production backup and provider ownership reconciliation remain
+outstanding. No production migration was executed.
+
+The subsequent CI repair also fixes a missing verified-Stripe-webhook limiter,
+audits pagination with uncapped source counts and explicit truncation metadata,
+and makes the database outage path return 503. The audit API now validates
+page sizes (1–200) and bounds the requested window to 10,000 rows; larger
+requests use the export surface. Existing negative auth, CSRF, rate-limit,
+and tenant-isolation assertions remain enforced.
+
+Browser tests now use a dedicated PostgreSQL 17/Redis fixture with real scoped
+API keys; a private local outbox supplies those keys to the browser harness.
+The setup rejects production mode, remote hosts, other database names, and
+SQLite before opening a connection. Local browser acceptance: **23 passed,
+2 existing skips**. Root tests pass with the locked Python 3.11 dependencies.
+The legacy dead-code guard passes after removing 20 unreachable frontend files;
+the obsolete duplicate secrets-export script is removed in favor of the
+existing guarded `export_env_bundle.py`.
+
+Secret scanning still requires separate resolution. The exact
+`.secrets.baseline` path contains detector fingerprints, so scanning those
+hashes recursively is excluded from Gitleaks. Newly detected baseline entries
+were reviewed as synthetic demo hashes, labels, or negative-test fixtures.
+The history scan remains enabled and still reports possible credentials,
+including historical `.env.production` and diagnostic scripts. No blanket
+history baseline or credential-revocation claim is made. These findings must
+be investigated and real credentials revoked before security acceptance.
 
 Do not squash revisions still needed by the v079 environment or retire legacy
 writes from these local results. The existing WS-1d gates still require live
 reconciliation, export parity, a verified soak, and all direct legacy writers
 to be cut over before legacy tables become read-only.
+
+
+## Additional failures exposed by hosted CI
+
+All four PostgreSQL 17 seeded-history jobs, browser E2E, collection, root-fast
+execution, dependency freshness, and frontend checks passed on draft PR #3071's
+initial candidate. The newly unblocked live suite exposed a v111 managed-rerun
+defect: it revoked v113's invite lookup permission. The repair preserves that
+narrow function for `regengine_sysadmin` only; the ordinary runtime remains
+denied invite reads and lookup execution.
+
+The remaining service repairs retain the current auth and role contracts:
+
+- Retired master-key tests now assert denial, and erasure tests target the
+  current atomic identity-mutation path. Metrics tests use the current bounded
+  labels. Pool-reset tests still prove failed resets discard connections and
+  identity writes stay transaction-local.
+- Deadline monitoring limits tenant discovery, reports truncation, suppresses
+  repeated alerts with a bounded per-process cache and hourly re-notification,
+  and allows one scheduler instance at a time. Cache overflow remains alerting;
+  a process restart may repeat alerts. It is not durable cross-process dedupe.
+- Task retention uses the shared allowlist and independent evidence denylist.
+  Recall and unknown task types remain stored. Finalization reports whether
+  the worker still owned the row; stolen or released locks remain rejected.
+- Raw psycopg tenant binding now calls the canonical cursor helper inside the
+  same transaction. Invalid identifiers and cross-tenant reuse still fail
+  before application SQL, with rollback tests covering failed operations.
+- The positive remediation integration lane contradicted the release-approved
+  router set and v111's intentionally absent grants. Its production acceptance
+  step now checks disabled-route and actual-role denial. The existing feature
+  tests remain in `services/ingestion/tests/remediation` for future promotion;
+  no new privileges were granted. Existing token/outbox background grants
+  remain; case/manifest access and public token-lookup functions stay denied.
+
+The full admin, scheduler, and shared suites pass locally with locked Python
+3.11 dependencies; the tenant-trust Semgrep scan is clear. Hosted results for
+the final commit remain the authoritative CI record. Historical secret
+findings and the missing approved production restore remain release blockers.

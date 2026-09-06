@@ -27,6 +27,8 @@ from app.fsma_readiness_compat import router as fsma_readiness_compat_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from server.router_policy import PRODUCTION_ENABLED_ROUTERS
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 ENDPOINTS = ("/api/v1/fsma/export-jobs", "/api/v1/fsma/mappings")
@@ -90,6 +92,8 @@ class TestNotImplementedStatus:
 _PROD_ENV = {
     "REGENGINE_ENV": "production",
     "ENVIRONMENT": "production",
+    "ENABLED_ROUTERS": ",".join(sorted(PRODUCTION_ENABLED_ROUTERS)),
+    "REDIS_URL": "redis://localhost:6379/15",
     "DATABASE_URL": "postgresql://localhost:5432/regengine_test",
     "ADMIN_DATABASE_URL": "postgresql+psycopg://localhost:5432/regengine_admin_test",
     "AUTH_SECRET_KEY": "test-secret-key-with-enough-length",  # pragma: allowlist secret
@@ -101,9 +105,9 @@ import json, os, server.main as m
 print(json.dumps({
     "paths": sorted({
         r.path for r in m.app.routes
-        if getattr(r, "path", "").startswith("/api/v1/fsma")
+        if getattr(r, "path", "") in {"/api/v1/fsma/export-jobs", "/api/v1/fsma/mappings"}
     }),
-    "valid_names": sorted(m._VALID_ROUTER_NAMES),
+    "valid_names": sorted(m.VALID_ROUTER_NAMES),
 }))
 """
 
@@ -115,6 +119,9 @@ def _enumerate_production_routes(disabled: str | None = None) -> dict:
     for test_only in ("AUTH_TEST_BYPASS_TOKEN", "ENABLE_EXPERIMENTAL_ROUTERS", "DISABLED_ROUTERS"):
         env.pop(test_only, None)
     if disabled is not None:
+        env["REGENGINE_ENV"] = "test"
+        env["ENVIRONMENT"] = "test"
+        env.pop("ENABLED_ROUTERS", None)
         env["DISABLED_ROUTERS"] = disabled
     proc = subprocess.run(
         [sys.executable, "-c", _ENUMERATE],
@@ -136,16 +143,15 @@ def _enumerate_production_routes(disabled: str | None = None) -> dict:
 class TestOperatorGate:
     def test_router_has_a_name_operators_can_reference(self) -> None:
         result = _enumerate_production_routes()
-        assert "fsma_readiness_compat" in result["valid_names"], (
-            "the compat router has no entry in _VALID_ROUTER_NAMES, so "
-            "DISABLED_ROUTERS cannot address it"
+        assert "readiness" in result["valid_names"], (
+            "the readiness owner has no entry in VALID_ROUTER_NAMES, so DISABLED_ROUTERS cannot address it"
         )
 
-    def test_mounted_by_default_in_production(self) -> None:
-        """Naming the router must not change the default deployment."""
+    def test_mounted_under_approved_readiness_owner(self) -> None:
+        """Compatibility routes inherit the approved readiness owner."""
         result = _enumerate_production_routes()
         assert result["paths"] == list(ENDPOINTS)
 
     def test_disabled_routers_removes_the_stubs(self) -> None:
-        result = _enumerate_production_routes(disabled="fsma_readiness_compat")
+        result = _enumerate_production_routes(disabled="readiness")
         assert result["paths"] == []

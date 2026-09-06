@@ -33,6 +33,7 @@ from services.shared.tenant_context import (  # noqa: E402
     TenantContext,
     apply_tenant_context,
     set_tenant_guc,
+    set_tenant_guc_cursor,
     set_tenant_guc_if_uuid,
 )
 
@@ -255,3 +256,21 @@ class TestApplyTenantContext:
         with pytest.raises(ValueError, match="not a valid UUID"):
             apply_tenant_context(session, ctx)
         assert session.calls == []
+
+
+@pytest.mark.parametrize("bad", [None, "", "not-a-uuid", "'; DROP TABLE tenants; --"])
+def test_raw_cursor_rejects_invalid_tenant_before_sql(bad):
+    cursor = _RecordingSession()
+    with pytest.raises(ValueError):
+        set_tenant_guc_cursor(cursor, bad)
+    assert cursor.calls == []
+
+
+def test_raw_cursor_uses_bound_transaction_local_tenant():
+    cursor = _RecordingSession()
+    tenant = "11111111-1111-1111-1111-111111111111"
+    set_tenant_guc_cursor(cursor, tenant)
+    sql, params = cursor.calls[0]
+    assert "set_config" in sql and "true" in sql and "%s" in sql
+    assert tenant not in sql
+    assert params == (tenant,)

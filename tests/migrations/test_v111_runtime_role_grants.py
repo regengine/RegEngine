@@ -28,10 +28,7 @@ ROLE_ADMIN_URL = os.getenv("ROLE_ADMIN_DATABASE_URL")
 
 pytestmark = pytest.mark.skipif(
     not (OWNER_URL and RUNTIME_URL and ADMIN_URL and ROLE_ADMIN_URL),
-    reason=(
-        "direct migration, runtime, admin, and provider role-admin PostgreSQL "
-        "URLs are required"
-    ),
+    reason=("direct migration, runtime, admin, and provider role-admin PostgreSQL URLs are required"),
 )
 
 TARGET_SCHEMAS = ("public", "fsma", "audit", "dlq", "ingestion")
@@ -297,17 +294,12 @@ def test_cutover_is_reapplicable_by_schema_owner(
     with migration_owner_engine.begin() as connection:
         # Seed a stale column ACL that a prior cutover/runbook could have left.
         # A table-level REVOKE alone does not remove pg_attribute.attacl.
-        connection.execute(
-            text("GRANT UPDATE (email) ON public.users TO regengine")
-        )
+        connection.execute(text("GRANT UPDATE (email) ON public.users TO regengine"))
 
         _apply_v111(connection, migration_module, monkeypatch)
         _apply_v111(connection, migration_module, monkeypatch)
         assert not connection.execute(
-            text(
-                "SELECT has_column_privilege("
-                "'regengine', 'public.users', 'email', 'UPDATE')"
-            )
+            text("SELECT has_column_privilege('regengine', 'public.users', 'email', 'UPDATE')")
         ).scalar_one()
 
 
@@ -361,15 +353,18 @@ def test_enforced_lane_uses_exact_dedicated_migration_owner(
         ).all()
         assert memberships == []
 
-        assert connection.execute(
-            text(
-                """
+        assert (
+            connection.execute(
+                text(
+                    """
                 SELECT pg_get_userbyid(datdba)
                   FROM pg_database
                  WHERE datname = current_database()
                 """
-            )
-        ).scalar_one() == expected_role
+                )
+            ).scalar_one()
+            == expected_role
+        )
 
         schema_owners = dict(
             connection.execute(
@@ -385,9 +380,7 @@ def test_enforced_lane_uses_exact_dedicated_migration_owner(
         )
         assert set(schema_owners) == set(TARGET_SCHEMAS)
         assert schema_owners["public"] in {expected_role, "pg_database_owner"}
-        assert {
-            owner for schema, owner in schema_owners.items() if schema != "public"
-        } == {expected_role}
+        assert {owner for schema, owner in schema_owners.items() if schema != "public"} == {expected_role}
 
         wrong_relations = connection.execute(
             text(
@@ -463,9 +456,7 @@ def test_deployed_module_import_forces_migration_owner_enforcement(
 
     deployed_module = _load_v111_module()
     assert deployed_module.MIGRATION_OWNER_ENFORCEMENT_REQUIRED is True
-    assert deployed_module.EXPECTED_MIGRATION_ROLE == unquote(
-        urlsplit(OWNER_URL).username or ""
-    )
+    assert deployed_module.EXPECTED_MIGRATION_ROLE == unquote(urlsplit(OWNER_URL).username or "")
 
 
 def test_enforcement_derives_identity_when_optional_role_pin_is_missing(monkeypatch):
@@ -474,9 +465,7 @@ def test_enforcement_derives_identity_when_optional_role_pin_is_missing(monkeypa
     monkeypatch.setenv("MIGRATIONS_DATABASE_URL", OWNER_URL)
 
     derived_module = _load_v111_module()
-    assert derived_module.EXPECTED_MIGRATION_ROLE == unquote(
-        urlsplit(OWNER_URL).username or ""
-    )
+    assert derived_module.EXPECTED_MIGRATION_ROLE == unquote(urlsplit(OWNER_URL).username or "")
 
 
 def test_enforcement_rejects_missing_or_mismatched_migration_identity(monkeypatch):
@@ -550,6 +539,7 @@ def test_v110_duplicate_role_failure_rolls_back_temporary_no_force(
     try:
         with pytest.raises(Exception, match="duplicate canonical system role"):
             with migration_owner_engine.begin() as connection:
+
                 class _Operations:
                     @staticmethod
                     def execute(statement: str) -> None:
@@ -640,14 +630,8 @@ def test_live_startup_canary_reports_enforced_for_both_runtime_roles(monkeypatch
     ):
         engine = create_engine(_sync_url(url), pool_pre_ping=True)
         try:
-            assert (
-                check_rls_posture(engine, label=label, expected_role=role)
-                == "enforced"
-            )
-            assert (
-                regengine_rls_enforcement_inert.labels(engine=label)._value.get()
-                == 0
-            )
+            assert check_rls_posture(engine, label=label, expected_role=role) == "enforced"
+            assert regengine_rls_enforcement_inert.labels(engine=label)._value.get() == 0
         finally:
             engine.dispose()
 
@@ -715,10 +699,7 @@ def test_live_startup_canary_rejects_catalog_drift_and_sets_metric(
                 label=label,
                 expected_role=expected_role,
             )
-        assert (
-            regengine_rls_enforcement_inert.labels(engine=label)._value.get()
-            == 1
-        )
+        assert regengine_rls_enforcement_inert.labels(engine=label)._value.get() == 1
     finally:
         target.dispose()
         if cleanup_sql:
@@ -739,10 +720,7 @@ def test_live_startup_canary_rejects_catalog_drift_and_sets_metric(
             )
             == "enforced"
         )
-        assert (
-            regengine_rls_enforcement_inert.labels(engine=label)._value.get()
-            == 0
-        )
+        assert regengine_rls_enforcement_inert.labels(engine=label)._value.get() == 0
     finally:
         restored.dispose()
 
@@ -762,9 +740,7 @@ def test_live_startup_canary_rejects_incoming_runtime_role_membership(
     try:
         with owner_engine.begin() as connection:
             connection.execute(text(f'CREATE ROLE "{leaked_principal}" NOLOGIN'))
-            connection.execute(
-                text(f'GRANT regengine_sysadmin TO "{leaked_principal}"')
-            )
+            connection.execute(text(f'GRANT regengine_sysadmin TO "{leaked_principal}"'))
 
         with pytest.raises(RuntimeError, match="failed the v111 catalog canary"):
             check_rls_posture(
@@ -780,9 +756,7 @@ def test_live_startup_canary_rejects_incoming_runtime_role_membership(
                 text("SELECT 1 FROM pg_roles WHERE rolname = :role_name"),
                 {"role_name": leaked_principal},
             ).scalar_one_or_none():
-                connection.execute(
-                    text(f'REVOKE regengine_sysadmin FROM "{leaked_principal}"')
-                )
+                connection.execute(text(f'REVOKE regengine_sysadmin FROM "{leaked_principal}"'))
                 connection.execute(text(f'DROP ROLE "{leaked_principal}"'))
 
     restored = create_engine(_sync_url(ADMIN_URL), pool_pre_ping=True)
@@ -828,9 +802,7 @@ def test_admin_checkout_reset_is_committed_and_survives_request_rollback():
                 "SELECT set_config('regengine.user_id', %s, false)",
                 (str(uuid4()),),
             )
-            cursor.execute(
-                "SELECT set_config('regengine.is_sysadmin', 'true', false)"
-            )
+            cursor.execute("SELECT set_config('regengine.is_sysadmin', 'true', false)")
             cursor.close()
             first.commit()
         finally:
@@ -1031,13 +1003,13 @@ async def test_live_session_auth_bootstrap_disarms_before_tenant_work(
     try:
         with Session(admin, expire_on_commit=False) as db:
             # An unarmed checkout cannot enumerate control-plane membership.
-            assert db.execute(
-                text(
-                    "SELECT count(*) FROM public.memberships "
-                    "WHERE user_id = :user_id"
-                ),
-                {"user_id": user_id},
-            ).scalar_one() == 0
+            assert (
+                db.execute(
+                    text("SELECT count(*) FROM public.memberships WHERE user_id = :user_id"),
+                    {"user_id": user_id},
+                ).scalar_one()
+                == 0
+            )
 
             actor = await require_sysadmin_high_assurance(
                 _cookie_request("/v1/admin/keys", session_token),
@@ -1062,10 +1034,7 @@ async def test_live_session_auth_bootstrap_disarms_before_tenant_work(
             ).one()
             assert gucs == (str(user_id), "false")
             assert db.execute(
-                text(
-                    "SELECT tenant_id FROM public.memberships "
-                    "WHERE user_id = :user_id"
-                ),
+                text("SELECT tenant_id FROM public.memberships WHERE user_id = :user_id"),
                 {"user_id": user_id},
             ).scalars().all() == [tenant_a]
             db.rollback()
@@ -1080,9 +1049,7 @@ async def test_live_session_auth_bootstrap_disarms_before_tenant_work(
             assert review_actor.actor_id == str(user_id)
             assert review_actor.tenant_id == str(tenant_a)
             assert "review.read" in review_actor.permissions
-            assert db.execute(
-                text("SELECT current_setting('regengine.is_sysadmin', true)")
-            ).scalar_one() == "false"
+            assert db.execute(text("SELECT current_setting('regengine.is_sysadmin', true)")).scalar_one() == "false"
 
             # Route work re-enters only its derived tenant. Canonical roles
             # plus tenant A are visible; tenant B remains outside the policy.
@@ -1090,15 +1057,16 @@ async def test_live_session_auth_bootstrap_disarms_before_tenant_work(
                 text("SELECT set_config('app.tenant_id', :tenant, true)"),
                 {"tenant": str(tenant_a)},
             )
-            visible_role_ids = set(
-                db.execute(text("SELECT id FROM public.roles")).scalars()
-            )
+            visible_role_ids = set(db.execute(text("SELECT id FROM public.roles")).scalars())
             assert role_a in visible_role_ids
             assert tenant_control_rows["role_ids"]["b"] not in visible_role_ids
-            assert db.execute(
-                text("SELECT count(*) FROM public.tenants WHERE id = :tenant"),
-                {"tenant": tenant_b},
-            ).scalar_one() == 0
+            assert (
+                db.execute(
+                    text("SELECT count(*) FROM public.tenants WHERE id = :tenant"),
+                    {"tenant": tenant_b},
+                ).scalar_one()
+                == 0
+            )
             db.rollback()
     finally:
         admin.dispose()
@@ -1108,17 +1076,11 @@ async def test_live_session_auth_bootstrap_disarms_before_tenant_work(
                 {"session_id": session_id},
             )
             connection.execute(
-                text(
-                    "DELETE FROM public.memberships "
-                    "WHERE user_id = :user_id AND tenant_id = :tenant"
-                ),
+                text("DELETE FROM public.memberships WHERE user_id = :user_id AND tenant_id = :tenant"),
                 {"user_id": user_id, "tenant": tenant_a},
             )
             connection.execute(
-                text(
-                    "DELETE FROM public.organization_memberships "
-                    "WHERE id = :membership_id"
-                ),
+                text("DELETE FROM public.organization_memberships WHERE id = :membership_id"),
                 {"membership_id": organization_membership_id},
             )
             connection.execute(
@@ -1183,30 +1145,35 @@ def test_cutover_rejects_inherited_or_owned_implicit_authority(
         with role_admin_engine.begin() as connection:
             connection.execute(text(f'CREATE ROLE "{inherited_role}" NOLOGIN'))
             connection.execute(text(f'GRANT "{inherited_role}" TO regengine'))
-        with migration_owner_engine.begin() as connection, pytest.raises(
-            Exception,
-            match="no incoming or outgoing memberships",
+        with (
+            migration_owner_engine.begin() as connection,
+            pytest.raises(
+                Exception,
+                match="no incoming or outgoing memberships",
+            ),
         ):
             _run_cutover(connection)
         with role_admin_engine.begin() as connection:
             connection.execute(text(f'REVOKE "{inherited_role}" FROM regengine'))
-            connection.execute(
-                text(f'GRANT regengine_sysadmin TO "{inherited_role}"')
-            )
-        with migration_owner_engine.begin() as connection, pytest.raises(
-            Exception,
-            match="no incoming or outgoing memberships",
+            connection.execute(text(f'GRANT regengine_sysadmin TO "{inherited_role}"'))
+        with (
+            migration_owner_engine.begin() as connection,
+            pytest.raises(
+                Exception,
+                match="no incoming or outgoing memberships",
+            ),
         ):
             _run_cutover(connection)
         with role_admin_engine.begin() as connection:
-            connection.execute(
-                text(f'REVOKE regengine_sysadmin FROM "{inherited_role}"')
-            )
+            connection.execute(text(f'REVOKE regengine_sysadmin FROM "{inherited_role}"'))
             connection.execute(text(f'CREATE TABLE public."{owned_table}" (id integer)'))
             connection.execute(text(f'ALTER TABLE public."{owned_table}" OWNER TO regengine'))
-        with migration_owner_engine.begin() as connection, pytest.raises(
-            Exception,
-            match="protected relation .* is owned by regengine",
+        with (
+            migration_owner_engine.begin() as connection,
+            pytest.raises(
+                Exception,
+                match="protected relation .* is owned by regengine",
+            ),
         ):
             _run_cutover(connection)
     finally:
@@ -1217,12 +1184,8 @@ def test_cutover_rejects_inherited_or_owned_implicit_authority(
                 {"role_name": inherited_role},
             ).scalar_one_or_none()
             if role_exists:
-                connection.execute(
-                    text(f'REVOKE "{inherited_role}" FROM regengine')
-                )
-                connection.execute(
-                    text(f'REVOKE regengine_sysadmin FROM "{inherited_role}"')
-                )
+                connection.execute(text(f'REVOKE "{inherited_role}" FROM regengine'))
+                connection.execute(text(f'REVOKE regengine_sysadmin FROM "{inherited_role}"'))
                 connection.execute(text(f'DROP ROLE "{inherited_role}"'))
 
 
@@ -1249,17 +1212,13 @@ def test_runtime_object_grants_match_closed_inventory(
             ),
             {"schemas": list(TARGET_SCHEMAS)},
         ):
-            actual_tables[row.grantee].setdefault(row.object_name, set()).add(
-                row.privilege_type
-            )
+            actual_tables[row.grantee].setdefault(row.object_name, set()).add(row.privilege_type)
 
         runtime_expected = {
-            name: set(privileges)
-            for name, privileges in migration_module.REGENGINE_TABLE_GRANTS.items()
+            name: set(privileges) for name, privileges in migration_module.REGENGINE_TABLE_GRANTS.items()
         }
         sysadmin_expected = {
-            name: set(privileges)
-            for name, privileges in migration_module.REGENGINE_SYSADMIN_TABLE_GRANTS.items()
+            name: set(privileges) for name, privileges in migration_module.REGENGINE_SYSADMIN_TABLE_GRANTS.items()
         }
         assert actual_tables["regengine"] == runtime_expected
         assert actual_tables["regengine_sysadmin"] == sysadmin_expected
@@ -1269,8 +1228,8 @@ def test_runtime_object_grants_match_closed_inventory(
             "regengine_sysadmin": set(),
         }
         for row in connection.execute(
-                text(
-                    """
+            text(
+                """
                     SELECT r.rolname,
                            n.nspname || '.' || c.relname AS object_name,
                            a.attname,
@@ -1283,12 +1242,10 @@ def test_runtime_object_grants_match_closed_inventory(
                      WHERE r.rolname IN ('regengine', 'regengine_sysadmin')
                        AND n.nspname = ANY(:schemas)
                     """
-                ),
-                {"schemas": list(TARGET_SCHEMAS)},
-            ):
-            actual_columns[row.rolname].add(
-                (row.object_name, row.attname, row.privilege_type)
-            )
+            ),
+            {"schemas": list(TARGET_SCHEMAS)},
+        ):
+            actual_columns[row.rolname].add((row.object_name, row.attname, row.privilege_type))
         runtime_expected_columns = {
             (object_name, column, privilege)
             for object_name, privilege_map in migration_module.REGENGINE_COLUMN_GRANTS.items()
@@ -1325,16 +1282,12 @@ def test_runtime_object_grants_match_closed_inventory(
             ),
             {"schemas": list(TARGET_SCHEMAS)},
         ):
-            actual_sequences[row.rolname].setdefault(row.object_name, set()).add(
-                row.privilege_type
-            )
+            actual_sequences[row.rolname].setdefault(row.object_name, set()).add(row.privilege_type)
         runtime_sequence_expected = {
-            name: set(privileges)
-            for name, privileges in migration_module.REGENGINE_SEQUENCE_GRANTS.items()
+            name: set(privileges) for name, privileges in migration_module.REGENGINE_SEQUENCE_GRANTS.items()
         }
         sysadmin_sequence_expected = {
-            name: set(privileges)
-            for name, privileges in migration_module.REGENGINE_SYSADMIN_SEQUENCE_GRANTS.items()
+            name: set(privileges) for name, privileges in migration_module.REGENGINE_SYSADMIN_SEQUENCE_GRANTS.items()
         }
         assert actual_sequences["regengine"] == runtime_sequence_expected
         assert actual_sequences["regengine_sysadmin"] == sysadmin_sequence_expected
@@ -1447,17 +1400,16 @@ def test_tenant_roots_and_roles_obey_actual_role_boundaries(tenant_control_rows)
                 text("SELECT set_config('app.tenant_id', :tenant, true)"),
                 {"tenant": str(tenant_a)},
             )
-            assert connection.execute(
-                text("SELECT id FROM public.tenants ORDER BY id")
-            ).scalars().all() == [tenant_a]
+            assert connection.execute(text("SELECT id FROM public.tenants ORDER BY id")).scalars().all() == [tenant_a]
 
         with runtime.connect() as connection:
-            assert connection.execute(
-                text("SELECT id FROM public.tenants")
-            ).scalars().all() == []
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+            assert connection.execute(text("SELECT id FROM public.tenants")).scalars().all() == []
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             connection.execute(text("SELECT settings FROM public.tenants"))
 
@@ -1483,14 +1435,8 @@ def test_tenant_roots_and_roles_obey_actual_role_boundaries(tenant_control_rows)
                     assert {"review.read", "review.decide"} <= set(row.permissions)
 
         with admin.begin() as connection:
-            connection.execute(
-                text("SELECT set_config('regengine.is_sysadmin', 'true', true)")
-            )
-            global_names = set(
-                connection.execute(
-                    text("SELECT name FROM public.roles ORDER BY name")
-                ).scalars()
-            )
+            connection.execute(text("SELECT set_config('regengine.is_sysadmin', 'true', true)"))
+            global_names = set(connection.execute(text("SELECT name FROM public.roles ORDER BY name")).scalars())
             assert f"Tenant A {marker}" in global_names
             assert f"Tenant B {marker}" in global_names
             assert set(
@@ -1503,36 +1449,35 @@ def test_tenant_roots_and_roles_obey_actual_role_boundaries(tenant_control_rows)
         # Live role/permission mutation is migration-owned; the admin runtime
         # can read canonical and selected-tenant roles but cannot rewrite the
         # global catalog.
-        with admin.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            admin.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             connection.execute(
-                text(
-                    "UPDATE public.roles SET permissions = '[\"review.read\"]'::jsonb "
-                    "WHERE id = :role_id"
-                ),
+                text("UPDATE public.roles SET permissions = '[\"review.read\"]'::jsonb WHERE id = :role_id"),
                 {"role_id": tenant_control_rows["role_ids"]["global"]},
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             connection.execute(text("SELECT * FROM public.roles"))
 
         # A caller-controlled GUC cannot spoof the exact-role sysadmin arm.
         with runtime.begin() as connection:
-            connection.execute(
-                text("SELECT set_config('regengine.is_sysadmin', 'true', true)")
-            )
+            connection.execute(text("SELECT set_config('regengine.is_sysadmin', 'true', true)"))
             connection.execute(
                 text("SELECT set_config('app.tenant_id', :tenant, true)"),
                 {"tenant": str(tenant_a)},
             )
-            visible = connection.execute(
-                text("SELECT id FROM public.tenants ORDER BY id")
-            ).scalars().all()
+            visible = connection.execute(text("SELECT id FROM public.tenants ORDER BY id")).scalars().all()
             assert visible == [tenant_a]
             assert tenant_b not in visible
     finally:
@@ -1565,13 +1510,14 @@ def test_funnel_events_are_tenant_bound_and_pool_safe(tenant_control_rows):
                 text("SELECT set_config('app.tenant_id', :tenant, true)"),
                 {"tenant": str(tenant_a)},
             )
-            assert connection.execute(
-                text("SELECT tenant_id FROM public.funnel_events")
-            ).scalars().all() == [tenant_a]
+            assert connection.execute(text("SELECT tenant_id FROM public.funnel_events")).scalars().all() == [tenant_a]
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="row-level security",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="row-level security",
+            ),
         ):
             connection.execute(
                 text("SELECT set_config('app.tenant_id', :tenant, true)"),
@@ -1588,12 +1534,8 @@ def test_funnel_events_are_tenant_bound_and_pool_safe(tenant_control_rows):
             )
 
         with runtime.connect() as connection:
-            assert connection.execute(
-                text("SELECT count(*) FROM public.funnel_events")
-            ).scalar_one() == 0
-            assert connection.execute(
-                text("SELECT current_setting('app.tenant_id', true)")
-            ).scalar_one() in (None, "")
+            assert connection.execute(text("SELECT count(*) FROM public.funnel_events")).scalar_one() == 0
+            assert connection.execute(text("SELECT current_setting('app.tenant_id', true)")).scalar_one() in (None, "")
     finally:
         runtime.dispose()
 
@@ -1651,14 +1593,9 @@ def test_disabled_graph_buffer_is_admin_reconcile_only(
         admin = create_engine(_sync_url(ADMIN_URL), pool_pre_ping=True)
         try:
             with admin.begin() as connection:
-                connection.execute(
-                    text("SELECT set_config('regengine.is_sysadmin', 'true', true)")
-                )
+                connection.execute(text("SELECT set_config('regengine.is_sysadmin', 'true', true)"))
                 assert connection.execute(
-                    text(
-                        "SELECT replayed_at IS NOT NULL FROM public.audit_log_buffer "
-                        "WHERE id = :row_id"
-                    ),
+                    text("SELECT replayed_at IS NOT NULL FROM public.audit_log_buffer WHERE id = :row_id"),
                     {"row_id": row_id},
                 ).scalar_one()
         finally:
@@ -1697,9 +1634,12 @@ def test_actual_runtime_role_has_no_control_plane_crud(owner_engine, table_name)
             f"UPDATE {table_name} SET {quoted_column} = {quoted_column} WHERE false",
             f"DELETE FROM {table_name} WHERE false",
         ):
-            with engine.connect() as connection, pytest.raises(
-                Exception,
-                match="permission denied|tenant context required",
+            with (
+                engine.connect() as connection,
+                pytest.raises(
+                    Exception,
+                    match="permission denied|tenant context required",
+                ),
             ):
                 connection.execute(text(statement))
     finally:
@@ -1722,6 +1662,8 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
         },
     }
     with owner_engine.connect() as connection:
+        if connection.execute(text("SELECT to_regprocedure('public.get_invite_tenant_by_token_hash(text)')")).scalar():
+            expected_direct["regengine_sysadmin"].add(("public", "get_invite_tenant_by_token_hash"))
         for role, expected in expected_direct.items():
             actual = set(
                 connection.execute(
@@ -1739,10 +1681,7 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             assert actual == expected
 
         function_body = connection.execute(
-            text(
-                "SELECT lower(pg_get_functiondef("
-                "'public.set_admin_context(boolean)'::regprocedure))"
-            )
+            text("SELECT lower(pg_get_functiondef('public.set_admin_context(boolean)'::regprocedure))")
         ).scalar_one()
         assert "current_user" in function_body
         assert "regengine_sysadmin" in function_body
@@ -1766,10 +1705,7 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
                 ).scalar_one(), (table_name, privilege)
         for signature in disabled_functions:
             assert not connection.execute(
-                text(
-                    "SELECT has_function_privilege("
-                    "'regengine', :signature, 'EXECUTE')"
-                ),
+                text("SELECT has_function_privilege('regengine', :signature, 'EXECUTE')"),
                 {"signature": signature},
             ).scalar_one(), signature
 
@@ -1781,9 +1717,12 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
             "SELECT fsma.get_remediation_token_by_hash('disabled')",
             "SELECT fsma.get_remediation_token_by_session_hash('disabled')",
         ):
-            with runtime.connect() as connection, pytest.raises(
-                Exception,
-                match="permission denied",
+            with (
+                runtime.connect() as connection,
+                pytest.raises(
+                    Exception,
+                    match="permission denied",
+                ),
             ):
                 _set_local_tenant(connection, uuid4())
                 connection.execute(text(statement))
@@ -1877,47 +1816,41 @@ def test_scheduler_remediation_grants_are_tenant_bound(
         with runtime.begin() as connection:
             _set_local_tenant(connection, tenant_a)
             assert connection.execute(
-                text(
-                    "SELECT id FROM fsma.notification_outbox "
-                    "WHERE id = ANY(:ids)"
-                ),
+                text("SELECT id FROM fsma.notification_outbox WHERE id = ANY(:ids)"),
                 {"ids": list(outbox_ids.values())},
             ).scalars().all() == [outbox_ids[tenant_a]]
             assert connection.execute(
-                text(
-                    "SELECT id FROM fsma.remediation_tokens "
-                    "WHERE id = ANY(:ids)"
-                ),
+                text("SELECT id FROM fsma.remediation_tokens WHERE id = ANY(:ids)"),
                 {"ids": list(token_ids.values())},
             ).scalars().all() == [token_ids[tenant_a]]
-            assert connection.execute(
-                text(
-                    "UPDATE fsma.notification_outbox "
-                    "SET status='sending', claimed_at=now() WHERE id=:id"
-                ),
-                {"id": outbox_ids[tenant_a]},
-            ).rowcount == 1
-            assert connection.execute(
-                text(
-                    "UPDATE fsma.notification_outbox "
-                    "SET status='sending', claimed_at=now() WHERE id=:id"
-                ),
-                {"id": outbox_ids[tenant_b]},
-            ).rowcount == 0
-            assert connection.execute(
-                text(
-                    "UPDATE fsma.remediation_tokens "
-                    "SET revoked_at=now() WHERE id=:id"
-                ),
-                {"id": token_ids[tenant_a]},
-            ).rowcount == 1
-            assert connection.execute(
-                text(
-                    "UPDATE fsma.remediation_tokens "
-                    "SET revoked_at=now() WHERE id=:id"
-                ),
-                {"id": token_ids[tenant_b]},
-            ).rowcount == 0
+            assert (
+                connection.execute(
+                    text("UPDATE fsma.notification_outbox SET status='sending', claimed_at=now() WHERE id=:id"),
+                    {"id": outbox_ids[tenant_a]},
+                ).rowcount
+                == 1
+            )
+            assert (
+                connection.execute(
+                    text("UPDATE fsma.notification_outbox SET status='sending', claimed_at=now() WHERE id=:id"),
+                    {"id": outbox_ids[tenant_b]},
+                ).rowcount
+                == 0
+            )
+            assert (
+                connection.execute(
+                    text("UPDATE fsma.remediation_tokens SET revoked_at=now() WHERE id=:id"),
+                    {"id": token_ids[tenant_a]},
+                ).rowcount
+                == 1
+            )
+            assert (
+                connection.execute(
+                    text("UPDATE fsma.remediation_tokens SET revoked_at=now() WHERE id=:id"),
+                    {"id": token_ids[tenant_b]},
+                ).rowcount
+                == 0
+            )
             connection.execute(
                 text(
                     "INSERT INTO fsma.remediation_tokens "
@@ -1933,9 +1866,12 @@ def test_scheduler_remediation_grants_are_tenant_bound(
                 },
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="row-level security",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="row-level security",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -1955,28 +1891,26 @@ def test_scheduler_remediation_grants_are_tenant_bound(
         with owner_engine.connect() as connection:
             states = dict(
                 connection.execute(
-                    text(
-                        "SELECT id, status FROM fsma.notification_outbox "
-                        "WHERE id = ANY(:ids)"
-                    ),
+                    text("SELECT id, status FROM fsma.notification_outbox WHERE id = ANY(:ids)"),
                     {"ids": list(outbox_ids.values())},
-                ).tuples().all()
+                )
+                .tuples()
+                .all()
             )
             assert states[outbox_ids[tenant_a]] == "sending"
             assert states[outbox_ids[tenant_b]] == "pending"
             token_states = dict(
                 connection.execute(
-                    text(
-                        "SELECT id, revoked_at IS NOT NULL "
-                        "FROM fsma.remediation_tokens WHERE id = ANY(:ids)"
-                    ),
+                    text("SELECT id, revoked_at IS NOT NULL FROM fsma.remediation_tokens WHERE id = ANY(:ids)"),
                     {
                         "ids": [
                             *token_ids.values(),
                             reminted_token_id,
                         ]
                     },
-                ).tuples().all()
+                )
+                .tuples()
+                .all()
             )
             assert token_states[token_ids[tenant_a]] is True
             assert token_states[token_ids[tenant_b]] is False
@@ -2009,22 +1943,20 @@ def test_scheduler_remediation_grants_are_tenant_bound(
 def test_runtime_cannot_update_admin_owned_alert_state(owner_engine):
     with owner_engine.connect() as connection:
         assert not connection.execute(
-            text(
-                "SELECT has_table_privilege("
-                "'regengine', 'public.compliance_alerts', 'UPDATE')"
-            )
+            text("SELECT has_table_privilege('regengine', 'public.compliance_alerts', 'UPDATE')")
         ).scalar_one()
 
     runtime = create_engine(_sync_url(RUNTIME_URL), pool_pre_ping=True)
     try:
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _set_local_tenant(connection, uuid4())
-            connection.execute(
-                text("UPDATE public.compliance_alerts SET status=status WHERE false")
-            )
+            connection.execute(text("UPDATE public.compliance_alerts SET status=status WHERE false"))
     finally:
         runtime.dispose()
 
@@ -2036,9 +1968,7 @@ def test_runtime_cannot_update_admin_owned_alert_state(owner_engine):
                 connection.execute(text("SELECT public.set_admin_context(true)"))
         with admin.connect() as connection:
             connection.execute(text("SELECT public.set_admin_context(true)"))
-            assert connection.execute(
-                text("SELECT current_setting('regengine.is_sysadmin')")
-            ).scalar_one() == "true"
+            assert connection.execute(text("SELECT current_setting('regengine.is_sysadmin')")).scalar_one() == "true"
     finally:
         runtime.dispose()
         admin.dispose()
@@ -2062,9 +1992,7 @@ async def test_hash_bound_bootstrap_and_admin_global_management(key_stores):
 
     # The separately-pooled sysadmin store is globally armed and can manage
     # tenant-bound rows without caller-supplied tenant metadata.
-    listed_ids = {
-        item.key_id for item in await admin.list_keys(include_disabled=True)
-    }
+    listed_ids = {item.key_id for item in await admin.list_keys(include_disabled=True)}
     assert {active.key_id, other.key_id, expired.key_id, revoked.key_id} <= listed_ids
     assert (await admin.get_key(active.key_id)).key_id == active.key_id
 
@@ -2096,10 +2024,7 @@ async def test_valid_runtime_key_cannot_mutate_security_columns(
                 key_hashes=api_key_hash_candidates(active.raw_key),
             )
             await session.execute(
-                text(
-                    f"UPDATE public.api_keys SET {assignment} "
-                    "WHERE key_id = :key_id"
-                ),
+                text(f"UPDATE public.api_keys SET {assignment} WHERE key_id = :key_id"),
                 {"key_id": active.key_id},
             )
 
@@ -2115,9 +2040,7 @@ async def test_valid_lookup_sees_exactly_one_row_and_pool_reuse_clears_proof(key
             key_id=active.key_id,
             key_hashes=api_key_hash_candidates(active.raw_key),
         )
-        visible = (
-            await session.execute(text("SELECT key_id FROM public.api_keys ORDER BY key_id"))
-        ).scalars().all()
+        visible = (await session.execute(text("SELECT key_id FROM public.api_keys ORDER BY key_id"))).scalars().all()
         assert visible == [active.key_id]
         assert other.key_id not in visible
 
@@ -2134,9 +2057,7 @@ async def test_valid_lookup_sees_exactly_one_row_and_pool_reuse_clears_proof(key
             )
         ).one()
         assert all(value in (None, "") for value in settings)
-        assert (
-            await reused_session.execute(text("SELECT count(*) FROM public.api_keys"))
-        ).scalar_one() == 0
+        assert (await reused_session.execute(text("SELECT count(*) FROM public.api_keys"))).scalar_one() == 0
 
 
 @pytest.mark.asyncio
@@ -2160,9 +2081,7 @@ def _set_local_tenant(connection, tenant_id) -> None:
 
 
 def _arm_admin(connection) -> None:
-    connection.execute(
-        text("SELECT set_config('regengine.is_sysadmin', 'true', true)")
-    )
+    connection.execute(text("SELECT set_config('regengine.is_sysadmin', 'true', true)"))
 
 
 def test_ingestion_schema_is_tenant_bound_and_operation_narrow(
@@ -2223,10 +2142,7 @@ def test_ingestion_schema_is_tenant_bound_and_operation_narrow(
             )
             connection.execute(document_sql, document_params(doc_a, tenant_a, "a"))
             connection.execute(
-                text(
-                    "UPDATE ingestion.jobs SET status='completed' "
-                    "WHERE job_id=:job"
-                ),
+                text("UPDATE ingestion.jobs SET status='completed' WHERE job_id=:job"),
                 {"job": job_a},
             )
             connection.execute(
@@ -2237,19 +2153,18 @@ def test_ingestion_schema_is_tenant_bound_and_operation_narrow(
                 ),
                 {"job": job_a},
             )
-            assert connection.execute(
-                text("SELECT job_id FROM ingestion.jobs ORDER BY job_id")
-            ).scalars().all() == [job_a]
-            assert connection.execute(
-                text("SELECT id FROM ingestion.documents ORDER BY id")
-            ).scalars().all() == [doc_a]
-            assert connection.execute(
-                text("SELECT job_id FROM ingestion.audit_log")
-            ).scalars().all() == [job_a]
+            assert connection.execute(text("SELECT job_id FROM ingestion.jobs ORDER BY job_id")).scalars().all() == [
+                job_a
+            ]
+            assert connection.execute(text("SELECT id FROM ingestion.documents ORDER BY id")).scalars().all() == [doc_a]
+            assert connection.execute(text("SELECT job_id FROM ingestion.audit_log")).scalars().all() == [job_a]
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="row-level security",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="row-level security",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2261,9 +2176,12 @@ def test_ingestion_schema_is_tenant_bound_and_operation_narrow(
                 {"tenant": tenant_b},
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2271,9 +2189,12 @@ def test_ingestion_schema_is_tenant_bound_and_operation_narrow(
                 {"id": doc_a},
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="row-level security",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="row-level security",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2287,20 +2208,17 @@ def test_ingestion_schema_is_tenant_bound_and_operation_narrow(
 
         # An unset checkout is empty, and reuse cannot retain tenant A.
         with runtime.connect() as connection:
-            assert connection.execute(
-                text("SELECT count(*) FROM ingestion.jobs")
-            ).scalar_one() == 0
-            assert connection.execute(
-                text("SELECT count(*) FROM ingestion.documents")
-            ).scalar_one() == 0
-            assert connection.execute(
-                text("SELECT count(*) FROM ingestion.audit_log")
-            ).scalar_one() == 0
+            assert connection.execute(text("SELECT count(*) FROM ingestion.jobs")).scalar_one() == 0
+            assert connection.execute(text("SELECT count(*) FROM ingestion.documents")).scalar_one() == 0
+            assert connection.execute(text("SELECT count(*) FROM ingestion.audit_log")).scalar_one() == 0
 
         # The control-plane credential has no ingestion-schema data access.
-        with admin.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            admin.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _arm_admin(connection)
             connection.execute(text("SELECT * FROM ingestion.documents"))
@@ -2340,14 +2258,15 @@ def test_dlq_is_admin_replay_only(owner_engine, tenant_control_rows):
                     {"id": row_id, "tenant": str(tenant)},
                 )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
-            connection.execute(
-                text("SELECT set_config('regengine.system_context', 'true', true)")
-            )
+            connection.execute(text("SELECT set_config('regengine.system_context', 'true', true)"))
             connection.execute(text("SELECT * FROM dlq.webhook_failures"))
 
         with admin.begin() as connection:
@@ -2367,9 +2286,12 @@ def test_dlq_is_admin_replay_only(owner_engine, tenant_control_rows):
                 {"id": row_a},
             )
 
-        with admin.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            admin.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _arm_admin(connection)
             connection.execute(
@@ -2431,17 +2353,11 @@ def test_queue_and_fsma_audit_reject_system_guc_spoof(
         with runtime.begin() as connection:
             _set_local_tenant(connection, tenant_a)
             assert connection.execute(
-                text(
-                    "SELECT tenant_id FROM fsma.task_queue "
-                    "WHERE id = ANY(:ids)"
-                ),
+                text("SELECT tenant_id FROM fsma.task_queue WHERE id = ANY(:ids)"),
                 {"ids": seeded_task_ids},
             ).scalars().all() == [tenant_a]
             assert connection.execute(
-                text(
-                    "SELECT tenant_id FROM fsma.fsma_audit_trail "
-                    "WHERE id = ANY(:ids)"
-                ),
+                text("SELECT tenant_id FROM fsma.fsma_audit_trail WHERE id = ANY(:ids)"),
                 {"ids": seeded_audit_ids},
             ).scalars().all() == [tenant_a]
 
@@ -2472,24 +2388,28 @@ def test_queue_and_fsma_audit_reject_system_guc_spoof(
 
         # The retired GUC is freely settable, but no active policy reads it.
         with runtime.begin() as connection:
-            connection.execute(
-                text("SELECT set_config('regengine.system_context', 'true', true)")
+            connection.execute(text("SELECT set_config('regengine.system_context', 'true', true)"))
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM fsma.task_queue WHERE id = ANY(:ids)"),
+                    {"ids": seeded_task_ids},
+                ).scalar_one()
+                == 0
             )
-            assert connection.execute(
-                text("SELECT count(*) FROM fsma.task_queue WHERE id = ANY(:ids)"),
-                {"ids": seeded_task_ids},
-            ).scalar_one() == 0
-            assert connection.execute(
-                text(
-                    "SELECT count(*) FROM fsma.fsma_audit_trail "
-                    "WHERE id = ANY(:ids)"
-                ),
-                {"ids": seeded_audit_ids},
-            ).scalar_one() == 0
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM fsma.fsma_audit_trail WHERE id = ANY(:ids)"),
+                    {"ids": seeded_audit_ids},
+                ).scalar_one()
+                == 0
+            )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="row-level security",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="row-level security",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2501,9 +2421,12 @@ def test_queue_and_fsma_audit_reject_system_guc_spoof(
                 {"tenant": tenant_b},
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="row-level security",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="row-level security",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2518,9 +2441,12 @@ def test_queue_and_fsma_audit_reject_system_guc_spoof(
 
         # Ordinary producers may enqueue and read only. Worker state changes
         # and retention both use the dedicated admin engine.
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2528,9 +2454,12 @@ def test_queue_and_fsma_audit_reject_system_guc_spoof(
                 {"id": seeded_task_ids[0]},
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2545,10 +2474,7 @@ def test_queue_and_fsma_audit_reject_system_guc_spoof(
                 {"ids": seeded_task_ids},
             ).scalar_one() == len(seeded_task_ids)
             assert connection.execute(
-                text(
-                    "SELECT count(*) FROM fsma.fsma_audit_trail "
-                    "WHERE id = ANY(:ids)"
-                ),
+                text("SELECT count(*) FROM fsma.fsma_audit_trail WHERE id = ANY(:ids)"),
                 {"ids": seeded_audit_ids},
             ).scalar_one() == len(seeded_audit_ids)
             connection.execute(
@@ -2603,10 +2529,13 @@ def test_task_worker_claims_with_admin_role(owner_engine, tenant_control_rows):
         assert worker.run_once() == task_id
         assert observed == [task_type]
         with owner_engine.connect() as connection:
-            assert connection.execute(
-                text("SELECT status FROM fsma.task_queue WHERE id=:id"),
-                {"id": task_id},
-            ).scalar_one() == "completed"
+            assert (
+                connection.execute(
+                    text("SELECT status FROM fsma.task_queue WHERE id=:id"),
+                    {"id": task_id},
+                ).scalar_one()
+                == "completed"
+            )
     finally:
         TASK_HANDLERS.pop(task_type, None)
         with owner_engine.begin() as connection:
@@ -2640,22 +2569,26 @@ def test_seed_function_is_reapplicable_owner_definer_and_tenant_exact(
             ).one()
             assert metadata[0] == metadata[3]
             assert metadata[1] is True
-            assert metadata[2] == [
-                "search_path=pg_catalog, public, fsma, pg_temp"
-            ]
+            assert metadata[2] == ["search_path=pg_catalog, public, fsma, pg_temp"]
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="tenant context required",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="tenant context required",
+            ),
         ):
             connection.execute(
                 text("SELECT public.seed_obligations_for_tenant(:tenant)"),
                 {"tenant": tenant_a},
             )
 
-        with runtime.connect() as connection, pytest.raises(
-            Exception,
-            match="seed tenant must equal",
+        with (
+            runtime.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="seed tenant must equal",
+            ),
         ):
             _set_local_tenant(connection, tenant_a)
             connection.execute(
@@ -2671,22 +2604,19 @@ def test_seed_function_is_reapplicable_owner_definer_and_tenant_exact(
                 text("SELECT public.seed_obligations_for_tenant(:tenant)"),
                 {"tenant": tenant_a},
             )
-            assert connection.execute(
-                text("SELECT count(*) FROM public.regulations")
-            ).scalar_one() > 0
-            assert connection.execute(
-                text("SELECT count(*) FROM public.obligations")
-            ).scalar_one() > 0
+            assert connection.execute(text("SELECT count(*) FROM public.regulations")).scalar_one() > 0
+            assert connection.execute(text("SELECT count(*) FROM public.obligations")).scalar_one() > 0
 
         with runtime.begin() as connection:
             _set_local_tenant(connection, tenant_b)
-            assert connection.execute(
-                text("SELECT count(*) FROM public.regulations")
-            ).scalar_one() == 0
+            assert connection.execute(text("SELECT count(*) FROM public.regulations")).scalar_one() == 0
 
-        with admin.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            admin.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             _arm_admin(connection)
             connection.execute(
@@ -2726,9 +2656,12 @@ def test_disabled_fsma_surfaces_are_unreachable_by_both_roles(
 ):
     engine = create_engine(_sync_url(role_url), pool_pre_ping=True)
     try:
-        with engine.connect() as connection, pytest.raises(
-            Exception,
-            match="permission denied",
+        with (
+            engine.connect() as connection,
+            pytest.raises(
+                Exception,
+                match="permission denied",
+            ),
         ):
             if role_url == ADMIN_URL:
                 _arm_admin(connection)
@@ -2745,17 +2678,12 @@ def test_sysadmin_dml_trigger_records_exact_session_role_and_is_immutable(
     admin = create_engine(_sync_url(ADMIN_URL), pool_pre_ping=True)
     runtime = create_engine(_sync_url(RUNTIME_URL), pool_pre_ping=True)
     with owner_engine.connect() as connection:
-        before_id = connection.execute(
-            text("SELECT COALESCE(max(id), 0) FROM audit.sysadmin_access_log")
-        ).scalar_one()
+        before_id = connection.execute(text("SELECT COALESCE(max(id), 0) FROM audit.sysadmin_access_log")).scalar_one()
     try:
         with admin.begin() as connection:
             _arm_admin(connection)
             connection.execute(
-                text(
-                    "UPDATE public.tenants "
-                    "SET settings=settings, updated_at=now() WHERE id=:tenant"
-                ),
+                text("UPDATE public.tenants SET settings=settings, updated_at=now() WHERE id=:tenant"),
                 {"tenant": tenant_a},
             )
 
@@ -2780,22 +2708,25 @@ def test_sysadmin_dml_trigger_records_exact_session_role_and_is_immutable(
             assert audit_row.session_user_name == "regengine_sysadmin"
 
         for engine in (runtime, admin):
-            with engine.connect() as connection, pytest.raises(
-                Exception,
-                match="permission denied",
+            with (
+                engine.connect() as connection,
+                pytest.raises(
+                    Exception,
+                    match="permission denied",
+                ),
             ):
                 if engine is admin:
                     _arm_admin(connection)
                 connection.execute(
-                    text(
-                        "UPDATE audit.sysadmin_access_log "
-                        "SET operation='ERASED' WHERE id=:id"
-                    ),
+                    text("UPDATE audit.sysadmin_access_log SET operation='ERASED' WHERE id=:id"),
                     {"id": audit_row.id},
                 )
-            with engine.connect() as connection, pytest.raises(
-                Exception,
-                match="permission denied",
+            with (
+                engine.connect() as connection,
+                pytest.raises(
+                    Exception,
+                    match="permission denied",
+                ),
             ):
                 if engine is admin:
                     _arm_admin(connection)
@@ -2833,9 +2764,12 @@ def test_sysadmin_delete_capability_is_limited_to_erasure_dependencies():
                 # proves the exact DELETE capability is present.
                 connection.execute(text(f"DELETE FROM {table_name} WHERE false"))
         for table_name in denied:
-            with admin.connect() as connection, pytest.raises(
-                Exception,
-                match="permission denied|tenant context required",
+            with (
+                admin.connect() as connection,
+                pytest.raises(
+                    Exception,
+                    match="permission denied|tenant context required",
+                ),
             ):
                 _arm_admin(connection)
                 connection.execute(text(f"DELETE FROM {table_name} WHERE false"))

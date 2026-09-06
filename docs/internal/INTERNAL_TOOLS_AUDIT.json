@@ -395,7 +395,7 @@
       "name": "Secrets Rotation Tool",
       "type": "ops/security tooling",
       "location": [
-        "scripts/rotate_secrets_to_aws.py",
+        "scripts/export_env_bundle.py",
         "scripts/sync_prod_secrets.py"
       ],
       "inferred_purpose": "Migrate secrets from local .env files to AWS Secrets Manager and synchronize production secrets for secure credential management.",

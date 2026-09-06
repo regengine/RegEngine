@@ -48,6 +48,14 @@ from app.stripe_billing import (
     webhooks as webhooks_mod,  # noqa: E402
 )
 
+
+@pytest.fixture(autouse=True)
+def _uncached_handler_logger(monkeypatch):
+    # Earlier tests can bind the production logger before capture_logs swaps
+    # processors. Resolve a fresh logger per call so capture sees real events.
+    monkeypatch.setattr(webhooks_mod, "logger", structlog.wrap_logger(None, cache_logger_on_first_use=False))
+
+
 # ── Fake Redis that models enough for these handlers ───────────────────────
 
 
