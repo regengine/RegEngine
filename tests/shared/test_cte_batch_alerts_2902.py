@@ -90,8 +90,7 @@ class TestBatchWritesComplianceAlerts_Issue2902:
 
         inserts = _alert_inserts(session)
         assert len(inserts) == 1, (
-            "batch path must INSERT the generated compliance alert; "
-            f"got {len(inserts)} alert INSERTs"
+            f"batch path must INSERT the generated compliance alert; got {len(inserts)} alert INSERTs"
         )
         _sql, params = inserts[0]
         assert params["event_id"] == results[0].event_id
@@ -195,12 +194,10 @@ class TestBatchSingleAlertParity_Issue2902:
 
         batch_params = dict(batch_inserts[0][1])
         single_params = dict(single_inserts[0][1])
-        # event_id is a fresh uuid per path — compare everything else.
-        batch_params.pop("event_id")
-        single_params.pop("event_id")
-        assert batch_params == single_params, (
-            "batch and single-event alert rows must carry identical columns"
-        )
+        # Each path creates its own event; both anchors must bind that event.
+        assert batch_params.pop("cte_event_id") == batch_params.pop("event_id")
+        assert single_params.pop("cte_event_id") == single_params.pop("event_id")
+        assert batch_params == single_params, "batch and single-event alert rows must carry identical columns"
 
     def test_unknown_alert_type_is_mapped_the_same_way(self):
         """``incomplete_route`` is not in the writer's accepted alert_type set.
@@ -227,11 +224,13 @@ class TestBatchSingleAlertParity_Issue2902:
             tenant_id="t-1",
             events=[
                 _base_event(
-                    alerts=[{
-                        "severity": "warning",
-                        "alert_type": "chain_break",
-                        "message": "Obligation not met",
-                    }]
+                    alerts=[
+                        {
+                            "severity": "warning",
+                            "alert_type": "chain_break",
+                            "message": "Obligation not met",
+                        }
+                    ]
                 )
             ],
         )
@@ -263,8 +262,7 @@ class TestBatchAlertsSkipNonInsertedEvents_Issue2902:
         )
 
         assert _alert_inserts(session) == [], (
-            "no alert row may be written for an event whose cte_events INSERT "
-            "did not land"
+            "no alert row may be written for an event whose cte_events INSERT did not land"
         )
 
     def test_rejected_event_gets_no_alert_row(self):
@@ -280,11 +278,13 @@ class TestBatchAlertsSkipNonInsertedEvents_Issue2902:
             tenant_id="t-1",
             events=[
                 _base_event(
-                    alerts=[{
-                        "severity": "critical",
-                        "alert_type": "chain_break",
-                        "message": "hard fail",
-                    }]
+                    alerts=[
+                        {
+                            "severity": "critical",
+                            "alert_type": "chain_break",
+                            "message": "hard fail",
+                        }
+                    ]
                 )
             ],
         )
