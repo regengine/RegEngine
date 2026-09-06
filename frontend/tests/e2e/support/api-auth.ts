@@ -1,4 +1,5 @@
 import { expect, type BrowserContext, type APIRequestContext } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { waitForOtp } from '../auth-helpers';
 
 type SessionUser = {
@@ -26,10 +27,14 @@ export type ApiSession = {
     apiKey?: string;
 };
 
-function localApiKey(): string | undefined {
+function localApiKey(email: string): string | undefined {
     if (process.env.API_KEY) return process.env.API_KEY;
     if (process.env.REGENGINE_API_KEY) return process.env.REGENGINE_API_KEY;
-    if (!process.env.PLAYWRIGHT_BASE_URL) return 'playwright-local-regengine-api-key-2026';
+    if (!process.env.PLAYWRIGHT_BASE_URL) {
+        const file = process.env.REGENGINE_E2E_API_KEY_OUTBOX || '/tmp/regengine-playwright-api-keys.json';
+        const keys = JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>;
+        return keys[email.toLowerCase()];
+    }
     return undefined;
 }
 
@@ -40,7 +45,7 @@ function baseOrigin(): string {
 export async function csrfHeader(context: BrowserContext): Promise<Record<string, string>> {
     const cookies = await context.cookies();
     const csrf = cookies.find(cookie => cookie.name === 're_csrf')?.value;
-    return csrf ? { 'x-csrf-token': csrf } : {};
+    return { Origin: baseOrigin(), ...(csrf ? { 'x-csrf-token': csrf } : {}) };
 }
 
 /**
@@ -88,7 +93,7 @@ export async function loginViaApi(
     expect(session.tenant_id, 'passwordless session resolves a tenant_id').toBeTruthy();
     expect(session.user?.email).toBe(email.toLowerCase());
 
-    const apiKey = localApiKey();
+    const apiKey = localApiKey(email);
     if (apiKey) {
         const response = await context.request.post('/api/session', {
             headers: {
@@ -114,9 +119,10 @@ export async function loginViaApi(
 
 export async function logoutViaApi(context: BrowserContext): Promise<void> {
     await context.request.get('/api/session');
-    await context.request.delete('/api/session', {
+    const response = await context.request.delete('/api/session', {
         headers: await csrfHeader(context),
     });
+    expect(response.ok(), await response.text()).toBeTruthy();
 }
 
 export async function expectOk(response: Awaited<ReturnType<APIRequestContext['get']>>): Promise<void> {

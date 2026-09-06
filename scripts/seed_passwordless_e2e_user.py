@@ -7,6 +7,7 @@ silently create identities in non-test environments.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -48,6 +49,46 @@ def _session_auth_method() -> str | None:
     if value not in {"email_otp", "webauthn", "sso"}:
         raise SystemExit("REGENGINE_E2E_SESSION_AUTH_METHOD must be email_otp, webauthn, or sso")
     return value
+
+
+async def _seed_api_key(tenant_id: str, email: str) -> None:
+    """Create a scoped key in the explicitly named local PostgreSQL fixture."""
+    from shared.api_key_store import DatabaseAPIKeyStore
+    from sqlalchemy.engine import make_url
+
+    database_url = os.environ["DATABASE_URL"]
+    target = make_url(database_url)
+    if (
+        target.get_backend_name() != "postgresql"
+        or target.host not in {"localhost", "127.0.0.1"}
+        or target.database != "playwright_shared"
+    ):
+        raise SystemExit("E2E API key seeding requires local PostgreSQL database playwright_shared")
+    store = DatabaseAPIKeyStore(database_url=database_url)
+    try:
+        from sqlalchemy import text
+
+        async with store._engine.begin() as connection:
+            await connection.execute(
+                text("""INSERT INTO public.tenants (id, name, slug, status)
+                VALUES (:id, 'Playwright fixture', :slug, 'active') ON CONFLICT (id) DO NOTHING"""),
+                {"id": uuid.UUID(tenant_id), "slug": f"playwright-{tenant_id}"},
+            )
+        key = await store.create_key(
+            "Playwright tenant key",
+            tenant_id=tenant_id,
+            scopes=["*"],
+            billing_tier="ENTERPRISE",
+            rate_limit_per_minute=10000,
+        )
+        outbox = Path(os.getenv("REGENGINE_E2E_API_KEY_OUTBOX", "/tmp/regengine-playwright-api-keys.json"))
+        records = json.loads(outbox.read_text()) if outbox.exists() else {}
+        records[email] = key.raw_key
+        # The key is consumed by the browser fixture, never printed to logs.
+        with os.fdopen(os.open(outbox, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as handle:
+            json.dump(records, handle)
+    finally:
+        await store.close()
 
 
 def main() -> int:
@@ -214,13 +255,15 @@ def main() -> int:
             ).scalar_one_or_none()
             if active_session is None:
                 print(
-                    "passwordless seed committed without an active session; "
-                    "session_auth_method was not applied",
+                    "passwordless seed committed without an active session; session_auth_method was not applied",
                     file=sys.stderr,
                 )
             else:
                 active_session.auth_method = session_auth_method
                 db.commit()
+
+        if os.getenv("ENABLE_DB_API_KEYS", "").lower() == "true":
+            asyncio.run(_seed_api_key(str(tenant.id), email))
 
         print(
             json.dumps(

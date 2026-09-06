@@ -12,8 +12,9 @@ flow. This migration intentionally avoids route or endpoint behavior changes.
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "da5d93004161"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "e3f4a5b6c7d8"  # pragma: allowlist secret
@@ -46,6 +47,16 @@ def upgrade() -> None:
     op.create_index("ix_user_emails_user_verified", "user_emails", ["user_id", "is_verified"])
     op.create_index("uq_user_emails_email_lower", "user_emails", [sa.text("lower(email)")], unique=True)
 
+    # v079 users already has FORCE RLS; the NOBYPASSRLS migration owner
+    # otherwise silently reads zero legacy identities. PostgreSQL holds this
+    # table lock until commit and restores the posture if the backfill fails.
+    users_forced = (
+        op.get_bind()
+        .execute(sa.text("SELECT relforcerowsecurity FROM pg_class WHERE oid = 'public.users'::regclass"))
+        .scalar_one()
+    )
+    if users_forced:
+        op.execute("ALTER TABLE public.users NO FORCE ROW LEVEL SECURITY")
     op.execute(
         """
         INSERT INTO public.user_emails (user_id, email, is_verified)
@@ -55,6 +66,9 @@ def upgrade() -> None:
         ON CONFLICT DO NOTHING
         """
     )
+
+    if users_forced:
+        op.execute("ALTER TABLE public.users FORCE ROW LEVEL SECURITY")
 
     op.create_table(
         "organizations",

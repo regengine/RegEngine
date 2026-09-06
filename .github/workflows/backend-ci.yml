@@ -92,7 +92,8 @@ jobs:
       - name: Verify requirements.lock freshness
         run: |
           python -m pip install "pip==24.3.1" pip-tools==7.5.2
-          pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
+          CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
+            pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
           git diff --exit-code -- requirements.lock
 
   # ── Test Matrix ──────────────────────────────────────────
@@ -638,7 +639,9 @@ jobs:
           cmd=$(docker inspect --format '{{json .Config.Cmd}}' regengine:test)
           echo "CMD=${cmd}"
           echo "${cmd}" | grep -q gunicorn
-          docker run --rm --entrypoint python regengine:test -c "import server.main"
+          docker run --rm --entrypoint python \
+            -e REGENGINE_ENV=test -e ADMIN_FALLBACK_SQLITE=sqlite:///:memory: \
+            regengine:test -c "import server.main"
 
   # ── Security (Hard Gate) ─────────────────────────────────
   security:
@@ -716,14 +719,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install minimal deps
-        run: |
-          # The regenerator imports a handful of production helpers from
-          # services/ingestion/app and services/shared. It exits 0 with a
-          # warning if imports fail, so we install only the modules needed
-          # for the helpers' transitive imports to resolve.
-          python -m pip install --upgrade pip
-          python -m pip install pydantic fastapi sqlalchemy
+      - name: Install production dependencies
+        run: python -m pip install --require-hashes -r requirements.lock
 
       - name: Regenerate public samples
         run: python scripts/regenerate_public_samples.py
@@ -1022,16 +1019,17 @@ jobs:
     # `alembic upgrade head` over the populated tables. Migrations are also
     # role-sensitive (v051/v056/v092 branch on Supabase client roles), so a
     # matrix leg replays the chain on a Supabase-like cluster too.
-    name: Seeded migration rehearsal (${{ matrix.cluster }})
+    name: Seeded migration rehearsal (${{ matrix.cluster }}, ${{ matrix.revision }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         cluster: [app-roles-only, supabase-client-roles]
+        revision: [267d8053ced5, 38e02636e340]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1046,6 +1044,9 @@ jobs:
     env:
       # No-Postgres must FAIL the rehearsal, never skip it (#2530).
       REGENGINE_REQUIRE_DB: "1"
+      REGENGINE_SEED_REVISION: ${{ matrix.revision }}
+      AUTH_OTP_HMAC_SECRET: synthetic-migration-rehearsal-hmac-secret-2026 # pragma: allowlist secret
+      PGOPTIONS: "-c timezone=UTC -c search_path=public,fsma,extensions"
       PYTHONDONTWRITEBYTECODE: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
@@ -1113,7 +1114,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1132,6 +1133,7 @@ jobs:
       # step is the backstop for runtime skips (e.g. a missing role).
       REGENGINE_REQUIRE_DB: "1"
       PYTHONDONTWRITEBYTECODE: 1
+      PGOPTIONS: "-c timezone=UTC -c search_path=public,fsma,extensions"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -1255,6 +1257,15 @@ jobs:
             echo "::error::v111 role-cutover proof skipped with all four direct credentials configured"
             exit 1
           fi
+
+      - name: Verify owner-only rule backfills and rollback
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+        run: |
+          export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
+          pytest tests/migrations/test_rule_backfill_owner_rls.py \
+            tests/migrations/test_v120_rule_citations.py \
+            -v -rs --no-cov -o "testpaths=tests"
 
       - name: Run live-DB suite (skips are failures)
         env:

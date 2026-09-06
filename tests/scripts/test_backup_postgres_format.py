@@ -70,16 +70,10 @@ def _write_pg_dump_stub(bin_dir: Path, *, fail: bool = False) -> None:
     """Install a fake `pg_dump` in *bin_dir* that honours --format=custom."""
     failure_block = ""
     if fail:
-        failure_block = (
-            'echo "pg_dump: error: connection to server failed" >&2\n' "exit 1\n"
-        )
+        failure_block = 'echo "pg_dump: error: connection to server failed" >&2\nexit 1\n'
     magic = "".join(f"\\x{b:02x}" for b in PGDMP_MAGIC)
     stub = bin_dir / "pg_dump"
-    stub.write_text(
-        _STUB_TEMPLATE.format(
-            failure_block=failure_block, magic=magic, sql=PLAIN_SQL_DUMP
-        )
-    )
+    stub.write_text(_STUB_TEMPLATE.format(failure_block=failure_block, magic=magic, sql=PLAIN_SQL_DUMP))
     stub.chmod(0o755)
 
 
@@ -121,9 +115,9 @@ def test_backup_artifact_is_real_gzip_not_a_custom_archive(tmp_path):
     assert len(dumps) == 1, f"expected one backup, got {dumps}"
     blob = dumps[0].read_bytes()
 
-    assert not blob.startswith(
-        PGDMP_MAGIC
-    ), "backup is a pg_dump custom archive named .sql.gz - unrestorable by the runbook"
+    assert not blob.startswith(PGDMP_MAGIC), (
+        "backup is a pg_dump custom archive named .sql.gz - unrestorable by the runbook"
+    )
     assert blob[:2] == b"\x1f\x8b", "backup is not gzip-compressed data"
 
 
@@ -174,8 +168,7 @@ def test_default_retention_covers_the_fsma_24_month_window(tmp_path):
     match = re.search(r"older than (\d+) days", proc.stdout)
     assert match, f"could not find retention line in output:\n{proc.stdout}"
     assert int(match.group(1)) >= 730, (
-        "default RETENTION_DAYS is shorter than the 24 months the script's own "
-        "header cites for FSMA 204"
+        "default RETENTION_DAYS is shorter than the 24 months the script's own header cites for FSMA 204"
     )
 
 
@@ -184,19 +177,15 @@ def test_script_and_runbook_describe_the_same_format():
     runbook = RUNBOOK.read_text()
     # Executable lines only - the script's header deliberately *names*
     # --format=custom to explain why it must not be used.
-    script = "\n".join(
-        line
-        for line in SCRIPT.read_text().splitlines()
-        if not line.lstrip().startswith("#")
-    )
+    script = "\n".join(line for line in SCRIPT.read_text().splitlines() if not line.lstrip().startswith("#"))
 
-    assert (
-        "--format=custom" not in script and "-Fc" not in script
-    ), "script emits a custom archive; the runbook restore uses `gunzip -c | psql`"
+    assert "--format=custom" not in script and "-Fc" not in script, (
+        "script emits a custom archive; the runbook restore uses `gunzip -c | psql`"
+    )
     assert "| gzip" in script, "script must pipe plain SQL through gzip"
-    assert (
-        "gunzip -c backups/postgres/regengine_YYYY-MM-DD.sql.gz" in runbook
-    ), "runbook restore command changed; re-check it still matches the script"
+    assert "gunzip -c backups/postgres/regengine_YYYY-MM-DD.sql.gz" in runbook, (
+        "runbook restore command changed; re-check it still matches the script"
+    )
     assert ".sql.gz" in script
 
 
@@ -208,17 +197,10 @@ def test_script_and_runbook_describe_the_same_format():
 def _server_reachable() -> bool:
     if not shutil.which("pg_isready") or not shutil.which("psql"):
         return False
-    return (
-        subprocess.run(
-            ["pg_isready"], capture_output=True, timeout=15
-        ).returncode
-        == 0
-    )
+    return subprocess.run(["pg_isready"], capture_output=True, timeout=15).returncode == 0
 
 
-@pytest.mark.skipif(
-    not _server_reachable(), reason="no reachable PostgreSQL server for round trip"
-)
+@pytest.mark.skipif(not _server_reachable(), reason="no reachable PostgreSQL server for round trip")
 def test_live_roundtrip_restores_seeded_rows(tmp_path):
     """Back up a seeded DB, then restore it with the runbook's exact command."""
     src, dst = "regengine_bkuptest_src", "regengine_bkuptest_dst"
@@ -234,10 +216,7 @@ def test_live_roundtrip_restores_seeded_rows(tmp_path):
 
     for db in (src, dst):
         subprocess.run(["dropdb", "--if-exists", db], capture_output=True, timeout=60)
-        assert (
-            subprocess.run(["createdb", db], capture_output=True, timeout=60).returncode
-            == 0
-        )
+        assert subprocess.run(["createdb", db], capture_output=True, timeout=60).returncode == 0
     try:
         psql(src, "CREATE TABLE traceability_lot (id serial primary key, lot_code text)")
         psql(src, "INSERT INTO traceability_lot (lot_code) VALUES ('LOT-A-001'), ('O''Brien (US)')")
@@ -245,17 +224,15 @@ def test_live_roundtrip_restores_seeded_rows(tmp_path):
         backup_dir = tmp_path / "backups"
         env = dict(os.environ, BACKUP_DIR=str(backup_dir), PGDATABASE=src)
         env.pop("S3_BUCKET", None)
-        proc = subprocess.run(
-            ["bash", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=300
-        )
+        proc = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=300)
         assert proc.returncode == 0, proc.stderr
 
         dump = next(iter(sorted(backup_dir.glob(f"{src}_*.sql.gz"))))
 
         # The runbook's restore pipeline, verbatim apart from the docker wrapper.
         restore = subprocess.run(
-            f'gunzip -c "{dump}" | psql -v ON_ERROR_STOP=1 -d {dst}',
-            shell=True,
+            ["psql", "-v", "ON_ERROR_STOP=1", "-d", dst],
+            input=gzip.decompress(dump.read_bytes()).decode(),
             capture_output=True,
             text=True,
             timeout=300,
@@ -309,13 +286,15 @@ def test_verification_survives_a_realistically_sized_dump(tmp_path):
     env.pop("RETENTION_DAYS", None)
 
     proc = subprocess.run(
-        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
-        cwd=tmp_path, timeout=300,
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=300,
     )
 
-    assert proc.returncode == 0, (
-        f"backup of a realistically-sized database failed:\n{proc.stdout}\n{proc.stderr}"
-    )
+    assert proc.returncode == 0, f"backup of a realistically-sized database failed:\n{proc.stdout}\n{proc.stderr}"
 
     dumps = list(backup_dir.rglob("*.sql.gz"))
     assert dumps, (

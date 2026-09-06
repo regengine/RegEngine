@@ -18,8 +18,8 @@ Two controls were nullified by that:
   fail-closed 429 was being inverted into fail-open precisely when the control
   was designed to be most conservative.
 
-The fallback's legitimate purpose (the key store not being enabled, so a valid
-key needs a direct table lookup) is preserved: 401 still falls back.
+The legacy second lookup has been removed. Every authentication or rate-limit
+failure must remain terminal, including 401, in both deployed and test modes.
 """
 
 from __future__ import annotations
@@ -63,21 +63,6 @@ def _build_app() -> FastAPI:
     return app
 
 
-def _valid_db_principal() -> IngestionPrincipal:
-    """What ``_lookup_scoped_key_from_db`` returns for a real, enabled key.
-
-    The key IS valid — that is the whole point. The bypass worked because a
-    valid-but-rate-limited key sails through a lookup that only checks
-    hash/enabled/expiry.
-    """
-    return IngestionPrincipal(
-        key_id="scoped-key-1",
-        scopes=["webhooks.ingest"],
-        tenant_id=_TENANT,
-        auth_mode="scoped_key_db_fallback",
-    )
-
-
 def _arm(monkeypatch, status_code: int, *, detail: str = "denied", headers=None):
     """Make ``require_api_key`` fail with ``status_code`` while the DB lookup
     would happily hand back a principal."""
@@ -86,7 +71,6 @@ def _arm(monkeypatch, status_code: int, *, detail: str = "denied", headers=None)
         raise HTTPException(status_code=status_code, detail=detail, headers=headers)
 
     monkeypatch.setattr(authz, "require_api_key", _fake_require)
-    monkeypatch.setattr(authz, "_lookup_scoped_key_from_db", lambda raw: _valid_db_principal())
 
 
 # ---------------------------------------------------------------------------
@@ -161,9 +145,9 @@ class TestRateLimitDenialIsTerminal:
         assert authz._auth_limiter._mem_failures.get("testclient", []) == []
 
 
-class TestGenuineAuthFailureStillFallsBack:
-    def test_401_still_falls_back_to_the_db_lookup(self, monkeypatch):
-        """The fallback's real purpose — key store not enabled — is preserved."""
+class TestGenuineAuthFailureIsTerminal:
+    def test_401_stays_denied_without_a_second_lookup(self, monkeypatch):
+        """A rejected credential cannot be revived by a weaker lookup."""
         from app import config as cfg
 
         cfg.get_settings.cache_clear()
@@ -171,8 +155,8 @@ class TestGenuineAuthFailureStillFallsBack:
         _arm(monkeypatch, 401, detail="Invalid API key")
 
         resp = TestClient(_build_app()).get("/whoami", headers={"X-RegEngine-API-Key": "rge_valid.key"})
-        assert resp.status_code == 200, resp.text
-        assert resp.json() == {"key_id": "scoped-key-1", "auth_mode": "scoped_key_db_fallback"}
+        assert resp.status_code == 401, resp.text
+        assert resp.json()["detail"] == "Invalid API key"
 
     def test_401_with_no_matching_row_still_401s(self, monkeypatch):
         from app import config as cfg
@@ -184,7 +168,6 @@ class TestGenuineAuthFailureStillFallsBack:
             raise HTTPException(status_code=401, detail="Invalid API key")
 
         monkeypatch.setattr(authz, "require_api_key", _fake_require)
-        monkeypatch.setattr(authz, "_lookup_scoped_key_from_db", lambda raw: None)
 
         resp = TestClient(_build_app()).get("/whoami", headers={"X-RegEngine-API-Key": "nope"})
         assert resp.status_code == 401
@@ -206,11 +189,10 @@ class TestDevBranchDoesNotDrift:
 
         resp = TestClient(_build_app()).get("/whoami", headers={"X-RegEngine-API-Key": "rge_valid.key"})
         assert resp.status_code == 429, (
-            "dev branch still swallows 429 — the two fallbacks have drifted: "
-            f"{resp.status_code} {resp.text!r}"
+            f"dev branch still swallows 429 — the two fallbacks have drifted: {resp.status_code} {resp.text!r}"
         )
 
-    def test_dev_branch_401_still_falls_back(self, monkeypatch):
+    def test_dev_branch_401_stays_denied(self, monkeypatch):
         from app import config as cfg
 
         cfg.get_settings.cache_clear()
@@ -218,5 +200,5 @@ class TestDevBranchDoesNotDrift:
         _arm(monkeypatch, 401, detail="Invalid API key")
 
         resp = TestClient(_build_app()).get("/whoami", headers={"X-RegEngine-API-Key": "rge_valid.key"})
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["auth_mode"] == "scoped_key_db_fallback"
+        assert resp.status_code == 401, resp.text
+        assert resp.json()["detail"] == "Invalid API key"

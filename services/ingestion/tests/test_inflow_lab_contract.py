@@ -52,6 +52,7 @@ def _event(cte_type: str, kdes: dict) -> IngestEvent:
                 "reference_document_type": "Packout Record",
                 "reference_document_number": "PACK-20260422-00001",
                 "harvester_business_name": "Valley Fresh Farms",
+                "harvester_business_phone": "+1-202-555-0147",
                 "traceability_lot_code_source_reference": "SRC-20260422-00002",
             },
         ),
@@ -95,6 +96,7 @@ def test_representative_inflow_lab_payloads_pass_webhook_kde_validation(cte_type
                 "location_name": "FreshPack Central",
                 "reference_document": "Packout Record PACK-20260422-00001",
                 "harvester_business_name": "Valley Fresh Farms",
+                "harvester_business_phone": "+1-202-555-0147",
             },
         ),
         (
@@ -105,6 +107,7 @@ def test_representative_inflow_lab_payloads_pass_webhook_kde_validation(cte_type
                 "location_name": "FreshPack Central",
                 "reference_document": "Packout Record PACK-20260422-00001",
                 "harvester_business_name": "Valley Fresh Farms",
+                "harvester_business_phone": "+1-202-555-0147",
             },
         ),
         (

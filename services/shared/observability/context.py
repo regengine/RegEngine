@@ -266,32 +266,37 @@ def _inject_service_context(logger_instance, method_name, event_dict):
     return event_dict
 
 
-# Configure base structlog processors with JSON output and audit fields
-structlog.configure(
-    processors=[
-        # #2859: MUST be first. Without it every binding made by
-        # CorrelationIdMiddleware / RequestIDMiddleware / TenantContextMiddleware
-        # via structlog.contextvars.bind_contextvars is silently discarded and
-        # every log line reads tenant_id="unknown" / request_id="unknown".
-        # Running first also means _inject_service_context sees the real values
-        # already present in the event dict and leaves them alone.
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        _inject_service_context,
-        # #2855: MUST run before the renderer. logger.exception() sets
-        # exc_info=True; without this processor JSONRenderer emits a bare
-        # {"exc_info": true} and the traceback never reaches production logs.
-        # (log_config.configure_logging has always had this — see #556.)
-        structlog.processors.format_exc_info,
-        structlog.processors.JSONRenderer(),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
+def configure_context_logging() -> None:
+    """Install the context module's JSON/audit chain explicitly and repeatably."""
+    structlog.configure(
+        processors=[
+            otel_context_processor,
+            sampling_aware_filter,
+            # #2859: Merge before _inject_service_context. Without it bindings made by
+            # CorrelationIdMiddleware / RequestIDMiddleware / TenantContextMiddleware
+            # via structlog.contextvars.bind_contextvars is silently discarded and
+            # every log line reads tenant_id="unknown" / request_id="unknown".
+            # This means _inject_service_context sees the real values
+            # already present in the event dict and leaves them alone.
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            _inject_service_context,
+            # #2855: MUST run before the renderer. logger.exception() sets
+            # exc_info=True; without this processor JSONRenderer emits a bare
+            # {"exc_info": true} and the traceback never reaches production logs.
+            # (log_config.configure_logging has always had this — see #556.)
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
 
 logger = structlog.get_logger("regengine")
 
@@ -348,4 +353,4 @@ def sampling_aware_filter(logger, method_name, event_dict):
 
 
 # Inject finalized processors into the configuration
-structlog.configure(processors=[otel_context_processor, sampling_aware_filter] + structlog.get_config()["processors"])
+configure_context_logging()

@@ -67,8 +67,18 @@ class _RenderedJsonCapture(logging.Handler):
 def rendered_logs():
     """Capture rendered log lines, leaving global logging state as found."""
     # Importing the module installs the production structlog configuration.
-    import shared.observability.context  # noqa: F401
+    from shared.observability.context import configure_context_logging
 
+    previous_config = structlog.get_config().copy()
+    # Other service imports install a PrintLogger with WARNING filtering.
+    # Reinstall the actual production chain this module is testing.
+    configure_context_logging()
+
+    # Other suites load Alembic fileConfig, which disables existing named
+    # loggers. Re-enable this test's logger and restore its previous state.
+    test_log = logging.getLogger("test_tenant_log_context_2859")
+    previous_disabled = test_log.disabled
+    test_log.disabled = False
     handler = _RenderedJsonCapture()
     root = logging.getLogger()
     previous_level = root.level
@@ -78,6 +88,8 @@ def rendered_logs():
     try:
         yield handler
     finally:
+        structlog.configure(**previous_config)
+        test_log.disabled = previous_disabled
         root.removeHandler(handler)
         root.setLevel(previous_level)
         structlog.contextvars.clear_contextvars()
@@ -123,8 +135,7 @@ def test_resolved_tenant_reaches_the_log_line(client, rendered_logs):
     assert lines, "handler log line was not captured — capture setup is broken"
     assert lines[0]["tenant_id"] == tenant_id, (
         "log line rendered tenant_id=%r while TenantContextMiddleware had "
-        "resolved %r — the resolved tenant never reached the logger"
-        % (lines[0].get("tenant_id"), tenant_id)
+        "resolved %r — the resolved tenant never reached the logger" % (lines[0].get("tenant_id"), tenant_id)
     )
 
 
@@ -140,8 +151,7 @@ def test_tenant_is_not_carried_into_a_later_request(client, rendered_logs):
     assert len(lines) == 2, f"expected one line per request, captured {len(lines)}"
     assert lines[0]["tenant_id"] == first_tenant
     assert lines[1]["tenant_id"] == second_tenant, (
-        "second request logged %r — the first request's tenant leaked forward"
-        % (lines[1].get("tenant_id"),)
+        "second request logged %r — the first request's tenant leaked forward" % (lines[1].get("tenant_id"),)
     )
 
 

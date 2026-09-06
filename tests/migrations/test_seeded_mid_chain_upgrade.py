@@ -10,18 +10,18 @@ that migration while every CI gate stayed green.
 
 This gate rehearses what production actually experiences:
 
-  1. ``alembic upgrade`` to ``MID_CHAIN_REVISION`` (v089 — the revision
-     production sat at when the v090 deploys failed),
+  1. ``alembic upgrade`` to ``MID_CHAIN_REVISION`` (v089 by default, or the
+     deployed v079 revision selected by ``REGENGINE_SEED_REVISION``),
   2. seed a small representative dataset (``seed_mid_chain.sql``: two
      tenants, users, audit_logs rows that arm the append-only trigger,
      fsma.cte_events, fsma.request_cases/request_signoffs),
   3. ``alembic upgrade head`` over the populated tables.
 
-Any migration after v089 that UPDATEs/DELETEs guarded rows, adds a
+Any migration after the selected seed revision that UPDATEs/DELETEs guarded rows, adds a
 constraint existing rows violate, or otherwise assumes empty tables fails
 here pre-merge. New migrations are appended after head, so they are always
 covered without moving the pin; the seed is executed at exactly
-``MID_CHAIN_REVISION`` forever, so later schema changes cannot invalidate it.
+one of the two pinned schemas, so later schema changes cannot invalidate it.
 
 Migrations are also role-sensitive: several revisions (v051, v056, v075,
 v092) take different guarded branches depending on whether Supabase-style
@@ -60,7 +60,32 @@ SEED_SQL = Path(__file__).resolve().parent / "seed_mid_chain.sql"
 # backfill produced the 2026-07-15 production deploy failures. The seed SQL
 # is written against this revision's schema; move the pin only together
 # with seed_mid_chain.sql.
-MID_CHAIN_REVISION = "38e02636e340"
+MID_CHAIN_REVISION = os.getenv("REGENGINE_SEED_REVISION", "38e02636e340")
+if MID_CHAIN_REVISION not in {"38e02636e340", "267d8053ced5"}:
+    raise ValueError("seed fixture supports only the audited v079 and v089 schemas")
+
+
+def _seed_sql() -> str:
+    sql = SEED_SQL.read_text()
+    if MID_CHAIN_REVISION == "267d8053ced5":
+        # v079 predates password removal. The fixture never authenticates with
+        # these disabled hashes; v084 must still preserve its email identities.
+        sql = (
+            sql.replace(
+                "INSERT INTO public.users (id, email, is_sysadmin)",
+                "INSERT INTO public.users (id, email, is_sysadmin, password_hash)",
+            )
+            .replace(
+                "'seed-admin@example.test', true)",
+                "'seed-admin@example.test', true, 'disabled-synthetic-password')",
+            )
+            .replace(
+                "'seed-user@example.test', false)",
+                "'seed-user@example.test', false, 'disabled-synthetic-password')",
+            )
+        )
+    return sql
+
 
 SEEDED_TABLES = (
     "public.tenants",
@@ -205,17 +230,10 @@ def rehearsal() -> Iterator[RehearsalResult]:
 
         try:
             with engine.connect() as migration_conn, provider_engine.connect() as provider_conn:
-                migration_database = migration_conn.execute(
-                    text("SELECT current_database()")
-                ).scalar_one()
-                provider_database = provider_conn.execute(
-                    text("SELECT current_database()")
-                ).scalar_one()
+                migration_database = migration_conn.execute(text("SELECT current_database()")).scalar_one()
+                provider_database = provider_conn.execute(text("SELECT current_database()")).scalar_one()
             if migration_database != provider_database:
-                pytest.fail(
-                    "ROLE_ADMIN_DATABASE_URL must target the same scratch database "
-                    "as the migration credential"
-                )
+                pytest.fail("ROLE_ADMIN_DATABASE_URL must target the same scratch database as the migration credential")
 
             _provision_cluster(engine, provider_engine)
 
@@ -239,7 +257,7 @@ def rehearsal() -> Iterator[RehearsalResult]:
             try:
                 seed_conn.autocommit = True
                 with seed_conn.cursor() as cur:
-                    cur.execute(SEED_SQL.read_text())
+                    cur.execute(_seed_sql())
             finally:
                 seed_conn.close()
 
@@ -311,3 +329,27 @@ def test_audit_append_only_still_enforced_at_head(rehearsal: RehearsalResult) ->
                 WHERE id = (SELECT min(id) FROM public.audit_logs)
             """)
         )
+
+
+def test_v079_identity_backfill_preserves_existing_users(rehearsal: RehearsalResult) -> None:
+    if MID_CHAIN_REVISION != "267d8053ced5":
+        return  # v089 fixture users are created after the v084 backfill.
+    with rehearsal.engine.connect() as conn:
+        missing = conn.execute(
+            text("""SELECT count(*) FROM public.users u
+            LEFT JOIN public.user_emails e ON e.user_id = u.id AND e.email = u.email
+            WHERE e.id IS NULL OR e.email_fingerprint IS NULL""")
+        ).scalar_one()
+        assert missing == 0
+        assert conn.execute(
+            text("SELECT relforcerowsecurity FROM pg_class WHERE oid='public.users'::regclass")
+        ).scalar_one()
+
+
+def test_rule_backfills_leave_forced_rls(rehearsal: RehearsalResult) -> None:
+    with rehearsal.engine.connect() as conn:
+        assert conn.execute(
+            text("""SELECT bool_and(relrowsecurity AND relforcerowsecurity)
+            FROM pg_class WHERE oid IN ('fsma.rule_definitions'::regclass,
+                                        'fsma.rule_audit_log'::regclass)""")
+        ).scalar_one()

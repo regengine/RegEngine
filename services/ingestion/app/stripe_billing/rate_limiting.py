@@ -29,6 +29,7 @@ logger = logging.getLogger("stripe_billing.rate_limit")
 
 _WEBHOOK_RATE_LIMIT = 100  # requests per window
 _WEBHOOK_WINDOW = 60  # seconds
+_VERIFIED_WEBHOOK_RATE_LIMIT = 1000  # signed deliveries per account/window
 _CHECKOUT_RATE_LIMIT = 10  # requests per source IP per window
 _CHECKOUT_WINDOW = 60  # seconds
 
@@ -40,17 +41,34 @@ _checkout_limiter_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 
 _rate_buckets: Dict[str, list] = {}
+_bucket_lock = threading.Lock()
+_rate_limit_rejections: dict[str, int] = {}
+_MAX_TRACKED_REJECTION_KEYS = 1024
+_REJECTION_OVERFLOW_KEY = "other"
 
 
-def _check_in_memory(client_ip: str, now: float) -> int:
+def _record_rejection(key: str) -> None:
+    with _bucket_lock:
+        if key not in _rate_limit_rejections and len(_rate_limit_rejections) >= _MAX_TRACKED_REJECTION_KEYS:
+            key = _REJECTION_OVERFLOW_KEY
+        _rate_limit_rejections[key] = _rate_limit_rejections.get(key, 0) + 1
+
+
+def rate_limit_rejection_counts() -> dict[str, int]:
+    with _bucket_lock:
+        return dict(_rate_limit_rejections)
+
+
+def _check_in_memory(client_ip: str, now: float, limit: int | None = None) -> int:
     """In-memory sliding window. Returns remaining seconds if limited, else 0."""
-    bucket = _rate_buckets.setdefault(client_ip, [])
-    bucket[:] = [t for t in bucket if now - t < _WEBHOOK_WINDOW]
-    if len(bucket) >= _WEBHOOK_RATE_LIMIT:
-        oldest = bucket[0]
-        return int(_WEBHOOK_WINDOW - (now - oldest)) or 1
-    bucket.append(now)
-    return 0
+    with _bucket_lock:
+        bucket = _rate_buckets.setdefault(client_ip, [])
+        bucket[:] = [t for t in bucket if now - t < _WEBHOOK_WINDOW]
+        if len(bucket) >= (limit if limit is not None else _WEBHOOK_RATE_LIMIT):
+            oldest = bucket[0]
+            return int(_WEBHOOK_WINDOW - (now - oldest)) or 1
+        bucket.append(now)
+        return 0
 
 
 # ---------------------------------------------------------------------------
@@ -127,11 +145,11 @@ def _get_redis():
         return None
 
 
-def _check_redis(client_ip: str, now: float) -> int:
+def _check_redis(client_ip: str, now: float, limit: int | None = None) -> int:
     """Redis sorted-set sliding window. Returns remaining seconds if limited, else 0."""
     r = _get_redis()
     if r is None:
-        return _check_in_memory(client_ip, now)
+        return _check_in_memory(client_ip, now, limit)
 
     key = f"stripe_webhook:rate:{client_ip}"
     member = f"{now}:{uuid.uuid4().hex}"
@@ -142,13 +160,13 @@ def _check_redis(client_ip: str, now: float) -> int:
             key,
             now,
             _WEBHOOK_WINDOW,
-            _WEBHOOK_RATE_LIMIT,
+            limit if limit is not None else _WEBHOOK_RATE_LIMIT,
             member,
         )
         return int(remaining)
     except Exception:
         logger.debug("Redis error in stripe webhook rate limit check, falling back to in-memory")
-        return _check_in_memory(client_ip, now)
+        return _check_in_memory(client_ip, now, limit)
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +234,26 @@ def _check_stripe_webhook_rate_limit(request) -> None:
     retry_after = _check_redis(client_ip, now)
 
     if retry_after > 0:
+        _record_rejection(client_ip)
         logger.warning("stripe_webhook_rate_limit_exceeded client_ip=%s", client_ip)
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again shortly.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _check_verified_stripe_webhook_rate_limit(event: dict) -> None:
+    """Only call after signature verification; unsigned traffic has another budget.
+
+    The signed account and mode identify the bucket. Peer IP and forwarded
+    headers cannot consume or split it, nor can a new event ID reset it.
+    """
+    account = str(event.get("account") or "platform")
+    key = f"verified:{account}:{bool(event.get('livemode', False))}"
+    retry_after = _check_redis(key, datetime.now(timezone.utc).timestamp(), _VERIFIED_WEBHOOK_RATE_LIMIT)
+    if retry_after > 0:
+        _record_rejection(key)
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Try again shortly.",
