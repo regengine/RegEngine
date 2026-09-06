@@ -147,3 +147,41 @@ Do not squash revisions still needed by the v079 environment or retire legacy
 writes from these local results. The existing WS-1d gates still require live
 reconciliation, export parity, a verified soak, and all direct legacy writers
 to be cut over before legacy tables become read-only.
+
+
+## Additional failures exposed by hosted CI
+
+All four PostgreSQL 17 seeded-history jobs, browser E2E, collection, root-fast
+execution, dependency freshness, and frontend checks passed on draft PR #3071's
+initial candidate. The newly unblocked live suite exposed a v111 managed-rerun
+defect: it revoked v113's invite lookup permission. The repair preserves that
+narrow function for `regengine_sysadmin` only; the ordinary runtime remains
+denied invite reads and lookup execution.
+
+The remaining service repairs retain the current auth and role contracts:
+
+- Retired master-key tests now assert denial, and erasure tests target the
+  current atomic identity-mutation path. Metrics tests use the current bounded
+  labels. Pool-reset tests still prove failed resets discard connections and
+  identity writes stay transaction-local.
+- Deadline monitoring limits tenant discovery, reports truncation, suppresses
+  repeated alerts with a bounded per-process cache and hourly re-notification,
+  and allows one scheduler instance at a time. Cache overflow remains alerting;
+  a process restart may repeat alerts. It is not durable cross-process dedupe.
+- Task retention uses the shared allowlist and independent evidence denylist.
+  Recall and unknown task types remain stored. Finalization reports whether
+  the worker still owned the row; stolen or released locks remain rejected.
+- Raw psycopg tenant binding now calls the canonical cursor helper inside the
+  same transaction. Invalid identifiers and cross-tenant reuse still fail
+  before application SQL, with rollback tests covering failed operations.
+- The positive remediation integration lane contradicted the release-approved
+  router set and v111's intentionally absent grants. Its production acceptance
+  step now checks disabled-route and actual-role denial. The existing feature
+  tests remain in `services/ingestion/tests/remediation` for future promotion;
+  no new privileges were granted. Existing token/outbox background grants
+  remain; case/manifest access and public token-lookup functions stay denied.
+
+The full admin, scheduler, and shared suites pass locally with locked Python
+3.11 dependencies; the tenant-trust Semgrep scan is clear. Hosted results for
+the final commit remain the authoritative CI record. Historical secret
+findings and the missing approved production restore remain release blockers.

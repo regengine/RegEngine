@@ -57,8 +57,7 @@ def _migration_owner_enforcement_required() -> bool:
         or os.getenv("ENV", "").strip().lower()
     )
     return (
-        os.getenv("REGENGINE_ENFORCE_MIGRATION_ROLE", "").strip().lower()
-        in _TRUE_VALUES
+        os.getenv("REGENGINE_ENFORCE_MIGRATION_ROLE", "").strip().lower() in _TRUE_VALUES
         or environment in _DEPLOYED_ENVIRONMENT_NAMES
         or any(os.getenv(marker, "").strip() for marker in _CLOUD_ENV_VARS)
     )
@@ -72,18 +71,14 @@ def _migration_url_role() -> str:
         return unquote(urlsplit(migration_url).username or "").strip()
     except ValueError as exc:
         raise RuntimeError(
-            "MIGRATIONS_DATABASE_URL is not a parseable PostgreSQL URL; "
-            "cannot prove the migration role"
+            "MIGRATIONS_DATABASE_URL is not a parseable PostgreSQL URL; cannot prove the migration role"
         ) from exc
 
 
 def _expected_migration_role(url_role: str) -> str:
     configured_role = os.getenv("REGENGINE_MIGRATIONS_ROLE", "").strip()
     if configured_role and url_role and configured_role != url_role:
-        raise RuntimeError(
-            "REGENGINE_MIGRATIONS_ROLE must match the login identity in "
-            "MIGRATIONS_DATABASE_URL"
-        )
+        raise RuntimeError("REGENGINE_MIGRATIONS_ROLE must match the login identity in MIGRATIONS_DATABASE_URL")
     return configured_role or url_role
 
 
@@ -747,9 +742,7 @@ REGENGINE_SYSADMIN_COLUMN_GRANTS = {
             "updated_at",
         )
     },
-    "public.audit_log_buffer": {
-        "UPDATE": ("replayed_at", "replay_attempts")
-    },
+    "public.audit_log_buffer": {"UPDATE": ("replayed_at", "replay_attempts")},
     "public.tenants": {"UPDATE": ("settings", "updated_at")},
 }
 
@@ -771,30 +764,17 @@ def _build_object_grants() -> str:
         statements.append(_grant_sql("regengine", object_name, privileges, "TABLE"))
     for object_name, privilege_map in sorted(REGENGINE_COLUMN_GRANTS.items()):
         for privilege, columns in sorted(privilege_map.items()):
-            statements.append(
-                f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine;"
-            )
+            statements.append(f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine;")
     for object_name, privileges in sorted(REGENGINE_SEQUENCE_GRANTS.items()):
         statements.append(_grant_sql("regengine", object_name, privileges, "SEQUENCE"))
 
     for object_name, privileges in sorted(REGENGINE_SYSADMIN_TABLE_GRANTS.items()):
-        statements.append(
-            _grant_sql("regengine_sysadmin", object_name, privileges, "TABLE")
-        )
-    for object_name, privilege_map in sorted(
-        REGENGINE_SYSADMIN_COLUMN_GRANTS.items()
-    ):
+        statements.append(_grant_sql("regengine_sysadmin", object_name, privileges, "TABLE"))
+    for object_name, privilege_map in sorted(REGENGINE_SYSADMIN_COLUMN_GRANTS.items()):
         for privilege, columns in sorted(privilege_map.items()):
-            statements.append(
-                f"GRANT {privilege} ({', '.join(columns)}) ON TABLE "
-                f"{object_name} TO regengine_sysadmin;"
-            )
-    for object_name, privileges in sorted(
-        REGENGINE_SYSADMIN_SEQUENCE_GRANTS.items()
-    ):
-        statements.append(
-            _grant_sql("regengine_sysadmin", object_name, privileges, "SEQUENCE")
-        )
+            statements.append(f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine_sysadmin;")
+    for object_name, privileges in sorted(REGENGINE_SYSADMIN_SEQUENCE_GRANTS.items()):
+        statements.append(_grant_sql("regengine_sysadmin", object_name, privileges, "SEQUENCE"))
     return "\n".join(statements)
 
 
@@ -1143,6 +1123,13 @@ BEGIN
     GRANT EXECUTE ON FUNCTION public.get_tenant_context() TO regengine_sysadmin;
     GRANT EXECUTE ON FUNCTION public.set_tenant_context(text) TO regengine_sysadmin;
     GRANT EXECUTE ON FUNCTION public.set_admin_context(boolean) TO regengine_sysadmin;
+    -- v113 is absent on the first pass, but present when the supported
+    -- runner reapplies this cutover at head. Preserve the admin route's
+    -- narrow pre-tenant helper without granting ordinary runtime access.
+    IF to_regprocedure('public.get_invite_tenant_by_token_hash(text)') IS NOT NULL THEN
+        GRANT EXECUTE ON FUNCTION public.get_invite_tenant_by_token_hash(text)
+            TO regengine_sysadmin;
+    END IF;
     REVOKE EXECUTE ON FUNCTION public.set_admin_context(boolean)
         FROM PUBLIC, regengine;
 

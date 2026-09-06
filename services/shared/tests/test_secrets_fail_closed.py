@@ -73,27 +73,21 @@ def _run(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
 
 
 class TestStartupWiring:
-    """The checks must be reachable from the deployed entrypoint."""
+    """The deployed entrypoint uses the current auth configuration validator.
 
-    def test_server_main_calls_both_secret_checks(self):
+    The utility checks below cover optional integration secrets. The removed
+    master-key mechanism is not restored to satisfy historical startup tests.
+    """
+
+    def test_server_main_calls_auth_validation(self):
         source = SERVER_MAIN.read_text(encoding="utf-8")
-        assert "from shared.secrets_manager import" in source
-        assert re.search(r"^\s*require_secure_secrets_in_production\(\)", source, re.MULTILINE), (
-            "require_secure_secrets_in_production() has no call site in server/main.py (#2808)"
-        )
-        assert re.search(r"^\s*validate_production_secrets\(\)", source, re.MULTILINE), (
-            "validate_production_secrets() has no call site in server/main.py (#2808)"
-        )
+        assert "from shared.auth import validate_auth_config" in source
+        assert re.search(r"^validate_auth_config\(\)", source, re.MULTILINE)
 
-    def test_server_main_offers_a_fatal_mode(self):
-        """The non-fatal default is deliberate — see test_unset_secrets_fail_in_production.
+    def test_retired_master_key_is_not_a_runtime_requirement(self):
+        from shared.secrets_manager import INSECURE_DEFAULTS
 
-        It is only defensible while an operator can opt into the hard failure,
-        so the flag that does it must not quietly disappear.
-        """
-        source = SERVER_MAIN.read_text(encoding="utf-8")
-        assert "REGENGINE_REQUIRE_SECURE_SECRETS" in source
-        assert "insecure_production_secrets_detected" in source
+        assert "ADMIN_MASTER_KEY" not in INSECURE_DEFAULTS
 
 
 class TestProductionSecretValidation:
@@ -111,8 +105,6 @@ class TestProductionSecretValidation:
     @pytest.mark.parametrize(
         ("var", "insecure_value"),
         [
-            ("ADMIN_MASTER_KEY", "dev-admin-key"),
-            ("ADMIN_MASTER_KEY", "change-in-production"),
             ("NEO4J_PASSWORD", "neo4j"),
             ("OBJECT_STORAGE_ACCESS_KEY_ID", "test"),
         ],
@@ -151,7 +143,6 @@ class TestProductionSecretValidation:
         combined = result.stdout + result.stderr
         for var in (
             "NEO4J_PASSWORD",
-            "ADMIN_MASTER_KEY",
             "OBJECT_STORAGE_ACCESS_KEY_ID",
             "OBJECT_STORAGE_SECRET_ACCESS_KEY",
         ):

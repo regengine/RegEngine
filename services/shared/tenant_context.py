@@ -358,6 +358,25 @@ def is_production() -> bool:
 # that proactively clears the GUC; that's the second layer of defense.
 
 
+def _validate_tenant_guc_id(tenant_id: str) -> None:
+    if not isinstance(tenant_id, str) or not tenant_id:
+        raise ValueError(f"tenant_id must be a non-empty UUID string; got {type(tenant_id).__name__!s}={tenant_id!r}")
+    try:
+        _uuid.UUID(tenant_id)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(f"tenant_id is not a valid UUID: {tenant_id!r}") from exc
+
+
+def set_tenant_guc_cursor(cursor: Any, tenant_id: str) -> None:
+    """The canonical transaction-local tenant binding for raw psycopg cursors.
+
+    The caller must hold the transaction through all tenant SQL and commit or
+    rollback. Raw cursors require DB-API binds, not SQLAlchemy text clauses.
+    """
+    _validate_tenant_guc_id(tenant_id)
+    cursor.execute("SELECT set_config('app.tenant_id', %s, true)", (tenant_id,))
+
+
 def set_tenant_guc(session: Any, tenant_id: str) -> None:
     """Set ``app.tenant_id`` on the session at TRANSACTION scope.
 
@@ -416,12 +435,7 @@ def set_tenant_guc(session: Any, tenant_id: str) -> None:
         ``hasattr(result, "__await__")`` check if the session type
         is mixed).
     """
-    if not isinstance(tenant_id, str) or not tenant_id:
-        raise ValueError(f"tenant_id must be a non-empty UUID string; got {type(tenant_id).__name__!s}={tenant_id!r}")
-    try:
-        _uuid.UUID(tenant_id)
-    except (ValueError, AttributeError) as exc:
-        raise ValueError(f"tenant_id is not a valid UUID: {tenant_id!r}") from exc
+    _validate_tenant_guc_id(tenant_id)
 
     # Return whatever ``session.execute(...)`` returns. Sync sessions
     # return a ``Result`` object (caller can ignore); async sessions
@@ -655,6 +669,8 @@ def _apply_rls_gucs_on_begin(conn: Any) -> None:
             {"tid": str(tid)},
         )
         _inc_rls_guc_metric("tenant")
+
+
 def install_rls_guc_hook() -> None:
     """Register :func:`_apply_rls_gucs_on_begin` on the Engine CLASS.
 

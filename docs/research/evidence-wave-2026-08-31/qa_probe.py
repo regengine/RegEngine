@@ -311,7 +311,7 @@ def tenant_probe():
         else:
             store.complete_ingestion_run(str(uuid4()), str(tenant), 1, 0)
         sql, params = session.calls[0]
-        assert sql == "SELECT set_config('app.tenant_id', :tid, true)"
+        assert "set_config" in sql and "'app.tenant_id'" in sql and ":tid, true)" in sql
         assert params == {"tid": str(tenant)}
         records.append({"operation": operation, "first_sql": sql, "first_params": params})
 

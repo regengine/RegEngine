@@ -10,6 +10,7 @@ import os
 # every reachable-DB test against the developer's real database (2026-07-25
 # incident). CI exports real service-container URLs explicitly.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("ADMIN_FALLBACK_SQLITE", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 

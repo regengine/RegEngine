@@ -320,12 +320,17 @@ def _query_alert_events(db_session, tenant_id: str, limit: int) -> list[AuditEnt
 
 def _count_sources(db_session, tenant_id: str) -> int:
     """Count the same tenant's physical source rows without list-window caps."""
+    queries = {
+        "audit_logs": "SELECT COUNT(*) FROM audit_logs WHERE tenant_id = :tenant_id",
+        "fsma.cte_events": "SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tenant_id",
+        "fsma.fda_export_log": "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tenant_id",
+        "fsma.compliance_alerts": "SELECT COUNT(*) FROM fsma.compliance_alerts WHERE tenant_id = :tenant_id",
+    }
     total = 0
-    for table in ("audit_logs", "fsma.cte_events", "fsma.fda_export_log", "fsma.compliance_alerts"):
+    for table, query in queries.items():
         schema, name = table.split(".") if "." in table else ("public", table)
         if not _table_exists(db_session, name, schema):
             continue
-        tenant_column = "tenant_id"
         if name == "compliance_alerts":
             columns = {
                 row[0]
@@ -339,10 +344,8 @@ def _count_sources(db_session, tenant_id: str) -> int:
             if "tenant_id" not in columns:
                 if "org_id" not in columns:
                     continue
-                tenant_column = "org_id"
-        row = db_session.execute(
-            text(f"SELECT COUNT(*) FROM {table} WHERE {tenant_column} = :tenant_id"), {"tenant_id": tenant_id}
-        ).fetchone()
+                query = "SELECT COUNT(*) FROM fsma.compliance_alerts WHERE org_id = :tenant_id"
+        row = db_session.execute(text(query), {"tenant_id": tenant_id}).fetchone()
         total += int(row[0])
     return total
 

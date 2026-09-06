@@ -111,9 +111,9 @@ def _seed(conn, *, token_hash: str, accepted: bool = False, revoked: bool = Fals
     return tenant_id
 
 
-@pytest.mark.parametrize("role", ["regengine", "regengine_sysadmin"])
+@pytest.mark.parametrize("role", ["regengine_sysadmin"])
 def test_token_lookup_resolves_tenant_without_tenant_context(role: str) -> None:
-    """The acceptance criterion: works as BOTH app roles, no tenant GUC set.
+    """The acceptance criterion: works as the admin route credential, no tenant GUC set.
 
     Pre-v113 this raised ``app.tenant_id not set`` for either role.
     """
@@ -171,7 +171,7 @@ def test_token_lookup_is_fail_closed_for_unusable_invites() -> None:
                     _seed(conn, token_hash=h, **kwargs)
                     hashes[label] = h
 
-                conn.execute(text("SET LOCAL ROLE regengine"))
+                conn.execute(text("SET LOCAL ROLE regengine_sysadmin"))
                 for label, h in hashes.items():
                     resolved = conn.execute(text(f"SELECT {_LOOKUP}(:h)"), {"h": h}).scalar()
                     assert resolved is None, f"{label} invite must not resolve a tenant, got {resolved!r}"
@@ -205,7 +205,7 @@ def test_invites_table_is_no_more_readable_than_before() -> None:
                 tenant_a = _seed(conn, token_hash=token_hash)
                 other_tenant = uuid.uuid4()
 
-                conn.execute(text("SET LOCAL ROLE regengine"))
+                conn.execute(text("SET LOCAL ROLE regengine_sysadmin"))
 
                 sp = conn.begin_nested()
                 try:
@@ -272,8 +272,8 @@ def test_lookup_function_is_invoker_pinned_and_not_world_executable() -> None:
             assert proacl is not None, "EXECUTE must be revoked from PUBLIC (a NULL acl means world-executable)"
             # A PUBLIC grant is the acl entry with an EMPTY grantee: "=X/owner".
             assert "{=" not in proacl and ",=" not in proacl, f"EXECUTE must not be granted to PUBLIC, got {proacl!r}"
-            assert "regengine=X/" in proacl and "regengine_sysadmin=X/" in proacl, (
-                f"both app roles need EXECUTE (the fix must not be role-dependent), got {proacl!r}"
+            assert "regengine=X/" not in proacl and "regengine_sysadmin=X/" in proacl, (
+                f"only the admin route credential needs EXECUTE, got {proacl!r}"
             )
     finally:
         engine.dispose()
@@ -297,7 +297,7 @@ def test_token_lookup_arm_is_scoped_to_a_single_unconsumed_row() -> None:
                 _seed(conn, token_hash=wanted)
                 _seed(conn, token_hash=other)
 
-                conn.execute(text("SET LOCAL ROLE regengine"))
+                conn.execute(text("SET LOCAL ROLE regengine_sysadmin"))
                 # Mirror what get_invite_tenant_by_token_hash does internally:
                 # an unmatchable tenant id (so the fail-hard arm evaluates to
                 # false rather than raising) plus the token hash.
@@ -312,5 +312,33 @@ def test_token_lookup_arm_is_scoped_to_a_single_unconsumed_row() -> None:
                 )
             finally:
                 trans.rollback()
+    finally:
+        engine.dispose()
+
+
+def test_ordinary_runtime_cannot_read_invites_or_invoke_lookup():
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    engine = _engine()
+    try:
+        with engine.connect() as conn:
+            transaction = conn.begin()
+            try:
+                conn.execute(text("SET LOCAL ROLE regengine"))
+                assert not conn.execute(
+                    text("SELECT has_table_privilege(current_user, 'public.invites', 'SELECT')")
+                ).scalar()
+                for sql in (
+                    "SELECT public.get_invite_tenant_by_token_hash('unknown')",
+                    "SELECT token_hash FROM public.invites",
+                ):
+                    with (
+                        pytest.raises(DBAPIError, match="permission denied|app.tenant_id not set"),
+                        conn.begin_nested(),
+                    ):
+                        conn.execute(text(sql))
+            finally:
+                transaction.rollback()
     finally:
         engine.dispose()

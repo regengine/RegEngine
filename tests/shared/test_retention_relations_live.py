@@ -62,7 +62,7 @@ def test_declared_retention_relations_match_the_migrated_schema() -> None:
             for resource, relation in sorted(_RESOURCE_RELATIONS.items()):
                 if relation is None:
                     # The name the pre-#2900 code used as a table name.
-                    if _resolve(conn, resource) is not None:
+                    if _resolve(conn, "public." + resource) is not None:
                         unexpectedly_present.append(resource)
                     continue
                 if _resolve(conn, relation) is None:

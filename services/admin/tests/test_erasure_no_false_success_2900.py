@@ -45,35 +45,29 @@ def _fake_db():
 
 
 async def _invoke(module, *, process_result, db):
-    fake_get_db = MagicMock()
-    fake_get_db.return_value.__enter__ = MagicMock(return_value=db)
-    fake_get_db.return_value.__exit__ = MagicMock(return_value=False)
-
-    manager = MagicMock()
-
-    async def _proc_del(**_kwargs):
-        return process_result
-
-    async def _anon(**_kwargs):
-        return (0, 0)
-
-    manager.process_deletion_request = _proc_del
-    manager.anonymize_audit_logs_for_user = _anon
-
     async def _async_noop(*_a, **_k):
         return None
 
+    def _apply(*_a, **_k):
+        if not process_result.get("soft_deleted"):
+            from sqlalchemy.exc import SQLAlchemyError
+
+            raise SQLAlchemyError("identity mutation did not complete")
+        return 0
+
     body = module.ErasureRequest(confirm=True, reason="testing")
     with (
-        patch.object(module, "get_db", fake_get_db),
+        patch.object(module, "_apply_account_erasure", side_effect=_apply),
+        patch.object(module, "_revoke_erased_user_runtime_sessions", side_effect=_async_noop),
         patch.object(module.TenantContext, "get_tenant_context", return_value=_TENANT_ID),
-        patch("shared.data_retention.DataRetentionManager", return_value=manager),
         patch.object(module, "enqueue_graph_write") as enqueue_mock,
         patch.object(module, "_delete_neo4j_user_graph_data") as neo4j_mock,
     ):
         neo4j_mock.side_effect = _async_noop
         try:
-            response = await module.request_erasure(body=body, current_user=_user_model())
+            response = await module.request_erasure(
+                body=body, current_user=_user_model(), db=db, session_store=MagicMock()
+            )
         except Exception as exc:  # noqa: BLE001 — the caller asserts on it
             return None, exc, enqueue_mock, neo4j_mock
         return response, None, enqueue_mock, neo4j_mock
@@ -146,5 +140,5 @@ async def test_successful_erasure_still_returns_the_accepted_response():
     assert exc is None, f"the happy path must not raise, got {exc!r}"
     assert response.status == "accepted"
     assert response.soft_deleted is True
-    assert response.hard_delete_scheduled is True
-    enqueue_mock.assert_called_once()
+    assert response.hard_delete_scheduled is False
+    db.commit.assert_called_once()

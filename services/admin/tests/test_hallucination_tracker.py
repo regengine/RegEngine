@@ -83,10 +83,10 @@ def reset_metrics():
     """Ensure each test starts with clean metric state."""
 
     hallucination_events_total._metrics.clear()  # type: ignore[attr-defined]
-    hallucination_active_reviews._metrics.clear()  # type: ignore[attr-defined]
+    hallucination_active_reviews.set(0)
     yield
     hallucination_events_total._metrics.clear()  # type: ignore[attr-defined]
-    hallucination_active_reviews._metrics.clear()  # type: ignore[attr-defined]
+    hallucination_active_reviews.set(0)
 
 
 @pytest.fixture
@@ -135,9 +135,9 @@ def test_record_hallucination_tracks_state(tracker_fixture):
     assert fake_redis.get(cache_key) is not None
 
     counter_value = (
-        hallucination_events_total.labels(tenant_id=tenant_id, extractor="GENERIC")._value.get()  # type: ignore[attr-defined]
+        hallucination_events_total.labels(extractor="GENERIC")._value.get()  # type: ignore[attr-defined]
     )
-    gauge_value = hallucination_active_reviews.labels(tenant_id=tenant_id)._value.get()  # type: ignore[attr-defined]
+    gauge_value = hallucination_active_reviews._value.get()  # type: ignore[attr-defined]
 
     assert counter_value == 1.0
     assert gauge_value == 1.0
@@ -164,7 +164,7 @@ def test_resolve_hallucination_updates_metrics(tracker_fixture):
     assert item.status == "APPROVED"
     assert item.reviewer_id == "human-reviewer"
 
-    gauge_value = hallucination_active_reviews.labels(tenant_id=tenant_id)._value.get()  # type: ignore[attr-defined]
+    gauge_value = hallucination_active_reviews._value.get()  # type: ignore[attr-defined]
     assert gauge_value == 0.0
 
 

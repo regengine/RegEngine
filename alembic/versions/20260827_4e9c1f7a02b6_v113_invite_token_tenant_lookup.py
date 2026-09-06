@@ -168,7 +168,7 @@ def upgrade() -> None:
         DROP POLICY IF EXISTS {_POLICY} ON public.invites;
         CREATE POLICY {_POLICY} ON public.invites
             FOR SELECT
-            TO regengine, regengine_sysadmin
+            TO regengine_sysadmin
             USING (
                 token_hash = NULLIF(current_setting('{_GUC}', true), '')
                 AND accepted_at IS NULL
@@ -179,7 +179,9 @@ def upgrade() -> None:
     )
 
     op.execute(f"REVOKE ALL ON FUNCTION {_FN} FROM PUBLIC")
-    op.execute(f"GRANT EXECUTE ON FUNCTION {_FN} TO regengine, regengine_sysadmin")
+    # Invite acceptance belongs to ADMIN_DATABASE_URL; the ordinary runtime
+    # has no public.invites privilege in the v111 closed grant inventory.
+    op.execute(f"GRANT EXECUTE ON FUNCTION {_FN} TO regengine_sysadmin")
 
 
 def downgrade() -> None:

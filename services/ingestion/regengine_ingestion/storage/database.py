@@ -8,6 +8,7 @@ from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
+from shared.tenant_context import set_tenant_guc_cursor
 
 from ..config import DatabaseConfig
 from ..models import AuditEntry, Document, IngestionJob
@@ -128,10 +129,7 @@ class DatabaseManager:
         try:
             with connection.transaction():
                 with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT set_config('app.tenant_id', %s, true)",
-                        (resolved_tenant_id,),
-                    )
+                    set_tenant_guc_cursor(cursor, resolved_tenant_id)
                     yield cursor
         except Exception:
             try:

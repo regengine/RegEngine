@@ -75,6 +75,7 @@ class _Harness:
         self.cases_by_tenant = cases_by_tenant
         self.sql_statements = []
         self.workflow_calls = []
+        self.discovery_limits = []
 
     def _execute(self, statement, params=None):
         self.sql_statements.append((str(statement), params))
@@ -96,6 +97,10 @@ class _Harness:
 
         workflow.check_deadline_status.side_effect = _check
 
+        def _discover(*, limit):
+            self.discovery_limits.append(limit)
+            return list(self.tenants[:limit])
+
         records = []
 
         def _record(level):
@@ -106,6 +111,7 @@ class _Harness:
 
         with (
             patch("shared.database.SessionLocal", return_value=db),
+            patch("shared.maintenance_tenants.list_maintenance_tenant_ids", side_effect=_discover),
             patch("shared.request_workflow.RequestWorkflow", return_value=workflow),
             patch.object(scheduler_service.logger, "error", side_effect=_record("error")),
             patch.object(scheduler_service.logger, "warning", side_effect=_record("warning")),
@@ -274,14 +280,8 @@ class TestQueryFanOut:
         harness = _Harness([_tenant(i) for i in range(50)], {})
         harness.run(svc, ticks=1)
 
-        tenant_sql = [s for s, _ in harness.sql_statements if "public.tenants" in s]
-        assert tenant_sql, "expected a tenant discovery query"
-        lowered = " ".join(tenant_sql[0].lower().split())
-        assert "limit" in lowered, (
-            "the tenant discovery scan must be bounded — an unbounded scan "
-            f"grows tick duration and memory with tenant count.\nSQL: {tenant_sql[0]}"
-        )
-        assert "order by" in lowered, "a bounded scan needs a deterministic order"
+        assert harness.discovery_limits == [svc.DEADLINE_TENANT_SCAN_LIMIT]
+        assert 0 < harness.discovery_limits[0] <= 5000
 
     def test_truncated_tenant_scan_is_reported_loudly(self):
         """Silently skipping tenants on a compliance control is worse than slow."""
