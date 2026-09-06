@@ -112,6 +112,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 """),
                 {"tid": tenant_id, "cte_type": event.cte_type.value},
             ).fetchall()
+            nested.commit()
         except (SQLAlchemyError, ValueError, TypeError, RuntimeError) as exc:
             nested.rollback()
             _pkg.logger.debug("obligation_query_rollback: %s", str(exc))
@@ -212,8 +213,9 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     db_session.execute(
                         text("""
                             INSERT INTO fsma.compliance_alerts
-                            (tenant_id, org_id, event_id, severity, alert_type, message, details)
-                            VALUES (CAST(:tid AS uuid), CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
+                            (tenant_id, org_id, cte_event_id, event_id, severity, alert_type, message, details)
+                            VALUES (CAST(:tid AS uuid), CAST(:tid AS uuid), CAST(:eid AS uuid), CAST(:eid AS uuid),
+                                    :sev, :atype, :msg, CAST(:details AS jsonb))
                         """),
                         {
                             "tid": tenant_id,

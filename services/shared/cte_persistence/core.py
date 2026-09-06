@@ -49,7 +49,6 @@ from __future__ import annotations
 # model classes, hashing functions, ``logger``) is still defined or
 # imported below, and the sibling modules resolve them late through
 # this module so monkeypatching ``core.X`` keeps working.
-
 import hashlib  # noqa: F401  — kept for backward compat (was a module global)
 import json
 import logging
@@ -65,8 +64,13 @@ from sqlalchemy.exc import (  # noqa: F401  — kept for backward compat
 )
 from sqlalchemy.orm import Session
 
-from .models import StoreResult, ChainVerification, MerkleVerification, DuplicateEventError
-from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
+from .hashing import (
+    compute_canonical_event_hash as compute_canonical_event_hash,
+    compute_chain_hash,
+    compute_event_hash,
+    compute_idempotency_key,
+)
+from .models import ChainVerification, DuplicateEventError, MerkleVerification, StoreResult
 
 # ---------------------------------------------------------------------------
 # Validation Status Constants (fix #1324)
@@ -136,17 +140,23 @@ def _derive_validation_status(
 # compliance alert was durably recorded. Keeping the SQL, the accepted-type set
 # and the parameter shape here is what stops the two paths drifting again.
 
-_VALID_ALERT_TYPES: frozenset[str] = frozenset({
-    "missing_kde", "temperature_excursion", "deadline_approaching",
-    "supplier_non_compliant", "chain_break", "export_failure",
-})
+_VALID_ALERT_TYPES: frozenset[str] = frozenset(
+    {
+        "missing_kde",
+        "temperature_excursion",
+        "deadline_approaching",
+        "supplier_non_compliant",
+        "chain_break",
+        "export_failure",
+    }
+)
 
 ALERT_INSERT_SQL = """
     INSERT INTO fsma.compliance_alerts (
-        tenant_id, org_id, event_id, severity, alert_type,
+        tenant_id, org_id, cte_event_id, event_id, severity, alert_type,
         title, message
     ) VALUES (
-        :tenant_id, :org_id, :event_id, :severity, :alert_type,
+        :tenant_id, :org_id, :cte_event_id, :event_id, :severity, :alert_type,
         :title, :message
     )
 """
@@ -161,14 +171,13 @@ def _normalize_alert_type(raw_type: str) -> str:
     return raw_type if raw_type in _VALID_ALERT_TYPES else "missing_kde"
 
 
-def _alert_insert_params(
-    tenant_id: str, event_id: str, alert: Dict[str, Any]
-) -> Dict[str, Any]:
+def _alert_insert_params(tenant_id: str, event_id: str, alert: Dict[str, Any]) -> Dict[str, Any]:
     """Build the bind parameters for one ``fsma.compliance_alerts`` row."""
     return {
         "tenant_id": tenant_id,
         "org_id": tenant_id,  # scope alerts to tenant until org model exists
         "event_id": event_id,
+        "cte_event_id": event_id,
         "severity": alert.get("severity", "warning"),
         "alert_type": _normalize_alert_type(alert.get("alert_type", "missing_kde")),
         "title": alert.get("alert_type", "Compliance Alert"),
@@ -215,13 +224,9 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
         try:
             dt = datetime.fromisoformat(candidate)
         except ValueError as exc:
-            raise ValueError(
-                f"{field} is not a valid ISO-8601 timestamp: {value!r}"
-            ) from exc
+            raise ValueError(f"{field} is not a valid ISO-8601 timestamp: {value!r}") from exc
     else:
-        raise ValueError(
-            f"{field} must be a string or datetime, got {type(value).__name__}"
-        )
+        raise ValueError(f"{field} must be a string or datetime, got {type(value).__name__}")
 
     if dt.tzinfo is None:
         raise ValueError(
@@ -234,8 +239,7 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
     now_utc = datetime.now(timezone.utc)
     if dt > now_utc + _FUTURE_SKEW_TOLERANCE:
         raise ValueError(
-            f"{field} is in the future beyond the allowed skew tolerance: "
-            f"{dt.isoformat()} (now={now_utc.isoformat()})"
+            f"{field} is in the future beyond the allowed skew tolerance: {dt.isoformat()} (now={now_utc.isoformat()})"
         )
     return dt
 
@@ -260,15 +264,17 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
 # The cte_events schema does NOT currently accept 'growing', so this
 # module must not either — the two paths intentionally differ until
 # #1335 retires this module.
-_ALLOWED_CTE_TYPES = frozenset({
-    "harvesting",
-    "cooling",
-    "initial_packing",
-    "first_land_based_receiving",
-    "shipping",
-    "receiving",
-    "transformation",
-})
+_ALLOWED_CTE_TYPES = frozenset(
+    {
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving",
+        "transformation",
+    }
+)
 
 
 def _validate_event_type(value: Any) -> str:
@@ -290,8 +296,7 @@ def _validate_event_type(value: Any) -> str:
     """
     if not isinstance(value, str) or not value:
         raise ValueError(
-            f"event_type is required and must be a non-empty string, "
-            f"got {type(value).__name__}: {value!r}"
+            f"event_type is required and must be a non-empty string, got {type(value).__name__}: {value!r}"
         )
     if value not in _ALLOWED_CTE_TYPES:
         raise ValueError(
@@ -306,6 +311,7 @@ def _validate_event_type(value: Any) -> str:
 # ---------------------------------------------------------------------------
 # KDE Value Serialization (fix #1311)
 # ---------------------------------------------------------------------------
+
 
 def _jsonify_kde(value: Any) -> str:
     """Serialize a KDE value to JSON text suitable for ``::jsonb`` cast.
@@ -338,6 +344,7 @@ def _jsonify_kde(value: Any) -> str:
 # ---------------------------------------------------------------------------
 # Append-only enforcement helpers (#1334)
 # ---------------------------------------------------------------------------
+
 
 def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
     """Raise DuplicateEventError if a CTE event with this sha256_hash already exists.
@@ -373,11 +380,11 @@ def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
 # Imported AFTER the helpers above so the sibling modules can resolve
 # ``core`` attributes during their (lazy, call-time) lookups. These
 # mixins contain code moved verbatim out of this file.
-from .writes import WritePathMixin  # noqa: E402
 from .batch import BatchWritePathMixin  # noqa: E402
+from .exports import ExportLogMixin  # noqa: E402
 from .queries import QueryPathMixin  # noqa: E402
 from .verification import ChainVerificationMixin  # noqa: E402
-from .exports import ExportLogMixin  # noqa: E402
+from .writes import WritePathMixin  # noqa: E402
 
 
 class CTEPersistence(

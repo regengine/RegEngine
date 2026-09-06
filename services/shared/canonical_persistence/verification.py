@@ -119,6 +119,7 @@ def _recompute_event_sha256(
     to_facility_reference: Optional[str],
     event_timestamp: Any,
     kdes: Dict[str, Any],
+    timestamp_hint: Optional[str] = None,
 ) -> str:
     """Recompute a canonical event's ``sha256_hash`` from row content.
 
@@ -126,7 +127,21 @@ def _recompute_event_sha256(
     ``TraceabilityEvent.compute_sha256_hash`` (canonical_event.py). A
     drift-guard unit test asserts equality against the production method.
     """
-    ts = event_timestamp.isoformat() if hasattr(event_timestamp, "isoformat") else str(event_timestamp)
+    if isinstance(event_timestamp, datetime):
+        # TIMESTAMPTZ preserves the instant, but the driver renders it in the
+        # connection's timezone. The normalized snapshot preserves the offset
+        # originally hashed. Use only that offset; never replace the authoritative
+        # timestamp with the snapshot's date/time (which would conceal tampering).
+        original_zone = timezone.utc
+        if isinstance(timestamp_hint, str):
+            try:
+                original_zone = datetime.fromisoformat(timestamp_hint).tzinfo or timezone.utc
+            except ValueError:
+                pass
+        timestamp = event_timestamp if event_timestamp.tzinfo else event_timestamp.replace(tzinfo=timezone.utc)
+        ts = timestamp.astimezone(original_zone).isoformat()
+    else:
+        ts = str(event_timestamp)
     canonical = "|".join(
         [
             str(event_id),
@@ -166,7 +181,8 @@ class CanonicalChainVerificationMixin:
                        te.product_reference, te.quantity, te.unit_of_measure,
                        te.from_facility_reference, te.to_facility_reference,
                        te.event_timestamp, te.kdes,
-                       ce.id AS matched_legacy_id
+                       ce.id AS matched_legacy_id,
+                       te.normalized_payload->>'event_timestamp' AS hashed_timestamp
                 FROM fsma.hash_chain hc
                 LEFT JOIN fsma.traceability_events te
                     ON te.event_id = hc.cte_event_id
@@ -274,6 +290,7 @@ class CanonicalChainVerificationMixin:
                 to_facility_reference=row[12],
                 event_timestamp=row[13],
                 kdes=row[14] if isinstance(row[14], dict) else json.loads(row[14] or "{}"),
+                timestamp_hint=row[16] if len(row) > 16 else None,
             )
             if recomputed_event != event_hash:
                 if int(seq) not in tamper_rows:

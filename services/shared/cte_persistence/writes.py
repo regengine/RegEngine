@@ -31,8 +31,8 @@ class WritePathMixin:
     def _acquire_chain_lock(self, tenant_id: str) -> None:
         """Acquire a per-tenant transaction-scoped advisory lock.
 
-        The chain-head read uses ``SELECT ... FOR UPDATE LIMIT 1``,
-        which **locks the returned row, not the next slot**. On a
+        A chain-head ``SELECT ... FOR UPDATE LIMIT 1`` only
+        locks the returned row, not the next slot. On a
         tenant's first event the SELECT returns zero rows and locks
         nothing; two concurrent first-event writers both see
         ``chain_head=None`` and both compute ``sequence_num=1``. Adding
@@ -76,6 +76,7 @@ class WritePathMixin:
         source_event_id: Optional[str] = None,
         event_entry_timestamp: Optional[str] = None,
         validator_results: Optional[List[Dict[str, Any]]] = None,
+        canonical_event: Any = None,
     ) -> StoreResult:
         """
         Persist a CTE event with its KDEs, hash chain entry, and alerts.
@@ -122,9 +123,7 @@ class WritePathMixin:
         event_dt = _core._parse_timestamp(event_timestamp, field="event_timestamp")
         event_timestamp = event_dt.isoformat()
         if event_entry_timestamp is not None:
-            entry_dt = _core._parse_timestamp(
-                event_entry_timestamp, field="event_entry_timestamp"
-            )
+            entry_dt = _core._parse_timestamp(event_entry_timestamp, field="event_entry_timestamp")
             event_entry_timestamp = entry_dt.isoformat()
 
         # --- Determine validation status (fix #1324) ---
@@ -150,8 +149,13 @@ class WritePathMixin:
 
         # --- Idempotency check ---
         idempotency_key = _core.compute_idempotency_key(
-            event_type, traceability_lot_code, event_timestamp, source, kdes,
-            location_gln=location_gln, location_name=location_name,
+            event_type,
+            traceability_lot_code,
+            event_timestamp,
+            source,
+            kdes,
+            location_gln=location_gln,
+            location_name=location_name,
         )
 
         existing = self.session.execute(
@@ -184,10 +188,19 @@ class WritePathMixin:
 
         # --- Compute hashes ---
         sha256_hash = _core.compute_event_hash(
-            event_id, event_type, traceability_lot_code,
-            product_description, quantity, unit_of_measure,
-            location_gln, location_name, event_timestamp, kdes,
+            event_id,
+            event_type,
+            traceability_lot_code,
+            product_description,
+            quantity,
+            unit_of_measure,
+            location_gln,
+            location_name,
+            event_timestamp,
+            kdes,
         )
+        if canonical_event is not None:
+            sha256_hash = _core.compute_canonical_event_hash(event_id, tenant_id, canonical_event)
 
         # --- Append-only enforcement (#1334) ---
         # Raise before INSERT so callers see a typed DuplicateEventError
@@ -207,7 +220,6 @@ class WritePathMixin:
                 WHERE tenant_id = :tid
                 ORDER BY sequence_num DESC
                 LIMIT 1
-                FOR UPDATE
             """),
             {"tid": tenant_id},
         ).fetchone()
@@ -363,13 +375,17 @@ class WritePathMixin:
                     text(_core.ALERT_INSERT_SQL),
                     _core._alert_insert_params(tenant_id, event_id, alert),
                 )
+                nested.commit()
             except Exception as exc:
                 nested.rollback()
-                _core.logger.warning("alert_insert_failed", extra={
-                    "event_id": event_id,
-                    "alert_type": alert.get("alert_type", "missing_kde"),
-                    "error": str(exc),
-                })
+                _core.logger.warning(
+                    "alert_insert_failed",
+                    extra={
+                        "event_id": event_id,
+                        "alert_type": alert.get("alert_type", "missing_kde"),
+                        "error": str(exc),
+                    },
+                )
 
         _core.logger.info(
             "cte_event_persisted",

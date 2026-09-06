@@ -82,27 +82,28 @@ class BatchWritePathMixin:
             evt = dict(evt)  # don't mutate caller input
             evt["event_type"] = _core._validate_event_type(evt.get("event_type"))
             # Parse + validate timestamps, normalize to UTC ISO-8601.
-            event_dt = _core._parse_timestamp(
-                evt.get("event_timestamp"), field="event_timestamp"
-            )
+            event_dt = _core._parse_timestamp(evt.get("event_timestamp"), field="event_timestamp")
             evt["event_timestamp"] = event_dt.isoformat()
             if evt.get("event_entry_timestamp") is not None:
-                entry_dt = _core._parse_timestamp(
-                    evt["event_entry_timestamp"], field="event_entry_timestamp"
-                )
+                entry_dt = _core._parse_timestamp(evt["event_entry_timestamp"], field="event_entry_timestamp")
                 evt["event_entry_timestamp"] = entry_dt.isoformat()
             idemp_key = _core.compute_idempotency_key(
-                evt["event_type"], evt["traceability_lot_code"],
-                evt["event_timestamp"], source, kdes,
+                evt["event_type"],
+                evt["traceability_lot_code"],
+                evt["event_timestamp"],
+                source,
+                kdes,
                 location_gln=evt.get("location_gln"),
                 location_name=evt.get("location_name"),
             )
-            prepared.append({
-                "event_id": event_id,
-                "idemp_key": idemp_key,
-                "evt": evt,
-                "kdes": kdes,
-            })
+            prepared.append(
+                {
+                    "event_id": event_id,
+                    "idemp_key": idemp_key,
+                    "evt": evt,
+                    "kdes": kdes,
+                }
+            )
 
         # --- Step 2: Batch idempotency check ---
         all_keys = [p["idemp_key"] for p in prepared]
@@ -110,7 +111,7 @@ class BatchWritePathMixin:
         # SQLAlchemy doesn't support WHERE IN with named params for lists easily,
         # so chunk into groups of 100
         for chunk_start in range(0, len(all_keys), 100):
-            chunk = all_keys[chunk_start:chunk_start + 100]
+            chunk = all_keys[chunk_start : chunk_start + 100]
             placeholders = ", ".join(f":k{i}" for i in range(len(chunk)))
             params = {f"k{i}": k for i, k in enumerate(chunk)}
             params["tid"] = tenant_id
@@ -133,7 +134,6 @@ class BatchWritePathMixin:
                 WHERE tenant_id = :tid
                 ORDER BY sequence_num DESC
                 LIMIT 1
-                FOR UPDATE
             """),
             {"tid": tenant_id},
         ).fetchone()
@@ -154,10 +154,18 @@ class BatchWritePathMixin:
             # Skip idempotent
             if p["idemp_key"] in existing_map:
                 eid, sha, ch = existing_map[p["idemp_key"]]
-                results.append(_core.StoreResult(
-                    success=True, event_id=eid, sha256_hash=sha,
-                    chain_hash=ch, idempotent=True, errors=[], kde_completeness=1.0, alerts=[],
-                ))
+                results.append(
+                    _core.StoreResult(
+                        success=True,
+                        event_id=eid,
+                        sha256_hash=sha,
+                        chain_hash=ch,
+                        idempotent=True,
+                        errors=[],
+                        kde_completeness=1.0,
+                        alerts=[],
+                    )
+                )
                 continue
 
             evt = p["evt"]
@@ -193,69 +201,78 @@ class BatchWritePathMixin:
             try:
                 quantity = float(raw_qty)
             except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    f"quantity must be numeric, got {raw_qty!r}"
-                ) from exc
+                raise ValueError(f"quantity must be numeric, got {raw_qty!r}") from exc
             if quantity <= 0:
-                raise ValueError(
-                    f"quantity must be > 0, got {quantity} "
-                    f"(tlc={evt.get('traceability_lot_code')})"
-                )
+                raise ValueError(f"quantity must be > 0, got {quantity} (tlc={evt.get('traceability_lot_code')})")
 
             sha256_hash = _core.compute_event_hash(
-                event_id, evt["event_type"], evt["traceability_lot_code"],
-                evt.get("product_description", ""), quantity,
-                evt.get("unit_of_measure", ""), evt.get("location_gln"),
-                evt.get("location_name"), evt["event_timestamp"], kdes,
+                event_id,
+                evt["event_type"],
+                evt["traceability_lot_code"],
+                evt.get("product_description", ""),
+                quantity,
+                evt.get("unit_of_measure", ""),
+                evt.get("location_gln"),
+                evt.get("location_name"),
+                evt["event_timestamp"],
+                kdes,
             )
+            if evt.get("_canonical_event") is not None:
+                sha256_hash = _core.compute_canonical_event_hash(event_id, tenant_id, evt["_canonical_event"])
 
             # --- Append-only enforcement (#1334) ---
             _core._assert_not_exists(sha256_hash, tenant_id, self.session)
 
             chain_hash = _core.compute_chain_hash(sha256_hash, previous_chain_hash)
 
-            event_rows.append({
-                "id": event_id,
-                "tenant_id": tenant_id,
-                "event_type": evt["event_type"],
-                "tlc": evt["traceability_lot_code"],
-                "product_description": evt.get("product_description", ""),
-                "quantity": quantity,
-                "unit_of_measure": evt.get("unit_of_measure", ""),
-                "location_gln": evt.get("location_gln"),
-                "location_name": evt.get("location_name"),
-                "event_timestamp": evt["event_timestamp"],
-                "source": source,
-                "source_event_id": evt.get("source_event_id"),
-                "idempotency_key": p["idemp_key"],
-                "sha256_hash": sha256_hash,
-                "chain_hash": chain_hash,
-                "epcis_event_type": evt.get("epcis_event_type"),
-                "epcis_action": evt.get("epcis_action"),
-                "epcis_biz_step": evt.get("epcis_biz_step"),
-                "validation_status": validation_status,
-            })
+            event_rows.append(
+                {
+                    "id": event_id,
+                    "tenant_id": tenant_id,
+                    "event_type": evt["event_type"],
+                    "tlc": evt["traceability_lot_code"],
+                    "product_description": evt.get("product_description", ""),
+                    "quantity": quantity,
+                    "unit_of_measure": evt.get("unit_of_measure", ""),
+                    "location_gln": evt.get("location_gln"),
+                    "location_name": evt.get("location_name"),
+                    "event_timestamp": evt["event_timestamp"],
+                    "source": source,
+                    "source_event_id": evt.get("source_event_id"),
+                    "idempotency_key": p["idemp_key"],
+                    "sha256_hash": sha256_hash,
+                    "chain_hash": chain_hash,
+                    "epcis_event_type": evt.get("epcis_event_type"),
+                    "epcis_action": evt.get("epcis_action"),
+                    "epcis_biz_step": evt.get("epcis_biz_step"),
+                    "validation_status": validation_status,
+                }
+            )
 
             if validation_status != _core.VALIDATION_STATUS_REJECTED:
                 for kde_key, kde_value in kdes.items():
                     if kde_value is not None:
-                        kde_rows.append({
-                            "tenant_id": tenant_id,
-                            "cte_event_id": event_id,
-                            "kde_key": kde_key,
-                            # fix #1311 — JSON text, cast to jsonb in the batch INSERT
-                            "kde_value": _core._jsonify_kde(kde_value),
-                            "is_required": False,
-                        })
+                        kde_rows.append(
+                            {
+                                "tenant_id": tenant_id,
+                                "cte_event_id": event_id,
+                                "kde_key": kde_key,
+                                # fix #1311 — JSON text, cast to jsonb in the batch INSERT
+                                "kde_value": _core._jsonify_kde(kde_value),
+                                "is_required": False,
+                            }
+                        )
 
-                chain_rows.append({
-                    "tenant_id": tenant_id,
-                    "cte_event_id": event_id,
-                    "sequence_num": next_sequence,
-                    "event_hash": sha256_hash,
-                    "previous_chain_hash": previous_chain_hash,
-                    "chain_hash": chain_hash,
-                })
+                chain_rows.append(
+                    {
+                        "tenant_id": tenant_id,
+                        "cte_event_id": event_id,
+                        "sequence_num": next_sequence,
+                        "event_hash": sha256_hash,
+                        "previous_chain_hash": previous_chain_hash,
+                        "chain_hash": chain_hash,
+                    }
+                )
 
                 # #2902 — the batch path had no fsma.compliance_alerts writer
                 # at all, so every alert generated upstream was discarded here
@@ -264,20 +281,35 @@ class BatchWritePathMixin:
                 for alert in alerts:
                     alert_rows.append((event_id, alert))
 
-                results.append(_core.StoreResult(
-                    success=True, event_id=event_id, sha256_hash=sha256_hash,
-                    chain_hash=chain_hash, idempotent=False, errors=[], kde_completeness=1.0, alerts=alerts,
-                ))
+                results.append(
+                    _core.StoreResult(
+                        success=True,
+                        event_id=event_id,
+                        sha256_hash=sha256_hash,
+                        chain_hash=chain_hash,
+                        idempotent=False,
+                        errors=[],
+                        kde_completeness=1.0,
+                        alerts=alerts,
+                    )
+                )
 
                 # Advance chain state only for accepted events.
                 previous_chain_hash = chain_hash
                 next_sequence += 1
             else:
-                results.append(_core.StoreResult(
-                    success=False, event_id=event_id, sha256_hash=sha256_hash,
-                    chain_hash=chain_hash, idempotent=False, errors=rejection_reasons,
-                    kde_completeness=1.0, alerts=alerts,
-                ))
+                results.append(
+                    _core.StoreResult(
+                        success=False,
+                        event_id=event_id,
+                        sha256_hash=sha256_hash,
+                        chain_hash=chain_hash,
+                        idempotent=False,
+                        errors=rejection_reasons,
+                        kde_completeness=1.0,
+                        alerts=alerts,
+                    )
+                )
 
             # #2820: later rows in this same batch with the same key must
             # reuse this result. Without this, the second occurrence
@@ -297,7 +329,7 @@ class BatchWritePathMixin:
         if event_rows:
             # Chunk inserts to avoid parameter limits (Postgres max ~32K params)
             for chunk_start in range(0, len(event_rows), 50):
-                chunk = event_rows[chunk_start:chunk_start + 50]
+                chunk = event_rows[chunk_start : chunk_start + 50]
                 values_clauses = []
                 params: Dict[str, Any] = {}
                 for i, row in enumerate(chunk):
@@ -306,19 +338,30 @@ class BatchWritePathMixin:
                         f":gln_{i}, :ln_{i}, :ts_{i}, :eets_{i}, :src_{i}, :seid_{i}, :ik_{i}, "
                         f":sha_{i}, :ch_{i}, :eet_{i}, :ea_{i}, :ebs_{i}, :vs_{i})"
                     )
-                    params.update({
-                        f"id_{i}": row["id"], f"tid_{i}": row["tenant_id"],
-                        f"et_{i}": row["event_type"], f"tlc_{i}": row["tlc"],
-                        f"pd_{i}": row["product_description"], f"qty_{i}": row["quantity"],
-                        f"uom_{i}": row["unit_of_measure"], f"gln_{i}": row["location_gln"],
-                        f"ln_{i}": row["location_name"], f"ts_{i}": row["event_timestamp"],
-                        f"eets_{i}": row.get("event_entry_timestamp", datetime.now(timezone.utc).isoformat()),
-                        f"src_{i}": row["source"], f"seid_{i}": row["source_event_id"],
-                        f"ik_{i}": row["idempotency_key"], f"sha_{i}": row["sha256_hash"],
-                        f"ch_{i}": row["chain_hash"], f"eet_{i}": row["epcis_event_type"],
-                        f"ea_{i}": row["epcis_action"], f"ebs_{i}": row["epcis_biz_step"],
-                        f"vs_{i}": row["validation_status"],
-                    })
+                    params.update(
+                        {
+                            f"id_{i}": row["id"],
+                            f"tid_{i}": row["tenant_id"],
+                            f"et_{i}": row["event_type"],
+                            f"tlc_{i}": row["tlc"],
+                            f"pd_{i}": row["product_description"],
+                            f"qty_{i}": row["quantity"],
+                            f"uom_{i}": row["unit_of_measure"],
+                            f"gln_{i}": row["location_gln"],
+                            f"ln_{i}": row["location_name"],
+                            f"ts_{i}": row["event_timestamp"],
+                            f"eets_{i}": row.get("event_entry_timestamp", datetime.now(timezone.utc).isoformat()),
+                            f"src_{i}": row["source"],
+                            f"seid_{i}": row["source_event_id"],
+                            f"ik_{i}": row["idempotency_key"],
+                            f"sha_{i}": row["sha256_hash"],
+                            f"ch_{i}": row["chain_hash"],
+                            f"eet_{i}": row["epcis_event_type"],
+                            f"ea_{i}": row["epcis_action"],
+                            f"ebs_{i}": row["epcis_biz_step"],
+                            f"vs_{i}": row["validation_status"],
+                        }
+                    )
                 sql = f"""
                     INSERT INTO fsma.cte_events (
                         id, tenant_id, event_type, traceability_lot_code,
@@ -329,7 +372,7 @@ class BatchWritePathMixin:
                         sha256_hash, chain_hash,
                         epcis_event_type, epcis_action, epcis_biz_step,
                         validation_status
-                    ) VALUES {', '.join(values_clauses)}
+                    ) VALUES {", ".join(values_clauses)}
                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                     RETURNING id
                 """
@@ -342,11 +385,7 @@ class BatchWritePathMixin:
             # concurrent writer won; re-select the winner by idempotency
             # key and rewrite our StoreResult so the caller sees the
             # authoritative event_id / sha256 / chain.
-            lost_idemp_keys = [
-                row["idempotency_key"]
-                for row in event_rows
-                if str(row["id"]) not in inserted_ids
-            ]
+            lost_idemp_keys = [row["idempotency_key"] for row in event_rows if str(row["id"]) not in inserted_ids]
             if lost_idemp_keys:
                 # Map idempotency_key → position in ``results`` so we can
                 # patch the entry the caller is going to see.
@@ -355,13 +394,9 @@ class BatchWritePathMixin:
                     key_to_result_idx[p["idemp_key"]] = idx
                 winners: Dict[str, Tuple[str, str, str]] = {}
                 for chunk_start in range(0, len(lost_idemp_keys), 100):
-                    chunk_keys = lost_idemp_keys[chunk_start:chunk_start + 100]
-                    placeholders = ", ".join(
-                        f":lk{i}" for i in range(len(chunk_keys))
-                    )
-                    lr_params: Dict[str, Any] = {
-                        f"lk{i}": k for i, k in enumerate(chunk_keys)
-                    }
+                    chunk_keys = lost_idemp_keys[chunk_start : chunk_start + 100]
+                    placeholders = ", ".join(f":lk{i}" for i in range(len(chunk_keys)))
+                    lr_params: Dict[str, Any] = {f"lk{i}": k for i, k in enumerate(chunk_keys)}
                     lr_params["tid"] = tenant_id
                     rows = self.session.execute(
                         text(f"""
@@ -398,23 +433,25 @@ class BatchWritePathMixin:
 
         if kde_rows:
             for chunk_start in range(0, len(kde_rows), 200):
-                chunk = kde_rows[chunk_start:chunk_start + 200]
+                chunk = kde_rows[chunk_start : chunk_start + 200]
                 values_clauses = []
                 params = {}
                 for i, row in enumerate(chunk):
                     # fix #1311: cast kde_value param to jsonb in the VALUES tuple
-                    values_clauses.append(
-                        f"(:tid_{i}, :eid_{i}, :kk_{i}, CAST(:kv_{i} AS jsonb), :ir_{i})"
+                    values_clauses.append(f"(:tid_{i}, :eid_{i}, :kk_{i}, CAST(:kv_{i} AS jsonb), :ir_{i})")
+                    params.update(
+                        {
+                            f"tid_{i}": row["tenant_id"],
+                            f"eid_{i}": row["cte_event_id"],
+                            f"kk_{i}": row["kde_key"],
+                            f"kv_{i}": row["kde_value"],
+                            f"ir_{i}": row["is_required"],
+                        }
                     )
-                    params.update({
-                        f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
-                        f"kk_{i}": row["kde_key"], f"kv_{i}": row["kde_value"],
-                        f"ir_{i}": row["is_required"],
-                    })
                 sql = f"""
                     INSERT INTO fsma.cte_kdes (
                         tenant_id, cte_event_id, kde_key, kde_value, is_required
-                    ) VALUES {', '.join(values_clauses)}
+                    ) VALUES {", ".join(values_clauses)}
                     ON CONFLICT (cte_event_id, kde_key) DO NOTHING
                 """
                 self.session.execute(text(sql), params)
@@ -478,11 +515,14 @@ class BatchWritePathMixin:
                 alerts_written += 1
             except Exception as exc:
                 nested.rollback()
-                _core.logger.warning("alert_insert_failed", extra={
-                    "event_id": event_id,
-                    "alert_type": alert.get("alert_type", "missing_kde"),
-                    "error": str(exc),
-                })
+                _core.logger.warning(
+                    "alert_insert_failed",
+                    extra={
+                        "event_id": event_id,
+                        "alert_type": alert.get("alert_type", "missing_kde"),
+                        "error": str(exc),
+                    },
+                )
 
         _core.logger.info(
             "batch_events_persisted",
