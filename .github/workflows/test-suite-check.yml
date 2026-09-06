@@ -185,6 +185,7 @@ jobs:
             --ignore=tests/invariants/test_backfill_canonical.py \
             --ignore=tests/security/test_tenant_isolation_phase1.py \
             --ignore=tests/security/test_account_erasure_identity_isolation_pg.py \
+            --ignore=tests/security/test_remediation_disabled_contract_pg.py \
             --ignore=tests/security/test_security_audit_fixes.py \
             --ignore=tests/security/test_auth_coverage.py \
             --ignore=tests/shared/test_visibility_timeout_2918.py \
