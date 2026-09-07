@@ -77,7 +77,7 @@ authlib>=1.7.2
 # (RFC7797 b64=false JWS payload-size bypass).
 joserfc>=1.7.4
 # Floored for CVE-2026-69247, CVE-2026-69248, and CVE-2026-69249.
-cryptography>=50.0.0
+cryptography>=50.0.1
 python-multipart>=0.0.32
 defusedxml>=0.7.1
 webauthn>=3.0.0
