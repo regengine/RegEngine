@@ -8,7 +8,12 @@ case "$MODE" in
     exec python3 scripts/security/staging_release_gate.py "$@"
     ;;
   --source)
-    shift
+    # ``shift`` with no positional parameters returns 1, and ``set -e`` turns
+    # that into a silent exit 1 before the first echo — which is exactly what
+    # the bare CI invocation (no arguments, MODE defaulted) does.
+    if [ "$#" -gt 0 ]; then
+      shift
+    fi
     ;;
   *)
     echo "Usage: $0 [--source | --staging --plan PLAN.json --confirm-staging-deployment ID --evidence-out FILE]"
