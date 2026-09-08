@@ -7,6 +7,7 @@ Covers: health, read endpoints, write endpoints, concurrent load, error handling
 
 import asyncio
 import json
+import os
 import statistics
 import sys
 import time
@@ -21,7 +22,7 @@ REQUESTS_PER_ENDPOINT = 100  # requests per test
 TIMEOUT = 10  # seconds per request
 
 TEST_TENANT = "00000000-0000-0000-0000-000000000123"
-ADMIN_KEY = "8f623912638891629831b9d8c91c9182dec283746571928374abcdef123456"
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # never commit a literal here
 
 SERVICES = {
     "ingestion": "http://localhost:8002",
