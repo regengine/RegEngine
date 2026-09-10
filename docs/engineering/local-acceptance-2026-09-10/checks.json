@@ -1,0 +1,159 @@
+[
+  {
+    "check": "authenticated_ingest",
+    "passed": true,
+    "http": 200,
+    "body": {
+      "accepted": 1,
+      "rejected": 0,
+      "total": 1,
+      "events": [
+        {
+          "traceability_lot_code": "LOCAL-single-7ed5de80-0",
+          "cte_type": "shipping",
+          "status": "accepted",
+          "event_id": "0090b01d-45ec-4b26-a009-42f770450776",
+          "sha256_hash": {
+            "algorithm": "SHA-256",
+            "hex_octets": "c4 4b 86 f0 65 4f d4 f7 40 ef dd e7 fd d6 c0 ed 80 05 6a 72 16 ba 50 5e fd 74 e0 f8 a9 40 fd 12"
+          },
+          "chain_hash": {
+            "algorithm": "SHA-256",
+            "hex_octets": "e8 e3 7c 70 ab 16 9a 50 57 33 19 71 f5 58 12 1a e2 c0 a4 6a fd 9e c8 37 6c 28 88 b8 0f cb 8b 3d"
+          },
+          "errors": []
+        }
+      ],
+      "ingestion_timestamp": "2026-09-10T19:59:37.660924+00:00"
+    }
+  },
+  {
+    "check": "same_key_replay",
+    "passed": true,
+    "http": 200,
+    "replayed": null
+  },
+  {
+    "check": "fresh_key_datastore_dedup",
+    "passed": true,
+    "http": 200,
+    "event_ids": [
+      "0090b01d-45ec-4b26-a009-42f770450776"
+    ]
+  },
+  {
+    "check": "same_key_changed_body_rejected",
+    "passed": true,
+    "http": 409
+  },
+  {
+    "check": "cross_tenant_header_rejected",
+    "passed": true,
+    "http": 403
+  },
+  {
+    "check": "invalid_key_rejected",
+    "passed": true,
+    "http": 401
+  },
+  {
+    "check": "second_authenticated_tenant",
+    "passed": true,
+    "http": 200,
+    "body": {
+      "accepted": 1,
+      "rejected": 0,
+      "total": 1,
+      "events": [
+        {
+          "traceability_lot_code": "LOCAL-tenant-two-0",
+          "cte_type": "shipping",
+          "status": "accepted",
+          "event_id": "1e4bc151-8115-4a6d-9d75-721020019735",
+          "sha256_hash": {
+            "algorithm": "SHA-256",
+            "hex_octets": "25 e8 63 2b fb 46 50 67 c3 a4 5b 03 b5 11 43 17 0d 12 fb 42 2f 61 8f cf 62 22 9b ac 6b 97 4b 82"
+          },
+          "chain_hash": {
+            "algorithm": "SHA-256",
+            "hex_octets": "6a 8d 0c 1c e7 0b d9 cc 8c a3 ca 1c d2 68 fb 91 6c 56 44 4a c9 df fd 6d 65 95 28 80 05 1c b5 90"
+          },
+          "errors": []
+        }
+      ],
+      "ingestion_timestamp": "2026-09-10T19:59:37.699254+00:00"
+    }
+  },
+  {
+    "check": "max500_batch",
+    "passed": true,
+    "http": 200,
+    "accepted": 500,
+    "rejected": 0,
+    "seconds": 1.114,
+    "error": null
+  },
+  {
+    "check": "export_tenant_0",
+    "passed": true,
+    "http": 200,
+    "chain_integrity": "VERIFIED",
+    "bytes": 55718,
+    "error": null
+  },
+  {
+    "check": "standalone_export_verifier_0",
+    "passed": true,
+    "exit": 0,
+    "output": "manifest: ok\nfiles: 3 / 3 sha256 matches\nmerkle: root recomputed and matched\nchain: persisted status VERIFIED matches declared chain artifact\nresult: bundle intact\n"
+  },
+  {
+    "check": "tampered_export_rejected",
+    "passed": true,
+    "exit": 1,
+    "output": "manifest: ok\nverify: FAILED \u2014 fda_spreadsheet_all_20260910_195938.csv: sha256 mismatch (got 7872f1db353515a19a448ad2fd4dba68c0380206a54a3ff46b4b4002e67acb3e, declared 253f03680e82acb4010624e8e1d0e3fcba57a83a82186a14fe1992d2fec2e11b)\nresult: bundle TAMPERED\n"
+  },
+  {
+    "check": "export_tenant_1",
+    "passed": true,
+    "http": 200,
+    "chain_integrity": "VERIFIED",
+    "bytes": 3329,
+    "error": null
+  },
+  {
+    "check": "standalone_export_verifier_1",
+    "passed": true,
+    "exit": 0,
+    "output": "manifest: ok\nfiles: 3 / 3 sha256 matches\nmerkle: root recomputed and matched\nchain: persisted status VERIFIED matches declared chain artifact\nresult: bundle intact\n"
+  },
+  {
+    "check": "canonical_chain_0",
+    "passed": true,
+    "chain_length": 501,
+    "errors": []
+  },
+  {
+    "check": "rls_cross_tenant_read_0",
+    "passed": true,
+    "visible_rows": 0
+  },
+  {
+    "check": "canonical_chain_1",
+    "passed": true,
+    "chain_length": 1,
+    "errors": []
+  },
+  {
+    "check": "rls_cross_tenant_read_1",
+    "passed": true,
+    "visible_rows": 0
+  },
+  {
+    "check": "stored_content_tamper_rejected",
+    "passed": true,
+    "errors": [
+      "Event tamper at seq=1: recomputed event_hash e5f4a1424cda6702... != stored c44b86f0654fd4f7..."
+    ]
+  }
+]

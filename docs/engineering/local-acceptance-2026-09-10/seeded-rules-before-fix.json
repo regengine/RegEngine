@@ -1,0 +1,27 @@
+{
+  "catalog": "repository FSMA_RULE_SEEDS explicitly seeded only into disposable database",
+  "rules_inserted": 36,
+  "http": 500,
+  "accepted": null,
+  "rejected": null,
+  "seconds": 0.03,
+  "first_event": {
+    "error": {
+      "type": "http_500",
+      "message": "An internal error occurred"
+    }
+  },
+  "export_http": 200,
+  "chain_integrity": "VERIFIED",
+  "verifier_exit": 0,
+  "verifier_output": "manifest: ok\nfiles: 3 / 3 sha256 matches\nmerkle: root recomputed and matched\nchain: persisted status VERIFIED matches declared chain artifact\nresult: bundle intact\n",
+  "counts": {
+    "cte_events": 501,
+    "traceability_events": 501,
+    "hash_chain": 501,
+    "rule_evaluations": 0
+  },
+  "canonical_valid": true,
+  "canonical_errors": [],
+  "passed": false
+}

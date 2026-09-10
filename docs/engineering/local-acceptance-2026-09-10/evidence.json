@@ -1,0 +1,50 @@
+{
+  "scope": "disposable local acceptance; not staging or production",
+  "roles": [
+    {
+      "rolname": "regengine",
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false
+    },
+    {
+      "rolname": "regengine_sysadmin",
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false
+    },
+    {
+      "rolname": "regengine_migrator_local",
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false
+    }
+  ],
+  "service_started": true,
+  "owned_processes_stopped": true,
+  "owned_storage_removed": true,
+  "source_snapshots": {
+    "services/shared/rules/evaluators/relational.py": {
+      "blob_url": "https://github.com/regengine/RegEngine/blob/988ae85d8490a2506951ba68975c004a3e67f49e/services/shared/rules/evaluators/relational.py",
+      "runtime_sha256_hex_octets": "e6 13 d0 7e d1 51 06 88 9b ef a3 e2 cb 0f fb a0 4e 15 c5 09 17 be d5 f1 73 11 eb 4f 69 06 a4 81",
+      "committed_bytes_match_runtime_digest": true
+    },
+    "services/shared/canonical_persistence/writer.py": {
+      "blob_url": "https://github.com/regengine/RegEngine/blob/988ae85d8490a2506951ba68975c004a3e67f49e/services/shared/canonical_persistence/writer.py",
+      "runtime_sha256_hex_octets": "ff a1 fb 5b 67 b1 04 0e d8 60 86 99 3d 66 3a a8 80 50 42 03 2d 32 27 d8 f1 86 66 55 bb d9 d3 09",
+      "committed_bytes_match_runtime_digest": true
+    },
+    "services/shared/idempotency.py": {
+      "blob_url": "https://github.com/regengine/RegEngine/blob/988ae85d8490a2506951ba68975c004a3e67f49e/services/shared/idempotency.py",
+      "runtime_sha256_hex_octets": "30 2a 3d 0c 0e b4 5f c7 bb e5 52 c8 63 18 61 2d b6 57 a6 65 b9 ce 3c 87 1f 22 0f 4c db 93 30 75",
+      "committed_bytes_match_runtime_digest": true
+    },
+    "server/main.py": {
+      "blob_url": "https://github.com/regengine/RegEngine/blob/988ae85d8490a2506951ba68975c004a3e67f49e/server/main.py",
+      "runtime_sha256_hex_octets": "d9 a2 70 46 25 93 73 4a 7a ba fa af a5 c9 38 9d ce cc 21 25 a8 35 1d 3c a4 c4 31 77 e2 4b 61 b2",
+      "committed_bytes_match_runtime_digest": true
+    }
+  },
+  "head_commit_url": "https://github.com/regengine/RegEngine/commit/3f1cdea048bf5f52cb822456f8422718460e2a11",
+  "migration_head_source": "https://github.com/regengine/RegEngine/blob/988ae85d8490a2506951ba68975c004a3e67f49e/alembic/versions/20260904_c6a120b4e901_v120_rule_citations.py"
+}

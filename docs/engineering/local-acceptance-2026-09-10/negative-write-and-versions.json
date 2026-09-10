@@ -1,0 +1,9 @@
+{
+  "cross_tenant_write_denied": true,
+  "sqlstate": "42501",
+  "versions": {
+    "postgres": "16.14 (Homebrew)",
+    "redis": "8.6.3",
+    "python": "3.11.15"
+  }
+}

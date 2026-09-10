@@ -1,0 +1,29 @@
+{
+  "scope": "disposable local acceptance; not staging or production",
+  "checks": [],
+  "roles": [
+    {
+      "rolname": "regengine",
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false
+    },
+    {
+      "rolname": "regengine_sysadmin",
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false
+    },
+    {
+      "rolname": "regengine_migrator_local",
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false
+    }
+  ],
+  "service_started": true,
+  "owned_processes_stopped": true,
+  "owned_storage_removed": true,
+  "head_commit_url": "https://github.com/regengine/RegEngine/commit/3f1cdea048bf5f52cb822456f8422718460e2a11",
+  "migration_head_source": "https://github.com/regengine/RegEngine/blob/988ae85d8490a2506951ba68975c004a3e67f49e/alembic/versions/20260904_c6a120b4e901_v120_rule_citations.py"
+}
