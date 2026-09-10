@@ -34,6 +34,17 @@ regexes = [
   '''pragma:\s+allowlist\s+secret''',
 ]
 
+# Stop-words to exclude specific known test fixture values from historical
+# commit scans. These are synthetic test tokens/secrets with no production use.
+stopwords = [
+  # Frontend test JWT (HS256 none algorithm, forged tenant_id) from #3085
+  "eyJhbGciOiJub25lIn0.eyJ0ZW5hbnRfaWQiOiJmb3JnZWQifQ.",
+  # Backend test internal secrets from #3085
+  "s3cr3t-internal-2844",
+  "test-internal-secret-2841",
+  "internal-secret-for-2859",
+]
+
 paths = [
   # detect-secrets stores SHA-1 fingerprints and line metadata here, never
   # plaintext credentials. Scanning those hashes creates recursive findings.
