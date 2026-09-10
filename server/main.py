@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import BoundedSemaphore
 
 os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
 
@@ -206,6 +208,7 @@ async def lifespan(app: FastAPI):
         # fetchers through stale or forged task rows.
         try:
             from shared.task_queue import TaskWorker
+
             from services.admin.app.database import get_admin_engine
 
             _register_ingestion_task_handlers()
@@ -252,6 +255,7 @@ async def lifespan(app: FastAPI):
 
         yield
     finally:
+
         async def _shutdown_step(name: str, operation) -> None:
             try:
                 result = operation()
@@ -929,27 +933,66 @@ include_owned_router(app, scheduler_status_router, owner="scheduler")
 
 
 # ── Health check ─────────────────────────────────────────────────
+_READINESS_TIMEOUT_SECONDS = 8.0
+# Driver calls can outlive the request deadline (for example stalled DNS).
+# Bound admission before submitting, and retain the slot until the underlying
+# future finishes, even when the HTTP request times out or is cancelled.
+_READINESS_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="readiness")
+_READINESS_SLOTS = BoundedSemaphore(2)
+
+
+def _submit_readiness_probe(request: Request):
+    slots = _READINESS_SLOTS
+    if not slots.acquire(blocking=False):
+        return None
+    try:
+        future = _READINESS_EXECUTOR.submit(_readiness_checks, request)
+    except Exception:
+        slots.release()
+        raise
+    future.add_done_callback(lambda _: slots.release())
+    return future
+
+
 @owned_api_route(app, owner="health", path="/readiness", methods=["GET"], tags=["system"])
 async def readiness(request: Request):
-    """Deep readiness probe — verifies critical dependencies.
+    """Bounded dependency readiness; /health remains the liveness endpoint."""
+    import asyncio
 
-    Postgres is required: missing or down returns 503. Redis and Neo4j are
-    optional dependencies — failures are reported per-component in the
-    ``checks`` payload with overall status ``degraded`` but still return 200,
-    so a down optional mirror cannot fail the Railway healthcheck
-    (railway.toml healthcheckPath=/readiness) and block deploys. Neo4j is
-    probed only when the graph subsystem is mounted; when it is disabled
-    (the production default — graph routers are experimental) Neo4j is
-    reported ``not_probed`` and never touched (WS-6).
+    from fastapi.responses import JSONResponse
 
-    The background runners (ingestion worker, embedded scheduler) are reported
-    the same way (#2518): a swallowed boot failure shows as ``error`` and
-    degrades the payload to 200 ``degraded`` — visible to operators — but never
-    503, so a non-fatal background failure does not block deploys. Postgres
-    remains the only component that can return 503.
+    future = _submit_readiness_probe(request)
+    if future is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "service": "regengine",
+                "checks": {"probe": {"status": "error", "error": "dependency probe capacity exhausted"}},
+            },
+        )
+    try:
+        return await asyncio.wait_for(
+            asyncio.wrap_future(future),
+            timeout=_READINESS_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "service": "regengine",
+                "checks": {"probe": {"status": "error", "error": "dependency probe timed out"}},
+            },
+        )
 
-    Use this for load balancer health checks so traffic isn't routed
-    to instances that can't actually serve requests.
+
+def _readiness_checks(request: Request):
+    """Run synchronous drivers off the event loop with driver-level bounds.
+
+    Postgres is required everywhere. Redis is required in strict deployed
+    runtimes, matching auth and checkout enforcement. Neo4j and background
+    runners remain optional: their failures report degraded with HTTP 200.
     """
     from fastapi.responses import JSONResponse
 
@@ -961,15 +1004,20 @@ async def readiness(request: Request):
 
         db_url = os.getenv("DATABASE_URL")
         if db_url:
-            engine = create_engine(db_url, pool_pre_ping=True)
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            engine.dispose()
+            connect_args = {}
+            if db_url.startswith(("postgresql:", "postgresql+psycopg:", "postgresql+psycopg2:", "postgres:")):
+                connect_args = {"connect_timeout": 2, "options": "-c statement_timeout=2000"}
+            engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+            finally:
+                engine.dispose()
             checks["postgres"] = {"status": "ok"}
         else:
             checks["postgres"] = {"status": "not_configured"}
     except Exception as exc:
-        checks["postgres"] = {"status": "error", "error": str(exc)[:200]}
+        checks["postgres"] = {"status": "error", "error": type(exc).__name__}
 
     # --- Redis ---
     try:
@@ -977,14 +1025,24 @@ async def readiness(request: Request):
 
         redis_url = os.getenv("REDIS_URL")
         if redis_url:
-            r = _redis.from_url(redis_url, socket_connect_timeout=2)
-            r.ping()
-            r.close()
+            from redis.backoff import NoBackoff
+            from redis.retry import Retry
+
+            r = _redis.from_url(
+                redis_url,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+                retry=Retry(NoBackoff(), 0),
+            )
+            try:
+                r.ping()
+            finally:
+                r.close()
             checks["redis"] = {"status": "ok"}
         else:
             checks["redis"] = {"status": "not_configured"}
     except Exception as exc:
-        checks["redis"] = {"status": "error", "error": str(exc)[:200]}
+        checks["redis"] = {"status": "error", "error": type(exc).__name__}
 
     # --- Neo4j (optional graph mirror — never fatal to readiness) ---
     # WS-6: only probe Neo4j when the graph subsystem is actually mounted.
@@ -1029,7 +1087,7 @@ async def readiness(request: Request):
                 driver.close()
             checks["neo4j"] = {"status": "ok"}
         except Exception as exc:
-            checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
+            checks["neo4j"] = {"status": "error", "error": type(exc).__name__}
 
     # --- Background runners (#2518) ---
     # The ingestion worker and embedded scheduler start in the lifespan inside
@@ -1092,19 +1150,20 @@ async def readiness(request: Request):
         else:
             checks["rate_limiter"] = {"status": "ok", "backend": _rl_backend}
     except Exception as exc:
-        checks["rate_limiter"] = {"status": "error", "error": str(exc)[:200]}
+        checks["rate_limiter"] = {"status": "error", "error": type(exc).__name__}
 
     # --- Determine overall status ---
     # Postgres is required for the consolidated API to serve production traffic.
     # Missing DATABASE_URL must fail readiness so deploy health checks do not
     # route requests to an instance that can only satisfy liveness.
-    # Redis and Neo4j are optional (Neo4j is a best-effort mirror already
-    # guarded by shared.circuit_breaker.neo4j_circuit at runtime) — their
-    # failures degrade the payload but must never return 503.
+    from shared.env import requires_strict_auth_runtime
+
     pg_ok = checks.get("postgres", {}).get("status") == "ok"
+    redis_ok = checks.get("redis", {}).get("status") == "ok"
+    redis_required = requires_strict_auth_runtime()
     all_ok = all(c.get("status") != "error" for c in checks.values())
 
-    if not pg_ok:
+    if not pg_ok or (redis_required and not redis_ok):
         return JSONResponse(
             status_code=503,
             content={

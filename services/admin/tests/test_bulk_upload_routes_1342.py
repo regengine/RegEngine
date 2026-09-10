@@ -111,9 +111,7 @@ def db_session() -> Session:
     SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(
-        UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False)
-    )
+    session.add(UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False))
     session.commit()
     try:
         yield session
@@ -448,6 +446,7 @@ class TestCommitExceptionHandler:
         validated_payload = {
             "status": "validated",
             "normalized_data": {},
+            "parsed_data": {},
             "error": None,
         }
         sid = loop.run_until_complete(store.create_session(tenant_key, user_key, validated_payload))

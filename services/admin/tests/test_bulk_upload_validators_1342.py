@@ -134,27 +134,27 @@ def test_facility_roles_unknown_type_becomes_empty_list():
 # ─────────────────────────────────────────────────────────────────────
 
 
-def test_cte_event_normalize_cte_falls_back_when_too_short():
-    """A cte_type that normalizes to <2 chars auto-fills to 'receiving'."""
+def test_cte_event_normalize_cte_preserves_unknown_for_rejection():
+    """Unknown codes remain unknown so payload validation can reject them."""
     _AUTOFILL_WARNINGS.clear()
     row = BulkCTEEventRow(
         facility_name="ACME Distribution",
         tlc_code="TLC-123",
-        cte_type="x",  # normalizes to "x" (1 char) → autofill
+        cte_type="x",
     )
-    assert row.cte_type == "receiving"
-    assert any(w["field"] == "cte_type" for w in _AUTOFILL_WARNINGS)
+    assert row.cte_type == "x"
+    assert not any(w["field"] == "cte_type" for w in _AUTOFILL_WARNINGS)
 
 
-def test_cte_event_normalize_cte_empty_value_falls_back():
-    """An empty cte_type autofills to 'receiving'."""
+def test_cte_event_normalize_cte_preserves_empty_for_rejection():
+    """An empty event type must never manufacture receiving."""
     _AUTOFILL_WARNINGS.clear()
     row = BulkCTEEventRow(
         facility_name="ACME Distribution",
         tlc_code="TLC-123",
         cte_type="",
     )
-    assert row.cte_type == "receiving"
+    assert row.cte_type == ""
 
 
 def test_cte_event_normalize_cte_alias_single_letter_expands():
@@ -450,8 +450,8 @@ def test_autofill_warning_with_hint_included_in_errors():
     assert all(w["severity"] == "warning" for w in autofill_warnings)
 
 
-def test_autofill_warning_for_unsupported_cte_type_propagates_hint():
-    """Unsupported cte_type triggers a hint-bearing warning ('event row N')."""
+def test_unsupported_cte_type_propagates_blocking_row_error():
+    """Unsupported event types identify the original row and block commit."""
     normalized, errors = validate_and_normalize_payload(
         {
             "facilities": [],
@@ -468,9 +468,8 @@ def test_autofill_warning_for_unsupported_cte_type_propagates_hint():
         supported_cte_types={"shipping", "receiving"},
         valid_ftl_category_ids={"1"},
     )
-    assert normalized["events"][0]["cte_type"] == "receiving"
-    hint_warnings = [e for e in errors if e.get("section") == "autofill" and "event row 1" in e.get("message", "")]
-    assert len(hint_warnings) >= 1
+    assert normalized["events"] == []
+    assert any(e["section"] == "event" and e["row"] == 1 and e["severity"] == "error" for e in errors)
 
 
 # ─────────────────────────────────────────────────────────────────────

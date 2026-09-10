@@ -54,6 +54,22 @@ class _FakeAsyncRedis:
             key = key.encode()
         return self.store.get(key)
 
+    async def set(self, key, value, *, nx, ex):
+        key = key.encode() if isinstance(key, str) else key
+        if nx and key in self.store:
+            return False
+        self.store[key] = value.encode() if isinstance(value, str) else value
+        return True
+
+    async def eval(self, script, numkeys, key, expected, *args):
+        key = key.encode() if isinstance(key, str) else key
+        if self.store.get(key) != expected.encode():
+            return 0
+        if args:
+            return await self.setex(key, int(args[0]), args[1])
+        del self.store[key]
+        return 1
+
     async def setex(self, key, ttl, value):
         if isinstance(key, str):
             key = key.encode()
@@ -77,8 +93,8 @@ def fake_redis(monkeypatch):
     # API-key-authenticated requests (no principal available pre-auth).
     monkeypatch.setattr(
         idemp_mod,
-        "_lookup_tenant_id_for_api_key",
-        lambda raw: _KEY_TO_TENANT.get(raw),
+        "_lookup_api_key_context",
+        lambda raw: (_KEY_TO_TENANT[raw], "auth-snapshot") if raw in _KEY_TO_TENANT else None,
     )
     return fake
 
@@ -139,9 +155,7 @@ def _victim_seeds_cache(client: TestClient, key: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def test_unauthenticated_forged_tenant_header_cannot_replay_victim_response(
-    server_main, fake_redis, victim_route
-):
+def test_unauthenticated_forged_tenant_header_cannot_replay_victim_response(server_main, fake_redis, victim_route):
     """A caller with NO credentials must not read the victim's cached body.
 
     Pre-fix this returned 200 with the victim's ``LOT-SECRET-<uuid>``: the header
@@ -170,9 +184,7 @@ def test_unauthenticated_forged_tenant_header_cannot_replay_victim_response(
     assert victim_route == {_VICTIM_TENANT: 1}
 
 
-def test_authenticated_tenant_cannot_redirect_cache_namespace_with_header(
-    server_main, fake_redis, victim_route
-):
+def test_authenticated_tenant_cannot_redirect_cache_namespace_with_header(server_main, fake_redis, victim_route):
     """Tenant A authenticates with its own key but forges ``X-Tenant-ID: B``.
 
     Pre-fix the header branch outranked the authenticated API-key lookup, so
@@ -200,9 +212,7 @@ def test_authenticated_tenant_cannot_redirect_cache_namespace_with_header(
     assert victim_route == {_VICTIM_TENANT: 1, _ATTACKER_TENANT: 1}
 
 
-def test_forged_header_cannot_poison_another_tenants_namespace(
-    server_main, fake_redis, victim_route
-):
+def test_forged_header_cannot_poison_another_tenants_namespace(server_main, fake_redis, victim_route):
     """Write side: the attacker's own response must not land in B's namespace.
 
     Otherwise the attacker could pre-seed a key the victim is about to use and
@@ -221,9 +231,7 @@ def test_forged_header_cannot_poison_another_tenants_namespace(
     assert resp.status_code == 200, resp.text
 
     stored = [k.decode() for k in fake_redis.store]
-    assert not any(_VICTIM_TENANT in k for k in stored), (
-        f"Attacker wrote into the victim's cache namespace: {stored}"
-    )
+    assert not any(_VICTIM_TENANT in k for k in stored), f"Attacker wrote into the victim's cache namespace: {stored}"
     assert stored == [f"idempotency:{_ATTACKER_TENANT}:poison-2841"], stored
 
 
@@ -247,9 +255,7 @@ def test_namespace_derives_from_authenticated_key_not_header(server_main, fake_r
     assert f"idempotency:{_VICTIM_TENANT}:dedup-2841" in stored
 
 
-def test_bare_tenant_header_alone_does_not_create_a_cache_namespace(
-    server_main, fake_redis, victim_route
-):
+def test_bare_tenant_header_alone_does_not_create_a_cache_namespace(server_main, fake_redis, victim_route):
     """No authenticated tenant → no cache read and no cache write (fail closed)."""
     client = TestClient(server_main.app)
 
@@ -273,9 +279,7 @@ def _internal_headers(secret: Optional[str], tenant: str, key: str) -> Dict[str,
     return headers
 
 
-def test_internal_tenant_header_requires_the_internal_secret(
-    server_main, fake_redis, victim_route, monkeypatch
-):
+def test_internal_tenant_header_requires_the_internal_secret(server_main, fake_redis, victim_route, monkeypatch):
     monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "s3cr3t-internal")
     client = TestClient(server_main.app)
 
@@ -290,9 +294,7 @@ def test_internal_tenant_header_requires_the_internal_secret(
     assert fake_redis.store == {}
 
 
-def test_internal_tenant_header_with_secret_scopes_the_cache(
-    server_main, fake_redis, victim_route, monkeypatch
-):
+def test_internal_tenant_header_with_secret_scopes_the_cache(server_main, fake_redis, victim_route, monkeypatch):
     monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "s3cr3t-internal")
     client = TestClient(server_main.app)
 
@@ -303,3 +305,37 @@ def test_internal_tenant_header_with_secret_scopes_the_cache(
     assert resp.status_code == 200, resp.text
     stored = [k.decode() for k in fake_redis.store]
     assert f"idempotency:{_VICTIM_TENANT}:int-ok-2841" in stored, stored
+
+
+def test_same_tenant_different_credential_cannot_read_cached_response(
+    server_main, fake_redis, victim_route, monkeypatch
+):
+    monkeypatch.setitem(_KEY_TO_TENANT, "other-same-tenant-key", _VICTIM_TENANT)
+    client = TestClient(server_main.app)
+    _victim_seeds_cache(client, "same-tenant-credential")
+    replay = client.post(
+        _VICTIM_PATH,
+        headers={
+            "Idempotency-Key": "same-tenant-credential",
+            "X-RegEngine-API-Key": "other-same-tenant-key",
+        },
+    )
+    assert replay.status_code == 409
+    assert "LOT-SECRET" not in replay.text
+    assert victim_route == {_VICTIM_TENANT: 1}
+
+
+def test_revoked_key_cannot_read_cached_response(server_main, fake_redis, victim_route, monkeypatch):
+    client = TestClient(server_main.app)
+    _victim_seeds_cache(client, "revoked")
+    monkeypatch.delitem(_KEY_TO_TENANT, "victim-key")
+    replay = client.post(
+        _VICTIM_PATH,
+        headers={
+            "Idempotency-Key": "revoked",
+            "X-RegEngine-API-Key": "victim-key",
+        },
+    )
+    assert replay.status_code == 401
+    assert "LOT-SECRET" not in replay.text
+    assert victim_route == {_VICTIM_TENANT: 1}

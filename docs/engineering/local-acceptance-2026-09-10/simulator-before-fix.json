@@ -1,0 +1,9 @@
+{
+  "python": "Python 3.11.15",
+  "regengine_contract_version": "2",
+  "simulator_contract_version": "2",
+  "exit_code": 0,
+  "output": "delivery reverted to mock for tenant isolated-inflow-contract\nLive trial completed: base_url=http://127.0.0.1:57864, demo_tenant=isolated-inflow-contract, mock_posted=1, live_posted=1, live_failed=0, live_delivery_status=posted",
+  "simulator_commit_url": "https://github.com/regengine/inflow-lab/commit/78050ae78c72a348a518b6d48bdeae7424d772da",
+  "candidate_commit_url": "https://github.com/regengine/RegEngine/commit/3f1cdea048bf5f52cb822456f8422718460e2a11"
+}

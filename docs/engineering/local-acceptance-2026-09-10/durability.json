@@ -1,0 +1,28 @@
+{
+  "durability": [
+    {
+      "tenant_index": 0,
+      "counts": {
+        "cte_events": 501,
+        "traceability_events": 501,
+        "hash_chain": 501,
+        "rule_evaluations": 0
+      }
+    },
+    {
+      "tenant_index": 1,
+      "counts": {
+        "cte_events": 2,
+        "traceability_events": 2,
+        "hash_chain": 2,
+        "rule_evaluations": 0
+      }
+    }
+  ],
+  "runtime_chain_privileges": {
+    "select": true,
+    "insert": true,
+    "update": false,
+    "delete": false
+  }
+}

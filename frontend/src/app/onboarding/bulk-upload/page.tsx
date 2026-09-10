@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, CheckCircle2, Download, FileSpreadsheet, Hash,
   Loader2, UploadCloud, ClipboardCheck, Search, ShieldCheck,
 } from 'lucide-react';
 
+import { parseCSVLocally, validateCSVLocally, type CsvPreview, type ClientValidationResult } from '@/lib/supplier-csv';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
@@ -25,233 +26,6 @@ const STEPS = [
   { label: 'Validate', Icon: ClipboardCheck },
   { label: 'Commit', Icon: CheckCircle2 },
 ];
-
-/* ── FSMA 204 client-side validation (no auth required) ── */
-
-const VALID_EVENT_TYPES = new Set(['R', 'S', 'T', 'C', 'D', 'P', 'H']);
-const EVENT_TYPE_LABELS: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transforming', C: 'Cooling', D: 'Distribution', P: 'Initial Packing', H: 'Harvesting' };
-
-const REQUIRED_COLUMNS = [
-  'event_type', 'product_name', 'lot_number',
-];
-const RECOMMENDED_COLUMNS = [
-  'event_datetime', 'product_code', 'quantity', 'unit',
-  'origin_facility_code', 'origin_facility_name',
-  'destination_facility_code', 'destination_facility_name',
-];
-
-interface ValidationIssue {
-  severity: 'error' | 'warning';
-  row?: number;
-  column?: string;
-  message: string;
-}
-
-interface ClientValidationResult {
-  totalRows: number;
-  columnsFound: string[];
-  requiredColumnsPresent: string[];
-  requiredColumnsMissing: string[];
-  recommendedColumnsPresent: string[];
-  recommendedColumnsMissing: string[];
-  eventTypeCounts: Record<string, number>;
-  invalidEventTypes: { row: number; value: string }[];
-  issues: ValidationIssue[];
-  completenessScore: number; // 0-100
-  canProceed: boolean; // true if no errors (warnings ok)
-  productNames: string[];
-  lotNumbers: string[];
-  facilityNames: string[];
-  dateRange: { earliest: string | null; latest: string | null };
-}
-
-function validateCSVLocally(text: string): ClientValidationResult {
-  const lines = text.trim().split('\n');
-  const result: ClientValidationResult = {
-    totalRows: 0, columnsFound: [], requiredColumnsPresent: [], requiredColumnsMissing: [],
-    recommendedColumnsPresent: [], recommendedColumnsMissing: [], eventTypeCounts: {},
-    invalidEventTypes: [], issues: [], completenessScore: 0, canProceed: true,
-    productNames: [], lotNumbers: [], facilityNames: [], dateRange: { earliest: null, latest: null },
-  };
-
-  if (lines.length < 2) {
-    result.issues.push({ severity: 'error', message: 'File contains no data rows.' });
-    result.canProceed = false;
-    return result;
-  }
-
-  const columns = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
-  result.columnsFound = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const dataLines = lines.slice(1).filter(l => l.trim().length > 0);
-  result.totalRows = dataLines.length;
-
-  // Column presence checks
-  for (const req of REQUIRED_COLUMNS) {
-    if (columns.includes(req)) { result.requiredColumnsPresent.push(req); }
-    else { result.requiredColumnsMissing.push(req); result.issues.push({ severity: 'error', column: req, message: `Required FSMA 204 column "${req}" is missing.` }); }
-  }
-  for (const rec of RECOMMENDED_COLUMNS) {
-    if (columns.includes(rec)) { result.recommendedColumnsPresent.push(rec); }
-    else { result.recommendedColumnsMissing.push(rec); result.issues.push({ severity: 'warning', column: rec, message: `Recommended column "${rec}" not found. Data may be incomplete for full FSMA 204 compliance.` }); }
-  }
-
-  // Index lookups
-  const idx = (name: string) => columns.indexOf(name);
-  const eventTypeIdx = idx('event_type');
-  const productNameIdx = idx('product_name');
-  const productCodeIdx = idx('product_code');
-  const lotIdx = idx('lot_number');
-  const datetimeIdx = idx('event_datetime');
-  const origFacIdx = idx('origin_facility_name');
-  const destFacIdx = idx('destination_facility_name');
-  const qtyIdx = idx('quantity');
-
-  const productSet = new Set<string>();
-  const lotSet = new Set<string>();
-  const facSet = new Set<string>();
-  const dates: string[] = [];
-  let emptyRequiredCells = 0;
-  let totalRequiredCells = 0;
-
-  for (let i = 0; i < dataLines.length; i++) {
-    const cells = dataLines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-    const rowNum = i + 2; // 1-indexed, header is row 1
-
-    // Event type validation
-    if (eventTypeIdx >= 0) {
-      const et = cells[eventTypeIdx]?.trim();
-      totalRequiredCells++;
-      if (!et) {
-        emptyRequiredCells++;
-        if (i < 20) result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: 'Empty event_type.' });
-      } else if (!VALID_EVENT_TYPES.has(et.toUpperCase())) {
-        result.invalidEventTypes.push({ row: rowNum, value: et });
-        if (result.invalidEventTypes.length <= 10) {
-          result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: `Invalid event type "${et}". Expected: R, S, T, C, D, P, H.` });
-        }
-      } else {
-        const label = EVENT_TYPE_LABELS[et.toUpperCase()] || et;
-        result.eventTypeCounts[label] = (result.eventTypeCounts[label] || 0) + 1;
-      }
-    }
-
-    // Product name
-    if (productNameIdx >= 0) {
-      totalRequiredCells++;
-      const val = cells[productNameIdx]?.trim();
-      if (!val) { emptyRequiredCells++; }
-      else { productSet.add(val); }
-    }
-
-    // Lot number
-    if (lotIdx >= 0) {
-      totalRequiredCells++;
-      const val = cells[lotIdx]?.trim();
-      if (!val) { emptyRequiredCells++; }
-      else { lotSet.add(val); }
-    }
-
-    // Datetime
-    if (datetimeIdx >= 0) {
-      const val = cells[datetimeIdx]?.trim();
-      if (val) dates.push(val);
-    }
-
-    // Facilities
-    if (origFacIdx >= 0) { const v = cells[origFacIdx]?.trim(); if (v) facSet.add(v); }
-    if (destFacIdx >= 0) { const v = cells[destFacIdx]?.trim(); if (v) facSet.add(v); }
-
-    // Quantity should be numeric
-    if (qtyIdx >= 0) {
-      const val = cells[qtyIdx]?.trim();
-      if (val && isNaN(Number(val))) {
-        if (i < 10) result.issues.push({ severity: 'warning', row: rowNum, column: 'quantity', message: `Non-numeric quantity "${val}".` });
-      }
-    }
-  }
-
-  // Summary stats
-  result.productNames = Array.from(productSet).slice(0, 15);
-  result.lotNumbers = Array.from(lotSet).slice(0, 15);
-  result.facilityNames = Array.from(facSet).slice(0, 15);
-
-  if (dates.length > 0) {
-    dates.sort();
-    result.dateRange = { earliest: dates[0], latest: dates[dates.length - 1] };
-  }
-
-  // Truncation notices
-  if (result.invalidEventTypes.length > 10) {
-    result.issues.push({ severity: 'error', message: `${result.invalidEventTypes.length - 10} additional invalid event_type rows not shown.` });
-  }
-
-  // Completeness score
-  const colScore = (result.requiredColumnsPresent.length / Math.max(REQUIRED_COLUMNS.length, 1)) * 40;
-  const recColScore = (result.recommendedColumnsPresent.length / Math.max(RECOMMENDED_COLUMNS.length, 1)) * 20;
-  const cellScore = totalRequiredCells > 0 ? ((totalRequiredCells - emptyRequiredCells) / totalRequiredCells) * 30 : 30;
-  const eventScore = result.invalidEventTypes.length === 0 ? 10 : Math.max(0, 10 - result.invalidEventTypes.length);
-  result.completenessScore = Math.round(colScore + recColScore + cellScore + eventScore);
-
-  // Can proceed if no errors
-  result.canProceed = !result.issues.some(i => i.severity === 'error');
-
-  return result;
-}
-
-/* ── Client-side CSV preview (no auth required) ── */
-interface CsvPreview {
-  totalRows: number;
-  columns: string[];
-  sampleRows: string[][];
-  eventTypeCounts: Record<string, number>;
-  productNames: string[];
-  lotNumbers: string[];
-}
-
-function parseCSVLocally(text: string): CsvPreview {
-  const lines = text.trim().split('\n');
-  if (lines.length < 2) return { totalRows: 0, columns: [], sampleRows: [], eventTypeCounts: {}, productNames: [], lotNumbers: [] };
-
-  const columns = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const dataLines = lines.slice(1);
-
-  const eventTypeIdx = columns.findIndex(c => c.toLowerCase() === 'event_type');
-  const productIdx = columns.findIndex(c => c.toLowerCase() === 'product_name');
-  const lotIdx = columns.findIndex(c => c.toLowerCase() === 'lot_number');
-
-  const eventTypeCounts: Record<string, number> = {};
-  const productSet = new Set<string>();
-  const lotSet = new Set<string>();
-
-  const sampleRows: string[][] = [];
-
-  for (let i = 0; i < dataLines.length; i++) {
-    const cells = dataLines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-    if (i < 5) sampleRows.push(cells);
-
-    if (eventTypeIdx >= 0 && cells[eventTypeIdx]) {
-      const et = cells[eventTypeIdx];
-      eventTypeCounts[et] = (eventTypeCounts[et] || 0) + 1;
-    }
-    if (productIdx >= 0 && cells[productIdx]) productSet.add(cells[productIdx]);
-    if (lotIdx >= 0 && cells[lotIdx]) lotSet.add(cells[lotIdx]);
-  }
-
-  const EVENT_TYPE_MAP: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transforming', C: 'Cooling', D: 'Distribution', P: 'Initial Packing', H: 'Harvesting' };
-  const mappedCounts: Record<string, number> = {};
-  for (const [k, v] of Object.entries(eventTypeCounts)) {
-    mappedCounts[EVENT_TYPE_MAP[k] || k] = v;
-  }
-
-  return {
-    totalRows: dataLines.length,
-    columns,
-    sampleRows,
-    eventTypeCounts: mappedCounts,
-    productNames: Array.from(productSet).slice(0, 10),
-    lotNumbers: Array.from(lotSet).slice(0, 10),
-  };
-}
 
 function getErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object') {
@@ -306,6 +80,7 @@ function getActiveStep(
 
 export default function BulkUploadPage() {
   const { isAuthenticated } = useAuth();
+  const fileReadVersion = useRef(0);
   const [file, setFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
@@ -321,6 +96,7 @@ export default function BulkUploadPage() {
   const activeStep = getActiveStep(file, csvPreview, clientValidation, parseResult, commitResult);
 
   const onFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const version = ++fileReadVersion.current;
     const selected = event.target.files?.[0] || null;
     setFile(selected);
     setCsvText(null);
@@ -332,19 +108,29 @@ export default function BulkUploadPage() {
     setStatusResult(null);
     setError(null);
 
+    if (selected && selected.size > MAX_UPLOAD_BYTES) {
+      setError('Uploaded file exceeds max size of 10 MB.');
+      return;
+    }
+
     // Client-side preview (works without auth)
-    if (selected && (selected.name.endsWith('.csv') || selected.type === 'text/csv')) {
+    if (selected && (selected.name.toLowerCase().endsWith('.csv') || selected.type === 'text/csv')) {
       const reader = new FileReader();
       reader.onload = (e) => {
+        if (version !== fileReadVersion.current) return;
         const text = e.target?.result;
         if (typeof text === 'string') {
           try {
             setCsvText(text);
             setCsvPreview(parseCSVLocally(text));
-          } catch {
-            setError('Could not preview this CSV. Try uploading again.');
+          } catch (err) {
+            setCsvText(null);
+            setError(getErrorMessage(err, 'Could not preview this CSV. Try uploading again.'));
           }
         }
+      };
+      reader.onerror = () => {
+        if (version === fileReadVersion.current) setError('Could not read this file. Please select it again.');
       };
       reader.readAsText(selected);
     }
@@ -413,8 +199,12 @@ export default function BulkUploadPage() {
       const committed = await apiClient.commitSupplierBulkUpload(parseResult.session_id);
       setCommitResult(committed);
       notifyDashboardRefresh();
-      const status = await apiClient.getSupplierBulkUploadStatus(parseResult.session_id);
-      setStatusResult(status);
+      try {
+        const status = await apiClient.getSupplierBulkUploadStatus(parseResult.session_id);
+        setStatusResult(status);
+      } catch {
+        setError('Commit succeeded, but status refresh failed. Refresh status to check the latest state.');
+      }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Commit failed. Resolve validation issues and retry.'));
     } finally {
@@ -599,9 +389,11 @@ export default function BulkUploadPage() {
           }}
         >
           {/* File input */}
-          <label className="block mb-1 text-sm font-semibold text-[var(--re-text-primary)]">Upload your file</label>
+          <label htmlFor="supplier-bulk-file" className="block mb-1 text-sm font-semibold text-[var(--re-text-primary)]">Upload your file</label>
           <p className="text-xs text-[var(--re-text-muted)] mb-3">Accepts CSV, XLSX, JSON, or PDF. Max 10 MB.</p>
           <input
+            id="supplier-bulk-file"
+            disabled={isBusy}
             type="file"
             accept=".csv,.xlsx,.json,.pdf"
             onChange={onFileSelected}
@@ -905,7 +697,7 @@ export default function BulkUploadPage() {
               }`}>
                 {clientValidation.canProceed ? <CheckCircle2 className="w-4 h-4" /> : <span>!</span>}
                 {clientValidation.canProceed
-                  ? 'Data passes FSMA 204 structure checks. Ready for server-side commit.'
+                  ? 'Local structure checks passed. Server validation is required before commit.'
                   : 'Fix the errors above before proceeding to commit.'}
               </div>
 
@@ -914,11 +706,11 @@ export default function BulkUploadPage() {
                 <div className="mt-4 rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-surface-card)] p-4 text-center">
                   <p className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
                     {clientValidation.canProceed
-                      ? 'Your data passed validation — sign in to commit with cryptographic proof'
+                      ? 'Sign in to validate this file on the server'
                       : 'Fix the issues above, then sign in to commit'}
                   </p>
                   <p className="text-xs text-[var(--re-text-muted)] mb-3 max-w-sm mx-auto">
-                    Server-side commit adds SHA-256 hashing, Merkle tree integrity, and generates review-ready records for operator review.
+                    Local checks do not verify tenant access, facility references, or regulatory compliance. No records have been saved.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link

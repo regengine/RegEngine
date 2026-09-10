@@ -67,6 +67,22 @@ class _FakeAsyncRedis:
             key = key.encode()
         return self.store.get(key)
 
+    async def set(self, key, value, *, nx, ex):
+        key = key.encode() if isinstance(key, str) else key
+        if nx and key in self.store:
+            return False
+        self.store[key] = value.encode() if isinstance(value, str) else value
+        return True
+
+    async def eval(self, script, numkeys, key, expected, *args):
+        key = key.encode() if isinstance(key, str) else key
+        if self.store.get(key) != expected.encode():
+            return 0
+        if args:
+            return await self.setex(key, int(args[0]), args[1])
+        del self.store[key]
+        return 1
+
     async def setex(self, key, ttl, value):
         if isinstance(key, str):
             key = key.encode()
@@ -223,9 +239,7 @@ def test_post_without_idempotency_key_is_not_cached(server_main, fake_redis, ech
     assert fake_redis.store == {}
 
 
-def test_principal_only_tenant_context_does_not_use_anonymous_cache(
-    server_main, fake_redis, principal_echo_route
-):
+def test_principal_only_tenant_context_does_not_use_anonymous_cache(server_main, fake_redis, principal_echo_route):
     client = TestClient(server_main.app)
 
     r1 = client.post(
@@ -253,7 +267,11 @@ def test_api_key_lookup_scopes_server_idempotency_without_tenant_header(
         "api-key-a": "tenant-a",
         "api-key-b": "tenant-b",
     }
-    monkeypatch.setattr(idemp_mod, "_lookup_tenant_id_for_api_key", lambda raw: tenant_by_key.get(raw))
+    monkeypatch.setattr(
+        idemp_mod,
+        "_lookup_api_key_context",
+        lambda raw: (tenant_by_key[raw], "auth-snapshot") if raw in tenant_by_key else None,
+    )
     client = TestClient(server_main.app)
 
     r1 = client.post(

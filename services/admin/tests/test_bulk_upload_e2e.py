@@ -178,7 +178,9 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         yield test_client
 
 
+@pytest.mark.parametrize("event_type", ["shipping", "D", "depletion"])
 def test_bulk_upload_parse_validate_commit_happy_path(
+    event_type,
     client: TestClient,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -199,6 +201,7 @@ tlc,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,Baby Spinach,active,,,
 event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z,"{""quantity"": 120, ""unit_of_measure"": ""cases"", ""product_description"": ""Baby Spinach""}"
 """
 
+    csv_payload = csv_payload.replace(",shipping,", f",{event_type},")
     parse_response = client.post(
         "/v1/supplier/bulk-upload/parse",
         files={"file": ("supplier.csv", csv_payload.encode("utf-8"), "text/csv")},
@@ -238,6 +241,7 @@ event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z
 
     total_events = db_session.execute(select(SupplierCTEEventModel)).scalars().all()
     assert len(total_events) == 1
+    assert total_events[0].cte_type == "shipping"
     assert total_events[0].merkle_prev_hash is None
     assert int(total_events[0].sequence_number) == 1
     assert lock_calls["count"] == 1
@@ -318,3 +322,54 @@ event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z
 
     total_events = db_session.execute(select(SupplierCTEEventModel)).scalars().all()
     assert len(total_events) == 1
+
+
+@pytest.mark.parametrize("event_type", ["unknown_event", "", "x"])
+@pytest.mark.parametrize("stale_validated", [False, True])
+def test_invalid_event_type_cannot_commit_receiving(client, db_session, event_type, stale_validated):
+    import app.bulk_upload.routes as bulk_routes
+
+    csv_payload = f"""record_type,name,street,city,state,postal_code,roles,facility_name,tlc_code,cte_type,event_time
+facility,Test Facility,100 Main St,Salinas,CA,93901,Packer,,,,
+event,,,,,,,Test Facility,LOT-100,{event_type},2026-09-10T12:00:00Z
+"""
+    parsed = client.post(
+        "/v1/supplier/bulk-upload/parse",
+        files={"file": ("invalid.csv", csv_payload.encode(), "text/csv")},
+    )
+    assert parsed.status_code == 200
+    session_id = parsed.json()["session_id"]
+    validated = client.post(f"/v1/supplier/bulk-upload/validate?session_id={session_id}")
+    assert validated.status_code == 200
+    assert validated.json()["preview"]["can_commit"] is False
+    assert any(
+        item["severity"] == "error" and "cte_type" in item["message"] for item in validated.json()["preview"]["errors"]
+    )
+
+    if stale_validated:
+        # Simulate a session produced by the previous release's autofill.
+        key = f"{TEST_TENANT_ID}:{TEST_USER_ID}:{session_id}"
+        session = bulk_routes.session_store._store[key]
+        session["status"] = "validated"
+        session["normalized_data"]["events"] = [
+            {"facility_name": "Test Facility", "tlc_code": "LOT-100", "cte_type": "receiving"}
+        ]
+
+    committed = client.post(f"/v1/supplier/bulk-upload/commit?session_id={session_id}")
+    assert committed.status_code == 400
+    assert db_session.execute(select(SupplierCTEEventModel)).scalars().all() == []
+    assert db_session.execute(select(SupplierFacilityModel)).scalars().all() == []
+
+
+def test_commit_rejects_legacy_session_without_original_data(client, db_session):
+    import app.bulk_upload.routes as bulk_routes
+
+    session_id = "legacy-session"
+    bulk_routes.session_store._store[f"{TEST_TENANT_ID}:{TEST_USER_ID}:{session_id}"] = {
+        "status": "validated",
+        "normalized_data": {"events": [{"cte_type": "receiving"}]},
+    }
+    committed = client.post(f"/v1/supplier/bulk-upload/commit?session_id={session_id}")
+    assert committed.status_code == 400
+    assert "Original upload data is unavailable" in committed.json()["detail"]
+    assert db_session.execute(select(SupplierCTEEventModel)).scalars().all() == []

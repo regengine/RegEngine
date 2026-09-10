@@ -1,0 +1,36 @@
+{
+  "catalog": "repository FSMA_RULE_SEEDS explicitly seeded only into disposable database",
+  "rules_inserted": 36,
+  "http": 200,
+  "accepted": 500,
+  "rejected": 0,
+  "seconds": 1.549,
+  "first_event": {
+    "traceability_lot_code": "LOCAL-RULES-0-ebe8f347",
+    "cte_type": "shipping",
+    "status": "accepted",
+    "event_id": "d9c498d5-874f-4996-b6aa-6008bd35677a",
+    "sha256_hash": {
+      "algorithm": "SHA-256",
+      "hex_octets": "86 f1 0f 53 a0 10 17 86 4e a4 47 aa ef 16 ec f2 b9 7f b1 5d 84 ef 7a 82 53 3f b1 af 28 d9 9a 6b"
+    },
+    "chain_hash": {
+      "algorithm": "SHA-256",
+      "hex_octets": "a9 ed 93 32 78 0f 52 70 77 eb 1b 2c 49 12 01 39 ce fb ac b2 85 16 f3 55 d7 97 35 d0 0b fe 2e ed"
+    },
+    "errors": []
+  },
+  "export_http": 200,
+  "chain_integrity": "VERIFIED",
+  "verifier_exit": 0,
+  "verifier_output": "manifest: ok\nfiles: 3 / 3 sha256 matches\nmerkle: root recomputed and matched\nchain: persisted status VERIFIED matches declared chain artifact\nresult: bundle intact\n",
+  "counts": {
+    "cte_events": 1001,
+    "traceability_events": 1001,
+    "hash_chain": 1001,
+    "rule_evaluations": 7000
+  },
+  "canonical_valid": true,
+  "canonical_errors": [],
+  "passed": true
+}
