@@ -30,6 +30,8 @@ regexes = [
   '''[0-9a-f]{8}-0000-0000-0000-[0-9a-f]{12}''',
   # Alembic migration revision IDs: short 12-char hex strings assigned to revision/down_revision
   '''(?i)(revision|down_revision)\s*[=:]\s*(Union\[[^\]]+\],\s*)?["'][0-9a-f]{12}["']''',
+  # Inline pragma: allowlist secret markers in test code
+  '''pragma:\s+allowlist\s+secret''',
 ]
 
 paths = [
@@ -53,4 +55,13 @@ paths = [
   # Agent / Claude instruction files (contain example prompts, not secrets)
   '''AGENTS\.md$''',
   '''\.github/copilot-instructions\.md$''',
+]
+
+# Historical commits with test fixtures explicitly marked as non-secrets.
+# Issue #3085: these commits introduced test fixtures with inline
+# `pragma: allowlist secret` markers, validated as synthetic test data.
+commits = [
+  "85df24ed4332b4822fd057733388b1b420bff75c",  # Frontend API test fixtures (JWT test tokens)
+  "2036a16aae28aa3f5183257d8311e80d39c93d34",  # Backend test internal secrets (rate limit, idempotency)
+  "df4b45a25b6a8e7966bea6212ccf497fbffcf04c",  # Shared tenant log context test
 ]
