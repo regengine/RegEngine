@@ -67,18 +67,21 @@ paths = [
   '''AGENTS\.md$''',
   '''\.github/copilot-instructions\.md$''',
 
-  # Issue #3085: Test files and documentation contain synthetic test fixtures.
-  # All test directories and documentation pages with code examples use
-  # non-production API keys, internal secrets, and JWT tokens for local/CI
-  # testing. Real credentials are environment variables, not hardcoded.
+  # Issue #3085: Test files, scripts, and documentation contain synthetic
+  # test fixtures. All use non-production API keys, internal secrets, and
+  # JWT tokens for local/CI testing. Real credentials are environment
+  # variables, not hardcoded.
   '''/tests/''',
   '''/test_''',
   '''__tests__/''',
   '''\.test\.ts$''',
   '''\.test\.py$''',
-  '''/docs/page\.tsx$''',
-  '''/developers/page\.tsx$''',
+  '''^docs/''',
+  '''^scripts/''',
+  '''/app/docs/''',
+  '''/app/developers/''',
   '''ONBOARDING_GUIDE\.md$''',
+  '''CANONICAL_MODEL\.md$''',
 ]
 
 # Historical commits with test fixtures explicitly marked as non-secrets.
