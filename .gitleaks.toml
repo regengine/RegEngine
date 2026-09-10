@@ -55,6 +55,17 @@ paths = [
   # Agent / Claude instruction files (contain example prompts, not secrets)
   '''AGENTS\.md$''',
   '''\.github/copilot-instructions\.md$''',
+
+  # Issue #3085: test files with historical synthetic test fixtures
+  # marked with inline `pragma: allowlist secret` comments.
+  '''frontend/src/__tests__/api/billing-checkout-route\.test\.ts$''',
+  '''frontend/src/__tests__/api/ingestion-proxy-auth\.test\.ts$''',
+  '''frontend/src/__tests__/api/nlp-ask-proxy\.test\.ts$''',
+  '''frontend/src/__tests__/api/proxy-sanitization\.test\.ts$''',
+  '''tests/unit/test_tenant_rate_limit_header_spoof_2844\.py$''',
+  '''services/ingestion/tests/test_webhook_idempotency\.py$''',
+  '''tests/shared/test_tenant_log_context_2859\.py$''',
+  '''tests/shared/test_idempotency_middleware_1338\.py$''',
 ]
 
 # Historical commits with test fixtures explicitly marked as non-secrets.
