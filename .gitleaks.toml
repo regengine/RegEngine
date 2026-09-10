@@ -79,7 +79,7 @@ paths = [
   '''^docs/''',
   '''^scripts/''',
   '''/app/docs/''',
-  '''/app/developers/''',
+  '''/app/developer''',
   '''ONBOARDING_GUIDE\.md$''',
   '''CANONICAL_MODEL\.md$''',
 ]
