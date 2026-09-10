@@ -68,6 +68,22 @@ class _FakeAsyncRedis:
             raise ConnectionError("fake redis down")
         return self.store.get(key)
 
+    async def set(self, key, value, *, nx, ex):
+        key = key.encode() if isinstance(key, str) else key
+        if nx and key in self.store:
+            return False
+        self.store[key] = value.encode() if isinstance(value, str) else value
+        return True
+
+    async def eval(self, script, numkeys, key, expected, *args):
+        key = key.encode() if isinstance(key, str) else key
+        if self.store.get(key) != expected.encode():
+            return 0
+        if args:
+            return await self.setex(key, int(args[0]), args[1])
+        del self.store[key]
+        return 1
+
     async def setex(self, key, ttl, value):
         if isinstance(key, str):
             key = key.encode()
@@ -332,7 +348,7 @@ class TestResolveTenantId:
         """
         import shared.idempotency as idemp_mod
 
-        monkeypatch.setattr(idemp_mod, "_lookup_tenant_id_for_api_key", lambda raw: "tenant-attacker")
+        monkeypatch.setattr(idemp_mod, "_lookup_api_key_context", lambda raw: ("tenant-attacker", "auth-snapshot"))
         req = self._request(header_tenant="tenant-victim")
         req.headers = {"X-Tenant-ID": "tenant-victim", "X-RegEngine-API-Key": "rge_attacker.secret"}
         assert middleware._resolve_tenant_id(req) == "tenant-attacker"
@@ -340,7 +356,7 @@ class TestResolveTenantId:
     def test_api_key_lookup_used_when_no_principal_or_header(self, middleware, monkeypatch):
         import shared.idempotency as idemp_mod
 
-        monkeypatch.setattr(idemp_mod, "_lookup_tenant_id_for_api_key", lambda raw: "tenant-from-key")
+        monkeypatch.setattr(idemp_mod, "_lookup_api_key_context", lambda raw: ("tenant-from-key", "auth-snapshot"))
         req = self._request()
         req.headers = {"X-RegEngine-API-Key": "rge_test.secret"}
         assert middleware._resolve_tenant_id(req) == "tenant-from-key"
@@ -831,3 +847,311 @@ class TestDispatchCacheErrorResilience:
         )
         assert resp.status_code == 200
         assert resp.json() == {"body": "hello"}
+
+
+class TestOperationBinding:
+    @pytest.mark.parametrize(
+        "path,body,extra",
+        [
+            ("/echo", b"changed", {}),
+            ("/does-not-exist", b"original", {}),
+            ("/echo?mode=other", b"original", {}),
+            ("/echo", b"original", {"X-RegEngine-API-Key": "different-credential"}),
+            ("/echo", b"original", {"Content-Type": "application/octet-stream"}),
+        ],
+    )
+    def test_key_reuse_for_different_operation_conflicts(self, monkeypatch, path, body, extra):
+        fake = _FakeAsyncRedis()
+        _patched_middleware(monkeypatch, fake)
+        calls = []
+        monkeypatch.setattr(
+            "shared.idempotency._lookup_api_key_context",
+            lambda raw: ("tenant", "auth-snapshot"),
+        )
+
+        async def handler(request):
+            calls.append(await request.body())
+            return {"secret": "original-response"}  # pragma: allowlist secret — synthetic response fixture
+
+        client = TestClient(_build_app(handler))
+        headers = {"Idempotency-Key": "operation", **_tenant_headers("tenant")}
+        assert client.post("/echo", content=b"original", headers=headers).status_code == 200
+        replay = client.post(path, content=body, headers={**headers, **extra})
+        assert replay.status_code == 409
+        assert replay.json() == {"error": "idempotency_key_conflict"}
+        assert calls == [b"original"]
+
+    def test_legacy_unbound_cache_entry_is_not_replayed_or_reexecuted(self, monkeypatch):
+        fake = _FakeAsyncRedis()
+        fake.store[b"idempotency:tenant:legacy"] = json.dumps(
+            {
+                "status": 200,
+                "body": "secret legacy response",
+                "headers": {},
+            }
+        ).encode()
+        _patched_middleware(monkeypatch, fake)
+        client = TestClient(_build_app())
+        response = client.post(
+            "/echo",
+            headers={
+                "Idempotency-Key": "legacy",
+                **_tenant_headers("tenant"),
+            },
+        )
+        assert response.status_code == 409
+        assert "secret" not in response.text
+        assert not fake.setex_calls
+
+    @pytest.mark.asyncio
+    async def test_concurrent_identical_replay_only_dispatches_once(self, monkeypatch):
+        import asyncio
+
+        fake = _FakeAsyncRedis()
+        _patched_middleware(monkeypatch, fake)
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def handler(request):
+            calls.append(await request.body())
+            started.set()
+            await release.wait()
+            return {"calls": len(calls)}
+
+        async with AsyncClient(transport=ASGITransport(app=_build_app(handler)), base_url="http://test") as client:
+            headers = {"Idempotency-Key": "concurrent", **_tenant_headers("tenant")}
+            first = asyncio.create_task(client.post("/echo", headers=headers, content=b"same"))
+            await asyncio.wait_for(started.wait(), timeout=3)
+            try:
+                second = await asyncio.wait_for(client.post("/echo", headers=headers, content=b"same"), timeout=3)
+                assert second.status_code == 409
+                assert second.json()["error"] == "idempotency_request_in_progress"
+            finally:
+                release.set()
+                original = await first
+            retry = await client.post("/echo", headers=headers, content=b"same")
+            assert original.status_code == retry.status_code == 200
+            assert retry.json() == original.json() == {"calls": 1}
+            assert calls == [b"same"]
+
+    def test_closed_mode_rejects_initial_connection_failure(self, monkeypatch):
+        monkeypatch.setenv("IDEMPOTENCY_FAIL_MODE", "closed")
+        _patched_middleware(monkeypatch, None)
+        client = TestClient(_build_app())
+        response = client.post("/echo", headers={"Idempotency-Key": "closed", **_tenant_headers("tenant")})
+        assert response.status_code == 503
+        assert response.headers["retry-after"] == "30"
+
+    def test_binary_response_round_trips_exactly(self, monkeypatch):
+        from fastapi import Response
+
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+
+        async def handler(request):
+            return Response(b"\xff\x00\xfe", media_type="application/octet-stream")
+
+        client = TestClient(_build_app(handler))
+        headers = {"Idempotency-Key": "binary", **_tenant_headers("tenant")}
+        first = client.post("/echo", headers=headers)
+        retry = client.post("/echo", headers=headers)
+        assert first.content == retry.content == b"\xff\x00\xfe"
+
+
+@pytest.fixture
+async def disposable_redis(tmp_path):
+    """Use a private Unix socket; never connect to an existing Redis database."""
+    import asyncio
+    import shutil
+    import subprocess
+    import tempfile
+
+    import redis.asyncio as redis
+
+    executable = shutil.which("redis-server")
+    if not executable:
+        pytest.skip("redis-server executable is required for real Redis reservation tests")
+    with tempfile.TemporaryDirectory(prefix="idemp-", dir="/tmp") as directory:
+        socket = f"{directory}/redis.sock"
+        process = subprocess.Popen(
+            [
+                executable,
+                "--port",
+                "0",
+                "--unixsocket",
+                socket,
+                "--save",
+                "",
+                "--appendonly",
+                "no",
+                "--dir",
+                directory,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        client = redis.Redis(unix_socket_path=socket)
+        try:
+            for _ in range(100):
+                try:
+                    await client.ping()
+                    break
+                except (ConnectionError, redis.ConnectionError):
+                    await asyncio.sleep(0.02)
+            else:
+                pytest.fail("Disposable Redis failed to start")
+            yield client
+        finally:
+            await client.aclose()
+            process.terminate()
+            process.wait(timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_real_redis_concurrent_replay(monkeypatch, disposable_redis):
+    import asyncio
+
+    _patched_middleware(monkeypatch, disposable_redis)
+    started, release = asyncio.Event(), asyncio.Event()
+    calls = []
+
+    async def handler(request):
+        calls.append(await request.body())
+        started.set()
+        await release.wait()
+        return {"calls": len(calls)}
+
+    # Distinct app instances share Redis, modeling separate service replicas.
+    async with AsyncClient(transport=ASGITransport(app=_build_app(handler)), base_url="http://test") as a:
+        async with AsyncClient(transport=ASGITransport(app=_build_app(handler)), base_url="http://test") as b:
+            headers = {"Idempotency-Key": "race", **_tenant_headers("tenant")}
+            pending = asyncio.create_task(a.post("/echo", headers=headers, content=b"same"))
+            await asyncio.wait_for(started.wait(), 3)
+            try:
+                concurrent = await b.post("/echo", headers=headers, content=b"same")
+                assert concurrent.status_code == 409
+                assert concurrent.json()["error"] == "idempotency_request_in_progress"
+                conflicting = await b.post("/echo", headers=headers, content=b"different")
+                assert conflicting.status_code == 409
+                assert conflicting.json()["error"] == "idempotency_key_conflict"
+            finally:
+                release.set()
+                original = await pending
+            replay = await b.post("/echo", headers=headers, content=b"same")
+            assert original.json() == replay.json() == {"calls": 1}
+            assert calls == [b"same"]
+            assert await disposable_redis.ttl("idempotency:tenant:race") > 86390
+
+
+@pytest.mark.asyncio
+async def test_streamed_oversized_body_rejected_before_reservation(monkeypatch):
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+
+    async def chunks():
+        for _ in range(11):
+            yield b"x" * (1024 * 1024)
+
+    async with AsyncClient(transport=ASGITransport(app=_build_app()), base_url="http://test") as client:
+        response = await client.post(
+            "/echo",
+            headers={
+                "Idempotency-Key": "large",
+                **_tenant_headers("tenant"),
+            },
+            content=chunks(),
+        )
+    assert response.status_code == 413
+    assert fake.store == {}
+
+
+def test_handler_exception_retains_ambiguous_reservation(monkeypatch):
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    calls = []
+
+    async def handler(request):
+        calls.append(1)
+        raise RuntimeError("side effect outcome is uncertain")
+
+    client = TestClient(_build_app(handler), raise_server_exceptions=False)
+    headers = {"Idempotency-Key": "ambiguous", **_tenant_headers("tenant")}
+    assert client.post("/echo", headers=headers).status_code == 500
+    retry = client.post("/echo", headers=headers)
+    assert retry.status_code == 409
+    assert retry.json()["error"] == "idempotency_request_in_progress"
+    assert calls == [1]
+
+
+def test_uncertain_cache_write_does_not_redispatch(monkeypatch):
+    class FailingPublishRedis(_FakeAsyncRedis):
+        async def eval(self, *args):
+            raise ConnectionError("publish unavailable")
+
+    _patched_middleware(monkeypatch, FailingPublishRedis())
+    client = TestClient(_build_app())
+    headers = {"Idempotency-Key": "ambiguous", **_tenant_headers("tenant")}
+    assert client.post("/echo", headers=headers).status_code == 200
+    assert client.post("/echo", headers=headers).status_code == 409
+
+
+def test_failed_route_releases_reservation_for_retry(monkeypatch):
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    attempts = []
+
+    async def handler(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise HTTPException(403)
+        return {"ok": True}
+
+    client = TestClient(_build_app(handler))
+    headers = {"Idempotency-Key": "retry", **_tenant_headers("tenant")}
+    assert client.post("/echo", headers=headers).status_code == 403
+    assert client.post("/echo", headers=headers).status_code == 200
+    assert len(attempts) == 2
+
+
+@pytest.mark.parametrize(
+    "changed_field,new_value",
+    [
+        ("scopes", ["read"]),
+        ("jurisdictions", ["US-CA"]),
+    ],
+)
+def test_authoritative_key_permission_narrowing_blocks_cached_replay(monkeypatch, changed_field, new_value):
+    import shared.api_key_store as key_store
+    import shared.database as database
+
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    authorization = {"scopes": ["read", "write"], "jurisdictions": ["US", "US-CA"]}
+    queries = []
+    db = MagicMock()
+
+    def execute(statement, parameters):
+        queries.append(str(statement))
+        result = MagicMock()
+        result.fetchone.return_value = (
+            "tenant",
+            True,
+            None,
+            "stable-key-id",
+            authorization["scopes"],
+            authorization["jurisdictions"],
+        )
+        return result
+
+    db.execute.side_effect = execute
+    monkeypatch.setattr(database, "SessionLocal", lambda: db)
+    monkeypatch.setattr(key_store, "set_api_key_lookup_context", lambda session, raw: ("stable-key-id", ["hash"]))
+    client = TestClient(_build_app())
+    # Internal identity must not bypass the fresh API-key authorization lookup.
+    headers = {"Idempotency-Key": "permissions", "X-RegEngine-API-Key": "stable-key", **_tenant_headers("tenant")}
+    original = client.post("/echo", headers=headers, content=b"same")
+    assert original.status_code == 200
+    assert client.post("/echo", headers=headers, content=b"same").status_code == 200
+    authorization[changed_field] = new_value
+    replay = client.post("/echo", headers=headers, content=b"same")
+    assert replay.status_code == 409
+    assert replay.json() == {"error": "idempotency_key_conflict"}
+    assert len(queries) == 3
+    assert all("scopes, allowed_jurisdictions" in query for query in queries)

@@ -32,6 +32,7 @@ def _tenant_headers(tenant: str) -> dict[str, str]:
         "X-RegEngine-Internal-Secret": _INTERNAL_SECRET,
     }
 
+
 # ---------------------------------------------------------------------------
 # Cache-key composition (#1237)
 # ---------------------------------------------------------------------------
@@ -165,6 +166,22 @@ class _FakeAsyncRedis:
         if isinstance(key, str):
             key = key.encode()
         return self.store.get(key)
+
+    async def set(self, key, value, *, nx, ex):
+        key = key.encode() if isinstance(key, str) else key
+        if nx and key in self.store:
+            return False
+        self.store[key] = value.encode() if isinstance(value, str) else value
+        return True
+
+    async def eval(self, script, numkeys, key, expected, *args):
+        key = key.encode() if isinstance(key, str) else key
+        if self.store.get(key) != expected.encode():
+            return 0
+        if args:
+            return await self.setex(key, int(args[0]), args[1])
+        del self.store[key]
+        return 1
 
     async def setex(self, key, ttl, value):
         if isinstance(key, str):

@@ -532,6 +532,11 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
 
             previous_chain_hash = chain_hash
             next_sequence += 1
+            # A repeated key in this request must reuse the first result
+            # before we allocate another ledger slot. Otherwise ON CONFLICT
+            # discards the duplicate but later rows retain its predecessor.
+            if evt.idempotency_key:
+                existing_map[evt.idempotency_key] = (str(evt.event_id), evt.sha256_hash, chain_hash)
 
         # --- Batch INSERT with ON CONFLICT tolerance (#1266) ---
         # _batch_insert_canonical_events returns the set of event_ids

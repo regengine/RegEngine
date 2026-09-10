@@ -23,7 +23,8 @@ export async function GET() {
             if (!url) return { name, status: 'not_configured' };
             const start = Date.now();
             try {
-                const res = await fetch(`${url}/health`, {
+                const path = name === 'ingestion' ? '/readiness' : '/health';
+                const res = await fetch(`${url.replace(/\/$/, '')}${path}`, {
                     signal: AbortSignal.timeout(10000),
                     headers: { 'User-Agent': 'regengine-healthcheck/1.0' },
                 });

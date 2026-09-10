@@ -32,38 +32,43 @@ echo "Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo ""
 
 # Export with verification enabled
-HTTP_CODE=$(curl -s -o "$TMPFILE" -w "%{http_code}" \
+HTTP_CODE=$(curl --connect-timeout 5 --max-time 60 -sS -o "$TMPFILE" -w "%{http_code}" \
     -H "Authorization: Bearer $AUDIT_TOKEN" \
     "${AUDIT_API_BASE}/v1/audit/export?include_verification=true&limit=50000")
 
 if [ "$HTTP_CODE" != "200" ]; then
     echo "FAIL: API returned HTTP $HTTP_CODE"
-    cat "$TMPFILE"
     exit 1
 fi
 
-# Extract verification result
-VALID=$(python3 -c "
-import json, sys
-data = json.load(open('$TMPFILE'))
-v = data.get('integrity', {}).get('chain_verification', {})
-if not v:
-    print('NO_VERIFICATION')
-    sys.exit(0)
-print('VALID' if v.get('valid') else 'INVALID')
-if not v.get('valid'):
-    print(f\"First break at entry: {v.get('first_break')}\")
-    for e in v.get('errors', []):
-        print(f\"  - Entry {e['id']}: {e['error']}\")
+# Require explicit, complete verification; response bodies may contain private data.
+python3 - "$TMPFILE" <<'PYVERIFY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as source:
+        data = json.load(source)
+    verification = data["integrity"]["chain_verification"]
+    total = verification["total_entries"]
+    verified = verification["verified"]
+    if (
+        verification["valid"] is not True
+        or type(total) is not int
+        or type(verified) is not int
+        or total <= 0
+        or verified != total
+        or verification.get("errors") != []
+        or verification.get("first_break") is not None
+    ):
+        raise ValueError("incomplete or invalid verification")
+except (OSError, ValueError, KeyError, TypeError):
+    print("FAIL: explicit, complete non-empty chain verification required")
     sys.exit(1)
-print(f\"Verified {v['verified']} / {v['total_entries']} entries\")
-")
-
-echo "$VALID"
-
-if echo "$VALID" | grep -q "INVALID"; then
-    exit 1
-fi
+print(f"Verified {verified} / {total} entries")
+if verification.get("has_legacy_v1_rows"):
+    print("WARNING: legacy rows lack actor-field tamper evidence")
+PYVERIFY
 
 echo ""
-echo "=== Chain integrity verified ==="
+echo "=== Returned audit chain integrity verified ==="

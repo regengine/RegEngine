@@ -2,7 +2,21 @@
 
 Provides deduplication for POST requests via Idempotency-Key header.
 Caches successful responses (2xx) for 24 hours to enable safe retries.
-Gracefully degrades if Redis is unavailable.
+Gracefully degrades if Redis is unavailable unless IDEMPOTENCY_FAIL_MODE=closed.
+The default degrade mode can dispatch duplicates on an ambiguous Redis failure;
+use closed mode where cache-level duplicate suppression is required.
+
+Keys bind exact request bytes, URL, content type, and credential to the tenant.
+Conflicting and legacy unbound cache entries return 409. An active or uncertain
+reservation also returns 409 and remains for the 24-hour retry window after a
+crash or failed publish. Such outcomes need reconciliation before retrying with
+another key. Rolling deployment requires retiring old writers first: old code
+cannot safely interpret reservation payloads or enforce fingerprint binding.
+
+API-key replay fingerprints include fresh database scopes and jurisdictions,
+so same-key permission changes invalidate older responses. A replay still skips
+route dependencies: unrelated dynamic authorization policies and rate limits
+require an outer enforcement layer or a future route-level replay boundary.
 
 Tenant isolation (#1237): cache keys are composed as
 ``idempotency:{tenant_id}:{idempotency_key}`` so that two tenants who
@@ -20,19 +34,19 @@ is simply not cached.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import os
-import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
 from shared.internal_caller import internal_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import StreamingResponse
 
 logger = structlog.get_logger("idempotency")
 
@@ -58,7 +72,7 @@ def _tenant_value_to_str(value: Any) -> Optional[str]:
     return None
 
 
-def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
+def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
     """Resolve a scoped API key to its tenant before route dependencies run.
 
     The production monolith installs this middleware outside FastAPI route
@@ -79,7 +93,7 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
             _key_id, key_hashes = lookup_proof
             stmt = text(
                 """
-                SELECT tenant_id, enabled, expires_at
+                SELECT tenant_id, enabled, expires_at, key_id, scopes, allowed_jurisdictions
                 FROM api_keys
                 WHERE key_hash IN :key_hashes
                 LIMIT 1
@@ -91,14 +105,26 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
 
         if not row:
             return None
-        tenant_id, enabled, expires_at = row
+        tenant_id, enabled, expires_at, key_id, scopes, jurisdictions = row
         if enabled is False:
             return None
         if expires_at and expires_at < datetime.now(timezone.utc):
             return None
-        return str(tenant_id) if tenant_id else None
-    except Exception as exc:  # pragma: no cover - environment-specific fallback
-        logger.debug("idempotency_api_key_tenant_lookup_failed", error=str(exc))
+        if not tenant_id:
+            return None
+        # Permission narrowing may retain the same raw key. Bind the current
+        # authoritative authorization state so an older response cannot survive it.
+        snapshot = json.dumps(
+            [
+                str(tenant_id),
+                str(key_id),
+                sorted(scopes or []),
+                sorted(jurisdictions or []),
+            ]
+        )
+        return str(tenant_id), hashlib.sha256(snapshot.encode()).hexdigest()
+    except Exception:  # pragma: no cover - environment-specific fallback
+        logger.debug("idempotency_api_key_context_lookup_failed")
         return None
 
 
@@ -106,10 +132,11 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     """Middleware that caches POST responses keyed by Idempotency-Key header.
 
     For POST requests with an Idempotency-Key header:
-    - If a cached response exists for that key, return it immediately
-    - Otherwise, let the request proceed and cache the response (2xx only)
+    - Reject a key already bound to another request with 409.
+    - Replay completed requests; reject active reservations with 409.
+    - Reserve new requests atomically, then cache successful responses.
 
-    If Redis is unavailable, requests proceed normally without caching.
+    Redis failures follow IDEMPOTENCY_FAIL_MODE (degrade by default).
     """
 
     def __init__(self, app, redis_url: str | None = None):
@@ -130,6 +157,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     decode_responses=False,  # Store as bytes for binary-safe JSON
                     max_connections=10,
                     socket_connect_timeout=2,
+                    socket_timeout=2,
                     socket_keepalive=True,
                 )
                 await self._client.ping()
@@ -159,9 +187,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     def _resolve_tenant_id(self, request: Request) -> Optional[str]:
         """Resolve tenant from AUTHENTICATED context only — never client input.
 
-        Order: RBAC principal (when an outer auth middleware set it) >
-        request.state.tenant_id > secret-gated internal tenant header >
-        scoped API-key lookup. Returns ``None`` when none of those yield a
+        Order: authoritative presented API key > RBAC principal (when an outer
+        auth middleware set it) > request.state.tenant_id > secret-gated internal
+        tenant header. Returns ``None`` when none of those yield a
         tenant, and ``dispatch`` then skips the cache entirely.
 
         SECURITY (#2841): this used to consult the raw ``X-Tenant-ID``
@@ -182,6 +210,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         namespace via ``X-RegEngine-Tenant-ID`` + the internal secret, the
         same gate ``tenant_context.py`` applies.
         """
+        # A presented key must be rechecked even if an outer middleware or
+        # internal header already provided a tenant. Never fall back from a
+        # revoked/unverifiable key to a cached response under another auth mode.
+        raw_api_key = request.headers.get("X-RegEngine-API-Key")
+        if raw_api_key:
+            context = _lookup_api_key_context(raw_api_key)
+            if context is None:
+                return None
+            tenant, authorization_fingerprint = context
+            request.state.idempotency_authorization_fingerprint = authorization_fingerprint
+            return tenant
         principal = getattr(request.state, "principal", None)
         principal_tenant = getattr(principal, "tenant_id", None) if principal else None
         tenant = _tenant_value_to_str(principal_tenant)
@@ -194,132 +233,150 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         internal_tenant = internal_tenant_id(request.headers)
         if internal_tenant:
             return internal_tenant
-        raw_api_key = request.headers.get("X-RegEngine-API-Key")
-        if raw_api_key:
-            return _lookup_tenant_id_for_api_key(raw_api_key)
         return None
 
+    async def _request_fingerprint(self, request: Request) -> str:
+        # Bind the exact operation and credential, not just the tenant. Never
+        # persist raw credentials or body. JSON whitespace changes conflict too.
+        parts = [
+            request.method.upper(),
+            str(request.url),
+            request.headers.get("content-type", ""),
+            request.headers.get("authorization", ""),
+            request.headers.get("x-regengine-api-key", ""),
+            request.headers.get("x-regengine-internal-secret", ""),
+            request.headers.get("cookie", ""),
+            getattr(request.state, "idempotency_authorization_fingerprint", ""),
+        ]
+        digest = hashlib.sha256(json.dumps(parts).encode())
+        # This middleware is outside RequestSizeLimitMiddleware in the monolith.
+        # Bound actual streamed bytes before retaining a body for downstream use.
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 10 * 1024 * 1024:
+                raise ValueError("idempotency request body exceeds 10 MB")
+            body.extend(chunk)
+        # Starlette's _CachedRequest replays _body to call_next after consumption.
+        request._body = bytes(body)
+        digest.update(body)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _error(status: int, code: str) -> Response:
+        return Response(
+            json.dumps({"error": code}),
+            status_code=status,
+            media_type="application/json",
+            headers={"Retry-After": "30"} if status == 503 else {},
+        )
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Check cache on receipt, cache response on return (if 2xx)."""
-        # Only process POST requests with Idempotency-Key header
+        """Bind retries to one operation; reserve its key before dispatch.
+
+        Reservations last for the retry window. A crash or uncertain cache
+        write leaves the reservation in place rather than dispatching twice.
+        This is cache-level protection, not exactly-once database execution.
+        Route dependencies still run only on the original request; callers
+        must not treat a tenant lookup as fresh route authorization.
+        """
         if not self._should_cache(request.method):
             return await call_next(request)
-
         idempotency_key = request.headers.get("Idempotency-Key")
-        if not idempotency_key:
-            return await call_next(request)
-
-        # Validate key format (UUID or similar hex string, max 255 chars)
         if not idempotency_key or len(idempotency_key) > 255:
             return await call_next(request)
-
         tenant_id = self._resolve_tenant_id(request)
         if not tenant_id:
-            logger.info("idempotency_skipped_no_tenant", idempotency_key=idempotency_key)
             return await call_next(request)
 
-        cache_key = self._get_cache_key(idempotency_key, tenant_id)
         client = await self._get_client()
+        closed = os.getenv("IDEMPOTENCY_FAIL_MODE", "degrade").strip().lower() == "closed"
+        if client is None:
+            if closed:
+                return self._error(503, "idempotency_backend_unavailable")
+            return await call_next(request)
 
-        # If Redis available, check for cached response
-        if client is not None:
-            try:
-                cached_data = await client.get(cache_key)
-                if cached_data is not None:
-                    cached_response = json.loads(cached_data.decode("utf-8"))
-                    logger.info(
-                        "idempotency_cache_hit",
-                        idempotency_key=idempotency_key,
-                        tenant_id=tenant_id,
-                        status=cached_response["status"],
-                    )
-                    return Response(
-                        content=cached_response["body"],
-                        status_code=cached_response["status"],
-                        headers=dict(cached_response.get("headers", {})),
-                    )
-            except Exception as exc:
-                fail_mode = os.getenv("IDEMPOTENCY_FAIL_MODE", "degrade").strip().lower()
-                logger.warning(
-                    "idempotency_cache_read_error",
-                    idempotency_key=idempotency_key,
-                    tenant_id=tenant_id,
-                    error=str(exc),
-                    fail_mode=fail_mode,
-                )
-                # #2699: IDEMPOTENCY_FAIL_MODE=closed refuses the request
-                # (503 + Retry-After) instead of re-executing it on a cache
-                # read error. Default degrade re-executes — duplicate
-                # evidence writes are still blocked by the DB-level
-                # UNIQUE (tenant_id, idempotency_key) index (v072), which
-                # is why degrade is acceptable here.
-                if fail_mode == "closed":
-                    return Response(
-                        content=json.dumps(
-                            {
-                                "error": "idempotency_backend_unavailable",
-                                "detail": "Idempotency cache unavailable — request not accepted. Please retry shortly.",
-                            }
-                        ),
-                        status_code=503,
-                        media_type="application/json",
-                        headers={"Retry-After": "30"},
-                    )
-                # Continue to process request on cache read error
-
-        # Request proceeds normally
-        response = await call_next(request)
-
-        # Cache successful responses only (2xx status codes)
-        if client is not None and 200 <= response.status_code < 300:
-            try:
-                # Read response body for caching
-                body = b""
-                async for chunk in response.body_iterator:
-                    body += chunk
-
-                # Prepare cache payload
-                cache_payload = {
-                    "status": response.status_code,
-                    "body": body.decode("utf-8", errors="replace"),
-                    "headers": dict(response.headers),
-                }
-
-                # Cache with TTL
-                await client.setex(
+        try:
+            fingerprint = await asyncio.wait_for(self._request_fingerprint(request), timeout=120)
+        except ValueError:
+            return self._error(413, "payload_too_large")
+        except asyncio.TimeoutError:
+            return self._error(504, "request_timeout")
+        cache_key = self._get_cache_key(idempotency_key, tenant_id)
+        reservation = json.dumps({"fingerprint": fingerprint, "owner": uuid4().hex})
+        try:
+            cached_data = await client.get(cache_key)
+            if cached_data is None:
+                acquired = await client.set(
                     cache_key,
-                    IDEMPOTENCY_TTL_SECONDS,
-                    json.dumps(cache_payload),
+                    reservation,
+                    nx=True,
+                    ex=IDEMPOTENCY_TTL_SECONDS,
                 )
-                logger.info(
-                    "idempotency_cached",
-                    idempotency_key=idempotency_key,
-                    tenant_id=tenant_id,
-                    status=response.status_code,
-                )
-
-                # Return a new response with the cached body
+                if not acquired:
+                    cached_data = await client.get(cache_key)
+                    if cached_data is None:
+                        return self._error(503, "idempotency_backend_unavailable")
+            if cached_data is not None:
+                cached = json.loads(cached_data)
+                # Old payloads lack operation binding. Do not replay them or
+                # silently re-execute a potentially committed operation.
+                if cached.get("fingerprint") != fingerprint:
+                    return self._error(409, "idempotency_key_conflict")
+                if "status" not in cached:
+                    return self._error(409, "idempotency_request_in_progress")
                 return Response(
-                    content=body,
-                    status_code=response.status_code,
-                    headers=dict(response.headers),
+                    content=(
+                        cached["body"].encode("latin1") if cached.get("body_encoding") == "latin1" else cached["body"]
+                    ),
+                    status_code=cached["status"],
+                    headers=cached.get("headers", {}),
                 )
+        except Exception:
+            logger.warning("idempotency_cache_read_error", fail_closed=closed)
+            if closed:
+                return self._error(503, "idempotency_backend_unavailable")
+            # Do not overwrite a reservation/cache entry after an uncertain read.
+            return await call_next(request)
 
-            except Exception as exc:
-                logger.warning(
-                    "idempotency_cache_write_error",
-                    idempotency_key=idempotency_key,
-                    tenant_id=tenant_id,
-                    error=str(exc),
+        response = await call_next(request)
+        # Compare-and-set prevents an expired owner overwriting another request.
+        if not 200 <= response.status_code < 300:
+            try:
+                await client.eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0",
+                    1,
+                    cache_key,
+                    reservation,
                 )
-                # Return original response on cache write error
-                return Response(
-                    content=body,
-                    status_code=response.status_code,
-                    headers=dict(response.headers),
-                )
+            except Exception:
+                logger.warning("idempotency_reservation_release_error")
+            return response
 
-        return response
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        # JSON responses are the supported cache format. Preserve binary bytes
+        # exactly using latin1 as a reversible storage encoding.
+        payload = json.dumps(
+            {
+                "fingerprint": fingerprint,
+                "status": response.status_code,
+                "body": body.decode("latin1"),
+                "body_encoding": "latin1",
+                "headers": dict(response.headers),
+            }
+        )
+        try:
+            await client.eval(
+                "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                "return redis.call('setex', KEYS[1], ARGV[2], ARGV[3]) end return 0",
+                1,
+                cache_key,
+                reservation,
+                IDEMPOTENCY_TTL_SECONDS,
+                payload,
+            )
+        except Exception:
+            logger.warning("idempotency_cache_write_error")
+        return Response(content=body, status_code=response.status_code, headers=dict(response.headers))
 
 
 class IdempotencyDependency:

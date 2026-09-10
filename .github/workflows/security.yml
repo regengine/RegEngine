@@ -409,7 +409,6 @@ jobs:
     name: Tenant Isolation & Auth Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     services:
       postgres:
         image: postgres:17
@@ -418,9 +417,7 @@ jobs:
           POSTGRES_PASSWORD: postgres # pragma: allowlist secret — throwaway CI-service password
           POSTGRES_DB: postgres
         ports:
-          # Host port 5433 matches the tests' default URLs
-          # (postgresql://…@localhost:5433/regengine_admin).
-          - 5433:5432
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -459,19 +456,34 @@ jobs:
           fi
           pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy psycopg2-binary
 
-      - name: Prepare security test database (roles + pre-baseline function)
+      - name: Create scratch database (dedicated migration + runtime roles)
         env:
-          PGPASSWORD: postgres # pragma: allowlist secret
-        run: |
-          # Mirror the production split: postgres owns migrations while the
-          # two runtime roles are independent NOBYPASSRLS logins. v111 owns
-          # their grants. get_tenant_context() is referenced by
-          # baseline RLS policies but created by NO migration — seed the v097
-          # fail-hard body or `alembic upgrade head` fails.
-          psql -h localhost -p 5433 -U postgres -c "CREATE ROLE regengine LOGIN PASSWORD 'regengine' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"  # pragma: allowlist secret — throwaway CI-service password
-          psql -h localhost -p 5433 -U postgres -c "CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'regengine_sysadmin' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"  # pragma: allowlist secret — throwaway CI-service password
-          psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE regengine_admin OWNER postgres;"
-          psql -h localhost -p 5433 -U postgres -d regengine_admin <<'EOSQL'
+          PGPASSWORD: postgres # pragma: allowlist secret — disposable CI service
+        run: | # pragma: allowlist secret
+          # Database name must NOT be regengine/regengine_admin: the #2646
+          # guard (tests/migrations/rls_db.py) refuses loopback URLs with
+          # those names even under CI=true, and the whole job would skip.
+          # The provider credential creates roles and the database only. The
+          # full Alembic chain then runs as the exact NOCREATEROLE,
+          # NOBYPASSRLS schema owner used by production migration jobs.
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d postgres <<'EOSQL'
+          CREATE ROLE regengine LOGIN PASSWORD 'runtime-test-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'admin-runtime-test-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE regengine_migrator_ci LOGIN PASSWORD 'migration-test-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE DATABASE live_suite OWNER regengine_migrator_ci;
+          GRANT CONNECT ON DATABASE live_suite TO regengine, regengine_sysadmin;
+          EOSQL
+          # get_tenant_context() is referenced by baseline RLS policies but
+          # created by NO migration — production Supabase carries it from
+          # pre-baseline state. Seed it exactly as scripts/init-postgres.sh
+          # does for local databases, or `alembic upgrade head` fails. Create
+          # it as the migration owner so no provider-owned function is hidden
+          # in an otherwise least-privilege rehearsal.
+          PGPASSWORD=migration-test-password psql -v ON_ERROR_STOP=1 \
+            -h localhost -U regengine_migrator_ci -d live_suite <<'EOSQL'
           CREATE OR REPLACE FUNCTION get_tenant_context()
           RETURNS UUID AS $fn$
           DECLARE
@@ -486,28 +498,39 @@ jobs:
           $fn$ LANGUAGE plpgsql STABLE;
           EOSQL
 
-      - name: Migrate security test database to alembic head
+      - name: Run fresh and managed migration-runner paths
         env:
-          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/regengine_admin # pragma: allowlist secret
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/regengine_admin # pragma: allowlist secret
+          MIGRATIONS_DATABASE_URL: postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          REGENGINE_MIGRATIONS_ROLE: regengine_migrator_ci
+          DATABASE_URL: postgresql://regengine:runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:admin-runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          MIGRATION_LOCK_TIMEOUT_S: "10"
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
-          alembic upgrade head
+          # First invocation proves the full chain as the dedicated
+          # NOCREATEROLE migration owner. The second proves the managed-head
+          # path and convergent v111 repair.
+          bash scripts/run-migrations.sh
+          bash scripts/run-migrations.sh
 
       - name: Run tenant isolation tests
         run: |
-          bash scripts/security/tenant_isolation_test.sh
+          bash scripts/security/tenant_isolation_test.sh --source
         env:
-          # The in-process app and direct-DB RLS tests (#2593 killed the
-          # skip theater) need a real migrated Postgres; the secrets-based
-          # URLs remain for the legacy live-API test path.
-          DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
-          ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:regengine_sysadmin@localhost:5433/regengine_admin # pragma: allowlist secret
-          TEST_DB_URL: postgresql://postgres:postgres@localhost:5433/regengine_admin # pragma: allowlist secret
+          # All connections target this job's disposable service container.
+          # Provider privileges are only for explicit fixture setup; requests
+          # and direct-role assertions use the restricted runtime identities.
+          MIGRATIONS_DATABASE_URL: postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/live_suite # pragma: allowlist secret
+          REGENGINE_MIGRATIONS_ROLE: regengine_migrator_ci
+          REGENGINE_ENFORCE_MIGRATION_ROLE: "1"
+          DATABASE_URL: postgresql://regengine:runtime-test-password@localhost:5432/live_suite # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:admin-runtime-test-password@localhost:5432/live_suite # pragma: allowlist secret
+          ROLE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite # pragma: allowlist secret
+          REMEDIATION_TEST_APP_DSN: postgresql://regengine:runtime-test-password@localhost:5432/live_suite # pragma: allowlist secret
+          REGENGINE_REQUIRE_DB: "1"
+          REGENGINE_REQUIRE_RLS_ENFORCEMENT: "1"
           REDIS_URL: redis://localhost:6379/0
-          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-          TEST_API_BASE: ${{ secrets.TEST_API_BASE }}
 
       - name: Upload isolation test results
         if: always()
@@ -687,7 +710,8 @@ jobs:
   # audit secrets were absent, so an unconfigured run was a green check rather
   # than a skip. `secrets` cannot be read from a job-level `if:`, so the check
   # is hoisted into a preflight job whose output gates the real one — the
-  # Audit Chain Integrity job now renders as SKIPPED when unconfigured.
+  # Scheduled/requested checks fail preflight when unconfigured; PR/push runs
+  # do not make authenticated calls to a deployed environment.
   audit-integrity-preflight:
     name: Audit chain preflight (secrets configured?)
     runs-on: ubuntu-latest
@@ -706,7 +730,8 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN not configured — the Audit Chain Integrity job will be SKIPPED, not passed."
+            echo "::error::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are required for the scheduled or requested audit chain check."
+            exit 1
           fi
 
   audit-integrity:

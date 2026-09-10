@@ -4,6 +4,9 @@ railway.toml uses healthcheckPath=/readiness, so this endpoint gates deploys
 and restarts:
 
 * Postgres down or unconfigured -> 503 (fatal; instance cannot serve traffic).
+* Redis down or unconfigured in strict deployed runtimes -> 503.
+* A stalled dependency probe returns 503 within its overall deadline while
+  the event loop remains available for liveness requests.
 * Neo4j down (graph subsystem active) -> 200 with overall status ``degraded``
   and the component reported in ``checks`` (optional graph mirror; must never
   block a deploy).
@@ -69,7 +72,7 @@ def test_neo4j_down_returns_200_degraded(client, monkeypatch, _postgres_ok, _red
     assert body["status"] == "degraded"
     assert body["checks"]["postgres"]["status"] == "ok"
     assert body["checks"]["neo4j"]["status"] == "error"
-    assert "connection refused" in body["checks"]["neo4j"]["error"]
+    assert body["checks"]["neo4j"]["error"] == "OSError"
 
 
 def test_neo4j_check_uses_bounded_timeouts(client, monkeypatch, _postgres_ok, _redis_unset):
@@ -396,7 +399,7 @@ def test_scheduler_live_thread_is_ok(monkeypatch, _postgres_ok, _redis_unset):
     assert resp.json()["checks"]["scheduler"]["status"] == "ok"
 
 
-def test_rate_limiter_memory_in_prod_degrades(monkeypatch, _postgres_ok, _redis_unset):
+def test_rate_limiter_memory_in_prod_with_missing_redis_is_not_ready(monkeypatch, _postgres_ok, _redis_unset):
     """#2711: production on memory:// slowapi storage must be visible."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
     import shared.env as env_mod
@@ -413,10 +416,10 @@ def test_rate_limiter_memory_in_prod_degrades(monkeypatch, _postgres_ok, _redis_
     )
     resp = client.get("/readiness")
 
-    assert resp.status_code == 200  # degraded, never 503
+    assert resp.status_code == 503  # Redis is required in production.
     body = resp.json()
     assert body["checks"]["rate_limiter"]["status"] == "error"
-    assert body["status"] == "degraded"
+    assert body["status"] == "not_ready"
 
 
 def test_rate_limiter_redis_backend_is_ok(monkeypatch, _postgres_ok, _redis_unset):
@@ -455,3 +458,98 @@ def test_rate_limiter_memory_outside_prod_is_ok(monkeypatch, _postgres_ok, _redi
 
     assert resp.status_code == 200
     assert resp.json()["checks"]["rate_limiter"]["status"] == "ok"
+
+
+@pytest.mark.parametrize("configured", [True, False])
+def test_strict_runtime_requires_redis(client, monkeypatch, _postgres_ok, configured):
+    import redis
+    import shared.env as env
+
+    monkeypatch.setattr(env, "requires_strict_auth_runtime", lambda: True)
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    if configured:
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
+        connection = MagicMock()
+        connection.ping.side_effect = redis.TimeoutError("secret-host-or-password")
+        monkeypatch.setattr(redis, "from_url", lambda *a, **k: connection)
+    else:
+        monkeypatch.delenv("REDIS_URL", raising=False)
+    response = client.get("/readiness")
+    assert response.status_code == 503
+    assert "secret-host-or-password" not in response.text
+    if configured:
+        connection.close.assert_called_once()
+
+
+def test_redis_read_timeout_and_no_retries(client, monkeypatch, _postgres_ok):
+    import redis
+
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    factory = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(redis, "from_url", factory)
+    assert client.get("/readiness").status_code == 200
+    kwargs = factory.call_args.kwargs
+    assert kwargs["socket_timeout"] == 2
+    assert kwargs["socket_connect_timeout"] == 2
+    assert kwargs["retry"].get_retries() == 0
+
+
+def test_postgres_timeout_and_disposal_on_error(client, monkeypatch, _postgres_ok, _redis_unset):
+    engine = MagicMock()
+    engine.connect.side_effect = ConnectionError("private-connection-details")
+    factory = MagicMock(return_value=engine)
+    monkeypatch.setattr(sqlalchemy, "create_engine", factory)
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    response = client.get("/readiness")
+    assert response.status_code == 503
+    assert "private-connection-details" not in response.text
+    assert factory.call_args.kwargs["connect_args"] == {
+        "connect_timeout": 2,
+        "options": "-c statement_timeout=2000",
+    }
+    engine.dispose.assert_called_once()
+
+
+def test_stalled_probe_is_bounded_and_does_not_block_liveness(monkeypatch):
+    import asyncio
+    import threading
+
+    import httpx
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def stalled_probe(request):
+        started.set()
+        release.wait(timeout=2)
+        return {"status": "ready"}
+
+    monkeypatch.setattr(main, "_readiness_checks", stalled_probe)
+    monkeypatch.setattr(main, "_READINESS_TIMEOUT_SECONDS", 0.1)
+    app = FastAPI()
+    app.add_api_route("/readiness", main.readiness, methods=["GET"])
+
+    @app.get("/health")
+    async def health():
+        return {"status": "alive"}
+
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            probe = asyncio.create_task(client.get("/readiness"))
+            try:
+                for _ in range(100):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.001)
+                assert started.is_set()
+                live = await asyncio.wait_for(client.get("/health"), timeout=0.05)
+                assert live.status_code == 200
+                response = await asyncio.wait_for(probe, timeout=0.5)
+                assert response.status_code == 503
+                assert response.json()["checks"]["probe"]["error"] == "dependency probe timed out"
+            finally:
+                release.set()
+                await probe
+
+    asyncio.run(exercise())
