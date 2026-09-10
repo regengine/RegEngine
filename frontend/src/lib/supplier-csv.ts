@@ -6,7 +6,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 // Keep aligned with admin bulk_upload.validators.normalize_cte_type.
 const EVENT_ALIASES: Record<string, string> = {
-  r: 'receiving', s: 'shipping', t: 'transforming', c: 'cooling', p: 'initial_packing', h: 'harvesting',
+  r: 'receiving', s: 'shipping', d: 'shipping', depletion: 'shipping', t: 'transforming', c: 'cooling', p: 'initial_packing', h: 'harvesting',
   transformation: 'transforming', first_land_based_receiving: 'first_receiver',
   harvest: 'harvesting', packing: 'initial_packing', pack: 'initial_packing', receive: 'receiving',
   ship: 'shipping', transform: 'transforming', cool: 'cooling', creation: 'initial_packing', holding: 'receiving',
@@ -154,7 +154,7 @@ export function validateCSVLocally(text: string): ClientValidationResult {
       } else if (!Object.hasOwn(EVENT_TYPE_LABELS, eventType(et))) {
         result.invalidEventTypes.push({ row: rowNum, value: et });
         if (result.invalidEventTypes.length <= 10) {
-          result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: `Invalid event type "${et}". Expected a supported event name or code: R, S, T, C, P, H, first_receiver.` });
+          result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: `Invalid event type "${et}". Expected a supported event name or code: R, S, T, C, D (shipping), P, H, first_receiver.` });
         }
       } else {
         const label = EVENT_TYPE_LABELS[eventType(et)] || et;

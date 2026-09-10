@@ -44,3 +44,11 @@ describe('supplier CSV local checks', () => {
     expect(validateCSVLocally('event_type,product_name,lot_number\r\n\r\n').canProceed).toBe(false);
   });
 });
+
+it.each(['D', 'd', 'depletion', 'distribution'])('previews and validates legacy shipping alias %s consistently', event => {
+  const csv = `event_type,product_name,lot_number\n${event},Lettuce,L1`;
+  expect(parseCSVLocally(csv).eventTypeCounts).toEqual({ Shipping: 1 });
+  const validation = validateCSVLocally(csv);
+  expect(validation.eventTypeCounts).toEqual({ Shipping: 1 });
+  expect(validation.canProceed).toBe(true);
+});
