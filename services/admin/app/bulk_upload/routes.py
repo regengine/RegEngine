@@ -274,11 +274,23 @@ async def commit_bulk_upload(
         )
 
     try:
+        # Revalidate original input: old validated sessions may already contain
+        # a fabricated receiving type in normalized_data. Never trust that cache.
+        parsed_data = session_data.get("parsed_data")
+        if not isinstance(parsed_data, dict):
+            raise ValueError("Original upload data is unavailable; upload and validate the file again")
+        normalized, errors = validate_and_normalize_payload(
+            parsed_data,
+            supported_cte_types=SUPPORTED_CTE_TYPES,
+            valid_ftl_category_ids=set(FTL_CATEGORY_LOOKUP.keys()),
+        )
+        if any(error.get("severity") != "warning" for error in errors):
+            raise ValueError("Upload contains invalid rows; correct the file and validate it again")
         summary = execute_bulk_commit(
             db,
             tenant_id=tenant_id,
             current_user=user,
-            normalized_payload=session_data.get("normalized_data") or {},
+            normalized_payload=normalized,
         )
     except Exception as exc:
         session_data["status"] = "failed"

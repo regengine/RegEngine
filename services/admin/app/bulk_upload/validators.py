@@ -146,10 +146,7 @@ class BulkCTEEventRow(BaseModel):
     @field_validator("cte_type", mode="before")
     @classmethod
     def _normalize_cte(cls, value: Any) -> str:
-        cleaned = normalize_cte_type(str(value or ""))
-        if len(cleaned) < 2:
-            return _autofill_str(cleaned, field="cte_type", min_len=2, default="receiving")
-        return cleaned
+        return normalize_cte_type(str(value or ""))
 
     @field_validator("event_time", mode="before")
     @classmethod
@@ -222,6 +219,18 @@ def validate_and_normalize_payload(
             continue
 
         for index, row in enumerate(rows, start=1):
+            if section_name == "event" and isinstance(row, dict):
+                cte_type = normalize_cte_type(row.get("cte_type"))
+                if cte_type not in supported_cte_types:
+                    errors.append(
+                        {
+                            "section": "event",
+                            "row": index,
+                            "message": f"Unsupported or missing cte_type: {cte_type!r}",
+                            "severity": "error",
+                        }
+                    )
+                    continue
             try:
                 candidate = model_cls.model_validate(row)
             except ValidationError as exc:
@@ -238,19 +247,6 @@ def validate_and_normalize_payload(
                 continue
 
             payload = candidate.model_dump()
-            if section_name == "event":
-                cte_type = str(payload.get("cte_type") or "")
-                if cte_type not in supported_cte_types:
-                    # Auto-default to "receiving" instead of rejecting
-                    payload["cte_type"] = "receiving"
-                    _AUTOFILL_WARNINGS.append(
-                        {
-                            "field": "cte_type",
-                            "original": cte_type,
-                            "replacement": "receiving",
-                            "hint": f"event row {index}",
-                        }
-                    )
             if section_name == "ftl_scope":
                 category_id = str(payload.get("category_id") or "")
                 if category_id not in valid_ftl_category_ids:
