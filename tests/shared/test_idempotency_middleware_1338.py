@@ -1155,3 +1155,165 @@ def test_authoritative_key_permission_narrowing_blocks_cached_replay(monkeypatch
     assert replay.json() == {"error": "idempotency_key_conflict"}
     assert len(queries) == 3
     assert all("scopes, allowed_jurisdictions" in query for query in queries)
+
+
+@pytest.mark.parametrize("signature_change", ["missing", "wrong", "rotated"])
+@pytest.mark.parametrize("replay_suffix", ["", "/"])
+def test_webhook_replay_cannot_bypass_real_signature_dependency(monkeypatch, signature_change, replay_suffix):
+    import hashlib
+    import hmac
+
+    from fastapi import Depends
+
+    from services.ingestion.app.webhook_router_v2.security import _verify_webhook_signature
+
+    monkeypatch.setenv("WEBHOOK_HMAC_SECRET", " signing-key ")
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    app = FastAPI()
+    calls = []
+
+    @app.post("/api/v1/webhooks/ingest")
+    async def webhook(_signature=Depends(_verify_webhook_signature)):
+        calls.append(1)
+        return {"receipt": "authorized"}
+
+    app.add_middleware(IdempotencyMiddleware)
+    client = TestClient(app)
+    body = b"{}"
+    headers = {
+        "Idempotency-Key": "signed",
+        **_tenant_headers("tenant"),
+        "X-Webhook-Signature": "sha256=" + hmac.new(b"signing-key", body, hashlib.sha256).hexdigest(),
+    }
+    assert client.post("/api/v1/webhooks/ingest", headers=headers, content=body).status_code == 200
+    assert client.post("/api/v1/webhooks/ingest", headers=headers, content=body).status_code == 200
+    if signature_change == "missing":
+        del headers["X-Webhook-Signature"]
+    elif signature_change == "wrong":
+        headers["X-Webhook-Signature"] = "sha256=bad"
+    else:
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", "rotated-key")
+    replay = client.post("/api/v1/webhooks/ingest" + replay_suffix, headers=headers, content=body)
+    assert replay.status_code == 409
+    assert replay.json() == {"error": "idempotency_key_conflict"}
+    headers.pop("Idempotency-Key")
+    assert client.post("/api/v1/webhooks/ingest", headers=headers, content=body).status_code == 401
+    assert calls == [1]
+
+
+def test_revoked_cookie_session_rechecks_real_session_dependency(monkeypatch):
+    from fastapi import Depends
+
+    from services.admin.app.auth.session_auth import (
+        get_auth_crypto_service,
+        get_current_active_session_context,
+    )
+    from services.admin.app.database import get_session
+
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    db, crypto = MagicMock(), MagicMock()
+    crypto.hash_session_token.return_value = "hashed-session"
+    db.execute.return_value.one_or_none.return_value = (MagicMock(), MagicMock())
+    app = FastAPI()
+    app.dependency_overrides[get_session] = lambda: db
+    app.dependency_overrides[get_auth_crypto_service] = lambda: crypto
+
+    @app.post("/session-protected")
+    async def receipt(context=Depends(get_current_active_session_context)):
+        return {"receipt": "authorized"}
+
+    app.add_middleware(IdempotencyMiddleware)
+    client = TestClient(app)
+    headers = {
+        "Idempotency-Key": "session",
+        **_tenant_headers("tenant"),
+        "Cookie": "__Host-regengine_session=opaque-session",
+    }
+    assert client.post("/session-protected", headers=headers).status_code == 200
+    db.execute.return_value.one_or_none.return_value = None  # revoked/expired session no longer matches
+    assert client.post("/session-protected", headers=headers).status_code == 401
+    assert db.execute.call_count == 2
+    assert fake.store == {}
+
+
+@pytest.mark.parametrize("path", ["/auth/refresh", "/v1/auth/accept-invite", "/session-protected"])
+def test_single_use_authentication_is_never_cached(monkeypatch, path):
+    from fastapi import Depends
+
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    app = FastAPI()
+    consumed = []
+
+    async def single_use(request: Request):
+        credential = await request.body()
+        if credential in consumed:
+            raise HTTPException(401, "credential already consumed or revoked")
+        consumed.append(credential)
+
+    @app.post(path)
+    async def exchange(_auth=Depends(single_use)):
+        return {"access_token": "replacement"}
+
+    app.add_middleware(IdempotencyMiddleware)
+    client = TestClient(app)
+    headers = {"Idempotency-Key": "auth", **_tenant_headers("tenant")}
+    if path == "/session-protected":
+        headers["Authorization"] = "Bearer revoked-after-first-use"
+    assert client.post(path, headers=headers, json={"refresh_token": "single-use"}).status_code == 200
+    assert client.post(path, headers=headers, json={"refresh_token": "single-use"}).status_code == 401
+    assert fake.store == {}
+
+
+def test_real_refresh_route_ignores_preexisting_cached_token_response(monkeypatch):
+    import asyncio
+
+    from services.admin.app.auth.refresh_router import router
+    from services.admin.app.database import get_session
+    from services.admin.app.dependencies import get_session_store
+
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    headers = {"Idempotency-Key": "refresh", **_tenant_headers("tenant"), "Content-Type": "application/json"}
+    body = b'{"refresh_token":"already-used"}'
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/auth/refresh",
+            "query_string": b"",
+            "server": ("testserver", 80),
+            "headers": [(key.lower().encode(), value.encode()) for key, value in headers.items()],
+        },
+        receive=receive,
+    )
+    middleware = IdempotencyMiddleware(app=MagicMock())
+    fingerprint = asyncio.run(middleware._request_fingerprint(request))
+    fake.store[b"idempotency:tenant:refresh"] = json.dumps(
+        {
+            "fingerprint": fingerprint,
+            "status": 200,
+            "body": '{"access_token":"old-cached-token"}',
+            "headers": {},
+        }
+    ).encode()
+    store = AsyncMock()
+    store.claim_session_by_token.return_value = None
+    store.check_token_reuse.return_value = None
+    app = FastAPI()
+    app.include_router(router, prefix="/auth")
+    app.dependency_overrides[get_session] = lambda: MagicMock()
+    app.dependency_overrides[get_session_store] = lambda: store
+    app.add_middleware(IdempotencyMiddleware)
+    response = TestClient(app).post("/auth/refresh", headers=headers, content=body)
+    assert response.status_code == 401
+    assert "old-cached-token" not in response.text
+    store.claim_session_by_token.assert_awaited_once()
+    assert fake.get_calls == []

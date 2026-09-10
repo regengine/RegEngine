@@ -553,3 +553,71 @@ def test_stalled_probe_is_bounded_and_does_not_block_liveness(monkeypatch):
                 await probe
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("cancel_request", [False, True])
+def test_timed_out_or_cancelled_probes_retain_bounded_capacity(monkeypatch, cancel_request):
+    import asyncio
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    import httpx
+
+    release = threading.Event()
+    calls = []
+
+    def stalled_probe(request):
+        calls.append(request)
+        release.wait(timeout=3)
+        return {"status": "ready"}
+
+    monkeypatch.setattr(main, "_readiness_checks", stalled_probe)
+    monkeypatch.setattr(main, "_READINESS_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(main, "_READINESS_SLOTS", threading.BoundedSemaphore(2))
+    app = FastAPI()
+    app.add_api_route("/readiness", main.readiness, methods=["GET"])
+
+    @app.get("/health")
+    async def health():
+        return {"status": "alive"}
+
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            probes = [asyncio.create_task(client.get("/readiness")) for _ in range(2)]
+            try:
+                for _ in range(100):
+                    if len(calls) == 2:
+                        break
+                    await asyncio.sleep(0.001)
+                assert len(calls) == 2
+                if cancel_request:
+                    for probe in probes:
+                        probe.cancel()
+                    await asyncio.gather(*probes, return_exceptions=True)
+                else:
+                    responses = await asyncio.gather(*probes)
+                    assert all(response.status_code == 503 for response in responses)
+                # Neither deadline nor caller cancellation releases driver slots.
+                responses = await asyncio.wait_for(
+                    asyncio.gather(*(client.get("/readiness") for _ in range(40))),
+                    timeout=0.5,
+                )
+                assert all(response.status_code == 503 for response in responses)
+                assert all("capacity exhausted" in response.text for response in responses)
+                assert len(calls) == 2
+                assert (await client.get("/health")).status_code == 200
+                release.set()
+                # Completion of the underlying drivers releases admission again.
+                for _ in range(100):
+                    response = await client.get("/readiness")
+                    if response.status_code == 200:
+                        break
+                    await asyncio.sleep(0.001)
+                assert response.status_code == 200
+            finally:
+                release.set()
+                await asyncio.gather(*probes, return_exceptions=True)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        monkeypatch.setattr(main, "_READINESS_EXECUTOR", executor)
+        asyncio.run(exercise())

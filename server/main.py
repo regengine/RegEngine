@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import BoundedSemaphore
 
 os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
 
@@ -932,6 +934,24 @@ include_owned_router(app, scheduler_status_router, owner="scheduler")
 
 # ── Health check ─────────────────────────────────────────────────
 _READINESS_TIMEOUT_SECONDS = 8.0
+# Driver calls can outlive the request deadline (for example stalled DNS).
+# Bound admission before submitting, and retain the slot until the underlying
+# future finishes, even when the HTTP request times out or is cancelled.
+_READINESS_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="readiness")
+_READINESS_SLOTS = BoundedSemaphore(2)
+
+
+def _submit_readiness_probe(request: Request):
+    slots = _READINESS_SLOTS
+    if not slots.acquire(blocking=False):
+        return None
+    try:
+        future = _READINESS_EXECUTOR.submit(_readiness_checks, request)
+    except Exception:
+        slots.release()
+        raise
+    future.add_done_callback(lambda _: slots.release())
+    return future
 
 
 @owned_api_route(app, owner="health", path="/readiness", methods=["GET"], tags=["system"])
@@ -941,9 +961,19 @@ async def readiness(request: Request):
 
     from fastapi.responses import JSONResponse
 
+    future = _submit_readiness_probe(request)
+    if future is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "service": "regengine",
+                "checks": {"probe": {"status": "error", "error": "dependency probe capacity exhausted"}},
+            },
+        )
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(_readiness_checks, request),
+            asyncio.wrap_future(future),
             timeout=_READINESS_TIMEOUT_SECONDS,
         )
     except TimeoutError:

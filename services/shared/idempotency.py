@@ -13,6 +13,9 @@ crash or failed publish. Such outcomes need reconciliation before retrying with
 another key. Rolling deployment requires retiring old writers first: old code
 cannot safely interpret reservation payloads or enforce fingerprint binding.
 
+Browser Cookie/Authorization requests and /auth operations bypass this cache,
+preserving session revocation and single-use authentication checks. Webhook
+replays bind the signature and current signing secret as well as request bytes.
 API-key replay fingerprints include fresh database scopes and jurisdictions,
 so same-key permission changes invalidate older responses. A replay still skips
 route dependencies: unrelated dynamic authorization policies and rate limits
@@ -248,6 +251,16 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             request.headers.get("cookie", ""),
             getattr(request.state, "idempotency_authorization_fingerprint", ""),
         ]
+        if request.url.path.rstrip("/") == "/api/v1/webhooks/ingest":
+            # Same trimmed configuration as webhook_router_v2.security. Bind
+            # both proof and signing-key epoch so missing/rotated proof cannot
+            # bypass the route's HMAC validator through an old cached response.
+            parts.extend(
+                [
+                    request.headers.get("x-webhook-signature", ""),
+                    hashlib.sha256(os.getenv("WEBHOOK_HMAC_SECRET", "").strip().encode()).hexdigest(),
+                ]
+            )
         digest = hashlib.sha256(json.dumps(parts).encode())
         # This middleware is outside RequestSizeLimitMiddleware in the monolith.
         # Bound actual streamed bytes before retaining a body for downstream use.
@@ -280,6 +293,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         must not treat a tenant lookup as fresh route authorization.
         """
         if not self._should_cache(request.method):
+            return await call_next(request)
+        # Browser/session authority has revocation and single-use semantics
+        # beyond API-key scopes. Always let its canonical dependencies execute.
+        if (
+            "cookie" in request.headers
+            or "authorization" in request.headers
+            or request.url.path == "/auth"
+            or request.url.path.startswith("/auth/")
+            or request.url.path == "/v1/auth"
+            or request.url.path.startswith("/v1/auth/")
+        ):
             return await call_next(request)
         idempotency_key = request.headers.get("Idempotency-Key")
         if not idempotency_key or len(idempotency_key) > 255:
