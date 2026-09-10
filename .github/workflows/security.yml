@@ -115,12 +115,22 @@ jobs:
           gitleaks version
 
       - name: Run gitleaks
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
         run: |
+          # On pull_request, gate only the commits in the PR so historical
+          # findings (tracked in #3080) do not block unrelated changes.
+          # On push/schedule, scan the full history to catch regressions.
+          LOG_OPTS=""
+          if [ -n "$BASE_SHA" ]; then
+            LOG_OPTS="--log-opts=${BASE_SHA}..HEAD"
+          fi
           gitleaks detect \
             --source . \
             --config .gitleaks.toml \
             --redact \
-            --verbose
+            --verbose \
+            $LOG_OPTS
 
   # ──────────────────────────────────────────────
   # 1b. Secrets Audit (detect-secrets) — #1173
