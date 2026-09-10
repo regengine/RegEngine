@@ -73,7 +73,7 @@ def fetch_related_events(
         WHERE traceability_lot_code = :tlc
           AND tenant_id = :tenant_id
           AND status = 'active'
-          AND (:exclude_id IS NULL OR event_id != CAST(:exclude_id AS uuid))
+          AND (CAST(:exclude_id AS uuid) IS NULL OR event_id != CAST(:exclude_id AS uuid))
         ORDER BY event_timestamp ASC
     """)
     rows = session.execute(
