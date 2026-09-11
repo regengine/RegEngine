@@ -8,6 +8,7 @@ from typing import Mapping, Optional
 
 import structlog
 from fastapi import HTTPException
+from shared.event_backbone import kafka_enabled
 from shared.kafka_auth import KafkaAuthError, sign_event
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
@@ -78,7 +79,16 @@ def send(
     structlog context) is attached as a Kafka header so downstream
     consumers can re-hydrate the trace context. Callers can pass ``headers``
     to add custom headers alongside correlation metadata (#1318).
+
+    When the event backbone is PostgreSQL (the production default, #1159)
+    this is a deliberate no-op: there is no broker to talk to, and blocking
+    on ``producer.flush()`` against an unresolvable bootstrap host held
+    ingest requests open until the edge proxy timed out (#3087).
     """
+    if not kafka_enabled():
+        logger.debug("kafka_send_skipped", topic=topic, reason="event_backbone_pg")
+        return
+
     # Extract extra headers (non-correlation ones) from caller so the
     # propagation helper can merge them with the auto-injected ones.
     extra: list = []
@@ -115,7 +125,9 @@ def send(
     try:
         producer = get_producer()
         producer.produce(topic=topic, key=key, value=signed_payload, headers=signed_headers)
-        producer.flush()
+        # Bound the flush: an unreachable broker must never hold an HTTP
+        # request open past the edge proxy timeout (#3087).
+        producer.flush(timeout=10)
     except RuntimeError as exc:
         logger.warning("kafka_client_unavailable", topic=topic, error=str(exc))
         raise HTTPException(status_code=503, detail="Kafka client unavailable") from exc
