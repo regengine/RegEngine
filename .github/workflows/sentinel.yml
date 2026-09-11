@@ -51,12 +51,16 @@ jobs:
         # hook, permission allow-list, MCP server, or subagent prompt that runs
         # with this job's secrets. PR-added files under .claude/ are removed
         # outright (e.g. settings.local.json) rather than merged.
+        # Auto-discovered instruction files (AGENTS.md / CLAUDE.md) are also
+        # pinned to base: they cannot execute code, but they are injected into
+        # the model's context and could steer tool use in a job holding secrets.
         # This only touches the working tree; `git diff $BASE_REF...HEAD` used
         # by /sentinel-check compares commits and is unaffected.
         run: |
           set -euo pipefail
+          TRUSTED_PATHS=".claude .mcp.json scripts/install_pkgs.sh AGENTS.md CLAUDE.md"
           rm -rf .claude .mcp.json
-          for path in .claude .mcp.json scripts/install_pkgs.sh; do
+          for path in $TRUSTED_PATHS; do
             if git cat-file -e "$BASE_REF:$path" 2>/dev/null; then
               git checkout --quiet "$BASE_REF" -- "$path"
             else
@@ -65,7 +69,8 @@ jobs:
             fi
           done
           echo "Overlay status (expected: only trusted-config paths differ from HEAD):"
-          git status --short -- .claude .mcp.json scripts/install_pkgs.sh
+          # shellcheck disable=SC2086  # intentional word-splitting of the path list
+          git status --short -- $TRUSTED_PATHS
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
