@@ -282,6 +282,8 @@ class RulesEngine:
                     "event_ftl_category": event_ftl_category,
                 },
             )
+            if persist and tenant_id:
+                self._persist_event_verdicts(tenant_id, [(event_id, summary)])
             return summary
 
         # #1365 — pre-fetch related events ONCE per event when any relational
@@ -310,6 +312,7 @@ class RulesEngine:
 
         if persist and tenant_id:
             self._persist_evaluations(tenant_id, event_id, summary.results)
+            self._persist_event_verdicts(tenant_id, [(event_id, summary)])
 
         return summary
 
@@ -336,8 +339,10 @@ class RulesEngine:
 
         Args:
             summary: Pre-computed ``EvaluationSummary``. Empty / no-verdict
-                summaries are accepted and produce no DB writes (the
-                underlying helper short-circuits on empty results).
+                summaries write no ``rule_evaluations`` rows, but the
+                event-level verdict (``no_verdict`` + reason) is still
+                stamped on the event so exports and auditor views never
+                read the absence of rows as a positive outcome.
             tenant_id: REQUIRED — written to every row and to the eval-error
                 marker on failure. Must come from the authenticated context,
                 NEVER from the summary or the event payload (#1344 invariant).
@@ -360,6 +365,7 @@ class RulesEngine:
             # to surface the misuse than silently lose results.
             raise ValueError("persist_summary requires an event_id (either as kwarg or on summary.event_id)")
         self._persist_evaluations(tenant_id, resolved_event_id, summary.results)
+        self._persist_event_verdicts(tenant_id, [(resolved_event_id, summary)])
 
     def evaluate_events_batch(
         self,
@@ -436,6 +442,10 @@ class RulesEngine:
                 for r in summary.results:
                     all_results.append((summary.event_id, r))
             self._batch_persist_evaluations(tenant_id, all_results)
+            self._persist_event_verdicts(
+                tenant_id,
+                [(summary.event_id, summary) for summary in summaries if summary.event_id],
+            )
 
         return summaries
 
@@ -782,6 +792,58 @@ class RulesEngine:
                     "event_id": row_params.get("event_id"),
                     "rule_id": row_params.get("rule_id"),
                     "error": str(dl_err),
+                },
+            )
+
+    def _persist_event_verdicts(self, tenant_id: str, verdicts: List[tuple]) -> None:
+        """Stamp the event-level tri-state verdict on ``traceability_events``.
+
+        ``verdicts`` is a list of ``(event_id, EvaluationSummary)``. Writes
+        ``evaluation_verdict`` ('pass' | 'fail' | 'no_verdict') and
+        ``no_verdict_reason`` in one executemany UPDATE inside its own
+        savepoint. Per-rule rows alone cannot express a summary-level
+        no-verdict (a non-FTL event whose meta-rules all passed looks
+        identical to a compliant FTL event), so without this column every
+        SQL consumer flattened that case into PASS.
+
+        Best-effort like ``_mark_event_evaluation_error``: a failure here
+        (e.g. migration v121 not yet applied) is logged and must not abort
+        the outer ingest transaction. Consumers treat NULL as "derive from
+        rows".
+        """
+        params = [
+            {
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+                "verdict": summary.verdict,
+                "reason": summary.verdict_reason,
+            }
+            for event_id, summary in verdicts
+            if event_id
+        ]
+        if not params:
+            return
+
+        savepoint = self.session.begin_nested()
+        try:
+            self.session.execute(
+                text(
+                    "UPDATE fsma.traceability_events"
+                    " SET evaluation_verdict = :verdict,"
+                    "     no_verdict_reason = :reason,"
+                    "     evaluated_at = NOW()"
+                    " WHERE tenant_id = :tenant_id AND event_id = :event_id"
+                ),
+                params,
+            )
+            savepoint.commit()
+        except Exception as verdict_err:
+            savepoint.rollback()
+            logger.error(
+                "evaluation_verdict_persist_failed",
+                extra={
+                    "event_ids": [p["event_id"] for p in params],
+                    "error": str(verdict_err),
                 },
             )
 

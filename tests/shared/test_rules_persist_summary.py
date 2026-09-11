@@ -6,8 +6,11 @@ double-eval regression that lands when ``RULES_ENGINE_ENFORCE`` flips
 from ``off`` to ``cte_only|all`` (see project memory: review-fix plan).
 
 Coverage:
-  - Empty / no-verdict summary is a no-op (no DB writes)
+  - Empty / no-verdict summary writes no rule rows but DOES stamp the
+    event-level tri-state verdict (v121) so downstream consumers can tell
+    "no verdict" apart from "passed"
   - Populated summary writes one row per ``RuleEvaluationResult``
+  - Event-level verdict stamp mirrors ``EvaluationSummary.verdict``
   - ``event_id`` defaults to ``summary.event_id`` when not supplied
   - Explicit ``event_id`` kwarg overrides ``summary.event_id``
   - Missing ``event_id`` (neither kwarg nor on summary) raises ValueError
@@ -97,26 +100,45 @@ def _make_engine_with_recording_session():
     return engine, session, executes, savepoints
 
 
+def _inserts(executes: List[tuple]) -> List[tuple]:
+    return [(stmt, params) for stmt, params in executes if "INSERT INTO fsma.rule_evaluations" in str(stmt)]
+
+
+def _verdict_updates(executes: List[tuple]) -> List[tuple]:
+    return [(stmt, params) for stmt, params in executes if "SET evaluation_verdict" in str(stmt)]
+
+
+def _error_marker_updates(executes: List[tuple]) -> List[tuple]:
+    return [(stmt, params) for stmt, params in executes if "SET evaluation_error" in str(stmt)]
+
+
 # ---------------------------------------------------------------------------
 # Empty / no-verdict short-circuit
 # ---------------------------------------------------------------------------
 
 
 class TestEmptySummary:
-    def test_empty_results_is_noop(self):
+    def test_empty_results_writes_no_rule_rows_but_stamps_verdict(self):
         engine, session, executes, savepoints = _make_engine_with_recording_session()
         summary = _empty_summary(event_id="evt-empty")
 
         engine.persist_summary(summary, tenant_id="t-1")
 
-        # _persist_evaluations short-circuits on empty results — no
-        # savepoint, no execute, no DB writes at all.
-        assert executes == []
-        assert savepoints == []
+        # _persist_evaluations short-circuits on empty results — no rule
+        # rows are written...
+        assert _inserts(executes) == []
+        # ...but the event is stamped ``no_verdict`` so the FDA export and
+        # auditor list cannot mistake "nothing evaluated" for PASS.
+        updates = _verdict_updates(executes)
+        assert len(updates) == 1
+        rows = updates[0][1]
+        assert rows == [
+            {"tenant_id": "t-1", "event_id": "evt-empty", "verdict": "no_verdict", "reason": "no_rules_loaded"}
+        ]
 
-    def test_no_verdict_reason_is_noop(self):
-        """A summary with no_verdict_reason but zero results still does
-        nothing — there's nothing to persist."""
+    def test_no_verdict_reason_is_stamped_not_flattened(self):
+        """A non-FTL summary (no_verdict_reason set, zero results) must
+        surface as ``no_verdict`` on the event — never as ``pass``."""
         engine, session, executes, savepoints = _make_engine_with_recording_session()
         summary = EvaluationSummary(
             event_id="evt-nv",
@@ -126,7 +148,33 @@ class TestEmptySummary:
 
         engine.persist_summary(summary, tenant_id="t-1")
 
-        assert executes == []
+        assert _inserts(executes) == []
+        updates = _verdict_updates(executes)
+        assert len(updates) == 1
+        assert updates[0][1][0]["verdict"] == "no_verdict"
+        assert updates[0][1][0]["reason"] == "not_ftl_scoped"
+
+    def test_non_ftl_meta_pass_rows_still_stamp_no_verdict(self):
+        """Regression for the flattening bug: a non-FTL event whose only
+        rows are passing NON_FTL meta-rules persists ``pass`` rows, so a
+        consumer that only looks at rule rows sees "all passed". The
+        event-level stamp must carry the ``no_verdict`` context."""
+        engine, session, executes, _ = _make_engine_with_recording_session()
+        summary = EvaluationSummary(
+            event_id="evt-nonftl",
+            total_rules=1,
+            passed=1,
+            results=[_result(rule_id="NON_FTL_META", result="pass", why_failed=None)],
+            no_verdict_reason="not_ftl_scoped",
+        )
+
+        engine.persist_summary(summary, tenant_id="t-1")
+
+        assert len(_inserts(executes)) == 1
+        updates = _verdict_updates(executes)
+        assert len(updates) == 1
+        assert updates[0][1][0]["verdict"] == "no_verdict"
+        assert updates[0][1][0]["reason"] == "not_ftl_scoped"
 
 
 # ---------------------------------------------------------------------------
@@ -175,12 +223,38 @@ class TestPopulatedSummary:
         engine, session, executes, savepoints = _make_engine_with_recording_session()
         engine.persist_summary(_populated_summary(), tenant_id="t-1")
 
-        assert len(savepoints) == 1
+        # One savepoint for the rule-row INSERT, one for the verdict stamp.
+        assert len(savepoints) == 2
         # _persist_evaluations does not explicitly commit the savepoint —
         # it relies on the surrounding transaction. We just assert it
         # WAS opened (defense against a future refactor that removes
         # the savepoint guard).
         assert savepoints[0].rolled_back is False
+        assert savepoints[1].rolled_back is False
+
+    def test_verdict_stamp_mirrors_summary(self):
+        engine, _, executes, _ = _make_engine_with_recording_session()
+        engine.persist_summary(_populated_summary(), tenant_id="t-1")
+
+        updates = _verdict_updates(executes)
+        assert len(updates) == 1
+        assert updates[0][1] == [{"tenant_id": "t-1", "event_id": "evt-1", "verdict": "fail", "reason": None}]
+
+    def test_error_only_summary_stamps_fail(self):
+        """An evaluator crash is a failure for the event verdict — it must
+        never be persisted as ``pass``."""
+        engine, _, executes, _ = _make_engine_with_recording_session()
+        summary = EvaluationSummary(
+            event_id="evt-err",
+            total_rules=1,
+            errored=1,
+            results=[_result(result="error", why_failed="boom")],
+        )
+
+        engine.persist_summary(summary, tenant_id="t-1")
+
+        updates = _verdict_updates(executes)
+        assert updates[0][1][0]["verdict"] == "fail"
 
 
 # ---------------------------------------------------------------------------
@@ -247,8 +321,10 @@ class TestFailurePath:
         assert any(sp.rolled_back for sp in savepoints)
         assert any(sp.committed for sp in savepoints)
 
-        # Two execute() calls: the failed INSERT and the marker UPDATE.
-        update_calls = [(stmt, params) for stmt, params in executes if "UPDATE fsma.traceability_events" in str(stmt)]
+        # The failed INSERT is followed by the error marker UPDATE; the
+        # verdict stamp is a separate UPDATE and must not be confused with
+        # the marker.
+        update_calls = _error_marker_updates(executes)
         assert len(update_calls) == 1
         assert update_calls[0][1]["tenant_id"] == "t-1"
         assert update_calls[0][1]["event_id"] == "evt-1"

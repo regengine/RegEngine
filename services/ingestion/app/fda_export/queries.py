@@ -637,6 +637,13 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
     rows unchanged. Likewise ``fsma.rule_definitions`` has ``title``
     (not ``rule_name``) and ``fsma.rule_evaluations`` has a text
     ``result`` (not a boolean ``passed``).
+
+    Each ``rule_results`` entry carries the raw ``result`` enum
+    (pass/fail/warn/skip/error) alongside a fail-closed ``passed``
+    boolean (false for ``fail`` AND ``error``). The event-level
+    ``evaluation_verdict`` / ``no_verdict_reason`` columns (v121) are
+    projected so the CSV/package builders can distinguish a non-FTL
+    no-verdict from a genuine PASS — per-rule rows alone cannot.
     """
     rows = db_session.execute(
         text(f"""
@@ -660,17 +667,19 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                     jsonb_agg(
                         jsonb_build_object(
                             'rule_name', rd.title,
-                            -- only 'fail' is a failure (result is
-                            -- pass/fail/warn/skip) — auditor_router's
-                            -- compliance semantics; = 'pass' would render
-                            -- warn/skip events as FAIL in the FDA CSV
-                            'passed', (re.result <> 'fail'),
+                            'result', re.result,
+                            -- fail-closed boolean: 'error' is an evaluator
+                            -- crash and must never read as passed. warn/skip
+                            -- are not failures (auditor_router semantics).
+                            'passed', (re.result NOT IN ('fail', 'error')),
                             'why_failed', re.why_failed
                         )
                     ) FILTER (WHERE re.rule_id IS NOT NULL),
                     '[]'::jsonb
                 ) AS rule_results,
-                e.ingested_at
+                e.ingested_at,
+                e.evaluation_verdict,
+                e.no_verdict_reason
             FROM fsma.traceability_events e
             LEFT JOIN fsma.rule_evaluations re
                 ON re.event_id = e.event_id AND re.tenant_id = e.tenant_id
@@ -682,7 +691,7 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.event_timestamp, e.from_facility_reference,
                 e.to_facility_reference, e.source_system, e.sha256_hash,
                 e.chain_hash, e.kdes, e.provenance_metadata,
-                e.ingested_at
+                e.ingested_at, e.evaluation_verdict, e.no_verdict_reason
             ORDER BY e.event_timestamp ASC
             LIMIT 10001
         """),
@@ -702,6 +711,9 @@ def v2_rows_to_event_dicts(rows) -> list[dict]:
         provenance = r[13] if r[13] else {}
         rule_results_raw = r[14] if r[14] else []
         ingested = r[15]
+        # v121 event-level verdict columns; absent on pre-migration fixtures.
+        evaluation_verdict = r[16] if len(r) > 16 else None
+        no_verdict_reason = r[17] if len(r) > 17 else None
         ts = r[6]
         if hasattr(ts, "isoformat"):
             ts = ts.isoformat()
@@ -730,6 +742,8 @@ def v2_rows_to_event_dicts(rows) -> list[dict]:
                 "kdes": kdes,
                 "provenance": provenance,
                 "rule_results": rule_results_raw,
+                "evaluation_verdict": evaluation_verdict,
+                "no_verdict_reason": no_verdict_reason,
                 "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
             }
         )

@@ -353,6 +353,10 @@ def _events_row(
     total_rules: int = 3,
     passed: int = 3,
     failed: int = 0,
+    errored: int = 0,
+    affirmative: int | None = None,
+    evaluation_verdict: str | None = None,
+    no_verdict_reason: str | None = None,
 ):
     return (
         event_id,
@@ -369,6 +373,10 @@ def _events_row(
         total_rules,
         passed,
         failed,
+        errored,
+        passed if affirmative is None else affirmative,
+        evaluation_verdict,
+        no_verdict_reason,
     )
 
 
@@ -400,6 +408,120 @@ class TestEvents:
         client = _build_client(_make_principal(), session)
         assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "unevaluated"
 
+    # -- tri-state verdict (error / no_verdict must never read as compliant) --
+
+    def test_error_only_event_is_not_compliant(self):
+        """An evaluator crash persisted as ``result='error'`` is not a
+        failure row, but it is not evidence of compliance either."""
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=1, passed=0, failed=0, errored=1, affirmative=0)
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        comp = client.get("/api/v1/audit/events").json()["events"][0]["compliance"]
+        assert comp["status"] == "error"
+        assert comp["errored"] == 1
+
+    def test_error_alongside_passes_is_still_error_not_compliant(self):
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=3, passed=2, failed=0, errored=1, affirmative=2)
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "error"
+
+    def test_fail_outranks_error(self):
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=3, passed=1, failed=1, errored=1, affirmative=1)
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "non_compliant"
+
+    def test_non_ftl_meta_pass_with_no_verdict_stamp_is_no_verdict(self):
+        """Non-FTL event: its only rows are passing NON_FTL meta-rules, so
+        per-row counts look like "all passed". The v121 event stamp says
+        ``no_verdict`` and must win."""
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(
+                        total_rules=1,
+                        passed=1,
+                        failed=0,
+                        evaluation_verdict="no_verdict",
+                        no_verdict_reason="not_ftl_scoped",
+                    )
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        comp = client.get("/api/v1/audit/events").json()["events"][0]["compliance"]
+        assert comp["status"] == "no_verdict"
+        assert comp["no_verdict_reason"] == "not_ftl_scoped"
+
+    def test_only_skip_rows_is_no_verdict_not_compliant(self):
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=2, passed=0, failed=0, errored=0, affirmative=0)
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        comp = client.get("/api/v1/audit/events").json()["events"][0]["compliance"]
+        assert comp["status"] == "no_verdict"
+        assert comp["no_verdict_reason"] == "all_rules_skipped"
+
+    def test_persisted_fail_verdict_is_non_compliant_even_without_fail_rows(self):
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=1, passed=1, failed=0, evaluation_verdict="fail")
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "non_compliant"
+
+    def test_warn_only_rows_count_as_compliant(self):
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=1, passed=0, failed=0, errored=0, affirmative=1)
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "compliant"
+
+    def test_legacy_14_column_row_still_maps(self):
+        """Pre-v121 fixtures without the errored/affirmative/verdict columns."""
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: [_events_row()[:14]]})
+        client = _build_client(_make_principal(), session)
+        comp = client.get("/api/v1/audit/events").json()["events"][0]["compliance"]
+        assert comp["status"] == "compliant"
+        assert comp["errored"] == 0
+
+    def test_lateral_counts_error_and_affirmative_rows(self):
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
+        client = _build_client(_make_principal(), session)
+        client.get("/api/v1/audit/events")
+        last_sql = session.calls[-1][0]
+        assert "FILTER (WHERE result = 'error') AS errored" in last_sql
+        assert "FILTER (WHERE result IN ('pass', 'warn')) AS affirmative" in last_sql
+        assert "e.evaluation_verdict" in last_sql
+        assert "e.no_verdict_reason" in last_sql
+
     def test_tlc_filter_passes_through_to_sql_params(self):
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
@@ -420,7 +542,36 @@ class TestEvents:
         client.get("/api/v1/audit/events?compliance_status=compliant")
         last_sql = session.calls[-1][0]
         assert "failed" in last_sql.lower()
-        assert "total_rules" in last_sql.lower()
+        assert "affirmative" in last_sql.lower()
+
+    def test_compliance_status_compliant_excludes_error_and_no_verdict(self):
+        """The compliant queue must reject error-only rows and events whose
+        engine stamp is ``no_verdict``/``fail`` — the flattening bug."""
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
+        client = _build_client(_make_principal(), session)
+        client.get("/api/v1/audit/events?compliance_status=compliant")
+        last_sql = session.calls[-1][0]
+        assert "COALESCE(eval_summary.errored, 0) = 0" in last_sql
+        assert "COALESCE(eval_summary.affirmative, 0) > 0" in last_sql
+        assert "COALESCE(e.evaluation_verdict, 'pass') NOT IN ('no_verdict', 'fail')" in last_sql
+        # The old, too-loose predicate must be gone.
+        assert "COALESCE(eval_summary.total_rules, 0) > 0" not in last_sql
+
+    def test_compliance_status_error_adds_sql_filter(self):
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
+        client = _build_client(_make_principal(), session)
+        client.get("/api/v1/audit/events?compliance_status=error")
+        last_sql = session.calls[-1][0]
+        assert "COALESCE(eval_summary.errored, 0) > 0" in last_sql
+        assert "COALESCE(eval_summary.failed, 0) = 0" in last_sql
+
+    def test_compliance_status_no_verdict_adds_sql_filter(self):
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
+        client = _build_client(_make_principal(), session)
+        client.get("/api/v1/audit/events?compliance_status=no_verdict")
+        last_sql = session.calls[-1][0]
+        assert "e.evaluation_verdict = 'no_verdict'" in last_sql
+        assert "COALESCE(eval_summary.affirmative, 0) = 0" in last_sql
 
     def test_compliance_status_non_compliant_adds_sql_filter(self):
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
@@ -428,6 +579,7 @@ class TestEvents:
         client.get("/api/v1/audit/events?compliance_status=non_compliant")
         last_sql = session.calls[-1][0]
         assert "> 0" in last_sql
+        assert "e.evaluation_verdict = 'fail'" in last_sql
 
     def test_compliance_status_unevaluated_adds_sql_filter(self):
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
@@ -435,6 +587,7 @@ class TestEvents:
         client.get("/api/v1/audit/events?compliance_status=unevaluated")
         last_sql = session.calls[-1][0]
         assert "= 0" in last_sql
+        assert "e.evaluation_verdict IS NULL" in last_sql
 
     def test_limit_capped_at_200(self):
         """FastAPI's ``Query(..., le=200)`` rejects limit > 200 at

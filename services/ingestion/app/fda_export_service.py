@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from shared.fda_export import safe_filename_token as _shared_safe_filename_token
 from shared.merkle_tree import MerkleTree
+from shared.rules.verdict import classify_event_verdict
 
 from .shared.csv_safety import sanitize_cell
 from .webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
@@ -843,31 +844,39 @@ def _event_to_fda_row_v2(event: dict, *, include_pii: bool = False) -> dict:
     """Convert a canonical traceability_event row (with rule results) to an FDA spreadsheet row.
 
     Accepts the same base fields as ``_event_to_fda_row`` plus:
-    - ``rule_results``: list[dict] with keys ``rule_name``, ``passed``, ``why_failed``
+    - ``rule_results``: list[dict] with keys ``rule_name``, ``result``
+      (raw pass/fail/warn/skip/error enum), ``passed``, ``why_failed``
+    - ``evaluation_verdict`` / ``no_verdict_reason``: event-level verdict
+      stamped by the rules engine (v121); may be absent/None
+
+    ``Compliance Status`` is one of PASS / FAIL / EVALUATION_ERROR /
+    NO_VERDICT:<reason> / NO_RULES_EVALUATED (see ``shared.rules.verdict``).
 
     ``include_pii`` is forwarded to :func:`_event_to_fda_row` (issue #1219).
     """
     # Reuse the legacy mapper for core FDA columns
     base_row = _event_to_fda_row(event, include_pii=include_pii)
 
-    # Compute compliance columns from attached rule results
-    rule_results: list[dict] = event.get("rule_results", [])
-    if not rule_results:
-        compliance_status = "NO_RULES_EVALUATED"
-        rule_failures_text = ""
-    else:
-        failed = [r for r in rule_results if not r.get("passed")]
-        if not failed:
-            compliance_status = "PASS"
-            rule_failures_text = ""
-        else:
-            compliance_status = "FAIL"
-            failure_descriptions = []
-            for f in failed:
-                name = f.get("rule_name", "unknown_rule")
-                reason = f.get("why_failed", "no reason provided")
-                failure_descriptions.append(f"{name}: {reason}")
-            rule_failures_text = "; ".join(failure_descriptions)
+    # Compute compliance columns from attached rule results + the
+    # event-level verdict (v121). Never flatten to a boolean here: an
+    # evaluator crash ('error') or a non-FTL no-verdict must not render
+    # as PASS in regulator-facing evidence.
+    verdict = classify_event_verdict(
+        event.get("rule_results", []),
+        evaluation_verdict=event.get("evaluation_verdict"),
+        no_verdict_reason=event.get("no_verdict_reason"),
+    )
+    compliance_status = verdict.status_label
+    failure_descriptions = []
+    for f in verdict.failed:
+        name = f.get("rule_name", "unknown_rule")
+        reason = f.get("why_failed", "no reason provided")
+        failure_descriptions.append(f"{name}: {reason}")
+    for f in verdict.errored:
+        name = f.get("rule_name", "unknown_rule")
+        reason = f.get("why_failed") or "evaluator error"
+        failure_descriptions.append(f"{name}: EVALUATION_ERROR ({reason})")
+    rule_failures_text = "; ".join(failure_descriptions)
 
     # Sanitize compliance fields — ``why_failed`` reasons can include
     # tenant-controlled KDE values that reach the auditor's spreadsheet.

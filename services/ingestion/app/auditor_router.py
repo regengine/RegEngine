@@ -183,7 +183,10 @@ async def audit_events(
     tenant_id: Optional[str] = Query(None),
     tlc: Optional[str] = Query(None),
     event_type: Optional[str] = Query(None),
-    compliance_status: Optional[str] = Query(None, description="Filter: compliant, non_compliant, unevaluated"),
+    compliance_status: Optional[str] = Query(
+        None,
+        description="Filter: compliant, non_compliant, error, no_verdict, unevaluated",
+    ),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
@@ -205,7 +208,14 @@ async def audit_events(
 
     where_sql = " AND ".join(where)
 
-    # Subquery for compliance status per event
+    # Subquery for compliance status per event.
+    #
+    # ``compliant`` is deliberately narrow: no ``fail`` rows, no ``error``
+    # rows (an evaluator crash is not evidence of compliance), at least one
+    # affirmative (pass/warn) row, and no event-level ``no_verdict`` /
+    # ``fail`` stamp from the rules engine (v121). A non-FTL event whose
+    # only rows are passing NON_FTL meta-rules is stamped ``no_verdict`` and
+    # therefore must not surface in the compliant queue.
     query = f"""
         SELECT e.event_id, e.event_type, e.traceability_lot_code,
                e.product_reference, e.quantity, e.unit_of_measure,
@@ -213,12 +223,18 @@ async def audit_events(
                e.schema_version, e.created_at,
                COALESCE(eval_summary.total_rules, 0) AS total_rules,
                COALESCE(eval_summary.passed, 0) AS rules_passed,
-               COALESCE(eval_summary.failed, 0) AS rules_failed
+               COALESCE(eval_summary.failed, 0) AS rules_failed,
+               COALESCE(eval_summary.errored, 0) AS rules_errored,
+               COALESCE(eval_summary.affirmative, 0) AS rules_affirmative,
+               e.evaluation_verdict,
+               e.no_verdict_reason
         FROM fsma.traceability_events e
         LEFT JOIN LATERAL (
             SELECT COUNT(*) AS total_rules,
                    COUNT(*) FILTER (WHERE result = 'pass') AS passed,
-                   COUNT(*) FILTER (WHERE result = 'fail') AS failed
+                   COUNT(*) FILTER (WHERE result = 'fail') AS failed,
+                   COUNT(*) FILTER (WHERE result = 'error') AS errored,
+                   COUNT(*) FILTER (WHERE result IN ('pass', 'warn')) AS affirmative
             FROM fsma.rule_evaluations re
             WHERE re.event_id = e.event_id AND re.tenant_id = :tid
         ) eval_summary ON TRUE
@@ -226,11 +242,28 @@ async def audit_events(
     """
 
     if compliance_status == "compliant":
-        query += " AND COALESCE(eval_summary.failed, 0) = 0 AND COALESCE(eval_summary.total_rules, 0) > 0"
+        query += (
+            " AND COALESCE(eval_summary.failed, 0) = 0"
+            " AND COALESCE(eval_summary.errored, 0) = 0"
+            " AND COALESCE(eval_summary.affirmative, 0) > 0"
+            " AND COALESCE(e.evaluation_verdict, 'pass') NOT IN ('no_verdict', 'fail')"
+        )
     elif compliance_status == "non_compliant":
-        query += " AND COALESCE(eval_summary.failed, 0) > 0"
+        query += " AND (COALESCE(eval_summary.failed, 0) > 0 OR e.evaluation_verdict = 'fail')"
+    elif compliance_status == "error":
+        query += " AND COALESCE(eval_summary.failed, 0) = 0 AND COALESCE(eval_summary.errored, 0) > 0"
+    elif compliance_status == "no_verdict":
+        query += (
+            " AND COALESCE(eval_summary.failed, 0) = 0"
+            " AND COALESCE(eval_summary.errored, 0) = 0"
+            " AND ("
+            "e.evaluation_verdict = 'no_verdict'"
+            " OR (COALESCE(eval_summary.total_rules, 0) > 0"
+            " AND COALESCE(eval_summary.affirmative, 0) = 0)"
+            ")"
+        )
     elif compliance_status == "unevaluated":
-        query += " AND COALESCE(eval_summary.total_rules, 0) = 0"
+        query += " AND COALESCE(eval_summary.total_rules, 0) = 0 AND e.evaluation_verdict IS NULL"
 
     # ``event_timestamp`` is indexed (idx_trace_events_timestamp) but not
     # unique, so it cannot order a LIMIT/OFFSET scan on its own — an index on
@@ -262,16 +295,52 @@ async def audit_events(
             "confidence_score": float(r[8]) if r[8] else 1.0,
             "schema_version": r[9],
             "created_at": r[10].isoformat() if r[10] else None,
-            "compliance": {
-                "total_rules": r[11],
-                "passed": r[12],
-                "failed": r[13],
-                "status": "compliant" if r[13] == 0 and r[11] > 0 else "non_compliant" if r[13] > 0 else "unevaluated",
-            },
+            "compliance": _event_compliance(r),
         }
         for r in rows
     ]
     return {"tenant_id": tid, "events": events, "total": len(events)}
+
+
+def _event_compliance(r) -> Dict[str, Any]:
+    """Map an ``audit_events`` row to a tri-state compliance block.
+
+    Mirrors the SQL filters above so a row's ``status`` always agrees with
+    the ``compliance_status`` filter that would have selected it. Rows from
+    pre-v121 fixtures (14 columns) are tolerated.
+    """
+    total_rules = r[11] or 0
+    passed = r[12] or 0
+    failed = r[13] or 0
+    errored = (r[14] if len(r) > 14 else 0) or 0
+    affirmative = (r[15] if len(r) > 15 else passed) or 0
+    evaluation_verdict = r[16] if len(r) > 16 else None
+    no_verdict_reason = r[17] if len(r) > 17 else None
+
+    if failed > 0 or evaluation_verdict == "fail":
+        status = "non_compliant"
+    elif errored > 0:
+        status = "error"
+    elif evaluation_verdict == "no_verdict":
+        status = "no_verdict"
+    elif total_rules == 0:
+        status = "unevaluated"
+    elif affirmative > 0:
+        status = "compliant"
+    else:
+        # Only skip rows: nothing affirmed, nothing failed.
+        status = "no_verdict"
+        no_verdict_reason = no_verdict_reason or "all_rules_skipped"
+
+    return {
+        "total_rules": total_rules,
+        "passed": passed,
+        "failed": failed,
+        "errored": errored,
+        "evaluation_verdict": evaluation_verdict,
+        "no_verdict_reason": no_verdict_reason if status == "no_verdict" else None,
+        "status": status,
+    }
 
 
 @router.get(

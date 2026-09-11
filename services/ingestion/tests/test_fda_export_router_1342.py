@@ -1147,6 +1147,79 @@ class TestExportV2:
         # 1 pass / 3 total = 0.3333
         assert float(resp.headers["x-compliance-rate"]) == pytest.approx(0.3333, abs=1e-3)
 
+    def test_error_only_and_no_verdict_events_never_increase_compliance_rate(self, monkeypatch, caplog):
+        """Regression: evaluator crashes (result='error') and non-FTL
+        no-verdict events used to be flattened into ``passed`` and inflate
+        the package compliance rate. Only affirmative PASS counts."""
+        events = [
+            {
+                **_FULLY_POPULATED_EVENT,
+                "id": "evt-pass",
+                "provenance": {},
+                "rule_results": [{"rule_name": "r1", "result": "pass", "passed": True}],
+            },
+            {
+                **_FULLY_POPULATED_EVENT,
+                "id": "evt-error-only",
+                "provenance": {},
+                "rule_results": [{"rule_name": "r1", "result": "error", "passed": False, "why_failed": "boom"}],
+            },
+            {
+                **_FULLY_POPULATED_EVENT,
+                "id": "evt-error-with-pass",
+                "provenance": {},
+                "rule_results": [
+                    {"rule_name": "r1", "result": "pass", "passed": True},
+                    {"rule_name": "r2", "result": "error", "passed": False},
+                ],
+            },
+            {
+                **_FULLY_POPULATED_EVENT,
+                "id": "evt-non-ftl",
+                "provenance": {},
+                "rule_results": [{"rule_name": "NON_FTL_META", "result": "pass", "passed": True}],
+                "evaluation_verdict": "no_verdict",
+                "no_verdict_reason": "not_ftl_scoped",
+            },
+            {
+                **_FULLY_POPULATED_EVENT,
+                "id": "evt-fail",
+                "provenance": {},
+                "rule_results": [{"rule_name": "r1", "result": "fail", "passed": False, "why_failed": "tmp"}],
+            },
+        ]
+        self._install_v2_helpers(monkeypatch, events=events)
+        app = _build_app_with_principal(scopes=["fda.export"])
+        _install_fake_dependencies(
+            monkeypatch,
+            session_factory=lambda: _FakeSession(),
+            persistence_cls=_FakePersistence,
+        )
+        import logging as _logging
+
+        with caplog.at_level(_logging.INFO, logger="fda-export"):
+            with TestClient(app) as client:
+                resp = client.get(
+                    "/api/v1/fda/export/v2",
+                    params={
+                        "tenant_id": "tenant-a",
+                        "start_date": "2026-01-01",
+                        "end_date": "2026-01-31",
+                    },
+                )
+        assert resp.status_code == 200
+        # Exactly 1 affirmative pass out of 5.
+        assert float(resp.headers["x-compliance-rate"]) == pytest.approx(0.2, abs=1e-4)
+
+        generated = [r for r in caplog.records if r.getMessage() == "fda_export_v2_generated"]
+        assert generated, "expected fda_export_v2_generated log record"
+        rec = generated[-1]
+        assert rec.compliance_pass == 1
+        assert rec.compliance_fail == 1
+        assert rec.compliance_error == 2
+        assert rec.compliance_no_verdict == 1
+        assert rec.compliance_no_rules == 0
+
     def test_unbounded_full_tenant_export_returns_400(self, monkeypatch):
         self._install_v2_helpers(monkeypatch)
         app = _build_app_with_principal(scopes=["fda.export"])

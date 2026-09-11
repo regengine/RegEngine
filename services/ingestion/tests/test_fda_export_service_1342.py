@@ -832,6 +832,104 @@ class TestEventToFdaRowV2:
         assert "unknown_rule" in row["Rule Failures"]
         assert "no reason provided" in row["Rule Failures"]
 
+    # -- tri-state: error / no-verdict must never render as PASS --
+
+    def test_error_only_is_evaluation_error_not_pass(self) -> None:
+        """Evaluator crash persisted as result='error' with the fail-closed
+        passed=False boolean from the v2 query."""
+        row = svc._event_to_fda_row_v2(
+            dict(
+                _CORE_EVENT,
+                rule_results=[{"rule_name": "r1", "result": "error", "passed": False, "why_failed": "KeyError"}],
+            )
+        )
+        assert row["Compliance Status"] == "EVALUATION_ERROR"
+        assert row["Compliance Status"] != "PASS"
+        assert "r1: EVALUATION_ERROR (KeyError)" in row["Rule Failures"]
+
+    def test_error_alongside_passes_is_still_evaluation_error(self) -> None:
+        row = svc._event_to_fda_row_v2(
+            dict(
+                _CORE_EVENT,
+                rule_results=[
+                    {"rule_name": "r1", "result": "pass", "passed": True},
+                    {"rule_name": "r2", "result": "error", "passed": False, "why_failed": None},
+                ],
+            )
+        )
+        assert row["Compliance Status"] == "EVALUATION_ERROR"
+        assert "r2: EVALUATION_ERROR (evaluator error)" in row["Rule Failures"]
+
+    def test_error_row_with_legacy_truthy_passed_is_still_error(self) -> None:
+        """Defence in depth: even if a stale query flattened error to
+        passed=True, the raw ``result`` token wins."""
+        row = svc._event_to_fda_row_v2(
+            dict(_CORE_EVENT, rule_results=[{"rule_name": "r1", "result": "error", "passed": True}])
+        )
+        assert row["Compliance Status"] == "EVALUATION_ERROR"
+
+    def test_fail_outranks_error(self) -> None:
+        row = svc._event_to_fda_row_v2(
+            dict(
+                _CORE_EVENT,
+                rule_results=[
+                    {"rule_name": "r1", "result": "fail", "passed": False, "why_failed": "missing KDE"},
+                    {"rule_name": "r2", "result": "error", "passed": False},
+                ],
+            )
+        )
+        assert row["Compliance Status"] == "FAIL"
+        assert "r1: missing KDE" in row["Rule Failures"]
+        assert "r2: EVALUATION_ERROR" in row["Rule Failures"]
+
+    def test_non_ftl_meta_pass_with_no_verdict_stamp_is_no_verdict(self) -> None:
+        """Non-FTL event whose only rows are passing NON_FTL meta-rules —
+        the engine's summary-level no-verdict must survive to the CSV."""
+        row = svc._event_to_fda_row_v2(
+            dict(
+                _CORE_EVENT,
+                rule_results=[{"rule_name": "NON_FTL_META", "result": "pass", "passed": True}],
+                evaluation_verdict="no_verdict",
+                no_verdict_reason="not_ftl_scoped",
+            )
+        )
+        assert row["Compliance Status"] == "NO_VERDICT:not_ftl_scoped"
+        assert row["Rule Failures"] == ""
+
+    def test_no_verdict_stamp_without_rows_is_no_verdict_not_no_rules(self) -> None:
+        row = svc._event_to_fda_row_v2(
+            dict(_CORE_EVENT, rule_results=[], evaluation_verdict="no_verdict", no_verdict_reason="not_ftl_scoped")
+        )
+        assert row["Compliance Status"] == "NO_VERDICT:not_ftl_scoped"
+
+    def test_persisted_fail_verdict_outranks_passing_rows(self) -> None:
+        row = svc._event_to_fda_row_v2(
+            dict(
+                _CORE_EVENT,
+                rule_results=[{"rule_name": "r1", "result": "pass", "passed": True}],
+                evaluation_verdict="fail",
+            )
+        )
+        assert row["Compliance Status"] == "FAIL"
+
+    def test_warn_and_skip_rows_are_pass(self) -> None:
+        row = svc._event_to_fda_row_v2(
+            dict(
+                _CORE_EVENT,
+                rule_results=[
+                    {"rule_name": "r1", "result": "warn", "passed": True},
+                    {"rule_name": "r2", "result": "skip", "passed": True},
+                ],
+            )
+        )
+        assert row["Compliance Status"] == "PASS"
+
+    def test_only_skip_rows_is_no_verdict(self) -> None:
+        row = svc._event_to_fda_row_v2(
+            dict(_CORE_EVENT, rule_results=[{"rule_name": "r1", "result": "skip", "passed": True}])
+        )
+        assert row["Compliance Status"] == "NO_VERDICT:all_rules_skipped"
+
     def test_trace_metadata_overrides(self) -> None:
         row = svc._event_to_fda_row_v2(
             dict(

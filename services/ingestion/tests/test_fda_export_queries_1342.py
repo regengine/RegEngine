@@ -715,6 +715,22 @@ class TestFetchV2Events:
         session = _FakeSession(results=[_Result(rows=[])])
         assert fetch_v2_events(session, "1=1", {}) == []
 
+    def test_projects_raw_result_and_event_verdict(self):
+        """The query must carry the raw ``result`` enum and the v121
+        event-level verdict; ``passed`` must be fail-closed for ``error``."""
+        session = _FakeSession(results=[_Result(rows=[])])
+        fetch_v2_events(session, "1=1", {})
+        sql = str(session.executes[0][0])
+        assert "'result', re.result" in sql
+        assert "'passed', (re.result NOT IN ('fail', 'error'))" in sql
+        assert "(re.result <> 'fail')" not in sql
+        assert "e.evaluation_verdict" in sql
+        assert "e.no_verdict_reason" in sql
+        # Both new columns are grouped so the aggregate stays valid.
+        group_by = sql.split("GROUP BY", 1)[1]
+        assert "e.evaluation_verdict" in group_by
+        assert "e.no_verdict_reason" in group_by
+
 
 # ---------------------------------------------------------------------------
 # v2_rows_to_event_dicts
@@ -722,8 +738,18 @@ class TestFetchV2Events:
 
 
 class TestV2RowsToEventDicts:
-    def _make_row(self, *, ts=None, ingested=None, kdes=None, provenance=None, rule_results=None, chain_hash="chain-x"):
-        return (
+    def _make_row(
+        self,
+        *,
+        ts=None,
+        ingested=None,
+        kdes=None,
+        provenance=None,
+        rule_results=None,
+        chain_hash="chain-x",
+        verdict=None,
+    ):
+        row = (
             "event-id",
             "shipping",
             "TLC-1",
@@ -741,6 +767,19 @@ class TestV2RowsToEventDicts:
             rule_results,
             ingested,
         )
+        if verdict is not None:
+            row = row + verdict
+        return row
+
+    def test_legacy_16_column_row_has_null_verdict(self):
+        events = v2_rows_to_event_dicts([self._make_row()])
+        assert events[0]["evaluation_verdict"] is None
+        assert events[0]["no_verdict_reason"] is None
+
+    def test_verdict_columns_are_carried_through(self):
+        events = v2_rows_to_event_dicts([self._make_row(verdict=("no_verdict", "not_ftl_scoped"))])
+        assert events[0]["evaluation_verdict"] == "no_verdict"
+        assert events[0]["no_verdict_reason"] == "not_ftl_scoped"
 
     def test_happy_path_with_all_fields(self):
         ts = datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc)

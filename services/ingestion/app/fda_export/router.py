@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
@@ -35,6 +36,8 @@ from shared.fda_export import (
     validate_export_window,
 )
 from shared.permissions import has_permission as _has_permission
+from shared.rules import verdict as verdict_tokens
+from shared.rules.verdict import classify_event_verdict
 
 from ..authz import IngestionPrincipal, require_permission
 from ..export_models import ExportHistoryResponse, ExportVerifyResponse
@@ -1065,14 +1068,24 @@ def export_fda_spreadsheet_v2(
         )
 
         # ----- Compute compliance summary stats -----
+        # Classify each event with the same tri-state logic the CSV uses so
+        # the package summary and the per-row Compliance Status can never
+        # disagree. Only an affirmative PASS counts toward the rate;
+        # error / no-verdict / no-rules events are reported distinctly.
         total_events = len(events)
-        events_passing = sum(
-            1 for e in events if e.get("rule_results") and all(r.get("passed") for r in e["rule_results"])
+        verdict_counts: Counter[str] = Counter(
+            classify_event_verdict(
+                e.get("rule_results"),
+                evaluation_verdict=e.get("evaluation_verdict"),
+                no_verdict_reason=e.get("no_verdict_reason"),
+            ).status
+            for e in events
         )
-        events_failing = sum(
-            1 for e in events if e.get("rule_results") and any(not r.get("passed") for r in e["rule_results"])
-        )
-        events_no_rules = total_events - events_passing - events_failing
+        events_passing = verdict_counts[verdict_tokens.PASS]
+        events_failing = verdict_counts[verdict_tokens.FAIL]
+        events_error = verdict_counts[verdict_tokens.EVALUATION_ERROR]
+        events_no_verdict = verdict_counts[verdict_tokens.NO_VERDICT]
+        events_no_rules = verdict_counts[verdict_tokens.NO_RULES_EVALUATED]
 
         # ----- Log the export to audit table -----
         # Raises AuditLogWriteError on DB failure (caught below) so the
@@ -1106,6 +1119,8 @@ def export_fda_spreadsheet_v2(
                 "format": format,
                 "compliance_pass": events_passing,
                 "compliance_fail": events_failing,
+                "compliance_error": events_error,
+                "compliance_no_verdict": events_no_verdict,
                 "compliance_no_rules": events_no_rules,
                 "pii_included": include_pii,
             },
@@ -1119,6 +1134,8 @@ def export_fda_spreadsheet_v2(
                     "total_events": total_events,
                     "events_passing": events_passing,
                     "events_failing": events_failing,
+                    "events_error": events_error,
+                    "events_no_verdict": events_no_verdict,
                     "events_no_rules": events_no_rules,
                     "compliance_rate": round(events_passing / total_events, 4) if total_events else 0,
                 },
