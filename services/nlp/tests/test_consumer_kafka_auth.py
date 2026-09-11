@@ -210,6 +210,10 @@ class TestIngestionSendSigns:
     def test_send_signs_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from services.ingestion.app import kafka_utils
 
+        # The send path only runs when the Kafka backbone is enabled;
+        # the pg default (#1159/#3087) makes it a no-op.
+        monkeypatch.setattr(kafka_utils, "kafka_enabled", lambda: True)
+
         captured: dict = {}
 
         class _FakeProducer:
@@ -219,7 +223,7 @@ class TestIngestionSendSigns:
                 captured["value"] = value
                 captured["headers"] = list(headers)
 
-            def flush(self):
+            def flush(self, timeout=None):
                 pass
 
         monkeypatch.setattr(kafka_utils, "get_producer", lambda: _FakeProducer())
