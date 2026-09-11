@@ -47,6 +47,7 @@ import hashlib
 import io
 import json
 import logging
+import re
 import zipfile
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -73,6 +74,7 @@ ALLOWED_BUNDLE_CONTENT_TYPES = {
     "application/octet-stream",  # browsers/curl often default to this for .zip
     "multipart/form-data",
 }
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +115,11 @@ def _hash_ip(client_host: Optional[str]) -> str:
     return hashlib.sha256(client_host.encode("utf-8")).hexdigest()[:16]
 
 
+def _is_sha256_hex(value: Any) -> bool:
+    """True only for a lowercase 64-char hex digest (the shape ``hexdigest`` emits)."""
+    return isinstance(value, str) and _SHA256_HEX_RE.fullmatch(value) is not None
+
+
 def _safe_zip_member(name: str) -> bool:
     """Reject path-traversal and absolute-path entries."""
     if not name or name.endswith("/"):
@@ -135,7 +142,7 @@ def _extract_event_hashes(events: list[dict[str, Any]]) -> list[str]:
     hashes: list[str] = []
     for event in events:
         h = event.get("event_hash") or event.get("sha256_hash") or event.get("hash")
-        if not isinstance(h, str) or len(h) != 64:
+        if not _is_sha256_hex(h):
             raise ValueError("events must each carry a 64-char hex 'event_hash' / 'sha256_hash'")
         hashes.append(h)
     return hashes
@@ -203,8 +210,26 @@ def _verify_payload(
     tree = MerkleTree(event_hashes)
     recomputed = tree.root
 
-    # ---- Compare to declared root (if provided) ----
-    if declared_root:
+    # ---- Compare to declared root (required) ----
+    # A recomputed root with nothing to compare it against proves nothing, so
+    # a missing or malformed commitment fails closed rather than passing.
+    if declared_root is None or declared_root == "":
+        checks.append(
+            VerifyCheck(
+                name="merkle_root_matches_declared",
+                passed=False,
+                detail="no declared Merkle root supplied; recomputed root reported only",
+            )
+        )
+    elif not _is_sha256_hex(declared_root):
+        checks.append(
+            VerifyCheck(
+                name="merkle_root_matches_declared",
+                passed=False,
+                detail="declared Merkle root must be a 64-char lowercase hex SHA-256 digest",
+            )
+        )
+    else:
         passed = recomputed == declared_root
         checks.append(
             VerifyCheck(
@@ -215,14 +240,6 @@ def _verify_payload(
                     if passed
                     else f"declared={declared_root[:16]}... recomputed={recomputed[:16]}..."
                 ),
-            )
-        )
-    else:
-        checks.append(
-            VerifyCheck(
-                name="merkle_root_matches_declared",
-                passed=True,
-                detail="no declared root supplied; recomputed root reported only",
             )
         )
 
@@ -306,12 +323,7 @@ def _verify_manifest_file_bundle(
         declared = entry.get("sha256")
         declared_size = entry.get("size")
 
-        if (
-            not isinstance(path, str)
-            or not _safe_zip_member(path)
-            or not isinstance(declared, str)
-            or len(declared) != 64
-        ):
+        if not isinstance(path, str) or not _safe_zip_member(path) or not _is_sha256_hex(declared):
             bad_entries.append(str(path or f"files[{idx}]"))
             continue
 
@@ -375,7 +387,15 @@ def _verify_manifest_file_bundle(
         )
 
     recomputed_root = MerkleTree(recomputed).root if recomputed else ""
-    if declared_root:
+    if declared_root and not _is_sha256_hex(declared_root):
+        checks.append(
+            VerifyCheck(
+                name="merkle_root_matches_declared",
+                passed=False,
+                detail="manifest.merkle.root must be a 64-char lowercase hex SHA-256 digest",
+            )
+        )
+    elif declared_root:
         root_matches = recomputed_root == declared_root
         checks.append(
             VerifyCheck(
@@ -599,24 +619,59 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
     if manifest_file_result is not None:
         return manifest_file_result
 
-    # File-hash cross-check: every name in manifest.file_hashes that is
-    # present in the ZIP must hash to the declared digest.
-    file_hashes = manifest.get("file_hashes") or {}
-    if isinstance(file_hashes, dict) and file_hashes:
-        mismatched: list[str] = []
-        for fname, declared in file_hashes.items():
-            if fname not in names:
-                continue
-            actual = hashlib.sha256(zf.read(fname)).hexdigest()
-            if actual != declared:
-                mismatched.append(fname)
+    # File-hash cross-check for the legacy ``manifest.file_hashes`` shape.
+    # The declared map must cover the archive payload exactly: every payload
+    # member declared, every declared name present, every digest well formed.
+    # Anything else is a structurally incomplete bundle and fails closed.
+    payload_members = set(names) - {"manifest.json"}
+    file_hashes = manifest.get("file_hashes")
+    if file_hashes is None:
+        file_hashes = {}
+    if not isinstance(file_hashes, dict):
         extra.append(
             VerifyCheck(
-                name="file_hashes_match_manifest",
-                passed=not mismatched,
-                detail=("all declared file hashes match" if not mismatched else f"mismatched: {sorted(mismatched)}"),
+                name="manifest_covers_bundle_members",
+                passed=False,
+                detail="manifest.file_hashes must be an object mapping member path to sha256",
             )
         )
+        file_hashes = {}
+    else:
+        bad_entries = sorted(
+            str(fname)
+            for fname, declared in file_hashes.items()
+            if not isinstance(fname, str) or not _safe_zip_member(fname) or not _is_sha256_hex(declared)
+        )
+        declared_names = {fname for fname in file_hashes if isinstance(fname, str)}
+        missing = sorted(declared_names - payload_members)
+        undeclared = sorted(payload_members - declared_names)
+        covers = not bad_entries and not missing and not undeclared
+        extra.append(
+            VerifyCheck(
+                name="manifest_covers_bundle_members",
+                passed=covers,
+                detail=(
+                    "manifest.file_hashes declares every bundle member exactly once"
+                    if covers
+                    else f"bad_entries={bad_entries} missing={missing} undeclared_members={undeclared}"
+                ),
+            )
+        )
+
+    mismatched: list[str] = []
+    for fname, declared in file_hashes.items():
+        if not isinstance(fname, str) or fname not in payload_members or not _is_sha256_hex(declared):
+            continue
+        actual = hashlib.sha256(zf.read(fname)).hexdigest()
+        if actual != declared:
+            mismatched.append(fname)
+    extra.append(
+        VerifyCheck(
+            name="file_hashes_match_manifest",
+            passed=not mismatched,
+            detail=("all declared file hashes match" if not mismatched else f"mismatched: {sorted(mismatched)}"),
+        )
+    )
 
     # Pull events + declared root from chain_verification_*.json if present.
     events: list[dict[str, Any]] = []
