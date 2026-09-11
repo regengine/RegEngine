@@ -287,6 +287,7 @@ def test_lists_built_in_scenarios(tmp_path, monkeypatch):
         "complete-romaine-flow",
         "missing-shipping-destination",
         "broken-lineage",
+        "demo-lot-0412-three-missing-ship-tos",
     }
 
 
@@ -713,3 +714,49 @@ def test_dev_file_store_isolates_tenants(tmp_path, monkeypatch):
 
     # The two tenants must occupy distinct files on disk.
     assert workbench._store_path("tenant-a") != workbench._store_path("tenant-b")
+
+
+def test_demo_lot_0412_three_missing_ship_tos_blocks_readiness(tmp_path, monkeypatch):
+    """DEMO-LOT-0412 fixture has 3 shipping events all missing ship_to_location.
+    This must produce submission_blocked=True, ≥3 fix queue items (one per shipping),
+    commit_gate.allowed=False, and export_eligible=False. No fake green."""
+    result = _evaluate_csv(monkeypatch, workbench.THREE_MISSING_SHIPTO_CSV)
+
+    assert result["submission_blocked"] is True, "Submission must be blocked"
+    assert result["non_compliant_events"] >= 3, "At least 3 non-compliant shipping events expected"
+    assert result["total_kde_errors"] >= 3, "At least 3 KDE errors (ship_to_location) expected"
+    assert any("ship_to" in reason.lower() for reason in result["blocking_reasons"]), \
+        "Blocking reasons must mention ship_to"
+
+    client = _client(tmp_path, monkeypatch)
+    run_resp = client.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "tenant_id": "tenant-a",
+            "source": "inflow-lab-data-feeder",
+            "csv": workbench.THREE_MISSING_SHIPTO_CSV,
+            "result": result,
+        },
+    )
+
+    assert run_resp.status_code == 200, run_resp.text
+    run = run_resp.json()
+
+    # Readiness must be degraded, not fake green
+    assert run["readiness"]["score"] < 100, "Readiness score must be below 100 (blocked condition)"
+    assert run["readiness"]["label"] in {"blocked", "needs remediation"}, \
+        f"Readiness label must indicate blocking, got: {run['readiness']['label']}"
+
+    # Fix queue must have ≥3 items for the 3 shipping defects
+    assert len(run["fix_queue"]) >= 3, f"Fix queue must have ≥3 items, got {len(run['fix_queue'])}"
+    ship_to_fixes = [
+        item for item in run["fix_queue"]
+        if "ship" in item["title"].lower() and item["severity"] in {"blocked", "warning"}
+    ]
+    assert len(ship_to_fixes) >= 3, \
+        f"At least 3 shipping fix items expected, found {len(ship_to_fixes)}"
+
+    # Commit gate must remain closed
+    assert run["commit_gate"]["allowed"] is False, "Commit gate must be closed"
+    assert run["commit_gate"]["export_eligible"] is False, "Must NOT be export eligible"
+
