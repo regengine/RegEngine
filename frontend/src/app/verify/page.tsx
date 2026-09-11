@@ -291,7 +291,7 @@ function VerifyWidget() {
                                         : 'var(--re-danger)',
                                 }}
                             >
-                                {state.data.verified ? 'Verified' : 'Failed'}
+                                {state.data.verified ? 'Self-consistent' : 'Failed'}
                             </div>
                             <div
                                 className="text-[13px]"
@@ -302,6 +302,15 @@ function VerifyWidget() {
                             </div>
                         </div>
                     </div>
+
+                    <p
+                        className="text-[13px] leading-relaxed m-0"
+                        style={{ color: T.textDim }}
+                    >
+                        {state.data.verified
+                            ? 'The files in this bundle match the manifest packaged alongside them. This does not authenticate who produced the bundle: the manifest and Merkle root come from the upload itself, so a bundle with replaced files and a regenerated manifest passes the same checks.'
+                            : 'At least one file or the Merkle root does not match the manifest packaged inside the bundle.'}
+                    </p>
 
                     <div
                         className="rounded-xl overflow-hidden"
@@ -449,8 +458,9 @@ export default function VerifyPage() {
                     >
                         Every public RegEngine proof bundle carries a{' '}
                         <strong className="text-re-text-secondary">SHA-256 manifest and Merkle root</strong>.
-                        Our open-source verification script lets you independently verify
-                        bundle integrity — without relying on our servers.
+                        Our open-source verification script lets you independently check that
+                        the bundle is consistent with its own manifest — without relying on our servers.
+                        It does not authenticate who published the bundle.
                     </p>
 
                     <div className="flex gap-3 justify-center flex-wrap">
@@ -490,9 +500,9 @@ export default function VerifyPage() {
                     >
                         Drop in a RegEngine export bundle (the <code style={{ fontFamily: T.mono, color: T.text }}>.zip</code> or{' '}
                         <code style={{ fontFamily: T.mono, color: T.text }}>.json</code> you downloaded
-                        from the proof page) and we&apos;ll re-run the same integrity checks the public
-                        verifier runs: file SHA-256 checks, Merkle root match against the manifest,
-                        and manifest consistency.
+                        from the proof page) and we&apos;ll re-run the same self-consistency checks the public
+                        verifier runs: file SHA-256 checks, Merkle root match against the bundle&apos;s own
+                        manifest, and manifest consistency.
                     </p>
                     <p
                         className="text-[14.5px] leading-relaxed m-0"
@@ -511,6 +521,22 @@ export default function VerifyPage() {
                         </a>{' '}
                         and run it locally — same algorithm, zero network.
                     </p>
+                    <div
+                        className="rounded-lg px-4 py-3 text-[13.5px] leading-relaxed"
+                        style={{
+                            background: T.surface,
+                            border: `1px solid ${T.border}`,
+                            color: T.textDim,
+                        }}
+                    >
+                        <strong className="text-re-text-secondary">What this does not prove.</strong>{' '}
+                        The manifest and Merkle root are read from the uploaded bundle and are treated as
+                        untrusted input. A passing result means the bundle is internally self-consistent.
+                        It does not verify a signature, compare against a digest RegEngine published
+                        separately, or establish that RegEngine produced the bundle. Anyone can replace every
+                        file, regenerate the manifest and root, and pass these checks. Do not treat a passing
+                        result as proof of publisher identity or provenance.
+                    </div>
                 </div>
 
                 <VerifyWidget />
@@ -745,7 +771,7 @@ export default function VerifyPage() {
                             { step: '1', label: 'Read Manifest', detail: 'Load manifest.json from the audit bundle ZIP' },
                             { step: '2', label: 'Hash Files', detail: 'Recompute SHA-256 for each declared evidence file' },
                             { step: '3', label: 'Rebuild Merkle Root', detail: 'Use the file hashes as leaves with the published tree algorithm' },
-                            { step: '4', label: 'Compare', detail: 'If every file hash and the root match, the bundle is intact.' },
+                            { step: '4', label: 'Compare', detail: 'If every file hash and the root match the manifest inside the bundle, the bundle is self-consistent. The check does not authenticate who produced it.' },
                         ].map((s, i) => (
                             <div key={i}>
                                 <div
@@ -815,9 +841,10 @@ export default function VerifyPage() {
                         className="text-[15px] max-w-[560px] mx-auto mb-7 leading-relaxed"
                         style={{ color: T.textDim }}
                     >
-                        RegEngine adds cryptographic verification on top of standard compliance controls.
-                        SHA-256 hashing lets you verify bundle integrity independently —
-                        whether or not you require a SOC 2 report.
+                        RegEngine adds hash-based consistency checks on top of standard compliance controls.
+                        SHA-256 hashing lets you confirm a bundle matches its own manifest independently —
+                        whether or not you require a SOC 2 report. It is not a signature and does not
+                        authenticate the publisher.
                     </p>
 
                     <div className="flex gap-3 justify-center flex-wrap">
