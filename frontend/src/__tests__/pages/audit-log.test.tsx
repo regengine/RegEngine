@@ -192,6 +192,20 @@ describe('AuditLogPage', () => {
         expect(mockListSupplierFacilities).not.toHaveBeenCalled();
     });
 
+    it('describes the empty audit log as hash-chained, not signed', async () => {
+        mockAuditFetch([]);
+        render(<AuditLogPage />, { wrapper: createWrapper() });
+
+        await waitFor(() => {
+            expect(screen.getByText('No Audit Entries Yet')).toBeInTheDocument();
+        });
+
+        // Audit entries are SHA-256 hash-chained and guarded by append-only
+        // triggers; no digital signature is applied, so copy must not say so.
+        expect(screen.getByText(/SHA-256 hash-chained/i)).toBeInTheDocument();
+        expect(screen.queryByText(/cryptographically signed/i)).not.toBeInTheDocument();
+    });
+
     it('does not fetch when the user is signed out', () => {
         mockUseAuth.mockReturnValue({
             isAuthenticated: false,

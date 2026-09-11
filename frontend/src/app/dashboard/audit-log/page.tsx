@@ -450,7 +450,7 @@ export default function AuditLogPage() {
                         <ScrollText className="h-12 w-12 text-muted-foreground/30 mb-4" />
                         <h2 className="text-lg font-semibold">No Audit Entries Yet</h2>
                         <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                            Events will appear here as your team scans labels, imports data, and generates reports. Every action is cryptographically signed and immutable.
+                            Events will appear here as your team scans labels, imports data, and generates reports. Every action is SHA-256 hash-chained and protected from modification by append-only database triggers.
                         </p>
                         <div className="flex items-center gap-1.5 mt-4 text-xs text-re-brand">
                             <ShieldCheck className="h-3.5 w-3.5" />
