@@ -614,6 +614,10 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.inflow_workbench_scenarios": ("SELECT", "INSERT"),
         "fsma.ingestion_run_receipts": ("INSERT",),
         "fsma.ingestion_runs": ("SELECT", "INSERT", "UPDATE"),
+        # v121 -- per-label FSMA 204 billing. Claimed via INSERT ... ON
+        # CONFLICT DO NOTHING (SELECT to read back an existing claim,
+        # UPDATE to record the Stripe outcome); never deleted.
+        "fsma.label_charges": ("SELECT", "INSERT", "UPDATE"),
         "fsma.notification_outbox": ("SELECT", "UPDATE"),
         "fsma.products": ("SELECT", "INSERT", "UPDATE"),
         "fsma.remediation_tokens": ("SELECT", "INSERT", "UPDATE"),

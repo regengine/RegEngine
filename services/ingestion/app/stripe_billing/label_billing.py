@@ -8,12 +8,23 @@ per ``fsma.cte_events.id`` actually billed, claimed via
 the same label twice. The pattern mirrors the claim-then-patch approach
 already used for ``fsma.cte_events`` itself
 (``services/shared/cte_persistence/batch.py``).
+
+Deliberately NOT participating in the caller's ambient request session:
+``charge_for_label`` opens and commits its own short-lived DB session
+(``shared.database.get_db_safe``) for the claim, independent of whatever
+transaction the ingest request is running. Stripe's ``InvoiceItem.create``
+is a real, irreversible external side effect -- if the claim row lived in
+the same still-open transaction as the rest of the request, a later
+rollback anywhere else in that request (an unrelated event in the batch
+failing, the request 500ing) would erase the claim while the Stripe charge
+already happened, and a retry would charge again. Committing the claim in
+its own transaction *before* Stripe is ever called closes that gap.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import stripe
 import structlog
@@ -41,6 +52,12 @@ class LabelChargeResult:
     # already existed -- i.e. this was an idempotent replay that did not
     # touch Stripe again.
     claimed: bool
+
+
+def _default_session() -> Any:
+    from shared.database import get_db_safe
+
+    return get_db_safe()
 
 
 def _claim_charge_row(session: Any, tenant_id: str, cte_event_id: str, amount_cents: int) -> tuple[str, bool]:
@@ -74,115 +91,133 @@ def _claim_charge_row(session: Any, tenant_id: str, cte_event_id: str, amount_ce
 
 
 def charge_for_label(
-    session: Any,
     tenant_id: str,
     cte_event_id: str,
     amount_cents: int,
+    *,
+    session_factory: Optional[Callable[[], Any]] = None,
 ) -> LabelChargeResult:
     """Charge ``amount_cents`` for one accepted traceability label.
 
     Idempotent: calling this twice for the same (tenant_id, cte_event_id)
     charges Stripe at most once -- the second call finds the row already
-    claimed and returns it unchanged (``claimed=False``) without any Stripe
-    call. The caller is responsible for committing ``session``.
+    claimed (committed by the first call before it ever touched Stripe)
+    and returns it unchanged (``claimed=False``).
 
     A tenant with no Stripe customer yet (e.g. a sandbox/trial tenant) is
     recorded as ``STATUS_NO_CUSTOMER`` rather than raising, so a tenant
     still in onboarding never breaks label ingestion.
-    """
-    charge_id, claimed = _claim_charge_row(session, tenant_id, cte_event_id, amount_cents)
-    if not claimed:
-        row = session.execute(
-            text("SELECT status, stripe_invoice_item_id FROM fsma.label_charges WHERE id = :id"),
-            {"id": charge_id},
-        ).fetchone()
-        return LabelChargeResult(
-            charge_id=charge_id,
-            tenant_id=tenant_id,
-            cte_event_id=cte_event_id,
-            amount_cents=amount_cents,
-            status=row[0] if row else STATUS_CHARGED,
-            stripe_invoice_item_id=row[1] if row else None,
-            claimed=False,
-        )
 
-    customer_id = _get_existing_customer_id(tenant_id)
-    if not customer_id:
-        session.execute(
-            text("UPDATE fsma.label_charges SET status = :status WHERE id = :id"),
-            {"status": STATUS_NO_CUSTOMER, "id": charge_id},
-        )
-        logger.info("label_charge_skipped_no_customer", tenant_id=tenant_id, cte_event_id=cte_event_id)
-        return LabelChargeResult(
-            charge_id=charge_id,
-            tenant_id=tenant_id,
-            cte_event_id=cte_event_id,
-            amount_cents=amount_cents,
-            status=STATUS_NO_CUSTOMER,
-            stripe_invoice_item_id=None,
-            claimed=True,
-        )
+    ``session_factory`` overrides how the DB session is obtained (tests
+    inject a fake); production uses ``shared.database.get_db_safe``.
+    """
+    session = (session_factory or _default_session)()
+    if session is None:
+        raise RuntimeError("label billing DB session unavailable")
 
     try:
-        _configure_stripe()
-        invoice_item = stripe.InvoiceItem.create(
-            customer=customer_id,
-            amount=amount_cents,
-            currency="usd",
-            description=f"FSMA 204 per-label traceability charge (event {cte_event_id})",
-        )
-        if isinstance(invoice_item, dict):
-            invoice_item_id = str(invoice_item.get("id") or "")
-        else:
-            invoice_item_id = str(getattr(invoice_item, "id", "") or "")
-    except stripe.error.StripeError as exc:
+        charge_id, claimed = _claim_charge_row(session, tenant_id, cte_event_id, amount_cents)
+        # Durable BEFORE any Stripe call -- see module docstring. Once this
+        # commits, no later rollback anywhere else can un-claim this label.
+        session.commit()
+
+        if not claimed:
+            row = session.execute(
+                text("SELECT status, stripe_invoice_item_id FROM fsma.label_charges WHERE id = :id"),
+                {"id": charge_id},
+            ).fetchone()
+            return LabelChargeResult(
+                charge_id=charge_id,
+                tenant_id=tenant_id,
+                cte_event_id=cte_event_id,
+                amount_cents=amount_cents,
+                status=row[0] if row else STATUS_CHARGED,
+                stripe_invoice_item_id=row[1] if row else None,
+                claimed=False,
+            )
+
+        customer_id = _get_existing_customer_id(tenant_id)
+        if not customer_id:
+            session.execute(
+                text("UPDATE fsma.label_charges SET status = :status WHERE id = :id"),
+                {"status": STATUS_NO_CUSTOMER, "id": charge_id},
+            )
+            session.commit()
+            logger.info("label_charge_skipped_no_customer", tenant_id=tenant_id, cte_event_id=cte_event_id)
+            return LabelChargeResult(
+                charge_id=charge_id,
+                tenant_id=tenant_id,
+                cte_event_id=cte_event_id,
+                amount_cents=amount_cents,
+                status=STATUS_NO_CUSTOMER,
+                stripe_invoice_item_id=None,
+                claimed=True,
+            )
+
+        try:
+            _configure_stripe()
+            invoice_item = stripe.InvoiceItem.create(
+                customer=customer_id,
+                amount=amount_cents,
+                currency="usd",
+                description=f"FSMA 204 per-label traceability charge (event {cte_event_id})",
+            )
+            if isinstance(invoice_item, dict):
+                invoice_item_id = str(invoice_item.get("id") or "")
+            else:
+                invoice_item_id = str(getattr(invoice_item, "id", "") or "")
+        except stripe.error.StripeError as exc:
+            session.execute(
+                text(
+                    "UPDATE fsma.label_charges "
+                    "SET status = :status, stripe_customer_id = :customer_id, error_message = :error "
+                    "WHERE id = :id"
+                ),
+                {"status": STATUS_FAILED, "customer_id": customer_id, "error": str(exc), "id": charge_id},
+            )
+            session.commit()
+            logger.error(
+                "label_charge_stripe_failed",
+                tenant_id=tenant_id,
+                cte_event_id=cte_event_id,
+                error=str(exc),
+            )
+            return LabelChargeResult(
+                charge_id=charge_id,
+                tenant_id=tenant_id,
+                cte_event_id=cte_event_id,
+                amount_cents=amount_cents,
+                status=STATUS_FAILED,
+                stripe_invoice_item_id=None,
+                claimed=True,
+            )
+
         session.execute(
             text(
                 "UPDATE fsma.label_charges "
-                "SET status = :status, stripe_customer_id = :customer_id, error_message = :error "
+                "SET status = :status, stripe_customer_id = :customer_id, "
+                "stripe_invoice_item_id = :invoice_item_id, charged_at = now() "
                 "WHERE id = :id"
             ),
-            {"status": STATUS_FAILED, "customer_id": customer_id, "error": str(exc), "id": charge_id},
+            {
+                "status": STATUS_CHARGED,
+                "customer_id": customer_id,
+                "invoice_item_id": invoice_item_id,
+                "id": charge_id,
+            },
         )
-        logger.error(
-            "label_charge_stripe_failed",
-            tenant_id=tenant_id,
-            cte_event_id=cte_event_id,
-            error=str(exc),
-        )
+        session.commit()
         return LabelChargeResult(
             charge_id=charge_id,
             tenant_id=tenant_id,
             cte_event_id=cte_event_id,
             amount_cents=amount_cents,
-            status=STATUS_FAILED,
-            stripe_invoice_item_id=None,
+            status=STATUS_CHARGED,
+            stripe_invoice_item_id=invoice_item_id,
             claimed=True,
         )
-
-    session.execute(
-        text(
-            "UPDATE fsma.label_charges "
-            "SET status = :status, stripe_customer_id = :customer_id, "
-            "stripe_invoice_item_id = :invoice_item_id, charged_at = now() "
-            "WHERE id = :id"
-        ),
-        {
-            "status": STATUS_CHARGED,
-            "customer_id": customer_id,
-            "invoice_item_id": invoice_item_id,
-            "id": charge_id,
-        },
-    )
-    return LabelChargeResult(
-        charge_id=charge_id,
-        tenant_id=tenant_id,
-        cte_event_id=cte_event_id,
-        amount_cents=amount_cents,
-        status=STATUS_CHARGED,
-        stripe_invoice_item_id=invoice_item_id,
-        claimed=True,
-    )
+    finally:
+        session.close()
 
 
 def get_label_charge(session: Any, tenant_id: str, cte_event_id: str) -> Optional[dict]:
@@ -190,7 +225,8 @@ def get_label_charge(session: Any, tenant_id: str, cte_event_id: str) -> Optiona
 
     This is the queryable record proving per-label pricing is real: the
     amount charged, its status, and (once charged) the Stripe invoice item
-    id it produced.
+    id it produced. Read-only, so (unlike ``charge_for_label``) it is safe
+    to run against the caller's ambient session.
     """
     row = session.execute(
         text(

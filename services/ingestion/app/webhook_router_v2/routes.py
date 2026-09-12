@@ -305,7 +305,6 @@ async def ingest_events(
                         from ..stripe_billing import charge_for_label
 
                         charge_for_label(
-                            db_session,
                             tenant_id=tenant_id,
                             cte_event_id=store_result.event_id,
                             amount_cents=get_settings().price_per_label_cents,
@@ -454,7 +453,6 @@ async def ingest_events(
                             from ..stripe_billing import charge_for_label
 
                             charge_for_label(
-                                db_session,
                                 tenant_id=tenant_id,
                                 cte_event_id=store_result.event_id,
                                 amount_cents=get_settings().price_per_label_cents,

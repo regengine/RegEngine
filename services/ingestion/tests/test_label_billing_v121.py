@@ -124,8 +124,14 @@ class _FakeLabelChargesSession:
                 return row
         return None
 
+    def commit(self):
+        """No-op: this fake writes straight to self.rows, no buffering."""
 
-@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})
+    def close(self):
+        """No-op: nothing to release for an in-memory fake."""
+
+
+@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})  # pragma: allowlist secret
 @patch("services.ingestion.app.stripe_billing.stripe")
 @patch(
     "services.ingestion.app.stripe_billing.label_billing._get_existing_customer_id",
@@ -136,7 +142,9 @@ def test_charge_for_label_charges_exactly_once(_mock_get_customer, mock_stripe):
     mock_stripe.InvoiceItem.create.return_value = {"id": "ii_test_1"}
     session = _FakeLabelChargesSession()
 
-    result = charge_for_label(session, tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10)
+    result = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10, session_factory=lambda: session
+    )
 
     assert result.status == STATUS_CHARGED
     assert result.amount_cents == 10
@@ -150,7 +158,7 @@ def test_charge_for_label_charges_exactly_once(_mock_get_customer, mock_stripe):
     )
 
 
-@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})
+@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})  # pragma: allowlist secret
 @patch("services.ingestion.app.stripe_billing.stripe")
 @patch(
     "services.ingestion.app.stripe_billing.label_billing._get_existing_customer_id",
@@ -161,8 +169,12 @@ def test_charge_for_label_idempotent_under_retry(_mock_get_customer, mock_stripe
     mock_stripe.InvoiceItem.create.return_value = {"id": "ii_test_2"}
     session = _FakeLabelChargesSession()
 
-    first = charge_for_label(session, tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10)
-    second = charge_for_label(session, tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10)
+    first = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10, session_factory=lambda: session
+    )
+    second = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10, session_factory=lambda: session
+    )
 
     assert mock_stripe.InvoiceItem.create.call_count == 1, "retry must not call Stripe a second time"
     assert session.insert_calls == 2, "both attempts try to claim the row; only the first should win"
@@ -182,13 +194,15 @@ def test_charge_for_label_skips_stripe_without_customer(_mock_get_customer, mock
     """A tenant with no Stripe customer yet never triggers a Stripe call."""
     session = _FakeLabelChargesSession()
 
-    result = charge_for_label(session, tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10)
+    result = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10, session_factory=lambda: session
+    )
 
     assert result.status == STATUS_NO_CUSTOMER
     mock_stripe.InvoiceItem.create.assert_not_called()
 
 
-@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})
+@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})  # pragma: allowlist secret
 @patch("services.ingestion.app.stripe_billing.stripe")
 @patch(
     "services.ingestion.app.stripe_billing.label_billing._get_existing_customer_id",
@@ -199,7 +213,9 @@ def test_label_charge_is_queryable(_mock_get_customer, mock_stripe):
     mock_stripe.InvoiceItem.create.return_value = {"id": "ii_test_3"}
     session = _FakeLabelChargesSession()
 
-    charge_for_label(session, tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=17)
+    charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=17, session_factory=lambda: session
+    )
     record = get_label_charge(session, tenant_id=TENANT_ID, cte_event_id=EVENT_ID)
 
     assert record is not None
