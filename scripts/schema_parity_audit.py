@@ -61,11 +61,20 @@ def _connect(database_url: str):
     return create_engine(database_url)
 
 
-def _fk_record(fk: dict, table_schema: str) -> dict:
-    """Canonical FK contract: name + referred table + column lists. No options."""
+def _fk_record(fk: dict, default_schema: str) -> dict:
+    """Canonical FK contract: name + referred table + column lists. No options.
+
+    SQLAlchemy's reflection returns ``referred_schema: None`` to mean "the
+    database's default schema" (``public`` on Postgres unless the connection
+    overrides it) -- NOT "same schema as the table that owns the FK". Falling
+    back to the owning table's schema here previously mislabeled every FK
+    from a non-default-schema table (e.g. ``agent_org.*`` or ``fsma.*``)
+    pointing at a default-schema table (e.g. ``public.tenants``) as pointing
+    at a same-named table inside its own schema instead (#3102 review).
+    """
     return {
         "name": fk.get("name") or "",
-        "referred_schema": fk.get("referred_schema") or table_schema,
+        "referred_schema": fk.get("referred_schema") or default_schema,
         "referred_table": fk.get("referred_table") or "",
         "constrained_columns": list(fk.get("constrained_columns") or []),
         "referred_columns": list(fk.get("referred_columns") or []),
@@ -88,6 +97,7 @@ def dump_schema(database_url: str) -> dict:
 
     engine = _connect(database_url)
     inspector = inspect(engine)
+    default_schema = inspector.default_schema_name or "public"
     result: dict[str, dict] = {}
 
     for schema in sorted(inspector.get_schema_names()):
@@ -103,7 +113,8 @@ def dump_schema(database_url: str) -> dict:
                     "nullable": bool(column["nullable"]),
                 }
             foreign_keys = [
-                _fk_record(fk, schema) for fk in inspector.get_foreign_keys(table, schema=schema)
+                _fk_record(fk, default_schema)
+                for fk in inspector.get_foreign_keys(table, schema=schema)
             ]
             foreign_keys.sort(key=_fk_identity)
             result[f"{schema}.{table}"] = {
