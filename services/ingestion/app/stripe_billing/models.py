@@ -54,12 +54,23 @@ class UsageResponse(BaseModel):
     used for local display/idempotency purposes only — they are not
     necessarily the tenant's real Stripe invoice period boundary. See
     DESIGN_metering-billing.md §3.3/§7.2 for the rationale.
+
+    ``unbilled_unit_count`` is the sum of ``(unit_count -
+    last_reported_count)`` across *every* billing period on record for the
+    tenant, not just the current one — a late-timestamped/backfilled event
+    (see ``services/shared/canonical_event.py``'s ``parse_timestamp``,
+    which places no lower bound on how old an accepted event's timestamp
+    may be) can land in a past period's counter row via
+    ``increment_usage_for_event``. Surfacing the cross-period total here
+    means that usage is never silently invisible to the tenant even though
+    ``unit_count`` above only reflects the current period.
     """
 
     tenant_id: str
     billing_period_start: str
     billing_period_end: str
     unit_count: int
+    unbilled_unit_count: int
     metered_billing_enabled: bool
     plan: str
 

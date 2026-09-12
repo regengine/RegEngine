@@ -677,7 +677,9 @@ async def create_portal_session_legacy(
     summary="Get current-period label usage",
     description=(
         "Returns the tenant's current-period per-label metered usage (accepted "
-        "TraceabilityEvent count). Populated for every tenant regardless of "
+        "TraceabilityEvent count), plus the total unbilled unit count across "
+        "ALL billing periods (current and past — a backfilled event can land "
+        "in a past period). Populated for every tenant regardless of "
         "metered-billing opt-in status."
     ),
 )
@@ -707,6 +709,24 @@ async def get_usage(
     ).fetchone()
     unit_count = int(row[0]) if row else 0
 
+    # Security-review fix: surface usage sitting in ANY period (not just the
+    # current one) that hasn't yet been reported to Stripe. A backfilled or
+    # deliberately backdated event (see ``increment_usage_for_event``'s
+    # handling of ``event_timestamp``) increments a *past* period's counter
+    # row, which the query above never sees — without this, that usage was
+    # invisible here even though it's real, accepted, billable usage.
+    unbilled_row = db_session.execute(
+        text(
+            """
+            SELECT COALESCE(SUM(unit_count - last_reported_count), 0)
+            FROM billing.tenant_usage_counters
+            WHERE tenant_id = :tenant_id AND unit_count > last_reported_count
+            """
+        ),
+        {"tenant_id": resolved_tenant_id},
+    ).fetchone()
+    unbilled_unit_count = int(unbilled_row[0]) if unbilled_row and unbilled_row[0] is not None else 0
+
     try:
         mapping = _state_mod._get_subscription_mapping(resolved_tenant_id)
     except redis.RedisError as exc:
@@ -729,6 +749,7 @@ async def get_usage(
         billing_period_start=period_start.isoformat(),
         billing_period_end=period_end.isoformat(),
         unit_count=unit_count,
+        unbilled_unit_count=unbilled_unit_count,
         metered_billing_enabled=metered_billing_enabled,
         plan=plan_id,
     )

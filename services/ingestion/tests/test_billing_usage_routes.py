@@ -94,7 +94,7 @@ async def test_get_usage_returns_current_period_row(monkeypatch):
         {"plan_id": "growth", "metered_billing_enabled": "true"},
     )
 
-    session = _FakeSession(results=[_Result(row=(42,))])
+    session = _FakeSession(results=[_Result(row=(42,)), _Result(row=(42,))])
     principal = _principal(["billing.usage.read"])
 
     response = await stripe_billing.get_usage(
@@ -106,6 +106,8 @@ async def test_get_usage_returns_current_period_row(monkeypatch):
 
     assert response.tenant_id == TENANT_ID
     assert response.unit_count == 42
+    # No prior report yet against this row, so it's also fully unbilled.
+    assert response.unbilled_unit_count == 42
     assert response.metered_billing_enabled is True
     assert response.plan == "growth"
     # billing_period_start is the first of the current UTC month.
@@ -113,11 +115,39 @@ async def test_get_usage_returns_current_period_row(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_get_usage_unbilled_count_includes_past_periods(monkeypatch):
+    # Security-review fix: a past period's outstanding usage (e.g. from a
+    # backfilled/backdated event) must be visible here even though it's
+    # not reflected in the current-period `unit_count`.
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
+    stripe_billing._store_subscription_mapping(
+        TENANT_ID,
+        {"plan_id": "growth", "metered_billing_enabled": "true"},
+    )
+
+    # Current period has 10 units; the cross-period aggregate (current + a
+    # past period with outstanding usage) is 25.
+    session = _FakeSession(results=[_Result(row=(10,)), _Result(row=(25,))])
+    principal = _principal(["billing.usage.read"])
+
+    response = await stripe_billing.get_usage(
+        tenant_id=None,
+        x_tenant_id=None,
+        principal=principal,
+        db_session=session,
+    )
+
+    assert response.unit_count == 10
+    assert response.unbilled_unit_count == 25
+
+
+@pytest.mark.asyncio
 async def test_get_usage_defaults_to_zero_when_no_counter_row(monkeypatch):
     fake_redis = _FakeRedis()
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
 
-    session = _FakeSession(results=[_Result(row=None)])
+    session = _FakeSession(results=[_Result(row=None), _Result(row=(0,))])
     principal = _principal(["billing.usage.read"])
 
     response = await stripe_billing.get_usage(
@@ -128,6 +158,7 @@ async def test_get_usage_defaults_to_zero_when_no_counter_row(monkeypatch):
     )
 
     assert response.unit_count == 0
+    assert response.unbilled_unit_count == 0
     assert response.metered_billing_enabled is False
     assert response.plan == "none"
 
