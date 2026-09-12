@@ -46,7 +46,7 @@
         "referred_columns": [
           "id"
         ],
-        "referred_schema": "agent_org",
+        "referred_schema": "public",
         "referred_table": "tenants"
       }
     ]
@@ -102,7 +102,7 @@
         "referred_columns": [
           "id"
         ],
-        "referred_schema": "agent_org",
+        "referred_schema": "public",
         "referred_table": "tenants"
       }
     ]
@@ -139,7 +139,7 @@
         "referred_columns": [
           "id"
         ],
-        "referred_schema": "agent_org",
+        "referred_schema": "public",
         "referred_table": "tenants"
       }
     ]
@@ -180,7 +180,7 @@
         "referred_columns": [
           "id"
         ],
-        "referred_schema": "agent_org",
+        "referred_schema": "public",
         "referred_table": "tenants"
       }
     ]
