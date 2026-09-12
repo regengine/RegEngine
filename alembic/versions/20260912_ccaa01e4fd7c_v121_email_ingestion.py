@@ -239,7 +239,7 @@ def _audit_functions() -> None:
                  rejected_attachment_count, details)
             VALUES (p_tenant_id, p_message_id, p_sender, p_recipient, p_subject, p_status,
                     p_rejection_reason, p_attachment_count, p_accepted_count, p_rejected_count, p_details)
-            ON CONFLICT (message_id) DO NOTHING
+            ON CONFLICT ON CONSTRAINT ux_inbound_email_audit_message_id DO NOTHING
             RETURNING a.id, a.message_id, a.status, a.attachment_count,
                       a.accepted_attachment_count, a.rejected_attachment_count;
         END;

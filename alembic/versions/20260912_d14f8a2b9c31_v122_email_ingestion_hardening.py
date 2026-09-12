@@ -223,6 +223,19 @@ def _claim_and_finalize_functions() -> None:
     ``finalize_inbound_email_audit`` then updates that same row to its real
     outcome -- guarded by ``status = 'processing'`` so it only ever applies
     to the row its own claim produced.
+
+    Review finding: a hard process kill (OOM, k8s eviction on deploy, a
+    gunicorn worker timeout) between a successful claim and finalize
+    leaves the row stuck at ``status='processing'`` forever -- no amount
+    of try/except in Python code can catch that. Every future Postmark
+    redelivery of the same MessageID would then lose the ON CONFLICT DO
+    NOTHING race and get a permanent 409: the email's CSV attachments are
+    never ingested (silent data loss for FSMA compliance data). The
+    conditional ``DO UPDATE ... WHERE`` below lets a later delivery
+    reclaim a 'processing' row once it has clearly been abandoned (older
+    than 5 minutes -- generously above any realistic single-email CSV
+    ingestion time); a row still legitimately in flight fails the WHERE
+    clause and behaves exactly like DO NOTHING.
     """
     op.execute(
         """
@@ -237,7 +250,15 @@ def _claim_and_finalize_functions() -> None:
             INSERT INTO fsma.inbound_email_audit AS a
                 (tenant_id, message_id, sender, recipient, subject, status, attachment_count)
             VALUES (p_tenant_id, p_message_id, p_sender, p_recipient, p_subject, 'processing', p_attachment_count)
-            ON CONFLICT (message_id) DO NOTHING
+            ON CONFLICT ON CONSTRAINT ux_inbound_email_audit_message_id DO UPDATE
+                SET tenant_id = EXCLUDED.tenant_id,
+                    sender = EXCLUDED.sender,
+                    recipient = EXCLUDED.recipient,
+                    subject = EXCLUDED.subject,
+                    attachment_count = EXCLUDED.attachment_count,
+                    received_at = now()
+                WHERE a.status = 'processing'
+                  AND a.received_at < now() - INTERVAL '5 minutes'
             RETURNING a.id, a.message_id, a.status;
         END;
         $fn$;
@@ -320,7 +341,7 @@ def _restore_record_function() -> None:
                  rejected_attachment_count, details)
             VALUES (p_tenant_id, p_message_id, p_sender, p_recipient, p_subject, p_status,
                     p_rejection_reason, p_attachment_count, p_accepted_count, p_rejected_count, p_details)
-            ON CONFLICT (message_id) DO NOTHING
+            ON CONFLICT ON CONSTRAINT ux_inbound_email_audit_message_id DO NOTHING
             RETURNING a.id, a.message_id, a.status, a.attachment_count,
                       a.accepted_attachment_count, a.rejected_attachment_count;
         END;
