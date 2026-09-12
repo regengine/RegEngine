@@ -293,6 +293,26 @@ async def ingest_events(
                     )
                     accepted += 1
 
+                    # Per-label FSMA 204 billing (v121). One charge per
+                    # accepted label; idempotent under retry via the
+                    # UNIQUE(tenant_id, cte_event_id) constraint on
+                    # fsma.label_charges, so this call is safe even when
+                    # the batch-persist path above returned an idempotent
+                    # (already-stored) event. A Stripe/DB hiccup here must
+                    # never fail an otherwise-successful ingest.
+                    try:
+                        from ..config import get_settings
+                        from ..stripe_billing import charge_for_label
+
+                        charge_for_label(
+                            db_session,
+                            tenant_id=tenant_id,
+                            cte_event_id=store_result.event_id,
+                            amount_cents=get_settings().price_per_label_cents,
+                        )
+                    except Exception as bill_err:  # noqa: BLE001 -- billing is best-effort, must never fail ingest
+                        _pkg.logger.warning("label_charge_skipped: %s", str(bill_err))
+
                     # Tenant-configured obligation-CTE rules (#2901). Runs
                     # after the store because it keys its fsma.compliance_alerts
                     # rows to the persisted event id. Its alerts are NOT merged
@@ -425,6 +445,22 @@ async def ingest_events(
                             )
                         )
                         accepted += 1
+
+                        # Per-label FSMA 204 billing (v121) — same call as
+                        # the batch path above, so the fallback path is not
+                        # a hole in per-label billing coverage.
+                        try:
+                            from ..config import get_settings
+                            from ..stripe_billing import charge_for_label
+
+                            charge_for_label(
+                                db_session,
+                                tenant_id=tenant_id,
+                                cte_event_id=store_result.event_id,
+                                amount_cents=get_settings().price_per_label_cents,
+                            )
+                        except Exception as bill_err:  # noqa: BLE001 -- billing is best-effort, must never fail ingest
+                            _pkg.logger.warning("label_charge_skipped: %s", str(bill_err))
 
                         _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
