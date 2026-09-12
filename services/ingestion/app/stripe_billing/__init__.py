@@ -23,6 +23,8 @@ from . import (
     plans as _plans_mod,  # noqa: F401
     routes as _routes_mod,  # noqa: F401
     state as _state_mod,  # noqa: F401
+    usage as _usage_mod,  # noqa: F401
+    usage_reporting as _usage_reporting_mod,  # noqa: F401
     webhooks as _webhooks_mod,  # noqa: F401
 )
 from .customers import (
@@ -55,11 +57,13 @@ from .models import (
     InvoicePdfResponse,
     InvoiceSummary,
     SubscriptionStatus,
+    UsageResponse,
 )
 from .plans import (
     DEFAULT_CANCEL_URL,
     DEFAULT_PORTAL_RETURN_URL,
     DEFAULT_SUCCESS_URL,
+    METERED_ADDONS,
     PLAN_ALIASES,
     PLANS,
     _normalize_billing_period,
@@ -72,8 +76,12 @@ from .routes import (
     create_portal_session_legacy,
     get_invoice_pdf,
     get_subscription,
+    get_usage,
     list_invoices,
     list_plans,
+    opt_in_metered_usage,
+    opt_out_metered_usage,
+    report_usage,
     router,
     stripe_webhook_legacy,
     stripe_webhooks,
@@ -93,6 +101,8 @@ from .state import (
     _subscription_lookup_key,
     _tenant_subscription_key,
 )
+from .usage import _current_billing_period, increment_usage_for_event
+from .usage_reporting import METER_EVENT_NAME, report_tenant_usage_to_stripe
 from .webhooks import (
     _handle_checkout_completed,
     _handle_stripe_event,
@@ -109,8 +119,12 @@ __all__ = [
     "create_portal_session_legacy",
     "get_invoice_pdf",
     "get_subscription",
+    "get_usage",
     "list_invoices",
     "list_plans",
+    "opt_in_metered_usage",
+    "opt_out_metered_usage",
+    "report_usage",
     "stripe_webhook_legacy",
     "stripe_webhooks",
     # Models
@@ -122,12 +136,14 @@ __all__ = [
     "InvoicePdfResponse",
     "InvoiceSummary",
     "SubscriptionStatus",
+    "UsageResponse",
     # Plans
     "DEFAULT_CANCEL_URL",
     "DEFAULT_PORTAL_RETURN_URL",
     "DEFAULT_SUCCESS_URL",
     "PLANS",
     "PLAN_ALIASES",
+    "METERED_ADDONS",
     # State
     "_buffer_pending_subscription_update",
     "_customer_lookup_key",
@@ -170,6 +186,11 @@ __all__ = [
     "_handle_stripe_event",
     "_process_stripe_webhook",
     "_update_subscription_status",
+    # Usage (per-label metered billing)
+    "_current_billing_period",
+    "increment_usage_for_event",
+    "report_tenant_usage_to_stripe",
+    "METER_EVENT_NAME",
     # Re-exported third-party (for test monkeypatching)
     "stripe",
     "emit_funnel_event",
@@ -232,8 +253,13 @@ _ATTR_TO_SUBMODULE = {
     "_update_subscription_status": _webhooks_mod,
     "_handle_stripe_event": _webhooks_mod,
     "_process_stripe_webhook": _webhooks_mod,
+    # usage.py
+    "_current_billing_period": _usage_mod,
+    "increment_usage_for_event": _usage_mod,
+    # usage_reporting.py
+    "report_tenant_usage_to_stripe": _usage_reporting_mod,
 }
-_STRIPE_SUBMODULES = (_helpers_mod, _customers_mod, _routes_mod, _webhooks_mod)
+_STRIPE_SUBMODULES = (_helpers_mod, _customers_mod, _routes_mod, _webhooks_mod, _usage_reporting_mod)
 
 
 class _PatchableModule(_types.ModuleType):
