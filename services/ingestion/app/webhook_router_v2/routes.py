@@ -283,6 +283,13 @@ async def ingest_events(
                 )
                 event_objs.append(event)
 
+            # Snapshot so a partial-then-failed batch attempt (below) can be
+            # undone precisely: on rollback we must discard only what THIS
+            # attempt appended, not the pre-eval-rejected events already
+            # recorded above.
+            _pre_batch_results_len = len(results)
+            _pre_batch_accepted = accepted
+
             try:
                 store_results = persistence.store_events_batch(
                     tenant_id=tenant_id,
@@ -362,6 +369,21 @@ async def ingest_events(
                     db_session.rollback()
                 except SQLAlchemyError as rb_err:
                     _pkg.logger.warning("fallback_pre_rollback_failed: %s", str(rb_err))
+                # The batch loop above may have already recorded some of this
+                # failed attempt's events as accepted (results/accepted) and
+                # queued them for billing (billable_event_ids) before the
+                # exception hit -- rows the rollback above just discarded.
+                # The fallback below re-persists the ENTIRE valid_events list
+                # from scratch, minting a fresh event_id per label and
+                # appending its own EventResult, so anything from this
+                # doomed attempt must be undone first: otherwise the response
+                # double-counts every event that succeeded before the
+                # failure, and billing would charge two different event_ids
+                # for the same physical label -- bypassing the
+                # UNIQUE(tenant_id, cte_event_id) idempotency guard entirely.
+                del results[_pre_batch_results_len:]
+                accepted = _pre_batch_accepted
+                billable_event_ids.clear()
                 # Fall back to per-event persistence
                 for event, alerts in valid_events:
                     # Enforcement: same pre-eval gate as the happy path.
