@@ -11,6 +11,18 @@ concurrency:
   group: sentinel-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Threat model (see the "Trusted config overlay" step below):
+#   * The `audit` job checks out untrusted PR-head code and holds
+#     ANTHROPIC_API_KEY, so it must never execute anything the PR controls.
+#     Claude Code project config (`.claude/` hooks, settings, commands, agents),
+#     `.mcp.json`, and the SessionStart hook target are all taken from the
+#     *base* ref, never from the PR head. The job's GITHUB_TOKEN is read-only.
+#   * The `report` job is the only step with a write-capable token
+#     (pull-requests: write) and it never checks out or executes repo code —
+#     it only posts the artifact produced by `audit` as a PR comment.
+#   * In CI the orchestrator runs in --report-only mode: it lists proposed
+#     audit-* issues in the report instead of filing them with `gh`.
+
 jobs:
   audit:
     if: contains(github.event.pull_request.labels.*.name, 'sentinel')
@@ -18,8 +30,10 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-      issues: write          # orchestrator files audit-* issues in strict mode
-      pull-requests: write   # post the report as a PR comment
+      issues: read           # orchestrator dedups findings against open issues
+      pull-requests: read    # regressor pulls closing-PR diffs for anchors
+    env:
+      BASE_REF: origin/${{ github.event.pull_request.base.ref }}
 
     steps:
       - name: Checkout PR (full history for diff vs main)
@@ -30,6 +44,33 @@ jobs:
 
       - name: Fetch base ref
         run: git fetch origin ${{ github.event.pull_request.base.ref }} --quiet
+
+      - name: Trusted config overlay (base ref, not PR head)
+        # Everything Claude Code executes or loads as project config must come
+        # from the base branch so a labeled PR cannot smuggle in a SessionStart
+        # hook, permission allow-list, MCP server, or subagent prompt that runs
+        # with this job's secrets. PR-added files under .claude/ are removed
+        # outright (e.g. settings.local.json) rather than merged.
+        # Auto-discovered instruction files (AGENTS.md / CLAUDE.md) are also
+        # pinned to base: they cannot execute code, but they are injected into
+        # the model's context and could steer tool use in a job holding secrets.
+        # This only touches the working tree; `git diff $BASE_REF...HEAD` used
+        # by /sentinel-check compares commits and is unaffected.
+        run: |
+          set -euo pipefail
+          TRUSTED_PATHS=".claude .mcp.json scripts/install_pkgs.sh AGENTS.md CLAUDE.md"
+          rm -rf .claude .mcp.json
+          for path in $TRUSTED_PATHS; do
+            if git cat-file -e "$BASE_REF:$path" 2>/dev/null; then
+              git checkout --quiet "$BASE_REF" -- "$path"
+            else
+              echo "::notice::$path not present on $BASE_REF; leaving absent"
+              rm -rf "$path"
+            fi
+          done
+          echo "Overlay status (expected: only trusted-config paths differ from HEAD):"
+          # shellcheck disable=SC2086  # intentional word-splitting of the path list
+          git status --short -- $TRUSTED_PATHS
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -42,10 +83,9 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Install Claude Code CLI
-        # Issue #2812: this job holds issues:write + pull-requests:write and
-        # checks out untrusted PR head code, so the CLI must be pinned to an
-        # exact version rather than resolving to whatever `latest` is.
-        # Mirrors the RAILWAY_CLI_VERSION pattern in deploy.yml.
+        # Issue #2812: this job checks out untrusted PR head code, so the CLI
+        # must be pinned to an exact version rather than resolving to whatever
+        # `latest` is. Mirrors the RAILWAY_CLI_VERSION pattern in deploy.yml.
         env:
           CLAUDE_CODE_VERSION: 2.1.246
         run: |
@@ -68,27 +108,22 @@ jobs:
         id: sentinel
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # read-only: job permissions above
+          # Belt-and-braces: the (trusted) SessionStart hook also self-skips
+          # under GITHUB_ACTIONS, so no PR-controlled lockfile is ever installed.
+          REGENGINE_SKIP_SESSION_BOOTSTRAP: '1'
         run: |
           set -o pipefail
           mkdir -p .sentinel
           # Headless invocation. The slash command body lives at
-          # .claude/commands/sentinel-check.md and is auto-discovered.
-          claude -p "/sentinel-check --base=$BASE_REF" \
+          # .claude/commands/sentinel-check.md (trusted overlay) and is
+          # auto-discovered. --strict-mcp-config ignores any .mcp.json so only
+          # explicitly passed MCP servers (none) can be spawned.
+          claude -p "/sentinel-check --base=$BASE_REF --report-only" \
             --output-format text \
+            --strict-mcp-config \
             2>&1 | tee .sentinel/report.md
           echo "report_path=.sentinel/report.md" >> "$GITHUB_OUTPUT"
-
-      - name: Post report as PR comment
-        if: always() && hashFiles('.sentinel/report.md') != ''
-        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9  # v5
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-path: .sentinel/report.md
-          edit-mode: replace
-          # Use a stable marker so re-runs replace rather than stack comments.
-          body-includes: '<!-- sentinel-report -->'
 
       - name: Upload raw report artifact
         if: always()
@@ -98,3 +133,33 @@ jobs:
           path: .sentinel/report.md
           if-no-files-found: warn
           retention-days: 30
+
+  report:
+    # Privileged half: the only write-capable token in this workflow. Runs
+    # even when `audit` fails so a partial report still surfaces, but never
+    # checks out or executes repository code.
+    needs: audit
+    if: always() && needs.audit.result != 'skipped' && needs.audit.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write   # post the report as a PR comment
+
+    steps:
+      - name: Download report artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+        with:
+          name: sentinel-report-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: .sentinel
+
+      - name: Post report as PR comment
+        if: steps.download.outcome == 'success' && hashFiles('.sentinel/report.md') != ''
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9  # v5
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: .sentinel/report.md
+          edit-mode: replace
+          # Use a stable marker so re-runs replace rather than stack comments.
+          body-includes: '<!-- sentinel-report -->'

@@ -5,6 +5,17 @@
 
 set -euo pipefail
 
+# CI guard: this script is wired as a Claude Code SessionStart hook in
+# .claude/settings.json. In GitHub Actions (e.g. .github/workflows/sentinel.yml)
+# the job checks out untrusted PR-head code, so installing PR-controlled
+# lockfiles (pip/npm lifecycle scripts) from a hook would execute that code
+# with job secrets in the environment. The audit only reads git history and
+# never needs dependencies installed, so bail out early.
+if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${REGENGINE_SKIP_SESSION_BOOTSTRAP:-0}" = "1" ]; then
+    echo "==> RegEngine session bootstrap skipped (CI / REGENGINE_SKIP_SESSION_BOOTSTRAP=1)"
+    exit 0
+fi
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
