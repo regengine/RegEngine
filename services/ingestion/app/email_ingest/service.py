@@ -226,13 +226,36 @@ async def _ingest_attachment_csv(tenant_id: str, name: str, raw: bytes) -> Attac
             source="email_inbound",
             tenant_id=tenant_id,
             principal=principal,
-            x_regengine_api_key=None,
+            # NOT None: webhook_router_v2._verify_api_key_present (invoked
+            # deep inside ingest_csv -> webhook_compat.ingest_events) is a
+            # presence-only check on this header -- "if not
+            # x_regengine_api_key: raise HTTPException(401)" -- it never
+            # validates the value. Passing None here means every single
+            # real attachment gets 401'd and reported as "rejected" before
+            # ever reaching CTEPersistence. Real authorization for this
+            # call already happened via verify_inbound_email_auth's Basic
+            # Auth gate plus the explicit `principal` constructed above;
+            # this sentinel only satisfies the unrelated defense-in-depth
+            # presence check for a caller that has no X-RegEngine-API-Key
+            # header to forward.
+            x_regengine_api_key="email-inbound-internal",
             x_tenant_id=None,
         )
     except HTTPException as exc:
         detail = exc.detail
         reason = detail.get("message") if isinstance(detail, dict) else str(detail)
         return AttachmentResult(name=name, status="rejected", reason=reason)
+    except Exception:
+        # Anything else escaping the reused pipeline (e.g. a non-UTF-8 CSV
+        # -- csv_templates.ingest_csv's `content.decode("utf-8-sig")` isn't
+        # wrapped in a try/except -- or a transient failure inside
+        # webhook_compat.ingest_events) must not blow up the whole email.
+        # An uncaught exception here would skip the audit-row write in
+        # process_inbound_email entirely, and a Postmark retry would then
+        # replay -- and thus double-ingest -- every attachment that already
+        # succeeded earlier in this same request's loop.
+        logger.exception("inbound_email_attachment_ingest_failed name=%s", name)
+        return AttachmentResult(name=name, status="rejected", reason="ingestion_failed")
     return AttachmentResult(
         name=name,
         status="accepted" if response.accepted else "rejected",

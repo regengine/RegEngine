@@ -340,6 +340,12 @@ class TestIngestAttachmentCsv:
         assert captured["tenant_id"] == "tenant-1"
         assert captured["source"] == "email_inbound"
         assert captured["file"].filename == "data.csv"
+        # Regression guard: webhook_router_v2._verify_api_key_present (called
+        # deep inside the real ingest_csv -> ingest_events chain) 401s on a
+        # falsy X-RegEngine-API-Key -- it only checks presence, never value
+        # -- so this must never be None/empty or every real attachment would
+        # be rejected before reaching CTEPersistence.
+        assert captured["x_regengine_api_key"]
 
     async def test_partial_when_some_rows_rejected(self, monkeypatch):
         async def fake_ingest_csv(**kwargs):
@@ -379,6 +385,50 @@ class TestIngestAttachmentCsv:
         result = await _ingest_attachment_csv("tenant-1", "data.csv", b"x")
         assert result.status == "rejected"
         assert result.reason == "CSV contained no data rows"
+
+    async def test_non_http_exception_is_caught_and_rejected(self, monkeypatch):
+        # A non-HTTPException escaping the reused pipeline (e.g. the real
+        # ingest_csv's un-guarded `content.decode("utf-8-sig")` on a
+        # non-UTF-8 attachment, or a transient failure inside
+        # webhook_compat.ingest_events) must become a per-attachment
+        # rejection, not an unhandled 500 for the whole email -- an
+        # unhandled exception here would skip process_inbound_email's
+        # audit-row write, and a Postmark retry would then replay (and
+        # thus double-ingest) every attachment already accepted earlier
+        # in the same request's loop.
+        async def fake_ingest_csv(**kwargs):
+            raise UnicodeDecodeError("utf-8", b"\xff\xfe", 0, 1, "invalid start byte")
+
+        monkeypatch.setattr(service_mod, "ingest_csv", fake_ingest_csv)
+        result = await _ingest_attachment_csv("tenant-1", "data.csv", b"x")
+        assert result.status == "rejected"
+        assert result.reason == "ingestion_failed"
+
+    async def test_real_ingest_csv_is_not_401d_by_the_api_key_presence_gate(self, monkeypatch):
+        """End-to-end against the REAL app.csv_templates.ingest_csv (only its
+        `ingest_events` call is stubbed, reproducing the exact presence-only
+        check `webhook_router_v2._verify_api_key_present` performs), proving
+        a real CSV attachment is no longer 401'd by a falsy
+        X-RegEngine-API-Key. Regression test for the x_regengine_api_key=None
+        bug: before the fix this raised HTTPException(401) for every
+        attachment, before CTEPersistence ever ran."""
+        import app.csv_templates as csv_templates_mod
+        from app.webhook_models import IngestResponse
+
+        async def fake_ingest_events(payload, *, principal_tenant_id, x_regengine_api_key=None):
+            if not x_regengine_api_key:
+                raise HTTPException(status_code=401, detail="Invalid or missing API key")
+            return IngestResponse(accepted=1, rejected=0, total=1, events=[])
+
+        monkeypatch.setattr(csv_templates_mod, "ingest_events", fake_ingest_events)
+
+        csv_bytes = (
+            b"cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name\n"
+            b"harvesting,LOT-001,Kale,10,lbs,Farm A\n"
+        )
+        result = await _ingest_attachment_csv("11111111-1111-1111-1111-111111111111", "data.csv", csv_bytes)
+        assert result.status == "accepted"
+        assert result.rows_accepted == 1
 
 
 # ---------------------------------------------------------------------------

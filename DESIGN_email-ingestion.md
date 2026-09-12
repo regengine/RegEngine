@@ -624,6 +624,56 @@ pytest services/ingestion/tests/test_email_ingest_router.py services/ingestion/t
    claim system like `remediation/delivery.py`'s (which solves a
    different problem — draining a queue under concurrent workers).
 
+   **Known residual gap, found in self-review**: the `message_id` guard is
+   read-then-act, not claim-then-act — two genuinely *concurrent* deliveries
+   of the same `MessageID` both read "no existing audit row" before either
+   has written one, so both proceed to run CSV ingestion independently.
+   `ON CONFLICT (message_id) DO NOTHING` on the audit insert only prevents a
+   second *audit row*; it does nothing to stop the CTE events themselves
+   from being persisted twice by the two racing requests. Closing that
+   fully would need a claim row inserted *before* attachment processing
+   starts (and a schema change, since `status` is `CHECK`-constrained to
+   `accepted|partial|rejected`, not e.g. `processing`) — out of scope for
+   this slice; sequential redelivery after a crash (the scenario point 3
+   actually motivates) is what the current guard covers.
+
+5. **`_ingest_attachment_csv` passes a non-empty sentinel for
+   `x_regengine_api_key`, not `None`** (fixed in self-review — see git log).
+   `app.csv_templates.ingest_csv` forwards this header, unmodified, into
+   `webhook_compat.ingest_events`, whose very first statement is
+   `webhook_router_v2._verify_api_key_present` — a presence-only check
+   ("if not x_regengine_api_key: raise HTTPException(401)", per its own
+   docstring it never validates the value). Passing `None` — the literal
+   value used by an unauthenticated caller with no header at all — meant
+   every real attachment was unconditionally 401'd before ever reaching
+   CTEPersistence, silently reported back as a per-attachment "rejected"
+   result. This was not caught by `test_email_ingest_service.py` because
+   its `_ingest_attachment_csv` happy-path test monkeypatches
+   `ingest_csv` itself, bypassing the real call chain entirely; a new test
+   exercises the real `ingest_csv` (only its `ingest_events` call
+   stubbed) to catch a regression here. Real authorization for this call
+   already happens via `verify_inbound_email_auth`'s Basic-Auth gate plus
+   the explicitly-constructed `principal` — the sentinel only satisfies
+   this unrelated defense-in-depth header check.
+
+6. **`_ingest_attachment_csv` now catches `Exception`, not just
+   `HTTPException`** (fixed in self-review). The reused
+   `app.csv_templates.ingest_csv` has at least one un-guarded call
+   (`content.decode("utf-8-sig")`, for a non-UTF-8 attachment — plausible
+   for a real Excel/Outlook-authored CSV) that can raise a plain
+   exception rather than an `HTTPException`. Uncaught, that exception
+   would previously propagate out of `process_inbound_email` before the
+   email-level audit row is written, producing an unhandled 500 for the
+   *whole* email (not just the one bad attachment) with **no audit
+   trail** — violating point 5's "must be auditable" requirement — and,
+   on the resulting Postmark retry, causing every attachment that had
+   already been accepted earlier in the same request's loop to be
+   re-ingested (the idempotency guard in point 4 above only helps once an
+   audit row exists; it does nothing for a mid-request crash that leaves
+   no row at all). The handler now logs the exception and returns a
+   per-attachment "rejected" result instead, matching section 9's stated
+   intent that only auth failure and total DB unavailability are non-200.
+
 ## 14. Out of scope (explicitly not built here)
 
 - No admin/tenant-facing CRUD endpoint for
