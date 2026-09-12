@@ -218,6 +218,7 @@ _VALID_ROUTER_NAMES = {
     "proof_recall",
     # #2893 — lets operators suppress the /api/v1/fsma readiness stubs.
     "fsma_readiness_compat",
+    "email_ingest",
 }
 
 # Validate DISABLED_ROUTERS — catch typos early
@@ -646,6 +647,15 @@ if _router_enabled("disaster_recovery"):
     from app.disaster_recovery import router as disaster_recovery_router
 
     app.include_router(disaster_recovery_router)
+
+# Inbound Email Ingestion (Postmark inbound-parse webhook). Not in
+# _COMPLIANCE_ROUTERS: unlike remediation/fda_export, disabling this cannot
+# corrupt or hide already-ingested compliance data — it only stops accepting
+# a new input channel.
+if _router_enabled("email_ingest"):
+    from app.email_ingest.router import router as email_ingest_router
+
+    app.include_router(email_ingest_router, tags=["Inbound Email"])
 
 
 # NOTE: Do NOT install the Phase 17 generic health router here — a custom

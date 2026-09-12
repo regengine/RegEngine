@@ -773,6 +773,17 @@ if _router_enabled("disaster_recovery"):
 
     include_owned_router(app, disaster_recovery_router, owner="disaster_recovery")
 
+# Inbound Email Ingestion (Postmark inbound-parse webhook). Not in
+# COMPLIANCE_ROUTERS: unlike remediation/fda_export, disabling this cannot
+# corrupt or hide already-ingested compliance data — it only stops accepting
+# a new input channel. Not yet in PRODUCTION_ENABLED_ROUTERS — promoting it
+# there is a deliberate release-gate decision, same as disaster_recovery/
+# supplier_validation above.
+if _router_enabled("email_ingest"):
+    from services.ingestion.app.email_ingest.router import router as email_ingest_router
+
+    include_owned_router(app, email_ingest_router, owner="email_ingest")
+
 
 # =====================================================================
 # DOMAIN: ADMIN — tenant management, auth, supplier onboarding
