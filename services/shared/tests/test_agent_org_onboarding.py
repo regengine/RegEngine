@@ -256,10 +256,16 @@ class _RelationalFakeDB:
         self.keys_by_agent: dict[tuple, str] = {}
         self.guc_calls: list[str] = []
         self.flush_count = 0
+        self.commit_count = 0
         self.executed: list[tuple[str, dict]] = []
+        self.events: list[str] = []  # ordered "commit" / "mint:<agent_id>" trail
 
     def flush(self):
         self.flush_count += 1
+
+    def commit(self):
+        self.commit_count += 1
+        self.events.append("commit")
 
     def execute(self, stmt, params=None):
         sql = str(getattr(stmt, "text", stmt))
@@ -334,6 +340,7 @@ def _install_fake_key_minting(monkeypatch, db: _RelationalFakeDB):
                 created_by=created_by,
             )
         )
+        db.events.append(f"mint:{agent_id}")
         key_id = _uuid()
         db.keys_by_agent[(tenant_id, agent_id)] = key_id
         return SimpleNamespace(key_id=key_id, raw_key="raw-secret-must-never-leak")
@@ -370,7 +377,11 @@ class TestOnboardTenantAgentOrgFreshTenant:
         assert len(result.key_ids) == 2
         assert len(set(result.key_ids)) == 2  # distinct keys per agent
         assert not hasattr(result, "raw_key")
-        assert db.guc_calls == [tenant_id]  # set_tenant_guc called exactly once
+        # set_tenant_guc is called once up front, then re-applied after
+        # every per-agent commit (transaction-scoped GUC does not survive
+        # a commit) — one initial call plus one per agent processed.
+        assert db.guc_calls == [tenant_id] * 3
+        assert db.commit_count == 2  # one commit per agent, before minting its key
 
         # Every minted key carries exactly the default onboarding
         # capabilities — never a wildcard, never empty.
@@ -506,3 +517,52 @@ class TestOnboardTenantAgentOrgInboxCollision:
 
         with pytest.raises(RuntimeError):
             await onboard_tenant_agent_org(db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+
+
+class TestOnboardTenantAgentOrgCommitOrdering:
+    """Regression coverage for the self-review fix: a key must never be
+    minted for an agent row that is only flushed, not committed.
+
+    ``mint_agent_scoped_key`` runs on ``DatabaseAPIKeyStore``'s own,
+    separate async engine, which commits immediately and independently of
+    ``db``. If ``db`` only flushed (never committed) before minting, an
+    exception raised for a *later* agent in the same call would roll back
+    an *earlier* agent's already-flushed pod/agent/inbox rows while its
+    already-minted-and-committed key survived — an orphaned credential
+    pointing at a row that no longer exists. These tests assert the fix's
+    actual mechanism: ``db.commit()`` (and re-applying the transaction-
+    scoped tenant GUC) happens for each agent strictly before that agent's
+    key is minted.
+    """
+
+    @pytest.mark.asyncio
+    async def test_commit_happens_before_each_agents_key_is_minted(self, monkeypatch, tenant_id):
+        db = _RelationalFakeDB({tenant_id: "acme"})
+        _install_fake_key_minting(monkeypatch, db)
+        pods = [PodSpec(name="outreach-pod-1", department="outreach", agent_count=2)]
+
+        await onboard_tenant_agent_org(db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+
+        # Exactly one commit precedes each mint — never a mint with no
+        # preceding commit, and never two mints sharing one commit.
+        assert db.events == [
+            "commit",
+            "mint:" + [aid for (t, p, n), aid in db.agents.items() if n.endswith("agent-1")][0],
+            "commit",
+            "mint:" + [aid for (t, p, n), aid in db.agents.items() if n.endswith("agent-2")][0],
+        ]
+
+    @pytest.mark.asyncio
+    async def test_tenant_guc_is_reapplied_after_every_commit(self, monkeypatch, tenant_id):
+        # set_tenant_guc uses set_config(..., true) — transaction-scoped,
+        # so it does not survive a commit. Every commit must be followed
+        # by another set_tenant_guc call before the next statement runs.
+        db = _RelationalFakeDB({tenant_id: "acme"})
+        _install_fake_key_minting(monkeypatch, db)
+        pods = [PodSpec(name="outreach-pod-1", department="outreach", agent_count=3)]
+
+        await onboard_tenant_agent_org(db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+
+        # One initial set_tenant_guc, plus one per agent (after its commit).
+        assert db.guc_calls == [tenant_id] * 4
+        assert db.commit_count == 3

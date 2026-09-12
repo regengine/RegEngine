@@ -17,6 +17,15 @@ for deviations called out up front — in particular:
 * Raw secrets are never returned or logged: ``OnboardingResult.key_ids``
   holds only ``key_id`` strings. Each ``APIKeyCreateResponse.raw_key``
   minted here is discarded immediately after use.
+* Per-agent rows are ``db.commit()``-ed (with the tenant GUC re-applied
+  right after, since it is transaction-scoped) before a key is minted for
+  that agent. A key store commit lands on a completely separate async
+  engine/connection from ``db``, so a mere ``flush()`` is not enough: an
+  exception later in the same onboarding call would roll back this
+  agent's still-uncommitted rows while an already-committed key for it
+  survives, orphaning a live agent-scoped credential. Committing first is
+  what makes "never mint a key for an agent row that didn't get
+  committed" actually true.
 """
 
 from __future__ import annotations
@@ -258,6 +267,18 @@ async def onboard_tenant_agent_org(
     additionally calls ``set_tenant_guc`` itself so it is also safe to
     call directly, e.g. from a script or test, without a surrounding
     request context.
+
+    NOTE: this function commits ``db`` once per agent (immediately before
+    minting that agent's key), rather than leaving all commit/rollback
+    ownership to the caller. This is a deliberate exception to this
+    codebase's usual "the router's db_session dependency owns commit" rule
+    (see ``services/ingestion/app/remediation/service.py``): agent-scoped
+    key minting runs on a wholly separate async engine that commits
+    immediately on its own, so without an intermediate commit here a
+    later failure in this same call could roll back an agent's rows while
+    its already-committed key survives orphaned. Each commit is followed
+    by re-applying ``set_tenant_guc`` (transaction-scoped, so it does not
+    survive a commit).
     """
     if key_store is None:
         from shared.api_key_store import get_db_key_store  # noqa: PLC0415
@@ -308,11 +329,28 @@ async def onboard_tenant_agent_org(
             inbox_addresses.append(email_address)
 
             # Key minting happens after the DB writes for this agent are
-            # flushed, so a key is never minted for an agent row that
-            # didn't actually get committed. A crash between "agent row
-            # committed" and "key minted" is recovered by simply
-            # re-calling onboarding: idempotent per the check below, it
-            # mints the missing key on retry.
+            # COMMITTED (not merely flushed — a flush is only visible
+            # inside this same transaction, while mint_agent_scoped_key
+            # runs on DatabaseAPIKeyStore's own, separate async engine and
+            # commits immediately on its own connection). Without an
+            # explicit commit here, an exception raised later in this same
+            # loop (a different pod/agent, or the key-store call itself)
+            # would roll back this agent's pod/agent/inbox rows while the
+            # already-committed key survives — an orphaned, still-valid
+            # agent-scoped credential pointing at an agent that no longer
+            # exists. Committing here first is what actually gives the
+            # "a key is never minted for an agent row that didn't get
+            # committed" guarantee; a bare flush does not.
+            #
+            # set_tenant_guc is transaction-scoped (set_config(..., true)),
+            # so it must be re-applied immediately after every commit —
+            # otherwise the next statement runs with no tenant GUC set.
+            db.commit()
+            set_tenant_guc(db, tenant_id)
+
+            # A crash between "agent row committed" and "key minted" is
+            # recovered by simply re-calling onboarding: idempotent per
+            # the check below, it mints the missing key on retry.
             existing_key_id = _existing_agent_key_id(db, tenant_id=tenant_id, agent_id=agent_id)
             if existing_key_id:
                 key_ids.append(existing_key_id)

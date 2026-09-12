@@ -594,15 +594,27 @@ Key design decisions:
   carve-out. A tenant admin who needs an agent's raw key uses the existing
   key-rotation/creation admin surface per-agent afterward, out of scope
   here.
-- **Transactional shape**: pods/agents/inboxes are written under one
-  `set_tenant_guc(db, tenant_id)` + the caller's existing transaction
-  (matches `service.ingest_manifest`'s style: the router's `db_session`
-  dependency owns commit/rollback, not the service function). Key minting
-  happens *after* the DB writes for a given agent are flushed (so a key is
-  never minted for an agent row that didn't actually get committed) but the
-  overall call is not one giant DB transaction spanning the async key-store
-  calls (a separate async engine/connection pool) — a crash between "agent
-  row committed" and "key minted" is recovered by simply re-calling
+- **Transactional shape (revised during self-review)**: pods/agents/inboxes
+  are written under one `set_tenant_guc(db, tenant_id)` call per commit
+  boundary, on `db`. Key minting runs on `DatabaseAPIKeyStore`'s own,
+  separate async engine/connection, which commits immediately and
+  independently of `db`. Because of that, `onboard_tenant_agent_org`
+  deviates from the usual "the router's `db_session` dependency owns
+  commit/rollback, not the service function" rule
+  (`service.ingest_manifest`'s style): it calls `db.commit()` itself,
+  once per agent, immediately before minting that agent's key — followed
+  by re-applying `set_tenant_guc` (transaction-scoped, so it doesn't
+  survive a commit). A first draft of this function only called
+  `db.flush()` before minting, which does **not** give the "a key is
+  never minted for an agent row that didn't actually get committed"
+  guarantee this design claims: a flush is visible only inside the same,
+  still-open transaction, so a later exception in the same onboarding
+  call (a different pod/agent, or the key-store call itself) would roll
+  back this agent's pod/agent/inbox rows while its already-committed key
+  survived — an orphaned, still-valid agent-scoped credential pointing at
+  an agent that no longer exists, with no FK to catch it. Committing per
+  agent before minting closes that gap; a crash between "agent row
+  committed" and "key minted" is still recovered by simply re-calling
   onboarding, which is idempotent per the inbox/key check above and will
   mint the missing key on retry.
 
