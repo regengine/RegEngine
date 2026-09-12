@@ -186,6 +186,14 @@ class APIKeyModel(Base):
     # NOT a UUID by convention because partner ids are short slugs.
     partner_id = Column(String(64), nullable=True, index=True)
 
+    # Agent association (agent-org scoped keys — see shared/agent_org/).
+    # NULL for ordinary tenant keys. Populated for keys minted via
+    # shared.agent_org.keys.mint_agent_scoped_key(): a key scoped to
+    # exactly one agent within its tenant, matching agent_org.agent_
+    # identities.id. Same precedent as partner_id above — a plain,
+    # unconstrained scoping column on this pre-auth-path table (v121).
+    agent_id = Column(TenantUUIDText(), nullable=True, index=True)
+
     # Access control
     billing_tier = Column(String(50), nullable=True)  # DEVELOPER, PROFESSIONAL, ENTERPRISE
     allowed_jurisdictions = Column(ARRAY(String), default=list)
@@ -232,6 +240,7 @@ class APIKeyResponse(BaseModel):
     description: Optional[str] = None
     tenant_id: Optional[str] = None
     partner_id: Optional[str] = None
+    agent_id: Optional[str] = None
     billing_tier: Optional[str] = None
     allowed_jurisdictions: list[str] = Field(default_factory=list)
     scopes: list[str] = Field(default_factory=list)
@@ -262,6 +271,13 @@ class APIKeyResponse(BaseModel):
     @field_validator("tenant_id", mode="before")
     @classmethod
     def _coerce_tenant_id(cls, v: object) -> object:
+        return str(v) if v is not None else None
+
+    # Same asyncpg-returns-UUID problem as tenant_id above — agent_id is
+    # also a cross-dialect UUID-shaped column (TenantUUIDText).
+    @field_validator("agent_id", mode="before")
+    @classmethod
+    def _coerce_agent_id(cls, v: object) -> object:
         return str(v) if v is not None else None
 
     _INT_DEFAULTS: ClassVar[dict[str, int]] = {
@@ -607,6 +623,7 @@ class DatabaseAPIKeyStore:
         description: Optional[str] = None,
         tenant_id: Optional[str] = None,
         partner_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
         billing_tier: Optional[str] = None,
         allowed_jurisdictions: Optional[list[str]] = None,
         scopes: Optional[list[str]] = None,
@@ -626,6 +643,9 @@ class DatabaseAPIKeyStore:
             name: Human-readable name for the key
             description: Optional description
             tenant_id: UUID of the tenant this key belongs to
+            agent_id: UUID of the agent_org agent this key is scoped to
+                (see shared.agent_org.keys.mint_agent_scoped_key). None
+                for ordinary tenant-wide keys.
             billing_tier: DEVELOPER, PROFESSIONAL, or ENTERPRISE
             allowed_jurisdictions: List of jurisdiction codes (e.g., ["US", "EU"])
             scopes: Permission scopes (e.g., ["read:regulations", "write:analysis"])
@@ -654,6 +674,7 @@ class DatabaseAPIKeyStore:
             description=description,
             tenant_id=tenant_id,
             partner_id=partner_id,
+            agent_id=agent_id,
             billing_tier=billing_tier,
             allowed_jurisdictions=allowed_jurisdictions or ["US"],
             scopes=scopes or [],
@@ -688,6 +709,7 @@ class DatabaseAPIKeyStore:
             description=description,
             tenant_id=tenant_id,
             partner_id=partner_id,
+            agent_id=agent_id,
             billing_tier=billing_tier,
             allowed_jurisdictions=allowed_jurisdictions or ["US"],
             scopes=scopes or [],
@@ -923,6 +945,7 @@ class DatabaseAPIKeyStore:
             description=old_key.description,
             tenant_id=old_key.tenant_id,
             partner_id=old_key.partner_id,
+            agent_id=old_key.agent_id,
             billing_tier=old_key.billing_tier,
             allowed_jurisdictions=list(old_key.allowed_jurisdictions or []),
             scopes=list(old_key.scopes or []),
@@ -1164,6 +1187,7 @@ class DatabaseAPIKeyStore:
                     description=existing.description,
                     tenant_id=existing.tenant_id,
                     partner_id=existing.partner_id,
+                    agent_id=existing.agent_id,
                     billing_tier=existing.billing_tier,
                     allowed_jurisdictions=list(existing.allowed_jurisdictions or []),
                     scopes=list(new_scopes),
@@ -1207,6 +1231,7 @@ class DatabaseAPIKeyStore:
                     description=existing.description,
                     tenant_id=existing.tenant_id,
                     partner_id=existing.partner_id,
+                    agent_id=existing.agent_id,
                     billing_tier=existing.billing_tier,
                     allowed_jurisdictions=list(existing.allowed_jurisdictions or []),
                     scopes=list(new_scopes),

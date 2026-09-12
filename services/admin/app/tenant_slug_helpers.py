@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import re
-
+from shared.agent_org.slugs import slugify
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,9 +15,12 @@ def _slugify_tenant_name(name: str) -> str:
     Returns ``"tenant"`` if the input produces an empty slug (e.g. the
     input was all non-alphanumeric characters). Callers that need a
     unique slug should pipe this through ``_ensure_unique_tenant_slug``.
+
+    Thin wrapper over the shared ``slugify`` helper (also used by
+    agent_org's pod/agent slugging) so this function's existing call
+    sites and tests are untouched.
     """
-    base = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return base or "tenant"
+    return slugify(name, fallback="tenant")
 
 
 def _ensure_unique_tenant_slug(db: Session, tenant_name: str) -> str:

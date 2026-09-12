@@ -49,6 +49,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from shared.agent_org.suppression import is_suppressed
 from shared.env import is_production
 from shared.pii import mask_email
 from shared.tenant_context import set_tenant_guc, tenant_scope
@@ -240,6 +241,14 @@ class NotificationOutboxDrainer:
             # enqueue_preview keeps recipient-less rows out of the queue;
             # this guards rows queued by any other path.
             return self._finish_skipped(tenant_id, row, reason="no_recipient")
+
+        # Hard gate: runs unconditionally, before any token reminting or
+        # provider call, for every row this drainer would otherwise send —
+        # a suppressed address can never receive mail via this path
+        # regardless of payload/token state (agent_org email suppression
+        # list, see shared/agent_org/suppression.py).
+        if is_suppressed(self._session, tenant_id=tenant_id, email_address=row["recipient"]):
+            return self._finish_skipped(tenant_id, row, reason="recipient_suppressed")
 
         token_id = (row["payload"] or {}).get("token_id")
         link: Optional[str] = None
