@@ -49,7 +49,7 @@ caller.
 
 New alembic migration:
 `alembic/versions/<date>_<hash>_v121_billing_usage_counters.py`
-(`down_revision = "c6a120b4e901"`, current head; naming/format follows
+(`down_revision = "c6a120b4e901"` <!-- pragma: allowlist secret -->, current head; naming/format follows
 `20260827_c1d4e8f20a37_v115_task_queue_tenantless_idempotency.py` and
 `20260716_c7a1e5f2b9d4_v095_supplier_remediation_slice.py`: `op.execute`
 raw DDL, `IF NOT EXISTS` everywhere, non-destructive `downgrade()`.)

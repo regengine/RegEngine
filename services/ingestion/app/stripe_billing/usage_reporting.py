@@ -62,19 +62,22 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
       in one query, so two concurrent reporting runs for the same tenant
       cannot both read the same pre-report ``unit_count`` and
       double-report the delta.
-    - Each Stripe call carries a stable ``identifier`` derived from that
-      period's counter's new cumulative value
-      (``{tenant_id}:{billing_period_start}:{unit_count}``), so a retried
-      call after a successful-but-unacknowledged Stripe response is
-      deduplicated Stripe-side too (Stripe enforces uniqueness of
-      ``identifier`` within a rolling ~24h window).
-    - ``last_reported_count`` only advances after Stripe confirms success
-      for that period; all updates commit together at the end. A
-      ``stripe.error.StripeError`` on any period is logged and re-raised,
-      rolling back the whole batch (no partial updates), so the next run
-      naturally re-sends the same (Stripe-deduplicated) identifiers for
-      every outstanding period, including ones that already succeeded in
-      the failed run.
+    - Each Stripe call carries an ``identifier`` derived from that period's
+      counter's cumulative value at read time
+      (``{tenant_id}:{billing_period_start}:{unit_count}``). That value is
+      NOT stable across separate invocations: new events keep incrementing
+      ``unit_count`` for a period between calls to this function, so a
+      later call reporting the same period computes a different
+      ``identifier`` and Stripe will not dedupe it against an earlier one.
+    - Because of that, ``last_reported_count`` is advanced and committed
+      immediately after each period's Stripe call succeeds — not batched
+      to one commit at the end. A ``stripe.error.StripeError`` on period N
+      only fails to advance period N; every period before it in this call
+      that already succeeded is durably committed and will not be
+      re-reported (and thus not double-billed) on the next run, however
+      much ``unit_count`` has grown for it by then. Only the failed
+      period's (and any not-yet-attempted period's) outstanding delta is
+      resent.
     """
     mapping = _state_mod._get_subscription_mapping(tenant_id)
     if mapping.get("metered_billing_enabled") != "true":
@@ -134,6 +137,10 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
             """),
             {"tenant_id": tenant_id, "unit_count": unit_count, "period_start": period_start},
         )
+        # Commit this period's advance now, before attempting the next
+        # period. A failure on a later period must not roll this back —
+        # see the docstring's identifier-instability note.
+        session.commit()
 
         logger.info(
             "stripe_usage_reported",
@@ -156,8 +163,6 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
 
     if not reported_periods:
         return None
-
-    session.commit()
 
     return {
         "tenant_id": tenant_id,

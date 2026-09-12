@@ -291,11 +291,18 @@ class TestReportTenantUsageStripeError:
         assert len(session.calls) == 1
         assert session.committed is False
 
-    def test_failure_on_a_later_period_leaves_earlier_periods_uncommitted(self, monkeypatch):
-        # A StripeError on the SECOND period must not leave the FIRST
-        # period's local update committed on its own — the whole batch is
-        # one transaction, so a retry safely re-sends both (Stripe dedupes
-        # the already-succeeded one by its stable `identifier`).
+    def test_failure_on_a_later_period_does_not_roll_back_an_earlier_success(self, monkeypatch):
+        # Bug (caught by review): the identifier embeds the period's
+        # *current* unit_count, which keeps growing as new events land in
+        # between separate invocations — it is NOT stable across a failed
+        # attempt and a later retry. So if a later period's StripeError
+        # rolled back an earlier period's already-succeeded update, a
+        # retry after that failure would recompute a DIFFERENT identifier
+        # for the earlier period (since unit_count grew) and Stripe would
+        # not dedupe it, double-reporting (over-billing) that period.
+        # The fix: commit each period's advance immediately after its own
+        # Stripe call succeeds, so an earlier success is never undone by a
+        # later failure in the same call.
         monkeypatch.setattr(mod._state_mod, "_get_subscription_mapping", lambda tid: _mapping())
         session = _FakeSession(
             results=[
@@ -323,4 +330,13 @@ class TestReportTenantUsageStripeError:
         with pytest.raises(stripe.error.StripeError):
             mod.report_tenant_usage_to_stripe(session, TENANT_ID)
 
-        assert session.committed is False
+        # The first period's Stripe call succeeded and must be durably
+        # committed even though the second period then failed.
+        assert session.committed is True
+        update_calls = [c for c in session.calls if "UPDATE billing.tenant_usage_counters" in c[0]]
+        assert len(update_calls) == 1
+        assert update_calls[0][1] == {
+            "tenant_id": TENANT_ID,
+            "unit_count": 5,
+            "period_start": PAST_PERIOD_START,
+        }
