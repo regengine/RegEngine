@@ -1,0 +1,572 @@
+"""Unit tests for ``app.email_ingest.service`` — the inbound-email orchestrator.
+
+Mocking style follows ``test_stripe_plans_1342.py``: ``monkeypatch`` swaps out
+collaborators (the DB session, ``ingest_csv``, tenant lookup) with fakes, so
+these tests need no live Postgres and make no network calls. The
+SECURITY DEFINER SQL itself (``fsma.record_inbound_email_audit`` etc.) is
+exercised by mocking ``db.execute(...).fetchone()`` rather than a real
+connection — same approach as ``test_email_ingest_tenant_lookup.py``.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import app.email_ingest.service as service_mod
+import pytest
+from app.email_ingest.schemas import AttachmentResult, PostmarkAttachment, PostmarkInboundPayload
+from app.email_ingest.service import (
+    _first_recipient,
+    _ingest_attachment_csv,
+    _process_one_attachment,
+    _result_from_audit_row,
+    get_inbound_email_audit_by_message_id,
+    process_inbound_email,
+    record_inbound_email_audit,
+)
+from fastapi import HTTPException
+
+VALID_B64 = base64.b64encode(b"col_a,col_b\n1,2\n").decode("ascii")
+
+# ---------------------------------------------------------------------------
+# _first_recipient — precedence: OriginalRecipient > ToFull > To > None
+# ---------------------------------------------------------------------------
+
+
+class TestFirstRecipient:
+    def test_prefers_original_recipient(self):
+        payload = PostmarkInboundPayload(
+            MessageID="m1",
+            From="a@example.com",
+            OriginalRecipient="preferred@tenant.co",
+            To="other@tenant.co",
+            ToFull=[{"Email": "tofull@tenant.co"}],
+        )
+        assert _first_recipient(payload) == "preferred@tenant.co"
+
+    def test_strips_original_recipient(self):
+        payload = PostmarkInboundPayload(
+            MessageID="m1", From="a@example.com", OriginalRecipient="  spaced@tenant.co  "
+        )
+        assert _first_recipient(payload) == "spaced@tenant.co"
+
+    def test_blank_original_recipient_falls_through_to_tofull(self):
+        payload = PostmarkInboundPayload(
+            MessageID="m1",
+            From="a@example.com",
+            OriginalRecipient="   ",
+            ToFull=[{"Email": "tofull@tenant.co"}],
+        )
+        assert _first_recipient(payload) == "tofull@tenant.co"
+
+    def test_falls_back_to_tofull_lowercase_key(self):
+        payload = PostmarkInboundPayload(
+            MessageID="m1", From="a@example.com", ToFull=[{"email": "lower@tenant.co"}]
+        )
+        assert _first_recipient(payload) == "lower@tenant.co"
+
+    def test_tofull_skips_blank_entries_and_uses_first_valid(self):
+        payload = PostmarkInboundPayload(
+            MessageID="m1",
+            From="a@example.com",
+            ToFull=[{"Email": ""}, {}, {"Email": "second@tenant.co"}],
+        )
+        assert _first_recipient(payload) == "second@tenant.co"
+
+    def test_falls_back_to_to_header_parsed(self):
+        payload = PostmarkInboundPayload(
+            MessageID="m1", From="a@example.com", To='"Tenant" <parsed@tenant.co>, other@tenant.co'
+        )
+        assert _first_recipient(payload) == "parsed@tenant.co"
+
+    def test_returns_none_when_nothing_present(self):
+        payload = PostmarkInboundPayload(MessageID="m1", From="a@example.com")
+        assert _first_recipient(payload) is None
+
+    def test_returns_none_when_to_header_has_no_addresses(self):
+        payload = PostmarkInboundPayload(MessageID="m1", From="a@example.com", To="")
+        assert _first_recipient(payload) is None
+
+
+# ---------------------------------------------------------------------------
+# Audit persistence helpers — mocked DB session
+# ---------------------------------------------------------------------------
+
+
+class TestGetInboundEmailAuditByMessageId:
+    def test_returns_none_when_no_row(self):
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+        assert get_inbound_email_audit_by_message_id(db, "msg-1") is None
+
+    def test_maps_row_fields_and_parses_json_details_string(self):
+        db = MagicMock()
+        row = SimpleNamespace(
+            id="11111111-1111-1111-1111-111111111111",
+            tenant_id="22222222-2222-2222-2222-222222222222",
+            message_id="msg-1",
+            sender="a@example.com",
+            recipient="b@tenant.co",
+            subject="hi",
+            status="accepted",
+            rejection_reason=None,
+            attachment_count=1,
+            accepted_attachment_count=1,
+            rejected_attachment_count=0,
+            details=json.dumps([{"name": "f.csv", "status": "accepted"}]),
+            received_at="2026-09-12T00:00:00Z",
+        )
+        db.execute.return_value.fetchone.return_value = row
+        result = get_inbound_email_audit_by_message_id(db, "msg-1")
+        assert result["id"] == str(row.id)
+        assert result["tenant_id"] == str(row.tenant_id)
+        assert result["details"] == [{"name": "f.csv", "status": "accepted"}]
+
+    def test_details_already_a_list_is_used_as_is(self):
+        db = MagicMock()
+        row = SimpleNamespace(
+            id="1",
+            tenant_id=None,
+            message_id="msg-2",
+            sender="a@example.com",
+            recipient="",
+            subject=None,
+            status="rejected",
+            rejection_reason="unmapped_recipient",
+            attachment_count=0,
+            accepted_attachment_count=0,
+            rejected_attachment_count=0,
+            details=[{"already": "a list"}],
+            received_at=None,
+        )
+        db.execute.return_value.fetchone.return_value = row
+        result = get_inbound_email_audit_by_message_id(db, "msg-2")
+        assert result["details"] == [{"already": "a list"}]
+        assert result["tenant_id"] is None
+
+    def test_null_details_defaults_to_empty_list(self):
+        db = MagicMock()
+        row = SimpleNamespace(
+            id="1",
+            tenant_id=None,
+            message_id="msg-3",
+            sender="a@example.com",
+            recipient="",
+            subject=None,
+            status="rejected",
+            rejection_reason="unmapped_recipient",
+            attachment_count=0,
+            accepted_attachment_count=0,
+            rejected_attachment_count=0,
+            details=None,
+            received_at=None,
+        )
+        db.execute.return_value.fetchone.return_value = row
+        result = get_inbound_email_audit_by_message_id(db, "msg-3")
+        assert result["details"] == []
+
+
+class TestRecordInboundEmailAudit:
+    def _call(self, db, **overrides):
+        kwargs = dict(
+            tenant_id="tenant-1",
+            message_id="msg-1",
+            sender="a@example.com",
+            recipient="b@tenant.co",
+            subject="hi",
+            status="accepted",
+            rejection_reason=None,
+            attachment_count=1,
+            accepted_count=1,
+            rejected_count=0,
+            details=[{"name": "f.csv"}],
+        )
+        kwargs.update(overrides)
+        return record_inbound_email_audit(db, **kwargs)
+
+    def test_commits_and_maps_row_on_success(self):
+        db = MagicMock()
+        row = SimpleNamespace(
+            id="1",
+            message_id="msg-1",
+            status="accepted",
+            attachment_count=1,
+            accepted_attachment_count=1,
+            rejected_attachment_count=0,
+        )
+        db.execute.return_value.fetchone.return_value = row
+        result = self._call(db)
+        db.commit.assert_called_once()
+        assert result["message_id"] == "msg-1"
+        assert result["status"] == "accepted"
+
+    def test_returns_none_on_conflict_race(self):
+        # ON CONFLICT (message_id) DO NOTHING -> no RETURNING row.
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+        assert self._call(db) is None
+        db.commit.assert_called_once()
+
+    def test_details_are_json_encoded_for_the_jsonb_param(self):
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+        details = [{"name": "f.csv", "status": "accepted"}]
+        self._call(db, details=details)
+        _, params = db.execute.call_args[0]
+        assert json.loads(params["p_details"]) == details
+
+    def test_passes_through_scalar_params(self):
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+        self._call(db, tenant_id="tenant-xyz", rejection_reason="unmapped_recipient")
+        _, params = db.execute.call_args[0]
+        assert params["p_tenant_id"] == "tenant-xyz"
+        assert params["p_rejection_reason"] == "unmapped_recipient"
+
+
+class TestResultFromAuditRow:
+    def test_rebuilds_response_from_persisted_row(self):
+        row = {
+            "message_id": "msg-1",
+            "status": "partial",
+            "tenant_id": "tenant-1",
+            "rejection_reason": None,
+            "details": [
+                {"name": "good.csv", "status": "accepted", "rows_accepted": 3, "rows_rejected": 0},
+                {"name": "bad.csv", "status": "rejected", "reason": "unsupported_attachment_type"},
+            ],
+        }
+        result = _result_from_audit_row(row)
+        assert result.message_id == "msg-1"
+        assert result.status == "partial"
+        assert result.tenant_id == "tenant-1"
+        assert len(result.attachments) == 2
+        assert result.attachments[0].rows_accepted == 3
+        assert result.attachments[1].reason == "unsupported_attachment_type"
+
+    def test_handles_missing_details_key(self):
+        row = {"message_id": "msg-2", "status": "rejected", "tenant_id": None, "rejection_reason": "unmapped_recipient"}
+        result = _result_from_audit_row(row)
+        assert result.attachments == []
+
+
+# ---------------------------------------------------------------------------
+# _process_one_attachment / _ingest_attachment_csv
+# ---------------------------------------------------------------------------
+
+
+class TestProcessOneAttachment:
+    async def test_rejects_unsupported_type_and_extension(self):
+        attachment = PostmarkAttachment(Name="doc.pdf", Content=VALID_B64, ContentType="application/pdf")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "rejected"
+        assert "unsupported_attachment_type" in result.reason
+
+    async def test_csv_extension_accepted_even_with_generic_content_type(self, monkeypatch):
+        called = {}
+
+        async def fake_ingest(tenant_id, name, raw):
+            called["args"] = (tenant_id, name, raw)
+            return AttachmentResult(name=name, status="accepted", rows_accepted=1)
+
+        monkeypatch.setattr(service_mod, "_ingest_attachment_csv", fake_ingest)
+        attachment = PostmarkAttachment(Name="data.csv", Content=VALID_B64, ContentType="application/octet-stream")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "accepted"
+        assert called["args"][0] == "tenant-1"
+        assert called["args"][1] == "data.csv"
+
+    async def test_excel_mimetype_accepted_without_csv_extension(self, monkeypatch):
+        # Postmark/Outlook commonly mislabel CSV attachments with the Excel
+        # MIME type even when the filename has no .csv suffix.
+        async def fake_ingest(tenant_id, name, raw):
+            return AttachmentResult(name=name, status="accepted")
+
+        monkeypatch.setattr(service_mod, "_ingest_attachment_csv", fake_ingest)
+        attachment = PostmarkAttachment(Name="export", Content=VALID_B64, ContentType="application/vnd.ms-excel")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "accepted"
+
+    async def test_invalid_base64_is_rejected(self):
+        attachment = PostmarkAttachment(Name="data.csv", Content="not-valid-base64!!!", ContentType="text/csv")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "rejected"
+        assert result.reason == "invalid_base64_content"
+
+    async def test_oversized_attachment_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(service_mod, "MAX_CSV_FILE_SIZE_BYTES", 4)
+        attachment = PostmarkAttachment(Name="data.csv", Content=VALID_B64, ContentType="text/csv")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "rejected"
+        assert "exceeds maximum attachment size" in result.reason
+
+    async def test_filename_is_sanitized_before_use(self, monkeypatch):
+        captured = {}
+
+        async def fake_ingest(tenant_id, name, raw):
+            captured["name"] = name
+            return AttachmentResult(name=name, status="accepted")
+
+        monkeypatch.setattr(service_mod, "_ingest_attachment_csv", fake_ingest)
+        attachment = PostmarkAttachment(Name="../../etc/passwd.csv", Content=VALID_B64, ContentType="text/csv")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert "/" not in captured["name"]
+        assert ".." not in captured["name"]
+        assert result.name == captured["name"]
+
+
+class TestIngestAttachmentCsv:
+    async def test_builds_email_inbound_principal_and_returns_accepted(self, monkeypatch):
+        captured = {}
+
+        async def fake_ingest_csv(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(accepted=2, rejected=0)
+
+        monkeypatch.setattr(service_mod, "ingest_csv", fake_ingest_csv)
+        result = await _ingest_attachment_csv("tenant-1", "data.csv", b"col_a\n1\n")
+
+        assert result.status == "accepted"
+        assert result.rows_accepted == 2
+        assert result.rows_rejected == 0
+        principal = captured["principal"]
+        assert principal.key_id == "email-ingest"
+        assert principal.scopes == ["webhooks.ingest"]
+        assert principal.tenant_id == "tenant-1"
+        assert principal.auth_mode == "email_inbound"
+        assert captured["tenant_id"] == "tenant-1"
+        assert captured["source"] == "email_inbound"
+        assert captured["file"].filename == "data.csv"
+
+    async def test_partial_when_some_rows_rejected(self, monkeypatch):
+        async def fake_ingest_csv(**kwargs):
+            return SimpleNamespace(accepted=1, rejected=1)
+
+        monkeypatch.setattr(service_mod, "ingest_csv", fake_ingest_csv)
+        result = await _ingest_attachment_csv("tenant-1", "data.csv", b"x")
+        # _ingest_attachment_csv itself only distinguishes accepted (>0) vs
+        # rejected (0 accepted); "partial" is computed one level up in
+        # process_inbound_email from the aggregate across attachments.
+        assert result.status == "accepted"
+        assert result.rows_rejected == 1
+
+    async def test_zero_accepted_rows_is_rejected(self, monkeypatch):
+        async def fake_ingest_csv(**kwargs):
+            return SimpleNamespace(accepted=0, rejected=3)
+
+        monkeypatch.setattr(service_mod, "ingest_csv", fake_ingest_csv)
+        result = await _ingest_attachment_csv("tenant-1", "data.csv", b"x")
+        assert result.status == "rejected"
+        assert result.rows_rejected == 3
+
+    async def test_http_exception_with_dict_detail_extracts_message(self, monkeypatch):
+        async def fake_ingest_csv(**kwargs):
+            raise HTTPException(status_code=400, detail={"message": "No valid rows found", "errors": ["bad"]})
+
+        monkeypatch.setattr(service_mod, "ingest_csv", fake_ingest_csv)
+        result = await _ingest_attachment_csv("tenant-1", "data.csv", b"x")
+        assert result.status == "rejected"
+        assert result.reason == "No valid rows found"
+
+    async def test_http_exception_with_string_detail_is_used_verbatim(self, monkeypatch):
+        async def fake_ingest_csv(**kwargs):
+            raise HTTPException(status_code=400, detail="CSV contained no data rows")
+
+        monkeypatch.setattr(service_mod, "ingest_csv", fake_ingest_csv)
+        result = await _ingest_attachment_csv("tenant-1", "data.csv", b"x")
+        assert result.status == "rejected"
+        assert result.reason == "CSV contained no data rows"
+
+
+# ---------------------------------------------------------------------------
+# process_inbound_email — full orchestration, DB session mocked
+# ---------------------------------------------------------------------------
+
+
+def _payload(**overrides) -> PostmarkInboundPayload:
+    kwargs = dict(
+        MessageID="msg-1",
+        From="sender@example.com",
+        OriginalRecipient="tenant-inbox@tenant.regengine.co",
+        Attachments=[],
+    )
+    kwargs.update(overrides)
+    return PostmarkInboundPayload(**kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_audit_persistence(monkeypatch):
+    """Default every test to a DB session that never leaves the process.
+
+    Individual tests still monkeypatch ``get_inbound_email_audit_by_message_id``
+    / ``record_inbound_email_audit`` at the module level to assert on calls;
+    this fixture just guarantees ``db_session`` itself is never touched for
+    real if a test forgets to stub one of them.
+    """
+    yield
+
+
+class TestProcessInboundEmailIdempotency:
+    async def test_replays_existing_audit_row_without_reprocessing(self, monkeypatch):
+        existing = {
+            "message_id": "msg-1",
+            "status": "accepted",
+            "tenant_id": "tenant-1",
+            "rejection_reason": None,
+            "details": [],
+        }
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: existing)
+
+        lookup_called = False
+
+        def fail_lookup(db, address):
+            nonlocal lookup_called
+            lookup_called = True
+            return "tenant-1"
+
+        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", fail_lookup)
+
+        def fail_record(*args, **kwargs):
+            raise AssertionError("record_inbound_email_audit must not run on idempotent replay")
+
+        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fail_record)
+
+        db = MagicMock()
+        result = await process_inbound_email(db, _payload())
+
+        assert result.message_id == "msg-1"
+        assert result.status == "accepted"
+        assert result.tenant_id == "tenant-1"
+        assert lookup_called is False
+
+
+class TestProcessInboundEmailUnmappedRecipient:
+    async def test_no_recipient_at_all_is_rejected_without_tenant_lookup(self, monkeypatch):
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+
+        def fail_lookup(db, address):
+            raise AssertionError("tenant lookup must not run without a recipient")
+
+        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", fail_lookup)
+
+        recorded = {}
+
+        def fake_record(db, **kwargs):
+            recorded.update(kwargs)
+            return {"id": "1"}
+
+        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fake_record)
+
+        db = MagicMock()
+        payload = _payload(OriginalRecipient=None, To=None, ToFull=None)
+        result = await process_inbound_email(db, payload)
+
+        assert result.status == "rejected"
+        assert result.rejection_reason == "unmapped_recipient"
+        assert result.tenant_id is None
+        assert recorded["status"] == "rejected"
+        assert recorded["rejection_reason"] == "unmapped_recipient"
+        assert recorded["recipient"] == ""
+
+    async def test_recipient_present_but_unmapped_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr: None)
+
+        recorded = {}
+
+        def fake_record(db, **kwargs):
+            recorded.update(kwargs)
+            return {"id": "1"}
+
+        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fake_record)
+
+        db = MagicMock()
+        result = await process_inbound_email(db, _payload())
+
+        assert result.status == "rejected"
+        assert result.rejection_reason == "unmapped_recipient"
+        assert recorded["recipient"] == "tenant-inbox@tenant.regengine.co"
+
+
+class TestProcessInboundEmailMappedTenant:
+    def _setup(self, monkeypatch, tenant_id="tenant-1"):
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr: tenant_id)
+        guc_calls = []
+        monkeypatch.setattr(service_mod, "set_tenant_guc", lambda db, tid: guc_calls.append(tid))
+        recorded = {}
+
+        def fake_record(db, **kwargs):
+            recorded.update(kwargs)
+            return {"id": "1"}
+
+        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fake_record)
+        return guc_calls, recorded
+
+    async def test_no_attachments_is_accepted(self, monkeypatch):
+        guc_calls, recorded = self._setup(monkeypatch)
+        db = MagicMock()
+        result = await process_inbound_email(db, _payload(Attachments=[]))
+
+        assert result.status == "accepted"
+        assert result.tenant_id == "tenant-1"
+        assert guc_calls == ["tenant-1"]
+        assert recorded["status"] == "accepted"
+        assert recorded["attachment_count"] == 0
+
+    async def test_all_attachments_accepted_is_accepted(self, monkeypatch):
+        self._setup(monkeypatch)
+
+        async def fake_process_one(tenant_id, attachment):
+            return AttachmentResult(name=attachment.Name, status="accepted", rows_accepted=5)
+
+        monkeypatch.setattr(service_mod, "_process_one_attachment", fake_process_one)
+
+        db = MagicMock()
+        payload = _payload(
+            Attachments=[{"Name": "a.csv", "Content": VALID_B64, "ContentType": "text/csv"}],
+        )
+        result = await process_inbound_email(db, payload)
+        assert result.status == "accepted"
+        assert len(result.attachments) == 1
+
+    async def test_mixed_results_is_partial(self, monkeypatch):
+        self._setup(monkeypatch)
+
+        async def fake_process_one(tenant_id, attachment):
+            if attachment.Name == "good.csv":
+                return AttachmentResult(name=attachment.Name, status="accepted", rows_accepted=2)
+            return AttachmentResult(name=attachment.Name, status="rejected", reason="bad_type")
+
+        monkeypatch.setattr(service_mod, "_process_one_attachment", fake_process_one)
+
+        db = MagicMock()
+        payload = _payload(
+            Attachments=[
+                {"Name": "good.csv", "Content": VALID_B64, "ContentType": "text/csv"},
+                {"Name": "bad.pdf", "Content": VALID_B64, "ContentType": "application/pdf"},
+            ],
+        )
+        result = await process_inbound_email(db, payload)
+        assert result.status == "partial"
+
+    async def test_all_attachments_rejected_is_rejected(self, monkeypatch):
+        self._setup(monkeypatch)
+
+        async def fake_process_one(tenant_id, attachment):
+            return AttachmentResult(name=attachment.Name, status="rejected", reason="bad_type")
+
+        monkeypatch.setattr(service_mod, "_process_one_attachment", fake_process_one)
+
+        db = MagicMock()
+        payload = _payload(
+            Attachments=[{"Name": "bad.pdf", "Content": VALID_B64, "ContentType": "application/pdf"}],
+        )
+        result = await process_inbound_email(db, payload)
+        assert result.status == "rejected"
+        # Distinct from the unmapped-recipient rejection: no rejection_reason
+        # is stamped here, the per-attachment `reason` carries the detail.
+        assert result.rejection_reason is None
