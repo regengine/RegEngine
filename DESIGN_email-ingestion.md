@@ -685,3 +685,101 @@ pytest services/ingestion/tests/test_email_ingest_router.py services/ingestion/t
   per spec point 6.
 - No outbound acknowledgement email to the sender on rejection — spec
   asks for log-and-200, not a reply.
+
+## 15. Security hardening (post-review, migration v122)
+
+An independent security review of this branch found two real gaps before
+it shipped anywhere; both are closed in `alembic/versions/20260912_d14f8a2b9c31_v122_email_ingestion_hardening.py`
+plus the corresponding `service.py`/`tenant_lookup.py` changes.
+
+1. **No sender authentication (high).** Sections 3.1 and 14 above describe
+   tenant resolution purely from the recipient address, with inbound
+   addresses "seeded directly ... e.g. via a one-off `INSERT`" and no
+   stated entropy requirement. Postmark's Basic-Auth webhook credential
+   authenticates the transport ("this call came from Postmark"), not the
+   original email's sender — Postmark forwards *any* internet sender's
+   mail addressed to a configured inbound address using that same shared
+   credential. Combined, the entire cross-tenant boundary reduced to
+   "knows/guesses one string," and once ingested, `source="email_inbound"`
+   events went through the same merkle-chained `CTEPersistence` path as
+   authenticated API/portal submissions.
+
+   Fix: `fsma.tenant_inbound_addresses` gains `allowed_senders TEXT[]`.
+   `fsma.get_tenant_by_inbound_address` now takes the email's `From`
+   address as a second argument and only resolves a tenant when the sender
+   matches an allowlist entry (`user@example.com` verbatim, or `@example.com`
+   as a domain suffix). **A row with an empty allowlist authorizes no
+   sender at all** — fail closed, not fail open — so every already-seeded
+   v121 row (all of which predate this column) denies every sender until
+   an operator explicitly populates it. `tenant_lookup.lookup_tenant_by_inbound_address`
+   and `service.process_inbound_email` were updated accordingly
+   (`service._sender_address` extracts the bare address from `payload.From`
+   via `email.utils.parseaddr`, same shape as `_first_recipient`'s
+   reliance on `email.utils`).
+
+   Deliberately NOT built as part of this fix: an admin/tenant-facing UI to
+   manage `allowed_senders` (same "seeded directly for now" scoping as
+   section 14 already accepts for the table as a whole), and a
+   quarantine/human-review queue for accepted email-sourced events beyond
+   the `source="email_inbound"` tag `CTEPersistence` already carries. Both
+   are reasonable follow-ups flagged by the review but are separate,
+   larger pieces of work from "authenticate the sender."
+
+2. **Read-then-act idempotency race (medium).** Documented as a known
+   residual gap in section 13 item 4 above: two genuinely concurrent
+   deliveries of the same `MessageID` could both observe "no audit row
+   yet" (via `get_inbound_email_audit_by_message_id`) before either had
+   written one, so both proceeded to run `_ingest_attachment_csv` against
+   the same CSV — `ON CONFLICT (message_id) DO NOTHING` on the old
+   single-statement `record_inbound_email_audit` only deduplicated the
+   *audit row*, after the fact, not the CTE events themselves.
+
+   Fix: claim-then-act, mirroring the `NotificationOutboxDrainer._claim()`
+   pattern already used by `app/remediation/delivery.py` for the identical
+   "make double-processing structurally impossible" problem (an atomic
+   `UPDATE ... WHERE status = 'queued' ...` there; an atomic
+   `INSERT ... ON CONFLICT DO NOTHING` here, since the audit row doesn't
+   exist yet at claim time). `status` gains a `'processing'` value.
+   `fsma.claim_inbound_email_audit` inserts the row as `status='processing'`
+   — the *first* write `process_inbound_email` makes, before any attachment
+   reaches CSV ingestion; losing that race (`NULL` back from `ON CONFLICT
+   DO NOTHING`) means another request already owns this exact `MessageID`,
+   so this request must not run ingestion at all. `fsma.finalize_inbound_email_audit`
+   then updates that same row to its real outcome, guarded by
+   `status = 'processing'` so it only ever touches the row its own claim
+   produced. `fsma.record_inbound_email_audit` is removed; nothing else
+   called it.
+
+   A request that loses the claim race re-reads the audit row: if the
+   winner has since finished, the loser replays that recorded result
+   (unchanged idempotent-replay behavior); if the winner is still mid-flight,
+   the loser returns **409** rather than fabricate a result or double-run
+   ingestion — Postmark's own retry-on-non-2xx contract (section 9) is
+   exactly the mechanism that recovers from that 409 once the winner
+   commits.
+
+   A session-level `pg_advisory_lock` (rather than a claim row) was
+   considered and rejected: `services/scheduler/app/distributed.py`'s own
+   comments document a real production incident class where a session-level
+   advisory lock held across multiple commits leaked onto a pooled
+   connection when it wasn't released on every exit path (#2882). This
+   endpoint's `db_session` is an ordinary per-request pooled session, not
+   the dedicated long-lived connection `distributed.py` manages specifically
+   to make that pattern safe, so the claim-row approach (already proven
+   safe under pooling by `remediation/delivery.py`) was used instead.
+   `pg_advisory_xact_lock` (used elsewhere in this repo for chain-append
+   races, e.g. `cte_persistence/writes.py`) was also considered and
+   rejected for this specific function: it releases at the next `COMMIT`,
+   and `process_inbound_email`'s own control flow already commits more than
+   once before attachment processing finishes (`tenant_lookup`'s bootstrap
+   lookup commits to release its transaction-local GUCs), so a
+   transaction-scoped lock taken up front would already be gone by the time
+   CSV ingestion runs.
+
+3. **Unsanitized `MessageID` in a log line (low).** `payload.MessageID` was
+   interpolated into `logger.warning(...)` unlike every other
+   payload-derived value in this module (`sanitize_upload_filename` for
+   attachment names, `mask_email` for the recipient). Fixed with a small
+   `service._sanitize_log_value` helper (strips control characters
+   including CR/LF, caps length at 200 chars) applied to `MessageID`
+   wherever it reaches a log line.

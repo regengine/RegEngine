@@ -3,9 +3,10 @@
 Mocking style follows ``test_stripe_plans_1342.py``: ``monkeypatch`` swaps out
 collaborators (the DB session, ``ingest_csv``, tenant lookup) with fakes, so
 these tests need no live Postgres and make no network calls. The
-SECURITY DEFINER SQL itself (``fsma.record_inbound_email_audit`` etc.) is
-exercised by mocking ``db.execute(...).fetchone()`` rather than a real
-connection — same approach as ``test_email_ingest_tenant_lookup.py``.
+SECURITY DEFINER SQL itself (``fsma.claim_inbound_email_audit``,
+``fsma.finalize_inbound_email_audit``, etc.) is exercised by mocking
+``db.execute(...).fetchone()`` rather than a real connection — same approach
+as ``test_email_ingest_tenant_lookup.py``.
 """
 
 from __future__ import annotations
@@ -23,9 +24,12 @@ from app.email_ingest.service import (
     _ingest_attachment_csv,
     _process_one_attachment,
     _result_from_audit_row,
+    _sanitize_log_value,
+    _sender_address,
+    claim_inbound_email_audit,
+    finalize_inbound_email_audit,
     get_inbound_email_audit_by_message_id,
     process_inbound_email,
-    record_inbound_email_audit,
 )
 from fastapi import HTTPException
 
@@ -89,6 +93,41 @@ class TestFirstRecipient:
     def test_returns_none_when_to_header_has_no_addresses(self):
         payload = PostmarkInboundPayload(MessageID="m1", From="a@example.com", To="")
         assert _first_recipient(payload) is None
+
+
+# ---------------------------------------------------------------------------
+# _sender_address — v122 sender-allowlist input
+# ---------------------------------------------------------------------------
+
+
+class TestSenderAddress:
+    def test_bare_address_is_lowercased(self):
+        assert _sender_address("Sender@Example.COM") == "sender@example.com"
+
+    def test_display_name_wrapped_address_is_extracted(self):
+        assert _sender_address('"Some Sender" <sender@example.com>') == "sender@example.com"
+
+    def test_empty_from_returns_empty_string(self):
+        assert _sender_address("") == ""
+
+
+# ---------------------------------------------------------------------------
+# _sanitize_log_value — control-character/length guard for log lines
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeLogValue:
+    def test_passes_through_an_ordinary_value(self):
+        assert _sanitize_log_value("msg-123") == "msg-123"
+
+    def test_strips_control_characters_including_crlf(self):
+        assert _sanitize_log_value("msg-1\r\nlogger.warning(injected)=1") == "msg-1logger.warning(injected)=1"
+
+    def test_truncates_overlong_values(self):
+        assert len(_sanitize_log_value("x" * 500)) == 200
+
+    def test_none_becomes_empty_string(self):
+        assert _sanitize_log_value(None) == ""
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +208,7 @@ class TestGetInboundEmailAuditByMessageId:
         assert result["details"] == []
 
 
-class TestRecordInboundEmailAudit:
+class TestClaimInboundEmailAudit:
     def _call(self, db, **overrides):
         kwargs = dict(
             tenant_id="tenant-1",
@@ -177,6 +216,44 @@ class TestRecordInboundEmailAudit:
             sender="a@example.com",
             recipient="b@tenant.co",
             subject="hi",
+            attachment_count=1,
+        )
+        kwargs.update(overrides)
+        return claim_inbound_email_audit(db, **kwargs)
+
+    def test_commits_and_maps_row_on_success(self):
+        db = MagicMock()
+        row = SimpleNamespace(id="1", message_id="msg-1", status="processing")
+        db.execute.return_value.fetchone.return_value = row
+        result = self._call(db)
+        db.commit.assert_called_once()
+        assert result["message_id"] == "msg-1"
+        assert result["status"] == "processing"
+
+    def test_returns_none_on_conflict_race(self):
+        # ON CONFLICT (message_id) DO NOTHING -> no RETURNING row: the
+        # caller (process_inbound_email) must treat this as "someone else
+        # already owns this message_id" and not run ingestion.
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+        assert self._call(db) is None
+        db.commit.assert_called_once()
+
+    def test_passes_through_scalar_params(self):
+        db = MagicMock()
+        db.execute.return_value.fetchone.return_value = None
+        self._call(db, tenant_id="tenant-xyz", sender="s@x.com")
+        _, params = db.execute.call_args[0]
+        assert params["p_tenant_id"] == "tenant-xyz"
+        assert params["p_sender"] == "s@x.com"
+        assert params["p_attachment_count"] == 1
+
+
+class TestFinalizeInboundEmailAudit:
+    def _call(self, db, **overrides):
+        kwargs = dict(
+            message_id="msg-1",
+            tenant_id="tenant-1",
             status="accepted",
             rejection_reason=None,
             attachment_count=1,
@@ -185,7 +262,7 @@ class TestRecordInboundEmailAudit:
             details=[{"name": "f.csv"}],
         )
         kwargs.update(overrides)
-        return record_inbound_email_audit(db, **kwargs)
+        return finalize_inbound_email_audit(db, **kwargs)
 
     def test_commits_and_maps_row_on_success(self):
         db = MagicMock()
@@ -203,8 +280,10 @@ class TestRecordInboundEmailAudit:
         assert result["message_id"] == "msg-1"
         assert result["status"] == "accepted"
 
-    def test_returns_none_on_conflict_race(self):
-        # ON CONFLICT (message_id) DO NOTHING -> no RETURNING row.
+    def test_returns_none_and_logs_when_row_is_no_longer_processing(self):
+        # The finalize function's WHERE status = 'processing' guard means a
+        # stray double-finalize (there should never be one) is a no-op, not
+        # a corruption of another request's row.
         db = MagicMock()
         db.execute.return_value.fetchone.return_value = None
         assert self._call(db) is None
@@ -452,11 +531,29 @@ def _no_real_audit_persistence(monkeypatch):
     """Default every test to a DB session that never leaves the process.
 
     Individual tests still monkeypatch ``get_inbound_email_audit_by_message_id``
-    / ``record_inbound_email_audit`` at the module level to assert on calls;
-    this fixture just guarantees ``db_session`` itself is never touched for
-    real if a test forgets to stub one of them.
+    / ``claim_inbound_email_audit`` / ``finalize_inbound_email_audit`` at the
+    module level to assert on calls; this fixture just guarantees
+    ``db_session`` itself is never touched for real if a test forgets to
+    stub one of them.
     """
     yield
+
+
+def _stub_claim(monkeypatch, *, succeeds=True):
+    """Most orchestration tests only care about what happens after a
+    successful claim, not the claim SQL itself (covered by
+    ``TestClaimInboundEmailAudit``) -- stub it to a deterministic
+    success/failure rather than relying on a bare ``MagicMock`` session's
+    incidental truthiness.
+    """
+    calls = []
+
+    def fake_claim(db, **kwargs):
+        calls.append(kwargs)
+        return {"id": "1", "message_id": kwargs["message_id"], "status": "processing"} if succeeds else None
+
+    monkeypatch.setattr(service_mod, "claim_inbound_email_audit", fake_claim)
+    return calls
 
 
 class TestProcessInboundEmailIdempotency:
@@ -472,17 +569,21 @@ class TestProcessInboundEmailIdempotency:
 
         lookup_called = False
 
-        def fail_lookup(db, address):
+        def fail_lookup(db, address, sender):
             nonlocal lookup_called
             lookup_called = True
             return "tenant-1"
 
         monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", fail_lookup)
 
-        def fail_record(*args, **kwargs):
-            raise AssertionError("record_inbound_email_audit must not run on idempotent replay")
+        def fail_claim(*args, **kwargs):
+            raise AssertionError("claim_inbound_email_audit must not run on idempotent replay")
 
-        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fail_record)
+        def fail_finalize(*args, **kwargs):
+            raise AssertionError("finalize_inbound_email_audit must not run on idempotent replay")
+
+        monkeypatch.setattr(service_mod, "claim_inbound_email_audit", fail_claim)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", fail_finalize)
 
         db = MagicMock()
         result = await process_inbound_email(db, _payload())
@@ -492,23 +593,121 @@ class TestProcessInboundEmailIdempotency:
         assert result.tenant_id == "tenant-1"
         assert lookup_called is False
 
+    async def test_processing_row_is_not_replayed(self, monkeypatch):
+        # A row left at status='processing' belongs to a request that is (or
+        # was, until it crashed) still mid-flight -- it must not be treated
+        # as a finished result.
+        existing = {
+            "message_id": "msg-1",
+            "status": "processing",
+            "tenant_id": None,
+            "rejection_reason": None,
+            "details": [],
+        }
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: existing)
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: "tenant-1"
+        )
+        _stub_claim(monkeypatch, succeeds=True)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", lambda db, **kwargs: {"id": "1"})
+        monkeypatch.setattr(service_mod, "set_tenant_guc", lambda db, tid: None)
+
+        db = MagicMock()
+        result = await process_inbound_email(db, _payload(Attachments=[]))
+
+        # Proceeded past the initial idempotency check instead of replaying
+        # the still-in-flight row, and (since our own claim succeeded)
+        # completed normally.
+        assert result.status == "accepted"
+
+    async def test_lost_claim_race_replays_winners_finished_result(self, monkeypatch):
+        # First read: no row yet. Claim: lost the race (another concurrent
+        # delivery beat us to it). Re-read: the winner has since finished.
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: "tenant-1"
+        )
+        _stub_claim(monkeypatch, succeeds=False)
+
+        finished = {
+            "message_id": "msg-1",
+            "status": "accepted",
+            "tenant_id": "tenant-1",
+            "rejection_reason": None,
+            "details": [],
+        }
+        reads = [None, finished]
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: reads.pop(0))
+
+        db = MagicMock()
+        result = await process_inbound_email(db, _payload())
+
+        assert result.status == "accepted"
+        assert result.tenant_id == "tenant-1"
+
+    async def test_lost_claim_race_still_in_flight_raises_409(self, monkeypatch):
+        # First read: no row yet. Claim: lost the race. Re-read: the winner
+        # is still processing -- must not fabricate a result or run
+        # ingestion ourselves.
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: "tenant-1"
+        )
+        _stub_claim(monkeypatch, succeeds=False)
+
+        still_processing = {
+            "message_id": "msg-1",
+            "status": "processing",
+            "tenant_id": "tenant-1",
+            "rejection_reason": None,
+            "details": [],
+        }
+        reads = [None, still_processing]
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: reads.pop(0))
+
+        db = MagicMock()
+        with pytest.raises(HTTPException) as exc_info:
+            await process_inbound_email(db, _payload())
+        assert exc_info.value.status_code == 409
+
+
+class TestProcessInboundEmailSenderAllowlist:
+    async def test_sender_address_is_forwarded_to_tenant_lookup(self, monkeypatch):
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+        captured = {}
+
+        def fake_lookup(db, address, sender):
+            captured["address"] = address
+            captured["sender"] = sender
+            return None
+
+        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", fake_lookup)
+        _stub_claim(monkeypatch, succeeds=True)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", lambda db, **kwargs: {"id": "1"})
+
+        db = MagicMock()
+        payload = _payload(From='"Some Sender" <Sender@Example.COM>')
+        await process_inbound_email(db, payload)
+
+        assert captured["address"] == "tenant-inbox@tenant.regengine.co"
+        assert captured["sender"] == "sender@example.com"
+
 
 class TestProcessInboundEmailUnmappedRecipient:
     async def test_no_recipient_at_all_is_rejected_without_tenant_lookup(self, monkeypatch):
         monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
 
-        def fail_lookup(db, address):
+        def fail_lookup(db, address, sender):
             raise AssertionError("tenant lookup must not run without a recipient")
 
         monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", fail_lookup)
+        _stub_claim(monkeypatch, succeeds=True)
 
         recorded = {}
 
-        def fake_record(db, **kwargs):
+        def fake_finalize(db, **kwargs):
             recorded.update(kwargs)
             return {"id": "1"}
 
-        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fake_record)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", fake_finalize)
 
         db = MagicMock()
         payload = _payload(OriginalRecipient=None, To=None, ToFull=None)
@@ -519,41 +718,46 @@ class TestProcessInboundEmailUnmappedRecipient:
         assert result.tenant_id is None
         assert recorded["status"] == "rejected"
         assert recorded["rejection_reason"] == "unmapped_recipient"
-        assert recorded["recipient"] == ""
 
     async def test_recipient_present_but_unmapped_is_rejected(self, monkeypatch):
         monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
-        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr: None)
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: None
+        )
+        claim_calls = _stub_claim(monkeypatch, succeeds=True)
 
         recorded = {}
 
-        def fake_record(db, **kwargs):
+        def fake_finalize(db, **kwargs):
             recorded.update(kwargs)
             return {"id": "1"}
 
-        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fake_record)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", fake_finalize)
 
         db = MagicMock()
         result = await process_inbound_email(db, _payload())
 
         assert result.status == "rejected"
         assert result.rejection_reason == "unmapped_recipient"
-        assert recorded["recipient"] == "tenant-inbox@tenant.regengine.co"
+        assert claim_calls[0]["recipient"] == "tenant-inbox@tenant.regengine.co"
 
 
 class TestProcessInboundEmailMappedTenant:
     def _setup(self, monkeypatch, tenant_id="tenant-1"):
         monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
-        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr: tenant_id)
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: tenant_id
+        )
+        _stub_claim(monkeypatch, succeeds=True)
         guc_calls = []
         monkeypatch.setattr(service_mod, "set_tenant_guc", lambda db, tid: guc_calls.append(tid))
         recorded = {}
 
-        def fake_record(db, **kwargs):
+        def fake_finalize(db, **kwargs):
             recorded.update(kwargs)
             return {"id": "1"}
 
-        monkeypatch.setattr(service_mod, "record_inbound_email_audit", fake_record)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", fake_finalize)
         return guc_calls, recorded
 
     async def test_no_attachments_is_accepted(self, monkeypatch):

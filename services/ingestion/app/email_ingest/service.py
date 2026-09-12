@@ -23,7 +23,8 @@ import binascii
 import io
 import json
 import logging
-from email.utils import getaddresses
+import re
+from email.utils import getaddresses, parseaddr
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -43,6 +44,33 @@ logger = logging.getLogger("email-ingest.service")
 # Postmark/Outlook commonly mislabel CSV as the Excel MIME type, so both are
 # accepted alongside the two literal CSV content types.
 _ALLOWED_ATTACHMENT_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel"}
+
+# Strips control characters (including CR/LF) from a payload-derived value
+# before it reaches a structured log line, same intent as
+# ``sanitize_upload_filename`` for attachment names and ``mask_email`` for
+# the recipient — applied here to Postmark's free-form ``MessageID``, which
+# unlike those two fields has no length cap or character restriction on the
+# wire.
+_LOG_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]+")
+_MAX_LOG_VALUE_CHARS = 200
+
+
+def _sanitize_log_value(value: Optional[str]) -> str:
+    cleaned = _LOG_CONTROL_CHARS_RE.sub("", str(value or ""))
+    return cleaned[:_MAX_LOG_VALUE_CHARS]
+
+
+def _sender_address(raw_from: str) -> str:
+    """Extract the bare email address from Postmark's ``From`` header value.
+
+    Postmark documents ``From`` as the full header value (which may be
+    ``"Display Name" <addr@example.com>`` or a bare address);
+    ``email.utils.parseaddr`` handles both shapes. Used only for the
+    per-tenant sender-allowlist check in ``tenant_lookup`` — the raw
+    ``payload.From`` is still what gets persisted to the audit row.
+    """
+    _, addr = parseaddr(raw_from or "")
+    return addr.strip().lower()
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +149,7 @@ def get_inbound_email_audit_by_message_id(db, message_id: str) -> Optional[Dict[
     }
 
 
-def record_inbound_email_audit(
+def claim_inbound_email_audit(
     db,
     *,
     tenant_id: Optional[str],
@@ -129,31 +157,28 @@ def record_inbound_email_audit(
     sender: str,
     recipient: str,
     subject: Optional[str],
-    status: str,
-    rejection_reason: Optional[str],
     attachment_count: int,
-    accepted_count: int,
-    rejected_count: int,
-    details: List[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
-    """Insert one audit row via the SECURITY DEFINER write function.
+    """Atomically claim a ``message_id`` for processing (v122 claim-then-act).
 
-    ``ON CONFLICT (message_id) DO NOTHING`` in the underlying function means
-    this returns ``None`` on the (rare) race between two concurrent
-    deliveries of the same message — the caller should treat that as "someone
-    else recorded it" and, if it needs the row, re-read it with
-    ``get_inbound_email_audit_by_message_id``.
+    Inserts the audit row with ``status='processing'`` — this is the FIRST
+    write ``process_inbound_email`` makes, before any attachment ever
+    reaches ``_ingest_attachment_csv``. ``ON CONFLICT (message_id) DO
+    NOTHING`` in the underlying function means this returns ``None`` when
+    another request has already claimed (or fully processed) this exact
+    ``message_id``; the caller must treat that as "do not run ingestion",
+    not just "someone already recorded it" — closing the race where two
+    concurrent deliveries of the same MessageID both read "no row yet" and
+    both proceeded to double-persist CTE events (see
+    ``DESIGN_email-ingestion.md`` section 13 item 4 / section 15).
     """
     row = db.execute(
         # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized inputs
         text(
             """
-            SELECT id, message_id, status, attachment_count,
-                   accepted_attachment_count, rejected_attachment_count
-            FROM fsma.record_inbound_email_audit(
-                :p_tenant_id, :p_message_id, :p_sender, :p_recipient, :p_subject,
-                :p_status, :p_rejection_reason, :p_attachment_count,
-                :p_accepted_count, :p_rejected_count, :p_details::jsonb
+            SELECT id, message_id, status
+            FROM fsma.claim_inbound_email_audit(
+                :p_tenant_id, :p_message_id, :p_sender, :p_recipient, :p_subject, :p_attachment_count
             )
             """
         ),
@@ -163,6 +188,51 @@ def record_inbound_email_audit(
             "p_sender": sender,
             "p_recipient": recipient,
             "p_subject": subject,
+            "p_attachment_count": attachment_count,
+        },
+    ).fetchone()
+    db.commit()
+    if not row:
+        return None
+    return {"id": str(row.id), "message_id": row.message_id, "status": row.status}
+
+
+def finalize_inbound_email_audit(
+    db,
+    *,
+    message_id: str,
+    tenant_id: Optional[str],
+    status: str,
+    rejection_reason: Optional[str],
+    attachment_count: int,
+    accepted_count: int,
+    rejected_count: int,
+    details: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Update a previously claimed audit row to its final outcome.
+
+    Only applies while the row is still ``status='processing'`` (enforced in
+    the SECURITY DEFINER function's ``WHERE`` clause), so this only ever acts
+    on the row this same request's own ``claim_inbound_email_audit`` call
+    produced — a stray double-finalize (there should never be one) is a
+    silent no-op (``None`` returned) rather than corrupting another
+    request's row.
+    """
+    row = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized inputs
+        text(
+            """
+            SELECT id, message_id, status, attachment_count,
+                   accepted_attachment_count, rejected_attachment_count
+            FROM fsma.finalize_inbound_email_audit(
+                :p_message_id, :p_tenant_id, :p_status, :p_rejection_reason,
+                :p_attachment_count, :p_accepted_count, :p_rejected_count, :p_details::jsonb
+            )
+            """
+        ),
+        {
+            "p_message_id": message_id,
+            "p_tenant_id": tenant_id,
             "p_status": status,
             "p_rejection_reason": rejection_reason,
             "p_attachment_count": attachment_count,
@@ -173,6 +243,7 @@ def record_inbound_email_audit(
     ).fetchone()
     db.commit()
     if not row:
+        logger.warning("inbound_email_finalize_no_row message_id=%s", _sanitize_log_value(message_id))
         return None
     return {
         "id": str(row.id),
@@ -305,26 +376,64 @@ async def _process_one_attachment(tenant_id: str, attachment: PostmarkAttachment
 async def process_inbound_email(db_session, payload: PostmarkInboundPayload) -> InboundEmailResult:
     # Idempotency guard: a provider retry on the same MessageID replays the
     # recorded summary instead of re-running CSV ingestion a second time.
+    # A 'processing' row belongs to a request that is (or was, until it
+    # crashed) still mid-flight -- it is not a finished result to replay.
     existing = get_inbound_email_audit_by_message_id(db_session, payload.MessageID)
-    if existing:
+    if existing is not None and existing["status"] != "processing":
         return _result_from_audit_row(existing)
 
     recipient = _first_recipient(payload)
-    tenant_id = tenant_lookup.lookup_tenant_by_inbound_address(db_session, recipient) if recipient else None
+    sender_address = _sender_address(payload.From)
+    # v122: the recipient address alone is not a tenant boundary -- Postmark's
+    # Basic-Auth webhook credential authenticates the transport only, not the
+    # original sender, and forwards any internet sender's mail addressed to a
+    # configured inbound address. The DB-backed lookup additionally requires
+    # `sender_address` to match that tenant's `allowed_senders` allowlist.
+    tenant_id = (
+        tenant_lookup.lookup_tenant_by_inbound_address(db_session, recipient, sender_address)
+        if recipient
+        else None
+    )
+
+    # Claim-then-act (v122): this INSERT is the first write for this
+    # message_id, made before any attachment touches CSV ingestion. Losing
+    # the claim race means another request already owns (or has finished)
+    # processing this exact MessageID.
+    claim = claim_inbound_email_audit(
+        db_session,
+        tenant_id=tenant_id,
+        message_id=payload.MessageID,
+        sender=payload.From,
+        recipient=recipient or "",
+        subject=payload.Subject,
+        attachment_count=len(payload.Attachments),
+    )
+    if claim is None:
+        existing = get_inbound_email_audit_by_message_id(db_session, payload.MessageID)
+        if existing is not None and existing["status"] != "processing":
+            # The other request finished between our first read and this
+            # claim attempt -- replay its recorded result.
+            return _result_from_audit_row(existing)
+        # Still mid-flight elsewhere. It is not safe to fabricate a result,
+        # and not safe to run ingestion ourselves while another request
+        # holds the claim, so surface a non-2xx -- exactly what Postmark's
+        # own retry-on-non-2xx contract exists to recover from (see
+        # router.py); the eventual retry will observe the finished row.
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "inbound_email_processing_in_progress", "message_id": payload.MessageID},
+        )
 
     if tenant_id is None:
         logger.warning(
             "inbound_email_unmapped_recipient recipient=%s message_id=%s",
             mask_email(recipient or ""),
-            payload.MessageID,
+            _sanitize_log_value(payload.MessageID),
         )
-        record_inbound_email_audit(
+        finalize_inbound_email_audit(
             db_session,
-            tenant_id=None,
             message_id=payload.MessageID,
-            sender=payload.From,
-            recipient=recipient or "",
-            subject=payload.Subject,
+            tenant_id=None,
             status="rejected",
             rejection_reason="unmapped_recipient",
             attachment_count=len(payload.Attachments),
@@ -347,13 +456,10 @@ async def process_inbound_email(db_session, payload: PostmarkInboundPayload) -> 
     rejected = sum(1 for r in results if r.status == "rejected")
     status = "rejected" if payload.Attachments and accepted == 0 else ("partial" if rejected else "accepted")
 
-    record_inbound_email_audit(
+    finalize_inbound_email_audit(
         db_session,
-        tenant_id=tenant_id,
         message_id=payload.MessageID,
-        sender=payload.From,
-        recipient=recipient,
-        subject=payload.Subject,
+        tenant_id=tenant_id,
         status=status,
         rejection_reason=None,
         attachment_count=len(payload.Attachments),
