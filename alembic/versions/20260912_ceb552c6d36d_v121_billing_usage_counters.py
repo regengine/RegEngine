@@ -28,6 +28,27 @@ with the ``get_tenant_context()`` predicate, via the same ``_tenant_rls``
 helper as the v095 supplier remediation slice
 (``20260716_c7a1e5f2b9d4_v095_supplier_remediation_slice.py``), reused
 verbatim here.
+
+Runtime-role grants (self-review fix): v111
+(``20260803_b71d9e4c2a60_v111_runtime_role_grants.py``) put every schema the
+app touches under a closed allowlist — ``regengine`` (the role
+``services/shared/database.py``'s engine actually connects as, enforced by
+``check_rls_posture``) has *zero* privileges on any object that migration
+didn't explicitly name, "New objects are inaccessible until an audited
+migration names them" per that file's own comment, and ``billing`` is a
+schema created after that cutover with no prior grant of any kind. Without
+an explicit grant here, ``increment_usage_for_event`` — which
+``CanonicalEventStore.persist_event``/``persist_events_batch`` call for
+*every* accepted label by default (``meter_usage=True``) — would fail with
+``permission denied for schema billing`` on the very first accepted event
+in a deployed environment, rolling back the entire canonical-event
+transaction, not just the usage counter. Grants below are scoped to exactly
+what the writer (INSERT, plus the implicit SELECT Postgres requires for
+``RETURNING`` / the ``unit_count = unit_count + 1`` self-reference) and the
+``/billing/usage`` + ``/billing/usage/report`` routes (SELECT, and the
+latter's high-water-mark UPDATE) actually need — matching the
+least-privilege, per-table allowlist pattern v111 established (e.g.
+``fsma.traceability_events: ("SELECT", "INSERT", "UPDATE")``).
 """
 
 from typing import Sequence, Union
@@ -114,6 +135,27 @@ def _create_tables() -> None:
     )
 
 
+def _grant_runtime_role_access() -> None:
+    """Grant ``regengine`` exactly the privileges the app needs on the new
+    schema (see the module docstring: v111 closed every schema to an
+    explicit per-table allowlist, and that allowlist does not — cannot —
+    know about a schema created after it ran).
+
+    - ``tenant_usage_event_ledger``: INSERT-only from the app's point of
+      view, but the ``... RETURNING event_id`` in
+      ``increment_usage_for_event`` requires SELECT on the returned column
+      too (Postgres treats a RETURNING clause as a read).
+    - ``tenant_usage_counters``: SELECT (the ``/billing/usage`` GET, and
+      the ``unit_count = billing.tenant_usage_counters.unit_count + 1``
+      self-reference in the upsert), INSERT (first upsert of a period),
+      and UPDATE (the upsert's ``DO UPDATE`` branch, plus
+      ``report_tenant_usage_to_stripe``'s ``last_reported_count`` advance).
+    """
+    op.execute("GRANT USAGE ON SCHEMA billing TO regengine")
+    op.execute("GRANT SELECT, INSERT ON billing.tenant_usage_event_ledger TO regengine")
+    op.execute("GRANT SELECT, INSERT, UPDATE ON billing.tenant_usage_counters TO regengine")
+
+
 def upgrade() -> None:
     _create_tables()
     _tenant_rls(
@@ -126,6 +168,7 @@ def upgrade() -> None:
         "tenant_id",
         "tenant_isolation_tenant_usage_counters",
     )
+    _grant_runtime_role_access()
 
 
 def downgrade() -> None:

@@ -175,3 +175,40 @@ class TestIncrementUsageForEvent:
         counter_sql, counter_params = session.calls[1]
         assert ledger_params["period_start"] == date(2026, 1, 1)
         assert counter_params["period_end"] == date(2026, 2, 1)
+
+    def test_non_utc_offset_is_converted_to_utc_before_bucketing(self):
+        # 11:30pm US/Pacific (UTC-08:00) on Jan 31 is already Feb 1 in UTC.
+        # Bucketing must use the UTC calendar day, per
+        # DESIGN_metering-billing.md §3.3 ("UTC calendar-month buckets") —
+        # not the source's own local calendar day.
+        from datetime import timedelta, timezone as dt_timezone
+
+        pacific = dt_timezone(timedelta(hours=-8))
+        session = _FakeSession(results=[_Result(row=("evt-tz",))])
+
+        increment_usage_for_event(
+            session,
+            tenant_id=TENANT_ID,
+            event_id="evt-tz",
+            event_timestamp=datetime(2026, 1, 31, 23, 30, tzinfo=pacific),
+        )
+
+        _ledger_sql, ledger_params = session.calls[0]
+        counter_sql, counter_params = session.calls[1]
+        assert ledger_params["period_start"] == date(2026, 2, 1)
+        assert counter_params["period_end"] == date(2026, 3, 1)
+
+    def test_naive_datetime_is_treated_as_already_utc(self):
+        # Mirrors canonical_event.py's own parse_timestamp validator: a
+        # naive datetime is assumed UTC, never shifted by the local clock.
+        session = _FakeSession(results=[_Result(row=("evt-naive",))])
+
+        increment_usage_for_event(
+            session,
+            tenant_id=TENANT_ID,
+            event_id="evt-naive",
+            event_timestamp=datetime(2026, 9, 15, 12, 0),
+        )
+
+        _ledger_sql, ledger_params = session.calls[0]
+        assert ledger_params["period_start"] == date(2026, 9, 1)

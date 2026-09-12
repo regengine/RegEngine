@@ -87,7 +87,24 @@ def increment_usage_for_event(
     count and the persisted event stay atomically in sync, never drifting
     apart.
     """
-    as_of = event_timestamp.date() if isinstance(event_timestamp, datetime) else event_timestamp
+    if isinstance(event_timestamp, datetime):
+        # ``TraceabilityEvent.event_timestamp`` keeps whatever offset the
+        # source reported (``canonical_event.py``'s validator only fills in
+        # UTC for a *naive* value — it never converts an offset-aware one).
+        # ``_current_billing_period`` is documented as a UTC-calendar-month
+        # bucket, so an event timestamped near midnight in a non-UTC offset
+        # (e.g. 23:30 US/Pacific, which is already the next UTC day) must be
+        # converted to UTC before truncating to a date — taking ``.date()``
+        # directly would bucket it by the *source's* local calendar day
+        # instead, silently contradicting the documented bucketing rule.
+        if event_timestamp.tzinfo is None:
+            # Mirrors ``canonical_event.py``'s own validator: a naive
+            # timestamp is treated as already UTC, not converted.
+            as_of = event_timestamp.date()
+        else:
+            as_of = event_timestamp.astimezone(timezone.utc).date()
+    else:
+        as_of = event_timestamp
     period_start, period_end = _current_billing_period(as_of)
 
     claimed = session.execute(
