@@ -4864,7 +4864,7 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 246,
+    "enabled_operation_count": 250,
     "disabled_operation_count": 181,
     "disabled_unique_path_count": 164,
     "enabled_by_classification": {

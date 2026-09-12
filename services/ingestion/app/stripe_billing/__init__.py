@@ -275,7 +275,14 @@ _ATTR_TO_SUBMODULE = {
     # usage_reporting.py
     "report_tenant_usage_to_stripe": _usage_reporting_mod,
 }
-_STRIPE_SUBMODULES = (_helpers_mod, _customers_mod, _routes_mod, _webhooks_mod, _label_billing_mod)
+_STRIPE_SUBMODULES = (
+    _helpers_mod,
+    _customers_mod,
+    _routes_mod,
+    _webhooks_mod,
+    _label_billing_mod,
+    _usage_reporting_mod,
+)
 
 
 class _PatchableModule(_types.ModuleType):
