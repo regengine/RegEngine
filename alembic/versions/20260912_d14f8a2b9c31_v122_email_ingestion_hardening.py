@@ -104,15 +104,18 @@ def _replace_tenant_lookup_function() -> None:
         LANGUAGE plpgsql
         SECURITY DEFINER
         SET search_path = fsma, public, pg_temp
+        SET row_security = off
         AS $fn$
         DECLARE
             v_tenant UUID;
             v_sender TEXT := lower(trim(coalesce(p_sender, '')));
         BEGIN
             PERFORM set_config('app.inbound_lookup_address', lower(p_address), true);
-            IF NULLIF(current_setting('app.tenant_id', true), '') IS NULL THEN
-                PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
-            END IF;
+            -- Bootstrap lookup, no tenant context yet -- see v121's
+            -- comment on this same function: `SET row_security = off`
+            -- replaces the earlier app.tenant_id-pinning workaround
+            -- (#1091/#2935 ban any GUC fallback to a constant, the nil
+            -- UUID included).
 
             SELECT tenant_id INTO v_tenant
             FROM fsma.tenant_inbound_addresses
@@ -147,14 +150,12 @@ def _restore_v121_tenant_lookup_function() -> None:
         LANGUAGE plpgsql
         SECURITY DEFINER
         SET search_path = fsma, public, pg_temp
+        SET row_security = off
         AS $fn$
         DECLARE
             v_tenant UUID;
         BEGIN
             PERFORM set_config('app.inbound_lookup_address', lower(p_address), true);
-            IF NULLIF(current_setting('app.tenant_id', true), '') IS NULL THEN
-                PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
-            END IF;
             SELECT tenant_id INTO v_tenant
             FROM fsma.tenant_inbound_addresses
             WHERE inbound_address = lower(p_address) AND is_active

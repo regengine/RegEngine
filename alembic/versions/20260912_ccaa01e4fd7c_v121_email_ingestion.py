@@ -184,19 +184,21 @@ def _inbound_address_lookup() -> None:
         LANGUAGE plpgsql
         SECURITY DEFINER
         SET search_path = fsma, public, pg_temp
+        SET row_security = off
         AS $fn$
         DECLARE
             v_tenant UUID;
         BEGIN
             PERFORM set_config('app.inbound_lookup_address', lower(p_address), true);
-            -- The bootstrap SELECT runs before any tenant context exists.
-            -- Pin app.tenant_id to the nil UUID so the tenant-isolation
-            -- policy's get_tenant_context() never evaluates against an
-            -- UNSET GUC (which RAISEs per v097); the nil tenant matches no
-            -- rows, so only the address-keyed lookup policy admits the row.
-            IF NULLIF(current_setting('app.tenant_id', true), '') IS NULL THEN
-                PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
-            END IF;
+            -- The bootstrap SELECT runs before any tenant context exists,
+            -- so it cannot go through the tenant-isolation policy at all
+            -- (get_tenant_context() RAISEs on an unset GUC per v097, and
+            -- pinning app.tenant_id to any constant to dodge that -- even
+            -- the nil UUID -- is exactly the fail-open shape #1091/#2935
+            -- ban outright). `SET row_security = off` on this function
+            -- bypasses RLS for its own execution only; the REVOKE/GRANT
+            -- below still limit who may ever call it, and the query is
+            -- scoped to a single row by the caller-supplied address.
             SELECT tenant_id INTO v_tenant
             FROM fsma.tenant_inbound_addresses
             WHERE inbound_address = lower(p_address) AND is_active

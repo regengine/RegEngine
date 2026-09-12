@@ -131,3 +131,14 @@ class TestVerifyInboundEmailAuth:
         _configure(monkeypatch)
         token = base64.b64encode(f"{_USER}:{_PASSWORD}".encode()).decode("ascii")
         assert await verify_inbound_email_auth(authorization=f"BASIC {token}") is None
+
+    async def test_non_ascii_credentials_raise_401_not_500(self, monkeypatch):
+        # Regression: hmac.compare_digest raises TypeError on non-ASCII str
+        # inputs. A crafted Basic-Auth header can decode to valid non-ASCII
+        # UTF-8 -- this must still 401, not crash into an unhandled 500.
+        _configure(monkeypatch)
+        header = _basic_header("ünïcode", "pass")
+        with pytest.raises(HTTPException) as ei:
+            await verify_inbound_email_auth(authorization=header)
+        assert ei.value.status_code == 401
+        assert ei.value.detail == "Invalid credentials"

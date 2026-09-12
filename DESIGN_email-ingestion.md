@@ -47,7 +47,7 @@ Next revision after `20260904_c6a120b4e901_v120_rule_citations.py` (the
 latest on `origin/main` as of this branch), so:
 
 `alembic/versions/20260912_<newhash>_v121_email_ingestion.py`
-(`down_revision = "c6a120b4e901"`).
+(`down_revision = "c6a120b4e901"` <!-- pragma: allowlist secret -->).
 
 **Deviation from spec's example names**: the spec sketches
 `ingestion.tenant_inbound_addresses`. Every existing RegEngine

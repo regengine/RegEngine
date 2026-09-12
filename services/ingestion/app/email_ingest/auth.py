@@ -75,10 +75,17 @@ async def verify_inbound_email_auth(
         )
 
     expected_user, expected_password = creds
+    # Compare on the UTF-8 byte representations: ``hmac.compare_digest`` raises
+    # ``TypeError`` for ``str`` inputs containing non-ASCII characters, and a
+    # crafted Basic-Auth header can decode to valid non-ASCII UTF-8 (e.g.
+    # "ünïcode:pass"). Comparing bytes avoids that crash and still yields a
+    # clean 401 for mismatched credentials.
     # `&` instead of `and` so both compare_digest calls always run — avoids a
     # username-existence timing side-channel; the calls are cheap so the
     # non-short-circuit is free.
-    ok = hmac.compare_digest(user, expected_user) & hmac.compare_digest(password, expected_password)
+    ok = hmac.compare_digest(user.encode("utf-8"), expected_user.encode("utf-8")) & hmac.compare_digest(
+        password.encode("utf-8"), expected_password.encode("utf-8")
+    )
     if not ok:
         logger.warning("email_inbound_auth_mismatch")
         raise HTTPException(

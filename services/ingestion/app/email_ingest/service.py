@@ -309,7 +309,7 @@ async def _ingest_attachment_csv(tenant_id: str, name: str, raw: bytes) -> Attac
             # this sentinel only satisfies the unrelated defense-in-depth
             # presence check for a caller that has no X-RegEngine-API-Key
             # header to forward.
-            x_regengine_api_key="email-inbound-internal",
+            x_regengine_api_key="email-inbound-internal",  # pragma: allowlist secret
             x_tenant_id=None,
         )
     except HTTPException as exc:
