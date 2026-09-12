@@ -57,13 +57,15 @@ class _FakeSession:
         self._call_index = 0
         self.calls: List[tuple] = []
         self.committed = False
+        self.commit_count = 0
+        self.rolled_back = False
 
     def execute(self, statement, params=None):
         self.calls.append((str(statement), params))
         sql = str(statement)
-        # The advisory lock/unlock calls don't consume a result slot --
-        # only the real queries (SELECT ... FOR UPDATE, the UPDATE) do.
-        if "pg_advisory_lock" in sql or "pg_advisory_unlock" in sql:
+        # The advisory lock call doesn't consume a result slot -- only the
+        # real queries (SELECT ... FOR UPDATE, the UPDATE) do.
+        if "pg_advisory_xact_lock" in sql:
             return _Result()
         if self._call_index < len(self._results):
             result = self._results[self._call_index]
@@ -73,6 +75,10 @@ class _FakeSession:
 
     def commit(self) -> None:
         self.committed = True
+        self.commit_count += 1
+
+    def rollback(self) -> None:
+        self.rolled_back = True
 
 
 def _mapping(**overrides):
@@ -122,7 +128,9 @@ class TestReportTenantUsageNoOps:
         result = mod.report_tenant_usage_to_stripe(session, TENANT_ID)
 
         assert result is None
-        assert not session.committed
+        # Nothing to write, but still commit to release the xact advisory
+        # lock acquired above (Postgres only releases it at COMMIT/ROLLBACK).
+        assert session.committed
 
 
 # ---------------------------------------------------------------------------
@@ -291,14 +299,15 @@ class TestReportTenantUsageStripeError:
         with pytest.raises(stripe.error.StripeError):
             mod.report_tenant_usage_to_stripe(session, TENANT_ID)
 
-        # Lock, SELECT ... FOR UPDATE, and the unlock (from `finally`) all
-        # happened — but no UPDATE to last_reported_count and no commit,
-        # so a retry resends the same delta next time.
-        assert len(session.calls) == 3
-        assert "pg_advisory_lock" in session.calls[0][0]
+        # Lock and SELECT ... FOR UPDATE happened, no UPDATE to
+        # last_reported_count (nothing succeeded), but the transaction is
+        # still committed (releasing the xact advisory lock cleanly) --
+        # there's simply nothing new for a retry to conflict with.
+        assert len(session.calls) == 2
+        assert "pg_advisory_xact_lock" in session.calls[0][0]
         assert "FOR UPDATE" in session.calls[1][0].upper()
-        assert "pg_advisory_unlock" in session.calls[2][0]
-        assert session.committed is False
+        assert not any("UPDATE billing.tenant_usage_counters" in c[0] for c in session.calls)
+        assert session.committed is True
 
     def test_failure_on_a_later_period_does_not_roll_back_an_earlier_success(self, monkeypatch):
         # Bug (caught by review): the identifier embeds the period's
@@ -309,9 +318,9 @@ class TestReportTenantUsageStripeError:
         # retry after that failure would recompute a DIFFERENT identifier
         # for the earlier period (since unit_count grew) and Stripe would
         # not dedupe it, double-reporting (over-billing) that period.
-        # The fix: commit each period's advance immediately after its own
-        # Stripe call succeeds, so an earlier success is never undone by a
-        # later failure in the same call.
+        # The fix: on a StripeError, commit (not roll back) the single
+        # transaction that spans the whole call, so every period already
+        # written survives even though a later period then failed.
         monkeypatch.setattr(mod._state_mod, "_get_subscription_mapping", lambda tid: _mapping())
         session = _FakeSession(
             results=[

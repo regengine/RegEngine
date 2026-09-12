@@ -48,7 +48,7 @@ caller.
 ## 3. Database schema (new `billing` schema)
 
 New alembic migration:
-`alembic/versions/<date>_<hash>_v121_billing_usage_counters.py`
+`alembic/versions/20260912_ceb552c6d36d_v121_billing_usage_counters.py`
 (`down_revision = "c6a120b4e901"` <!-- pragma: allowlist secret -->, current head; naming/format follows
 `20260827_c1d4e8f20a37_v115_task_queue_tenantless_idempotency.py` and
 `20260716_c7a1e5f2b9d4_v095_supplier_remediation_slice.py`: `op.execute`
@@ -463,7 +463,7 @@ endpoints' role gate):
 ## 8. Testing plan (monkeypatch-based, no live DB/Stripe — matches
    `test_stripe_plans_1342.py` style)
 
-- `services/ingestion/tests/test_billing_usage_1xxx.py`:
+- `services/ingestion/tests/test_billing_usage_core.py`:
   - `increment_usage_for_event` called twice with the same `event_id` only
     increments once (in-memory/sqlite session or a mocked `session.execute`
     call-count assertion, consistent with how
@@ -471,12 +471,14 @@ endpoints' role gate):
     without a live Postgres).
   - `persist_events_batch` with `meter_usage=True` increments once per
     element of `inserted_event_ids`, zero times for `lost_race_events`.
+- `services/ingestion/tests/test_billing_usage_reporting.py`:
   - `report_tenant_usage_to_stripe`: monkeypatch `stripe.billing.MeterEvent.create`
     (module-level patch on `usage_reporting.stripe`, following the
     `stripe_billing.stripe` monkeypatch-propagation pattern in
-    `stripe_billing/__init__.py`) to assert the payload/`identifier`, that
-    `last_reported_count` only advances on success, and that a
-    `stripe.error.StripeError` leaves `last_reported_count` untouched.
+    `services/ingestion/app/stripe_billing/__init__.py`) to assert the
+    payload/`identifier`, that `last_reported_count` only advances on
+    success, and that a `stripe.error.StripeError` leaves
+    `last_reported_count` untouched.
   - `GET /api/v1/billing/usage` and the opt-in endpoints: FastAPI
     `TestClient` with `app.dependency_overrides[_get_db_session]` and
     `require_permission` overridden the way `test_webhook_router_v2_1342.py`

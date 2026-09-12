@@ -57,16 +57,22 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
     Safe to call repeatedly / on a schedule, and safe against a second,
     concurrent call for the same tenant:
 
-    - A session-scoped Postgres advisory lock (``pg_advisory_lock``, keyed
-      on the tenant) is held for the entire call, released only in a
-      ``finally``. This is what actually provides the concurrency
-      guarantee: the per-period commits below end the transaction after
-      each period, releasing that period's row-level ``FOR UPDATE`` lock
-      as soon as it succeeds -- row locking alone cannot block a second
-      call from grabbing an unlocked *later* period once the first has
-      committed. The advisory lock has no such gap: a concurrent call
-      blocks at its own ``pg_advisory_lock`` until this one fully
-      finishes (success, no-op, or exception).
+    - A single transaction spans the whole call (no commit until the very
+      end, or immediately before re-raising a ``StripeError`` -- see
+      below). A previous version of this function committed after each
+      period to guard against exactly the failure-rollback problem
+      described next, using a session-scoped ``pg_advisory_lock`` to
+      still serialize concurrent calls across those commits. That was
+      itself broken: ``pg_advisory_lock`` is tied to the specific
+      physical Postgres backend connection that acquired it, and a
+      pooled SQLAlchemy engine does not guarantee a session keeps the
+      same physical connection across multiple commits -- the lock could
+      end up stranded on a connection this function no longer holds,
+      while a concurrent call proceeds as if unlocked. A transaction-
+      scoped ``pg_advisory_xact_lock``, held for one uninterrupted
+      transaction on one connection, has no such gap: Postgres releases
+      it automatically at COMMIT or ROLLBACK, whichever this function
+      does, on the same connection that acquired it.
     - Only the ``(unit_count - last_reported_count)`` delta is ever sent,
       per period.
     - Each Stripe call carries an ``identifier`` derived from that period's
@@ -76,15 +82,14 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
       ``unit_count`` for a period between calls to this function, so a
       later call reporting the same period computes a different
       ``identifier`` and Stripe will not dedupe it against an earlier one.
-    - Because of that, ``last_reported_count`` is advanced and committed
-      immediately after each period's Stripe call succeeds — not batched
-      to one commit at the end. A ``stripe.error.StripeError`` on period N
-      only fails to advance period N; every period before it in this call
-      that already succeeded is durably committed and will not be
-      re-reported (and thus not double-billed) on the next run, however
-      much ``unit_count`` has grown for it by then. Only the failed
-      period's (and any not-yet-attempted period's) outstanding delta is
-      resent.
+      That means a period already reported successfully must never be
+      discarded by a ROLLBACK, or a later retry would re-report it under a
+      new identifier and double-bill it. So a ``stripe.error.StripeError``
+      on period N does not roll back the transaction: everything written
+      so far (periods before N, all in this same still-open transaction)
+      is committed before the error is re-raised, and only period N's
+      (and any not-yet-attempted period's) delta is left outstanding for
+      the next call.
     """
     mapping = _state_mod._get_subscription_mapping(tenant_id)
     if mapping.get("metered_billing_enabled") != "true":
@@ -94,36 +99,34 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
     if not customer_id:
         return None
 
-    # Serialize reporting runs for this tenant with a SESSION-scoped
-    # advisory lock (pg_advisory_lock, not pg_advisory_xact_lock): the
-    # per-period commits below each end the current transaction, which
-    # releases the FOR UPDATE row lock taken below as soon as the first
-    # period succeeds -- row locking alone can no longer block a second,
-    # concurrent call to this function from grabbing an unlocked LATER
-    # period and double-reporting it. The advisory lock spans every
-    # commit in this call and is released only in the `finally` below,
-    # so a concurrent call blocks until this one fully finishes.
-    lock_key = text("SELECT pg_advisory_lock(hashtextextended('billing.usage_report:' || :tenant_id, 0))")
-    unlock_key = text("SELECT pg_advisory_unlock(hashtextextended('billing.usage_report:' || :tenant_id, 0))")
-    session.execute(lock_key, {"tenant_id": tenant_id})
+    # Transaction-scoped advisory lock: serializes concurrent calls for
+    # this tenant without any separate unlock call or cross-connection
+    # risk (see docstring). Held for the rest of this transaction.
+    session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended('billing.usage_report:' || :tenant_id, 0))"),
+        {"tenant_id": tenant_id},
+    )
+
+    rows = session.execute(
+        text("""
+            SELECT billing_period_start, unit_count, last_reported_count
+            FROM billing.tenant_usage_counters
+            WHERE tenant_id = :tenant_id AND unit_count > last_reported_count
+            ORDER BY billing_period_start
+            FOR UPDATE
+        """),
+        {"tenant_id": tenant_id},
+    ).fetchall()
+
+    if not rows:
+        # No period (current or past) has outstanding usage to report.
+        # Nothing was written; commit just to release the xact lock.
+        session.commit()
+        return None
+
+    reported_periods: List[Dict[str, Any]] = []
+
     try:
-        rows = session.execute(
-            text("""
-                SELECT billing_period_start, unit_count, last_reported_count
-                FROM billing.tenant_usage_counters
-                WHERE tenant_id = :tenant_id AND unit_count > last_reported_count
-                ORDER BY billing_period_start
-                FOR UPDATE
-            """),
-            {"tenant_id": tenant_id},
-        ).fetchall()
-
-        if not rows:
-            # No period (current or past) has outstanding usage to report.
-            return None
-
-        reported_periods: List[Dict[str, Any]] = []
-
         for period_start, unit_count, last_reported_count in rows:
             delta = unit_count - last_reported_count
             if delta <= 0:
@@ -133,21 +136,11 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
 
             identifier = f"{tenant_id}:{period_start.isoformat()}:{unit_count}"
 
-            try:
-                meter_event = stripe.billing.MeterEvent.create(
-                    event_name=METER_EVENT_NAME,
-                    payload={"stripe_customer_id": customer_id, "value": str(delta)},
-                    identifier=identifier,
-                )
-            except stripe.error.StripeError as exc:
-                logger.error(
-                    "stripe_usage_report_failed",
-                    tenant_id=tenant_id,
-                    billing_period_start=period_start.isoformat(),
-                    delta=delta,
-                    error=str(exc),
-                )
-                raise
+            meter_event = stripe.billing.MeterEvent.create(
+                event_name=METER_EVENT_NAME,
+                payload={"stripe_customer_id": customer_id, "value": str(delta)},
+                identifier=identifier,
+            )
 
             session.execute(
                 text("""
@@ -157,13 +150,6 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
                 """),
                 {"tenant_id": tenant_id, "unit_count": unit_count, "period_start": period_start},
             )
-            # Commit this period's advance now, before attempting the next
-            # period. A failure on a later period must not roll this back —
-            # see the docstring's identifier-instability note. Safe against
-            # a concurrent call because the advisory lock above is held
-            # across every commit in this function, independent of
-            # per-period transaction boundaries.
-            session.commit()
 
             logger.info(
                 "stripe_usage_reported",
@@ -183,15 +169,28 @@ def report_tenant_usage_to_stripe(session: Session, tenant_id: str) -> Optional[
                     "meter_event_id": getattr(meter_event, "identifier", identifier),
                 }
             )
+    except stripe.error.StripeError as exc:
+        logger.error(
+            "stripe_usage_report_failed",
+            tenant_id=tenant_id,
+            billing_period_start=period_start.isoformat(),
+            delta=delta,
+            error=str(exc),
+        )
+        # Commit (not rollback): every period already written above must
+        # survive -- see the docstring's identifier-instability note.
+        session.commit()
+        raise
 
-        if not reported_periods:
-            return None
+    if not reported_periods:
+        session.commit()
+        return None
 
-        return {
-            "tenant_id": tenant_id,
-            "periods_reported": len(reported_periods),
-            "total_reported_delta": sum(p["reported_delta"] for p in reported_periods),
-            "reported_periods": reported_periods,
-        }
-    finally:
-        session.execute(unlock_key, {"tenant_id": tenant_id})
+    session.commit()
+
+    return {
+        "tenant_id": tenant_id,
+        "periods_reported": len(reported_periods),
+        "total_reported_delta": sum(p["reported_delta"] for p in reported_periods),
+        "reported_periods": reported_periods,
+    }
