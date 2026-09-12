@@ -29,6 +29,7 @@ VALID_ROUTER_NAMES = frozenset(
         "edi",
         "score",
         "portal",
+        "inbound_email",
         "audit",
         "sop",
         "export",

@@ -518,40 +518,16 @@ def _check_lot_code_integrity(lot_code: str) -> list[str]:
     return warnings
 
 
-@router.post(
-    "/ingest/csv",
-    response_model=CsvIngestResponse,
-    summary="Upload and ingest a CSV file",
-    description=(
-        "Parse a CSV file, validate rows, and persist CTE events to the database. "
-        "Supports single-type files (pass cte_type) or mixed-type files with a "
-        "cte_type/event_type column per row."
-    ),
-)
-async def ingest_csv(
-    file: UploadFile = File(..., description="CSV file to ingest"),
-    cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
-    source: str = Form("csv_upload", description="Source identifier"),
-    tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
-    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
-    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
-):
-    """Ingest a CSV file of CTE events (single-type or mixed-type)."""
+def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[IngestEvent], list[str], list[str]]:
+    """Parse CSV text into ``IngestEvent`` objects.
 
-    # Normalize the fallback cte_type if provided
-    fallback_cte = None
-    if cte_type:
-        fallback_cte = _CTE_TYPE_ALIASES.get(cte_type.strip().lower().replace(" ", "_"))
-        if not fallback_cte:
-            valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
-            raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
+    Shared by the ``/ingest/csv`` upload route and any other ingestion
+    entrypoint (e.g. the Postmark inbound-email webhook) that needs to accept
+    the same CSV structure and produce identical validation results — this
+    is the single place CTE/KDE row-mapping logic lives.
 
-    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
-
-    # Read and parse CSV
-    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
-    text = content.decode("utf-8-sig")  # Handle BOM
+    Returns ``(events, parse_errors, kde_warnings)``.
+    """
     reader = csv.DictReader(io.StringIO(text))
 
     events: list[IngestEvent] = []
@@ -670,6 +646,45 @@ async def ingest_csv(
             # raw exception text (library internals) isn't echoed to callers.
             logger.warning("csv_row_parse_failed row=%s error=%s", row_num, str(e))
             parse_errors.append(f"Row {row_num}: could not be parsed (see server logs)")
+
+    return events, parse_errors, kde_warnings
+
+
+@router.post(
+    "/ingest/csv",
+    response_model=CsvIngestResponse,
+    summary="Upload and ingest a CSV file",
+    description=(
+        "Parse a CSV file, validate rows, and persist CTE events to the database. "
+        "Supports single-type files (pass cte_type) or mixed-type files with a "
+        "cte_type/event_type column per row."
+    ),
+)
+async def ingest_csv(
+    file: UploadFile = File(..., description="CSV file to ingest"),
+    cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
+    source: str = Form("csv_upload", description="Source identifier"),
+    tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+):
+    """Ingest a CSV file of CTE events (single-type or mixed-type)."""
+
+    # Normalize the fallback cte_type if provided
+    fallback_cte = None
+    if cte_type:
+        fallback_cte = _CTE_TYPE_ALIASES.get(cte_type.strip().lower().replace(" ", "_"))
+        if not fallback_cte:
+            valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
+            raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
+
+    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+
+    # Read and parse CSV
+    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
+    text = content.decode("utf-8-sig")  # Handle BOM
+    events, parse_errors, kde_warnings = parse_csv_rows(text, fallback_cte)
 
     if not events and parse_errors:
         raise HTTPException(status_code=400, detail={"message": "No valid rows found", "errors": parse_errors})

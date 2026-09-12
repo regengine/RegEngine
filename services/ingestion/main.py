@@ -178,6 +178,7 @@ _VALID_ROUTER_NAMES = {
     "edi",
     "score",
     "portal",
+    "inbound_email",
     "audit",
     "sop",
     "export",
@@ -395,6 +396,13 @@ if _router_enabled("portal"):
     from app.supplier_portal import router as portal_router
 
     app.include_router(portal_router, tags=["Supplier Portal"])
+
+
+# Inbound Email Ingestion (Postmark Inbound Parse webhook)
+if _router_enabled("inbound_email"):
+    from app.routes_inbound_email import router as inbound_email_router
+
+    app.include_router(inbound_email_router, tags=["Inbound Email Webhook"])
 
 
 # Mock Audit Mode

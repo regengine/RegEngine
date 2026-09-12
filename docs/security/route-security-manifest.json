@@ -305,6 +305,58 @@
       "test_adapter": "tenant_api_key_postgres_rls"
     },
     {
+      "operation": "billing:GET:/api/v1/billing/usage",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/usage",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.read"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:DELETE:/api/v1/billing/usage/opt-in",
+      "owner": "billing",
+      "method": "DELETE",
+      "path": "/api/v1/billing/usage/opt-in",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.manage"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/usage/opt-in",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/usage/opt-in",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.manage"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/usage/report",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/usage/report",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.report"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
       "operation": "billing:POST:/api/v1/billing/webhook/stripe",
       "owner": "billing",
       "method": "POST",
@@ -4541,6 +4593,33 @@
       "probe_path": "/api/v1/vision/analyze-label"
     },
     {
+      "operation": "inbound_email:POST:/api/v1/webhooks/inbound-email",
+      "owner": "inbound_email",
+      "method": "POST",
+      "path": "/api/v1/webhooks/inbound-email",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/webhooks/inbound-email"
+    },
+    {
+      "operation": "inbound_email:POST:/api/v1/webhooks/inbound-email/addresses",
+      "owner": "inbound_email",
+      "method": "POST",
+      "path": "/api/v1/webhooks/inbound-email/addresses",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/webhooks/inbound-email/addresses"
+    },
+    {
+      "operation": "inbound_email:GET:/api/v1/webhooks/inbound-email/rejections",
+      "owner": "inbound_email",
+      "method": "GET",
+      "path": "/api/v1/webhooks/inbound-email/rejections",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/webhooks/inbound-email/rejections"
+    },
+    {
       "operation": "scraping:POST:/scrape/{adaptor}",
       "owner": "scraping",
       "method": "POST",
@@ -4794,13 +4873,13 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 246,
-    "disabled_operation_count": 179,
-    "disabled_unique_path_count": 162,
+    "enabled_operation_count": 250,
+    "disabled_operation_count": 181,
+    "disabled_unique_path_count": 164,
     "enabled_by_classification": {
       "global-sysadmin": 15,
       "public": 29,
-      "tenant-scoped": 195,
+      "tenant-scoped": 199,
       "workload-only": 7
     }
   }

@@ -40,6 +40,12 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     redis_url: str = Field(default="rediss://redis:6379/0", alias="REDIS_URL")
 
+    # Per-label FSMA 204 traceability billing (v121). One label/unit
+    # accepted by /ingest is charged this many cents via Stripe. Rejected
+    # at startup rather than accepted and silently failing every charge
+    # claim (fsma.label_charges has a CHECK (amount_cents >= 0)).
+    price_per_label_cents: int = Field(default=10, alias="PRICE_PER_LABEL_CENTS", ge=0)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

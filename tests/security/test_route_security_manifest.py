@@ -62,22 +62,26 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
 
     assert checked_in == manifest
     assert checked_in["summary"] == {
-        "enabled_operation_count": 246,
+        # +4 vs the prior 246: the per-label metered billing add-on
+        # (GET/POST/POST/DELETE under /api/v1/billing/usage*), all
+        # tenant-scoped — see DESIGN_metering-billing.md.
+        "enabled_operation_count": 250,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
         # eager route copies of fastapi < 0.137 (under which the previous
         # manifest was generated) silently dropped it. The pinned fastapi
         # resolves includes lazily and serves it, so the manifest must list it.
-        # 179/162 adds the new email_ingest:POST:/webhooks/email/inbound
-        # operation — mounted (non-production-enabled) but not yet promoted
-        # into PRODUCTION_ENABLED_ROUTERS, so it's omitted here rather than
-        # counted as enabled.
-        "disabled_operation_count": 179,
-        "disabled_unique_path_count": 162,
+        # 181/164 adds the 3 new inbound_email operations (webhook + address
+        # registration + rejection listing): the owner is in VALID_ROUTER_NAMES
+        # for dev/test surface parity but deliberately not yet in
+        # PRODUCTION_ENABLED_ROUTERS, so they land in the omitted/disabled
+        # inventory pending an explicit production-allowlist decision.
+        "disabled_operation_count": 181,
+        "disabled_unique_path_count": 164,
         "enabled_by_classification": {
             "global-sysadmin": 15,
             "public": 29,
-            "tenant-scoped": 195,
+            "tenant-scoped": 199,
             "workload-only": 7,
         },
     }
@@ -241,7 +245,9 @@ def test_checkout_manifest_adapter_rejects_broad_auth_failure_downgrade(inventor
 
 
 def test_every_omitted_router_path_returns_exact_404(production_route_app, manifest):
-    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 179
+    # 181 includes the 3 new inbound_email operations — see the comment on
+    # disabled_operation_count above.
+    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 181
 
 
 def test_representative_auth_negative_contracts_are_not_vacuous(production_route_app):
