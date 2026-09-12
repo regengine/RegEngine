@@ -68,8 +68,12 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # eager route copies of fastapi < 0.137 (under which the previous
         # manifest was generated) silently dropped it. The pinned fastapi
         # resolves includes lazily and serves it, so the manifest must list it.
-        "disabled_operation_count": 178,
-        "disabled_unique_path_count": 161,
+        # 179/162 adds agent_org:POST:/agent-org/onboard — the new agent-org
+        # onboarding router is registered (VALID_ROUTER_NAMES) and experimental
+        # (not yet promoted to PRODUCTION_ENABLED_ROUTERS), so it is enabled by
+        # default outside production but omitted from the production table.
+        "disabled_operation_count": 179,
+        "disabled_unique_path_count": 162,
         "enabled_by_classification": {
             "global-sysadmin": 15,
             "public": 29,
@@ -237,7 +241,7 @@ def test_checkout_manifest_adapter_rejects_broad_auth_failure_downgrade(inventor
 
 
 def test_every_omitted_router_path_returns_exact_404(production_route_app, manifest):
-    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 178
+    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 179
 
 
 def test_representative_auth_negative_contracts_are_not_vacuous(production_route_app):

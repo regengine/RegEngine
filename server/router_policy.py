@@ -70,6 +70,7 @@ VALID_ROUTER_NAMES = frozenset(
         "fsma_compliance",
         "proof_verify",
         "proof_recall",
+        "agent_org",
     }
 )
 
@@ -121,6 +122,7 @@ EXPERIMENTAL_ROUTERS = frozenset(
         "recall_simulations",
         "graph",
         "nlp",
+        "agent_org",
     }
 )
 
