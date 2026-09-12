@@ -27,6 +27,43 @@ from app.authz import IngestionPrincipal
 TENANT_ID = "tenant-usage-1"
 
 
+class _NullLogger:
+    """No-op stand-in for ``stripe_billing.routes``' module-level structlog
+    logger, installed by the ``_isolate_routes_logger`` fixture below.
+
+    ``routes.py``'s ``logger = structlog.get_logger("stripe-billing")`` is
+    one shared, ``cache_logger_on_first_use=True`` object used by every
+    endpoint in that module — including ``create_checkout``'s
+    client/auth tenant-mismatch warning, which
+    ``test_stripe_routes_1342.py::test_client_tenant_mismatch_is_logged_and_ignored``
+    asserts on via ``structlog.testing.capture_logs()``. Once that proxy's
+    first real ``.error()``/``.info()``/``.warning()`` call binds a logger
+    against whatever the *global* processors list happens to be at that
+    moment, it keeps using that exact list object forever — including
+    across a later full ``structlog.configure(...)`` elsewhere in the suite
+    (e.g. ``configure_logging()`` at ``app.main`` import time in
+    ``test_correlation_middleware_2151.py`` / ``test_cors_...``) that
+    replaces the *global* list with a new one. If that bind happens to be
+    ours (this file sorts alphabetically before those, so it can run
+    first when the whole ``services/ingestion/tests/`` suite executes
+    together) it silently and permanently breaks that other file's
+    ``capture_logs()`` assertion for the rest of the pytest session,
+    regardless of whether *our* call is itself wrapped in
+    ``capture_logs()`` — the poisoned reference is to the list object,
+    not to caching timing. None of our own tests assert on
+    ``routes.py``'s log output, so the simplest fix is to never let this
+    file's tests touch the real shared logger at all.
+    """
+
+    def __getattr__(self, _name: str):
+        return lambda *_args, **_kwargs: None
+
+
+@pytest.fixture(autouse=True)
+def _isolate_routes_logger(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(stripe_billing._routes_mod, "logger", _NullLogger())
+
+
 class _FakeRedis:
     def __init__(self):
         self.hashes: dict[str, dict[str, str]] = {}

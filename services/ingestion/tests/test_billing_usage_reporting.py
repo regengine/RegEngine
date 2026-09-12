@@ -60,6 +60,11 @@ class _FakeSession:
 
     def execute(self, statement, params=None):
         self.calls.append((str(statement), params))
+        sql = str(statement)
+        # The advisory lock/unlock calls don't consume a result slot --
+        # only the real queries (SELECT ... FOR UPDATE, the UPDATE) do.
+        if "pg_advisory_lock" in sql or "pg_advisory_unlock" in sql:
+            return _Result()
         if self._call_index < len(self._results):
             result = self._results[self._call_index]
             self._call_index += 1
@@ -165,13 +170,14 @@ class TestReportTenantUsageSuccessSinglePeriod:
         }
         assert session.committed is True
 
+        # calls[0] is the advisory lock (see _FakeSession.execute).
         # The counter rows are read FOR UPDATE (concurrency guard) ...
-        select_sql, select_params = session.calls[0]
+        select_sql, select_params = session.calls[1]
         assert "FOR UPDATE" in select_sql.upper()
         assert select_params == {"tenant_id": TENANT_ID}
         # ... and the high-water mark advances to the new cumulative count,
         # not just by the delta.
-        update_sql, update_params = session.calls[1]
+        update_sql, update_params = session.calls[2]
         assert "last_reported_count" in update_sql
         assert update_params == {
             "tenant_id": TENANT_ID,
@@ -285,10 +291,13 @@ class TestReportTenantUsageStripeError:
         with pytest.raises(stripe.error.StripeError):
             mod.report_tenant_usage_to_stripe(session, TENANT_ID)
 
-        # Only the initial SELECT ... FOR UPDATE happened — no UPDATE to
-        # last_reported_count, and no commit, so a retry resends the same
-        # delta next time.
-        assert len(session.calls) == 1
+        # Lock, SELECT ... FOR UPDATE, and the unlock (from `finally`) all
+        # happened — but no UPDATE to last_reported_count and no commit,
+        # so a retry resends the same delta next time.
+        assert len(session.calls) == 3
+        assert "pg_advisory_lock" in session.calls[0][0]
+        assert "FOR UPDATE" in session.calls[1][0].upper()
+        assert "pg_advisory_unlock" in session.calls[2][0]
         assert session.committed is False
 
     def test_failure_on_a_later_period_does_not_roll_back_an_earlier_success(self, monkeypatch):
