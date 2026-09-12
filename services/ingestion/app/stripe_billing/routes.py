@@ -10,6 +10,9 @@ import stripe
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from shared import funnel_events as _funnel_mod
+from shared.database import get_db_session
+from shared.tenant_context import set_tenant_guc_if_uuid
+from sqlalchemy import text
 
 from ..authz import (
     IngestionPrincipal,
@@ -23,6 +26,8 @@ from . import (
     plans as _plans_mod,
     rate_limiting as _rate_limiting_mod,
     state as _state_mod,
+    usage as _usage_mod,
+    usage_reporting as _usage_reporting_mod,
     webhooks as _webhooks_mod,
 )
 from .helpers import (
@@ -39,12 +44,18 @@ from .models import (
     InvoicePdfResponse,
     InvoiceSummary,
     SubscriptionStatus,
+    UsageResponse,
 )
-from .plans import DEFAULT_PORTAL_RETURN_URL, PLANS
+from .plans import DEFAULT_PORTAL_RETURN_URL, METERED_ADDONS, PLANS
 
 logger = structlog.get_logger("stripe-billing")
 
 router = APIRouter(prefix="/api/v1/billing", tags=["Billing & Subscriptions"])
+
+# ``app.dependency_overrides[_get_db_session]`` in tests must reference the
+# exact callable passed to ``Depends()`` below — matches the pattern already
+# used by ``canonical_router.py`` / ``webhook_router_v2.py``.
+_get_db_session = get_db_session
 
 
 def _allow_subscription_read_fallback() -> bool:
@@ -649,3 +660,252 @@ async def create_portal_session_legacy(
         tenant_id=tenant_id,
         customer_id=customer_id,
     )
+
+
+# ── Per-label metered billing (DESIGN_metering-billing.md §6) ──────────────
+#
+# Usage itself is counted unconditionally for every tenant inside
+# ``CanonicalEventStore.persist_event`` / ``persist_events_batch``
+# (``services/shared/canonical_persistence/writer.py``) — these routes only
+# read that accumulated state and manage whether it is ever reported to
+# Stripe.
+
+
+@router.get(
+    "/usage",
+    response_model=UsageResponse,
+    summary="Get current-period label usage",
+    description=(
+        "Returns the tenant's current-period per-label metered usage (accepted "
+        "TraceabilityEvent count). Populated for every tenant regardless of "
+        "metered-billing opt-in status."
+    ),
+)
+async def get_usage(
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant assertion; must match the credential"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("billing.usage.read")),
+    db_session=Depends(get_db_session),
+) -> UsageResponse:
+    """Return current-period per-label usage for the authenticated tenant."""
+    if db_session is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    resolved_tenant_id = _helpers_mod._resolve_tenant_context(tenant_id, x_tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, resolved_tenant_id)  # RLS backstop (UUID tenants only)
+
+    period_start, period_end = _usage_mod._current_billing_period()
+    row = db_session.execute(
+        text(
+            """
+            SELECT unit_count
+            FROM billing.tenant_usage_counters
+            WHERE tenant_id = :tenant_id AND billing_period_start = :period_start
+            """
+        ),
+        {"tenant_id": resolved_tenant_id, "period_start": period_start},
+    ).fetchone()
+    unit_count = int(row[0]) if row else 0
+
+    try:
+        mapping = _state_mod._get_subscription_mapping(resolved_tenant_id)
+    except redis.RedisError as exc:
+        if _allow_subscription_read_fallback():
+            logger.info(
+                "usage_subscription_mapping_read_fallback_empty",
+                tenant_id=resolved_tenant_id,
+                error=str(exc),
+            )
+            mapping = {}
+        else:
+            logger.error("usage_subscription_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
+            raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    plan_id = _plans_mod._normalize_plan_id(mapping.get("plan_id", "growth")) if mapping else "none"
+    metered_billing_enabled = mapping.get("metered_billing_enabled") == "true"
+
+    return UsageResponse(
+        tenant_id=resolved_tenant_id,
+        billing_period_start=period_start.isoformat(),
+        billing_period_end=period_end.isoformat(),
+        unit_count=unit_count,
+        metered_billing_enabled=metered_billing_enabled,
+        plan=plan_id,
+    )
+
+
+@router.post(
+    "/usage/report",
+    summary="Report current-period usage to Stripe",
+    description=(
+        "Pushes this tenant's un-reported current-period label usage to Stripe's "
+        "Billing Meters API. No-ops if the tenant is not opted into metered "
+        "billing, has no linked Stripe customer, or has nothing new to report. "
+        "Safe to call repeatedly."
+    ),
+)
+async def report_usage(
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant assertion; must match the credential"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("billing.usage.report")),
+    db_session=Depends(get_db_session),
+) -> dict[str, Any]:
+    """Trigger an on-demand usage report to Stripe for the tenant's current period."""
+    if db_session is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    resolved_tenant_id = _helpers_mod._resolve_tenant_context(tenant_id, x_tenant_id, principal)
+    _helpers_mod._configure_stripe()
+    set_tenant_guc_if_uuid(db_session, resolved_tenant_id)  # RLS backstop (UUID tenants only)
+
+    try:
+        result = _usage_reporting_mod.report_tenant_usage_to_stripe(db_session, resolved_tenant_id)
+    except stripe.error.StripeError as exc:
+        logger.error("usage_report_failed", tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Stripe usage report failed: {exc.user_message or str(exc)}",
+        ) from exc
+
+    if result is None:
+        return {
+            "tenant_id": resolved_tenant_id,
+            "reported": False,
+            "detail": "No new usage to report, or tenant is not opted into metered billing.",
+        }
+
+    return {"tenant_id": resolved_tenant_id, "reported": True, **result}
+
+
+@router.post(
+    "/usage/opt-in",
+    summary="Opt a tenant into per-label metered billing",
+    description=(
+        "Attaches the metered label-events Price as a second subscription item "
+        "alongside the tenant's existing flat-tier subscription. The tenant must "
+        "already have an active flat-tier subscription — metering is an add-on, "
+        "not a standalone plan."
+    ),
+)
+async def opt_in_metered_usage(
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant assertion; must match the credential"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("billing.usage.manage")),
+) -> dict[str, Any]:
+    """Attach the metered label-events add-on to the tenant's subscription."""
+    _helpers_mod._enforce_admin_or_operator(principal, "billing.usage.manage")
+    _helpers_mod._configure_stripe()
+
+    resolved_tenant_id = _helpers_mod._resolve_tenant_context(tenant_id, x_tenant_id, principal)
+
+    try:
+        mapping = _state_mod._get_subscription_mapping(resolved_tenant_id)
+    except redis.RedisError as exc:
+        logger.error("usage_opt_in_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    subscription_id = str(mapping.get("subscription_id") or "").strip()
+    if not subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Tenant has no active flat-tier subscription; metered billing is an add-on, not a standalone plan.",
+        )
+
+    addon = METERED_ADDONS["label_events"]
+    price_id = os.getenv(addon["stripe_price_env"], "").strip()
+    if not price_id:
+        raise HTTPException(status_code=500, detail=f"{addon['stripe_price_env']} is not configured")
+
+    try:
+        item = stripe.SubscriptionItem.create(subscription=subscription_id, price=price_id)
+    except stripe.error.StripeError as exc:
+        logger.error("usage_opt_in_subscription_item_failed", tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Stripe metered add-on attach failed: {exc.user_message or str(exc)}",
+        ) from exc
+
+    _state_mod._store_subscription_mapping(
+        resolved_tenant_id,
+        {
+            "metered_billing_enabled": "true",
+            "metered_subscription_item_id": str(_stripe_get(item, "id", "") or ""),
+        },
+    )
+
+    logger.info(
+        "usage_opt_in_enabled",
+        tenant_id=resolved_tenant_id,
+        subscription_id=subscription_id,
+        subscription_item_id=_stripe_get(item, "id", ""),
+    )
+
+    return {
+        "tenant_id": resolved_tenant_id,
+        "metered_billing_enabled": True,
+        "subscription_item_id": _stripe_get(item, "id", ""),
+    }
+
+
+@router.delete(
+    "/usage/opt-in",
+    summary="Opt a tenant out of per-label metered billing",
+    description=(
+        "Removes the metered label-events subscription item and clears the "
+        "tenant's opt-in flag. Idempotent: no-ops if the tenant was not opted in."
+    ),
+)
+async def opt_out_metered_usage(
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant assertion; must match the credential"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("billing.usage.manage")),
+) -> dict[str, Any]:
+    """Detach the metered label-events add-on from the tenant's subscription."""
+    _helpers_mod._enforce_admin_or_operator(principal, "billing.usage.manage")
+    _helpers_mod._configure_stripe()
+
+    resolved_tenant_id = _helpers_mod._resolve_tenant_context(tenant_id, x_tenant_id, principal)
+
+    try:
+        mapping = _state_mod._get_subscription_mapping(resolved_tenant_id)
+    except redis.RedisError as exc:
+        logger.error("usage_opt_out_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    subscription_item_id = str(mapping.get("metered_subscription_item_id") or "").strip()
+    if subscription_item_id:
+        try:
+            stripe.SubscriptionItem.delete(subscription_item_id)
+        except stripe.error.InvalidRequestError as exc:
+            # Already gone on Stripe's side (e.g. the subscription itself was
+            # canceled) — treat as already-opted-out rather than failing the
+            # local flag flip.
+            logger.info(
+                "usage_opt_out_subscription_item_missing",
+                tenant_id=resolved_tenant_id,
+                subscription_item_id=subscription_item_id,
+                error=str(exc),
+            )
+        except stripe.error.StripeError as exc:
+            logger.error(
+                "usage_opt_out_subscription_item_failed",
+                tenant_id=resolved_tenant_id,
+                subscription_item_id=subscription_item_id,
+                error=str(exc),
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"Stripe metered add-on removal failed: {exc.user_message or str(exc)}",
+            ) from exc
+
+    _state_mod._store_subscription_mapping(
+        resolved_tenant_id,
+        {
+            "metered_billing_enabled": "false",
+            "metered_subscription_item_id": "",
+        },
+    )
+
+    logger.info("usage_opt_in_disabled", tenant_id=resolved_tenant_id)
+
+    return {"tenant_id": resolved_tenant_id, "metered_billing_enabled": False}
