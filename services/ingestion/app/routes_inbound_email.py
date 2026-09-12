@@ -130,11 +130,26 @@ async def _verify_postmark_basic_auth(
 # ---------------------------------------------------------------------------
 
 
+class TenantLookupUnavailable(RuntimeError):
+    """The address→tenant lookup could not be performed at all (database
+    unavailable, or the query itself errored) — distinct from a completed
+    lookup that found no registered tenant. Callers must let this
+    propagate rather than quarantine it as "unknown recipient": a DB blip
+    is a transient condition Postmark should retry, not a reason to
+    silently drop a legitimate supplier's email.
+    """
+
+
 def _db_get_tenant_by_inbound_address(address: str) -> Optional[str]:
-    """Resolve a recipient address to a tenant_id, or None if unregistered."""
+    """Resolve a recipient address to a tenant_id.
+
+    Returns None only when the lookup completed and found no tenant
+    registered for that address. Raises TenantLookupUnavailable if the
+    lookup itself could not be performed.
+    """
     db = get_db_safe()
     if not db:
-        return None
+        raise TenantLookupUnavailable("database unavailable")
     try:
         row = db.execute(
             # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized address
@@ -143,9 +158,9 @@ def _db_get_tenant_by_inbound_address(address: str) -> Optional[str]:
         ).fetchone()
         return str(row[0]) if row else None
     except Exception as exc:
-        logger.warning("inbound_email_tenant_lookup_failed error=%s", str(exc))
         db.rollback()
-        return None
+        logger.error("inbound_email_tenant_lookup_failed error=%s", str(exc))
+        raise TenantLookupUnavailable(f"tenant lookup query failed: {exc}") from exc
     finally:
         db.close()
 

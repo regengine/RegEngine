@@ -261,6 +261,81 @@ class TestTenantResolution:
         assert rejections[0]["reason"] == "unknown_recipient"
         assert rejections[0]["recipient"] == "nobody@inbound.regengine.co"
 
+    def test_tenant_lookup_unavailable_propagates_not_quarantined(self, monkeypatch):
+        """A DB blip during tenant resolution must not be indistinguishable
+        from a genuinely unregistered recipient: it should raise so Postmark
+        retries, not silently quarantine (and lose) the email."""
+
+        def _boom(addr):
+            raise m.TenantLookupUnavailable("database unavailable")
+
+        monkeypatch.setattr(m, "_db_get_tenant_by_inbound_address", _boom)
+        ingest_calls: list = []
+
+        async def _fake_ingest(payload, **_kwargs):
+            ingest_calls.append(payload)
+            return _make_ingest_response(accepted=1)
+
+        monkeypatch.setattr(m, "ingest_events", _fake_ingest)
+
+        client = TestClient(_build_app())
+        with pytest.raises(m.TenantLookupUnavailable):
+            client.post(
+                "/api/v1/webhooks/inbound-email",
+                json=_postmark_payload(),
+                headers=_basic_auth_header(),
+            )
+        assert rejlog.list_inbound_email_rejections(rejlog.UNRESOLVED_TENANT_KEY) == []
+        assert ingest_calls == []
+
+
+class TestDbGetTenantByInboundAddress:
+    """Direct coverage of the lookup helper's unavailable-vs-not-found split."""
+
+    class _FakeSession:
+        def __init__(self, row=None, raise_on_execute=None):
+            self._row = row
+            self._raise = raise_on_execute
+            self.rolled_back = False
+            self.closed = False
+
+        def execute(self, stmt, params=None):
+            if self._raise:
+                raise self._raise
+            return self
+
+        def fetchone(self):
+            return self._row
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            self.closed = True
+
+    def test_no_db_raises_unavailable(self, monkeypatch):
+        monkeypatch.setattr(m, "get_db_safe", lambda: None)
+        with pytest.raises(m.TenantLookupUnavailable):
+            m._db_get_tenant_by_inbound_address("nobody@inbound.regengine.co")
+
+    def test_query_exception_raises_unavailable_and_rolls_back(self, monkeypatch):
+        session = self._FakeSession(raise_on_execute=RuntimeError("connection reset"))
+        monkeypatch.setattr(m, "get_db_safe", lambda: session)
+        with pytest.raises(m.TenantLookupUnavailable):
+            m._db_get_tenant_by_inbound_address("nobody@inbound.regengine.co")
+        assert session.rolled_back is True
+        assert session.closed is True
+
+    def test_found_row_returns_tenant_id(self, monkeypatch):
+        session = self._FakeSession(row=("tenant-acme",))
+        monkeypatch.setattr(m, "get_db_safe", lambda: session)
+        assert m._db_get_tenant_by_inbound_address("ingest+acme@inbound.regengine.co") == "tenant-acme"
+
+    def test_no_row_returns_none_not_raises(self, monkeypatch):
+        session = self._FakeSession(row=None)
+        monkeypatch.setattr(m, "get_db_safe", lambda: session)
+        assert m._db_get_tenant_by_inbound_address("nobody@inbound.regengine.co") is None
+
 
 # ---------------------------------------------------------------------------
 # Malformed / unparseable emails never crash and are quarantined
