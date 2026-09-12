@@ -54,6 +54,7 @@ Verified product capabilities in the current tree:
 | Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
 | Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
+| Inbound email ingestion: Postmark inbound-parse webhook, Basic-Auth + per-tenant sender allowlist, CSV attachments routed through the existing CSV ingest path, claim-then-act idempotent audit trail. Built and unit-tested; **not enabled in production** and has no admin/self-service provisioning UI — see [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) | [services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/) |
 
 ## Production Spine
 
@@ -340,12 +341,14 @@ These are current repo facts, not speculation:
 - Neo4j and Redpanda/Kafka-compatible code paths exist, but the default local dev compose file ([docker-compose.dev.yml](docker-compose.dev.yml)) starts only PostgreSQL and Redis — no Neo4j, no Kafka/Redpanda broker.
 - [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) still exposes an internal non-HTTP `ingest_events()` helper that requires a tenant-bearing payload because it has no request context. HTTP and router callers should derive that payload tenant from authenticated tenant context.
 - Supplier remediation notification delivery is recipient-gated. [services/ingestion/app/remediation/delivery.py](services/ingestion/app/remediation/delivery.py) drains the notification outbox and sends correction-link emails via Resend from the scheduler leader (v101 added delivery-status columns). Only rows enqueued with a recipient are delivered; rows without a recipient remain previews, and legacy pre-v101 `pending` rows are never drained — draining them would revoke links buyers already shared out of band. At send time the drainer re-validates the referenced token and follows the buyer reissue path, so a delivered email never carries a revoked or superseded link.
+- Inbound email ingestion ([services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/)) is built and unit-tested but the `email_ingest` router is not in `PRODUCTION_ENABLED_ROUTERS` ([server/router_policy.py](server/router_policy.py)), so it cannot run in production without a code change plus completing review of the Basic-Auth webhook credential rollout. There is no admin or self-service way to provision the recipient-address→tenant mapping (`fsma.tenant_inbound_addresses`) — today that is a manual SQL insert. See [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) for the full limitation list, including that tests are fully mocked with no live-email or live-DB coverage.
 - This repository does not prove broad production adoption, paid customer status, regulatory approval, or FDA certification.
 
 ## Documentation Map
 
 - [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.
 
+- [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) - inbound email (Postmark) ingestion: how it works, config, rollout status, and known limitations.
 - [ARCHITECTURE.md](ARCHITECTURE.md) - current runtime shape, system map, and debt register.
 - [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
 - [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.
