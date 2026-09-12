@@ -123,38 +123,49 @@ def charge_for_label(
 
         if not claimed:
             row = session.execute(
-                text("SELECT status, stripe_invoice_item_id FROM fsma.label_charges WHERE id = :id"),
+                text("SELECT amount_cents, status, stripe_invoice_item_id FROM fsma.label_charges WHERE id = :id"),
                 {"id": charge_id},
             ).fetchone()
             return LabelChargeResult(
                 charge_id=charge_id,
                 tenant_id=tenant_id,
                 cte_event_id=cte_event_id,
-                amount_cents=amount_cents,
-                status=row[0] if row else STATUS_CHARGED,
-                stripe_invoice_item_id=row[1] if row else None,
+                # The persisted amount, not this call's argument -- if
+                # PRICE_PER_LABEL_CENTS changed since the first attempt, the
+                # Stripe item (and any charge) was created at the OLD price.
+                amount_cents=row[0] if row else amount_cents,
+                status=row[1] if row else STATUS_CHARGED,
+                stripe_invoice_item_id=row[2] if row else None,
                 claimed=False,
             )
 
-        customer_id = _get_existing_customer_id(tenant_id)
-        if not customer_id:
-            session.execute(
-                text("UPDATE fsma.label_charges SET status = :status WHERE id = :id"),
-                {"status": STATUS_NO_CUSTOMER, "id": charge_id},
-            )
-            session.commit()
-            logger.info("label_charge_skipped_no_customer", tenant_id=tenant_id, cte_event_id=cte_event_id)
-            return LabelChargeResult(
-                charge_id=charge_id,
-                tenant_id=tenant_id,
-                cte_event_id=cte_event_id,
-                amount_cents=amount_cents,
-                status=STATUS_NO_CUSTOMER,
-                stripe_invoice_item_id=None,
-                claimed=True,
-            )
-
+        # Everything from here on is best-effort in the sense that ANY
+        # failure -- customer lookup, Stripe config, the Stripe call itself,
+        # a non-Stripe SDK error -- must leave the claim in a terminal,
+        # visible STATUS_FAILED state rather than stuck 'pending' forever.
+        # A 'pending' row is indistinguishable from "in progress" to every
+        # later caller (the `not claimed` branch above returns it as-is,
+        # with no retry), so an uncaught exception here would silently and
+        # permanently lose the charge.
         try:
+            customer_id = _get_existing_customer_id(tenant_id)
+            if not customer_id:
+                session.execute(
+                    text("UPDATE fsma.label_charges SET status = :status WHERE id = :id"),
+                    {"status": STATUS_NO_CUSTOMER, "id": charge_id},
+                )
+                session.commit()
+                logger.info("label_charge_skipped_no_customer", tenant_id=tenant_id, cte_event_id=cte_event_id)
+                return LabelChargeResult(
+                    charge_id=charge_id,
+                    tenant_id=tenant_id,
+                    cte_event_id=cte_event_id,
+                    amount_cents=amount_cents,
+                    status=STATUS_NO_CUSTOMER,
+                    stripe_invoice_item_id=None,
+                    claimed=True,
+                )
+
             _configure_stripe()
             invoice_item = stripe.InvoiceItem.create(
                 customer=customer_id,
@@ -166,18 +177,14 @@ def charge_for_label(
                 invoice_item_id = str(invoice_item.get("id") or "")
             else:
                 invoice_item_id = str(getattr(invoice_item, "id", "") or "")
-        except stripe.error.StripeError as exc:
+        except Exception as exc:  # noqa: BLE001 -- see comment above: any failure must reach STATUS_FAILED
             session.execute(
-                text(
-                    "UPDATE fsma.label_charges "
-                    "SET status = :status, stripe_customer_id = :customer_id, error_message = :error "
-                    "WHERE id = :id"
-                ),
-                {"status": STATUS_FAILED, "customer_id": customer_id, "error": str(exc), "id": charge_id},
+                text("UPDATE fsma.label_charges SET status = :status, error_message = :error WHERE id = :id"),
+                {"status": STATUS_FAILED, "error": str(exc), "id": charge_id},
             )
             session.commit()
             logger.error(
-                "label_charge_stripe_failed",
+                "label_charge_failed",
                 tenant_id=tenant_id,
                 cte_event_id=cte_event_id,
                 error=str(exc),

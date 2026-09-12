@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from services.ingestion.app.stripe_billing import (
     STATUS_CHARGED,
+    STATUS_FAILED,
     STATUS_NO_CUSTOMER,
     charge_for_label,
     get_label_charge,
@@ -74,9 +75,9 @@ class _FakeLabelChargesSession:
             row = self.rows.get(key)
             return _Result(rows=[(row["id"],)] if row else [])
 
-        if "SELECT status, stripe_invoice_item_id" in sql:
+        if "SELECT amount_cents, status, stripe_invoice_item_id" in sql:
             row = self._row_by_id(params["id"])
-            return _Result(rows=[(row["status"], row["stripe_invoice_item_id"])] if row else [])
+            return _Result(rows=[(row["amount_cents"], row["status"], row["stripe_invoice_item_id"])] if row else [])
 
         if "SELECT id, amount_cents, currency, status" in sql:
             key = (params["tenant_id"], params["cte_event_id"])
@@ -108,7 +109,7 @@ class _FakeLabelChargesSession:
         if "error_message" in sql:
             row = self._row_by_id(params["id"])
             row["status"] = params["status"]
-            row["stripe_customer_id"] = params["customer_id"]
+            row["error_message"] = params["error"]
             return _Result()
 
         if sql.strip().startswith("UPDATE fsma.label_charges SET status = :status WHERE id"):
@@ -185,6 +186,31 @@ def test_charge_for_label_idempotent_under_retry(_mock_get_customer, mock_stripe
     assert second.stripe_invoice_item_id == "ii_test_2"
 
 
+@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})  # pragma: allowlist secret
+@patch("services.ingestion.app.stripe_billing.stripe")
+@patch(
+    "services.ingestion.app.stripe_billing.label_billing._get_existing_customer_id",
+    return_value="cus_test_123",
+)
+def test_idempotent_replay_returns_persisted_amount_not_new_argument(_mock_get_customer, mock_stripe):
+    """A replay must report what was actually charged, even if the
+    configured price changed between the two calls."""
+    mock_stripe.InvoiceItem.create.return_value = {"id": "ii_test_price_change"}
+    session = _FakeLabelChargesSession()
+
+    first = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10, session_factory=lambda: session
+    )
+    # PRICE_PER_LABEL_CENTS changes between the two attempts.
+    second = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=25, session_factory=lambda: session
+    )
+
+    assert mock_stripe.InvoiceItem.create.call_count == 1
+    assert first.amount_cents == 10
+    assert second.amount_cents == 10, "must report the price actually charged, not the caller's new argument"
+
+
 @patch("services.ingestion.app.stripe_billing.stripe")
 @patch(
     "services.ingestion.app.stripe_billing.label_billing._get_existing_customer_id",
@@ -200,6 +226,29 @@ def test_charge_for_label_skips_stripe_without_customer(_mock_get_customer, mock
 
     assert result.status == STATUS_NO_CUSTOMER
     mock_stripe.InvoiceItem.create.assert_not_called()
+
+
+@patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})  # pragma: allowlist secret
+@patch("services.ingestion.app.stripe_billing.stripe")
+@patch(
+    "services.ingestion.app.stripe_billing.label_billing._get_existing_customer_id",
+    return_value="cus_test_123",
+)
+def test_non_stripe_error_leaves_a_terminal_failed_status_not_stuck_pending(_mock_get_customer, mock_stripe):
+    """A non-StripeError failure (config, network, SDK error) must still
+    reach STATUS_FAILED -- never leave the claim stuck 'pending' forever,
+    which the `not claimed` branch would otherwise return unchanged on
+    every future call with no path to retry."""
+    mock_stripe.InvoiceItem.create.side_effect = RuntimeError("boom: connection reset")
+    session = _FakeLabelChargesSession()
+
+    result = charge_for_label(
+        tenant_id=TENANT_ID, cte_event_id=EVENT_ID, amount_cents=10, session_factory=lambda: session
+    )
+
+    assert result.status == STATUS_FAILED
+    stored = session.rows[(TENANT_ID, EVENT_ID)]
+    assert stored["status"] == STATUS_FAILED, "must not be left as 'pending' in the DB"
 
 
 @patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_123"})  # pragma: allowlist secret

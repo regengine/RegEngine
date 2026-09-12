@@ -97,7 +97,11 @@ def upgrade() -> None:
             END IF;
 
             EXECUTE 'GRANT USAGE ON SCHEMA fsma TO regengine, regengine_sysadmin';
-            EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON {_TABLE} '
+            -- No DELETE: this table is the idempotency/audit claim for
+            -- per-label billing. A runtime role that could delete a claim
+            -- row could let a retry mint a fresh one and double-charge
+            -- Stripe, and would let it erase billing history.
+            EXECUTE 'GRANT SELECT, INSERT, UPDATE ON {_TABLE} '
                  || 'TO regengine, regengine_sysadmin';
         END $$;
         """
