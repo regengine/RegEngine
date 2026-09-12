@@ -775,6 +775,15 @@ if _router_enabled("disaster_recovery"):
 
 
 # =====================================================================
+# DOMAIN: AGENT ORGANIZATION — pods, agent identities, inboxes, scoped keys
+# =====================================================================
+if _router_enabled("agent_org"):
+    from shared.agent_org.router import router as agent_org_router
+
+    include_owned_router(app, agent_org_router, owner="agent_org", tags=["Agent Organization"])
+
+
+# =====================================================================
 # DOMAIN: ADMIN — tenant management, auth, supplier onboarding
 # =====================================================================
 if _router_enabled("admin"):

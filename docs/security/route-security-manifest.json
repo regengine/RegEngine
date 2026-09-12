@@ -3182,6 +3182,15 @@
   ],
   "disabled_operations": [
     {
+      "operation": "agent_org:POST:/agent-org/onboard",
+      "owner": "agent_org",
+      "method": "POST",
+      "path": "/agent-org/onboard",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/agent-org/onboard"
+    },
+    {
       "operation": "alerts:GET:/api/v1/alerts/{tenant_id}",
       "owner": "alerts",
       "method": "GET",
@@ -4786,8 +4795,8 @@
   ],
   "summary": {
     "enabled_operation_count": 246,
-    "disabled_operation_count": 178,
-    "disabled_unique_path_count": 161,
+    "disabled_operation_count": 179,
+    "disabled_unique_path_count": 162,
     "enabled_by_classification": {
       "global-sysadmin": 15,
       "public": 29,
