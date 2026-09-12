@@ -305,6 +305,58 @@
       "test_adapter": "tenant_api_key_postgres_rls"
     },
     {
+      "operation": "billing:GET:/api/v1/billing/usage",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/usage",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.read"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:DELETE:/api/v1/billing/usage/opt-in",
+      "owner": "billing",
+      "method": "DELETE",
+      "path": "/api/v1/billing/usage/opt-in",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.manage"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/usage/opt-in",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/usage/opt-in",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.manage"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/usage/report",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/usage/report",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.report"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
       "operation": "billing:POST:/api/v1/billing/webhook/stripe",
       "owner": "billing",
       "method": "POST",
@@ -4812,13 +4864,13 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 246,
+    "enabled_operation_count": 250,
     "disabled_operation_count": 181,
     "disabled_unique_path_count": 164,
     "enabled_by_classification": {
       "global-sysadmin": 15,
       "public": 29,
-      "tenant-scoped": 195,
+      "tenant-scoped": 199,
       "workload-only": 7
     }
   }

@@ -62,7 +62,10 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
 
     assert checked_in == manifest
     assert checked_in["summary"] == {
-        "enabled_operation_count": 246,
+        # +4 vs the prior 246: the per-label metered billing add-on
+        # (GET/POST/POST/DELETE under /api/v1/billing/usage*), all
+        # tenant-scoped — see DESIGN_metering-billing.md.
+        "enabled_operation_count": 250,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
         # eager route copies of fastapi < 0.137 (under which the previous
@@ -78,7 +81,7 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         "enabled_by_classification": {
             "global-sysadmin": 15,
             "public": 29,
-            "tenant-scoped": 195,
+            "tenant-scoped": 199,
             "workload-only": 7,
         },
     }
