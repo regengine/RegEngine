@@ -54,6 +54,7 @@ Verified product capabilities in the current tree:
 | Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
 | Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
+| Agent organization v1: one-call tenant onboarding of DB-backed pods/agent identities, dev-only inbox address provisioning, agent-scoped API keys with cross-agent/cross-tenant isolation, and a hard email-suppression gate on the existing remediation outbound path — experimental router, not yet reachable in production (see limitations below) | [services/shared/agent_org/](services/shared/agent_org/), [docs/architecture/agent-org.md](docs/architecture/agent-org.md) |
 
 ## Production Spine
 
@@ -340,6 +341,7 @@ These are current repo facts, not speculation:
 - Neo4j and Redpanda/Kafka-compatible code paths exist, but the default local dev compose file ([docker-compose.dev.yml](docker-compose.dev.yml)) starts only PostgreSQL and Redis — no Neo4j, no Kafka/Redpanda broker.
 - [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) still exposes an internal non-HTTP `ingest_events()` helper that requires a tenant-bearing payload because it has no request context. HTTP and router callers should derive that payload tenant from authenticated tenant context.
 - Supplier remediation notification delivery is recipient-gated. [services/ingestion/app/remediation/delivery.py](services/ingestion/app/remediation/delivery.py) drains the notification outbox and sends correction-link emails via Resend from the scheduler leader (v101 added delivery-status columns). Only rows enqueued with a recipient are delivered; rows without a recipient remain previews, and legacy pre-v101 `pending` rows are never drained — draining them would revoke links buyers already shared out of band. At send time the drainer re-validates the referenced token and follows the buyer reissue path, so a delivered email never carries a revoked or superseded link.
+- Agent organization ([docs/architecture/agent-org.md](docs/architecture/agent-org.md)) is v1 and honestly bounded: `DevInboxProvider` ([services/shared/agent_org/providers.py](services/shared/agent_org/providers.py)) generates and records a deterministic address string only — it does not create a real, internet-routable mailbox and talks to no external email provider, since no live email-provider credentials exist in this environment. The `agent_org` router is registered as experimental in [server/router_policy.py](server/router_policy.py) and is not in `PRODUCTION_ENABLED_ROUTERS`, so `/agent-org/onboard` is not reachable in production without a deliberate allowlist change; it mounts by default in dev/test/CI only. Agent-scoped API keys mint correctly and enforce real cross-agent/cross-tenant isolation, but no mounted route yet consumes their `agent.inbox.read`/`agent.inbox.send`/`agent.suppression.read` capabilities — `require_agent_key` is exercised only by unit tests. `record_suppression` has no HTTP or admin-UI surface yet; populating `agent_org.email_suppressions` today requires direct DB access. All ~100 tests for this feature run against SQLite/stub sessions with no live DB, Stripe, or email-provider calls, and [docs/schema/expected_schema.json](docs/schema/expected_schema.json) has not been regenerated against the v121 migration in this branch.
 - This repository does not prove broad production adoption, paid customer status, regulatory approval, or FDA certification.
 
 ## Documentation Map
@@ -352,6 +354,7 @@ These are current repo facts, not speculation:
 - [SECURITY.md](SECURITY.md) - security posture.
 - [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) - tenant-scoped ingestion route inventory.
 - [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md) - CTE dual-write retirement plan and read-path cutover inventory.
+- [docs/architecture/agent-org.md](docs/architecture/agent-org.md) - agent organization v1 (pods, dev-only inboxes, scoped keys, suppression gate): what's real today and what isn't. Full design rationale in [DESIGN_agent-org.md](DESIGN_agent-org.md).
 - [CHANGELOG.md](CHANGELOG.md) - change history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow.
 - [docs/runbooks/](docs/runbooks) - operational runbooks.
