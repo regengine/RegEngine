@@ -23,7 +23,7 @@ names but have the same content shape).
 
 ## 2. New module: `services/ingestion/app/email_ingest/`
 
-Mirrors the layout of `app/remediation/` (package with `router.py` +
+Mirrors the layout of `services/ingestion/app/remediation/` (package with `router.py` +
 `service.py` + `schemas.py`) rather than a single file, since the module
 has auth, tenant resolution, orchestration, and schemas as distinct
 concerns from the start.
@@ -46,7 +46,7 @@ Tests: `services/ingestion/tests/test_email_ingest_router.py`,
 Next revision after `20260904_c6a120b4e901_v120_rule_citations.py` (the
 latest on `origin/main` as of this branch), so:
 
-`alembic/versions/20260912_<newhash>_v121_email_ingestion.py`
+`alembic/versions/20260912_ccaa01e4fd7c_v121_email_ingestion.py`
 (`down_revision = "c6a120b4e901"` <!-- pragma: allowlist secret -->).
 
 **Deviation from spec's example names**: the spec sketches
@@ -254,7 +254,7 @@ recipients; we use the first one that maps to a tenant.
 
 ## 5. Auth — `auth.py`
 
-`grep`'d precedent: `webhook_router_v2/security.py` (`_verify_webhook_signature`,
+`grep`'d precedent: `services/ingestion/app/webhook_router_v2/security.py` (`_verify_webhook_signature`,
 HMAC over the raw body, secret from `WEBHOOK_HMAC_SECRET`) and
 `services/shared/webhook_security.py` (HMAC + `hmac.compare_digest`,
 env-configured secret, secret-rotation via a `_PREVIOUS` env var). Postmark's
@@ -590,8 +590,8 @@ pytest services/ingestion/tests/test_email_ingest_router.py services/ingestion/t
    `ingestion.tenant_inbound_addresses` would be the first table in a
    brand-new schema for no benefit.
 2. **Auth mechanism is HTTP Basic, not HMAC**, even though every existing
-   *webhook* auth pattern in this repo (`webhook_router_v2/security.py`,
-   `shared/webhook_security.py`) is HMAC-over-body. This is what the spec
+   *webhook* auth pattern in this repo (`services/ingestion/app/webhook_router_v2/security.py`,
+   `services/shared/webhook_security.py`) is HMAC-over-body. This is what the spec
    itself asks for, and it matches Postmark's actual inbound-webhook
    contract (Postmark does not sign inbound POSTs; its documented
    security mechanism for an inbound-parse endpoint is Basic Auth via the
@@ -621,7 +621,7 @@ pytest services/ingestion/tests/test_email_ingest_router.py services/ingestion/t
    crash between "CSV rows committed" and "200 returned" would double-
    ingest CTE events. This is the smallest change that closes that gap
    (one unique index + a read-before-process check), not a full outbox/
-   claim system like `remediation/delivery.py`'s (which solves a
+   claim system like `services/ingestion/app/remediation/delivery.py`'s (which solves a
    different problem — draining a queue under concurrent workers).
 
    **Known residual gap, found in self-review**: the `message_id` guard is
@@ -735,7 +735,7 @@ plus the corresponding `service.py`/`tenant_lookup.py` changes.
    *audit row*, after the fact, not the CTE events themselves.
 
    Fix: claim-then-act, mirroring the `NotificationOutboxDrainer._claim()`
-   pattern already used by `app/remediation/delivery.py` for the identical
+   pattern already used by `services/ingestion/app/remediation/delivery.py` for the identical
    "make double-processing structurally impossible" problem (an atomic
    `UPDATE ... WHERE status = 'queued' ...` there; an atomic
    `INSERT ... ON CONFLICT DO NOTHING` here, since the audit row doesn't
@@ -766,9 +766,9 @@ plus the corresponding `service.py`/`tenant_lookup.py` changes.
    endpoint's `db_session` is an ordinary per-request pooled session, not
    the dedicated long-lived connection `distributed.py` manages specifically
    to make that pattern safe, so the claim-row approach (already proven
-   safe under pooling by `remediation/delivery.py`) was used instead.
+   safe under pooling by `services/ingestion/app/remediation/delivery.py`) was used instead.
    `pg_advisory_xact_lock` (used elsewhere in this repo for chain-append
-   races, e.g. `cte_persistence/writes.py`) was also considered and
+   races, e.g. `services/shared/cte_persistence/writes.py`) was also considered and
    rejected for this specific function: it releases at the next `COMMIT`,
    and `process_inbound_email`'s own control flow already commits more than
    once before attachment processing finishes (`tenant_lookup`'s bootstrap

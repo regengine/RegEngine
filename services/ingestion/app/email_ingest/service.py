@@ -447,26 +447,63 @@ async def process_inbound_email(db_session, payload: PostmarkInboundPayload) -> 
             rejection_reason="unmapped_recipient",
         )
 
-    set_tenant_guc(db_session, tenant_id)
-    results: List[AttachmentResult] = []
-    for attachment in payload.Attachments:
-        results.append(await _process_one_attachment(tenant_id, attachment))
+    # Review finding: everything from here to finalize_inbound_email_audit
+    # below must never let an exception escape without finalizing the claim
+    # row first. Each attachment's own ingestion errors are already caught
+    # in _ingest_attachment_csv, but set_tenant_guc or finalize_inbound_
+    # email_audit itself failing would otherwise leave this row stuck at
+    # status='processing' forever: every future Postmark redelivery of the
+    # same MessageID loses the claim race (line 402's INSERT conflicts),
+    # sees the row still 'processing', and gets a permanent 409 -- the
+    # email's CSV attachments are then never ingested. Finalizing as
+    # 'rejected' on any unexpected failure trades that permanent hang for
+    # a terminal, visible, auditable state (consistent with how
+    # unmapped_recipient is handled above) and re-raises so Postmark still
+    # sees a non-2xx.
+    try:
+        set_tenant_guc(db_session, tenant_id)
+        results: List[AttachmentResult] = []
+        for attachment in payload.Attachments:
+            results.append(await _process_one_attachment(tenant_id, attachment))
 
-    accepted = sum(1 for r in results if r.status == "accepted")
-    rejected = sum(1 for r in results if r.status == "rejected")
-    status = "rejected" if payload.Attachments and accepted == 0 else ("partial" if rejected else "accepted")
+        accepted = sum(1 for r in results if r.status == "accepted")
+        rejected = sum(1 for r in results if r.status == "rejected")
+        status = "rejected" if payload.Attachments and accepted == 0 else ("partial" if rejected else "accepted")
 
-    finalize_inbound_email_audit(
-        db_session,
-        message_id=payload.MessageID,
-        tenant_id=tenant_id,
-        status=status,
-        rejection_reason=None,
-        attachment_count=len(payload.Attachments),
-        accepted_count=accepted,
-        rejected_count=rejected,
-        details=[r.model_dump() for r in results],
-    )
+        finalize_inbound_email_audit(
+            db_session,
+            message_id=payload.MessageID,
+            tenant_id=tenant_id,
+            status=status,
+            rejection_reason=None,
+            attachment_count=len(payload.Attachments),
+            accepted_count=accepted,
+            rejected_count=rejected,
+            details=[r.model_dump() for r in results],
+        )
+    except Exception:
+        logger.exception(
+            "inbound_email_processing_crashed message_id=%s",
+            _sanitize_log_value(payload.MessageID),
+        )
+        # A DB-level failure above can leave db_session's transaction
+        # aborted; SQLAlchemy refuses further statements on it until
+        # rolled back, which would make this finalize call itself raise
+        # and defeat the whole point of this handler.
+        db_session.rollback()
+        finalize_inbound_email_audit(
+            db_session,
+            message_id=payload.MessageID,
+            tenant_id=tenant_id,
+            status="rejected",
+            rejection_reason="internal_error",
+            attachment_count=len(payload.Attachments),
+            accepted_count=0,
+            rejected_count=0,
+            details=[],
+        )
+        raise
+
     return InboundEmailResult(
         message_id=payload.MessageID,
         status=status,

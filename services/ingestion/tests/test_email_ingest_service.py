@@ -824,3 +824,95 @@ class TestProcessInboundEmailMappedTenant:
         # Distinct from the unmapped-recipient rejection: no rejection_reason
         # is stamped here, the per-attachment `reason` carries the detail.
         assert result.rejection_reason is None
+
+
+class TestProcessInboundEmailCrashRecovery:
+    # Review finding: an unexpected exception between the claim INSERT and
+    # finalize_inbound_email_audit used to leave the audit row stuck at
+    # status='processing' forever -- every future Postmark redelivery of
+    # the same MessageID then loses the claim race and gets a permanent
+    # 409, so the email's CSV attachments are never ingested (silent data
+    # loss). These tests pin the fix: any such exception must still
+    # finalize the row (to a terminal 'rejected' state) before propagating.
+
+    def _setup(self, monkeypatch, tenant_id="tenant-1"):
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: tenant_id
+        )
+        _stub_claim(monkeypatch, succeeds=True)
+        recorded = {}
+
+        def fake_finalize(db, **kwargs):
+            recorded.update(kwargs)
+            return {"id": "1"}
+
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", fake_finalize)
+        return recorded
+
+    async def test_exception_during_attachment_processing_still_finalizes_and_reraises(self, monkeypatch):
+        recorded = self._setup(monkeypatch)
+        monkeypatch.setattr(service_mod, "set_tenant_guc", lambda db, tid: None)
+
+        async def _boom(tenant_id, attachment):
+            raise RuntimeError("simulated crash")
+
+        monkeypatch.setattr(service_mod, "_process_one_attachment", _boom)
+
+        db = MagicMock()
+        payload = _payload(
+            Attachments=[{"Name": "a.csv", "Content": VALID_B64, "ContentType": "text/csv"}],
+        )
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            await process_inbound_email(db, payload)
+
+        # The row must be finalized to a terminal state, not left
+        # 'processing' -- that's the whole point of the fix.
+        assert recorded["status"] == "rejected"
+        assert recorded["rejection_reason"] == "internal_error"
+        db.rollback.assert_called_once()
+
+    async def test_exception_in_set_tenant_guc_still_finalizes_and_reraises(self, monkeypatch):
+        recorded = self._setup(monkeypatch)
+
+        def _boom(db, tid):
+            raise RuntimeError("guc failure")
+
+        monkeypatch.setattr(service_mod, "set_tenant_guc", _boom)
+
+        db = MagicMock()
+        payload = _payload(Attachments=[])
+        with pytest.raises(RuntimeError, match="guc failure"):
+            await process_inbound_email(db, payload)
+
+        assert recorded["status"] == "rejected"
+        assert recorded["rejection_reason"] == "internal_error"
+
+    async def test_exception_in_finalize_itself_is_not_swallowed(self, monkeypatch):
+        # If finalize_inbound_email_audit fails even on the recovery
+        # attempt, that failure must still propagate -- never silently
+        # swallowed -- so the caller/router surfaces a non-2xx and the
+        # crash is not masked as a clean response.
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: "tenant-1"
+        )
+        _stub_claim(monkeypatch, succeeds=True)
+        monkeypatch.setattr(service_mod, "set_tenant_guc", lambda db, tid: None)
+
+        async def _boom(tenant_id, attachment):
+            raise RuntimeError("simulated crash")
+
+        monkeypatch.setattr(service_mod, "_process_one_attachment", _boom)
+
+        def _finalize_also_fails(db, **kwargs):
+            raise RuntimeError("db unavailable")
+
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", _finalize_also_fails)
+
+        db = MagicMock()
+        payload = _payload(
+            Attachments=[{"Name": "a.csv", "Content": VALID_B64, "ContentType": "text/csv"}],
+        )
+        with pytest.raises(RuntimeError, match="db unavailable"):
+            await process_inbound_email(db, payload)
