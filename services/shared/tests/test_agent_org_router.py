@@ -137,3 +137,80 @@ def test_onboard_rejects_agent_count_outside_bounds(monkeypatch, agent_count):
 
     assert response.status_code == 422
     mock_onboard.assert_not_called()
+
+
+class TestOnboardRequestSizeCaps:
+    """Regression coverage for the security-review finding: each pod's
+    ``agent_count`` was capped (<=50) but nothing capped the *number of
+    pods* in one request, so a single call could still request an
+    effectively unbounded number of agents (e.g. 2,000 pods x 50 agents),
+    each costing ``onboard_tenant_agent_org`` a synchronous DB round trip,
+    a commit, and an awaited key-mint call. Both the pod-count and the
+    total-agent-count-across-all-pods ceilings must reject oversized
+    requests before ``onboard_tenant_agent_org`` is ever called.
+    """
+
+    def test_rejects_empty_pods_list(self, monkeypatch):
+        mock_onboard = AsyncMock()
+        monkeypatch.setattr(agent_org_router_mod, "onboard_tenant_agent_org", mock_onboard)
+
+        client = _build_client(_principal())
+        response = client.post("/agent-org/onboard", json={"pods": []})
+
+        assert response.status_code == 422
+        mock_onboard.assert_not_called()
+
+    def test_rejects_too_many_pods(self, monkeypatch):
+        mock_onboard = AsyncMock()
+        monkeypatch.setattr(agent_org_router_mod, "onboard_tenant_agent_org", mock_onboard)
+
+        too_many_pods = [
+            {"name": f"pod-{i}", "department": "ops", "agent_count": 1}
+            for i in range(agent_org_router_mod.MAX_PODS_PER_REQUEST + 1)
+        ]
+        client = _build_client(_principal())
+        response = client.post("/agent-org/onboard", json={"pods": too_many_pods})
+
+        assert response.status_code == 422
+        mock_onboard.assert_not_called()
+
+    def test_accepts_pod_count_at_the_limit(self, monkeypatch):
+        mock_onboard = AsyncMock(
+            return_value=OnboardingResult(
+                tenant_id="tenant-1",
+                pods_created=0,
+                agents_created=0,
+                inboxes_created=0,
+                keys_created=0,
+            )
+        )
+        monkeypatch.setattr(agent_org_router_mod, "onboard_tenant_agent_org", mock_onboard)
+
+        pods_at_limit = [
+            {"name": f"pod-{i}", "department": "ops", "agent_count": 1}
+            for i in range(agent_org_router_mod.MAX_PODS_PER_REQUEST)
+        ]
+        client = _build_client(_principal())
+        response = client.post("/agent-org/onboard", json={"pods": pods_at_limit})
+
+        assert response.status_code == 200
+        mock_onboard.assert_awaited_once()
+
+    def test_rejects_total_agent_count_over_the_cap_even_within_pod_limits(self, monkeypatch):
+        # Individually-legal pods (agent_count <= 50, pod count <=
+        # MAX_PODS_PER_REQUEST) whose *sum* still exceeds the total-agent
+        # ceiling — this is exactly the shape of the reported exploit,
+        # just scaled down to this test's limits.
+        mock_onboard = AsyncMock()
+        monkeypatch.setattr(agent_org_router_mod, "onboard_tenant_agent_org", mock_onboard)
+
+        per_pod = 50
+        num_pods = agent_org_router_mod.MAX_TOTAL_AGENTS_PER_REQUEST // per_pod + 1
+        assert num_pods <= agent_org_router_mod.MAX_PODS_PER_REQUEST
+        pods = [{"name": f"pod-{i}", "department": "ops", "agent_count": per_pod} for i in range(num_pods)]
+
+        client = _build_client(_principal())
+        response = client.post("/agent-org/onboard", json={"pods": pods})
+
+        assert response.status_code == 422
+        mock_onboard.assert_not_called()

@@ -13,7 +13,13 @@ for deviations called out up front — in particular:
 * Idempotency is enforced at the DB layer via ``INSERT ... ON CONFLICT
   DO NOTHING RETURNING id``, falling back to a plain ``SELECT`` when the
   insert affects zero rows — the same "claim-or-read" shape
-  ``delivery.py``'s ``_claim()`` uses for outbox rows.
+  ``delivery.py``'s ``_claim()`` uses for outbox rows. Per-agent key
+  minting uses the same claim-or-read shape but split across two engines:
+  a plain ``SELECT`` (``_existing_agent_key_id``) is the fast path, and a
+  partial UNIQUE index on ``api_keys(tenant_id, agent_id) WHERE enabled``
+  (v121 migration) is the actual claim — two concurrent mints for the
+  same agent race on that index, and the loser catches ``IntegrityError``
+  and reads back the winner's ``key_id`` instead of minting a duplicate.
 * Raw secrets are never returned or logged: ``OnboardingResult.key_ids``
   holds only ``key_id`` strings. Each ``APIKeyCreateResponse.raw_key``
   minted here is discarded immediately after use.
@@ -35,6 +41,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from shared.tenant_context import set_tenant_guc
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from .keys import AGENT_KEY_CAPABILITIES, mint_agent_scoped_key
 from .providers import InboxProvider, agent_slug, get_inbox_provider
@@ -355,18 +362,46 @@ async def onboard_tenant_agent_org(
             if existing_key_id:
                 key_ids.append(existing_key_id)
             else:
-                minted = await mint_agent_scoped_key(
-                    key_store,
-                    tenant_id=tenant_id,
-                    agent_id=agent_id,
-                    name=f"{agent_name} key",
-                    capabilities=DEFAULT_ONBOARDING_AGENT_CAPABILITIES,
-                    created_by="agent_org.onboarding",
-                )
-                keys_created += 1
-                key_ids.append(minted.key_id)
-                # raw_key (minted.raw_key) is discarded here — never
-                # stored, logged, or returned by this function.
+                # This check-then-act is backed by a DB-level partial
+                # UNIQUE index, uq_api_keys_tenant_agent_enabled ON
+                # api_keys(tenant_id, agent_id) WHERE enabled AND agent_id
+                # IS NOT NULL (v121 migration) — unlike the pod/agent rows
+                # above, key minting runs on DatabaseAPIKeyStore's own
+                # separate async engine/connection, so there is no shared
+                # transaction to serialize two concurrent callers here.
+                # Two onboarding calls racing on the same agent (e.g. a
+                # client retrying after a timeout while the first call is
+                # still in flight) can both pass the SELECT above; the
+                # loser's INSERT then violates the unique index and raises
+                # IntegrityError instead of silently minting a second live
+                # credential for the same agent. Treat that exactly like
+                # "someone else already minted it": read back the winner's
+                # key_id instead of raising.
+                try:
+                    minted = await mint_agent_scoped_key(
+                        key_store,
+                        tenant_id=tenant_id,
+                        agent_id=agent_id,
+                        name=f"{agent_name} key",
+                        capabilities=DEFAULT_ONBOARDING_AGENT_CAPABILITIES,
+                        created_by="agent_org.onboarding",
+                    )
+                except IntegrityError:
+                    winner_key_id = _existing_agent_key_id(db, tenant_id=tenant_id, agent_id=agent_id)
+                    if not winner_key_id:
+                        # The unique index fired but no enabled key is
+                        # visible yet from this connection — surface
+                        # loudly rather than silently under-counting.
+                        raise RuntimeError(
+                            f"api_keys claim-or-read race: agent {agent_id!r} key neither "
+                            "minted nor found after a unique-constraint conflict"
+                        ) from None
+                    key_ids.append(winner_key_id)
+                else:
+                    keys_created += 1
+                    key_ids.append(minted.key_id)
+                    # raw_key (minted.raw_key) is discarded here — never
+                    # stored, logged, or returned by this function.
 
     return OnboardingResult(
         tenant_id=tenant_id,

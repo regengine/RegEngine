@@ -43,6 +43,18 @@ ordinary tenant keys, populated for keys minted via
 context is established, so this stays a plain UUID column, exactly like
 ``partner_id`` is a plain, unconstrained string.
 
+A partial UNIQUE index, ``uq_api_keys_tenant_agent_enabled`` on
+``(tenant_id, agent_id) WHERE enabled AND agent_id IS NOT NULL``, backs
+onboarding's per-agent key idempotency at the DB level. Without it, that
+idempotency was only a check-then-act at the application layer (a
+``SELECT`` for an existing enabled key, minting only if none was found),
+so two concurrent onboarding calls for the same tenant+agent — e.g. a
+client retry racing the original, still-in-flight request — could both
+observe "no existing key" and both mint one, leaving two live credentials
+for a single agent. The predicate excludes disabled keys so revoking an
+agent's key and minting its replacement is never blocked by the old,
+now-disabled row.
+
 Idempotent and reversible. Downgrade drops the four new tables in
 FK-safe order and reverts the ``api_keys`` column/index, but does not
 ``DROP SCHEMA agent_org`` — other migrations in this repo don't drop
@@ -196,12 +208,26 @@ def _add_api_keys_agent_id() -> None:
             ON api_keys (agent_id)
         """
     )
+    # DB-level backstop for onboarding's per-agent key idempotency (see
+    # module docstring): at most one *enabled* key per (tenant_id,
+    # agent_id). Two concurrent onboarding calls minting a key for the
+    # same agent now race on this constraint instead of both succeeding —
+    # the loser gets an IntegrityError that onboarding.py catches and
+    # turns into "read back the winner's key_id".
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_api_keys_tenant_agent_enabled
+            ON api_keys (tenant_id, agent_id)
+            WHERE enabled AND agent_id IS NOT NULL
+        """
+    )
 
 
 def _drop_api_keys_agent_id() -> None:
     if not _api_keys_exists():
         return
 
+    op.execute("DROP INDEX IF EXISTS uq_api_keys_tenant_agent_enabled")
     op.execute("DROP INDEX IF EXISTS ix_api_keys_agent_id")
     op.execute("ALTER TABLE api_keys DROP COLUMN IF EXISTS agent_id")
 

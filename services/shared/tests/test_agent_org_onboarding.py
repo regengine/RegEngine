@@ -27,6 +27,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from shared.agent_org import onboarding as mod
 from shared.agent_org.onboarding import (
     DEFAULT_ONBOARDING_AGENT_CAPABILITIES,
@@ -501,6 +502,60 @@ class TestOnboardTenantAgentOrgIdempotency:
         assert result.keys_created == 1
         assert len(mint_calls) == 1
         assert mint_calls[0]["agent_id"] == agent_id
+
+
+class TestOnboardTenantAgentOrgConcurrentKeyMint:
+    """Regression coverage for the security-review finding: per-agent key
+    idempotency was only a check-then-act (SELECT, then mint if absent)
+    with no DB-level backstop, so two concurrent onboarding calls for the
+    same agent could both mint a live key. The v121 migration adds a
+    partial UNIQUE index (``tenant_id, agent_id``) that the loser's INSERT
+    now violates; ``onboard_tenant_agent_org`` must catch that
+    ``IntegrityError`` and read back the winner's ``key_id`` instead of
+    minting (or crashing).
+    """
+
+    @pytest.mark.asyncio
+    async def test_integrity_error_on_mint_reads_back_the_winner_key(self, monkeypatch, tenant_id):
+        db = _RelationalFakeDB({tenant_id: "acme"})
+        pod = PodSpec(name="outreach-pod-1", department="outreach", agent_count=1)
+
+        async def _fake_mint_conflict(key_store, *, tenant_id, agent_id, name, capabilities, created_by=None, rate_limit_per_minute=30):
+            # Simulate a concurrent onboarding call that won the race: it
+            # already committed a key for this agent on its own
+            # connection/engine, and this call's own INSERT just hit the
+            # unique index.
+            db.keys_by_agent[(tenant_id, agent_id)] = "winner-key-id"
+            raise IntegrityError("INSERT INTO api_keys ...", {}, Exception("duplicate key value"))
+
+        monkeypatch.setattr(mod, "mint_agent_scoped_key", _fake_mint_conflict)
+
+        result = await onboard_tenant_agent_org(
+            db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+        )
+
+        assert result.keys_created == 0  # never counted as newly minted by the loser
+        assert result.key_ids == ["winner-key-id"]
+
+    @pytest.mark.asyncio
+    async def test_integrity_error_with_no_readable_winner_raises_runtime_error(self, monkeypatch, tenant_id):
+        # Pathological case: the unique index fired (IntegrityError) but no
+        # enabled key is visible from this connection yet. Must surface
+        # loudly rather than silently dropping the agent's key entirely.
+        db = _RelationalFakeDB({tenant_id: "acme"})
+        pod = PodSpec(name="outreach-pod-1", department="outreach", agent_count=1)
+
+        async def _fake_mint_conflict_no_winner(
+            key_store, *, tenant_id, agent_id, name, capabilities, created_by=None, rate_limit_per_minute=30
+        ):
+            raise IntegrityError("INSERT INTO api_keys ...", {}, Exception("duplicate key value"))
+
+        monkeypatch.setattr(mod, "mint_agent_scoped_key", _fake_mint_conflict_no_winner)
+
+        with pytest.raises(RuntimeError):
+            await onboard_tenant_agent_org(
+                db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+            )
 
 
 class TestOnboardTenantAgentOrgInboxCollision:

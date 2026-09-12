@@ -23,7 +23,7 @@ from dataclasses import asdict
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from shared.database import get_db_session
 
 from services.ingestion.app.authz import IngestionPrincipal, require_permission
@@ -35,6 +35,18 @@ router = APIRouter(prefix="/agent-org", tags=["Agent Organization"])
 
 _get_db_session = get_db_session  # test-override alias, mirrors remediation/router.py
 
+#: Per-request ceilings. Each individual pod's ``agent_count`` was already
+#: bounded (<=50), but nothing capped how many *pods* one request could
+#: list, so a single call could still request an effectively unbounded
+#: number of agents (e.g. 2,000 pods x 50 agents each). Every agent
+#: onboarded costs `onboard_tenant_agent_org` a synchronous DB round trip,
+#: a `db.commit()`, and an awaited key-mint call against a separate async
+#: engine, so both the pod count and the total agent count summed across
+#: all pods must be capped up front — this is a one-call *onboarding*
+#: endpoint for a real org's headcount, not a bulk-provisioning API.
+MAX_PODS_PER_REQUEST = 20
+MAX_TOTAL_AGENTS_PER_REQUEST = 200
+
 
 class PodSpecRequest(BaseModel):
     """One pod to create/find during onboarding."""
@@ -45,7 +57,18 @@ class PodSpecRequest(BaseModel):
 
 
 class OnboardRequest(BaseModel):
-    pods: list[PodSpecRequest]
+    pods: list[PodSpecRequest] = Field(min_length=1, max_length=MAX_PODS_PER_REQUEST)
+
+    @model_validator(mode="after")
+    def _check_total_agent_count(self) -> "OnboardRequest":
+        total = sum(p.agent_count for p in self.pods)
+        if total > MAX_TOTAL_AGENTS_PER_REQUEST:
+            raise ValueError(
+                f"Total agent_count across all pods ({total}) exceeds the "
+                f"per-request limit of {MAX_TOTAL_AGENTS_PER_REQUEST}. Split "
+                "large onboarding requests into multiple calls."
+            )
+        return self
 
 
 class OnboardingResultResponse(BaseModel):
