@@ -125,6 +125,36 @@ describe('AuditReviewPage', () => {
         }
     });
 
+    it('renders a failed chain walk as FAILED, not N/A', async () => {
+        global.fetch = vi.fn().mockImplementation((url: string) => {
+            if (url.includes('/summary')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({
+                        records: { total_canonical_events: 24, ingestion_sources: { edi: 24 } },
+                        compliance: { total_evaluations: 120, pass_rate_percent: 92.5, passed: 111, failed: 5, warned: 4 },
+                        exceptions: { total: 3, open: 1, critical_open: 0 },
+                        requests: { total: 2, submitted: 1, active: 1 },
+                        chain_integrity: {
+                            chain_length: 24,
+                            status: 'UNVERIFIED',
+                            errors: ['Tamper detected at seq=7'],
+                            verified_at: '2026-05-07T00:00:00.000Z',
+                        },
+                        generated_at: '2026-05-07T00:00:00.000Z',
+                    }),
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({ rules: [] }) });
+        });
+
+        const { findByText, queryByText } = render(<AuditReviewPage />, { wrapper: createWrapper() });
+
+        expect(await findByText('FAILED')).toBeTruthy();
+        expect(queryByText('N/A')).toBeNull();
+        expect(await findByText('24 chain entries')).toBeTruthy();
+    });
+
     it('does not fetch when auth is unavailable', () => {
         mockUseAuth.mockReturnValue({
             isAuthenticated: false,

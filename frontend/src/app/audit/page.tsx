@@ -55,7 +55,7 @@ interface AuditSummary {
   compliance: { total_evaluations: number; pass_rate_percent: number; passed: number; failed: number; warned: number };
   exceptions: { total: number; open: number; critical_open: number };
   requests: { total: number; submitted: number; active: number };
-  chain_integrity: { chain_length: number; status: string };
+  chain_integrity: { chain_length: number | null; status: string; errors?: string[]; verified_at?: string | null };
   generated_at: string;
 }
 
@@ -171,12 +171,18 @@ function AuditReviewContent() {
                     <span className="text-re-success flex items-center gap-1">
                       <CheckCircle className="h-6 w-6" /> OK
                     </span>
+                  ) : s.chain_integrity.status === 'UNVERIFIED' ? (
+                    <span className="text-re-danger flex items-center gap-1">
+                      <XCircle className="h-6 w-6" /> FAILED
+                    </span>
                   ) : (
                     <span className="text-muted-foreground">N/A</span>
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {s.chain_integrity.chain_length} chain entries
+                  {s.chain_integrity.chain_length === null
+                    ? 'Chain not checked'
+                    : `${s.chain_integrity.chain_length} chain entries`}
                 </p>
               </CardContent>
             </Card>
