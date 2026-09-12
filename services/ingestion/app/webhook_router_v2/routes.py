@@ -23,8 +23,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from shared.database import get_db_session
 from shared.idempotency import IdempotencyDependency
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 
 from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from ..config import get_settings
+from ..stripe_billing import charge_for_label
 from ..subscription_gate import require_active_subscription
 from ..webhook_models import (
     ChainVerifyResponse,
@@ -124,6 +127,13 @@ async def ingest_events(
     results: list[EventResult] = []
     accepted = 0
     rejected = 0
+    # Per-label FSMA 204 billing (v121) — event ids to charge once (and only
+    # once) db_session.commit() below actually lands. Billing from inside
+    # the loop, before that commit, would charge Stripe for a label whose
+    # persistence row could still be rolled back by a later failure in this
+    # same request -- a retry would then get a fresh event_id and bypass the
+    # UNIQUE(tenant_id, cte_event_id) idempotency guarantee entirely.
+    billable_event_ids: list[str] = []
 
     # Batch deduplication — detect identical events within the same payload
     seen_in_batch: set[str] = set()
@@ -273,6 +283,13 @@ async def ingest_events(
                 )
                 event_objs.append(event)
 
+            # Snapshot so a partial-then-failed batch attempt (below) can be
+            # undone precisely: on rollback we must discard only what THIS
+            # attempt appended, not the pre-eval-rejected events already
+            # recorded above.
+            _pre_batch_results_len = len(results)
+            _pre_batch_accepted = accepted
+
             try:
                 store_results = persistence.store_events_batch(
                     tenant_id=tenant_id,
@@ -292,6 +309,8 @@ async def ingest_events(
                         )
                     )
                     accepted += 1
+                    # Billed below, only after db_session.commit() succeeds.
+                    billable_event_ids.append(store_result.event_id)
 
                     # Tenant-configured obligation-CTE rules (#2901). Runs
                     # after the store because it keys its fsma.compliance_alerts
@@ -350,6 +369,21 @@ async def ingest_events(
                     db_session.rollback()
                 except SQLAlchemyError as rb_err:
                     _pkg.logger.warning("fallback_pre_rollback_failed: %s", str(rb_err))
+                # The batch loop above may have already recorded some of this
+                # failed attempt's events as accepted (results/accepted) and
+                # queued them for billing (billable_event_ids) before the
+                # exception hit -- rows the rollback above just discarded.
+                # The fallback below re-persists the ENTIRE valid_events list
+                # from scratch, minting a fresh event_id per label and
+                # appending its own EventResult, so anything from this
+                # doomed attempt must be undone first: otherwise the response
+                # double-counts every event that succeeded before the
+                # failure, and billing would charge two different event_ids
+                # for the same physical label -- bypassing the
+                # UNIQUE(tenant_id, cte_event_id) idempotency guard entirely.
+                del results[_pre_batch_results_len:]
+                accepted = _pre_batch_accepted
+                billable_event_ids.clear()
                 # Fall back to per-event persistence
                 for event, alerts in valid_events:
                     # Enforcement: same pre-eval gate as the happy path.
@@ -425,6 +459,11 @@ async def ingest_events(
                             )
                         )
                         accepted += 1
+                        # Billed below, only after db_session.commit()
+                        # succeeds -- a savepoint.commit() just above only
+                        # releases the nested savepoint; it does not make
+                        # this row durable against a later outer rollback.
+                        billable_event_ids.append(store_result.event_id)
 
                         _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
@@ -506,6 +545,33 @@ async def ingest_events(
     finally:
         if db_session:
             db_session.close()
+
+    # Per-label FSMA 204 billing (v121). Only reached once db_session.commit()
+    # above has actually succeeded, so every id here is durably persisted --
+    # charging earlier (inside the loop, before that commit) would bill a
+    # label whose row could still be rolled back by an unrelated failure
+    # later in the same request; a retry would then mint a fresh event_id
+    # and bypass the UNIQUE(tenant_id, cte_event_id) idempotency guarantee
+    # entirely. A Stripe/DB hiccup per label must never fail the response
+    # for labels that already ingested successfully.
+    if billable_event_ids:
+        price_cents = get_settings().price_per_label_cents
+        for billed_event_id in billable_event_ids:
+            try:
+                # Stripe's SDK and the billing DB session are both
+                # synchronous; run_in_threadpool keeps this request's async
+                # event loop free for other tenants while a Stripe call is
+                # in flight. anyio copies the current contextvars into the
+                # thread, so the RLS tenant-context GUC hook
+                # (shared/tenant_context.py) still applies correctly there.
+                await run_in_threadpool(
+                    charge_for_label,
+                    tenant_id=tenant_id,
+                    cte_event_id=billed_event_id,
+                    amount_cents=price_cents,
+                )
+            except Exception as bill_err:  # noqa: BLE001 -- billing is best-effort, must never fail ingest
+                _pkg.logger.warning("label_charge_skipped: %s", str(bill_err))
 
     return IngestResponse(
         accepted=accepted,

@@ -4593,6 +4593,33 @@
       "probe_path": "/api/v1/vision/analyze-label"
     },
     {
+      "operation": "inbound_email:POST:/api/v1/webhooks/inbound-email",
+      "owner": "inbound_email",
+      "method": "POST",
+      "path": "/api/v1/webhooks/inbound-email",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/webhooks/inbound-email"
+    },
+    {
+      "operation": "inbound_email:POST:/api/v1/webhooks/inbound-email/addresses",
+      "owner": "inbound_email",
+      "method": "POST",
+      "path": "/api/v1/webhooks/inbound-email/addresses",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/webhooks/inbound-email/addresses"
+    },
+    {
+      "operation": "inbound_email:GET:/api/v1/webhooks/inbound-email/rejections",
+      "owner": "inbound_email",
+      "method": "GET",
+      "path": "/api/v1/webhooks/inbound-email/rejections",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/webhooks/inbound-email/rejections"
+    },
+    {
       "operation": "scraping:POST:/scrape/{adaptor}",
       "owner": "scraping",
       "method": "POST",
@@ -4837,9 +4864,9 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 250,
-    "disabled_operation_count": 178,
-    "disabled_unique_path_count": 161,
+    "enabled_operation_count": 246,
+    "disabled_operation_count": 181,
+    "disabled_unique_path_count": 164,
     "enabled_by_classification": {
       "global-sysadmin": 15,
       "public": 29,

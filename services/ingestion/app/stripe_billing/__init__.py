@@ -20,6 +20,7 @@ from shared.funnel_events import emit_funnel_event  # noqa: F401 — tests monke
 from . import (
     customers as _customers_mod,  # noqa: F401
     helpers as _helpers_mod,  # noqa: F401
+    label_billing as _label_billing_mod,  # noqa: F401
     plans as _plans_mod,  # noqa: F401
     routes as _routes_mod,  # noqa: F401
     state as _state_mod,  # noqa: F401
@@ -34,6 +35,14 @@ from .customers import (
     _ensure_customer_mapping,
     _get_existing_customer_id,
     _record_checkout_session_hint,
+)
+from .label_billing import (
+    STATUS_CHARGED,
+    STATUS_FAILED,
+    STATUS_NO_CUSTOMER,
+    LabelChargeResult,
+    charge_for_label,
+    get_label_charge,
 )
 from .helpers import (
     _coerce_int,
@@ -181,6 +190,13 @@ __all__ = [
     "_ensure_customer_mapping",
     "_get_existing_customer_id",
     "_record_checkout_session_hint",
+    # Label billing (v121 -- per-label FSMA 204 pricing)
+    "charge_for_label",
+    "get_label_charge",
+    "LabelChargeResult",
+    "STATUS_CHARGED",
+    "STATUS_NO_CUSTOMER",
+    "STATUS_FAILED",
     # Webhooks
     "_handle_checkout_completed",
     "_handle_stripe_event",
@@ -259,7 +275,7 @@ _ATTR_TO_SUBMODULE = {
     # usage_reporting.py
     "report_tenant_usage_to_stripe": _usage_reporting_mod,
 }
-_STRIPE_SUBMODULES = (_helpers_mod, _customers_mod, _routes_mod, _webhooks_mod, _usage_reporting_mod)
+_STRIPE_SUBMODULES = (_helpers_mod, _customers_mod, _routes_mod, _webhooks_mod, _label_billing_mod)
 
 
 class _PatchableModule(_types.ModuleType):
