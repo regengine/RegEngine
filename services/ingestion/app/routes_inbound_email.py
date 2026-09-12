@@ -85,7 +85,7 @@ async def _verify_postmark_basic_auth(
     """Require HTTP Basic Auth matching POSTMARK_INBOUND_WEBHOOK_USER/PASSWORD.
 
     Postmark supports embedding Basic Auth credentials directly in the
-    registered webhook URL (https://user:pass@host/path), which is the
+    registered webhook URL (https://user:pass@host/path), which is the  # pragma: allowlist secret
     mechanism this checks against.
     """
     configured = _postmark_credentials()
