@@ -71,6 +71,7 @@ VALID_ROUTER_NAMES = frozenset(
         "fsma_compliance",
         "proof_verify",
         "proof_recall",
+        "email_ingest",
     }
 )
 

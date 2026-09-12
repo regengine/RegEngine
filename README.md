@@ -54,6 +54,7 @@ Verified product capabilities in the current tree:
 | Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
 | Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
+| Inbound email ingestion: Postmark inbound-parse webhook, Basic-Auth + per-tenant sender allowlist, CSV attachments routed through the existing CSV ingest path, claim-then-act idempotent audit trail. Built and unit-tested; **not enabled in production** and has no admin/self-service provisioning UI — see [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) | [services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/) |
 
 ## Production Spine
 
@@ -355,6 +356,7 @@ These are current repo facts, not speculation:
 - [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.
 - [DESIGN_metering-billing.md](DESIGN_metering-billing.md) — per-label metered billing: schema, the `persist_event`/`persist_events_batch` usage-counting hook, Stripe Billing Meters reporting, API surface, and documented deviations/follow-ups (see also the Data And Schema and Important Limitations sections above).
 
+- [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) - inbound email (Postmark) ingestion: how it works, config, rollout status, and known limitations.
 - [ARCHITECTURE.md](ARCHITECTURE.md) - current runtime shape, system map, and debt register.
 - [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
 - [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.

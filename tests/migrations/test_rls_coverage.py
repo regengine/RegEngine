@@ -86,6 +86,17 @@ TABLES_EXEMPT: Set[str] = {
     # Release-disabled by v111 for the same reason. A future exchange router
     # must ship a two-party RLS design before either role receives access.
     "exchange_packages",
+    # v121 (DESIGN_email-ingestion.md): one row per inbound email, including
+    # emails to an unmapped recipient address that has no tenant yet but must
+    # still be auditable, so tenant_id is nullable -- there is no value to
+    # compare against a `tenant_id = get_tenant_context()` policy for those
+    # rows. Closed-grant model instead (matches the v095 remediation_tokens /
+    # v111 incidents / v112 seed_obligations_for_tenant precedent): no direct
+    # table privilege is granted to `regengine`, only EXECUTE on the two
+    # SECURITY DEFINER functions (fsma.record_inbound_email_audit,
+    # fsma.get_inbound_email_audit_by_message_id) that are the sole access
+    # path to this table.
+    "inbound_email_audit",
 }
 
 # #2828: public-schema tables whose required posture is identical to the
