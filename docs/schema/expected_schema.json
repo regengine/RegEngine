@@ -2027,6 +2027,55 @@
       }
     }
   },
+  "fsma.label_charges": {
+    "columns": {
+      "amount_cents": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "charged_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "currency": {
+        "nullable": false,
+        "type": "text"
+      },
+      "error_message": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "stripe_customer_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "stripe_invoice_item_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.locations": {
     "columns": {
       "address": {
