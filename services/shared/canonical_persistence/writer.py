@@ -43,10 +43,30 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
     ``fsma.cte_events`` and reports canonical-only chains as orphaned.
     """
 
-    def __init__(self, session: Session, dual_write: bool = True, skip_chain_write: bool = False):
+    def __init__(
+        self,
+        session: Session,
+        dual_write: bool = True,
+        skip_chain_write: bool = False,
+        meter_usage: bool = True,
+    ):
         self.session = session
         self.dual_write = dual_write
         self.skip_chain_write = skip_chain_write
+        # Per-label metered billing (DESIGN_metering-billing.md §4.1).
+        # Default-on: usage is tracked for every tenant regardless of
+        # metered-billing opt-in (cheap: two indexed upserts on the
+        # caller's existing transaction), so a tenant switched onto
+        # metered billing later sees correct current-period usage
+        # immediately, with no backfill job needed. Whether that usage is
+        # ever *reported* to Stripe is gated separately, at the reporting
+        # layer, by the tenant's opt-in flag.
+        #
+        # ``meter_usage=False`` exists for callers outside
+        # ``services/ingestion`` (e.g. ``services/shared/tests/...``) that
+        # must not gain a hard import dependency on
+        # ``services.ingestion.app.stripe_billing.usage``.
+        self.meter_usage = meter_usage
 
     def _session_dialect_name(self) -> str:
         bind = getattr(self.session, "bind", None)
@@ -320,6 +340,25 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                     idempotent=True,
                     errors=[],
                 )
+
+        # --- Meter usage for the newly-accepted label (per-label metered
+        # billing, DESIGN_metering-billing.md §4.1) ---
+        # Reaching here means ``inserted`` is a genuine new row: the
+        # idempotent-replay branches above already ``return`` early. Runs
+        # in this same transaction — a failure here rolls the whole
+        # persist back, keeping the usage counter and the canonical write
+        # atomically in sync.
+        if self.meter_usage:
+            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415
+                increment_usage_for_event,
+            )
+
+            increment_usage_for_event(
+                self.session,
+                tenant_id=tenant_id,
+                event_id=str(event.event_id),
+                event_timestamp=event.event_timestamp,
+            )
 
         # --- Mark superseded event (fix #1262) ---
         # The previous implementation was check-then-update:
@@ -606,6 +645,23 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         inserted_events = [evt for evt in new_events if str(evt.event_id) in inserted_event_ids]
         for evt in inserted_events:
             self._create_transformation_links(evt)
+
+        # --- Meter usage for newly-accepted labels (per-label metered
+        # billing, DESIGN_metering-billing.md §4.1) ---
+        # Only ``inserted_events`` — never ``lost_race_events``, which the
+        # winning concurrent writer already counted.
+        if self.meter_usage and inserted_events:
+            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415
+                increment_usage_for_event,
+            )
+
+            for evt in inserted_events:
+                increment_usage_for_event(
+                    self.session,
+                    tenant_id=tenant_id,
+                    event_id=str(evt.event_id),
+                    event_timestamp=evt.event_timestamp,
+                )
 
         # --- Dual-write legacy (TEMPORARY — see migration.py) ---
         # Only dual-write events that actually inserted here; an event

@@ -47,6 +47,23 @@ class SubscriptionStatus(BaseModel):
     facilities_limit: int = 0
 
 
+class UsageResponse(BaseModel):
+    """Current-period per-label metered usage for a tenant.
+
+    ``billing_period_start``/``_end`` are the UTC-calendar-month bucket
+    used for local display/idempotency purposes only — they are not
+    necessarily the tenant's real Stripe invoice period boundary. See
+    DESIGN_metering-billing.md §3.3/§7.2 for the rationale.
+    """
+
+    tenant_id: str
+    billing_period_start: str
+    billing_period_end: str
+    unit_count: int
+    metered_billing_enabled: bool
+    plan: str
+
+
 class BillingPortalRequest(BaseModel):
     """Request payload for creating a Stripe customer portal session."""
 
