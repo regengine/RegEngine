@@ -9,6 +9,11 @@ fsma.get_active_portal_link_by_token — the address lookup happens before
 authentication, so it must bypass RLS narrowly through a single-purpose
 function rather than a broad grant.
 
+Tenant self-service isolation uses the fail-hard predicate converged on by
+v090 (``tenant_id = get_tenant_context()``, raising on an unset GUC) with
+the v074 sysadmin-bypass shape, not the older text-compare style — this is
+a new table, so it starts on the canonical predicate directly.
+
 Revision ID: 8301f3cad96a
 Revises: c6a120b4e901
 Create Date: 2026-09-12
@@ -22,6 +27,13 @@ revision: str = "8301f3cad96a"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "c6a120b4e901"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+# Canonical fail-hard tenant predicate with sysadmin bypass branch.
+# Identical shape to v074's/v090's _TENANT_POLICY.
+_TENANT_POLICY = """\
+tenant_id = get_tenant_context()
+OR (current_setting('regengine.is_sysadmin', true) = 'true'
+    AND current_user = 'regengine_sysadmin')"""
 
 
 def upgrade() -> None:
@@ -56,43 +68,20 @@ def upgrade() -> None:
     op.execute("ALTER TABLE fsma.tenant_inbound_email_addresses ENABLE ROW LEVEL SECURITY;")
     op.execute("ALTER TABLE fsma.tenant_inbound_email_addresses FORCE ROW LEVEL SECURITY;")
 
-    # Tenant self-service: a tenant may manage only its own registered addresses.
-    for stmt in (
+    # Tenant self-service: a tenant may manage only its own registered
+    # addresses. Fail-hard predicate (v090 convergence) — an unset
+    # app.tenant_id GUC raises via get_tenant_context() rather than
+    # silently matching the wrong rows.
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_inbound_email_addresses ON fsma.tenant_inbound_email_addresses")
+    op.execute(
+        f"""
+        CREATE POLICY tenant_isolation_inbound_email_addresses
+            ON fsma.tenant_inbound_email_addresses
+            FOR ALL TO regengine, regengine_sysadmin
+            USING ({_TENANT_POLICY})
+            WITH CHECK ({_TENANT_POLICY})
         """
-        DO $$ BEGIN
-            CREATE POLICY tenant_isolation_select ON fsma.tenant_inbound_email_addresses
-                FOR SELECT
-                USING (tenant_id::text = current_setting('app.tenant_id', true));
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-        """,
-        """
-        DO $$ BEGIN
-            CREATE POLICY tenant_isolation_insert ON fsma.tenant_inbound_email_addresses
-                FOR INSERT
-                WITH CHECK (tenant_id::text = current_setting('app.tenant_id', true));
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-        """,
-        """
-        DO $$ BEGIN
-            CREATE POLICY tenant_isolation_update ON fsma.tenant_inbound_email_addresses
-                FOR UPDATE
-                USING (tenant_id::text = current_setting('app.tenant_id', true))
-                WITH CHECK (tenant_id::text = current_setting('app.tenant_id', true));
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-        """,
-        """
-        DO $$ BEGIN
-            CREATE POLICY tenant_isolation_delete ON fsma.tenant_inbound_email_addresses
-                FOR DELETE
-                USING (tenant_id::text = current_setting('app.tenant_id', true));
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-        """,
-    ):
-        op.execute(stmt)
+    )
 
     # Narrow, token-style lookup policy for the webhook path, which has no
     # tenant context yet — mirrors portal_links_token_lookup from v075.
@@ -159,8 +148,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS fsma.get_tenant_by_inbound_address(TEXT)")
     op.execute("DROP POLICY IF EXISTS inbound_email_address_lookup ON fsma.tenant_inbound_email_addresses")
-    op.execute("DROP POLICY IF EXISTS tenant_isolation_delete ON fsma.tenant_inbound_email_addresses")
-    op.execute("DROP POLICY IF EXISTS tenant_isolation_update ON fsma.tenant_inbound_email_addresses")
-    op.execute("DROP POLICY IF EXISTS tenant_isolation_insert ON fsma.tenant_inbound_email_addresses")
-    op.execute("DROP POLICY IF EXISTS tenant_isolation_select ON fsma.tenant_inbound_email_addresses")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_inbound_email_addresses ON fsma.tenant_inbound_email_addresses")
     op.execute("DROP TABLE IF EXISTS fsma.tenant_inbound_email_addresses")
