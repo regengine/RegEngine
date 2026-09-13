@@ -3234,6 +3234,15 @@
   ],
   "disabled_operations": [
     {
+      "operation": "agent_org:POST:/agent-org/onboard",
+      "owner": "agent_org",
+      "method": "POST",
+      "path": "/agent-org/onboard",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/agent-org/onboard"
+    },
+    {
       "operation": "alerts:GET:/api/v1/alerts/{tenant_id}",
       "owner": "alerts",
       "method": "GET",

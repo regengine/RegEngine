@@ -123,6 +123,7 @@ EXPERIMENTAL_ROUTERS = frozenset(
         "recall_simulations",
         "graph",
         "nlp",
+        "agent_org",
     }
 )
 

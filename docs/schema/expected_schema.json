@@ -1,4 +1,190 @@
 {
+  "agent_org.agent_identities": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "pod_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "role": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "pod_id"
+        ],
+        "name": "agent_identities_pod_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "agent_org",
+        "referred_table": "agent_pods"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "agent_identities_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "agent_org.agent_inboxes": {
+    "columns": {
+      "agent_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "email_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "provider": {
+        "nullable": false,
+        "type": "text"
+      },
+      "provider_ref": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "agent_id"
+        ],
+        "name": "agent_inboxes_agent_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "agent_org",
+        "referred_table": "agent_identities"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "agent_inboxes_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "agent_org.agent_pods": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "department": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "agent_pods_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "agent_org.email_suppressions": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "email_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "reason": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "email_suppressions_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
   "audit.rls_policy_restoration_log": {
     "columns": {
       "id": {
@@ -4750,6 +4936,10 @@
   },
   "public.api_keys": {
     "columns": {
+      "agent_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
       "allowed_jurisdictions": {
         "nullable": true,
         "type": "array"

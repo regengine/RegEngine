@@ -363,6 +363,7 @@ These are current repo facts, not speculation:
 - [SECURITY.md](SECURITY.md) - security posture.
 - [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) - tenant-scoped ingestion route inventory.
 - [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md) - CTE dual-write retirement plan and read-path cutover inventory.
+- [docs/architecture/agent-org.md](docs/architecture/agent-org.md) - agent organization v1 (pods, dev-only inboxes, scoped keys, suppression gate): what's real today and what isn't. Full design rationale in [DESIGN_agent-org.md](DESIGN_agent-org.md).
 - [CHANGELOG.md](CHANGELOG.md) - change history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow.
 - [docs/runbooks/](docs/runbooks) - operational runbooks.
