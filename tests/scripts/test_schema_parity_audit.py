@@ -63,6 +63,7 @@ def test_fk_identity_ignores_ondelete_options():
     assert mod._fk_identity(left) == mod._fk_identity(right)
 
 
+
 def test_fk_record_uses_passed_default_schema_for_unset_referred_schema():
     """#3102 review: on Postgres, SQLAlchemy's reflection reports
     ``referred_schema: None`` to mean "the database's default schema"

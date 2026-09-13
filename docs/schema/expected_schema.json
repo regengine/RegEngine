@@ -243,6 +243,60 @@
     },
     "foreign_keys": []
   },
+  "billing.tenant_usage_counters": {
+    "columns": {
+      "billing_period_end": {
+        "nullable": false,
+        "type": "date"
+      },
+      "billing_period_start": {
+        "nullable": false,
+        "type": "date"
+      },
+      "last_reported_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "last_reported_count": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "unit_count": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    },
+    "foreign_keys": []
+  },
+  "billing.tenant_usage_event_ledger": {
+    "columns": {
+      "billing_period_start": {
+        "nullable": false,
+        "type": "date"
+      },
+      "counted_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "dlq.webhook_failures": {
     "columns": {
       "created_at": {
@@ -2571,6 +2625,55 @@
       }
     ]
   },
+  "fsma.label_charges": {
+    "columns": {
+      "amount_cents": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "charged_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "currency": {
+        "nullable": false,
+        "type": "text"
+      },
+      "error_message": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "stripe_customer_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "stripe_invoice_item_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.locations": {
     "columns": {
       "address": {
@@ -3985,6 +4088,31 @@
       "updated_at": {
         "nullable": false,
         "type": "timestamp"
+      }
+    },
+    "foreign_keys": []
+  },
+  "fsma.tenant_inbound_email_addresses": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "inbound_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
       }
     },
     "foreign_keys": []

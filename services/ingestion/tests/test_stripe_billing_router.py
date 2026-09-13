@@ -530,3 +530,18 @@ def test_invoice_pdf_rejects_cross_tenant_invoice(monkeypatch: pytest.MonkeyPatc
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Invoice not found for tenant"
+
+
+def test_patching_package_stripe_propagates_to_usage_reporting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Merge-conflict regression: ``_STRIPE_SUBMODULES`` must include every
+    submodule that imports ``stripe`` directly, or ``setattr(stripe_billing,
+    "stripe", ...)`` (the package's own documented test-patching contract --
+    see the ``noqa`` comment on ``import stripe`` in
+    ``app/stripe_billing/__init__.py``) silently leaves that submodule bound
+    to the real Stripe SDK. usage_reporting.py imports stripe directly (it
+    calls ``stripe.billing.MeterEvent.create``), so it must be one of the
+    propagation targets.
+    """
+    sentinel = object()
+    monkeypatch.setattr(stripe_billing, "stripe", sentinel)
+    assert stripe_billing._usage_reporting_mod.stripe is sentinel
