@@ -24,6 +24,7 @@ export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
   "/trace",
   "/compliance",
   "/ingest",
+  "/remediation",
 ] as const;
 
 /**

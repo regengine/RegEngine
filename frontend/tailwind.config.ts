@@ -73,6 +73,7 @@ const config = {
                     card: "var(--re-surface-card)",
                     elevated: "var(--re-surface-elevated)",
                     overlay: "var(--re-surface-overlay)",
+                    inset: "var(--re-surface-inset)",
                 },
                 "re-text": {
                     primary: "var(--re-text-primary)",
@@ -86,6 +87,32 @@ const config = {
                     subtle: "var(--re-border-subtle)",
                     strong: "var(--re-border-strong)",
                 },
+                // Added by the redesign (SPEC §1). Every entry maps to a token
+                // defined for BOTH themes in globals.css.
+                "re-brand-muted": "var(--re-brand-muted)",
+                "re-brand-foreground": "var(--re-brand-foreground)",
+                "re-danger-foreground": "var(--re-danger-foreground)",
+                "re-success-bg": "var(--re-success-bg)",
+                "re-success-border": "var(--re-success-border)",
+                "re-warning-bg": "var(--re-warning-bg)",
+                "re-warning-border": "var(--re-warning-border)",
+                "re-danger-bg": "var(--re-danger-bg)",
+                "re-danger-border": "var(--re-danger-border)",
+                "re-info-bg": "var(--re-info-bg)",
+                "re-info-border": "var(--re-info-border)",
+                "re-focus-ring": "var(--re-focus-ring)",
+                "re-ring-offset": "var(--re-ring-offset)",
+                // Compliance-object state vocabulary
+                "re-state-corrected": "var(--re-state-corrected)",
+                "re-state-corrected-bg": "var(--re-state-corrected-bg)",
+                "re-state-corrected-border": "var(--re-state-corrected-border)",
+                // Categorical encoding only (facility types, graph nodes) — never status.
+                "re-cat-1": "var(--re-cat-1)",
+                "re-cat-2": "var(--re-cat-2)",
+                "re-cat-3": "var(--re-cat-3)",
+                "re-cat-4": "var(--re-cat-4)",
+                "re-cat-5": "var(--re-cat-5)",
+                "re-cat-6": "var(--re-cat-6)",
             },
             boxShadow: {
                 "re-sm": "var(--re-shadow-sm)",
@@ -94,10 +121,40 @@ const config = {
                 "re-glow": "var(--re-shadow-glow)",
                 "re-glow-strong": "var(--re-shadow-glow-strong)",
             },
+            // Pinned to flat values (SPEC §5.1). This REPLACES the previous
+            // calc(var(--radius)) chain, moving rounded-lg from 6px to 8px —
+            // intended: 8px is the card/table/tile radius. `--radius` is still
+            // defined for anything reading it directly, but no longer drives
+            // this scale. Defaults like rounded-full / rounded-none survive
+            // because these keys sit in `extend`.
             borderRadius: {
-                lg: "var(--radius)",
-                md: "calc(var(--radius) - 2px)",
-                sm: "calc(var(--radius) - 4px)",
+                sm: "4px",
+                md: "6px",
+                lg: "8px",
+                xl: "12px",
+                "2xl": "12px",
+            },
+            // The 8-step type scale (SPEC §2.2). Declared here, in rem, so that
+            // html.a11y-font-large / -xl (which scale the root font-size) keep
+            // enlarging every primitive.
+            fontSize: {
+                display: ["clamp(2rem, 4.2vw, 2.75rem)", { lineHeight: "1.05", fontWeight: "600", letterSpacing: "-0.02em" }],
+                "heading-lg": ["clamp(1.5rem, 2.6vw, 2rem)", { lineHeight: "1.2", fontWeight: "600", letterSpacing: "-0.015em" }],
+                title: ["1.75rem", { lineHeight: "2.125rem", fontWeight: "600", letterSpacing: "-0.015em" }],
+                heading: ["1.25rem", { lineHeight: "1.75rem", fontWeight: "600", letterSpacing: "-0.01em" }],
+                subheading: ["0.9375rem", { lineHeight: "1.375rem", fontWeight: "600" }],
+                body: ["1rem", { lineHeight: "1.625rem" }],
+                ui: ["0.875rem", { lineHeight: "1.25rem" }],
+                small: ["0.75rem", { lineHeight: "1rem" }],
+                label: ["0.6875rem", { lineHeight: "1rem", fontWeight: "500", letterSpacing: "0.04em" }],
+            },
+            transitionDuration: {
+                120: "120ms",
+                180: "180ms",
+                240: "240ms",
+            },
+            transitionTimingFunction: {
+                re: "cubic-bezier(.2, 0, 0, 1)",
             },
             keyframes: {
                 "accordion-down": {
