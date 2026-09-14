@@ -232,7 +232,7 @@ export default function DesignSystemPage() {
                         <Callout tone="neutral" title="Educational tool">Free self-check tool. Not a compliance certification or regulatory determination.</Callout>
                         <Callout tone="info" title="Sandbox mode">Using sample data for demonstration.</Callout>
                         <Callout tone="success" title="Chain verified">Every record in this export is hash-chained.</Callout>
-                        <Callout tone="warning" title="Approaching deadline" icon={AlertTriangle}>FDA enforcement begins July 20, 2028.</Callout>
+                        <Callout tone="warning" title="Supplier gaps open" icon={AlertTriangle}>Three lots are missing a ship-to location.</Callout>
                         <Callout tone="danger" role="alert" title="Backend services unreachable" action={<Button size="sm" variant="secondary">Retry</Button>}>
                             Data will appear once services are connected.
                         </Callout>
