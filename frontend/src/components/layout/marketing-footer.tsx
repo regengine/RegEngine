@@ -8,10 +8,44 @@ import {
     MARKETING_FOOTER_DEVELOPER_LINKS,
     MARKETING_FOOTER_PRODUCT_LINKS,
     MARKETING_FREE_TOOLS,
+    type MarketingNavLink,
 } from '@/components/layout/marketing-nav';
+import { Container } from '@/components/layout/container';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import { Badge } from '@/components/ui/badge';
 import { requestShowCookiePrefs } from '@/lib/cookie-consent';
 import { shouldHideMarketingChrome } from '@/lib/app-routes';
+
+/**
+ * Marketing footer.
+ *
+ * `<footer aria-label="Site footer">` is load-bearing: the Inflow Lab embed
+ * shim hides the site chrome by `footer` selector. Every column, link and href
+ * from `marketing-nav.ts` is unchanged — `public-site-fixes.test.tsx` asserts
+ * the Product column's data directly.
+ *
+ * The trust row above the legal line is SPEC §6's graft from proposal B: three
+ * neutral chips carrying **stated** proof points from the brand doc, plus the
+ * enforcement date in mono. Nothing here is a new claim.
+ */
+const TRUST_CHIPS = ['SHA-256 verified chains', 'EPCIS 2.0 native', 'SOC 2 Type I in progress'];
+
+const COLUMN_HEADING = 'mb-3 text-label uppercase text-re-text-tertiary';
+const FOOTER_LINK =
+    'mb-2.5 block text-small text-re-text-muted no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none';
+
+function FooterColumn({ heading, links }: { heading: string; links: MarketingNavLink[] }) {
+    return (
+        <div>
+            <h4 className={COLUMN_HEADING}>{heading}</h4>
+            {links.map((link) => (
+                <Link key={link.label} href={link.href} className={FOOTER_LINK}>
+                    {link.label}
+                </Link>
+            ))}
+        </div>
+    );
+}
 
 export function MarketingFooter() {
     const pathname = usePathname();
@@ -23,106 +57,81 @@ export function MarketingFooter() {
     return (
         <footer
             aria-label="Site footer"
-            className="relative z-[2] border-t border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] text-[var(--re-text-secondary)]"
+            className="relative z-[2] border-t border-re-border-subtle bg-re-surface-card text-re-text-secondary"
         >
-            <div className="max-w-[1200px] mx-auto px-6 pt-14 pb-9 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10">
+            <Container width="marketing" className="grid grid-cols-1 gap-10 pb-10 pt-14 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
                 <div>
-                    <Link href="/" className="flex items-center gap-2 mb-3 no-underline" aria-label="RegEngine home">
+                    <Link href="/" className="mb-3 flex items-center gap-2 no-underline" aria-label="RegEngine home">
                         <RegEngineWordmark size="sm" />
                     </Link>
-                    <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-4 max-w-[280px]">
+                    <p className="max-w-[280px] text-small leading-5 text-re-text-muted">
                         Food traceability compliance for farms and food companies.
                     </p>
-                    <div className="font-mono text-[12px] text-[var(--re-text-tertiary)]">
-                        FSMA 204 Enforcement: July 20, 2028
-                    </div>
                 </div>
 
+                <FooterColumn heading="Product" links={MARKETING_FOOTER_PRODUCT_LINKS} />
+
                 <div>
-                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[var(--re-text-tertiary)] mb-3">
-                        Product
-                    </h4>
-                    {MARKETING_FOOTER_PRODUCT_LINKS.map((link) => (
-                        <Link
-                            key={link.label}
-                            href={link.href}
-                            className="block text-[13px] text-[var(--re-text-muted)] no-underline mb-2.5 hover:text-[var(--re-text-primary)] transition-colors"
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
-                </div>
-                <div>
-                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[var(--re-text-tertiary)] mb-3">
-                        Free Tools
-                    </h4>
+                    <h4 className={COLUMN_HEADING}>Free Tools</h4>
                     {MARKETING_FREE_TOOLS.map((link) => (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            className="block text-[13px] text-[var(--re-text-muted)] no-underline mb-2.5 hover:text-[var(--re-text-primary)] transition-colors"
-                        >
+                        <Link key={link.href} href={link.href} className={FOOTER_LINK}>
                             {link.label}
                         </Link>
                     ))}
                     <Link
                         href={MARKETING_ALL_TOOLS_LINK.href}
-                        className="block text-[13px] text-[var(--re-brand-light)] no-underline mt-1 font-semibold hover:text-[var(--re-text-primary)] transition-colors"
+                        className="mt-1 block text-small font-medium text-re-brand no-underline transition-colors duration-120 hover:text-re-brand-dark motion-reduce:transition-none"
                     >
                         View all tools →
                     </Link>
                 </div>
 
-                <div>
-                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[var(--re-text-tertiary)] mb-3">
-                        Developers
-                    </h4>
-                    {MARKETING_FOOTER_DEVELOPER_LINKS.map((link) => (
-                        <Link
-                            key={link.label}
-                            href={link.href}
-                            className="block text-[13px] text-[var(--re-text-muted)] no-underline mb-2.5 hover:text-[var(--re-text-primary)] transition-colors"
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
-                </div>
+                <FooterColumn heading="Developers" links={MARKETING_FOOTER_DEVELOPER_LINKS} />
+                <FooterColumn heading="Company" links={MARKETING_FOOTER_COMPANY_LINKS} />
+            </Container>
 
-                <div>
-                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[var(--re-text-tertiary)] mb-3">
-                        Company
-                    </h4>
-                    {MARKETING_FOOTER_COMPANY_LINKS.map((item) => (
-                        <Link
-                            key={item.label}
-                            href={item.href}
-                            className="block text-[13px] text-[var(--re-text-muted)] no-underline mb-2.5 hover:text-[var(--re-text-primary)] transition-colors"
-                        >
-                            {item.label}
-                        </Link>
-                    ))}
-                </div>
-            </div>
-            <div className="max-w-[1200px] mx-auto px-6 py-5 border-t border-[var(--re-border-subtle)] flex flex-wrap justify-between items-center gap-4">
-                <span className="text-[0.72rem] text-[var(--re-text-muted)]">
+            {/* Trust row — stated proof points only (SPEC §6). */}
+            <Container
+                width="marketing"
+                className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-re-border-subtle py-4"
+            >
+                {TRUST_CHIPS.map((chip) => (
+                    <Badge key={chip} tone="neutral" size="sm">
+                        {chip}
+                    </Badge>
+                ))}
+                <span className="font-mono text-small text-re-text-tertiary">
+                    FSMA 204 Enforcement: July 20, 2028
+                </span>
+            </Container>
+
+            <Container
+                width="marketing"
+                className="flex flex-wrap items-center justify-between gap-4 border-t border-re-border-subtle py-5"
+            >
+                <span className="text-small text-re-text-muted">
                     &copy; 2026 RegEngine LLC All rights reserved.
                 </span>
                 <div className="flex flex-wrap items-center gap-4">
-                    <Link href="/dpa" className="text-[0.72rem] text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] transition-colors no-underline">
+                    <Link
+                        href="/dpa"
+                        className="text-small text-re-text-muted no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+                    >
                         DPA
                     </Link>
                     <button
+                        type="button"
                         onClick={requestShowCookiePrefs}
-                        className="text-[0.72rem] text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                        className="cursor-pointer border-0 bg-transparent p-0 text-small text-re-text-muted transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                         aria-label="Manage cookie preferences"
                     >
                         Cookie Preferences
                     </button>
-                    <span className="text-[0.68rem] text-[var(--re-text-muted)]">
+                    <span className="text-small text-re-text-muted">
                         Verify our exports yourself: <code className="font-mono">verify_chain.py</code>
                     </span>
                 </div>
-            </div>
+            </Container>
         </footer>
     );
 }

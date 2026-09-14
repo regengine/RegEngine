@@ -2,143 +2,100 @@
 
 import { filterExperimentalLinks } from '@/lib/experimental-features';
 import Link from 'next/link';
+import { X } from 'lucide-react';
 import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { cn } from '@/lib/utils';
 import { MobileMenuCTA } from './MobileMenuCTA';
 import type { MobileMenuProps } from './types';
+
+/**
+ * Mobile navigation drawer.
+ *
+ * Every one of the seventeen inline style objects this file used to carry is
+ * now a token utility. The contract kept intact: `role="dialog"` +
+ * `aria-label="Navigation menu"`, the `.marketing-mobile-drawer` class hook,
+ * the safe-area insets, and the parent's `re:mobile-menu-state` CustomEvent
+ * (AccessibilityWidget and CookieBanner both listen for it).
+ */
+const LOGGED_IN_LINKS = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Heartbeat', href: '/dashboard/heartbeat' },
+    { label: 'Compliance', href: '/dashboard/compliance' },
+    { label: 'Alerts', href: '/dashboard/alerts' },
+    { label: 'Suppliers', href: '/dashboard/suppliers' },
+    { label: 'Products', href: '/dashboard/products' },
+    { label: 'Settings', href: '/dashboard/settings' },
+];
 
 export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
     return (
         <>
-            {/* Mobile Drawer Overlay */}
+            {/* Drawer scrim */}
             <div
-                style={{
-                    position: "fixed",
-                    inset: 0,
-                    zIndex: "var(--re-z-sticky)",
-                    background: "rgba(0,0,0,0.5)",
-                    backdropFilter: "blur(4px)",
-                    WebkitBackdropFilter: "blur(4px)",
-                    opacity: mobileOpen ? 1 : 0,
-                    visibility: mobileOpen ? "visible" : "hidden",
-                    pointerEvents: mobileOpen ? "auto" : "none",
-                    transition: "opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s",
-                }}
+                className={cn(
+                    'fixed inset-0 z-[var(--re-z-sticky)] bg-re-surface-overlay backdrop-blur-[4px] transition-[opacity,visibility] duration-240 motion-reduce:transition-none',
+                    mobileOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+                )}
                 onClick={() => setMobileOpen(false)}
                 aria-hidden="true"
             />
 
-            {/* Mobile Drawer Panel */}
+            {/* Drawer panel */}
             <div
-                className="marketing-mobile-drawer"
+                className={cn(
+                    'marketing-mobile-drawer fixed bottom-0 right-0 top-0 z-[var(--re-z-modal)] flex w-[min(320px,85vw)] flex-col overflow-y-auto border-l border-[var(--re-mobile-border)] bg-[var(--re-mobile-menu-bg)] pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] transition-[transform,visibility] duration-240 motion-reduce:transition-none',
+                    mobileOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'
+                )}
                 role="dialog"
                 aria-modal={mobileOpen ? true : undefined}
                 aria-hidden={!mobileOpen}
                 aria-label="Navigation menu"
-                style={{
-                    position: "fixed",
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    width: "min(320px, 85vw)",
-                    zIndex: "var(--re-z-modal)",
-                    background: "var(--re-mobile-menu-bg)",
-                    borderLeft: "1px solid var(--re-mobile-border)",
-                    transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
-                    visibility: mobileOpen ? "visible" : "hidden",
-                    pointerEvents: mobileOpen ? "auto" : "none",
-                    transition: "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s",
-                    overflowY: "auto",
-                    WebkitOverflowScrolling: "touch",
-                    display: "flex",
-                    flexDirection: "column",
-                    paddingTop: "env(safe-area-inset-top, 0px)",
-                    paddingBottom: "env(safe-area-inset-bottom, 0px)",
-                }}
             >
-                {/* Drawer Header */}
-                <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "16px 20px",
-                    borderBottom: "1px solid var(--re-mobile-border)",
-                    minHeight: "56px",
-                }}>
+                {/* Drawer header */}
+                <div className="flex min-h-[56px] items-center justify-between border-b border-[var(--re-mobile-border)] px-5 py-4">
                     <RegEngineWordmark size="sm" />
                     <button
+                        type="button"
                         onClick={() => setMobileOpen(false)}
                         aria-label="Close menu"
-                        style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--re-text-muted)",
-                            width: "44px",
-                            height: "44px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer",
-                            borderRadius: "8px",
-                            WebkitTapHighlightColor: "transparent",
-                            padding: 0,
-                        }}
+                        className="-mr-2 flex h-11 w-11 items-center justify-center rounded-md border-0 bg-transparent p-0 text-re-text-muted transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
                     >
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                            <line x1="4" y1="4" x2="16" y2="16" />
-                            <line x1="16" y1="4" x2="4" y2="16" />
-                        </svg>
+                        <X aria-hidden="true" size={20} strokeWidth={1.75} />
                     </button>
                 </div>
 
-                {/* Primary Nav Links */}
-                <div style={{ padding: "8px 12px" }}>
-                    {filterExperimentalLinks(user ? [
-                        { label: 'Dashboard', href: '/dashboard' },
-                        { label: 'Heartbeat', href: '/dashboard/heartbeat' },
-                        { label: 'Compliance', href: '/dashboard/compliance' },
-                        { label: 'Alerts', href: '/dashboard/alerts' },
-                        { label: 'Suppliers', href: '/dashboard/suppliers' },
-                        { label: 'Products', href: '/dashboard/products' },
-                        { label: 'Settings', href: '/dashboard/settings' },
-                    ] : MARKETING_PRIMARY_NAV).map((item) => (
+                {/* Primary nav links */}
+                <div className="px-3 py-2">
+                    {filterExperimentalLinks(user ? LOGGED_IN_LINKS : MARKETING_PRIMARY_NAV).map((item) => (
                         <Link
                             key={item.label}
                             href={item.href}
                             onClick={() => setMobileOpen(false)}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                fontSize: "15px",
-                                color: pathname === item.href ? "var(--re-brand)" : "var(--re-text-primary)",
-                                textDecoration: "none",
-                                fontWeight: pathname === item.href ? 600 : 500,
-                                padding: "14px 12px",
-                                borderRadius: "var(--re-radius-md)",
-                                transition: "background 0.15s",
-                                minHeight: "48px",
-                                WebkitTapHighlightColor: "transparent",
-                            }}
+                            aria-current={pathname === item.href ? 'page' : undefined}
+                            className={`relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline ${
+                                pathname === item.href
+                                    ? 'bg-re-surface-inset font-medium text-re-text-primary'
+                                    : 'text-re-text-secondary'
+                            } transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none`}
                         >
+                            {pathname === item.href && (
+                                <span
+                                    aria-hidden="true"
+                                    className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-re-brand"
+                                />
+                            )}
                             {item.label}
                         </Link>
                     ))}
                 </div>
 
-                {/* Divider */}
-                <div style={{ height: "1px", background: "var(--re-mobile-border)", margin: "4px 20px" }} />
+                <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
 
-                {/* Free Tools Section */}
-                <div style={{ padding: "8px 12px" }}>
-                    <div style={{
-                        fontSize: "10px",
-                        fontWeight: 600,
-                        letterSpacing: "0.12em",
-                        textTransform: "uppercase" as const,
-                        color: "var(--re-text-muted)",
-                        padding: "8px 12px 4px",
-                    }}>
+                {/* Free tools */}
+                <div className="px-3 py-2">
+                    <div className="px-3 pb-1 pt-2 text-label uppercase text-re-text-muted">
                         FSMA 204 Compliance Tools
                     </div>
                     {[...MARKETING_FREE_TOOLS, MARKETING_ALL_TOOLS_LINK].map((tool) => (
@@ -146,58 +103,34 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                             key={tool.href}
                             href={tool.href}
                             onClick={() => setMobileOpen(false)}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "12px",
-                                padding: "12px",
-                                textDecoration: "none",
-                                borderRadius: "var(--re-radius-md)",
-                                transition: "background 0.15s",
-                                minHeight: "48px",
-                                WebkitTapHighlightColor: "transparent",
-                            }}
+                            className="flex min-h-[48px] items-start gap-3 rounded-md p-3 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
                         >
-                            <span
+                            <tool.icon
                                 aria-hidden="true"
-                                style={{
-                                    width: "32px",
-                                    height: "32px",
-                                    borderRadius: "var(--re-radius-md)",
-                                    border: "1px solid var(--re-surface-border)",
-                                    background: "var(--re-brand-muted)",
-                                    color: "var(--re-brand)",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <tool.icon size={16} strokeWidth={2} />
+                                size={16}
+                                strokeWidth={1.75}
+                                className="mt-0.5 shrink-0 text-re-text-tertiary"
+                            />
+                            <span className="min-w-0">
+                                <span className="block text-ui font-medium text-re-text-primary">
+                                    {tool.href === '/tools' ? `${tool.label} →` : tool.label}
+                                </span>
+                                <span className="mt-0.5 block text-small text-re-text-tertiary">{tool.desc}</span>
                             </span>
-                            <div>
-                                <div style={{ fontSize: "14px", fontWeight: tool.href === "/tools" ? 600 : 500, color: tool.href === "/tools" ? "var(--re-brand)" : "var(--re-text-primary)" }}>
-                                    {tool.href === "/tools" ? `${tool.label} →` : tool.label}
-                                </div>
-                                <div style={{ fontSize: "12px", color: "var(--re-text-muted)", lineHeight: 1.3 }}>{tool.desc}</div>
-                            </div>
                         </Link>
                     ))}
                 </div>
 
-                {/* Divider */}
-                <div style={{ height: "1px", background: "var(--re-mobile-border)", margin: "4px 20px" }} />
+                <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
 
-                {/* Theme Toggle */}
-                <div style={{ padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: "13px", color: "var(--re-text-muted)", fontWeight: 500 }}>Theme</span>
+                {/* Theme */}
+                <div className="flex items-center justify-between px-6 py-3">
+                    <span className="text-ui text-re-text-secondary">Theme</span>
                     <ThemeToggle />
                 </div>
 
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
+                <div className="flex-1" />
 
-                {/* CTA Buttons at bottom */}
                 <MobileMenuCTA user={user} showLoggedIn={showLoggedIn} setMobileOpen={setMobileOpen} />
             </div>
         </>

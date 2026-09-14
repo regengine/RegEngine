@@ -1,10 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
 
 const STEPS = [
   { label: 'Profile', href: '/onboarding/setup/welcome', step: 1 },
@@ -20,14 +21,13 @@ function getActiveStep(pathname: string): number {
 
 export default function SetupLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const activeStep = getActiveStep(pathname);
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
-      {/* Progress stepper */}
+    <div className="mx-auto w-full max-w-[640px] px-5 py-10 sm:px-8">
+      {/* Progress stepper — the one recipe: 24px circle, mono numeral, hairline. */}
       <nav className="mb-8" aria-label="Setup progress">
-        <ol className="flex items-center justify-center gap-0">
+        <ol className="flex items-center justify-center">
           {STEPS.map((step, i) => {
             const isComplete = activeStep > step.step;
             const isCurrent = activeStep === step.step;
@@ -36,29 +36,33 @@ export default function SetupLayout({ children }: { children: ReactNode }) {
               <li key={step.step} className="flex items-center">
                 {i > 0 && (
                   <div
-                    className={`h-px w-10 sm:w-16 mx-1 transition-colors ${
-                      isComplete ? 'bg-[var(--re-brand)]' : 'bg-[var(--re-surface-border)]'
-                    }`}
+                    className={cn(
+                      'mx-3 h-px w-10 transition-colors duration-120 motion-reduce:transition-none sm:w-16',
+                      isComplete ? 'bg-re-text-primary' : 'bg-re-border',
+                    )}
                   />
                 )}
                 <div className="flex items-center gap-2">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-sm text-xs font-semibold transition-all ${
-                      isComplete
-                        ? 'bg-[var(--re-brand)] text-white'
-                        : isCurrent
-                          ? 'border-2 border-[var(--re-brand)] text-[var(--re-brand)]'
-                          : 'border border-[var(--re-surface-border)] text-[var(--re-text-muted)]'
-                    }`}
-                  >
-                    {isComplete ? <Check className="h-4 w-4" /> : step.step}
-                  </div>
                   <span
-                    className={`hidden sm:inline text-sm ${
-                      isCurrent
-                        ? 'font-medium text-[var(--re-text-primary)]'
-                        : 'text-[var(--re-text-muted)]'
-                    }`}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-label transition-colors duration-120 motion-reduce:transition-none',
+                      isComplete && 'border-re-text-primary bg-re-text-primary text-re-surface-card',
+                      isCurrent && 'border-re-text-primary text-re-text-primary',
+                      !isComplete && !isCurrent && 'border-re-border text-re-text-tertiary',
+                    )}
+                  >
+                    {isComplete ? (
+                      <Check className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+                    ) : (
+                      String(step.step).padStart(2, '0')
+                    )}
+                  </span>
+                  <span
+                    className={cn(
+                      'hidden text-small sm:inline',
+                      isCurrent ? 'font-medium text-re-text-primary' : 'text-re-text-tertiary',
+                    )}
                   >
                     {step.label}
                   </span>
@@ -78,16 +82,6 @@ export default function SetupLayout({ children }: { children: ReactNode }) {
       >
         {children}
       </motion.div>
-
-      {/* Skip link */}
-      <div className="mt-8 text-center">
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="text-xs text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors underline underline-offset-2"
-        >
-          Skip for now — I&apos;ll set up later
-        </button>
-      </div>
     </div>
   );
 }

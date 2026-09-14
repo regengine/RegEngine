@@ -1,10 +1,42 @@
 'use client';
 
 import Link from 'next/link';
+import { LayoutGrid } from 'lucide-react';
 import { MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { Button } from '@/components/ui/button';
 import { NavDropdown } from './NavDropdown';
 import type { DesktopNavProps } from './types';
+
+/**
+ * Desktop marketing nav — SPEC §3.3 / §6.
+ *
+ * Nav links are sentence-case `text-ui` chrome links, not 12px uppercase
+ * monospace: `text-label` is the only uppercase step in the system, and it is
+ * reserved for eyebrows and table heads. The label strings themselves are
+ * untouched (unit and e2e specs match on them) — only the type changes.
+ *
+ * CTA hierarchy (SPEC §6 amendment): the single primary is "Book a call",
+ * because a VP-level buyer previously had no path to sales from the chrome —
+ * the only primary in the header was a lead-gen tool. "Free Tools" demotes to
+ * secondary and "Log In" is a ghost link.
+ *
+ * The `.marketing-desktop-nav` class hook stays: globals.css hides it under
+ * 768px with `!important` and shows `.marketing-mobile-toggle` instead. The
+ * `xl:` step here is additive — between 769 and 1279 the drawer now carries
+ * the nav, where previously eleven items overflowed the viewport and the
+ * body's `overflow-x: hidden` clipped them away unreachably.
+ */
+
+/** Chrome link recipe — no underline, secondary → primary on hover (SPEC §2.3). */
+const NAV_LINK =
+    'whitespace-nowrap rounded-sm text-ui font-medium normal-case text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none';
+
+const LOGGED_IN_NAV = [
+    { label: 'Compliance', href: '/dashboard/compliance' },
+    { label: 'Suppliers', href: '/dashboard/suppliers' },
+    { label: 'Products', href: '/dashboard/products' },
+];
 
 export function DesktopNav({
     user,
@@ -18,37 +50,10 @@ export function DesktopNav({
     handleToolsKeyDown,
     focusFirstToolsItem,
 }: DesktopNavProps) {
-    const navLinkStyle: React.CSSProperties = {
-        fontSize: "12px",
-        color: "var(--re-text-muted)",
-        textDecoration: "none",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        fontFamily: "var(--re-font-mono)",
-        transition: "color 0.2s",
-        padding: "8px 0",
-        whiteSpace: "nowrap",
-    };
-
-    const handleLinkEnter = (e: React.MouseEvent) =>
-        ((e.target as HTMLElement).style.color = "var(--re-text-primary)");
-    const handleLinkLeave = (e: React.MouseEvent) =>
-        ((e.target as HTMLElement).style.color = "var(--re-text-muted)");
-
     return (
-        <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-            {(showLoggedIn ? [
-                { label: 'Compliance', href: '/dashboard/compliance' },
-                { label: 'Suppliers', href: '/dashboard/suppliers' },
-                { label: 'Products', href: '/dashboard/products' },
-            ] : MARKETING_PRIMARY_NAV).map((item) => (
-                <Link
-                    key={item.label}
-                    href={item.href}
-                    style={navLinkStyle}
-                    onMouseEnter={handleLinkEnter}
-                    onMouseLeave={handleLinkLeave}
-                >
+        <div className="marketing-desktop-nav hidden xl:flex items-center gap-3">
+            {(showLoggedIn ? LOGGED_IN_NAV : MARKETING_PRIMARY_NAV).map((item) => (
+                <Link key={item.label} href={item.href} className={NAV_LINK}>
                     {item.label}
                 </Link>
             ))}
@@ -65,101 +70,45 @@ export function DesktopNav({
             />
 
             {/* Developer & Docs links */}
-            <Link
-                href="/developer/portal"
-                style={navLinkStyle}
-                onMouseEnter={handleLinkEnter}
-                onMouseLeave={handleLinkLeave}
-            >
+            <Link href="/developer/portal" className={NAV_LINK}>
                 Developers
             </Link>
-            <Link
-                href="/docs"
-                style={navLinkStyle}
-                onMouseEnter={handleLinkEnter}
-                onMouseLeave={handleLinkLeave}
-            >
+            <Link href="/docs" className={NAV_LINK}>
                 Docs
             </Link>
 
-            <ThemeToggle />
+            <span className="ml-1 flex items-center">
+                <ThemeToggle />
+            </span>
 
-            {/* Auth-aware buttons */}
+            {/* Auth-aware actions — exactly one primary (SPEC §4). */}
             {showLoggedIn ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <Link
-                        href="/dashboard"
-                        style={{
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "var(--re-surface-base)",
-                            background: "var(--re-text-primary)",
-                            padding: "8px 16px",
-                            borderRadius: "var(--re-radius-md)",
-                            textDecoration: "none",
-                            transition: "all 0.2s",
-                            boxShadow: "var(--re-shadow-sm)",
-                            border: "1px solid var(--re-text-primary)",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            whiteSpace: "nowrap",
-                        }}
+                <div className="flex items-center gap-3">
+                    <Button asChild variant="primary" size="sm">
+                        <Link href="/dashboard">
+                            <LayoutGrid aria-hidden="true" strokeWidth={1.75} />
+                            Dashboard
+                        </Link>
+                    </Button>
+                    <span
+                        title={user?.email || 'Account'}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-re-border bg-re-surface-inset text-small font-semibold uppercase text-re-text-primary"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-                        </svg>
-                        Dashboard
-                    </Link>
-                    <div
-                        style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "var(--re-radius-md)",
-                            background: "var(--re-surface-elevated)",
-                            border: "1px solid var(--re-surface-border)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            color: "var(--re-text-primary)",
-                            cursor: "pointer",
-                            textTransform: "uppercase",
-                        }}
-                        title={user?.email || "Account"}
-                    >
-                        {(user?.email?.[0] || "U")}
-                    </div>
+                        {user?.email?.[0] || 'U'}
+                    </span>
                 </div>
             ) : (
-                <>
-                    <Link href="/login" style={navLinkStyle} onMouseEnter={handleLinkEnter} onMouseLeave={handleLinkLeave}>
+                <div className="flex items-center gap-2">
+                    <Link href="/login" className={NAV_LINK}>
                         Log In
                     </Link>
-                    <Link
-                        href="/tools"
-                        style={{
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            fontFamily: "var(--re-font-mono)",
-                            textTransform: "uppercase",
-                            color: "var(--re-surface-base)",
-                            background: "var(--re-text-primary)",
-                            padding: "8px 16px",
-                            borderRadius: "var(--re-radius-md)",
-                            textDecoration: "none",
-                            transition: "all 0.2s",
-                            boxShadow: "var(--re-shadow-sm)",
-                            border: "1px solid var(--re-text-primary)",
-                            whiteSpace: "nowrap",
-                        }}
-                        onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-secondary)"; }}
-                        onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "var(--re-text-primary)"; }}
-                    >
-                        Free Tools
-                    </Link>
-                </>
+                    <Button asChild variant="secondary" size="sm">
+                        <Link href="/tools">Free Tools</Link>
+                    </Button>
+                    <Button asChild variant="primary" size="sm">
+                        <Link href="/contact">Book a call</Link>
+                    </Button>
+                </div>
             )}
         </div>
     );

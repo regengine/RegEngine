@@ -1,16 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 
 import { PageContainer } from '@/components/layout/page-container';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/layout/page-header';
+import { Section } from '@/components/layout/section';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -27,7 +33,6 @@ import { DemoBanner } from '@/components/control-plane/demo-banner';
 import {
   AlertTriangle,
   CheckCircle,
-  Clock,
   FileText,
   Package,
   PlayCircle,
@@ -35,17 +40,22 @@ import {
   Timer,
 } from 'lucide-react';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; progress: number }> = {
-  intake: { label: 'Intake', color: 'bg-re-surface-card0', progress: 5 },
-  scoping: { label: 'Scoping', color: 'bg-blue-400', progress: 15 },
-  collecting: { label: 'Collecting', color: 'bg-re-info', progress: 30 },
-  gap_analysis: { label: 'Gap Analysis', color: 'bg-re-warning', progress: 45 },
-  exception_triage: { label: 'Exception Triage', color: 'bg-orange-500', progress: 55 },
-  assembling: { label: 'Assembling', color: 'bg-purple-500', progress: 70 },
-  internal_review: { label: 'Internal Review', color: 'bg-indigo-500', progress: 80 },
-  ready: { label: 'Ready', color: 'bg-re-success', progress: 90 },
-  submitted: { label: 'Submitted', color: 'bg-re-success', progress: 100 },
-  amended: { label: 'Amended', color: 'bg-teal-500', progress: 100 },
+/**
+ * Workflow status mapped onto the shared compliance-state vocabulary — the old
+ * map painted Badge backgrounds with raw saturated palette classes (and a
+ * non-existent `bg-re-surface-card0`) and white text.
+ */
+const STATUS_CONFIG: Record<string, { label: string; state: ComplianceState; progress: number }> = {
+  intake: { label: 'Intake', state: 'pending', progress: 5 },
+  scoping: { label: 'Scoping', state: 'pending', progress: 15 },
+  collecting: { label: 'Collecting', state: 'in-progress', progress: 30 },
+  gap_analysis: { label: 'Gap Analysis', state: 'in-progress', progress: 45 },
+  exception_triage: { label: 'Exception Triage', state: 'at-risk', progress: 55 },
+  assembling: { label: 'Assembling', state: 'in-progress', progress: 70 },
+  internal_review: { label: 'Internal Review', state: 'pending', progress: 80 },
+  ready: { label: 'Ready', state: 'compliant', progress: 90 },
+  submitted: { label: 'Submitted', state: 'exported', progress: 100 },
+  amended: { label: 'Amended', state: 'corrected', progress: 100 },
 };
 
 export default function RequestWorkflowPage() {
@@ -84,13 +94,18 @@ export default function RequestWorkflowPage() {
   if (requests.error) {
     return (
       <PageContainer>
-        <div className="p-8 text-center">
-          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
-          <p className="text-sm text-muted-foreground/60 mt-2">{(requests.error as Error).message}</p>
-          <button onClick={() => requests.refetch()} className="mt-4 text-sm text-primary hover:underline">
-            Retry
-          </button>
-        </div>
+        <Callout
+          tone="danger"
+          role="alert"
+          title="Unable to load data from the control plane API."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => requests.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {(requests.error as Error).message}
+        </Callout>
       </PageContainer>
     );
   }
@@ -109,248 +124,235 @@ export default function RequestWorkflowPage() {
 
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Timer className="h-6 w-6 text-re-info" />
-            Request-Response Workflow
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            24-hour FDA response readiness — from request intake to sealed package submission
-          </p>
-        </div>
-        <Button onClick={() => setShowCreate(!showCreate)}>
-          <PlayCircle className="h-4 w-4 mr-2" />
-          New Request Case
-        </Button>
-      </div>
+      <PageHeader
+        title="Request-Response Workflow"
+        description="24-hour FDA response readiness — from request intake to sealed package submission"
+        primaryAction={
+          <Button
+            variant={showCreate ? 'secondary' : 'primary'}
+            onClick={() => setShowCreate(!showCreate)}
+            leadingIcon={<PlayCircle strokeWidth={1.75} aria-hidden="true" />}
+          >
+            New Request Case
+          </Button>
+        }
+      />
 
       <DemoBanner visible={!!(requests.data?.__isDemo)} />
 
-      {/* Create Form */}
       {showCreate && (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-          <Card className="mb-6 border-blue-200">
-            <CardHeader>
-              <CardTitle className="text-lg">Open New Request Case</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Requesting Party</label>
-                  <select
-                    className="mt-1 w-full border rounded px-3 py-2 text-sm bg-background"
-                    value={newRequestParty}
-                    onChange={e => setNewRequestParty(e.target.value)}
-                  >
-                    <option value="FDA">FDA</option>
-                    <option value="State DOH">State DOH</option>
-                    <option value="Internal Drill">Internal Drill</option>
-                    <option value="Customer Audit">Customer Audit</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Affected Lot Codes (comma-separated)</label>
-                  <Input
-                    className="mt-1"
-                    placeholder="TLC-001, TLC-002..."
-                    value={newRequestLots}
-                    onChange={e => setNewRequestLots(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleCreate} disabled={createRequest.isPending}>
-                  {createRequest.isPending ? 'Creating...' : 'Create Case (24h deadline)'}
-                </Button>
-                <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+        <Card className="mb-8 mt-6">
+          <CardHeader>
+            <CardTitle>Open New Request Case</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Requesting Party" htmlFor="new-request-party">
+                <select
+                  id="new-request-party"
+                  className={fieldControlClasses}
+                  value={newRequestParty}
+                  onChange={e => setNewRequestParty(e.target.value)}
+                >
+                  <option value="FDA">FDA</option>
+                  <option value="State DOH">State DOH</option>
+                  <option value="Internal Drill">Internal Drill</option>
+                  <option value="Customer Audit">Customer Audit</option>
+                </select>
+              </Field>
+              <Field label="Affected Lot Codes (comma-separated)" htmlFor="new-request-lots">
+                <Input
+                  id="new-request-lots"
+                  placeholder="TLC-001, TLC-002..."
+                  value={newRequestLots}
+                  onChange={e => setNewRequestLots(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleCreate} disabled={createRequest.isPending}>
+                {createRequest.isPending ? 'Creating...' : 'Create Case (24h deadline)'}
+              </Button>
+              <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Active Cases */}
-      <div className="space-y-4 mb-8">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Clock className="h-5 w-5 text-re-warning" />
-          Active Cases ({activeCases.length})
-        </h2>
-
+      <Section
+        spacing="app"
+        className="mt-6"
+        title={<>Active Cases ({activeCases.length})</>}
+      >
         {requests.isLoading ? (
           <div className="space-y-3">
             {[1, 2].map(i => <Skeleton key={i} className="h-40 w-full" />)}
           </div>
         ) : activeCases.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-3 text-re-success" />
-              <p className="font-medium">No active request cases</p>
-              <p className="text-sm">Create a new case to start a response workflow</p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={CheckCircle}
+            title="No active request cases"
+            description="Create a new case to start a response workflow"
+          />
         ) : (
-          activeCases.map(rc => {
-            const config = STATUS_CONFIG[rc.package_status] || STATUS_CONFIG.intake;
-            const isOverdue = rc.is_overdue;
-            const hoursLeft = rc.hours_remaining ?? 0;
+          <div className="space-y-4">
+            {activeCases.map(rc => {
+              const config = STATUS_CONFIG[rc.package_status] || STATUS_CONFIG.intake;
+              const isOverdue = rc.is_overdue;
+              const hoursLeft = rc.hours_remaining ?? 0;
 
-            return (
-              <motion.div key={rc.request_case_id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Card className={isOverdue ? 'border-re-danger bg-re-danger-muted/30' : ''}>
-                  <CardContent className="pt-5 pb-4">
-                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                      {/* Left: case info */}
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <Badge className={`${config.color} text-white`}>{config.label}</Badge>
-                          <span className="text-sm font-medium">{rc.requesting_party}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {rc.scope_type?.replace(/_/g, ' ')}
+              return (
+                <Card key={rc.request_case_id} padding="spacious">
+                  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                    {/* Left: case info */}
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <StatusBadge state={config.state} label={config.label} size="sm" />
+                        <span className="text-ui font-medium text-re-text-primary">
+                          {rc.requesting_party}
+                        </span>
+                        <span className="text-small text-re-text-tertiary">
+                          {rc.scope_type?.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      <div>
+                        <Progress value={config.progress} className="h-2" />
+                        <div className="mt-1 flex flex-wrap justify-between gap-2">
+                          <span className="text-small text-re-text-tertiary">
+                            {rc.total_records} records collected
+                          </span>
+                          <span className="text-small text-re-text-tertiary">
+                            {rc.gap_count} gaps / {rc.active_exception_count} exceptions
                           </span>
                         </div>
+                      </div>
 
-                        {/* Progress bar */}
-                        <div>
-                          <Progress value={config.progress} className="h-2" />
-                          <div className="flex justify-between mt-1">
-                            <span className="text-xs text-muted-foreground">
-                              {rc.total_records} records collected
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {rc.gap_count} gaps / {rc.active_exception_count} exceptions
-                            </span>
-                          </div>
+                      {rc.affected_lots?.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {rc.affected_lots.slice(0, 5).map(lot => (
+                            <Badge key={lot} size="sm" mono>{lot}</Badge>
+                          ))}
+                          {rc.affected_lots.length > 5 && (
+                            <Badge size="sm">+{rc.affected_lots.length - 5} more</Badge>
+                          )}
                         </div>
+                      )}
+                    </div>
 
-                        {/* Scope */}
-                        {rc.affected_lots?.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {rc.affected_lots.slice(0, 5).map(lot => (
-                              <Badge key={lot} variant="outline" className="text-xs">{lot}</Badge>
-                            ))}
-                            {rc.affected_lots.length > 5 && (
-                              <Badge variant="outline" className="text-xs">+{rc.affected_lots.length - 5} more</Badge>
-                            )}
-                          </div>
+                    {/* Right: countdown + actions */}
+                    <div className="flex flex-col items-start gap-2 md:min-w-[12rem] md:items-end">
+                      <div className={cn('flex items-center gap-1.5 text-ui font-medium', isOverdue ? 'text-re-danger' : 'text-re-text-secondary')}>
+                        <Timer className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                        {rc.countdown_display || `${Math.max(0, hoursLeft).toFixed(1)}h remaining`}
+                      </div>
+                      {isOverdue && <Badge tone="danger" size="sm">OVERDUE</Badge>}
+
+                      <div className="flex flex-wrap gap-1">
+                        {rc.package_status === 'ready' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            leadingIcon={<Send strokeWidth={1.75} aria-hidden="true" />}
+                            onClick={() => submitPackage.mutate({
+                              requestCaseId: rc.request_case_id,
+                              submitted_by: actor,
+                              submitted_to: rc.requesting_party,
+                            }, { onError: notifyActionError('Submit') })}
+                          >
+                            Submit
+                          </Button>
+                        )}
+                        {/* Status-aware next step. The card used to show
+                            Assemble for every pre-ready status, but the
+                            backend rejects assemble outside gap_analysis/
+                            exception_triage/assembling/internal_review —
+                            from intake the only offered action was a
+                            guaranteed 400. Walk the state machine instead. */}
+                        {rc.package_status === 'intake' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={approveScope.isPending}
+                            leadingIcon={<PlayCircle strokeWidth={1.75} aria-hidden="true" />}
+                            onClick={() => approveScope.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Approve Scope') })}
+                          >
+                            Approve Scope
+                          </Button>
+                        )}
+                        {['scoping'].includes(rc.package_status) && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={collectRecords.isPending}
+                            leadingIcon={<FileText strokeWidth={1.75} aria-hidden="true" />}
+                            onClick={() => collectRecords.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Collect Records') })}
+                          >
+                            Collect Records
+                          </Button>
+                        )}
+                        {['collecting'].includes(rc.package_status) && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={runGapAnalysis.isPending}
+                            leadingIcon={<AlertTriangle strokeWidth={1.75} aria-hidden="true" />}
+                            onClick={() => runGapAnalysis.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Run Gap Analysis') })}
+                          >
+                            Run Gap Analysis
+                          </Button>
+                        )}
+                        {['gap_analysis', 'exception_triage', 'assembling', 'internal_review'].includes(rc.package_status) && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={assemblePackage.isPending}
+                            leadingIcon={<Package strokeWidth={1.75} aria-hidden="true" />}
+                            onClick={() => assemblePackage.mutate({
+                              requestCaseId: rc.request_case_id,
+                              generatedBy: actor,
+                            }, { onError: notifyActionError('Assemble') })}
+                          >
+                            Assemble
+                          </Button>
                         )}
                       </div>
-
-                      {/* Right: countdown + actions */}
-                      <div className="flex flex-col items-end gap-2 min-w-[180px]">
-                        <div className={`text-right ${isOverdue ? 'text-re-danger' : 'text-muted-foreground'}`}>
-                          <div className="flex items-center gap-1 text-sm font-medium">
-                            <Timer className="h-4 w-4" />
-                            {rc.countdown_display || `${Math.max(0, hoursLeft).toFixed(1)}h remaining`}
-                          </div>
-                          {isOverdue && (
-                            <span className="text-xs font-bold text-re-danger">OVERDUE</span>
-                          )}
-                        </div>
-
-                        <div className="flex gap-1">
-                          {rc.package_status === 'ready' && (
-                            <Button
-                              size="sm"
-                              onClick={() => submitPackage.mutate({
-                                requestCaseId: rc.request_case_id,
-                                submitted_by: actor,
-                                submitted_to: rc.requesting_party,
-                              }, { onError: notifyActionError('Submit') })}
-                            >
-                              <Send className="h-3.5 w-3.5 mr-1" />
-                              Submit
-                            </Button>
-                          )}
-                          {/* Status-aware next step. The card used to show
-                              Assemble for every pre-ready status, but the
-                              backend rejects assemble outside gap_analysis/
-                              exception_triage/assembling/internal_review —
-                              from intake the only offered action was a
-                              guaranteed 400. Walk the state machine instead. */}
-                          {rc.package_status === 'intake' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={approveScope.isPending}
-                              onClick={() => approveScope.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Approve Scope') })}
-                            >
-                              <PlayCircle className="h-3.5 w-3.5 mr-1" />
-                              Approve Scope
-                            </Button>
-                          )}
-                          {['scoping'].includes(rc.package_status) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={collectRecords.isPending}
-                              onClick={() => collectRecords.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Collect Records') })}
-                            >
-                              <FileText className="h-3.5 w-3.5 mr-1" />
-                              Collect Records
-                            </Button>
-                          )}
-                          {['collecting'].includes(rc.package_status) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={runGapAnalysis.isPending}
-                              onClick={() => runGapAnalysis.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Run Gap Analysis') })}
-                            >
-                              <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                              Run Gap Analysis
-                            </Button>
-                          )}
-                          {['gap_analysis', 'exception_triage', 'assembling', 'internal_review'].includes(rc.package_status) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={assemblePackage.isPending}
-                              onClick={() => assemblePackage.mutate({
-                                requestCaseId: rc.request_case_id,
-                                generatedBy: actor,
-                              }, { onError: notifyActionError('Assemble') })}
-                            >
-                              <Package className="h-3.5 w-3.5 mr-1" />
-                              Assemble
-                            </Button>
-                          )}
-                        </div>
-                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Completed Cases */}
-      {completedCases.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5 text-re-success" />
-            Completed ({completedCases.length})
-          </h2>
-          {completedCases.map(rc => (
-            <Card key={rc.request_case_id} className="opacity-75">
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Badge className="bg-re-success text-white">{rc.package_status === 'amended' ? 'Amended' : 'Submitted'}</Badge>
-                    <span className="text-sm">{rc.requesting_party}</span>
-                    <span className="text-xs text-muted-foreground">{rc.total_records} records</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {completedCases.length > 0 && (
+        <Section
+          spacing="app"
+          className="mt-8"
+          title={<>Completed ({completedCases.length})</>}
+        >
+          <div className="space-y-2">
+            {completedCases.map(rc => (
+              <Card key={rc.request_case_id} variant="inset" padding="compact">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <StatusBadge
+                      state={rc.package_status === 'amended' ? 'corrected' : 'exported'}
+                      label={rc.package_status === 'amended' ? 'Amended' : 'Submitted'}
+                      size="sm"
+                    />
+                    <span className="text-ui text-re-text-primary">{rc.requesting_party}</span>
+                    <span className="text-small text-re-text-tertiary">{rc.total_records} records</span>
+                  </div>
+                  <span className="text-small text-re-text-tertiary">
                     {new Date(rc.request_received_at).toLocaleDateString()}
                   </span>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
       )}
     </PageContainer>
   );

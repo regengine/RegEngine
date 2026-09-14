@@ -42,6 +42,7 @@ const CHROMELESS_EXACT_ROUTES = new Set([
   "/login",
   "/accept-invite",
   "/auth/verify",
+  "/auth/sso/mock",
 ]);
 
 export function matchesRoutePrefix(

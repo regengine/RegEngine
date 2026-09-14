@@ -2,12 +2,17 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Spinner } from '@/components/ui/spinner';
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { cn } from '@/lib/utils';
 import {
     ScrollText,
     Database,
@@ -25,7 +30,6 @@ import {
     Search,
     Download,
     Hash,
-    Info,
     Shield,
 } from 'lucide-react';
 
@@ -58,15 +62,17 @@ interface AuditLogResponse {
     entries: AuditEntry[];
 }
 
-/* ── Config ── */
+/* ── Config ──
+   Event type is expressed as an icon + label badge in a semantic tone, never
+   as a hard-coded hex piped through an inline style. */
 
-const EVENT_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
-    cte_recorded: { color: '#10b981', icon: Database, label: 'CTE Recorded' },
-    api_call: { color: '#3b82f6', icon: Webhook, label: 'API Call' },
-    compliance_change: { color: '#f59e0b', icon: AlertTriangle, label: 'Compliance' },
-    export: { color: '#8b5cf6', icon: Upload, label: 'Export' },
-    user_login: { color: '#6366f1', icon: User, label: 'Auth' },
-    alert: { color: '#ef4444', icon: AlertTriangle, label: 'Alert' },
+const EVENT_CONFIG: Record<string, { tone: BadgeTone; icon: React.ElementType; label: string }> = {
+    cte_recorded: { tone: 'success', icon: Database, label: 'CTE Recorded' },
+    api_call: { tone: 'info', icon: Webhook, label: 'API Call' },
+    compliance_change: { tone: 'warning', icon: AlertTriangle, label: 'Compliance' },
+    export: { tone: 'neutral', icon: Upload, label: 'Export' },
+    user_login: { tone: 'neutral', icon: User, label: 'Auth' },
+    alert: { tone: 'danger', icon: AlertTriangle, label: 'Alert' },
 };
 
 type EventFilter = 'all' | 'cte_recorded' | 'api_call' | 'compliance_change' | 'export' | 'user_login' | 'alert';
@@ -173,308 +179,335 @@ export default function AuditLogPage() {
     }, [entries, dataUpdatedAt]);
 
     return (
-        <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
-            <div className="mx-auto max-w-7xl space-y-6">
-                <Breadcrumbs items={[
-                    { label: 'Dashboard', href: '/dashboard' },
-                    { label: 'Audit Log' },
-                ]} />
-
-                {/* Header */}
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
-                            <ScrollText className="h-6 w-6 sm:h-7 sm:w-7 text-[var(--re-brand)]" />
-                            Audit Log
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Immutable, SHA-256 verified record of all system events
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {lastFetched && (
-                            <span className="text-[10px] text-muted-foreground">
-                                Updated {lastFetched.toLocaleTimeString()}
-                            </span>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => loadLog()} disabled={loading} className="h-8 w-8 p-0">
-                            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                        </Button>
-                        <Link href="/dashboard/export-jobs">
-                            <Button variant="outline" size="sm" className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]">
-                                <Download className="h-3 w-3 mr-1" /> Export
-                            </Button>
-                        </Link>
-                        <Badge variant="outline" className="text-[10px] py-1 hidden sm:inline-flex">
-                            <Shield className="h-3 w-3 mr-1 text-[var(--re-brand)]" /> Hash-chained
+        <PageContainer>
+            <PageHeader
+                title="Audit Log"
+                description="Immutable, SHA-256 verified record of all system events"
+                meta={
+                    <>
+                        {lastFetched && <span>Updated {lastFetched.toLocaleTimeString()}</span>}
+                        <Badge tone="neutral" size="sm" className="hidden sm:inline-flex">
+                            <Shield className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                            Hash-chained
                         </Badge>
-                    </div>
-                </div>
+                    </>
+                }
+                secondaryActions={
+                    <>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Refresh audit log"
+                            onClick={() => loadLog()}
+                            disabled={loading}
+                        >
+                            <RefreshCw
+                                className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                            />
+                        </Button>
+                        <Button variant="secondary" size="sm" asChild>
+                            <Link href="/dashboard/export-jobs">
+                                <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                Export
+                            </Link>
+                        </Button>
+                    </>
+                }
+            />
 
+            <div className="space-y-6">
                 {/* Auth gate */}
                 {!isLoggedIn && (
-                    <Card className="border-re-warning/30 bg-re-warning-muted0/[0.03]">
-                        <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                            Sign in to view the audit log.
-                        </CardContent>
-                    </Card>
+                    <Callout tone="warning" icon={Shield}>
+                        Sign in to view the audit log.
+                    </Callout>
                 )}
 
-                {/* Summary Stats */}
+                {/* Summary */}
                 {isLoggedIn && entries.length > 0 && (
-                    <motion.div
-                        className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                    >
-                        <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                            <div className="text-2xl sm:text-3xl font-bold tabular-nums">{total.toLocaleString()}</div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">Total Events</div>
-                        </div>
-                        <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                            <div className="text-2xl sm:text-3xl font-bold tabular-nums text-[var(--re-brand)]">{stats.today}</div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">Today</div>
-                        </div>
-                        <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                            <div className="text-2xl sm:text-3xl font-bold tabular-nums">{Object.keys(stats.typeCounts).length}</div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">Event Types</div>
-                        </div>
-                    </motion.div>
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                        <StatTile label="Total Events" value={total.toLocaleString()} />
+                        <StatTile label="Today" value={stats.today} />
+                        <StatTile label="Event Types" value={Object.keys(stats.typeCounts).length} />
+                    </div>
                 )}
 
                 {/* Loading */}
                 {loading && entries.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                    <div className="flex flex-col items-center justify-center gap-3 py-16">
                         <Spinner size="lg" />
-                        <p className="text-sm text-muted-foreground">Loading audit trail...</p>
+                        <p className="text-ui text-re-text-tertiary">Loading audit trail...</p>
                     </div>
                 )}
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-re-danger/30 bg-re-danger/[0.03]">
-                        <CardContent className="py-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3 text-re-danger">
-                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                    <div>
-                                        <p className="text-sm font-medium">Couldn&apos;t load the audit log</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">Check your connection and retry.</p>
-                                    </div>
-                                </div>
-                                <Button variant="outline" size="sm" className="rounded-xl text-xs flex-shrink-0 min-h-[44px]" onClick={() => loadLog()} disabled={loading}>
-                                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Retry
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <Callout
+                        tone="danger"
+                        role="alert"
+                        icon={AlertTriangle}
+                        title="Couldn't load the audit log"
+                        action={
+                            <Button variant="secondary" size="sm" onClick={() => loadLog()} disabled={loading}>
+                                <RefreshCw
+                                    className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                                    strokeWidth={1.75}
+                                    aria-hidden="true"
+                                />
+                                Retry
+                            </Button>
+                        }
+                    >
+                        Check your connection and retry.
+                    </Callout>
                 )}
 
-                {/* Filter + Search Bar */}
+                {/* Event list shell — toolbar, rows, pagination */}
                 {isLoggedIn && entries.length > 0 && (
-                    <div className="space-y-3">
-                        {/* Search */}
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search actions, actors, resources..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] text-sm placeholder:text-muted-foreground focus:outline-none focus:border-[var(--re-brand)] transition-colors"
-                            />
+                    <div className="rounded-lg border border-re-border bg-re-surface-card">
+                        {/* Toolbar */}
+                        <div className="space-y-3 border-b border-re-border-subtle px-4 py-3">
+                            <div className="w-full sm:max-w-sm">
+                                <label htmlFor="audit-log-search" className="sr-only">
+                                    Search actions, actors, resources
+                                </label>
+                                <Input
+                                    id="audit-log-search"
+                                    type="search"
+                                    placeholder="Search actions, actors, resources..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    leadingIcon={<Search strokeWidth={1.75} />}
+                                />
+                            </div>
+
+                            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-1">
+                                <Filter
+                                    className="h-4 w-4 shrink-0 text-re-text-muted"
+                                    strokeWidth={1.75}
+                                    aria-hidden="true"
+                                />
+                                {FILTER_OPTIONS.map((f) => {
+                                    const count = f.id === 'all' ? entries.length : (stats.typeCounts[f.id] || 0);
+                                    const active = filter === f.id;
+                                    return (
+                                        <button
+                                            key={f.id}
+                                            type="button"
+                                            aria-pressed={active}
+                                            onClick={() => setFilter(f.id)}
+                                            className={cn(
+                                                'flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[0.8125rem] font-medium transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-card motion-reduce:transition-none',
+                                                active
+                                                    ? 'border-re-border-strong bg-re-surface-inset text-re-text-primary'
+                                                    : 'border-re-border bg-re-surface-card text-re-text-secondary hover:bg-re-surface-inset hover:text-re-text-primary'
+                                            )}
+                                        >
+                                            {f.label}
+                                            {count > 0 && (
+                                                <span className="font-mono text-label tabular-nums text-re-text-tertiary">
+                                                    {count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
 
-                        {/* Filter chips */}
-                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                            <Filter className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                            {FILTER_OPTIONS.map((f) => {
-                                const count = f.id === 'all' ? entries.length : (stats.typeCounts[f.id] || 0);
-                                return (
-                                    <button
-                                        key={f.id}
-                                        onClick={() => setFilter(f.id)}
-                                        className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium border transition-all whitespace-nowrap min-h-[32px] active:scale-[0.96] flex-shrink-0 flex items-center gap-1 ${
-                                            filter === f.id
-                                                ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
-                                                : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]/50'
-                                        }`}
-                                    >
-                                        {f.label}
-                                        {count > 0 && (
-                                            <span className={`text-[9px] px-1 rounded-full ${filter === f.id ? 'bg-white/20' : 'bg-[var(--re-surface-card)]'}`}>
-                                                {count}
-                                            </span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
+                        {/* Rows */}
+                        {filtered.length > 0 ? (
+                            <ul className="divide-y divide-re-border-subtle">
+                                {filtered.map((entry) => {
+                                    const config = EVENT_CONFIG[entry.event_type] || EVENT_CONFIG.cte_recorded;
+                                    const Icon = config.icon;
+                                    const isExpanded = expandedId === entry.id;
 
-                {/* Event List */}
-                {isLoggedIn && filtered.length > 0 && (
-                    <div className="space-y-1.5">
-                        {filtered.map((entry, i) => {
-                            const config = EVENT_CONFIG[entry.event_type] || EVENT_CONFIG.cte_recorded;
-                            const Icon = config.icon;
-                            const isExpanded = expandedId === entry.id;
-
-                            return (
-                                <motion.div
-                                    key={entry.id}
-                                    initial={{ opacity: 0, y: 6 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: Math.min(i * 0.02, 0.5) }}
-                                >
-                                    <div
-                                        className={`p-3 rounded-xl border transition-all cursor-pointer ${isExpanded ? 'border-[var(--re-brand)] bg-[var(--re-surface-elevated)]' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]/50'}`}
-                                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                                    >
-                                        <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                                            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-0"
-                                                style={{ background: `${config.color}15` }}>
-                                                <Icon className="h-3.5 w-3.5" style={{ color: config.color }} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-1.5 flex-wrap">
-                                                    <span className="text-xs sm:text-sm font-medium">{entry.action}</span>
-                                                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0"
-                                                        style={{ background: `${config.color}15`, color: config.color }}>
-                                                        {config.label}
-                                                    </Badge>
-                                                </div>
-                                                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                                                    <span className="truncate">{entry.actor}</span>
-                                                    <span className="hidden sm:inline text-muted-foreground/50">→</span>
-                                                    <span className="truncate hidden sm:inline">{entry.resource}</span>
-                                                </div>
-                                            </div>
-                                            <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                <div>
-                                                    <div className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                                        <Clock className="h-3 w-3" /> {formatTimeAgo(entry.timestamp)}
+                                    return (
+                                        <li key={entry.id}>
+                                            <button
+                                                type="button"
+                                                aria-expanded={isExpanded}
+                                                onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                                                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-120 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none sm:items-center"
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-ui font-medium text-re-text-primary">
+                                                            {entry.action}
+                                                        </span>
+                                                        <Badge tone={config.tone} size="sm">
+                                                            <Icon
+                                                                className="h-3.5 w-3.5 shrink-0"
+                                                                strokeWidth={1.75}
+                                                                aria-hidden="true"
+                                                            />
+                                                            {config.label}
+                                                        </Badge>
                                                     </div>
-                                                    {entry.hash && (
-                                                        <div className="text-[9px] font-mono text-muted-foreground/40 mt-0.5 hidden sm:block">
-                                                            <Hash className="h-2.5 w-2.5 inline mr-0.5" />{entry.hash.slice(0, 10)}
+                                                    <div className="mt-0.5 flex items-center gap-1.5 text-small text-re-text-tertiary">
+                                                        <span className="truncate">{entry.actor}</span>
+                                                        <span className="hidden sm:inline" aria-hidden="true">→</span>
+                                                        <span className="hidden truncate sm:inline">{entry.resource}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex shrink-0 items-center gap-2 text-right">
+                                                    <div>
+                                                        <div className="flex items-center justify-end gap-1 text-small text-re-text-tertiary">
+                                                            <Clock
+                                                                className="h-3 w-3"
+                                                                strokeWidth={1.75}
+                                                                aria-hidden="true"
+                                                            />
+                                                            {formatTimeAgo(entry.timestamp)}
+                                                        </div>
+                                                        {entry.hash && (
+                                                            <div className="mt-0.5 hidden items-center justify-end gap-1 font-mono text-label text-re-text-muted sm:flex">
+                                                                <Hash
+                                                                    className="h-3 w-3"
+                                                                    strokeWidth={1.75}
+                                                                    aria-hidden="true"
+                                                                />
+                                                                {entry.hash.slice(0, 10)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <ChevronDown
+                                                        className={cn(
+                                                            'h-4 w-4 text-re-text-muted transition-transform duration-120 motion-reduce:transition-none',
+                                                            isExpanded && 'rotate-180'
+                                                        )}
+                                                        strokeWidth={1.75}
+                                                        aria-hidden="true"
+                                                    />
+                                                </div>
+                                            </button>
+
+                                            {isExpanded && (
+                                                <dl className="grid grid-cols-1 gap-2 border-t border-re-border-subtle bg-re-surface-inset px-4 py-3 text-small sm:grid-cols-2">
+                                                    <div>
+                                                        <dt className="inline text-re-text-tertiary">Timestamp:</dt>{' '}
+                                                        <dd className="inline font-mono text-re-text-secondary">
+                                                            {new Date(entry.timestamp).toLocaleString()}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="inline text-re-text-tertiary">Category:</dt>{' '}
+                                                        <dd className="inline capitalize text-re-text-secondary">
+                                                            {entry.category}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="inline text-re-text-tertiary">Actor:</dt>{' '}
+                                                        <dd className="inline text-re-text-secondary">{entry.actor}</dd>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <dt className="inline text-re-text-tertiary">Resource:</dt>{' '}
+                                                        <dd className="inline break-all font-mono text-re-text-secondary">
+                                                            {entry.resource}
+                                                        </dd>
+                                                    </div>
+                                                    {entry.ip_address && (
+                                                        <div>
+                                                            <dt className="inline text-re-text-tertiary">IP:</dt>{' '}
+                                                            <dd className="inline font-mono text-re-text-secondary">
+                                                                {entry.ip_address}
+                                                            </dd>
                                                         </div>
                                                     )}
-                                                </div>
-                                                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                            </div>
-                                        </div>
-
-                                        {/* Expanded details */}
-                                        <AnimatePresence>
-                                            {isExpanded && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, height: 0 }}
-                                                    animate={{ opacity: 1, height: 'auto' }}
-                                                    exit={{ opacity: 0, height: 0 }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    <div className="mt-3 pt-3 border-t border-[var(--re-border-default)] grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                                        <div>
-                                                            <span className="text-muted-foreground">Timestamp:</span>{' '}
-                                                            <span className="font-mono">{new Date(entry.timestamp).toLocaleString()}</span>
+                                                    {entry.hash && (
+                                                        <div className="sm:col-span-2">
+                                                            <dt className="inline text-re-text-tertiary">SHA-256:</dt>{' '}
+                                                            <dd className="inline break-all font-mono text-re-text-secondary">
+                                                                {entry.hash}
+                                                            </dd>
                                                         </div>
-                                                        <div>
-                                                            <span className="text-muted-foreground">Category:</span>{' '}
-                                                            <span className="capitalize">{entry.category}</span>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-muted-foreground">Actor:</span>{' '}
-                                                            <span>{entry.actor}</span>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-muted-foreground">Resource:</span>{' '}
-                                                            <span className="font-mono truncate">{entry.resource}</span>
-                                                        </div>
-                                                        {entry.ip_address && (
-                                                            <div>
-                                                                <span className="text-muted-foreground">IP:</span>{' '}
-                                                                <span className="font-mono">{entry.ip_address}</span>
-                                                            </div>
-                                                        )}
-                                                        {entry.hash && (
-                                                            <div className="sm:col-span-2">
-                                                                <span className="text-muted-foreground">SHA-256:</span>{' '}
-                                                                <span className="font-mono text-[10px] break-all">{entry.hash}</span>
-                                                            </div>
-                                                        )}
-                                                        {entry.details && Object.keys(entry.details).length > 0 && (
-                                                            <div className="sm:col-span-2">
-                                                                <span className="text-muted-foreground">Metadata:</span>
-                                                                <pre className="mt-1 p-2 rounded-lg bg-[var(--re-surface-card)] text-[10px] font-mono overflow-x-auto">
+                                                    )}
+                                                    {entry.details && Object.keys(entry.details).length > 0 && (
+                                                        <div className="sm:col-span-2">
+                                                            <dt className="text-re-text-tertiary">Metadata:</dt>
+                                                            <dd>
+                                                                <pre className="mt-1 overflow-x-auto rounded-md bg-re-surface-card p-2 font-mono text-label leading-4 text-re-text-secondary">
                                                                     {JSON.stringify(entry.details, null, 2)}
                                                                 </pre>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </motion.div>
+                                                            </dd>
+                                                        </div>
+                                                    )}
+                                                </dl>
                                             )}
-                                        </AnimatePresence>
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        ) : (
+                            <EmptyState
+                                bare
+                                size="sm"
+                                icon={Search}
+                                title="No matching events"
+                                description="No audit entries on this page match the current search and filter."
+                            />
+                        )}
 
-                {/* Pagination */}
-                {isLoggedIn && totalPages > 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                        <span className="text-[11px] text-muted-foreground">
-                            Page {page} of {totalPages} ({total.toLocaleString()} entries)
-                        </span>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="rounded-xl h-9 w-9 p-0 active:scale-[0.97]" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="sm" className="rounded-xl h-9 w-9 p-0 active:scale-[0.97]" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between border-t border-re-border-subtle px-4 py-2">
+                                <span className="text-small text-re-text-tertiary">
+                                    Page {page} of {totalPages} ({total.toLocaleString()} entries)
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Previous page"
+                                        disabled={page <= 1}
+                                        onClick={() => setPage(p => p - 1)}
+                                    >
+                                        <ChevronLeft strokeWidth={1.75} aria-hidden="true" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Next page"
+                                        disabled={page >= totalPages}
+                                        onClick={() => setPage(p => p + 1)}
+                                    >
+                                        <ChevronRight strokeWidth={1.75} aria-hidden="true" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* Empty state */}
                 {isLoggedIn && !loading && entries.length === 0 && !error && (
-                    <motion.div
-                        className="flex flex-col items-center justify-center py-16 text-center"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                    >
-                        <ScrollText className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                        <h2 className="text-lg font-semibold">No Audit Entries Yet</h2>
-                        <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                            Events will appear here as your team scans labels, imports data, and generates reports. Every action is SHA-256 hash-chained and protected from modification by append-only database triggers.
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-4 text-xs text-re-brand">
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                            <span>SHA-256 hash chain ready</span>
-                        </div>
-                    </motion.div>
+                    <EmptyState
+                        icon={ScrollText}
+                        title="No Audit Entries Yet"
+                        description="Events will appear here as your team scans labels, imports data, and generates reports. Every action is SHA-256 hash-chained and protected from modification by append-only database triggers."
+                        action={
+                            <Badge tone="success">
+                                <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                SHA-256 hash chain ready
+                            </Badge>
+                        }
+                    />
                 )}
 
                 {/* Chain integrity footer */}
                 {isLoggedIn && entries.length > 0 && (
-                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                        <CardContent className="py-3">
-                            <div className="flex items-start gap-3">
-                                <Info className="h-4 w-4 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
-                                <div className="text-xs text-muted-foreground leading-relaxed">
-                                    <span className="font-medium text-foreground">Tamper-evident audit trail: </span>
-                                    Every entry is cryptographically chained using SHA-256. Database triggers prevent modification or deletion.
-                                    Designed to support 21 CFR Part 11-style record controls and long-term retention.
-                                </div>
-                            </div>
+                    <Card variant="inset">
+                        <CardContent className="p-4 text-ui text-re-text-secondary">
+                            <span className="font-medium text-re-text-primary">Tamper-evident audit trail: </span>
+                            Every entry is cryptographically chained using SHA-256. Database triggers prevent modification or deletion.
+                            Designed to support 21 CFR Part 11-style record controls and long-term retention.
                         </CardContent>
                     </Card>
                 )}
             </div>
-        </div>
+        </PageContainer>
     );
 }

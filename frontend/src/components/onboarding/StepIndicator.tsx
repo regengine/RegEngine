@@ -1,9 +1,12 @@
 /**
- * StepIndicator — lightweight "Step X of N" pill used across onboarding pages.
+ * StepIndicator — the "Step X of N" marker used across onboarding pages.
  *
- * Placed inside each page's CardHeader so users always know where they are
- * in the setup flow independent of the layout's visual stepper.
+ * SPEC §6 / proposal-A §6.6: a neutral mono Badge at the top of the step card,
+ * so the card says where you are independently of the layout's stepper. The
+ * rendered text stays "Step 1 of 3" (uppercased visually only) and the
+ * aria-label is unchanged — both are asserted by page tests.
  */
+import { Badge } from "@/components/ui/badge";
 
 interface StepIndicatorProps {
     /** Current step number (1-based). */
@@ -14,11 +17,14 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ step, total = 3 }: StepIndicatorProps) {
     return (
-        <span
+        <Badge
+            tone="neutral"
+            size="sm"
+            mono
             aria-label={`Step ${step} of ${total}`}
-            className="inline-flex items-center rounded-full border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-[var(--re-text-muted)]"
+            className="uppercase"
         >
             Step {step} of {total}
-        </span>
+        </Badge>
     );
 }

@@ -3,7 +3,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Fingerprint, Loader2 } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { isValidEmail, performPasskeyLogin, seedPasswordlessClientUser } from '@/lib/passwordless-auth';
@@ -60,12 +63,12 @@ export function StepUpModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] sm:max-w-md">
+      <DialogContent className="border-re-border bg-re-surface-card sm:max-w-md">
         <DialogHeader>
-          <div className="mb-2 inline-flex w-fit items-center gap-2 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
+          <Badge tone="neutral" mono className="mb-2 w-fit uppercase">
             <Fingerprint className="h-3.5 w-3.5" aria-hidden="true" />
             Step-up required
-          </div>
+          </Badge>
           <DialogTitle>Authenticate with your passkey</DialogTitle>
           <DialogDescription>
             This action requires a high-assurance session before it can continue.
@@ -73,36 +76,34 @@ export function StepUpModal() {
         </DialogHeader>
 
         {error && (
-          <div role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400">
+          <Callout tone="danger" role="alert">
             {error}
-          </div>
+          </Callout>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--re-text-secondary)]" htmlFor="step-up-email">
-              Email address
-            </label>
+          <Field label="Email address" htmlFor="step-up-email">
             <Input
               id="step-up-email"
               type="email"
+              size="lg"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="name@company.com"
               autoComplete="email webauthn"
               disabled={isSubmitting}
             />
-          </div>
-          <Button type="submit" className="h-11 w-full gap-2" disabled={isSubmitting}>
+          </Field>
+          <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
                 Waiting for passkey...
               </>
             ) : (
               <>
                 Authenticate with passkey
-                <Fingerprint className="h-4 w-4" aria-hidden="true" />
+                <Fingerprint aria-hidden="true" />
               </>
             )}
           </Button>

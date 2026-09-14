@@ -1,13 +1,15 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import { Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 import { filterExperimentalToolLinks } from '@/lib/experimental-features';
-import { Zap } from 'lucide-react';
 
 interface FreeToolPageShellProps {
     /** Tool name shown in breadcrumb and title (e.g. "Supply Chain Knowledge Graph") */
@@ -20,6 +22,18 @@ interface FreeToolPageShellProps {
     children: React.ReactNode;
 }
 
+/**
+ * Shell for every free tool page — SPEC §6 "Free tool" template.
+ *
+ * The grey hero band and the separately boxed title block collapse into one
+ * `PageHeader`: breadcrumb, H1, lede, and the "Free Tool — No Login Required"
+ * badge in the meta slot. The header is never boxed and carries no shadow; the
+ * hairline under it is the only rule.
+ *
+ * Prop API and every string are unchanged — "RegEngine • {title}",
+ * "Free Tool — No Login Required", "Educational Tool" and the disclaimer are
+ * all asserted copy.
+ */
 export function FreeToolPageShell({
     title,
     subtitle,
@@ -31,61 +45,42 @@ export function FreeToolPageShell({
     );
 
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] p-4 pt-4 md:p-8">
-            <div className="mx-auto max-w-7xl space-y-6">
-                {/* Breadcrumb */}
-                <Breadcrumbs
-                    items={[
-                        { label: 'Free Tools', href: '/tools' },
-                        { label: title },
-                    ]}
-                />
-
-                {/* Title Block */}
-                <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5 shadow-sm md:p-6">
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div>
-                        <h1 className="text-3xl font-semibold tracking-tight text-[var(--re-text-primary)]">
-                            RegEngine • {title}
-                        </h1>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                            {subtitle}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Badge className="bg-[var(--re-brand)] rounded-xl py-1 px-3">
-                            <Zap className="mr-2 h-4 w-4 inline" />
+        <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
+            <Container width="tool">
+                <PageHeader
+                    breadcrumbs={
+                        <Breadcrumbs
+                            className="mb-0"
+                            items={[
+                                { label: 'Free Tools', href: '/tools' },
+                                { label: title },
+                            ]}
+                        />
+                    }
+                    title={`RegEngine • ${title}`}
+                    description={subtitle}
+                    meta={
+                        <Badge tone="brand">
+                            <Zap aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.75} />
                             Free Tool — No Login Required
                         </Badge>
-                    </div>
-                </div>
-                </div>
+                    }
+                />
 
-                {/* Tool Content */}
-                <div className="mt-6">{children}</div>
+                <div className="space-y-6">{children}</div>
 
-                {/* Compliance Note */}
-                <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4 shadow-sm md:p-6 mt-8">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <div className="text-sm font-medium">
-                                Educational Tool
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                Free self-check tool. Not a compliance certification or regulatory determination.
-                            </div>
-                        </div>
-                        <Badge variant="secondary" className="rounded-xl">
-                            Free Tool
-                        </Badge>
-                    </div>
-                </div>
+                <Callout
+                    tone="neutral"
+                    role="note"
+                    title="Educational Tool"
+                    className="mt-8"
+                    action={<Badge tone="neutral">Free Tool</Badge>}
+                >
+                    Free self-check tool. Not a compliance certification or regulatory determination.
+                </Callout>
 
-                {/* Related Tools */}
-                {relatedTools.length > 0 && (
-                    <RelatedTools tools={relatedTools} />
-                )}
-            </div>
+                {relatedTools.length > 0 && <RelatedTools tools={relatedTools} />}
+            </Container>
         </div>
     );
 }
