@@ -2,18 +2,32 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronRight, LayoutDashboard } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
+/**
+ * Human labels for dashboard sub-routes. Without an entry a slug falls back to
+ * naive capitalisation ("agent-reviews" → "Agent-reviews"), so every route the
+ * console links to gets a real label here.
+ */
 const LABEL_MAP: Record<string, string> = {
     compliance: 'Compliance',
     alerts: 'Alerts',
-    'recall-report': 'Recall Report',
-    suppliers: 'Suppliers',
-    products: 'Products',
+    'agent-reviews': 'Agent reviews',
     'audit-log': 'Audit Log',
+    'export-jobs': 'FDA Export',
+    heartbeat: 'Heartbeat',
+    'inflow-lab': 'Inflow Lab',
+    integrations: 'Integrations',
+    issues: 'Issues',
     notifications: 'Notifications',
-    team: 'Team',
+    products: 'Products',
+    'qa-health': 'QA Health',
+    'recall-drills': 'Recall Drills',
+    'recall-report': 'Recall Report',
+    'recall-response': 'Recall Response',
     settings: 'Settings',
+    suppliers: 'Suppliers',
+    team: 'Team',
 };
 
 export function DashboardBreadcrumb() {
@@ -27,13 +41,17 @@ export function DashboardBreadcrumb() {
     const label = LABEL_MAP[subPage] || subPage.charAt(0).toUpperCase() + subPage.slice(1);
 
     return (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4 px-4 pt-4">
-            <Link href="/dashboard" className="flex items-center gap-1 hover:text-foreground transition-colors">
-                <LayoutDashboard className="h-3 w-3" />
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-small text-re-text-muted">
+            <Link
+                href="/dashboard"
+                className="rounded-sm text-re-text-muted transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
+            >
                 Dashboard
             </Link>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-foreground font-medium">{label}</span>
-        </div>
+            <ChevronRight className="h-3 w-3 shrink-0 text-re-text-disabled" strokeWidth={1.75} aria-hidden="true" />
+            <span aria-current="page" className="truncate font-medium text-re-text-primary">
+                {label}
+            </span>
+        </nav>
     );
 }
