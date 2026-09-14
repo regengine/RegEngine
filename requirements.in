@@ -39,7 +39,7 @@ gunicorn>=26.2.0
 # Proven against a live migrated schema, not assumed: the gate fails at 1.19.1
 # without the fix (29 operations), passes with it, and still fails when an
 # ORM-only CHECK is introduced — so the blind spot did not widen.
-alembic>=1.19.1
+alembic>=1.19.2
 psycopg[binary]>=3.3.4
 psycopg2-binary>=2.9.12
 asyncpg>=0.31.0
