@@ -2,6 +2,32 @@
 @config "../../tailwind.config.ts";
 @source "../**/*.{ts,tsx}";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   RegEngine global stylesheet.
+
+   Structure (see scratchpad/design/SPEC.md):
+     1. Inflow Lab embed skin   — KEPT VERBATIM. A separate product surface.
+     2. Design tokens           — one layer, light + dark, both complete.
+     3. Legacy class aliases    — plain rules, no !important.
+     4. Utilities + a11y        — KEPT VERBATIM. Unlayered, so they outrank
+                                  the token layer, which is what lets the
+                                  AccessibilityWidget override anything.
+     5. Transitional scaffolding — deleted in the final migration commit.
+
+   This file replaced 1839 lines that stacked five competing token systems,
+   each overriding the last with !important.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────────────────────────────────────────────────────
+   1. INFLOW LAB EMBED SKIN — KEPT VERBATIM
+   The embedded operator console is a separate product surface with its own
+   light slate palette. src/__tests__/styles/globals-css-invariants.test.ts
+   parses this block and requires every position-indexed section selector to
+   carry :not([data-inflow-lab-mode="dashboard"]).
+   ─────────────────────────────────────────────────────────────────────────── */
+@config "../../tailwind.config.ts";
+@source "../**/*.{ts,tsx}";
+
 body[data-inflow-lab="true"] > a[href="#main-content"],
 body[data-inflow-lab="true"] nav[aria-label="Main navigation"],
 body[data-inflow-lab="true"] footer,
@@ -210,7 +236,6 @@ body[data-inflow-lab="true"] {
     }
 }
 
-
 @layer base {
 
     /* Tailwind v4 defaults an unspecified border-color to `currentColor`, where
@@ -227,143 +252,161 @@ body[data-inflow-lab="true"] {
         border-color: #e2e8f0;
     }
 
-    /*
-   * RegEngine Theme System
-   * Maps the brand palette to shadcn/ui CSS variable tokens.
-   * Dark (default): Background #06090f  Foreground #c8d1dc  Accent #10b981
-   * Light: Background #ffffff  Foreground #1a1a2e  Accent #059669
-   */
-    :root {
-        /* Core surfaces */
-        --background: 220 43% 4%;
-        /* #06090f */
-        --foreground: 214 18% 82%;
-        /* #c8d1dc */
+}
 
-        /* Cards & popovers */
-        --card: 220 30% 6%;
-        /* ~#0c1017 */
-        --card-foreground: 214 18% 82%;
-        /* #c8d1dc */
-        --popover: 220 30% 6%;
-        --popover-foreground: 214 18% 82%;
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*   2. DESIGN TOKENS                                                          */
+/* ─────────────────────────────────────────────────────────────────────────── */
 
-        /* Primary (emerald accent) */
-        --primary: 160 81% 39%;
-        /* #10b981 */
-        --primary-foreground: 220 43% 4%;
+/* ═══════════════════════════════════════════════════════════════════════════
+   RegEngine design tokens — the single source of truth.
 
-        /* Secondary */
-        --secondary: 217 19% 12%;
-        /* subtle surfaces */
-        --secondary-foreground: 214 18% 82%;
+   One layer, two complete palettes. Every token is defined in BOTH `:root`
+   (light) and `.dark`; nothing inherits a light value into dark. Ratios in the
+   comments are WCAG 2.x, computed by scratchpad/design/wcag.mjs, not estimated.
 
-        /* Muted */
-        --muted: 217 19% 12%;
-        --muted-foreground: 215 16% 47%;
-        /* #64748b */
+   Rules that keep this layer honest:
+     · brand green appears only as: the one primary button per view region, the
+       focus ring, prose links, "Engine" in the wordmark, the 2px active-nav
+       rail, and the hero stat's sparkline. Never a fill, wash or heading.
+     · red / amber / green / blue / violet appear only inside StatusBadge,
+       Callout, a table's status column and a StatTile delta arrow — and always
+       with an icon AND a text label, never colour alone.
+     · text never wears the status colour; a coloured mark sits beside it.
+   See scratchpad/design/SPEC.md §1.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-        /* Accent */
-        --accent: 160 81% 39%;
-        /* #10b981 */
-        --accent-foreground: 220 43% 4%;
+@layer base {
 
-        /* Destructive */
-        --destructive: 0 84% 60%;
-        /* red-500 */
-        --destructive-foreground: 0 0% 98%;
+    :root,
+    .light {
+        color-scheme: light;
 
-        /* Borders & inputs */
-        --border: 217 19% 14%;
-        /* subtle border */
-        --input: 217 19% 14%;
-        --ring: 160 81% 39%;
-        /* focus ring = accent */
+        /* ── Surfaces ─────────────────────────────────────────────────── */
+        --re-surface-base: #f5f6f8;
+        --re-surface-card: #ffffff;
+        --re-surface-elevated: #ffffff;
+        --re-surface-overlay: #14181f7a;
+        --re-surface-inset: #eef0f3;
+        --re-surface-secondary: #eef0f3;
+        --re-surface-muted: #eef0f3;
+        /* Always-opposite pair, for tooltips and other high-contrast overlays.
+           16.46:1 — the tooltip used to be text-white on surface-base, i.e.
+           near-white on near-white in light mode. */
+        --re-surface-inverse: #14181f;
+        --re-text-inverse: #f5f6f8;
 
-        /* Border radius */
-        --radius: 0.5rem;
+        /* ── Text ─────────────────────────────────────────────────────── */
+        --re-text-primary: #14181f;
+        /* 16.46 on base · 17.79 on card */
+        --re-text-secondary: #3d4552;
+        /* 8.94 · 9.67  — body */
+        --re-text-tertiary: #5c6573;
+        /* 5.45 · 5.89 */
+        --re-text-muted: #636c7a;
+        /* 4.91 · 5.31 */
+        --re-text-disabled: #9aa3af;
+        /* disabled controls only — WCAG-exempt */
+        --re-text-dim: #636c7a;
 
-        /* ─── RegEngine Extended Tokens ──────────────────────── */
+        /* ── Borders ──────────────────────────────────────────────────── */
+        --re-border-subtle: #e8ebef;
+        --re-border-default: #d6dbe2;
+        --re-border-strong: #7c8694;
+        /* 3.41 on base — clears the 3:1 UI minimum */
+        --re-border: #d6dbe2;
+        --re-surface-border: #d6dbe2;
 
-        /* Brand */
-        --re-brand: #10b981;
-        --re-brand-dark: #059669;
-        --re-brand-light: #34d399;
-        --re-brand-muted: #10b9811a;
+        /* ── Brand ────────────────────────────────────────────────────── */
+        --re-brand: #047857;
+        /* 5.07 as text on base */
+        --re-brand-dark: #065f46;
+        --re-brand-light: #10b981;
+        --re-brand-muted: #e6f2ee;
+        /* brand text on it: 4.78 */
+        --re-brand-foreground: #ffffff;
+        /* on brand fill: 5.48 */
+        --re-brand-rgb: 4 120 87;
 
-        /* Stage Colors (Semantic) */
-        --re-discovery: #3b82f6;
-        /* blue-500 */
-        --re-decomposition: #10b981;
-        /* brand */
-        --re-linkage: #a855f7;
-        /* purple-500 */
-        --re-evidence: #f59e0b;
-        /* amber-500 */
+        /* ── Status ───────────────────────────────────────────────────── */
+        --re-success: #157347;
+        --re-success-bg: #e6f5ec;
+        --re-success-border: #6abd8e;
+        --re-success-muted: #d3eddd;
+        --re-warning: #9a4d00;
+        --re-warning-bg: #fdf1e0;
+        --re-warning-border: #dda23c;
+        --re-warning-muted: #f9e4bf;
+        --re-danger: #b42318;
+        --re-danger-bg: #fdecea;
+        --re-danger-border: #eb9289;
+        --re-danger-muted: #fbd6d2;
+        --re-danger-foreground: #ffffff;
+        --re-info: #1d4ed8;
+        --re-info-bg: #e9f0fd;
+        --re-info-border: #85a8ec;
+        --re-info-muted: #d5e2fb;
 
-        /* Surfaces */
-        --re-surface-base: #06090f;
-        --re-surface-card: #0c1017;
-        --re-surface-border: #1e293b;
-        --re-surface-elevated: #111827;
-        --re-surface-overlay: #06090fcc;
+        /* ── Focus & selection ────────────────────────────────────────── */
+        --re-focus-ring: #047857;
+        --re-ring-offset: #f5f6f8;
+        --re-selection: #d7f0e4;
 
-        /* Text */
-        --re-text-primary: #f8fafc;
-        --re-text-secondary: #c8d1dc;
-        --re-text-tertiary: #94a3b8;
-        --re-text-muted: #8b9bb5;
-        --re-text-disabled: #6b7a8d;
+        /* ── Categorical (facility types, graph nodes, pipeline stages).
+              Never used for status. ─────────────────────────────────── */
+        --re-cat-1: #1d4ed8;
+        --re-cat-2: #b45309;
+        --re-cat-3: #157347;
+        --re-cat-4: #6d28d9;
+        --re-cat-5: #0e7490;
+        --re-cat-6: #9f1239;
 
-        /* Borders */
-        --re-border-default: #1e293b;
-        --re-border-subtle: #334155;
-        --re-border-strong: #475569;
+        /* ── shadcn/ui bridge (consumed as hsl(var(--x)) by tailwind.config) ── */
+        --background: 220 18% 97%;
+        --foreground: 218 22% 10%;
+        --card: 0 0% 100%;
+        --card-foreground: 218 22% 10%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 218 22% 10%;
+        --primary: 163 94% 24%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 216 17% 94%;
+        --secondary-foreground: 218 22% 10%;
+        --muted: 216 17% 94%;
+        --muted-foreground: 217 10% 43%;
+        --accent: 160 30% 93%;
+        --accent-foreground: 163 94% 24%;
+        --destructive: 4 76% 40%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 215 17% 86%;
+        --input: 215 17% 86%;
+        --ring: 163 94% 24%;
+        --radius: 0.375rem;
 
-        /* Status */
-        --re-success: #10b981;
-        --re-success-muted: #10b98126;
-        --re-success-bg: #10b98114;
-        --re-success-border: #10b98126;
-        --re-warning: #f59e0b;
-        --re-warning-muted: #f59e0b26;
-        --re-warning-bg: #f59e0b14;
-        --re-warning-border: #f59e0b26;
-        --re-danger: #ef4444;
-        --re-danger-muted: #ef444426;
-        --re-danger-bg: #ef444414;
-        --re-danger-border: #ef444426;
-        --re-info: #3b82f6;
-        --re-info-muted: #3b82f626;
-        --re-info-bg: #3b82f614;
-        --re-info-border: #3b82f626;
-        --re-sticky-bg: #06090feb;
+        /* ── Shadows. Elevation is surface-step + border; shadow is the
+              exception, not the mechanism. ───────────────────────────── */
+        --re-shadow-sm: 0 1px 2px #14181f0f;
+        --re-shadow-md: 0 4px 12px #14181f14, 0 1px 2px #14181f0a;
+        --re-shadow-lg: 0 16px 40px #14181f1f, 0 2px 6px #14181f0f;
+        --re-shadow-glow: 0 0 0 3px var(--re-brand-muted);
+        --re-shadow-glow-strong: 0 0 0 3px var(--re-brand-muted);
 
-        /* Shadows */
-        --re-shadow-sm: 0 1px 2px 0 #0000004d;
-        --re-shadow-md: 0 4px 6px -1px #0006, 0 2px 4px -2px #0000004d;
-        --re-shadow-lg: 0 10px 15px -3px #00000080, 0 4px 6px -4px #0006;
-        --re-shadow-glow: 0 0 20px #10b98126;
-        --re-shadow-glow-strong: 0 0 40px #10b98140;
+        /* ── Type families. Marketing wears Outfit; the product wears Inter. ── */
+        --re-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --re-font-display: "Outfit", "Inter", system-ui, -apple-system, sans-serif;
+        --re-font-serif: Georgia, "Times New Roman", serif;
+        --re-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-        /* Transitions */
-        --re-transition-fast: .15s cubic-bezier(.4, 0, .2, 1);
-        --re-transition-normal: .2s cubic-bezier(.4, 0, .2, 1);
-        --re-transition-slow: .3s cubic-bezier(.4, 0, .2, 1);
-
-        /* Typography */
-        --re-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-        --re-font-display: 'Outfit', system-ui, -apple-system, sans-serif;
-        --re-font-serif: 'Fraunces', Georgia, serif;
-        --re-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-        /* Radius and layering aliases for new UI work */
-        --re-radius-sm: 0.25rem;
-        --re-radius-md: 0.5rem;
-        --re-radius-lg: 0.75rem;
-        --re-radius-xl: 1rem;
-        --re-radius-2xl: 1.5rem;
+        /* ── Radius / motion / layering ───────────────────────────────── */
+        --re-radius-sm: 4px;
+        --re-radius-md: 6px;
+        --re-radius-lg: 8px;
+        --re-radius-xl: 12px;
+        --re-radius-2xl: 12px;
         --re-radius-pill: 9999px;
+        --re-transition-fast: 120ms cubic-bezier(.2, 0, 0, 1);
+        --re-transition-normal: 180ms cubic-bezier(.2, 0, 0, 1);
+        --re-transition-slow: 240ms cubic-bezier(.2, 0, 0, 1);
         --re-z-base: 0;
         --re-z-raised: 1;
         --re-z-sticky: 40;
@@ -372,129 +415,401 @@ body[data-inflow-lab="true"] {
         --re-z-modal: 102;
         --re-z-toast: 9999;
 
-        /* ─── Theme-Aware Nav/Layout Tokens ─────────────── */
-        --re-nav-bg: #06090fd9;
-        --re-nav-border: #ffffff0a;
-        --re-nav-dropdown-bg: #0f141efa;
-        --re-nav-dropdown-border: #ffffff14;
-        --re-nav-dropdown-shadow: 0 20px 50px #0009;
-        --re-nav-hover: #ffffff0d;
-        --re-nav-divider: #ffffff0f;
-        --re-mobile-menu-bg: #06090ff7;
-        --re-mobile-border: #ffffff0a;
-        --re-mobile-toggle-border: #ffffff1f;
+        /* ── Chrome aliases ───────────────────────────────────────────── */
+        --re-sticky-bg: #f5f6f8f2;
+        --re-nav-bg: var(--re-sticky-bg);
+        --re-nav-border: var(--re-border-subtle);
+        --re-nav-dropdown-bg: var(--re-surface-elevated);
+        --re-nav-dropdown-border: var(--re-border-default);
+        --re-nav-dropdown-shadow: var(--re-shadow-lg);
+        --re-nav-hover: var(--re-surface-inset);
+        --re-nav-divider: var(--re-border-subtle);
+        --re-mobile-menu-bg: var(--re-surface-elevated);
+        --re-mobile-border: var(--re-border-subtle);
+        --re-mobile-toggle-border: var(--re-border-default);
+
+        /* ── Compliance-object state vocabulary.
+              "corrected" keeps its own violet: without it, corrected and
+              event would differ only by a 14px glyph in a dense STATE
+              column. Verified fg-on-bg 6.31. ───────────────────────── */
+        --re-state-invited: var(--re-text-tertiary);
+        --re-state-invited-bg: var(--re-surface-inset);
+        --re-state-invited-border: var(--re-border-default);
+        --re-state-corrected: #6d28d9;
+        --re-state-corrected-bg: #f4efff;
+        --re-state-corrected-border: #b498ea;
+        --re-state-event: var(--re-info);
+        --re-state-event-bg: var(--re-info-bg);
+        --re-state-event-border: var(--re-info-border);
+        --re-evidence-bg: var(--re-warning-bg);
+        --re-evidence-border: var(--re-warning-border);
+
+        /* ── Legacy aliases. Kept so ~7,000 existing references resolve.
+              Do not use these in new code. ──────────────────────────── */
+        --re-signal-red: var(--re-danger);
+        --re-signal-yellow: var(--re-warning);
+        --re-signal-green: var(--re-success);
+        --re-signal-blue: var(--re-info);
+        --re-discovery: var(--re-info);
+        --re-decomposition: var(--re-success);
+        --re-linkage: var(--re-text-tertiary);
+        --re-evidence: var(--re-warning);
+        --re-accent-blue: var(--re-cat-1);
+        --re-accent-purple: var(--re-cat-4);
+        --re-purple: var(--re-cat-4);
+        --re-cyan: var(--re-cat-5);
+        --re-feeling-control: var(--re-text-primary);
+        --re-feeling-traceability: var(--re-info);
+        --re-feeling-readiness: var(--re-brand);
+        --re-feeling-trust: var(--re-warning);
+        --re-feeling-calm-urgency: var(--re-danger);
+        --re-command-bg: var(--re-surface-base);
+        --re-command-grid: var(--re-border-subtle);
+        --re-command-ink: var(--re-text-primary);
+        --re-ledger-bg: var(--re-surface-card);
+        --re-workbench-bg: var(--re-surface-base);
+        --re-density-low: 16px;
+        --re-density-medium: 12px;
+        --re-density-high: 8px;
     }
 
-    /* ─── Light Theme ──────────────────────────────────── */
-    .light {
-        /* Core surfaces — warm white base, strong foreground */
-        --background: 0 0% 100%;
-        --foreground: 222 47% 11%;
+    /* ── Dark. A deliberate second palette, never an inversion.
+          Surfaces step LIGHTER as they come forward; borders are lighter than
+          what they bound; status foregrounds are 400-steps so they read as
+          text; brand is bright and carries a dark foreground on fills.
 
-        /* Cards & popovers — subtle warm gray lift */
-        --card: 220 14% 97%;
-        --card-foreground: 222 47% 11%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
+          The developer portal keeps its committed-dark identity by joining
+          this selector rather than defining a private 90-line token block —
+          and stays gated on :not(.a11y-high-contrast) so a user's forced
+          high-contrast choice still wins. ───────────────────────────────── */
+    .dark,
+    html:not(.a11y-high-contrast) .re-devportal {
+        color-scheme: dark;
 
-        /* Primary (emerald, WCAG AA on white) */
-        --primary: 162 72% 28%;
-        --primary-foreground: 0 0% 100%;
+        --re-surface-base: #0f1216;
+        --re-surface-card: #161a20;
+        --re-surface-elevated: #1c2129;
+        --re-surface-overlay: #000000a3;
+        --re-surface-inset: #0b0d11;
+        --re-surface-secondary: #0b0d11;
+        --re-surface-muted: #0b0d11;
+        /* Inverted again in dark: the bubble is light on a dark page. 15.59:1. */
+        --re-surface-inverse: #e8eaee;
+        --re-text-inverse: #0f1216;
 
-        /* Secondary */
-        --secondary: 220 14% 95%;
-        --secondary-foreground: 222 47% 11%;
+        --re-text-primary: #eef1f5;
+        /* 16.57 on base — not pure white, to avoid halation */
+        --re-text-secondary: #c7cdd6;
+        /* 11.74 */
+        --re-text-tertiary: #9ba4b1;
+        /* 7.46 */
+        --re-text-muted: #8f98a6;
+        /* 6.45 */
+        --re-text-disabled: #5f6875;
+        --re-text-dim: #8f98a6;
 
-        /* Muted */
-        --muted: 220 14% 95%;
-        --muted-foreground: 215 20% 40%;
+        --re-border-subtle: #232932;
+        --re-border-default: #2e3641;
+        --re-border-strong: #667180;
+        /* 3.79 on base */
+        --re-border: #2e3641;
+        --re-surface-border: #2e3641;
 
-        /* Accent */
-        --accent: 162 72% 28%;
-        --accent-foreground: 0 0% 100%;
+        --re-brand: #34d399;
+        /* 9.77 as text on base */
+        --re-brand-dark: #10b981;
+        --re-brand-light: #6ee7b7;
+        --re-brand-muted: #192d2c;
+        /* brand text on it: 7.52 */
+        --re-brand-foreground: #06261b;
+        /* on brand fill: 8.40 */
+        --re-brand-rgb: 52 211 153;
 
-        /* Destructive */
-        --destructive: 0 72% 51%;
-        --destructive-foreground: 0 0% 100%;
+        --re-success: #4ade80;
+        --re-success-bg: #12271d;
+        --re-success-border: #2a7a55;
+        --re-success-muted: #173626;
+        --re-warning: #fbbf24;
+        --re-warning-bg: #2b220f;
+        --re-warning-border: #8a661a;
+        --re-warning-muted: #3a2d12;
+        --re-danger: #f87171;
+        --re-danger-bg: #2c1517;
+        --re-danger-border: #b84545;
+        --re-danger-muted: #3d1b1d;
+        --re-danger-foreground: #2c1517;
+        --re-info: #7cb0fb;
+        --re-info-bg: #141f36;
+        --re-info-border: #386bbd;
+        --re-info-muted: #1a2a4a;
 
-        /* Borders & inputs — stronger borders for light mode */
-        --border: 214 20% 84%;
-        --input: 214 20% 84%;
-        --ring: 162 72% 28%;
+        --re-focus-ring: #34d399;
+        --re-ring-offset: #0f1216;
+        --re-selection: #1f5a3f;
 
-        /* Brand — darker green for WCAG AA contrast on white */
-        --re-brand: #047857;
-        --re-brand-dark: #065f46;
-        --re-brand-light: #059669;
-        --re-brand-muted: #04785714;
+        --re-cat-1: #7cb0fb;
+        --re-cat-2: #fbbf24;
+        --re-cat-3: #4ade80;
+        --re-cat-4: #c4b5fd;
+        --re-cat-5: #67e8f9;
+        --re-cat-6: #fda4af;
 
-        /* Stage Colors — deepened for white backgrounds */
-        --re-discovery: #1d4ed8;
-        --re-decomposition: #047857;
-        --re-linkage: #7c3aed;
-        --re-evidence: #b45309;
+        --background: 214 19% 7%;
+        --foreground: 214 26% 95%;
+        --card: 216 19% 11%;
+        --card-foreground: 214 26% 95%;
+        --popover: 217 19% 14%;
+        --popover-foreground: 214 26% 95%;
+        --primary: 158 64% 52%;
+        --primary-foreground: 159 73% 9%;
+        --secondary: 217 19% 14%;
+        --secondary-foreground: 214 26% 95%;
+        --muted: 217 19% 14%;
+        --muted-foreground: 217 11% 61%;
+        --accent: 177 28% 14%;
+        --accent-foreground: 158 64% 52%;
+        --destructive: 0 91% 71%;
+        --destructive-foreground: 355 35% 13%;
+        --border: 215 17% 22%;
+        --input: 215 17% 22%;
+        --ring: 158 64% 52%;
 
-        /* Surfaces — crisp whites with visible card separation */
-        --re-surface-base: #fff;
-        --re-surface-card: #f8fafc;
-        --re-surface-border: #cbd5e1;
-        --re-surface-elevated: #f1f5f9;
-        --re-surface-overlay: #ffffffe6;
+        /* Dark replaces drop shadows with a 1px ring, except at modal level. */
+        --re-shadow-sm: none;
+        --re-shadow-md: 0 0 0 1px #2e3641;
+        --re-shadow-lg: 0 0 0 1px #2e3641, 0 24px 48px #00000080;
 
-        /* Text — maximum readability, strong hierarchy */
-        --re-text-primary: #0f172a;
-        --re-text-secondary: #1e293b;
-        --re-text-tertiary: #475569;
-        --re-text-muted: #64748b;
-        --re-text-disabled: #94a3b8;
+        --re-sticky-bg: #0f1216f2;
 
-        /* Borders — more visible in light mode */
-        --re-border-default: #cbd5e1;
-        --re-border-subtle: #e2e8f0;
-        --re-border-strong: #64748b;
+        --re-state-corrected: #c4b5fd;
+        --re-state-corrected-bg: #211a3a;
+        --re-state-corrected-border: #6e58b2;
+    }
 
-        /* Status — deepened for contrast on white */
-        --re-success: #15803d;
-        --re-success-muted: #15803d1a;
-        --re-success-bg: #15803d0f;
-        --re-success-border: #15803d26;
-        --re-warning: #b45309;
-        --re-warning-muted: #b453091a;
-        --re-warning-bg: #b453090f;
-        --re-warning-border: #b4530926;
-        --re-danger: #b91c1c;
-        --re-danger-muted: #b91c1c1a;
-        --re-danger-bg: #b91c1c0f;
-        --re-danger-border: #b91c1c26;
-        --re-info: #1d4ed8;
-        --re-info-muted: #1d4ed81a;
-        --re-info-bg: #1d4ed80f;
-        --re-info-border: #1d4ed826;
-        --re-sticky-bg: #ffffffeb;
+    /* ── Element defaults ─────────────────────────────────────────────── */
+    html {
+        background: var(--re-surface-base);
+        color: var(--re-text-primary);
+        font-family: var(--re-font-sans);
+        font-feature-settings: "cv11", "ss01";
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+    }
 
-        /* Shadows — visible but soft on white */
-        --re-shadow-sm: 0 1px 3px 0 #00000014, 0 1px 2px -1px #0000000f;
-        --re-shadow-md: 0 4px 8px -1px #0000001a, 0 2px 4px -2px #0000000f;
-        --re-shadow-lg: 0 12px 24px -4px #0000001a, 0 4px 8px -4px #0000000f;
-        --re-shadow-glow: 0 0 20px #0478571f;
-        --re-shadow-glow-strong: 0 0 40px #0478572e;
+    body {
+        /* Flat. The 48px grid-paper and the 620px top gradient are gone —
+           they competed with dense tables on every app page. */
+        background: var(--re-surface-base);
+        color: var(--re-text-primary);
+    }
 
-        /* Theme-Aware Nav/Layout Tokens */
-        --re-nav-bg: #ffffffeb;
-        --re-nav-border: #00000014;
-        --re-nav-dropdown-bg: #fffffffa;
-        --re-nav-dropdown-border: #0000001a;
-        --re-nav-dropdown-shadow: 0 20px 50px #00000026;
-        --re-nav-hover: #0000000d;
-        --re-nav-divider: #00000014;
-        --re-mobile-menu-bg: #fffffffa;
-        --re-mobile-border: #00000014;
-        --re-mobile-toggle-border: #00000026;
+    h1,
+    h2,
+    h3,
+    h4 {
+        color: var(--re-text-primary);
+        letter-spacing: -0.01em;
+    }
 
-        /* Light mode typography boost */
-        font-size: 16px;
+    ::selection {
+        background: var(--re-selection);
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--re-focus-ring);
+        outline-offset: 2px;
+    }
+
+    /* ── Print: docs and legal pages are printed by auditors. ─────────── */
+    @media print {
+
+        .re-docs-shell .doc-sidebar-wrapper,
+        [data-docs-toc],
+        nav[aria-label="Main navigation"],
+        nav[aria-label="Dashboard navigation"],
+        nav[aria-label="Dashboard quick navigation"],
+        nav[aria-label="Documentation navigation"],
+        footer,
+        [data-print-hide] {
+            display: none !important;
+        }
+
+        html,
+        body {
+            background: #fff;
+            color: #000;
+        }
+
+        a[href^="http"]::after {
+            content: " (" attr(href) ")";
+            font-size: 0.75em;
+            word-break: break-all;
+        }
+
+        pre,
+        code,
+        table,
+        figure {
+            break-inside: avoid;
+        }
     }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*   3. LEGACY CLASS ALIASES                                                   */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Legacy class aliases.
+
+   These class names are referenced from ~23 (.re-container) to ~31 (.re-label)
+   places across src, plus the compliance primitives' hook classes. They are
+   kept so nothing renders unstyled during and after the migration — but they
+   are now plain surface/typography rules with NO !important, so a component's
+   own utilities always win. New code uses the primitives in
+   src/components/{ui,layout}, never these classes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+
+    /* ── Layout ───────────────────────────────────────────────────────── */
+    .re-container {
+        width: min(1120px, 100% - 40px);
+        margin-inline: auto;
+    }
+
+    .re-section {
+        padding-block: clamp(48px, 6vw, 80px);
+        border-top: 1px solid var(--re-border-subtle);
+    }
+
+    .re-panel {
+        border: 1px solid var(--re-border-default);
+        border-radius: var(--re-radius-lg);
+        background: var(--re-surface-card);
+    }
+
+    /* ── Page surfaces. Flat — the grid-paper and gradient washes are gone. ── */
+    .re-page,
+    .re-app-surface,
+    .re-app-shell,
+    .re-docs-shell,
+    .re-compliance-os {
+        background: var(--re-surface-base);
+        color: var(--re-text-primary);
+    }
+
+    .re-docs-shell {
+        border-top: 1px solid var(--re-border-subtle);
+    }
+
+    .re-auth-rail {
+        background: var(--re-surface-inset);
+        color: var(--re-text-primary);
+    }
+
+    .re-home-command-rail {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        border: 1px solid var(--re-border-default);
+        border-radius: var(--re-radius-lg);
+        background: var(--re-surface-card);
+        overflow: hidden;
+    }
+
+    .re-home-grid-panel {
+        background: var(--re-surface-card);
+    }
+
+    /* ── Typography ───────────────────────────────────────────────────── */
+    .re-label {
+        color: var(--re-text-muted);
+        font-family: var(--re-font-mono);
+        font-size: 0.6875rem;
+        font-weight: 500;
+        line-height: 1rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .re-hero-title {
+        max-width: 20ch;
+        color: var(--re-text-primary);
+        font-family: var(--re-font-display);
+        font-size: clamp(2rem, 4.2vw, 2.75rem);
+        font-weight: 600;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+    }
+
+    .re-hero-copy {
+        max-width: 68ch;
+        color: var(--re-text-secondary);
+        font-size: 1rem;
+        line-height: 1.625rem;
+    }
+
+    .re-signal {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    /* ── Tables (superseded by the DataTable primitive; kept for legacy markup) ── */
+    .re-rule-table,
+    .re-workbench-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .re-rule-table th,
+    .re-workbench-table th {
+        height: 2.5rem;
+        padding: 0 0.75rem;
+        border-bottom: 1px solid var(--re-border-subtle);
+        background: var(--re-surface-inset);
+        color: var(--re-text-tertiary);
+        font-family: var(--re-font-mono);
+        font-size: 0.6875rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-align: left;
+        text-transform: uppercase;
+    }
+
+    .re-rule-table td,
+    .re-workbench-table td {
+        padding: 0.625rem 0.75rem;
+        border-bottom: 1px solid var(--re-border-subtle);
+        color: var(--re-text-secondary);
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    /* ── Compliance-primitive hook classes (components/compliance) ──────── */
+    .re-evidence-card,
+    .re-readiness-score,
+    .re-hash-strip,
+    .re-commit-gate,
+    .re-package-preview {
+        border-radius: var(--re-radius-lg);
+    }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   4. UTILITIES + ACCESSIBILITY — KEPT VERBATIM, UNLAYERED
+
+   Unlayered rules outrank every @layer, so these keep winning over the token
+   layer regardless of specificity — which is exactly what the
+   AccessibilityWidget depends on. Two changes only, both noted inline:
+   the press-scale transform is removed (SPEC §5.2) and `.no-scrollbar`, which
+   had five call sites and no definition, is defined alongside `.scrollbar-none`.
+   ─────────────────────────────────────────────────────────────────────────── */
 
 /* ─── Mobile utilities ─── */
 .scrollbar-none {
@@ -502,6 +817,15 @@ body[data-inflow-lab="true"] {
     scrollbar-width: none;
 }
 .scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+
+/* `.no-scrollbar` has five call sites in src and was never defined. Same rule. */
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
     display: none;
 }
 
@@ -514,13 +838,6 @@ body[data-inflow-lab="true"] {
     input[type="submit"], input[type="button"] {
         -webkit-tap-highlight-color: transparent;
     }
-
-    /* Active state feedback */
-    a:active, button:active, [role="button"]:active {
-        transform: scale(0.98);
-        transition: transform 0.1s ease;
-    }
-
 
 }
 
@@ -769,464 +1086,50 @@ html.a11y-cursor-large input[type="submit"] {
 /* ═══════════════════════════════════════════════════════════
    RegEngine Braun/Rams System
    Quiet, technical, table-first product language.
-   ═══════════════════════════════════════════════════════════ */
 
-@layer base {
-    :root,
-    .light {
-        --background: 60 8% 96%;
-        --foreground: 210 9% 9%;
-        --card: 60 5% 93%;
-        --card-foreground: 210 9% 9%;
-        --popover: 60 8% 98%;
-        --popover-foreground: 210 9% 9%;
-        --primary: 210 9% 9%;
-        --primary-foreground: 60 8% 96%;
-        --secondary: 60 5% 88%;
-        --secondary-foreground: 210 9% 9%;
-        --muted: 60 5% 90%;
-        --muted-foreground: 210 7% 34%;
-        --accent: 4 76% 43%;
-        --accent-foreground: 60 8% 96%;
-        --destructive: 4 76% 43%;
-        --destructive-foreground: 60 8% 96%;
-        --border: 45 7% 74%;
-        --input: 45 7% 66%;
-        --ring: 210 9% 9%;
-        --radius: 0.1875rem;
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRANSITIONAL — DELETE IN THE FINAL MIGRATION COMMIT. See SPEC.md §7.1.
 
-        --re-brand: #1d1d1b;
-        --re-brand-dark: #000000;
-        --re-brand-light: #4a4a45;
-        --re-brand-muted: #1d1d1b12;
-        --re-signal-red: #b3261e;
-        --re-signal-yellow: #d59a17;
-        --re-signal-green: #2d7f45;
-        --re-signal-blue: #2364aa;
+   These rules map raw Tailwind palette classes onto the new tokens so that a
+   page which has not been migrated yet never renders unmapped colour. At the
+   time this landed, 61 files still carried raw palette utilities and 42 still
+   used bg-gradient-to-*; without this block, main would show those pages
+   half-migrated for the whole page-migration window.
 
-        --re-discovery: var(--re-signal-blue);
-        --re-decomposition: var(--re-signal-green);
-        --re-linkage: #6f5f3f;
-        --re-evidence: var(--re-signal-yellow);
+   Rules for this block:
+     · it is the ONLY !important outside the verbatim-kept a11y / inflow-lab
+       blocks;
+     · it is never extended — every page PR shrinks what it has to cover;
+     · it is deleted wholesale in one commit once
+       `node scripts/design-lint.mjs` reports zero raw-palette hits.
 
-        --re-surface-base: #f4f4f1;
-        --re-surface-card: #ededeb;
-        --re-surface-border: #a9a79f;
-        --re-surface-elevated: #ffffff;
-        --re-surface-overlay: #fffffff2;
-
-        --re-text-primary: #1d1d1b;
-        --re-text-secondary: #343431;
-        --re-text-tertiary: #5d5c56;
-        --re-text-muted: #6d6b64;
-        --re-text-disabled: #918d82;
-
-        --re-border-default: #a9a79f;
-        --re-border-subtle: #d7d6d1;
-        --re-border-strong: #1d1d1b;
-
-        --re-success: var(--re-signal-green);
-        --re-success-muted: #2d7f4517;
-        --re-success-bg: #2d7f450d;
-        --re-success-border: #2d7f4536;
-        --re-warning: var(--re-signal-yellow);
-        --re-warning-muted: #d59a1717;
-        --re-warning-bg: #d59a170d;
-        --re-warning-border: #d59a1736;
-        --re-danger: var(--re-signal-red);
-        --re-danger-muted: #b3261e17;
-        --re-danger-bg: #b3261e0d;
-        --re-danger-border: #b3261e36;
-        --re-info: var(--re-signal-blue);
-        --re-info-muted: #2364aa17;
-        --re-info-bg: #2364aa0d;
-        --re-info-border: #2364aa36;
-        --re-sticky-bg: #f4f4f1f0;
-
-        --re-shadow-sm: none;
-        --re-shadow-md: none;
-        --re-shadow-lg: none;
-        --re-shadow-glow: none;
-        --re-shadow-glow-strong: none;
-
-        --re-font-sans: "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
-        --re-font-display: "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
-        --re-font-serif: Georgia, serif;
-        --re-font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
-
-        --re-radius-sm: 2px;
-        --re-radius-md: 3px;
-        --re-radius-lg: 4px;
-        --re-radius-xl: 4px;
-        --re-radius-2xl: 4px;
-        --re-radius-pill: 2px;
-
-        --re-nav-bg: #f4f4f1f2;
-        --re-nav-border: #1d1d1b;
-        --re-nav-dropdown-bg: #ffffff;
-        --re-nav-dropdown-border: #1d1d1b;
-        --re-nav-dropdown-shadow: none;
-        --re-nav-hover: #1d1d1b0a;
-        --re-nav-divider: #a9a79f;
-        --re-mobile-menu-bg: #f4f4f1;
-        --re-mobile-border: #1d1d1b;
-        --re-mobile-toggle-border: #1d1d1b;
-    }
-
-    .dark {
-        --background: 210 9% 9%;
-        --foreground: 42 30% 94%;
-        --card: 210 7% 13%;
-        --card-foreground: 42 30% 94%;
-        --popover: 210 7% 13%;
-        --popover-foreground: 42 30% 94%;
-        --primary: 42 30% 94%;
-        --primary-foreground: 210 9% 9%;
-        --secondary: 210 5% 18%;
-        --secondary-foreground: 42 30% 94%;
-        --muted: 210 5% 18%;
-        --muted-foreground: 42 9% 68%;
-        --accent: 4 76% 56%;
-        --accent-foreground: 42 30% 94%;
-        --border: 42 8% 33%;
-        --input: 42 8% 33%;
-        --ring: 42 30% 94%;
-        --re-surface-base: #1d1d1b;
-        --re-surface-card: #242420;
-        --re-surface-border: #5d574b;
-        --re-surface-elevated: #151513;
-        --re-surface-overlay: #1d1d1bf2;
-        --re-text-primary: #f3f0e8;
-        --re-text-secondary: #ddd6c8;
-        --re-text-tertiary: #b9b3a7;
-        --re-text-muted: #aca597;
-        --re-text-disabled: #837d72;
-        --re-border-default: #5d574b;
-        --re-border-subtle: #3f3b34;
-        --re-border-strong: #f3f0e8;
-        --re-nav-bg: #1d1d1bf2;
-        --re-nav-border: #5d574b;
-        --re-nav-dropdown-bg: #242420;
-        --re-nav-dropdown-border: #5d574b;
-        --re-mobile-menu-bg: #1d1d1b;
-        --re-mobile-border: #5d574b;
-        --re-mobile-toggle-border: #5d574b;
-    }
-
-    html {
-        background: var(--re-surface-base);
-        color: var(--re-text-primary);
-        font-family: var(--re-font-sans);
-        text-rendering: optimizeLegibility;
-    }
-
-    body {
-        background:
-            linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
-            var(--re-surface-base);
-        background-size: 48px 48px;
-        color: var(--re-text-primary);
-        letter-spacing: 0;
-    }
-
-    h1,
-    h2,
-    h3,
-    h4 {
-        color: var(--re-text-primary);
-        font-family: var(--re-font-display);
-        letter-spacing: 0;
-    }
-
-    ::selection {
-        background: var(--re-signal-yellow);
-        color: #1d1d1b;
-    }
-}
-
-@layer components {
-    .re-page {
-        background:
-            linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
-            var(--re-surface-base);
-        background-size: 48px 48px;
-    }
-
-    .re-container {
-        width: min(1180px, calc(100vw - 32px));
-        margin: 0 auto;
-    }
-
-    .re-section {
-        padding: clamp(48px, 7vw, 88px) 0;
-        border-top: 1px solid var(--re-surface-border);
-    }
-
-    .re-panel {
-        border: 1px solid var(--re-surface-border);
-        border-radius: var(--re-radius-lg);
-        background: var(--re-surface-elevated);
-        box-shadow: none;
-    }
-
-    .re-rule-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-    }
-
-    .re-rule-table th,
-    .re-rule-table td {
-        border-bottom: 1px solid var(--re-surface-border);
-        padding: 12px 10px;
-        text-align: left;
-        vertical-align: top;
-    }
-
-    .re-rule-table th {
-        color: var(--re-text-muted);
-        font-family: var(--re-font-mono);
-        font-size: 11px;
-        font-weight: 500;
-        text-transform: uppercase;
-    }
-
-    .re-label {
-        color: var(--re-text-muted);
-        font-family: var(--re-font-mono);
-        font-size: 11px;
-        line-height: 1.3;
-        text-transform: uppercase;
-    }
-
-    .re-signal {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border: 1px solid currentColor;
-        border-radius: 50%;
-        background: currentColor;
-    }
-
-    .bg-gradient-to-r,
-    .bg-gradient-to-l,
-    .bg-gradient-to-b,
-    .bg-gradient-to-t,
-    .bg-gradient-to-br,
-    .bg-gradient-to-bl,
-    .bg-gradient-to-tr,
-    .bg-gradient-to-tl {
-        background-image: none !important;
-    }
-
-    .rounded-full,
-    .rounded-2xl,
-    .rounded-3xl,
-    .rounded-xl,
-    .rounded-lg {
-        border-radius: var(--re-radius-lg) !important;
-    }
-
-    .shadow,
-    .shadow-sm,
-    .shadow-md,
-    .shadow-lg,
-    .shadow-xl,
-    .shadow-2xl {
-        box-shadow: none !important;
-    }
-}
-
-/* Plain selectors intentionally duplicate the named components above.
-   Turbopack can reorder Tailwind layers in dev; these keep the design shell firm. */
-.re-page {
-    background:
-        linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
-        var(--re-surface-base) !important;
-    background-size: 48px 48px !important;
-}
-
-.re-container {
-    width: min(1120px, calc(100vw - 40px)) !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-}
-
-.re-section {
-    padding-top: clamp(36px, 5vw, 72px) !important;
-    padding-bottom: clamp(36px, 5vw, 72px) !important;
-    border-top: 1px solid var(--re-surface-border) !important;
-}
-
-.re-panel {
-    border: 1px solid var(--re-surface-border) !important;
-    border-radius: var(--re-radius-lg) !important;
-    background: var(--re-surface-elevated) !important;
-    box-shadow: none !important;
-}
-
-.re-rule-table {
-    width: 100%;
-    min-width: 620px;
-    border-collapse: collapse;
-    font-size: 13px;
-}
-
-.re-workbench-table {
-    min-width: 0;
-    table-layout: fixed;
-}
-
-.re-workbench-table th,
-.re-workbench-table td {
-    padding-left: 9px;
-    padding-right: 9px;
-}
-
-.re-workbench-table th:nth-child(1),
-.re-workbench-table td:nth-child(1) {
-    width: 27%;
-}
-
-.re-workbench-table th:nth-child(2),
-.re-workbench-table td:nth-child(2) {
-    width: 17%;
-}
-
-.re-workbench-table th:nth-child(3),
-.re-workbench-table td:nth-child(3) {
-    width: 21%;
-}
-
-.re-workbench-table th:nth-child(4),
-.re-workbench-table td:nth-child(4) {
-    width: 16%;
-}
-
-.re-workbench-table th:nth-child(5),
-.re-workbench-table td:nth-child(5) {
-    width: 19%;
-}
-
-.re-rule-table th,
-.re-rule-table td {
-    border-bottom: 1px solid var(--re-surface-border);
-    padding: 12px 10px;
-    text-align: left;
-    vertical-align: top;
-}
-
-.re-rule-table th {
-    color: var(--re-text-muted);
-    font-family: var(--re-font-mono);
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: uppercase;
-}
-
-.re-label {
-    color: var(--re-text-muted);
-    font-family: var(--re-font-mono);
-    font-size: 11px;
-    line-height: 1.3;
-    text-transform: uppercase;
-}
-
-.re-hero-title {
-    max-width: 720px;
-    color: var(--re-text-primary);
-    font-size: clamp(36px, 4.8vw, 58px);
-    font-weight: 650;
-    letter-spacing: 0;
-    line-height: 1;
-}
-
-.re-hero-copy {
-    max-width: 590px;
-    color: var(--re-text-muted);
-    font-size: clamp(16px, 1.5vw, 18px);
-    line-height: 1.65;
-}
-
-.re-signal {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border: 1px solid currentColor;
-    border-radius: 50%;
-    background: currentColor;
-}
-
-.re-app-surface {
-    min-height: 100%;
-    background:
-        linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
-        var(--re-surface-base);
-    background-size: 48px 48px;
-    color: var(--re-text-primary);
-}
-
-.re-app-surface :is(section, article, aside, form, table, thead, tbody, tr, th, td) {
-    border-color: var(--re-surface-border);
-}
-
-.re-app-surface :is(h1, h2, h3) {
-    font-family: var(--re-font-display);
-    letter-spacing: 0;
-}
-
-/* The colour defaults below are UNLAYERED, so they outrank every Tailwind
-   utility (which lives in `@layer utilities`) no matter how specific the
-   utility is. Left unguarded they repaint text that a page coloured on
-   purpose: a `text-white` heading on a dark hero came out as
-   `--re-text-primary` — on /supplier-compliance that is rgb(16,24,40),
-   the exact first stop of the section's own background gradient, i.e.
-   invisible. Exclude the utilities pages use deliberately on dark
-   sections: white/near-white copy (`text-white`, `text-white/90`) and
-   transparent text paired with `bg-clip-text` gradients. Typography
-   (font, tracking) still applies to every heading. */
-.re-app-surface :is(h1, h2, h3):not([class*="text-white"]):not([class*="text-transparent"]) {
-    color: var(--re-text-primary);
-}
-
-.re-app-surface h1 {
-    font-weight: 700;
-}
-
-.re-app-surface :is(p, li, dd, dt, label) {
-    letter-spacing: 0;
-}
-
-.re-app-surface :is(p, li, dd, dt, label):not([class*="text-white"]):not([class*="text-transparent"]) {
-    color: inherit;
-}
+   Radius and shadow are deliberately NOT coerced here: those are pinned
+   properly in tailwind.config.ts, which gets the same result with no
+   !important and no surprise for an author who writes `rounded-xl`.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .re-app-surface :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-slate-700, .text-gray-500, .text-gray-600, .text-zinc-500, .text-zinc-600) {
     color: var(--re-text-muted) !important;
 }
 
 .re-app-surface :is(.text-emerald-500, .text-emerald-600, .text-emerald-700, .text-green-600, .text-green-700) {
-    color: var(--re-signal-green) !important;
+    color: var(--re-success) !important;
 }
 
 .re-app-surface :is(.text-blue-500, .text-blue-600, .text-blue-700, .text-indigo-500, .text-indigo-600, .text-indigo-700) {
-    color: var(--re-signal-blue) !important;
+    color: var(--re-info) !important;
 }
 
 .re-app-surface :is(.text-amber-500, .text-amber-600, .text-amber-700, .text-orange-500, .text-orange-600, .text-orange-700) {
-    color: var(--re-signal-yellow) !important;
+    color: var(--re-warning) !important;
 }
 
 .re-app-surface :is(.text-red-500, .text-red-600, .text-red-700, .text-rose-500, .text-rose-600, .text-rose-700) {
-    color: var(--re-signal-red) !important;
+    color: var(--re-danger) !important;
 }
 
 .re-app-surface :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100, .bg-zinc-50, .bg-zinc-100) {
-    background-color: var(--re-surface-elevated) !important;
+    background-color: var(--re-surface-card) !important;
 }
 
 .re-app-surface :is(.bg-emerald-50, .bg-green-50, .bg-teal-50) {
@@ -1246,594 +1149,20 @@ html.a11y-cursor-large input[type="submit"] {
 }
 
 .re-app-surface :is([class*="border-slate-"], [class*="border-gray-"], [class*="border-zinc-"], [class*="border-neutral-"]) {
-    border-color: var(--re-surface-border) !important;
+    border-color: var(--re-border-default) !important;
 }
 
-.re-app-surface :is([class*="ring-"], [class*="focus:ring-"], [class*="focus-visible:ring-"]) {
-    --tw-ring-color: var(--re-border-strong) !important;
+/* Gradients are not part of the system. Suppress the 42 remaining call sites
+   until each page is migrated. */
+:is(.bg-gradient-to-r, .bg-gradient-to-l, .bg-gradient-to-b, .bg-gradient-to-t, .bg-gradient-to-br, .bg-gradient-to-bl, .bg-gradient-to-tr, .bg-gradient-to-tl) {
+    background-image: none !important;
 }
 
-.re-app-surface :is(input, select, textarea) {
-    border-radius: var(--re-radius-md) !important;
-    border-color: var(--re-surface-border) !important;
-    background: var(--re-surface-elevated) !important;
-    color: var(--re-text-primary) !important;
-    box-shadow: none !important;
-}
-
-.re-app-surface :is(button, [role="button"], a[class*="rounded"]) {
-    letter-spacing: 0;
-}
-
-.re-app-surface :is(code, pre, kbd) {
-    border-radius: var(--re-radius-md);
-    font-family: var(--re-font-mono);
-}
-
-.re-app-surface :is(pre, .font-mono) {
-    letter-spacing: 0;
-}
-
-.re-app-surface .text-transparent {
-    color: var(--re-text-primary) !important;
-}
-
+/* Gradient text would be invisible once the gradient above is suppressed. */
 .re-app-surface .bg-clip-text {
     background-image: none !important;
 }
 
-.re-app-shell {
-    background:
-        linear-gradient(90deg, rgba(29, 29, 27, 0.035) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(29, 29, 27, 0.025) 1px, transparent 1px),
-        var(--re-surface-base);
-    background-size: 48px 48px;
-}
-
-.re-app-shell :is(aside, nav) {
-    border-color: var(--re-border-strong);
-}
-
-.re-docs-shell {
-    background: var(--re-surface-base);
-    border-top: 1px solid var(--re-surface-border);
-}
-
-/* ═══════════════════════════════════════════════════════════
-   RegEngine Unified Product System
-   Site-wide refresh for marketing, dashboard, docs, and tools.
-   ═══════════════════════════════════════════════════════════ */
-
-:root,
-.light {
-    --background: 210 33% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 222 47% 11%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 29% 94%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 29% 94%;
-    --muted-foreground: 215 16% 42%;
-    --accent: 172 66% 30%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 45%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 214 24% 86%;
-    --input: 214 24% 82%;
-    --ring: 222 47% 11%;
-    --radius: 0.5rem;
-
-    --re-brand: #101828;
-    --re-brand-dark: #020617;
-    --re-brand-light: #334155;
-    --re-brand-muted: #1018280d;
-    --re-signal-red: #dc2626;
-    --re-signal-yellow: #d97706;
-    --re-signal-green: #059669;
-    --re-signal-blue: #2563eb;
-
-    --re-discovery: var(--re-signal-blue);
-    --re-decomposition: var(--re-signal-green);
-    --re-linkage: #475569;
-    --re-evidence: var(--re-signal-yellow);
-
-    --re-surface-base: #f7f9fc;
-    --re-surface-card: #eef3f8;
-    --re-surface-border: #d8e0ea;
-    --re-surface-elevated: #ffffff;
-    --re-surface-overlay: #fffffff2;
-
-    --re-text-primary: #101828;
-    --re-text-secondary: #344054;
-    --re-text-tertiary: #475467;
-    --re-text-muted: #667085;
-    --re-text-disabled: #98a2b3;
-
-    --re-border-default: #d0d8e4;
-    --re-border-subtle: #e7edf4;
-    --re-border-strong: #101828;
-
-    --re-success: var(--re-signal-green);
-    --re-success-muted: #05966918;
-    --re-success-bg: #ecfdf5;
-    --re-success-border: #a7f3d0;
-    --re-warning: var(--re-signal-yellow);
-    --re-warning-muted: #d9770618;
-    --re-warning-bg: #fffbeb;
-    --re-warning-border: #fde68a;
-    --re-danger: var(--re-signal-red);
-    --re-danger-muted: #dc262618;
-    --re-danger-bg: #fef2f2;
-    --re-danger-border: #fecaca;
-    --re-info: var(--re-signal-blue);
-    --re-info-muted: #2563eb18;
-    --re-info-bg: #eff6ff;
-    --re-info-border: #bfdbfe;
-    --re-sticky-bg: #f7f9fcf2;
-
-    --re-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-    --re-shadow-md: 0 10px 24px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.04);
-    --re-shadow-lg: 0 22px 48px rgba(16, 24, 40, 0.12), 0 4px 10px rgba(16, 24, 40, 0.06);
-    --re-shadow-glow: 0 0 0 4px rgba(37, 99, 235, 0.08);
-    --re-shadow-glow-strong: 0 0 0 6px rgba(37, 99, 235, 0.12);
-
-    --re-radius-sm: 4px;
-    --re-radius-md: 6px;
-    --re-radius-lg: 8px;
-    --re-radius-xl: 8px;
-    --re-radius-2xl: 8px;
-    --re-radius-pill: 9999px;
-
-    --re-nav-bg: #fffffff2;
-    --re-nav-border: #d8e0ea;
-    --re-nav-dropdown-bg: #ffffff;
-    --re-nav-dropdown-border: #d8e0ea;
-    --re-nav-dropdown-shadow: var(--re-shadow-lg);
-    --re-nav-hover: #1018280a;
-    --re-nav-divider: #e7edf4;
-    --re-mobile-menu-bg: #ffffff;
-    --re-mobile-border: #d8e0ea;
-    --re-mobile-toggle-border: #cbd5e1;
-}
-
-.dark {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 96%;
-    --card: 222 35% 10%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 35% 10%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 210 40% 96%;
-    --primary-foreground: 222 47% 7%;
-    --secondary: 222 28% 14%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 222 28% 14%;
-    --muted-foreground: 215 20% 72%;
-    --accent: 160 84% 39%;
-    --accent-foreground: 222 47% 7%;
-    --border: 217 22% 22%;
-    --input: 217 22% 26%;
-    --ring: 210 40% 96%;
-
-    --re-surface-base: #0b1220;
-    --re-surface-card: #111827;
-    --re-surface-border: #253247;
-    --re-surface-elevated: #0f172a;
-    --re-surface-overlay: #0b1220f2;
-    --re-text-primary: #f8fafc;
-    --re-text-secondary: #e2e8f0;
-    --re-text-tertiary: #cbd5e1;
-    --re-text-muted: #94a3b8;
-    --re-text-disabled: #64748b;
-    --re-border-default: #334155;
-    --re-border-subtle: #1f2937;
-    --re-border-strong: #e2e8f0;
-    --re-nav-bg: #0b1220f2;
-    --re-nav-border: #253247;
-    --re-nav-dropdown-bg: #111827;
-    --re-nav-dropdown-border: #253247;
-    --re-mobile-menu-bg: #0b1220;
-    --re-mobile-border: #253247;
-    --re-mobile-toggle-border: #334155;
-}
-
-html,
-body {
-    background: var(--re-surface-base) !important;
-}
-
-body,
-.re-page,
-.re-app-surface,
-.re-app-shell {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0, rgba(247, 249, 252, 0.96) 280px, var(--re-surface-base) 620px),
-        var(--re-surface-base) !important;
-    background-size: auto !important;
-}
-
-.dark body,
-.dark .re-page,
-.dark .re-app-surface,
-.dark .re-app-shell {
-    background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0, rgba(11, 18, 32, 0.98) 320px, var(--re-surface-base) 680px),
-        var(--re-surface-base) !important;
-}
-
-.re-container {
-    width: min(1200px, calc(100vw - 40px)) !important;
-}
-
-.re-section {
-    border-top: 1px solid var(--re-border-subtle) !important;
-}
-
-.re-panel,
-/* Substring matches need guards: "bg-white" must not catch translucent
-   overlays like bg-white/10 (glass over dark heroes), and "bg-slate-50"
-   is a substring of bg-slate-500 — solidifying those to an elevated white
-   panel makes white-on-dark text unreadable. */
-.re-app-surface :is(.re-panel, .bg-card, [class*="bg-card"], [class*="bg-white"]:not([class*="bg-white/"]), [class*="bg-slate-50"]:not([class*="bg-slate-500"]), [class*="bg-gray-50"]:not([class*="bg-gray-500"]), [class*="bg-zinc-50"]:not([class*="bg-zinc-500"])) {
-    border-color: var(--re-surface-border) !important;
-    border-radius: var(--re-radius-lg) !important;
-    background-color: var(--re-surface-elevated) !important;
-    box-shadow: var(--re-shadow-sm) !important;
-}
-
-@media (max-width: 640px) {
-    .re-container {
-        width: min(100%, calc(100vw - 32px)) !important;
-    }
-
-    .re-hero-title {
-        font-size: clamp(34px, 10.5vw, 44px);
-        line-height: 1.02;
-    }
-
-    .re-section {
-        padding-top: 34px !important;
-        padding-bottom: 34px !important;
-    }
-}
-
-.re-panel:hover,
-.re-app-surface :is(.bg-card, [class*="bg-card"]):hover {
-    box-shadow: var(--re-shadow-md) !important;
-}
-
-.rounded-full {
-    border-radius: var(--re-radius-pill) !important;
-}
-
-.rounded-2xl,
-.rounded-3xl,
-.rounded-xl,
-.rounded-lg,
-.rounded-md,
-.rounded-sm {
-    border-radius: var(--re-radius-lg) !important;
-}
-
-.shadow-sm,
-.shadow,
-.shadow-md {
-    box-shadow: var(--re-shadow-sm) !important;
-}
-
-.shadow-lg,
-.shadow-xl,
-.shadow-2xl {
-    box-shadow: var(--re-shadow-md) !important;
-}
-
-.re-label,
-.re-rule-table th,
-.re-app-surface :is(th, caption, .text-xs.uppercase, .font-mono.uppercase) {
-    color: var(--re-text-muted) !important;
-    letter-spacing: 0.02em !important;
-}
-
-.re-rule-table th,
-.re-rule-table td,
-.re-app-surface :is(th, td) {
-    border-color: var(--re-border-subtle) !important;
-}
-
-.re-app-surface :is(button, [role="button"], input, select, textarea, a[class*="border"]) {
-    border-radius: var(--re-radius-md) !important;
-}
-
-.re-app-surface :is(input, select, textarea) {
-    border-color: var(--re-border-default) !important;
-    background: var(--re-surface-elevated) !important;
-    box-shadow: inset 0 1px 0 rgba(16, 24, 40, 0.02) !important;
-}
-
-.re-app-surface :is(button, [role="button"]) {
-    font-weight: 650;
-}
-
-.re-app-surface :is(.bg-slate-950, .bg-black, .bg-zinc-950, .bg-gray-950) {
-    background-color: var(--re-text-primary) !important;
-    color: var(--re-surface-elevated) !important;
-}
-
-.re-app-surface :is(.border, .border-t, .border-b, .border-l, .border-r) {
-    border-color: var(--re-surface-border);
-}
-
-.re-app-surface :is(pre, code) {
-    border-color: var(--re-border-subtle);
-}
-
-.re-app-shell :is(aside, nav) {
-    border-color: var(--re-surface-border);
-    background-color: var(--re-surface-elevated);
-}
-
-.re-docs-shell {
-    background: var(--re-surface-base);
-    border-top-color: var(--re-border-subtle);
-}
-
-.re-auth-rail :is(h1, h2, h3, p, span) {
-    color: var(--re-surface-base) !important;
-}
-
-.re-auth-rail .re-auth-check {
-    background: rgba(255, 255, 255, 0.08) !important;
-}
-
-.re-auth-rail .re-auth-check span {
-    color: rgba(255, 255, 255, 0.9) !important;
-}
-
-@media (max-width: 767px) {
-    .re-container {
-        width: min(100% - 32px, 1120px) !important;
-    }
-
-    .re-rule-table {
-        min-width: 560px;
-    }
-}
-
-/* ─── Compliance Operating System v2 foundation ─── */
-:root,
-.light {
-    --re-feeling-control: #0f172a;
-    --re-feeling-traceability: #1d4ed8;
-    --re-feeling-readiness: #047857;
-    --re-feeling-trust: #92400e;
-    --re-feeling-calm-urgency: #b91c1c;
-
-    --re-command-bg: #f6f8fb;
-    --re-command-grid: #dbe3ee;
-    --re-command-ink: #0f172a;
-    --re-ledger-bg: #fffdf7;
-    --re-workbench-bg: #f8fafc;
-
-    --re-density-low: 18px;
-    --re-density-medium: 14px;
-    --re-density-high: 10px;
-
-    --re-state-invited: #475569;
-    --re-state-invited-bg: #f1f5f9;
-    --re-state-invited-border: #cbd5e1;
-    --re-state-corrected: #7c3aed;
-    --re-state-corrected-bg: #f5f3ff;
-    --re-state-corrected-border: #ddd6fe;
-    --re-state-event: #2563eb;
-    --re-state-event-bg: #eff6ff;
-    --re-state-event-border: #bfdbfe;
-    --re-evidence-bg: #fffbeb;
-    --re-evidence-border: #fde68a;
-}
-
-.dark {
-    --re-feeling-control: #f8fafc;
-    --re-feeling-traceability: #60a5fa;
-    --re-feeling-readiness: #34d399;
-    --re-feeling-trust: #fbbf24;
-    --re-feeling-calm-urgency: #f87171;
-
-    --re-command-bg: #080d16;
-    --re-command-grid: #1e293b;
-    --re-command-ink: #f8fafc;
-    --re-ledger-bg: #15120a;
-    --re-workbench-bg: #0b1220;
-
-    --re-state-invited: #cbd5e1;
-    --re-state-invited-bg: #1e293b;
-    --re-state-invited-border: #334155;
-    --re-state-corrected: #c4b5fd;
-    --re-state-corrected-bg: #2e1065;
-    --re-state-corrected-border: #5b21b6;
-    --re-state-event: #93c5fd;
-    --re-state-event-bg: #172554;
-    --re-state-event-border: #1d4ed8;
-    --re-evidence-bg: #451a03;
-    --re-evidence-border: #92400e;
-}
-
-.re-compliance-os {
-    color: var(--re-text-secondary);
-    background:
-        linear-gradient(90deg, rgba(219, 227, 238, 0.34) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(219, 227, 238, 0.3) 1px, transparent 1px),
-        linear-gradient(180deg, #ffffff 0, var(--re-command-bg) 580px, var(--re-surface-base) 100%);
-    background-size: 64px 64px, 64px 64px, auto;
-}
-
-.dark .re-compliance-os {
-    background:
-        linear-gradient(90deg, rgba(30, 41, 59, 0.5) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(30, 41, 59, 0.42) 1px, transparent 1px),
-        linear-gradient(180deg, #090f1a 0, var(--re-command-bg) 600px, var(--re-surface-base) 100%);
-    background-size: 64px 64px, 64px 64px, auto;
-}
-
-.re-evidence-card,
-.re-readiness-score,
-.re-hash-strip,
-.re-commit-gate,
-.re-package-preview {
-    border-radius: var(--re-radius-lg);
-    box-shadow: var(--re-shadow-sm);
-}
-
-.re-home-grid-panel {
-    background-image:
-        linear-gradient(90deg, rgba(203, 213, 225, 0.38) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(203, 213, 225, 0.32) 1px, transparent 1px);
-    background-size: 28px 28px;
-}
-
-.re-home-command-rail {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    border: 1px solid var(--re-surface-border);
-    background: var(--re-surface-elevated);
-    border-radius: var(--re-radius-lg);
-    overflow: hidden;
-}
-
-@media (max-width: 760px) {
-    .re-home-command-rail {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 640px) {
-    .re-a11y-fab {
-        top: auto !important;
-        right: 0 !important;
-        bottom: calc(env(safe-area-inset-bottom) + 5rem) !important;
-        width: 2.35rem !important;
-        height: 3rem !important;
-        border-radius: 9999px 0 0 9999px !important;
-        opacity: 0.92;
-        transform: none !important;
-    }
-
-    .re-a11y-fab:focus-visible,
-    .re-a11y-fab:hover {
-        opacity: 1;
-        transform: scale(1.02) !important;
-    }
-
-    .re-a11y-panel {
-        top: auto !important;
-        right: 1rem !important;
-        bottom: calc(env(safe-area-inset-bottom) + 8.75rem) !important;
-        width: calc(100vw - 2rem) !important;
-        max-height: min(70vh, 34rem) !important;
-        transform: none !important;
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   Developer Portal — committed dark developer identity
-   ═══════════════════════════════════════════════════════════ */
-
-/* The portal keeps its own dark, terminal-adjacent chrome regardless of the
-   app's light/dark preference — the visual signal that you've left the
-   compliance console and entered the API surface. Every token the portal
-   pages consume is redefined here, on the shell wrapper, so the values win
-   over both `:root` and `.dark` by DOM proximity and nothing leaks out.
-
-   Forced high contrast is a user's accessibility choice and outranks the
-   committed look, so the whole block is gated on :not(.a11y-high-contrast):
-   in that mode none of these tokens apply and the portal inherits the
-   user's forced scheme wholesale. Gating beats a token-by-token `inherit`
-   escape hatch because it cannot drift when tokens are added here. */
-html:not(.a11y-high-contrast) .re-devportal {
-    color-scheme: dark;
-
-    /* shadcn primitives (Card, Button, Input, Badge inside the portal) */
-    --background: 214 40% 6%;
-    --foreground: 210 40% 96%;
-    --card: 218 41% 11%;
-    --card-foreground: 210 40% 96%;
-    --popover: 218 41% 11%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 160 84% 39%;
-    --primary-foreground: 166 91% 5%;
-    --secondary: 217 33% 14%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 217 33% 14%;
-    --muted-foreground: 214 21% 68%;
-    --accent: 160 84% 39%;
-    --accent-foreground: 166 91% 5%;
-    --destructive: 0 72% 55%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 217 34% 19%;
-    --input: 217 34% 23%;
-    --ring: 160 84% 39%;
-
-    /* Brand: the API accent. Bright enough to read as text on the dark base
-       (7.1:1) and dark text on a brand fill clears 8:1 — unlike the app's
-       ink-colored `--re-brand`, which vanishes on dark surfaces. */
-    --re-brand: #10b981;
-    --re-brand-dark: #059669;
-    --re-brand-light: #34d399;
-    --re-brand-muted: rgba(16, 185, 129, 0.12);
-
-    --re-signal-red: #f87171;
-    --re-signal-yellow: #fbbf24;
-    --re-signal-green: #34d399;
-    --re-signal-blue: #60a5fa;
-
-    --re-surface-base: #090e15;
-    --re-surface-card: #101826;
-    --re-surface-border: #1e2b40;
-    --re-surface-elevated: #0d1420;
-    --re-surface-overlay: #090e15f2;
-    --re-sticky-bg: #090e15f2;
-    /* Inset wells (inputs, revealed keys) — darker than the page base so form
-       fields read as fields rather than holes in the card they sit on. */
-    --re-surface-inset: #05080d;
-    /* Pillar token consumed by the usage page; :root's #475569 is invisible here. */
-    --re-linkage: #93a4b8;
-
-    --re-text-primary: #f1f5f9;
-    --re-text-secondary: #dbe4ee;
-    --re-text-tertiary: #b9c5d4;
-    --re-text-muted: #93a4b8;
-    /* #7d8fa6 clears WCAG AA (4.5:1) on all three portal surfaces — a darker
-       value fails on --re-surface-elevated/-card even though it passes on base. */
-    --re-text-disabled: #7d8fa6;
-
-    --re-border-default: #24344d;
-    --re-border-subtle: #16202f;
-    --re-border-strong: #35496a;
-
-    --re-success: #34d399;
-    --re-success-muted: rgba(52, 211, 153, 0.14);
-    --re-success-bg: rgba(52, 211, 153, 0.07);
-    --re-success-border: rgba(52, 211, 153, 0.25);
-    --re-warning: #fbbf24;
-    --re-warning-muted: rgba(251, 191, 36, 0.14);
-    --re-warning-bg: rgba(251, 191, 36, 0.07);
-    --re-warning-border: rgba(251, 191, 36, 0.3);
-    --re-danger: #f87171;
-    --re-danger-muted: rgba(248, 113, 113, 0.14);
-    --re-danger-bg: rgba(248, 113, 113, 0.08);
-    --re-danger-border: rgba(248, 113, 113, 0.3);
-    --re-info: #60a5fa;
-    --re-info-muted: rgba(96, 165, 250, 0.14);
-    --re-info-bg: rgba(96, 165, 250, 0.08);
-    --re-info-border: rgba(96, 165, 250, 0.3);
-
-    color: var(--re-text-primary);
-    /* Fine dot grid — deliberately different from the app shell's 48px line
-       grid so the two surfaces never read as the same place. */
-    background:
-        radial-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1.5px) 0 0 / 26px 26px,
-        var(--re-surface-base);
+.re-app-surface .text-transparent {
+    color: var(--re-text-primary) !important;
 }

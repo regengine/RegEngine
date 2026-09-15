@@ -1,5 +1,35 @@
 import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { extendTailwindMerge } from "tailwind-merge"
+
+/**
+ * The design system's type scale (tailwind.config.ts -> theme.extend.fontSize).
+ *
+ * tailwind-merge only knows Tailwind's stock size names, so it classifies every
+ * one of these as a *text colour* and drops it the moment a real colour class
+ * follows: `cn("text-ui", "text-re-text-secondary")` collapsed to just the
+ * colour, and the element silently fell back to the inherited 16px body size.
+ * Registering the scale in the font-size group is what makes `cn()` treat
+ * size and colour as the two independent axes they are.
+ */
+const TYPE_SCALE = [
+    "display",
+    "heading-lg",
+    "title",
+    "heading",
+    "subheading",
+    "body",
+    "ui",
+    "small",
+    "label",
+] as const
+
+const twMerge = extendTailwindMerge({
+    extend: {
+        classGroups: {
+            "font-size": [{ text: [...TYPE_SCALE] }],
+        },
+    },
+})
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))

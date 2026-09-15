@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "design:lint": "node scripts/design-lint.mjs",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -21,7 +22,8 @@
   },
   "knip": {
     "entry": [
-      "playwright.demo-smoke.config.ts"
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
     ]
   },
   "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",

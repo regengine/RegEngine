@@ -4,6 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Container } from '@/components/layout/container';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import { clsx } from 'clsx';
+import type { LucideIcon } from 'lucide-react';
 import {
     LayoutDashboard, Key, BarChart3, BookOpen, LogOut,
     ShieldCheck, Terminal, Code2, Webhook, Package,
@@ -14,7 +20,7 @@ import {
 interface PortalNavItem {
     label: string;
     href: string;
-    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+    icon: LucideIcon;
     /** Leaves the portal shell for the shared public docs chrome. */
     external?: boolean;
 }
@@ -49,6 +55,20 @@ const NAV_SECTIONS: { label: string; items: PortalNavItem[] }[] = [
     },
 ];
 
+/**
+ * The one nav-item recipe — shared with the dashboard sidebar (SPEC §3.3):
+ * 36px row, inset tint when active, 2px brand rail on the left edge.
+ */
+function navItemClass(active: boolean) {
+    return clsx(
+        'relative flex h-9 items-center gap-2.5 rounded-md px-3 text-ui no-underline transition-colors duration-120 motion-reduce:transition-none',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-1 focus-visible:ring-offset-re-ring-offset',
+        active
+            ? 'bg-re-surface-inset font-medium text-re-text-primary before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-re-brand before:content-[""]'
+            : 'text-re-text-secondary hover:bg-re-surface-inset hover:text-re-text-primary',
+    );
+}
+
 export function DeveloperPortalShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
@@ -78,30 +98,25 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
     }
 
     return (
-        <div className="re-devportal min-h-screen flex">
-            <aside className="w-60 flex-shrink-0 flex flex-col border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+        <div className="re-devportal flex min-h-screen bg-re-surface-base text-re-text-primary">
+            <aside className="flex w-[244px] flex-shrink-0 flex-col border-r border-re-border-subtle bg-re-surface-elevated">
                 {/* Badge sits OUTSIDE the logo link so the link's accessible
                     name stays "RegEngine developer portal" — the badge is a
                     status indicator, not link text. */}
-                <div className="p-4 flex items-center gap-2.5 border-b border-[var(--re-border-subtle)]">
-                    <Link href="/developer/portal" className="flex-1 min-w-0 flex items-center gap-2.5 no-underline">
-                        <div className="w-7 h-7 rounded-md flex items-center justify-center border border-[var(--re-surface-border)] bg-[var(--re-brand-muted)]">
-                            <Terminal className="w-4 h-4 text-[var(--re-brand-light)]" />
-                        </div>
-                        <div className="min-w-0">
-                            <span className="font-semibold text-sm block text-[var(--re-text-primary)]">RegEngine</span>
-                            <span className="font-mono text-[10px] tracking-wide text-[var(--re-brand-light)]">developer portal</span>
-                        </div>
-                    </Link>
-                    <span
-                        className="font-mono text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded border"
-                        style={{ color: 'var(--re-warning)', borderColor: 'var(--re-warning-border)', background: 'var(--re-warning-bg)' }}
+                <div className="flex items-center gap-2 border-b border-re-border-subtle px-4 py-3">
+                    <Link
+                        href="/developer/portal"
+                        className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
                     >
+                        <RegEngineWordmark size="sm" />
+                        <span className="font-mono text-label text-re-text-muted">developer portal</span>
+                    </Link>
+                    <Badge tone="warning" size="sm" mono className="shrink-0 uppercase">
                         SANDBOX
-                    </span>
+                    </Badge>
                 </div>
 
-                <nav className="flex-1 overflow-y-auto py-3 px-2">
+                <nav aria-label="Developer portal navigation" className="flex-1 overflow-y-auto px-2 py-3">
                     {NAV_SECTIONS.map((section) => {
                         const isCollapsed = collapsed[section.label];
                         return (
@@ -110,13 +125,12 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                                     type="button"
                                     onClick={() => toggleSection(section.label)}
                                     aria-expanded={!isCollapsed}
-                                    className="w-full flex items-center justify-between px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest rounded-md"
-                                    style={{ color: 'var(--re-text-disabled)' }}
+                                    className="flex w-full items-center justify-between gap-1.5 rounded-md px-3 py-2 text-label uppercase text-re-text-muted transition-colors duration-120 hover:text-re-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
                                 >
                                     {section.label}
                                     {isCollapsed
-                                        ? <ChevronRight className="w-3 h-3" />
-                                        : <ChevronDown className="w-3 h-3" />
+                                        ? <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                        : <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                     }
                                 </button>
                                 {!isCollapsed && (
@@ -128,23 +142,23 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                                                     key={item.href}
                                                     href={item.href}
                                                     aria-current={active ? 'page' : undefined}
-                                                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-all no-underline"
-                                                    style={{
-                                                        color: active ? 'var(--re-brand-light)' : 'var(--re-text-muted)',
-                                                        background: active ? 'var(--re-brand-muted)' : 'transparent',
-                                                        boxShadow: active ? 'inset 2px 0 0 var(--re-brand)' : 'none',
-                                                        fontWeight: active ? 600 : 400,
-                                                    }}
+                                                    className={navItemClass(active)}
                                                 >
-                                                    <item.icon className="w-3.5 h-3.5 flex-shrink-0" style={{
-                                                        color: active ? 'var(--re-brand-light)' : 'var(--re-text-disabled)',
-                                                    }} />
+                                                    <item.icon
+                                                        className="h-4 w-4 flex-shrink-0"
+                                                        strokeWidth={1.75}
+                                                        aria-hidden="true"
+                                                    />
                                                     {item.label}
                                                     {item.external && (
                                                         <>
                                                             {/* Same-tab navigation out of the portal chrome — say so for AT users */}
                                                             <span className="sr-only">(opens documentation)</span>
-                                                            <ArrowUpRight className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: 'var(--re-text-disabled)' }} />
+                                                            <ArrowUpRight
+                                                                className="ml-auto h-3 w-3 flex-shrink-0 text-re-text-muted"
+                                                                strokeWidth={1.75}
+                                                                aria-hidden="true"
+                                                            />
                                                         </>
                                                     )}
                                                 </Link>
@@ -157,39 +171,31 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                     })}
                 </nav>
 
-                <div className="p-2 space-y-0.5 border-t border-[var(--re-border-subtle)]">
-                    <div
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px]"
-                        style={{ color: 'var(--re-text-disabled)' }}
-                    >
-                        <div className="w-1.5 h-1.5 rounded-full bg-re-success" />
+                <div className="space-y-0.5 border-t border-re-border-subtle p-2">
+                    <p className="px-3 py-1.5 text-small text-re-text-muted">
                         Service updates available through support
-                    </div>
-                    <Link
-                        href="/dashboard"
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-[var(--re-brand-muted)] no-underline"
-                        style={{ color: 'var(--re-text-muted)' }}
-                    >
-                        <ArrowLeft className="w-3.5 h-3.5" />
+                    </p>
+                    <Link href="/dashboard" className={navItemClass(false)}>
+                        <ArrowLeft className="h-4 w-4 flex-shrink-0" strokeWidth={1.75} aria-hidden="true" />
                         Back to console
                     </Link>
-                    <button
+                    <Button
                         type="button"
+                        variant="ghost"
                         onClick={handleLogout}
                         disabled={isLoggingOut}
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger/10 disabled:opacity-60 no-underline"
-                        style={{ color: 'var(--re-text-disabled)' }}
+                        className="h-9 w-full justify-start px-3 font-normal"
+                        leadingIcon={<LogOut className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
                     >
-                        <LogOut className="w-3.5 h-3.5" />
                         {isLoggingOut ? 'Signing out…' : 'Sign Out'}
-                    </button>
+                    </Button>
                 </div>
             </aside>
 
             <main className="flex-1 overflow-auto">
-                <div className="max-w-5xl mx-auto px-8 py-8">
+                <Container width="docs" className="py-8">
                     {children}
-                </div>
+                </Container>
             </main>
         </div>
     );

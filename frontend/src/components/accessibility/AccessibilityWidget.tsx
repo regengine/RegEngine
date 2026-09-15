@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { cn } from '@/lib/utils';
 
 interface A11ySettings {
   fontSize: 'default' | 'large' | 'xl';
@@ -76,23 +77,23 @@ function Toggle({ label, description, checked, onChange, id }: {
   return (
     <div className="flex items-center justify-between py-3 px-5">
       <label htmlFor={id} className="flex-1 cursor-pointer">
-        <span className="text-sm font-medium block" style={{ color: 'var(--re-text-primary)' }}>{label}</span>
-        {description && <span className="text-xs block mt-0.5" style={{ color: 'var(--re-text-muted)' }}>{description}</span>}
+        <span className="block text-ui font-medium text-re-text-primary">{label}</span>
+        {description && <span className="mt-0.5 block text-small text-re-text-tertiary">{description}</span>}
       </label>
       <button
         id={id}
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className="relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
-        style={{
-          background: checked ? 'var(--re-brand)' : 'var(--re-surface-border)',
-        }}
+        className={cn(
+          "relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring/25 motion-reduce:transition-none",
+          checked ? "bg-re-brand" : "bg-re-border-strong",
+        )}
       >
         <span
           aria-hidden="true"
-          className="inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform"
-          style={{ transform: checked ? 'translateX(20px)' : 'translateX(2px)', marginTop: '2px' }}
+          className="mt-0.5 inline-block h-5 w-5 transform rounded-full bg-re-surface-card transition-transform duration-120 motion-reduce:transition-none"
+          style={{ transform: checked ? 'translateX(20px)' : 'translateX(2px)' }}
         />
       </button>
     </div>
@@ -109,7 +110,7 @@ function FontSizeSelector({ value, onChange }: {
   ];
   return (
     <div className="py-3 px-5">
-      <span className="text-sm font-medium block mb-2" style={{ color: 'var(--re-text-primary)' }}>Text Size</span>
+      <span className="mb-2 block text-ui font-medium text-re-text-primary">Text Size</span>
       <div className="flex gap-2" role="radiogroup" aria-label="Text size">
         {options.map(o => (
           <button
@@ -118,13 +119,13 @@ function FontSizeSelector({ value, onChange }: {
             aria-checked={value === o.val}
             aria-label={`Font size ${o.val}`}
             onClick={() => onChange(o.val)}
-            className="flex-1 py-2 rounded-lg text-center font-semibold transition-all focus:outline-none focus:ring-2"
-            style={{
-              fontSize: o.size,
-              background: value === o.val ? 'var(--re-brand)' : 'var(--re-surface-elevated)',
-              color: value === o.val ? '#fff' : 'var(--re-text-secondary)',
-              border: value === o.val ? '2px solid var(--re-brand)' : '2px solid var(--re-surface-border)',
-            }}
+            className={cn(
+              "flex-1 rounded-md border-2 py-2 text-center font-semibold transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring/25 motion-reduce:transition-none",
+              value === o.val
+                ? "border-re-brand bg-re-brand text-re-brand-foreground"
+                : "border-re-border bg-re-surface-card text-re-text-secondary hover:border-re-border-strong",
+            )}
+            style={{ fontSize: o.size }} // design-lint-disable — this control previews a text size; the size IS the content
           >
             {o.label}
           </button>
@@ -198,14 +199,11 @@ export function AccessibilityWidget() {
         onClick={() => setOpen(!open)}
         aria-label={open ? 'Close accessibility settings' : 'Open accessibility settings'}
         aria-expanded={open}
-        className="re-a11y-fab fixed bottom-6 right-6 z-[9999] w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-offset-2"
-        style={{
-          background: 'var(--re-brand)',
-          color: '#fff',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-        }}
+        // Below md the dashboard shell pins a 56px tab bar to the bottom edge,
+        // so the launcher has to clear it or it lands on the first tab.
+        className="re-a11y-fab fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+1rem)] right-4 z-[var(--re-z-toast)] flex h-12 w-12 items-center justify-center rounded-full border border-re-brand-dark bg-re-brand text-re-brand-foreground transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring/25 motion-reduce:transition-none md:bottom-6 md:right-6"
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="4.5" r="2.5"/>
           <path d="M12 7v4m0 0l-4 7m4-7l4 7"/>
           <path d="M7 11.5h10"/>
@@ -218,30 +216,30 @@ export function AccessibilityWidget() {
           role="dialog"
           aria-label="Accessibility Settings"
           aria-modal="false"
-          className="re-a11y-panel fixed bottom-20 right-6 z-[9999] w-80 max-h-[80vh] overflow-y-auto rounded-2xl"
-          style={{
-            background: 'var(--re-surface-base)',
-            border: '1px solid var(--re-surface-border)',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-          }}
+          // Sits directly above the launcher, which itself clears the mobile
+          // tab bar. Elevation is surface-step + border, not a drop shadow.
+          className="re-a11y-panel fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+4.5rem)] right-4 z-[var(--re-z-toast)] max-h-[70vh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-re-border bg-re-surface-elevated md:bottom-20 md:right-6 md:max-h-[80vh]"
         >
           {/* Header */}
-          <div className="px-5 pt-5 pb-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--re-surface-border)' }}>
+          <div className="flex items-center justify-between border-b border-re-border-subtle px-5 pb-3 pt-5">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--re-text-primary)' }}>Accessibility</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--re-text-muted)' }}>Customize your experience</p>
+              <h2 className="text-subheading text-re-text-primary">Accessibility</h2>
+              <p className="mt-0.5 text-small text-re-text-tertiary">Customize your experience</p>
             </div>
             {hasChanges && (
-              <button onClick={resetAll} className="text-xs font-medium px-2 py-1 rounded" style={{ color: 'var(--re-brand)', background: 'var(--re-brand-muted)' }}>
+              <button
+                onClick={resetAll}
+                className="rounded-md px-2 py-1 text-small font-medium text-re-text-secondary transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring/25 motion-reduce:transition-none"
+              >
                 Reset All
               </button>
             )}
           </div>
 
           {/* Controls */}
-          <div className="py-2" style={{ borderBottom: '1px solid var(--re-surface-border)' }}>
-            <div className="px-5 pt-3 pb-1">
-              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--re-text-muted)' }}>Vision</span>
+          <div className="border-b border-re-border-subtle py-2">
+            <div className="px-5 pb-1 pt-3">
+              <span className="text-label uppercase text-re-text-muted">Vision</span>
             </div>
             <FontSizeSelector value={settings.fontSize} onChange={v => update({ fontSize: v })} />
             <Toggle id="a11y-dyslexic" label="Dyslexia-Friendly Font" description="Switch to OpenDyslexic typeface"
@@ -255,8 +253,8 @@ export function AccessibilityWidget() {
           </div>
 
           <div className="py-2">
-            <div className="px-5 pt-3 pb-1">
-              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--re-text-muted)' }}>Motor &amp; Navigation</span>
+            <div className="px-5 pb-1 pt-3">
+              <span className="text-label uppercase text-re-text-muted">Motor &amp; Navigation</span>
             </div>
             <Toggle id="a11y-reduced-motion" label="Reduce Motion" description="Minimize animations and transitions"
               checked={settings.reducedMotion} onChange={v => update({ reducedMotion: v })} />
@@ -267,8 +265,8 @@ export function AccessibilityWidget() {
           </div>
 
           {/* Footer */}
-          <div className="px-5 py-3 text-center" style={{ borderTop: '1px solid var(--re-surface-border)' }}>
-            <p className="text-[10px]" style={{ color: 'var(--re-text-muted)' }}>
+          <div className="border-t border-re-border-subtle px-5 py-3 text-center">
+            <p className="text-label text-re-text-muted">
               Settings are saved locally and persist across visits.
             </p>
           </div>

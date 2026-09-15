@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
 import {
   Select,
   SelectContent,
@@ -42,7 +43,7 @@ const COMPLIANCE_STATUSES = [
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { user, tenantId } = useAuth();
+  const { tenantId } = useAuth();
   const updateOnboarding = useUpdateOnboarding(tenantId);
 
   const [role, setRole] = useState('');
@@ -70,32 +71,19 @@ export default function WelcomePage() {
   };
 
   return (
-    <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
-      <CardHeader className="space-y-2 pb-2">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--re-brand)]/10">
-            <Building2 className="h-5 w-5 text-[var(--re-brand)]" />
-          </div>
-          <div>
-            <div className="mb-1">
-              <StepIndicator step={1} />
-            </div>
-            <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
-              Welcome to RegEngine
-            </h1>
-            <p className="text-sm text-[var(--re-text-muted)]">
-              Help us tailor your workspace — this takes about 10 seconds.
-            </p>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Your role
-          </label>
+    <Card padding="spacious">
+      <StepIndicator step={1} />
+      <h1 className="mt-4 text-heading text-re-text-primary">
+        Welcome to RegEngine
+      </h1>
+      <p className="mt-1 text-ui text-re-text-secondary">
+        Help us tailor your workspace — this takes about 10 seconds.
+      </p>
+
+      <div className="mt-6 space-y-5">
+        <Field label="Your role" htmlFor="onboarding-role">
           <Select value={role} onValueChange={setRole}>
-            <SelectTrigger>
+            <SelectTrigger id="onboarding-role" className="h-11">
               <SelectValue placeholder="Select your role" />
             </SelectTrigger>
             <SelectContent>
@@ -106,14 +94,11 @@ export default function WelcomePage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Company type
-          </label>
+        <Field label="Company type" htmlFor="onboarding-company-type">
           <Select value={companyType} onValueChange={setCompanyType}>
-            <SelectTrigger>
+            <SelectTrigger id="onboarding-company-type" className="h-11">
               <SelectValue placeholder="Select company type" />
             </SelectTrigger>
             <SelectContent>
@@ -124,14 +109,11 @@ export default function WelcomePage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Compliance status
-          </label>
+        <Field label="Compliance status" htmlFor="onboarding-compliance-status">
           <Select value={complianceStatus} onValueChange={setComplianceStatus}>
-            <SelectTrigger>
+            <SelectTrigger id="onboarding-compliance-status" className="h-11">
               <SelectValue placeholder="Where are you on your FSMA 204 journey?" />
             </SelectTrigger>
             <SelectContent>
@@ -142,26 +124,35 @@ export default function WelcomePage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Field>
+      </div>
 
+      <div className="mt-8 flex flex-col-reverse gap-3 border-t border-re-border-subtle pt-5 sm:flex-row sm:items-center sm:justify-between">
         <Button
-          className="h-11 w-full"
+          variant="ghost"
+          size="lg"
+          onClick={() => router.push('/dashboard')}
+        >
+          Skip for now — I&apos;ll set up later
+        </Button>
+        <Button
+          size="lg"
           disabled={!isValid || updateOnboarding.isPending}
           onClick={handleContinue}
         >
           {updateOnboarding.isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
               Saving...
             </>
           ) : (
             <>
               Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight aria-hidden="true" />
             </>
           )}
         </Button>
-      </CardContent>
+      </div>
     </Card>
   );
 }
