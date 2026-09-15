@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Factory, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -14,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { apiClient } from '@/lib/api-client';
@@ -129,74 +132,58 @@ export default function FacilityPage() {
   };
 
   return (
-    <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
-      <CardHeader className="space-y-2 pb-2">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-re-brand-muted">
-            <Factory className="h-5 w-5 text-re-brand" />
-          </div>
-          <div>
-            <div className="mb-1">
-              <StepIndicator step={2} />
-            </div>
-            <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
-              Register Your First Facility
-            </h1>
-            <p className="text-sm text-[var(--re-text-muted)]">
-              You can add more facilities later under Suppliers.
-            </p>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <Card padding="spacious">
+      <StepIndicator step={2} />
+      <h1 className="mt-4 text-heading text-re-text-primary">
+        Register Your First Facility
+      </h1>
+      <p className="mt-1 text-ui text-re-text-secondary">
+        You can add more facilities later under Suppliers.
+      </p>
+
+      <div className="mt-6 space-y-5">
         {error && (
-          <div className="rounded-md border border-re-danger/40 bg-re-danger/10 px-3 py-2 text-sm text-re-danger" role="alert">
+          <Callout tone="danger" role="alert">
             {error}
-          </div>
+          </Callout>
         )}
 
         {/* Facility name */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Facility name <span className="text-re-danger">*</span>
-          </label>
+        <Field label="Facility name" htmlFor="facility-name" required>
           <Input
+            id="facility-name"
+            size="lg"
             placeholder="e.g. Salinas Valley Packhouse"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-        </div>
+        </Field>
 
         {/* Street address — #539: real field replaces hardcoded '--' */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-            Street address <span className="text-re-danger">*</span>
-          </label>
+        <Field label="Street address" htmlFor="facility-street" required>
           <Input
+            id="facility-street"
+            size="lg"
             placeholder="e.g. 1234 Harvest Rd"
             value={street}
             onChange={(e) => setStreet(e.target.value)}
           />
-        </div>
+        </Field>
 
         {/* City / State */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              City <span className="text-re-danger">*</span>
-            </label>
+          <Field label="City" htmlFor="facility-city" required>
             <Input
+              id="facility-city"
+              size="lg"
               placeholder="e.g. Salinas"
               value={city}
               onChange={(e) => setCity(e.target.value)}
             />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              State <span className="text-re-danger">*</span>
-            </label>
+          </Field>
+          <Field label="State" htmlFor="facility-state" required>
             <Select value={state} onValueChange={setState}>
-              <SelectTrigger>
+              <SelectTrigger id="facility-state" className="h-11">
                 <SelectValue placeholder="State" />
               </SelectTrigger>
               <SelectContent>
@@ -207,80 +194,92 @@ export default function FacilityPage() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </Field>
         </div>
 
         {/* ZIP / FDA reg — #539: ZIP required with format validation */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              ZIP code <span className="text-re-danger">*</span>
-            </label>
+          <Field
+            label="ZIP code"
+            htmlFor="facility-zip"
+            required
+            error={zipInvalid ? 'Enter a valid 5-digit ZIP (or ZIP+4 e.g. 93901-1234).' : undefined}
+          >
             <Input
+              id="facility-zip"
+              size="lg"
               placeholder="e.g. 93901"
               value={zip}
               onChange={(e) => setZip(e.target.value)}
               aria-invalid={zipInvalid}
             />
-            {zipInvalid && (
-              <p className="text-xs text-re-danger">
-                Enter a valid 5-digit ZIP (or ZIP+4 e.g. 93901-1234).
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              FDA registration #
-            </label>
+          </Field>
+          <Field label="FDA registration #" htmlFor="facility-fda-reg">
             <Input
+              id="facility-fda-reg"
+              size="lg"
               placeholder="Optional"
               value={fdaReg}
               onChange={(e) => setFdaReg(e.target.value)}
             />
-          </div>
+          </Field>
         </div>
 
         {/* Supply chain roles */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
+        <fieldset>
+          <legend className="text-ui font-medium text-re-text-primary">
             Supply chain role(s)
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {SUPPLY_CHAIN_ROLES.map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => toggleRole(role)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  roles.includes(role)
-                    ? 'border-[var(--re-brand)] bg-[var(--re-brand)]/10 text-[var(--re-brand)]'
-                    : 'border-[var(--re-surface-border)] text-[var(--re-text-muted)] hover:border-[var(--re-text-muted)]'
-                }`}
-              >
-                {role}
-              </button>
-            ))}
+          </legend>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {SUPPLY_CHAIN_ROLES.map((role) => {
+              const selected = roles.includes(role);
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => toggleRole(role)}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-small font-medium transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none',
+                    selected
+                      ? 'border-re-text-primary bg-re-surface-inset text-re-text-primary'
+                      : 'border-re-border text-re-text-secondary hover:border-re-border-strong',
+                  )}
+                >
+                  {role}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </fieldset>
+      </div>
 
+      <div className="mt-8 flex flex-col-reverse gap-3 border-t border-re-border-subtle pt-5 sm:flex-row sm:items-center sm:justify-between">
         <Button
-          className="h-11 w-full"
+          variant="ghost"
+          size="lg"
+          onClick={() => router.push('/dashboard')}
+        >
+          Skip for now — I&apos;ll set up later
+        </Button>
+        <Button
+          size="lg"
           disabled={!isValid || saving}
           onClick={handleSubmit}
         >
           {saving ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
               Saving...
             </>
           ) : (
             <>
               Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight aria-hidden="true" />
             </>
           )}
         </Button>
-      </CardContent>
+      </div>
     </Card>
   );
 }

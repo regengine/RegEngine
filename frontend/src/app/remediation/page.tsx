@@ -3,14 +3,19 @@
 import { useMemo, useState } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { Section } from '@/components/layout/section';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -20,10 +25,12 @@ import {
   useRemediationManifests,
   useRemediationMetrics,
   useRemediationOutbox,
+  type ManifestRecord,
+  type ManifestSummary,
   type OutboxPreview,
 } from '@/hooks/use-remediation';
 
-import { FileWarning, Link2, Mail, PackageCheck, ShieldCheck } from 'lucide-react';
+import { Check, Copy, FileWarning, Link2, Mail, PackageCheck } from 'lucide-react';
 
 const CASE_STATUS_LABEL: Record<string, string> = {
   detected: 'Detected',
@@ -50,19 +57,23 @@ const DELIVERY_LABEL: Record<string, string> = {
   skipped: 'Email skipped',
 };
 
+const DELIVERY_TONE: Record<string, BadgeTone> = {
+  pending: 'neutral',
+  previewed: 'neutral',
+  queued: 'info',
+  sending: 'info',
+  sent: 'success',
+  failed: 'danger',
+  skipped: 'warning',
+};
+
 function DeliveryBadge({ status, reason }: { status: string; reason?: string | null }) {
   const label = DELIVERY_LABEL[status] ?? status;
-  const title = reason ?? undefined;
-  if (status === 'sent') {
-    return <Badge variant="secondary" className="text-re-success" title={title}>{label}</Badge>;
-  }
-  if (status === 'failed') {
-    return <Badge variant="destructive" title={title}>{label}</Badge>;
-  }
-  if (status === 'queued' || status === 'sending') {
-    return <Badge variant="secondary" title={title}>{label}</Badge>;
-  }
-  return <Badge variant="outline" className="text-muted-foreground" title={title}>{label}</Badge>;
+  return (
+    <Badge tone={DELIVERY_TONE[status] ?? 'neutral'} size="sm" title={reason ?? undefined}>
+      {label}
+    </Badge>
+  );
 }
 
 function pct(value: number | null | undefined): string {
@@ -70,14 +81,56 @@ function pct(value: number | null | undefined): string {
   return `${Math.round(value * 100)}%`;
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/**
+ * One-time secret reveal. The correction URL is shown once and only its hash is
+ * stored, so the warning copy is load-bearing and must not be softened.
+ */
+function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard denied (insecure context, permission) — the URL is on screen.
+    }
+  };
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
-      </CardHeader>
-      {hint ? <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent> : null}
+    <Card variant="inset" padding="compact" className="mt-4">
+      {email ? (
+        <>
+          <p className="text-ui font-medium text-re-text-primary">
+            Link issued — being emailed to {email} automatically (usually within a minute).
+          </p>
+          <p className="mt-1 text-small text-re-text-tertiary">
+            Do not share the copy below: sending re-issues the link, so this copy stops working the
+            moment the email goes out. Only its hash is stored.
+          </p>
+        </>
+      ) : (
+        <p className="text-ui font-medium text-re-text-primary">
+          No supplier email given — this link will NOT be emailed. Copy it now and deliver it
+          yourself (shown once — only its hash is stored):
+        </p>
+      )}
+      <div className="mt-2 flex items-start gap-2">
+        <code className="min-w-0 flex-1 break-all rounded-md border border-re-border-subtle bg-re-surface-card px-2 py-1.5 font-mono text-small text-re-text-secondary">
+          {url}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={copy}
+          aria-label={copied ? 'Correction link copied' : 'Copy correction link'}
+        >
+          {copied
+            ? <Check className="h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+            : <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -110,289 +163,325 @@ export default function RemediationPage() {
   const rows = manifests.data?.manifests ?? [];
   const m = metrics.data;
 
+  const pageHeader = (
+    <PageHeader
+      title="Supplier Remediation"
+      description="Manifest intake, blocked-line correction links, and evidence — suppliers fix their own data."
+    />
+  );
+
+
   if (manifests.error) {
     return (
       <PageContainer>
-        <div className="p-8 text-center">
-          <p className="text-muted-foreground">Unable to load supplier remediation data.</p>
-          <p className="text-sm text-muted-foreground/60 mt-2">{(manifests.error as Error).message}</p>
-          <button onClick={() => manifests.refetch()} className="mt-4 text-sm text-primary hover:underline">
-            Retry
-          </button>
-        </div>
+        {pageHeader}
+        <Callout
+          tone="danger"
+          role="alert"
+          title="Unable to load supplier remediation data."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => manifests.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {(manifests.error as Error).message}
+        </Callout>
       </PageContainer>
     );
   }
 
+  const manifestColumns: DataTableColumn<ManifestSummary>[] = [
+    {
+      key: 'original_filename',
+      header: 'File',
+      cell: (row) => (
+        <button
+          type="button"
+          aria-pressed={selectedRun === row.ingestion_run_id}
+          onClick={() => setSelectedRun(row.ingestion_run_id)}
+          className="rounded-sm text-left font-medium text-re-text-primary transition-colors duration-120 hover:text-re-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring aria-pressed:text-re-brand motion-reduce:transition-none"
+        >
+          {row.original_filename}
+        </button>
+      ),
+    },
+    { key: 'total_rows', header: 'Rows', align: 'right', width: '6rem' },
+    { key: 'ready_to_release', header: 'Ready', align: 'right', width: '6rem' },
+    { key: 'blocked', header: 'Blocked', align: 'right', width: '6rem' },
+    { key: 'released', header: 'Released', align: 'right', width: '7rem' },
+    {
+      key: 'data_hold',
+      header: 'Status',
+      width: '10rem',
+      cell: (row) =>
+        row.data_hold
+          ? <StatusBadge state="blocked" label="Data hold" size="sm" />
+          : <StatusBadge state="compliant" label="Clear" size="sm" />,
+    },
+    {
+      key: 'release',
+      header: 'Release',
+      align: 'right',
+      width: '13rem',
+      cell: (row) =>
+        row.ready_to_release > 0 ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={releaseManifest.isPending}
+            leadingIcon={<PackageCheck strokeWidth={1.75} aria-hidden="true" />}
+            onClick={(e) => {
+              e.stopPropagation();
+              releaseManifest.mutate(row.ingestion_run_id);
+            }}
+          >
+            Release passing rows
+          </Button>
+        ) : null,
+    },
+  ];
+
+  const recordColumns: DataTableColumn<ManifestRecord>[] = [
+    { key: 'row_number', header: 'Row', align: 'right', width: '5rem' },
+    {
+      key: 'validation_status',
+      header: 'Validation',
+      width: '9.5rem',
+      cell: (record) =>
+        record.validation_status === 'passed'
+          ? <StatusBadge state="compliant" label="Passed" size="sm" />
+          : <StatusBadge state="blocked" label="Blocked" size="sm" />,
+    },
+    {
+      key: 'release_status',
+      header: 'Release',
+      width: '7rem',
+      cell: (record) => <span className="text-re-text-secondary">{record.release_status}</span>,
+    },
+    {
+      key: 'case',
+      header: 'Case',
+      width: '12.5rem',
+      cell: (record) => {
+        if (!record.case) return <span className="text-re-text-muted">—</span>;
+        const delivery = outboxByCase.get(record.case.case_id);
+        return (
+          <span className="flex flex-wrap items-center gap-2 text-ui text-re-text-secondary">
+            {CASE_STATUS_LABEL[record.case.case_status] ?? record.case.case_status}
+            {delivery ? (
+              <DeliveryBadge status={delivery.status} reason={delivery.last_error} />
+            ) : record.case.notified ? (
+              <Mail
+                className="h-3.5 w-3.5 text-re-text-muted"
+                strokeWidth={1.75}
+                role="img"
+                aria-label="Supplier notified"
+              />
+            ) : null}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'due',
+      header: 'Due',
+      width: '7rem',
+      cell: (record) => (
+        <span className="text-re-text-tertiary">
+          {record.case?.due_at ? new Date(record.case.due_at).toLocaleDateString() : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'why_blocked',
+      header: 'Why blocked',
+      cell: (record) => (
+        <span className="block max-w-[20ch] text-re-text-tertiary">
+          {(record.failures ?? []).map((f) => f.why_failed).join('; ') || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'issue',
+      header: 'Correction',
+      align: 'right',
+      width: '9.5rem',
+      cell: (record) => {
+        if (
+          !record.remediation_case_id ||
+          !record.case ||
+          ['released'].includes(record.case.case_status)
+        ) {
+          return null;
+        }
+        return (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={issueLink.isPending}
+            leadingIcon={<Link2 strokeWidth={1.75} aria-hidden="true" />}
+            onClick={() => {
+              const email = supplierEmail.trim();
+              issueLink.mutate(
+                {
+                  caseId: record.remediation_case_id as string,
+                  supplierEmail: email || undefined,
+                },
+                {
+                  onSuccess: (data) =>
+                    setIssued({ url: data.correction_url, email: email || null }),
+                },
+              );
+            }}
+          >
+            Issue link
+          </Button>
+        );
+      },
+    },
+  ];
+
   return (
     <PageContainer>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6 text-re-success" />
-          Supplier Remediation
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Manifest intake, blocked-line correction links, and evidence — suppliers fix their own data.
-        </p>
-      </div>
+      {pageHeader}
 
       {/* Metrics (FR-12) */}
-      <div className="grid gap-4 md:grid-cols-4 mb-8">
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
         {metrics.isLoading ? (
           [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)
         ) : (
           <>
-            <MetricCard label="Records processed" value={String(m?.total_records_processed ?? 0)} />
-            <MetricCard label="First-pass acceptance" value={pct(m?.first_pass_acceptance_rate)} />
-            <MetricCard
+            <StatTile label="Records processed" value={String(m?.total_records_processed ?? 0)} />
+            <StatTile label="First-pass acceptance" value={pct(m?.first_pass_acceptance_rate)} />
+            <StatTile
               label="Resolved without buyer work"
               value={pct(m?.resolved_without_buyer_intervention_rate)}
-              hint="The pilot headline metric"
+            >
+              <p className="text-small text-re-text-tertiary">The pilot headline metric</p>
+            </StatTile>
+            <StatTile
+              label="Supplier corrections"
+              value={String(m?.supplier_corrections_submitted ?? 0)}
             />
-            <MetricCard label="Supplier corrections" value={String(m?.supplier_corrections_submitted ?? 0)} />
           </>
         )}
       </div>
 
       {/* Manifest list (FR-9) */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileWarning className="h-5 w-5" /> Manifests
-          </CardTitle>
-          <CardDescription>
-            A data hold withholds blocked lines from release — it never rejects physical shipments.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {manifests.isLoading ? (
-            <Skeleton className="h-32" />
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No manifests ingested yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>File</TableHead>
-                  <TableHead>Rows</TableHead>
-                  <TableHead>Ready</TableHead>
-                  <TableHead>Blocked</TableHead>
-                  <TableHead>Released</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow
-                    key={row.ingestion_run_id}
-                    className="cursor-pointer"
-                    onClick={() => setSelectedRun(row.ingestion_run_id)}
-                  >
-                    <TableCell className="font-medium">{row.original_filename}</TableCell>
-                    <TableCell>{row.total_rows}</TableCell>
-                    <TableCell>{row.ready_to_release}</TableCell>
-                    <TableCell>{row.blocked}</TableCell>
-                    <TableCell>{row.released}</TableCell>
-                    <TableCell>
-                      {row.data_hold ? (
-                        <Badge variant="destructive">Data hold</Badge>
-                      ) : (
-                        <Badge variant="secondary">Clear</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {row.ready_to_release > 0 && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={releaseManifest.isPending}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            releaseManifest.mutate(row.ingestion_run_id);
-                          }}
-                        >
-                          <PackageCheck className="h-4 w-4 mr-1" /> Release passing rows
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <Section
+        spacing="app"
+        title="Manifests"
+        description="A data hold withholds blocked lines from release — it never rejects physical shipments."
+      >
+        <DataTable
+          caption="Ingested supplier manifests"
+          columns={manifestColumns}
+          data={rows}
+          minWidth="1000px"
+          rowKey={(row) => row.ingestion_run_id}
+          status={manifests.isLoading ? 'loading' : rows.length === 0 ? 'empty' : 'idle'}
+          empty={{ icon: FileWarning, title: 'No manifests ingested yet.' }}
+        />
+      </Section>
 
       {/* Manifest detail */}
       {selectedRun && (
-        <Card className="mb-8">
+        <Card className="mt-8">
           <CardHeader>
-            <CardTitle>{detail.data?.original_filename ?? 'Manifest detail'}</CardTitle>
-            <CardDescription>
-              SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… — original bytes preserved verbatim
-            </CardDescription>
-            <div className="mt-3 max-w-md">
-              <Input
-                type="email"
-                placeholder="supplier@company.com"
-                value={supplierEmail}
-                onChange={(e) => setSupplierEmail(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Correction links are emailed here automatically when issued. Leave empty to deliver a link
-                manually instead.
-              </p>
+            <div className="min-w-0">
+              <CardTitle>{detail.data?.original_filename ?? 'Manifest detail'}</CardTitle>
+              <CardDescription className="mt-1">
+                SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… — original bytes preserved verbatim
+              </CardDescription>
             </div>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedRun(null)}>
+              Close
+            </Button>
           </CardHeader>
-          <CardContent>
-            {detail.isLoading ? (
-              <Skeleton className="h-32" />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Row</TableHead>
-                    <TableHead>Validation</TableHead>
-                    <TableHead>Release</TableHead>
-                    <TableHead>Case</TableHead>
-                    <TableHead>Due</TableHead>
-                    <TableHead>Why blocked</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(detail.data?.records ?? []).map((record) => (
-                    <TableRow key={record.record_id}>
-                      <TableCell>{record.row_number}</TableCell>
-                      <TableCell>
-                        {record.validation_status === 'passed' ? (
-                          <Badge variant="secondary">Passed</Badge>
-                        ) : (
-                          <Badge variant="destructive">Blocked</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{record.release_status}</TableCell>
-                      <TableCell>
-                        {record.case ? (
-                          <span className="flex items-center gap-2 text-sm">
-                            {CASE_STATUS_LABEL[record.case.case_status] ?? record.case.case_status}
-                            {(() => {
-                              const delivery = outboxByCase.get(record.case.case_id);
-                              if (delivery) {
-                                return <DeliveryBadge status={delivery.status} reason={delivery.last_error} />;
-                              }
-                              return record.case.notified ? (
-                                <Mail className="h-3 w-3 text-muted-foreground" />
-                              ) : null;
-                            })()}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {record.case?.due_at ? new Date(record.case.due_at).toLocaleDateString() : '—'}
-                      </TableCell>
-                      <TableCell className="max-w-md text-sm text-muted-foreground">
-                        {(record.failures ?? []).map((f) => f.why_failed).join('; ') || '—'}
-                      </TableCell>
-                      <TableCell>
-                        {record.remediation_case_id &&
-                          record.case &&
-                          !['released'].includes(record.case.case_status) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={issueLink.isPending}
-                              onClick={() => {
-                                const email = supplierEmail.trim();
-                                issueLink.mutate(
-                                  {
-                                    caseId: record.remediation_case_id as string,
-                                    supplierEmail: email || undefined,
-                                  },
-                                  {
-                                    onSuccess: (data) =>
-                                      setIssued({ url: data.correction_url, email: email || null }),
-                                  },
-                                );
-                              }}
-                            >
-                              <Link2 className="h-4 w-4 mr-1" /> Issue link
-                            </Button>
-                          )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-            {issued && (
-              <div className="mt-4 space-y-1 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm">
-                {issued.email ? (
-                  <>
-                    <p className="font-medium">
-                      Link issued — being emailed to {issued.email} automatically (usually within a minute).
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Do not share the copy below: sending re-issues the link, so this copy stops working the
-                      moment the email goes out. Only its hash is stored.
-                    </p>
-                  </>
-                ) : (
-                  <p className="font-medium">
-                    No supplier email given — this link will NOT be emailed. Copy it now and deliver it
-                    yourself (shown once — only its hash is stored):
-                  </p>
-                )}
-                <code className="break-all">{issued.url}</code>
-              </div>
-            )}
+          <CardContent className="space-y-4">
+            <div className="max-w-md">
+              <Field
+                label="Supplier email"
+                htmlFor="remediation-supplier-email"
+                hint="Correction links are emailed here automatically when issued. Leave empty to deliver a link manually instead."
+              >
+                <Input
+                  id="remediation-supplier-email"
+                  type="email"
+                  placeholder="supplier@company.com"
+                  value={supplierEmail}
+                  onChange={(e) => setSupplierEmail(e.target.value)}
+                />
+              </Field>
+            </div>
+
+            <DataTable
+              caption="Manifest rows and their remediation state"
+              columns={recordColumns}
+              data={detail.data?.records ?? []}
+              minWidth="900px"
+              rowKey={(record) => record.record_id}
+              status={
+                detail.isLoading
+                  ? 'loading'
+                  : (detail.data?.records ?? []).length === 0
+                    ? 'empty'
+                    : 'idle'
+              }
+              empty={{ title: 'No rows in this manifest.' }}
+            />
+
+            {issued && <IssuedLinkPanel url={issued.url} email={issued.email} />}
+
             {issueLink.error ? (
-              <p className="mt-3 text-sm text-re-danger">{(issueLink.error as Error).message}</p>
+              <Callout tone="danger" role="alert">
+                {(issueLink.error as Error).message}
+              </Callout>
             ) : null}
           </CardContent>
         </Card>
       )}
 
       {/* Notification outbox — queued link emails are delivered by the drainer */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" /> Notifications
-          </CardTitle>
-          <CardDescription>
+      <Section
+        spacing="app"
+        className="mt-8"
+        title="Notifications"
+        description={
+          <>
             Correction-link emails send automatically for entries with a recipient. &ldquo;Preview&rdquo;
             entries predate automatic delivery or are buyer-facing and are never emailed.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {(outbox.data?.notifications ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No notifications queued.</p>
-          ) : (
-            <ul className="space-y-2">
-              {(outbox.data?.notifications ?? []).slice(0, 10).map((n) => (
-                <li key={n.id} className="flex flex-wrap items-center gap-2 text-sm">
-                  <DeliveryBadge status={n.status} reason={n.last_error} />
-                  <span className="font-medium">{n.subject}</span>
-                  {n.recipient && <span className="text-muted-foreground">→ {n.recipient}</span>}
-                  <span className="text-xs text-muted-foreground">
-                    {n.sent_at
-                      ? `sent ${new Date(n.sent_at).toLocaleString()}`
-                      : n.created_at
-                        ? new Date(n.created_at).toLocaleString()
-                        : ''}
-                  </span>
-                  {(n.status === 'failed' || n.status === 'skipped') && n.last_error && (
-                    <span className="text-xs text-re-danger">{n.last_error}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        }
+      >
+        {(outbox.data?.notifications ?? []).length === 0 ? (
+          <EmptyState icon={Mail} title="No notifications queued." size="sm" />
+        ) : (
+          <ul className="rounded-lg border border-re-border bg-re-surface-card">
+            {(outbox.data?.notifications ?? []).slice(0, 10).map((n) => (
+              <li
+                key={n.id}
+                className="flex flex-wrap items-center gap-2 border-b border-re-border-subtle px-4 py-2.5 text-ui last:border-0"
+              >
+                <DeliveryBadge status={n.status} reason={n.last_error} />
+                <span className="font-medium text-re-text-primary">{n.subject}</span>
+                {n.recipient && <span className="text-re-text-tertiary">→ {n.recipient}</span>}
+                <span className="text-small text-re-text-tertiary">
+                  {n.sent_at
+                    ? `sent ${new Date(n.sent_at).toLocaleString()}`
+                    : n.created_at
+                      ? new Date(n.created_at).toLocaleString()
+                      : ''}
+                </span>
+                {(n.status === 'failed' || n.status === 'skipped') && n.last_error && (
+                  <span className="text-small text-re-danger">{n.last_error}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
     </PageContainer>
   );
 }

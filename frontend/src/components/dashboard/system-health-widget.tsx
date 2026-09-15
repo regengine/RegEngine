@@ -1,8 +1,8 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Activity, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 import { useSystemStatus } from "@/hooks/use-api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge";
+import { Callout } from "@/components/ui/callout";
 
 interface ServiceStatusProps {
   name: string;
@@ -10,57 +10,38 @@ interface ServiceStatusProps {
   details?: Record<string, unknown>;
 }
 
-const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
-  const getIcon = () => {
-    switch (status) {
-      case "healthy":
-        return <CheckCircle className="h-5 w-5 text-re-success" />;
-      case "degraded":
-        return <AlertTriangle className="h-5 w-5 text-re-warning" />;
-      case "unhealthy":
-        return <XCircle className="h-5 w-5 text-re-danger" />;
-      default:
-        return <Activity className="h-5 w-5 text-muted-foreground" />;
-    }
-  };
-
-  const getBadgeVariant = () => {
-    switch (status) {
-      case "healthy":
-        return "default";
-      case "degraded":
-        return "secondary"; // fallback since warning isn't standard
-      case "unhealthy":
-        return "destructive";
-      default:
-        return "outline";
-    }
-  };
-
-  return (
-    <div className="flex min-h-[48px] items-center justify-between gap-2 border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-3">
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-        <div className="flex-shrink-0">{getIcon()}</div>
-        <div className="min-w-0">
-          <p className="font-medium capitalize text-sm sm:text-base truncate">
-            {name}
-          </p>
-          {status !== "healthy" && details?.error != null && (
-            <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
-              This service is not responding right now. Check again shortly.
-            </p>
-          )}
-        </div>
-      </div>
-      <Badge
-        variant={getBadgeVariant()}
-        className="capitalize flex-shrink-0 text-[11px] sm:text-xs"
-      >
-        {status}
-      </Badge>
-    </div>
-  );
+/** Service health speaks the same state vocabulary as the rest of the app. */
+const OVERALL_STATE: Record<string, ComplianceState> = {
+  healthy: "compliant",
+  degraded: "at-risk",
+  unhealthy: "non-compliant",
+  unknown: "unknown",
 };
+
+const SERVICE_STATE: Record<ServiceStatusProps["status"], ComplianceState> = {
+  healthy: "compliant",
+  degraded: "at-risk",
+  unhealthy: "non-compliant",
+};
+
+const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => (
+  <div className="flex min-h-[48px] items-center justify-between gap-3 border-b border-re-border-subtle py-2.5 last:border-0">
+    <div className="min-w-0">
+      <p className="truncate text-ui font-medium capitalize text-re-text-primary">{name}</p>
+      {status !== "healthy" && details?.error != null && (
+        <p className="truncate text-small text-re-text-tertiary">
+          This service is not responding right now. Check again shortly.
+        </p>
+      )}
+    </div>
+    <StatusBadge
+      state={SERVICE_STATE[status] ?? "unknown"}
+      label={status}
+      size="sm"
+      className="shrink-0 capitalize"
+    />
+  </div>
+);
 
 export function SystemHealthWidget() {
   const { data: systemStatus, isLoading, error } = useSystemStatus();
@@ -85,13 +66,10 @@ export function SystemHealthWidget() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">System Health</CardTitle>
+          <CardTitle>System Health</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 border border-re-danger/30 bg-[var(--re-surface-card)] p-3 text-re-danger">
-            <XCircle className="h-5 w-5" />
-            <span className="text-sm">Failed to load system status</span>
-          </div>
+          <Callout tone="danger" role="alert">Failed to load system status</Callout>
         </CardContent>
       </Card>
     );
@@ -102,26 +80,18 @@ export function SystemHealthWidget() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">System Health</CardTitle>
-        <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 ${
-              overallStatus === "healthy"
-                ? "bg-re-success"
-                : overallStatus === "degraded"
-                  ? "bg-re-warning"
-                  : "bg-re-danger"
-            }`}
-          />
-          <span className="text-xs text-muted-foreground capitalize">
-            {overallStatus}
-          </span>
-        </div>
+      <CardHeader>
+        <CardTitle>System Health</CardTitle>
+        <StatusBadge
+          state={OVERALL_STATE[overallStatus] ?? "unknown"}
+          label={overallStatus}
+          size="sm"
+          className="capitalize"
+        />
       </CardHeader>
-      <CardContent className="space-y-3 pt-4">
+      <CardContent>
         {services.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-ui text-re-text-tertiary">
             No services monitored.
           </p>
         ) : (

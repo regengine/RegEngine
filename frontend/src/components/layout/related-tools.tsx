@@ -1,46 +1,56 @@
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowRight, LucideIcon } from 'lucide-react';
+import { ChevronRight, type LucideIcon } from 'lucide-react';
 
 interface RelatedTool {
     id: string;
     title: string;
     description: string;
-    icon: LucideIcon;
+    /** Accepted for call-site compatibility; the ledger rows carry no icon. */
+    icon?: LucideIcon;
 }
 
 interface RelatedToolsProps {
     tools: RelatedTool[];
 }
 
+/**
+ * Related tools — SPEC §6 "ledger-row lists".
+ *
+ * Hairline rows (title link + one-line description + a right chevron), not an
+ * icon-card grid. `@/components/tools/RelatedTools` renders the identical row
+ * recipe from a different prop shape; both module paths stay exported because
+ * eighteen and eight call sites respectively import them, and page tests mock
+ * them by path.
+ */
 export function RelatedTools({ tools }: RelatedToolsProps) {
     return (
-        <div className="mt-16 pt-16 border-t border-[var(--re-border-default)]">
-            <h3 className="text-2xl font-bold mb-8">Related Tools</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-12 border-t border-re-border-subtle pt-8">
+            <h3 className="mb-4 text-heading text-re-text-primary">Related Tools</h3>
+            <ul className="list-none p-0">
                 {tools.map((tool) => (
-                    <Link key={tool.id} href={`/tools/${tool.id}`}>
-                        <Card className="h-full border-[var(--re-border-default)] bg-[var(--re-surface-card)] hover:border-[var(--re-border-subtle)] transition-all group cursor-pointer">
-                            <CardHeader className="space-y-3">
-                                <div className="p-2 w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] flex items-center justify-center">
-                                    <tool.icon className="h-5 w-5 text-[var(--re-brand)]" />
-                                </div>
-                                <div>
-                                    <CardTitle className="text-lg group-hover:text-[var(--re-brand)] transition-colors">
-                                        {tool.title}
-                                    </CardTitle>
-                                    <CardDescription className="text-sm line-clamp-2 mt-1">
-                                        {tool.description}
-                                    </CardDescription>
-                                </div>
-                                <div className="flex items-center text-xs font-bold text-[var(--re-brand)] opacity-0 group-hover:opacity-100 transition-opacity pt-2">
-                                    Launch Tool <ArrowRight className="ml-1 h-3 w-3" />
-                                </div>
-                            </CardHeader>
-                        </Card>
-                    </Link>
+                    <li key={tool.id} className="border-b border-re-border-subtle last:border-b-0">
+                        <Link
+                            href={`/tools/${tool.id}`}
+                            className="group flex items-center gap-4 py-3 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
+                        >
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-ui font-medium text-re-text-primary transition-colors duration-120 group-hover:text-re-brand motion-reduce:transition-none">
+                                    {tool.title}
+                                </span>
+                                <span className="mt-0.5 block truncate text-small text-re-text-tertiary">
+                                    {tool.description}
+                                </span>
+                            </span>
+                            <ChevronRight
+                                aria-hidden="true"
+                                size={16}
+                                strokeWidth={1.75}
+                                className="shrink-0 text-re-text-muted transition-colors duration-120 group-hover:text-re-text-secondary motion-reduce:transition-none"
+                            />
+                        </Link>
+                    </li>
                 ))}
-            </div>
+            </ul>
         </div>
     );
 }

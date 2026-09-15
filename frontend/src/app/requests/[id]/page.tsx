@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { PageContainer } from '@/components/layout/page-container';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -22,16 +24,12 @@ import {
 } from '@/hooks/use-control-plane';
 
 import {
-  AlertTriangle,
   ArrowLeft,
   CheckCircle,
   Clock,
-  FileText,
   Hash,
   Package,
   Send,
-  Shield,
-  Timer,
   User,
 } from 'lucide-react';
 
@@ -63,6 +61,19 @@ const STAGE_LABELS: Record<string, string> = {
   amended: 'Amended',
 };
 
+/** Key/value row shared by the Scope and Case Stats lists. */
+function DetailRow({ term, children }: { term: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-re-border-subtle py-2 last:border-0">
+      <dt className="text-label text-re-text-muted">{term}</dt>
+      <dd className="text-right text-ui text-re-text-primary">{children}</dd>
+    </div>
+  );
+}
+
+const BACK_LINK_CLASS =
+  'inline-flex items-center gap-1.5 text-ui text-re-text-tertiary no-underline transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none';
+
 export default function RequestCaseDetailPage() {
   const params = useParams();
   const requestCaseId = params.id as string;
@@ -93,14 +104,15 @@ export default function RequestCaseDetailPage() {
   if (!requestCase) {
     return (
       <PageContainer>
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <p className="font-medium">Request case not found</p>
-            <Link href="/requests" className="text-sm text-re-info hover:underline mt-2 inline-block">
+        <EmptyState
+          title="Request case not found"
+          action={
+            <Link href="/requests" className={BACK_LINK_CLASS}>
+              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
               Back to Request Workflow
             </Link>
-          </CardContent>
-        </Card>
+          }
+        />
       </PageContainer>
     );
   }
@@ -112,97 +124,93 @@ export default function RequestCaseDetailPage() {
 
   return (
     <PageContainer>
-      {/* Back link + header */}
-      <div className="mb-6">
-        <Link href="/requests" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-4">
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Request Workflow
-        </Link>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <Timer className="h-6 w-6 text-re-info" />
-              Request Case
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {requestCase.requesting_party} — {requestCase.scope_type?.replace(/_/g, ' ')}
-            </p>
-          </div>
-          <div className={`text-right ${isOverdue ? 'text-re-danger' : ''}`}>
-            <div className="flex items-center gap-2 text-lg font-bold">
-              <Clock className="h-5 w-5" />
+      <PageHeader
+        breadcrumbs={
+          <Link href="/requests" className={BACK_LINK_CLASS}>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+            Back to Request Workflow
+          </Link>
+        }
+        title="Request Case"
+        description={`${requestCase.requesting_party} — ${requestCase.scope_type?.replace(/_/g, ' ')}`}
+        meta={
+          <>
+            <span
+              className={cn(
+                'flex items-center gap-1.5 text-ui font-medium',
+                isOverdue ? 'text-re-danger' : 'text-re-text-secondary'
+              )}
+            >
+              <Clock className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
               {requestCase.countdown_display || `${Math.max(0, hoursLeft).toFixed(1)}h remaining`}
-            </div>
-            {isOverdue && <Badge variant="destructive">OVERDUE</Badge>}
-          </div>
-        </div>
-      </div>
+            </span>
+            {isOverdue && <Badge tone="danger" size="sm">OVERDUE</Badge>}
+          </>
+        }
+      />
 
       {/* Workflow Stage Pipeline */}
       <Card className="mb-6">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Workflow Progress</CardTitle>
+        <CardHeader>
+          <CardTitle>Workflow Progress</CardTitle>
         </CardHeader>
         <CardContent>
-          <Progress value={progress} className="h-3 mb-4" />
-          <div className="flex flex-wrap gap-1">
+          <Progress value={progress} className="mb-4 h-3" />
+          <ol className="flex flex-wrap gap-1">
             {STAGE_ORDER.map((stage, idx) => {
               const isCurrent = stage === requestCase.package_status;
               const isPast = idx < currentStageIdx;
               return (
-                <div
+                <li
                   key={stage}
-                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                    isCurrent ? 'bg-re-info-muted text-re-info font-bold border border-blue-300' :
-                    isPast ? 'bg-re-success-muted text-re-success' :
-                    'text-muted-foreground'
-                  }`}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  className={cn(
+                    'flex items-center gap-1 rounded-md border px-2 py-1 text-small',
+                    isCurrent
+                      ? 'border-re-info-border bg-re-info-bg font-medium text-re-info'
+                      : isPast
+                        ? 'border-re-success-border bg-re-success-bg text-re-success'
+                        : 'border-transparent text-re-text-muted'
+                  )}
                 >
-                  {isPast && <CheckCircle className="h-3 w-3" />}
+                  {isPast && (
+                    <CheckCircle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+                  )}
                   {STAGE_LABELS[stage]}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left column: case details */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Scope */}
+        <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Scope</CardTitle>
+              <CardTitle>Scope</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Requesting Party</dt>
-                  <dd className="font-medium">{requestCase.requesting_party}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Scope Type</dt>
-                  <dd className="font-medium">{requestCase.scope_type?.replace(/_/g, ' ')}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Received</dt>
-                  <dd>{new Date(requestCase.request_received_at).toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Due</dt>
-                  <dd className={isOverdue ? 'text-re-danger font-bold' : ''}>
+              <dl className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                <DetailRow term="Requesting Party">{requestCase.requesting_party}</DetailRow>
+                <DetailRow term="Scope Type">{requestCase.scope_type?.replace(/_/g, ' ')}</DetailRow>
+                <DetailRow term="Received">
+                  {new Date(requestCase.request_received_at).toLocaleString()}
+                </DetailRow>
+                <DetailRow term="Due">
+                  <span className={cn(isOverdue && 'font-medium text-re-danger')}>
                     {new Date(requestCase.response_due_at).toLocaleString()}
-                  </dd>
-                </div>
+                  </span>
+                </DetailRow>
               </dl>
 
               {requestCase.affected_lots?.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-xs text-muted-foreground mb-1">Affected Lot Codes</p>
+                  <p className="mb-1.5 text-label text-re-text-muted">Affected Lot Codes</p>
                   <div className="flex flex-wrap gap-1">
                     {requestCase.affected_lots.map((lot: string) => (
-                      <Badge key={lot} variant="outline" className="text-xs font-mono">{lot}</Badge>
+                      <Badge key={lot} size="sm" mono>{lot}</Badge>
                     ))}
                   </div>
                 </div>
@@ -210,10 +218,10 @@ export default function RequestCaseDetailPage() {
 
               {requestCase.affected_facilities?.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-xs text-muted-foreground mb-1">Affected Facilities</p>
+                  <p className="mb-1.5 text-label text-re-text-muted">Affected Facilities</p>
                   <div className="flex flex-wrap gap-1">
                     {requestCase.affected_facilities.map((f: string) => (
-                      <Badge key={f} variant="outline" className="text-xs">{f}</Badge>
+                      <Badge key={f} size="sm">{f}</Badge>
                     ))}
                   </div>
                 </div>
@@ -224,10 +232,7 @@ export default function RequestCaseDetailPage() {
           {/* Package History */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="h-5 w-5 text-purple-500" />
-                Response Packages ({packageList.length})
-              </CardTitle>
+              <CardTitle>Response Packages ({packageList.length})</CardTitle>
             </CardHeader>
             <CardContent>
               {packages.isLoading ? (
@@ -235,40 +240,40 @@ export default function RequestCaseDetailPage() {
                   {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full" />)}
                 </div>
               ) : packageList.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No packages assembled yet
-                </p>
+                <EmptyState bare size="sm" title="No packages assembled yet" />
               ) : (
                 <div className="space-y-3">
                   {packageList.map((pkg: ResponsePackage) => (
-                    <div key={pkg.package_id} className="border rounded-lg p-3">
-                      <div className="flex items-center justify-between">
+                    <Card key={pkg.package_id} variant="inset" padding="compact">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">v{pkg.version_number}</Badge>
-                          <span className="text-xs text-muted-foreground">
+                          <Badge size="sm" mono>v{pkg.version_number}</Badge>
+                          <span className="text-small text-re-text-tertiary">
                             {new Date(pkg.generated_at).toLocaleString()}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground">
-                          <Hash className="h-3 w-3" />
+                        <div className="flex items-center gap-1 font-mono text-small text-re-text-tertiary">
+                          <Hash className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                           {pkg.package_hash?.slice(0, 12)}...
                         </div>
                       </div>
                       {pkg.generated_by && (
-                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" />
+                        <div className="mt-1 flex items-center gap-1 text-small text-re-text-tertiary">
+                          <User className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                           {pkg.generated_by}
                         </div>
                       )}
                       {pkg.diff_from_previous && (
-                        <div className="mt-2 text-xs bg-muted p-2 rounded">
-                          <span className="font-medium">Diff from v{pkg.version_number - 1}:</span>
-                          <pre className="mt-1 overflow-x-auto">
+                        <div className="mt-2 rounded-md border border-re-border-subtle bg-re-surface-card p-2 text-small">
+                          <span className="font-medium text-re-text-primary">
+                            Diff from v{pkg.version_number - 1}:
+                          </span>
+                          <pre className="mt-1 overflow-x-auto font-mono text-small text-re-text-secondary">
                             {JSON.stringify(pkg.diff_from_previous, null, 2).slice(0, 200)}
                           </pre>
                         </div>
                       )}
-                    </div>
+                    </Card>
                   ))}
                 </div>
               )}
@@ -278,58 +283,51 @@ export default function RequestCaseDetailPage() {
 
         {/* Right column: stats + actions */}
         <div className="space-y-4">
-          {/* Quick Stats */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Case Stats</CardTitle>
+            <CardHeader>
+              <CardTitle>Case Stats</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Records Collected</span>
-                <span className="font-bold">{requestCase.total_records}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Gaps Found</span>
-                <span className={`font-bold ${requestCase.gap_count > 0 ? 'text-re-warning' : 'text-re-success'}`}>
-                  {requestCase.gap_count}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Active Exceptions</span>
-                <span className={`font-bold ${requestCase.active_exception_count > 0 ? 'text-re-danger' : 'text-re-success'}`}>
-                  {requestCase.active_exception_count}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Package Versions</span>
-                <span className="font-bold">{packageList.length}</span>
-              </div>
+            <CardContent>
+              <dl>
+                <DetailRow term="Records Collected">{requestCase.total_records}</DetailRow>
+                <DetailRow term="Gaps Found">
+                  <span className={requestCase.gap_count > 0 ? 'text-re-warning' : 'text-re-success'}>
+                    {requestCase.gap_count}
+                  </span>
+                </DetailRow>
+                <DetailRow term="Active Exceptions">
+                  <span className={requestCase.active_exception_count > 0 ? 'text-re-danger' : 'text-re-success'}>
+                    {requestCase.active_exception_count}
+                  </span>
+                </DetailRow>
+                <DetailRow term="Package Versions">{packageList.length}</DetailRow>
+              </dl>
             </CardContent>
           </Card>
 
-          {/* Actions */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Actions</CardTitle>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {requestCase.package_status !== 'submitted' && (
                 <Button
                   className="w-full"
-                  variant="outline"
+                  variant="secondary"
+                  leadingIcon={<Package strokeWidth={1.75} aria-hidden="true" />}
                   onClick={() => assemblePackage.mutate({
                     requestCaseId,
                     generatedBy: actor,
                   })}
                   disabled={assemblePackage.isPending}
                 >
-                  <Package className="h-4 w-4 mr-2" />
                   {assemblePackage.isPending ? 'Assembling...' : 'Assemble Package'}
                 </Button>
               )}
               {requestCase.package_status === 'ready' && (
                 <Button
                   className="w-full"
+                  leadingIcon={<Send strokeWidth={1.75} aria-hidden="true" />}
                   onClick={() => submitPackage.mutate({
                     requestCaseId,
                     submitted_by: actor,
@@ -337,14 +335,12 @@ export default function RequestCaseDetailPage() {
                   })}
                   disabled={submitPackage.isPending}
                 >
-                  <Send className="h-4 w-4 mr-2" />
                   {submitPackage.isPending ? 'Submitting...' : 'Submit to ' + requestCase.requesting_party}
                 </Button>
               )}
               {requestCase.package_status === 'submitted' && (
-                <div className="text-center py-3">
-                  <CheckCircle className="h-8 w-8 text-re-success mx-auto mb-2" />
-                  <p className="text-sm font-medium text-re-success">Package Submitted</p>
+                <div className="py-3">
+                  <StatusBadge state="exported" label="Package Submitted" />
                 </div>
               )}
             </CardContent>

@@ -2,26 +2,26 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import Link from 'next/link';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import {
     AlertTriangle,
     ShieldAlert,
-    Clock,
     XCircle,
     CheckCircle2,
     RefreshCw,
     FileWarning,
     Users,
     Link2,
-    ChevronRight,
-    Timer,
-    Shield,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -72,21 +72,23 @@ interface BlockerCheck {
     warning_count: number;
 }
 
-/* ── Helpers ── */
+/* ── Tone maps ──
+   State is carried by a StatusBadge / Badge tone (icon + label), never by a
+   hard-coded hex applied through an inline style. */
 
-const BLOCKER_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-    critical_rule_failure: { icon: XCircle, color: '#ef4444', label: 'Rule Failure' },
-    unresolved_critical_exception: { icon: FileWarning, color: '#f59e0b', label: 'Exception' },
-    unevaluated_event: { icon: ShieldAlert, color: '#8b5cf6', label: 'Unevaluated' },
-    missing_signoff: { icon: Users, color: '#3b82f6', label: 'Missing Signoff' },
-    identity_ambiguity: { icon: Link2, color: '#ec4899', label: 'Identity' },
+const BLOCKER_CONFIG: Record<string, { icon: React.ElementType; tone: BadgeTone; label: string }> = {
+    critical_rule_failure: { icon: XCircle, tone: 'danger', label: 'Rule Failure' },
+    unresolved_critical_exception: { icon: FileWarning, tone: 'warning', label: 'Exception' },
+    unevaluated_event: { icon: ShieldAlert, tone: 'neutral', label: 'Unevaluated' },
+    missing_signoff: { icon: Users, tone: 'info', label: 'Missing Signoff' },
+    identity_ambiguity: { icon: Link2, tone: 'neutral', label: 'Identity' },
 };
 
-const URGENCY_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-    overdue: { color: '#ef4444', bg: 'bg-re-danger-muted0/10', label: 'OVERDUE' },
-    critical: { color: '#f59e0b', bg: 'bg-re-warning-muted0/10', label: 'CRITICAL' },
-    urgent: { color: '#3b82f6', bg: 'bg-re-info-muted0/10', label: 'URGENT' },
-    normal: { color: '#10b981', bg: 'bg-re-brand-muted', label: 'ON TRACK' },
+const URGENCY_CONFIG: Record<string, { state: ComplianceState; label: string }> = {
+    overdue: { state: 'non-compliant', label: 'OVERDUE' },
+    critical: { state: 'at-risk', label: 'CRITICAL' },
+    urgent: { state: 'pending', label: 'URGENT' },
+    normal: { state: 'compliant', label: 'ON TRACK' },
 };
 
 /* ── Page ── */
@@ -151,226 +153,209 @@ export default function IssuesPage() {
     const pendingReviews = issuesData?.pendingReviews ?? {};
     const error = issuesError?.message ?? null;
 
-    const totalIssues = blockers.length + deadlines.filter(d => d.urgency === 'overdue' || d.urgency === 'critical').length;
     const overdueCount = deadlines.filter(d => d.urgency === 'overdue').length;
     const criticalCount = deadlines.filter(d => d.urgency === 'critical').length;
+    const pendingReviewCount = Object.values(pendingReviews).reduce((s, v) => s + v, 0);
+
+    const deadlineColumns: DataTableColumn<DeadlineCase>[] = [
+        {
+            key: 'urgency',
+            header: 'Status',
+            width: '11rem',
+            cell: (c) => {
+                const cfg = URGENCY_CONFIG[c.urgency] ?? URGENCY_CONFIG.normal;
+                return <StatusBadge state={cfg.state} label={cfg.label} size="sm" />;
+            },
+        },
+        {
+            key: 'case',
+            header: 'Case',
+            cell: (c) => (
+                <span className="font-medium text-re-text-primary">
+                    {c.requesting_party} — {c.scope_description || c.package_status}
+                </span>
+            ),
+        },
+        {
+            key: 'countdown',
+            header: 'Countdown',
+            width: '18rem',
+            cell: (c) => (
+                <span className="text-re-text-tertiary">
+                    {c.countdown_display} · {c.gap_count} gaps · {c.active_exception_count} exceptions
+                </span>
+            ),
+        },
+    ];
+
+    const blockerColumns: DataTableColumn<Blocker>[] = [
+        {
+            key: 'type',
+            header: 'Type',
+            width: '11rem',
+            cell: (b) => {
+                const cfg = BLOCKER_CONFIG[b.type] || BLOCKER_CONFIG.critical_rule_failure;
+                const Icon = cfg.icon;
+                return (
+                    <Badge tone={cfg.tone} size="sm">
+                        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        {cfg.label}
+                    </Badge>
+                );
+            },
+        },
+        {
+            key: 'message',
+            header: 'Blocker',
+            cell: (b) => (
+                <div className="min-w-0">
+                    <p className="font-medium text-re-text-primary">{b.message}</p>
+                    {b.rule_title && (
+                        <p className="mt-0.5 text-small text-re-text-tertiary">Rule: {b.rule_title}</p>
+                    )}
+                    {b.supplier && (
+                        <p className="mt-0.5 text-small text-re-text-tertiary">Supplier: {b.supplier}</p>
+                    )}
+                </div>
+            ),
+        },
+        {
+            key: 'citation',
+            header: 'Citation',
+            width: '12rem',
+            mono: true,
+            cell: (b) => b.citation ?? '—',
+        },
+    ];
 
     return (
-        <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
-            <div className="mx-auto max-w-5xl space-y-6">
-                <Breadcrumbs items={[
-                    { label: 'Dashboard', href: '/dashboard' },
-                    { label: 'Issues' },
-                ]} />
-
-                {/* Header */}
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
-                            <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-warning" />
-                            Issues
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Everything preventing compliant submission — fix these first.
-                        </p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => loadIssues()} disabled={loading} className="h-8 w-8 p-0">
-                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        <PageContainer>
+            <PageHeader
+                title="Issues"
+                description="Everything preventing compliant submission — fix these first."
+                secondaryActions={
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Refresh issues"
+                        onClick={() => loadIssues()}
+                        disabled={loading}
+                    >
+                        <RefreshCw
+                            className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                            strokeWidth={1.75}
+                            aria-hidden="true"
+                        />
                     </Button>
-                </div>
+                }
+            />
 
-                {/* Summary Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-                    <div className="p-3 sm:p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-center">
-                        <div className="text-2xl sm:text-3xl font-bold text-re-danger tabular-nums">{blockers.length}</div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">Blocking Defects</div>
-                    </div>
-                    <div className="p-3 sm:p-4 rounded-xl bg-re-warning-muted0/[0.06] border border-re-warning/20 text-center">
-                        <div className="text-2xl sm:text-3xl font-bold text-re-warning tabular-nums">{overdueCount + criticalCount}</div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">Urgent Deadlines</div>
-                    </div>
-                    <div className="p-3 sm:p-4 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-center">
-                        <div className="text-2xl sm:text-3xl font-bold text-re-info tabular-nums">{warnings.length}</div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">Warnings</div>
-                    </div>
-                    <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                        <div className="text-2xl sm:text-3xl font-bold tabular-nums">
-                            {Object.values(pendingReviews).reduce((s, v) => s + v, 0)}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">Pending Reviews</div>
-                    </div>
+            <div className="space-y-6">
+                {error && (
+                    <Callout tone="danger" role="alert">
+                        {error}
+                    </Callout>
+                )}
+
+                {/* Summary */}
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    <StatTile label="Blocking Defects" value={blockers.length} />
+                    <StatTile label="Urgent Deadlines" value={overdueCount + criticalCount} />
+                    <StatTile label="Warnings" value={warnings.length} />
+                    <StatTile label="Pending Reviews" value={pendingReviewCount} />
                 </div>
 
                 {loading && (
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
-                {error && (
-                    <Card className="border-re-danger/30">
-                        <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-re-danger">
-                                <AlertTriangle className="h-5 w-5" />
-                                <p className="text-sm">{error}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Deadline Urgency */}
+                {/* Deadline urgency */}
                 {deadlines.length > 0 && (
-                    <Card className="border-[var(--re-border-default)]">
-                        <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <Timer className="h-4 w-4 text-re-warning" />
-                                Active Deadlines
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {deadlines.map((c) => {
-                                const cfg = URGENCY_CONFIG[c.urgency] || URGENCY_CONFIG.normal;
-                                return (
-                                    <div
-                                        key={c.request_case_id}
-                                        className={`flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] ${cfg.bg}`}
-                                    >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <Badge
-                                                className="text-[9px] px-1.5 py-0 font-bold"
-                                                style={{ background: `${cfg.color}20`, color: cfg.color }}
-                                            >
-                                                {cfg.label}
-                                            </Badge>
-                                            <div className="min-w-0">
-                                                <div className="text-sm font-medium truncate">
-                                                    {c.requesting_party} — {c.scope_description || c.package_status}
-                                                </div>
-                                                <div className="text-[11px] text-muted-foreground">
-                                                    {c.countdown_display} · {c.gap_count} gaps · {c.active_exception_count} exceptions
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                    </div>
-                                );
-                            })}
-                        </CardContent>
-                    </Card>
+                    <section className="space-y-3">
+                        <h3 className="text-subheading text-re-text-primary">Active Deadlines</h3>
+                        <DataTable
+                            caption="Active regulator request deadlines, most urgent first"
+                            columns={deadlineColumns}
+                            data={deadlines}
+                            rowKey={(c) => c.request_case_id}
+                            minWidth="640px"
+                            stickyFirstColumn
+                        />
+                    </section>
                 )}
 
-                {/* Blocking Defects */}
+                {/* Blocking defects */}
                 {blockers.length > 0 && (
-                    <Card className="border-re-danger/20">
-                        <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2 text-re-danger">
-                                <XCircle className="h-4 w-4" />
-                                Blocking Defects — Must Fix Before Submission
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {blockers.map((b, i) => {
-                                const cfg = BLOCKER_CONFIG[b.type] || BLOCKER_CONFIG.critical_rule_failure;
-                                const Icon = cfg.icon;
-                                return (
-                                    <motion.div
-                                        key={`${b.type}-${i}`}
-                                        initial={{ opacity: 0, y: 6 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: i * 0.03 }}
-                                        className="p-3 rounded-xl border border-[var(--re-border-default)] hover:border-re-danger/30 transition-all"
-                                    >
-                                        <div className="flex items-start gap-2.5">
-                                            <div
-                                                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                                                style={{ background: `${cfg.color}15` }}
-                                            >
-                                                <Icon className="h-3.5 w-3.5" style={{ color: cfg.color }} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-1.5 mb-0.5">
-                                                    <Badge
-                                                        className="text-[9px] px-1.5 py-0"
-                                                        style={{ background: `${cfg.color}15`, color: cfg.color }}
-                                                    >
-                                                        {cfg.label}
-                                                    </Badge>
-                                                    {b.citation && (
-                                                        <span className="text-[9px] text-muted-foreground font-mono">{b.citation}</span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs text-foreground">{b.message}</p>
-                                                {b.rule_title && (
-                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Rule: {b.rule_title}</p>
-                                                )}
-                                                {b.supplier && (
-                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Supplier: {b.supplier}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
-                        </CardContent>
-                    </Card>
+                    <section className="space-y-3">
+                        <h3 className="text-subheading text-re-text-primary">
+                            Blocking Defects — Must Fix Before Submission
+                        </h3>
+                        <DataTable
+                            caption="Blocking defects that must be fixed before submission"
+                            columns={blockerColumns}
+                            data={blockers}
+                            rowKey={(b, i) => `${b.type}-${i}`}
+                            minWidth="640px"
+                            stickyFirstColumn
+                        />
+                    </section>
                 )}
 
                 {/* Warnings */}
                 {warnings.length > 0 && (
-                    <Card className="border-re-warning/20">
+                    <Card>
                         <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2 text-re-warning">
-                                <AlertTriangle className="h-4 w-4" />
-                                Warnings — Non-Blocking
-                            </CardTitle>
+                            <CardTitle>Warnings — Non-Blocking</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            {warnings.map((w, i) => (
-                                <div key={i} className="p-3 rounded-xl border border-[var(--re-border-default)] text-xs text-muted-foreground">
-                                    {w.message}
-                                </div>
-                            ))}
+                        <CardContent className="p-0">
+                            <ul className="divide-y divide-re-border-subtle">
+                                {warnings.map((w, i) => (
+                                    <li key={i} className="flex items-start gap-2.5 px-5 py-3 text-ui text-re-text-secondary">
+                                        <AlertTriangle
+                                            className="mt-0.5 h-4 w-4 shrink-0 text-re-warning"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
+                                        />
+                                        {w.message}
+                                    </li>
+                                ))}
+                            </ul>
                         </CardContent>
                     </Card>
                 )}
 
-                {/* Pending Reviews Breakdown */}
+                {/* Pending reviews breakdown */}
                 {Object.keys(pendingReviews).length > 0 && (
-                    <Card className="border-[var(--re-border-default)]">
+                    <Card>
                         <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <Shield className="h-4 w-4 text-[var(--re-brand)]" />
-                                Pending Reviews
-                            </CardTitle>
+                            <CardTitle>Pending Reviews</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <CardContent className="p-0">
+                            <dl className="grid grid-cols-2 md:grid-cols-4">
                                 {Object.entries(pendingReviews).map(([key, count]) => (
-                                    <div key={key} className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-lg font-bold tabular-nums">{count}</div>
-                                        <div className="text-[10px] text-muted-foreground capitalize">
-                                            {key.replace(/_/g, ' ')}
-                                        </div>
+                                    <div
+                                        key={key}
+                                        className="border-b border-r border-re-border-subtle px-5 py-4 last:border-r-0"
+                                    >
+                                        <dt className="text-label text-re-text-muted">{key.replace(/_/g, ' ')}</dt>
+                                        <dd className="mt-1 text-title tabular-nums text-re-text-primary">{count}</dd>
                                     </div>
                                 ))}
-                            </div>
+                            </dl>
                         </CardContent>
                     </Card>
                 )}
 
-                {/* Empty State */}
+                {/* Empty state */}
                 {!loading && blockers.length === 0 && deadlines.length === 0 && warnings.length === 0 && (
-                    <motion.div
-                        className="flex flex-col items-center justify-center py-16 text-center"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                    >
-                        <CheckCircle2 className="h-12 w-12 text-re-brand mb-4" />
-                        <h2 className="text-lg font-semibold">No issues in the current view</h2>
-                        <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                            No blocking defects, urgent deadlines, or warnings were returned for this workspace at the moment.
-                        </p>
-                    </motion.div>
+                    <EmptyState
+                        icon={CheckCircle2}
+                        title="No issues in the current view"
+                        titleAs="h2"
+                        description="No blocking defects, urgent deadlines, or warnings were returned for this workspace at the moment."
+                    />
                 )}
             </div>
-        </div>
+        </PageContainer>
     );
 }

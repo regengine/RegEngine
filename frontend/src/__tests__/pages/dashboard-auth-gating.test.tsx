@@ -78,7 +78,11 @@ vi.mock('@/components/ui/badge', () => ({
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
 }));
 
-vi.mock('@/components/ui/input', () => ({
+// Spread the real module: these suites only need to replace <Input> itself, and
+// a hand-written factory silently breaks any page importing another export
+// (fieldControlClasses, the shared control recipe) the moment one is added.
+vi.mock('@/components/ui/input', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/components/ui/input')>()),
     Input: (props: any) => <input {...props} />,
 }));
 
@@ -137,6 +141,20 @@ vi.mock('lucide-react', () => {
         Edit3: Stub,
         Trash2: Stub,
         X: Stub,
+        // The shared design-system primitives (Callout, StatusBadge, StatTile,
+        // DataTable, Field) build their icon maps at module scope, so every
+        // icon they reference must exist on this mock or the import throws
+        // before a single assertion runs.
+        AlertCircle: Stub,
+        ArrowDown: Stub,
+        ArrowDownRight: Stub,
+        ArrowUpDown: Stub,
+        ArrowUpRight: Stub,
+        HelpCircle: Stub,
+        Info: Stub,
+        Minus: Stub,
+        Search: Stub,
+        XCircle: Stub,
     };
 });
 

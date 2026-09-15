@@ -4,17 +4,22 @@ import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 import { PageContainer } from '@/components/layout/page-container';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { PageHeader } from '@/components/layout/page-header';
+import { Section } from '@/components/layout/section';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
 import { useEntities, useIdentityReviews } from '@/hooks/use-control-plane';
@@ -27,9 +32,7 @@ import {
   HelpCircle,
   Link2,
   type LucideIcon,
-  MapPin,
   Package,
-  Search,
   Users,
 } from 'lucide-react';
 
@@ -54,20 +57,23 @@ interface IdentityReview {
   entity_b_name?: string;
 }
 
+/** Entity type is a *kind*, so it uses the categorical ramp, not status colour. */
 const ENTITY_TYPE_CONFIG: Record<string, { icon: LucideIcon; label: string; color: string }> = {
-  firm: { icon: Users, label: 'Firm', color: 'text-re-info' },
-  facility: { icon: Building2, label: 'Facility', color: 'text-re-success' },
-  product: { icon: Package, label: 'Product', color: 'text-purple-500' },
-  lot: { icon: Link2, label: 'Lot', color: 'text-re-warning' },
-  trading_relationship: { icon: GitMerge, label: 'Trading', color: 'text-cyan-500' },
+  firm: { icon: Users, label: 'Firm', color: 'text-re-cat-1' },
+  facility: { icon: Building2, label: 'Facility', color: 'text-re-cat-2' },
+  product: { icon: Package, label: 'Product', color: 'text-re-cat-3' },
+  lot: { icon: Link2, label: 'Lot', color: 'text-re-cat-4' },
+  trading_relationship: { icon: GitMerge, label: 'Trading', color: 'text-re-cat-5' },
 };
 
-const MATCH_TYPE_BADGE: Record<string, { variant: 'default' | 'destructive' | 'warning' | 'secondary'; label: string }> = {
-  exact: { variant: 'default', label: 'Exact Match' },
-  likely: { variant: 'warning', label: 'Likely Match' },
-  ambiguous: { variant: 'secondary', label: 'Ambiguous' },
-  unresolved: { variant: 'destructive', label: 'Unresolved' },
+const MATCH_TYPE_BADGE: Record<string, { tone: BadgeTone; label: string }> = {
+  exact: { tone: 'success', label: 'Exact Match' },
+  likely: { tone: 'warning', label: 'Likely Match' },
+  ambiguous: { tone: 'neutral', label: 'Ambiguous' },
+  unresolved: { tone: 'danger', label: 'Unresolved' },
 };
+
+const FILTER_SELECT = 'h-8 w-auto max-w-[12rem] py-0 pr-8 text-small';
 
 function IdentityResolutionPageContent() {
   const { tenantId } = useAuth();
@@ -89,190 +95,196 @@ function IdentityResolutionPageContent() {
     const refetchAll = () => { entities.refetch(); reviews.refetch(); };
     return (
       <PageContainer>
-        <div className="p-8 text-center">
-          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
-          <p className="text-sm text-muted-foreground/60 mt-2">{err.message}</p>
-          <button onClick={refetchAll} className="mt-4 text-sm text-primary hover:underline">
-            Retry
-          </button>
-        </div>
+        <PageHeader
+          title="Identity Resolution"
+          description="Canonical entities, alias management, and ambiguous match review"
+        />
+        <Callout
+          tone="danger"
+          role="alert"
+          title="Unable to load data from the control plane API."
+          action={
+            <Button variant="secondary" size="sm" onClick={refetchAll}>
+              Retry
+            </Button>
+          }
+        >
+          {err.message}
+        </Callout>
       </PageContainer>
     );
   }
 
+  const visibleEntities = entityList.filter((e: Entity) => !searchQuery ||
+    e.canonical_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.gln?.includes(searchQuery) ||
+    e.gtin?.includes(searchQuery)
+  );
+
+  const columns: DataTableColumn<Entity>[] = [
+    {
+      key: 'entity_type',
+      header: 'Type',
+      width: '9rem',
+      cell: (entity) => {
+        const config = ENTITY_TYPE_CONFIG[entity.entity_type] || ENTITY_TYPE_CONFIG.firm;
+        const Icon = config.icon;
+        return (
+          <span className="flex items-center gap-1.5 text-re-text-secondary">
+            <Icon
+              className={cn('h-4 w-4 shrink-0', config.color)}
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            {config.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'canonical_name',
+      header: 'Name',
+      cell: (entity) => (
+        <span className="font-medium text-re-text-primary">{entity.canonical_name}</span>
+      ),
+    },
+    { key: 'gln', header: 'GLN', mono: true, cell: (entity) => entity.gln || '-' },
+    { key: 'gtin', header: 'GTIN', mono: true, cell: (entity) => entity.gtin || '-' },
+    {
+      key: 'verification_status',
+      header: 'Status',
+      width: '10rem',
+      cell: (entity) =>
+        entity.verification_status === 'verified' ? (
+          <StatusBadge state="compliant" label="Verified" size="sm" />
+        ) : (
+          <StatusBadge state="pending" label={entity.verification_status} size="sm" />
+        ),
+    },
+    {
+      key: 'confidence_score',
+      header: 'Confidence',
+      align: 'right',
+      width: '8rem',
+      // Colour alone used to carry the threshold here; the number carries it now.
+      cell: (entity) => (
+        <span className="tabular-nums text-re-text-primary">
+          {(entity.confidence_score * 100).toFixed(0)}%
+        </span>
+      ),
+    },
+  ];
+
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <GitMerge className="h-6 w-6 text-cyan-500" />
-            Identity Resolution
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Canonical entities, alias management, and ambiguous match review
-          </p>
-        </div>
-        {pendingReviewCount > 0 && (
-          <Badge variant="warning" className="text-sm px-3 py-1">
-            <HelpCircle className="h-3.5 w-3.5 mr-1" />
-            {pendingReviewCount} Pending Reviews
-          </Badge>
-        )}
-      </div>
-
-      <DemoBanner visible={!!(entities.data?.__isDemo)} />
-
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="entities">
-            <Building2 className="h-4 w-4 mr-1" />
-            Entities ({entityList.length})
-          </TabsTrigger>
-          <TabsTrigger value="reviews">
-            <HelpCircle className="h-4 w-4 mr-1" />
-            Review Queue ({pendingReviewCount})
-          </TabsTrigger>
-        </TabsList>
+        <PageHeader
+          title="Identity Resolution"
+          description="Canonical entities, alias management, and ambiguous match review"
+          meta={
+            pendingReviewCount > 0 ? (
+              <StatusBadge state="at-risk" label={`${pendingReviewCount} Pending Reviews`} />
+            ) : undefined
+          }
+          tabs={
+            <TabsList>
+              <TabsTrigger value="entities">
+                <Building2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Entities ({entityList.length})
+              </TabsTrigger>
+              <TabsTrigger value="reviews">
+                <HelpCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Review Queue ({pendingReviewCount})
+              </TabsTrigger>
+            </TabsList>
+          }
+        />
 
-        {/* Entities Tab */}
+        <DemoBanner visible={!!(entities.data?.__isDemo)} />
+
         <TabsContent value="entities">
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search entities..."
-                    className="pl-9 h-9 text-sm"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <select
-                  className="text-sm border rounded px-2 py-1.5 bg-background h-9"
-                  value={entityTypeFilter || ''}
-                  onChange={e => setEntityTypeFilter(e.target.value || undefined)}
-                >
-                  <option value="">All Types</option>
-                  <option value="firm">Firms</option>
-                  <option value="facility">Facilities</option>
-                  <option value="product">Products</option>
-                  <option value="lot">Lots</option>
-                </select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Entity Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {Object.entries(ENTITY_TYPE_CONFIG).filter(([k]) => k !== 'trading_relationship').map(([type, config]) => {
-              const count = entityList.filter((e: Entity) => e.entity_type === type).length;
-              const Icon = config.icon;
-              return (
-                <Card key={type} className="cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => setEntityTypeFilter(entityTypeFilter === type ? undefined : type)}
-                >
-                  <CardContent className="pt-4 pb-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className={`h-4 w-4 ${config.color}`} />
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider">{config.label === 'Facility' ? 'Facilities' : config.label + 's'}</span>
-                    </div>
-                    <p className="text-2xl font-bold">{count}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            {Object.entries(ENTITY_TYPE_CONFIG)
+              .filter(([k]) => k !== 'trading_relationship')
+              .map(([type, config]) => {
+                const count = entityList.filter((e: Entity) => e.entity_type === type).length;
+                const label = config.label === 'Facility' ? 'Facilities' : `${config.label}s`;
+                const pressed = entityTypeFilter === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => setEntityTypeFilter(pressed ? undefined : type)}
+                    className="block w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset"
+                  >
+                    <StatTile
+                      label={label}
+                      value={count}
+                      className={cn(pressed && 'border-re-border-strong bg-re-surface-inset')}
+                    />
+                  </button>
+                );
+              })}
           </div>
 
-          {/* Entity List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Canonical Entities</CardTitle>
-              <CardDescription>
-                {entities.isLoading ? 'Loading...' : `${entityList.length} entities`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {entities.isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
-                </div>
-              ) : entityList.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Building2 className="h-12 w-12 mx-auto mb-3 text-re-text-secondary" />
-                  <p className="font-medium">No entities registered</p>
-                  <p className="text-sm">Entities are auto-registered from ingested traceability events</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>GLN</TableHead>
-                      <TableHead>GTIN</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Confidence</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {entityList
-                      .filter((e: Entity) => !searchQuery ||
-                        e.canonical_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        e.gln?.includes(searchQuery) ||
-                        e.gtin?.includes(searchQuery)
-                      )
-                      .map((entity: Entity) => {
-                        const config = ENTITY_TYPE_CONFIG[entity.entity_type] || ENTITY_TYPE_CONFIG.firm;
-                        const Icon = config.icon;
-                        return (
-                          <TableRow key={entity.entity_id}>
-                            <TableCell>
-                              <div className="flex items-center gap-1.5">
-                                <Icon className={`h-4 w-4 ${config.color}`} />
-                                <span className="text-xs">{config.label}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-medium">{entity.canonical_name}</TableCell>
-                            <TableCell className="font-mono text-xs">{entity.gln || '-'}</TableCell>
-                            <TableCell className="font-mono text-xs">{entity.gtin || '-'}</TableCell>
-                            <TableCell>
-                              <Badge variant={entity.verification_status === 'verified' ? 'default' : 'outline'} className="text-xs">
-                                {entity.verification_status === 'verified' ? (
-                                  <><CheckCircle className="h-3 w-3 mr-0.5" /> Verified</>
-                                ) : entity.verification_status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <span className={`text-sm ${entity.confidence_score >= 0.9 ? 'text-re-success' : entity.confidence_score >= 0.7 ? 'text-re-warning' : 'text-re-danger'}`}>
-                                {(entity.confidence_score * 100).toFixed(0)}%
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                  </TableBody>
-                </Table>
-              </div>
-              )}
-            </CardContent>
-          </Card>
+          <Section
+            spacing="app"
+            title="Canonical Entities"
+            description={entities.isLoading ? 'Loading...' : `${entityList.length} entities`}
+          >
+            <DataTable
+              caption="Canonical identity entities"
+              columns={columns}
+              data={visibleEntities}
+              minWidth="880px"
+              rowKey={(entity) => entity.entity_id}
+              status={entities.isLoading ? 'loading' : visibleEntities.length === 0 ? 'empty' : 'idle'}
+              empty={{
+                icon: Building2,
+                title: 'No entities registered',
+                description: 'Entities are auto-registered from ingested traceability events',
+              }}
+              toolbar={{
+                search: {
+                  placeholder: 'Search entities...',
+                  value: searchQuery,
+                  onChange: setSearchQuery,
+                  label: 'Search entities by name, GLN or GTIN',
+                },
+                filters: (
+                  <>
+                    <label htmlFor="identity-type-filter" className="sr-only">
+                      Filter by entity type
+                    </label>
+                    <select
+                      id="identity-type-filter"
+                      className={cn(fieldControlClasses, FILTER_SELECT)}
+                      value={entityTypeFilter || ''}
+                      onChange={e => setEntityTypeFilter(e.target.value || undefined)}
+                    >
+                      <option value="">All Types</option>
+                      <option value="firm">Firms</option>
+                      <option value="facility">Facilities</option>
+                      <option value="product">Products</option>
+                      <option value="lot">Lots</option>
+                    </select>
+                  </>
+                ),
+              }}
+            />
+          </Section>
         </TabsContent>
 
-        {/* Review Queue Tab */}
         <TabsContent value="reviews">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <HelpCircle className="h-5 w-5 text-re-warning" />
-                Ambiguous Match Review Queue
-              </CardTitle>
-              <CardDescription>
-                Potential duplicates requiring human review — confirm match, confirm distinct, or defer
-              </CardDescription>
+              <div className="min-w-0">
+                <CardTitle>Ambiguous Match Review Queue</CardTitle>
+                <CardDescription className="mt-1">
+                  Potential duplicates requiring human review — confirm match, confirm distinct, or defer
+                </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               {reviews.isLoading ? (
@@ -280,47 +292,47 @@ function IdentityResolutionPageContent() {
                   {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
                 </div>
               ) : reviewList.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-3 text-re-success" />
-                  <p className="font-medium">No pending reviews</p>
-                  <p className="text-sm">All identity matches have been resolved</p>
-                </div>
+                <EmptyState
+                  bare
+                  icon={CheckCircle}
+                  title="No pending reviews"
+                  description="All identity matches have been resolved"
+                />
               ) : (
                 <div className="space-y-3">
                   {reviewList.map((review: IdentityReview) => {
                     const matchBadge = MATCH_TYPE_BADGE[review.match_type] || MATCH_TYPE_BADGE.ambiguous;
                     const isPending = review.status === 'pending';
                     return (
-                      <div
-                        key={review.review_id}
-                        className={`border rounded-lg p-4 ${isPending ? '' : 'opacity-60'}`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant={matchBadge.variant}>{matchBadge.label}</Badge>
-                              <span className="text-sm text-muted-foreground">
+                      <Card key={review.review_id} variant="inset" padding="compact">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <Badge tone={matchBadge.tone} size="sm">{matchBadge.label}</Badge>
+                              <span className="text-ui text-re-text-tertiary">
                                 {(review.match_confidence * 100).toFixed(0)}% confidence
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div className="border rounded p-2 bg-muted/30">
-                                <p className="text-xs text-muted-foreground mb-1">Entity A</p>
-                                <p className="font-medium">{review.entity_a_name || review.entity_a_id?.slice(0, 8)}</p>
+                            <dl className="grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-md border border-re-border-subtle bg-re-surface-card p-2">
+                                <dt className="text-label text-re-text-muted">Entity A</dt>
+                                <dd className="mt-0.5 text-ui font-medium text-re-text-primary">
+                                  {review.entity_a_name || review.entity_a_id?.slice(0, 8)}
+                                </dd>
                               </div>
-                              <div className="border rounded p-2 bg-muted/30">
-                                <p className="text-xs text-muted-foreground mb-1">Entity B</p>
-                                <p className="font-medium">{review.entity_b_name || review.entity_b_id?.slice(0, 8)}</p>
+                              <div className="rounded-md border border-re-border-subtle bg-re-surface-card p-2">
+                                <dt className="text-label text-re-text-muted">Entity B</dt>
+                                <dd className="mt-0.5 text-ui font-medium text-re-text-primary">
+                                  {review.entity_b_name || review.entity_b_id?.slice(0, 8)}
+                                </dd>
                               </div>
-                            </div>
+                            </dl>
                           </div>
                           {!isPending && (
-                            <Badge variant="outline" className="text-xs">
-                              {review.status?.replace(/_/g, ' ')}
-                            </Badge>
+                            <Badge size="sm">{review.status?.replace(/_/g, ' ')}</Badge>
                           )}
                         </div>
-                      </div>
+                      </Card>
                     );
                   })}
                 </div>

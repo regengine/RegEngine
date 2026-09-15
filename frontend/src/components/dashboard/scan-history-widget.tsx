@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowRight, Package, ScanLine, Truck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
 import { getServiceURL } from "@/lib/api-config";
 
@@ -76,66 +78,62 @@ export function ScanHistoryWidget() {
 
   return (
     <Card className="min-h-[260px]">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ScanLine className="h-4 w-4" />
-            Recent Scans
-          </CardTitle>
-          <Link
-            href="/ingest"
-            className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-          >
-            Import data <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
+      <CardHeader>
+        <CardTitle>Recent Scans</CardTitle>
+        <Link
+          href="/ingest"
+          className="inline-flex shrink-0 items-center gap-1 text-small text-re-text-tertiary no-underline transition-colors duration-120 hover:text-re-brand"
+        >
+          Import data <ArrowRight className="h-3 w-3" aria-hidden="true" />
+        </Link>
       </CardHeader>
       <CardContent className="min-h-[196px]">
         {isLoading ? (
-          <div className="flex min-h-[168px] items-center justify-center text-sm text-muted-foreground">
-            Loading...
+          <div className="space-y-2" aria-busy="true">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
           </div>
         ) : events.length === 0 ? (
-          <div className="min-h-[168px] text-center py-8">
-            <ScanLine className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No scans yet</p>
-            <Link
-              href="/ingest"
-              className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            >
-              Import data
-              <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
+          <EmptyState
+            bare
+            size="sm"
+            icon={ScanLine}
+            title="No scans yet"
+            action={
+              <Link
+                href="/ingest"
+                className="inline-flex items-center gap-1 text-ui text-re-brand no-underline hover:underline"
+              >
+                Import data
+                <ArrowRight className="h-3 w-3" aria-hidden="true" />
+              </Link>
+            }
+          />
         ) : (
-          <div className="space-y-1.5">
+          <div>
             {events.map((evt) => {
               const Icon = EVENT_ICONS[evt.event_type] || Package;
               return (
                 <div
                   key={evt.event_id}
-                  className="flex items-center gap-2.5 border-b border-[var(--re-surface-border)] px-2 py-2 transition-colors last:border-b-0 hover:bg-muted/50"
+                  className="flex items-center gap-3 border-b border-re-border-subtle py-2.5 transition-colors duration-120 last:border-b-0"
                 >
-                  <div className="flex-shrink-0 border border-[var(--re-surface-border)] bg-muted p-1.5">
-                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
+                  <Icon className="h-4 w-4 shrink-0 text-re-text-muted" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-ui font-medium text-re-text-primary">
                       {evt.product_description}
                     </div>
-                    <div className="text-[11px] text-muted-foreground font-mono truncate">
+                    <div className="truncate font-mono text-small text-re-text-tertiary">
                       {evt.traceability_lot_code}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end flex-shrink-0">
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 py-0"
-                    >
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge size="sm" mono>
                       {evt.event_type}
                     </Badge>
                     {evt.ingested_at && (
-                      <span className="text-[10px] text-muted-foreground mt-0.5">
+                      <span className="text-small text-re-text-tertiary">
                         {timeAgo(evt.ingested_at)}
                       </span>
                     )}

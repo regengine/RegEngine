@@ -11,15 +11,15 @@ import {
   Apple,
   Check,
   ArrowRight,
-  ShieldCheck,
-  AlertTriangle,
   Loader2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { FTL_CATEGORIES, type FTLCategory } from '@/lib/ftl-data';
@@ -48,32 +48,41 @@ function CategoryCard({
     <button
       type="button"
       onClick={onToggle}
-      className={`group relative flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-all ${
+      aria-pressed={selected}
+      className={cn(
+        'relative flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none',
         selected
-          ? 'border-[var(--re-brand)] bg-[var(--re-brand)]/5'
-          : 'border-[var(--re-surface-border)] hover:border-[var(--re-text-muted)]'
-      }`}
+          ? 'border-re-text-primary bg-re-surface-inset'
+          : 'border-re-border hover:border-re-border-strong',
+      )}
     >
       {selected && (
-        <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--re-brand)]">
-          <Check className="h-3 w-3 text-white" />
-        </div>
+        <Check
+          className="absolute right-2 top-2 h-4 w-4 text-re-text-primary"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       )}
-      <div className="flex items-center gap-2">
-        <Icon className={`h-4 w-4 ${selected ? 'text-[var(--re-brand)]' : 'text-[var(--re-text-muted)]'}`} />
-        <span className={`text-sm font-medium ${selected ? 'text-[var(--re-text-primary)]' : 'text-[var(--re-text-secondary)]'}`}>
-          {cat.name}
-        </span>
-      </div>
-      <span className="text-xs text-[var(--re-text-muted)] line-clamp-1">
+      <span className="flex items-center gap-2 pr-6">
+        <Icon
+          className={cn(
+            'h-4 w-4 shrink-0',
+            selected ? 'text-re-text-primary' : 'text-re-text-tertiary',
+          )}
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+        <span className="text-ui font-medium text-re-text-primary">{cat.name}</span>
+      </span>
+      <span className="line-clamp-1 text-small text-re-text-tertiary">
         {cat.examples}
       </span>
       {cat.covered ? (
-        <Badge variant="outline" className="mt-0.5 border-re-brand/30 text-re-brand text-[10px] px-1.5 py-0">
+        <Badge tone="info" size="sm" className="mt-0.5">
           On FTL
         </Badge>
       ) : (
-        <Badge variant="outline" className="mt-0.5 border-[var(--re-surface-border)] text-[var(--re-text-muted)] text-[10px] px-1.5 py-0">
+        <Badge tone="neutral" size="sm" className="mt-0.5">
           Not on FTL
         </Badge>
       )}
@@ -137,47 +146,44 @@ export default function FTLCheckPage() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
-        <CardHeader className="space-y-2 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-re-warning/10">
-              <ShieldCheck className="h-5 w-5 text-re-warning" />
-            </div>
-            <div>
-              <div className="mb-1">
-                <StepIndicator step={3} />
-              </div>
-              <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
-                Check Your FTL Coverage
-              </h1>
-              <p className="text-sm text-[var(--re-text-muted)]">
-                Select the product categories your facility handles.
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-            {FTL_CATEGORIES.map((cat) => (
-              <CategoryCard
-                key={cat.id}
-                cat={cat}
-                selected={selected.has(cat.id)}
-                onToggle={() => toggle(cat.id)}
-              />
-            ))}
-          </div>
+      <Card padding="spacious">
+        <StepIndicator step={3} />
+        <h1 className="mt-4 text-heading text-re-text-primary">
+          Check Your FTL Coverage
+        </h1>
+        <p className="mt-1 text-ui text-re-text-secondary">
+          Select the product categories your facility handles.
+        </p>
 
+        <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {FTL_CATEGORIES.map((cat) => (
+            <CategoryCard
+              key={cat.id}
+              cat={cat}
+              selected={selected.has(cat.id)}
+              onToggle={() => toggle(cat.id)}
+            />
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-re-border-subtle pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => router.push('/dashboard')}
+          >
+            Skip for now — I&apos;ll set up later
+          </Button>
           {!showResults ? (
             <Button
-              className="h-11 w-full"
+              size="lg"
               disabled={selected.size === 0}
               onClick={handleCheck}
             >
               Check FTL Coverage ({selected.size} selected)
             </Button>
           ) : null}
-        </CardContent>
+        </div>
       </Card>
 
       {/* Results */}
@@ -188,51 +194,44 @@ export default function FTLCheckPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
           >
-            <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
-              <CardContent className="pt-6 space-y-4">
+            <Card padding="spacious">
+              <div className="space-y-4">
                 {/* Summary */}
-                <div className="text-center space-y-2">
-                  <div className="text-3xl font-bold text-[var(--re-text-primary)]">
+                <div className="space-y-2 text-center">
+                  <div className="text-title tabular-nums text-re-text-primary">
                     {results.covered.length} of {results.total}
                   </div>
-                  <p className="text-sm text-[var(--re-text-muted)]">
+                  <p className="text-ui text-re-text-secondary">
                     categories you selected are on the FDA Food Traceability List
                   </p>
                   <Progress
                     value={results.total > 0 ? (results.covered.length / results.total) * 100 : 0}
-                    className="h-2 mx-auto max-w-xs"
+                    className="mx-auto h-2 max-w-xs"
                   />
                 </div>
 
                 {/* Risk callout */}
                 {results.highRisk.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-lg border border-re-warning/30 bg-re-warning/5 p-3">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-re-warning" />
-                    <div className="text-sm">
-                      <span className="font-medium text-re-warning">
-                        {results.highRisk.length} high-risk
-                      </span>
-                      <span className="text-[var(--re-text-muted)]">
-                        {' '}categories with frequent FDA outbreak history:{' '}
-                        {results.highRisk.map((c) => c.name).join(', ')}
-                      </span>
-                    </div>
-                  </div>
+                  <Callout tone="warning">
+                    <span className="font-medium text-re-text-primary">
+                      {results.highRisk.length} high-risk
+                    </span>
+                    <span>
+                      {' '}categories with frequent FDA outbreak history:{' '}
+                      {results.highRisk.map((c) => c.name).join(', ')}
+                    </span>
+                  </Callout>
                 )}
 
                 {/* Required CTEs */}
                 {results.allCTEs.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="text-sm font-medium text-[var(--re-text-secondary)]">
+                    <h3 className="text-ui font-medium text-re-text-primary">
                       Critical Tracking Events you&apos;ll need to record:
                     </h3>
                     <div className="flex flex-wrap gap-1.5">
                       {results.allCTEs.map((cte) => (
-                        <Badge
-                          key={cte}
-                          variant="outline"
-                          className="border-[var(--re-surface-border)] text-[var(--re-text-secondary)]"
-                        >
+                        <Badge key={cte} tone="neutral" mono>
                           {cte}
                         </Badge>
                       ))}
@@ -242,7 +241,7 @@ export default function FTLCheckPage() {
 
                 {/* Not covered */}
                 {results.notCovered.length > 0 && (
-                  <p className="text-xs text-[var(--re-text-muted)]">
+                  <p className="text-small text-re-text-tertiary">
                     Not on the FTL (no FSMA 204 traceability required):{' '}
                     {results.notCovered.map((c) => c.name).join(', ')}
                   </p>
@@ -250,32 +249,30 @@ export default function FTLCheckPage() {
 
                 {/* #541 — Error banner with retry; no silent redirect on failure */}
                 {saveError && (
-                  <div
-                    role="alert"
-                    className="rounded-md border border-re-danger/40 bg-re-danger/10 px-3 py-2 text-sm text-re-danger"
-                  >
+                  <Callout tone="danger" role="alert">
                     {saveError}
-                  </div>
+                  </Callout>
                 )}
 
                 <Button
-                  className="h-11 w-full"
+                  className="w-full"
+                  size="lg"
                   disabled={saving}
                   onClick={handleContinue}
                 >
                   {saving ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
                       Setting up dashboard...
                     </>
                   ) : (
                     <>
                       {saveError ? 'Retry' : 'Continue to Dashboard'}
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      <ArrowRight aria-hidden="true" />
                     </>
                   )}
                 </Button>
-              </CardContent>
+              </div>
             </Card>
           </motion.div>
         )}

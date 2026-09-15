@@ -8,207 +8,75 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { PageContainer } from "@/components/layout/page-container";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Callout } from "@/components/ui/callout";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
-import { useSystemStatus } from "@/hooks/use-api";
-import { SystemHealthWidget } from "@/components/dashboard/system-health-widget";
+import { useSystemStatus, useSystemMetrics } from "@/hooks/use-api";
 import { MetricsOverviewWidget } from "@/components/dashboard/metrics-overview-widget";
+import { SystemHealthWidget } from "@/components/dashboard/system-health-widget";
 import { ScanHistoryWidget } from "@/components/dashboard/scan-history-widget";
 import { QAHealthWidget } from "@/components/dashboard/qa-health-widget";
 import { fetchWorkbenchReadinessSummary } from "@/lib/api-hooks";
-import {
-  Shield,
-  Upload,
-  Search,
-  FileCheck,
-  AlertTriangle,
-  TrendingUp,
-  Activity,
-  ArrowRight,
-  BarChart3,
-  Building2,
-  Truck,
-  Settings,
-  CheckCircle2,
-  WifiOff,
-  ClipboardCheck,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { GettingStartedCard } from "@/components/dashboard/getting-started-card";
 import { useOnboardingStatus } from "@/hooks/use-onboarding";
 
-// Base quick actions (overridden by tenant type)
-const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
-  const commonActions = [
-    {
-      title: "FSMA Readiness Score",
-      description: "View your advisory readiness indicator",
-      icon: Shield,
-      href: "/dashboard/compliance",
-      color: "text-re-brand",
-      bg: "bg-re-brand-muted dark:bg-re-brand/30",
-    },
-    {
-      title: "Alerts",
-      description: "Review compliance alerts",
-      icon: AlertTriangle,
-      href: "/dashboard/alerts",
-      color: "text-re-warning",
-      bg: "bg-re-warning-muted dark:bg-re-warning/30",
-    },
-    {
-      title: "Import Data",
-      description: "Documents, CSV, and file upload",
-      icon: Upload,
-      href: "/ingest",
-      color: "text-re-info",
-      bg: "bg-re-info-muted dark:bg-re-info/30",
-    },
-  ];
+/**
+ * Dashboard overview.
+ *
+ * An operator opens this page every morning and after every import. The first
+ * viewport answers three questions without scrolling: where do we stand, what
+ * is wrong, and what do I do next. Everything else is folded into those three
+ * or demoted below the fold — see SPEC §7 for the mapping of every widget that
+ * used to sit up here.
+ */
 
-  if (tenantType === "retailer") {
-    return [
-      ...commonActions,
-      {
-        title: "Supplier Network",
-        description: "Manage supplier compliance",
-        icon: Building2,
-        href: "/dashboard/suppliers",
-        color: "text-re-warning",
-        bg: "bg-re-warning-muted dark:bg-re-warning/30",
-      },
-      {
-        title: "Product Catalog",
-        description: "Product catalog management",
-        icon: FileCheck,
-        href: "/dashboard/products",
-        color: "text-re-text-secondary",
-        bg: "bg-re-surface-elevated",
-      },
-      {
-        title: "Recall Readiness",
-        description: "Preparedness assessment",
-        icon: TrendingUp,
-        href: "/dashboard/recall-report",
-        color: "text-re-text-secondary",
-        bg: "bg-re-surface-elevated",
-      },
-    ];
-  }
+/** The six quick actions, unchanged in label and href — now one link row. */
+const QUICK_LINKS = [
+  { title: "FSMA Readiness Score", href: "/dashboard/compliance" },
+  { title: "Alerts", href: "/dashboard/alerts" },
+  { title: "Import Data", href: "/ingest" },
+  { title: "Supplier Network", href: "/dashboard/suppliers" },
+  { title: "Product Catalog", href: "/dashboard/products" },
+  { title: "Recall Readiness", href: "/dashboard/recall-report" },
+];
 
-  if (tenantType === "supplier") {
-    return [
-      ...commonActions,
-      {
-        title: "Recall Readiness",
-        description: "Preparedness assessment",
-        icon: TrendingUp,
-        href: "/dashboard/recall-report",
-        color: "text-re-warning",
-        bg: "bg-re-warning-muted dark:bg-re-warning/30",
-      },
-      {
-        title: "FDA Export",
-        description: "Recurring export retention",
-        icon: Upload,
-        href: "/dashboard/export-jobs",
-        color: "text-re-brand",
-        bg: "bg-re-brand-muted dark:bg-re-brand/30",
-      },
-      {
-        title: "Audit Log",
-        description: "Immutable event history",
-        icon: Search,
-        href: "/dashboard/audit-log",
-        color: "text-re-text-secondary",
-        bg: "bg-re-surface-elevated",
-      },
-      {
-        title: "Recall Drill",
-        description: "FDA recall simulation",
-        icon: Truck,
-        href: "/dashboard/recall-drills",
-        color: "text-re-text-secondary",
-        bg: "bg-re-surface-elevated",
-      },
-    ];
-  }
-
-  // System admin
-  return [
-    {
-      title: "System Settings",
-      description: "Manage account & integrations",
-      icon: Settings,
-      href: "/dashboard/settings",
-      color: "text-re-info",
-      bg: "bg-re-info-muted dark:bg-re-info/30",
-    },
-    {
-      title: "Team",
-      description: "Manage team members & roles",
-      icon: Building2,
-      href: "/settings/users",
-      color: "text-re-brand",
-      bg: "bg-re-brand-muted dark:bg-re-brand/30",
-    },
-    {
-      title: "Audit Log",
-      description: "System event history",
-      icon: Activity,
-      href: "/dashboard/audit-log",
-      color: "text-re-text-secondary",
-      bg: "bg-re-surface-elevated",
-    },
-    {
-      title: "FDA Export",
-      description: "Retention & export scheduling",
-      icon: Upload,
-      href: "/dashboard/export-jobs",
-      color: "text-re-warning",
-      bg: "bg-re-warning-muted dark:bg-re-warning/30",
-    },
-  ];
+type AttentionRow = {
+  id: string;
+  state: ComplianceState;
+  item: string;
+  source: string;
+  href: string;
 };
 
 function DashboardPageSkeleton() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)]" aria-busy="true">
+    <div aria-busy="true">
       <PageContainer>
-        <div className="space-y-6 sm:space-y-8 animate-pulse">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-2">
-              <div className="h-8 w-44 rounded bg-muted" />
-              <div className="h-4 w-[min(24rem,80vw)] rounded bg-muted" />
-            </div>
-            <div className="h-7 w-40 rounded bg-muted" />
+        <div className="space-y-6">
+          <div className="space-y-2 border-b border-re-border-subtle pb-5">
+            <Skeleton className="h-8 w-44" />
+            <Skeleton className="h-4 w-[min(24rem,80vw)]" />
           </div>
-          <div className="h-[244px] rounded-lg bg-muted" />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="h-[210px] rounded-lg bg-muted" />
-              <div className="h-[136px] rounded-lg bg-muted" />
-            </div>
-            <div className="space-y-6">
-              <div className="h-[220px] rounded-lg bg-muted" />
-              <div className="h-[260px] rounded-lg bg-muted" />
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div className="h-6 w-36 rounded bg-muted" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="h-[96px] rounded-lg bg-muted" />
+          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr_1fr]">
+            <Skeleton className="h-[172px]" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:contents">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-[92px]" />
               ))}
             </div>
           </div>
-          <div className="h-[116px] rounded-lg bg-muted" />
-          <div className="h-[116px] rounded-lg bg-muted" />
+          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+            <Skeleton className="h-[240px]" />
+            <Skeleton className="h-[240px]" />
+          </div>
         </div>
       </PageContainer>
     </div>
@@ -216,17 +84,18 @@ function DashboardPageSkeleton() {
 }
 
 export default function DashboardPage() {
-  const { user, isHydrated, isAuthenticated } = useAuth();
+  const { user, isHydrated } = useAuth();
   const { tenantId, isTenantReady } = useTenant();
   const router = useRouter();
+  const isAuthenticated = Boolean(user);
 
   const effectiveUser = user;
   const effectiveTenantId = tenantId;
 
-  // Fetch real service health status
-  // Derive health badge from the same useSystemStatus() data the widget uses
-  // — single source of truth so badge and widget never contradict.
+  // Derive the health signal from the same useSystemStatus() data the widget
+  // uses — one source of truth, so the strip and the widget never contradict.
   const { data: systemStatus, isLoading: statusLoading } = useSystemStatus();
+  const { data: metrics } = useSystemMetrics();
 
   const healthStatus = useMemo(():
     | "loading"
@@ -253,13 +122,6 @@ export default function DashboardPage() {
   const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
 
-  // Default to 'retailer' quick actions. (Previously derived from a Supabase
-  // org-plan lookup that resolved to undefined in production — the org id
-  // space never matched tenant_id — so 'retailer' is the effective behavior.)
-  const quickActions = useMemo(() => {
-    return getQuickActions("retailer");
-  }, []);
-
   const { data: workbenchReadiness } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
     queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
@@ -268,259 +130,251 @@ export default function DashboardPage() {
     retry: false,
   });
 
+  /**
+   * "Needs attention" absorbs what used to be three separate red widgets: the
+   * System Health service list, the QA Health blocking count, and the open-fix
+   * count from the workbench. One list, sorted worst-first.
+   */
+  const attentionRows = useMemo<AttentionRow[]>(() => {
+    const rows: AttentionRow[] = [];
+
+    for (const service of systemStatus?.services ?? []) {
+      if (service.status !== "healthy") {
+        rows.push({
+          id: `service-${service.name}`,
+          state: "non-compliant",
+          item: `${service.name} service is not responding`,
+          source: "System health",
+          href: "/dashboard/settings",
+        });
+      }
+    }
+
+    const fixes = workbenchReadiness?.unresolved_fix_count ?? 0;
+    if (fixes > 0) {
+      rows.push({
+        id: "workbench-fixes",
+        state: "needs-correction",
+        item: `${fixes} unresolved ${fixes === 1 ? "fix" : "fixes"} in the Inflow Workbench`,
+        source: workbenchReadiness?.source && workbenchReadiness.source !== "none"
+          ? workbenchReadiness.source
+          : "Inflow Workbench",
+        href: "/dashboard/inflow-lab",
+      });
+    }
+
+    const openAlerts = metrics?.open_alerts ?? 0;
+    if (openAlerts > 0) {
+      rows.push({
+        id: "open-alerts",
+        state: "at-risk",
+        item: `${openAlerts} open compliance ${openAlerts === 1 ? "alert" : "alerts"}`,
+        source: "Alerts",
+        href: "/dashboard/alerts",
+      });
+    }
+
+    if (metrics && (metrics.chain_length ?? 0) > 0 && !metrics.chain_valid) {
+      rows.push({
+        id: "chain-broken",
+        state: "blocked",
+        item: "Hash chain verification failed",
+        source: "Evidence ledger",
+        href: "/dashboard/audit-log",
+      });
+    }
+
+    return rows;
+  }, [systemStatus, workbenchReadiness, metrics]);
+
+  const attentionColumns: DataTableColumn<AttentionRow>[] = [
+    {
+      key: "state",
+      header: "Status",
+      width: "12rem",
+      cell: (row) => <StatusBadge state={row.state} size="sm" />,
+    },
+    { key: "item", header: "Item" },
+    { key: "source", header: "Source", width: "12rem" },
+  ];
+
+  /** The numbered next actions, derived from what is actually wrong. */
+  const nextActions = useMemo(() => {
+    const actions: { label: string; href: string; cta?: string }[] = [];
+    const fixes = workbenchReadiness?.unresolved_fix_count ?? 0;
+    if (fixes > 0) {
+      actions.push({
+        label: `Resolve ${fixes} open ${fixes === 1 ? "fix" : "fixes"} in the workbench`,
+        href: "/dashboard/inflow-lab",
+        cta: "Open",
+      });
+    }
+    if ((metrics?.open_alerts ?? 0) > 0) {
+      actions.push({ label: "Review open compliance alerts", href: "/dashboard/alerts", cta: "Review" });
+    }
+    if ((metrics?.events_ingested ?? 0) === 0) {
+      actions.push({ label: "Import your first traceability records", href: "/ingest", cta: "Import" });
+    }
+    actions.push({ label: "Run a recall drill", href: "/dashboard/recall-drills" });
+    return actions.slice(0, 4);
+  }, [workbenchReadiness, metrics]);
+
   if (!isHydrated || !effectiveUser) {
     return <DashboardPageSkeleton />;
   }
 
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)]">
-      <PageContainer>
-        <div className="space-y-6 sm:space-y-8">
-          {/* Welcome Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
-              </div>
-              <p className="text-muted-foreground mt-1">
-                Welcome to RegEngine. Here&apos;s your compliance overview.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {partnerTier === "founding" && (
-                <Badge
-                  variant="secondary"
-                  className="bg-re-surface-elevated text-re-brand border border-[var(--re-surface-border)]"
-                >
-                  Founding Partner
+    <PageContainer>
+      <PageHeader
+        title="Dashboard"
+        description="Welcome to RegEngine. Here's your compliance overview."
+        meta={
+          // Service health lives in the shell's status strip and nowhere else
+          // (SPEC §3.3); this header used to render a second copy of it.
+          partnerTier === "founding" ? (
+            <Badge tone="brand">Founding Partner</Badge>
+          ) : undefined
+        }
+        secondaryActions={
+          <Button variant="secondary" asChild>
+            <Link href="/ingest">Import data</Link>
+          </Button>
+        }
+        primaryAction={
+          experimentalFeaturesEnabled() ? (
+            <Button asChild>
+              <Link href="/dashboard/inflow-lab">
+                Open Inflow Lab
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <div className="space-y-6">
+        {/* One notice when the backend is unreachable, instead of a red pill in
+            each of three widgets. */}
+        {healthStatus === "disruption" && (
+          <Callout tone="danger" role="alert" title="Backend services unreachable">
+            Data will appear once services are connected.
+          </Callout>
+        )}
+
+        <MetricsOverviewWidget readiness={workbenchReadiness} />
+
+        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <section aria-labelledby="needs-attention-heading" className="space-y-3">
+            <h2 id="needs-attention-heading" className="text-subheading text-re-text-primary">
+              Needs attention
+              {attentionRows.length > 0 && (
+                <Badge tone="neutral" size="sm" className="ml-2">
+                  {attentionRows.length}
                 </Badge>
               )}
-              {healthStatus === "loading" ? (
-                <Badge
-                  variant="outline"
-                  className="bg-re-surface-elevated text-re-text-muted dark:bg-re-surface-base/30 dark:text-re-text-tertiary"
-                >
-                  <Activity className="w-3 h-3 mr-1 animate-pulse" />
-                  Checking...
-                </Badge>
-              ) : healthStatus === "operational" ? (
-                <Badge
-                  variant="outline"
-                  className="bg-re-success-muted text-re-success dark:bg-re-success/30 dark:text-re-success"
-                >
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                  All Systems Operational
-                </Badge>
-              ) : healthStatus === "degraded" ? (
-                <Badge
-                  variant="outline"
-                  className="bg-re-warning-muted text-re-warning dark:bg-re-warning/30 dark:text-re-warning"
-                >
-                  <AlertTriangle className="w-3 h-3 mr-1" />
-                  Degraded Performance
-                </Badge>
-              ) : (
-                <Badge
-                  variant="outline"
-                  className="bg-re-danger-muted text-re-danger dark:bg-re-danger/30 dark:text-re-danger"
-                >
-                  <WifiOff className="w-3 h-3 mr-1" />
-                  Services Unreachable
-                </Badge>
-              )}
-            </div>
-          </div>
+            </h2>
+            <DataTable
+              caption="Items that need attention, worst first"
+              columns={attentionColumns}
+              data={attentionRows}
+              rowKey={(row) => row.id}
+              rowHref={(row) => row.href}
+              density="medium"
+              minWidth="480px"
+              status={attentionRows.length === 0 ? "empty" : "idle"}
+              empty={{
+                icon: CheckCircle2,
+                title: "Nothing needs attention",
+                description: "Every check you have configured is currently passing.",
+                size: "sm",
+              }}
+            />
+          </section>
 
-          {/* Getting Started (new users) */}
-          <GettingStartedCard />
-
-          {/* Operational Widgets */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <MetricsOverviewWidget />
-
-              <Card>
-                <CardContent className="pt-4 sm:pt-5 pb-4">
-                  <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                        <ClipboardCheck className="h-5 w-5 text-re-brand" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-base sm:text-lg font-semibold">
-                            Traceability Readiness
-                          </h2>
-                          {workbenchReadiness?.export_eligible ? (
-                            <Badge
-                              variant="outline"
-                              className="bg-re-success-muted text-re-success border-re-success"
-                            >
-                              Export eligible
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="bg-re-surface-elevated text-muted-foreground"
-                            >
-                              Not export eligible
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                          {workbenchReadiness?.label ||
-                            "No saved Inflow Workbench run yet."}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 sm:gap-4 xl:min-w-[320px]">
-                      <div>
-                        <p className="text-xl sm:text-2xl font-bold">
-                          {typeof workbenchReadiness?.score === "number"
-                            ? workbenchReadiness.score
-                            : "—"}
-                        </p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">
-                          Readiness
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xl sm:text-2xl font-bold">
-                          {workbenchReadiness?.unresolved_fix_count ?? "—"}
-                        </p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">
-                          Open Fixes
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xl sm:text-2xl font-bold truncate">
-                          {workbenchReadiness?.source &&
-                          workbenchReadiness.source !== "none"
-                            ? workbenchReadiness.source
-                            : "—"}
-                        </p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">
-                          Source
-                        </p>
-                      </div>
-                    </div>
-                    {experimentalFeaturesEnabled() && (
-                      <Link href="/dashboard/inflow-lab" className="w-full xl:w-auto">
-                        <Button
-                          variant="outline"
-                          className="min-h-[44px] w-full xl:w-auto active:scale-[0.98] transition-transform"
-                        >
-                          Open Inflow Lab
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="space-y-6">
-              <SystemHealthWidget />
-              {effectiveUser.is_sysadmin && <QAHealthWidget />}
-              <ScanHistoryWidget />
-            </div>
-          </div>
-
-          {/* Quick Actions - Now tenant-type specific */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {quickActions.map((action) => (
-                <div
-                  key={action.href}
-                >
-                  <Link href={action.href}>
-                    <Card className="h-full hover:border-primary/50 active:scale-[0.98] transition-all cursor-pointer group">
-                      <CardContent className="pt-4 sm:pt-6 pb-4 min-h-[48px]">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                          <div
-                            className={`p-2.5 sm:p-3 rounded-sm border border-[var(--re-surface-border)] ${action.bg} flex-shrink-0`}
-                          >
-                            <action.icon
-                              className={`h-5 w-5 sm:h-6 sm:w-6 ${action.color}`}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary transition-colors">
-                              {action.title}
-                            </h3>
-                            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 truncate">
-                              {action.description}
-                            </p>
-                          </div>
-                          <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Daily Heartbeat CTA */}
-          <Link href="/dashboard/heartbeat">
-            <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)] transition-colors cursor-pointer group hover:border-[var(--re-brand)]">
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="p-2.5 sm:p-3 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                      <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-re-text-secondary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm sm:text-base group-hover:text-re-info transition-colors">
-                        Daily Compliance Heartbeat
-                      </h3>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        Score, alerts, chain status &amp; next actions — your
-                        morning check
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-re-info group-hover:translate-x-1 transition-all" />
-                </div>
-              </CardContent>
+          <section aria-labelledby="next-actions-heading" className="space-y-3">
+            <h2 id="next-actions-heading" className="text-subheading text-re-text-primary">
+              Next actions
+            </h2>
+            <Card>
+              <ol className="divide-y divide-re-border-subtle">
+                {nextActions.map((action, i) => (
+                  <li key={action.href + action.label} className="flex items-start gap-3 px-4 py-3">
+                    <span className="mt-0.5 font-mono text-label text-re-text-muted">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <Link
+                      href={action.href}
+                      className="flex-1 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-brand"
+                    >
+                      {action.label}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
             </Card>
-          </Link>
+            <GettingStartedCard />
+          </section>
+        </div>
 
-          {/* FSMA 204 Deadline Banner */}
-          {experimentalFeaturesEnabled() && (
-          <Card className="border-[var(--re-brand)] bg-[var(--re-surface-card)]">
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="p-2.5 sm:p-3 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                    <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-re-brand-dark" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-sm sm:text-base">
-                      FSMA 204 Compliance
-                    </h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      FDA enforcement begins {FSMA_ENFORCEMENT_DATE} • Start tracking your readiness
-                    </p>
-                  </div>
-                </div>
-                <Link href="/fsma" className="w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    className="min-h-[48px] w-full sm:w-auto active:scale-[0.98] transition-transform"
-                  >
-                    View FSMA Dashboard
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
+        {/* ── Below the fold ─────────────────────────────────────────────── */}
+
+        <section aria-labelledby="go-to-heading" className="border-t border-re-border-subtle pt-5">
+          <h2 id="go-to-heading" className="sr-only">
+            Quick Actions
+          </h2>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-label text-re-text-muted">Go to</span>
+            {QUICK_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-brand"
+              >
+                {link.title}
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <SystemHealthWidget />
+          {effectiveUser.is_sysadmin && <QAHealthWidget />}
+          <ScanHistoryWidget />
+        </div>
+
+        <Card variant="interactive">
+          <Link href="/dashboard/heartbeat" className="block no-underline">
+            <CardContent className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <p className="text-subheading text-re-text-primary">Daily Compliance Heartbeat</p>
+                <p className="text-ui text-re-text-tertiary">
+                  Score, alerts, chain status &amp; next actions — your morning check
+                </p>
               </div>
+              <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" aria-hidden="true" />
+            </CardContent>
+          </Link>
+        </Card>
+
+        {experimentalFeaturesEnabled() && (
+          <Card>
+            <CardContent className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <p className="text-subheading text-re-text-primary">FSMA 204 Compliance</p>
+                <p className="text-ui text-re-text-tertiary">
+                  FDA enforcement begins {FSMA_ENFORCEMENT_DATE} • Start tracking your readiness
+                </p>
+              </div>
+              <Button variant="secondary" asChild>
+                <Link href="/fsma">
+                  View FSMA Dashboard
+                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
-          )}
-        </div>
-      </PageContainer>
-    </div>
+        )}
+      </div>
+    </PageContainer>
   );
 }
