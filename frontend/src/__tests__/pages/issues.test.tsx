@@ -80,6 +80,22 @@ vi.mock('lucide-react', () => {
         ChevronRight: stub,
         Timer: stub,
         Shield: stub,
+        // The shared design-system primitives (Callout, StatusBadge, StatTile,
+        // DataTable, Field, Button) build their icon maps at module scope, so
+        // every icon they reference must exist on this mock or the import
+        // throws before a single assertion runs.
+        AlertCircle: stub,
+        ArrowDown: stub,
+        ArrowDownRight: stub,
+        ArrowUp: stub,
+        ArrowUpDown: stub,
+        ArrowUpRight: stub,
+        HelpCircle: stub,
+        Info: stub,
+        Loader2: stub,
+        Minus: stub,
+        Search: stub,
+        X: stub,
     };
 });
 

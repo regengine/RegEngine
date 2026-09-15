@@ -57,6 +57,15 @@ harvesting,TLC-FEED-003,Romaine Lettuce,220,cases,Desert Bloom Farm,2026-04-26T1
 cooling,TLC-FEED-003,Romaine Lettuce,220,cases,Imperial Pre-Cool Facility,2026-04-26T17:51:00Z,,2026-04-26,,,,,,,,COOL-003,SRC-COOL-003,,Desert Bloom Farm Block 3,,,
 transformation,TLC-FEED-003-CUT,Romaine Lettuce,218,cases,LA Fresh Cut Kitchen,2026-04-27T00:10:00Z,,,,,,,,,,TRANS-003,SRC-MISSING-PACK,,Desert Bloom Farm Block 3,2026-04-27,,"""
 
+THREE_MISSING_SHIPTO_CSV = """cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref,harvester_business_phone
+harvesting,DEMO-LOT-0412,Organic Romaine,180,cases,Coastal Valley Farms,2026-04-12T08:30:00Z,2026-04-12,,,,,,,,,HARV-0412-A,SRC-HARV-0412,Coastal Valley Farms,Coastal Field Block 5,+1-415-555-0412
+cooling,DEMO-LOT-0412,Organic Romaine,180,cases,Valley Cooling Facility,2026-04-12T12:00:00Z,,2026-04-12,,,,,,,,COOL-0412-A,SRC-COOL-0412,,Coastal Field Block 5,
+initial_packing,DEMO-LOT-0412,Organic Romaine,178,cases,Valley Packhouse,2026-04-12T15:30:00Z,,,2026-04-12,,,,,,,PACK-0412-A,SRC-PACK-0412,Coastal Valley Farms,Coastal Field Block 5,+1-415-555-0412
+shipping,DEMO-LOT-0412,Organic Romaine,178,cases,Valley Packout Dock A,2026-04-12T19:00:00Z,,,,2026-04-12,,Valley Packhouse,,,,BOL-0412-A,SRC-PACK-0412,,Coastal Field Block 5,
+shipping,DEMO-LOT-0412,Organic Romaine,88,cases,Valley Packout Dock B,2026-04-12T19:15:00Z,,,,2026-04-12,,Valley Packhouse,,,,BOL-0412-B,SRC-PACK-0412,,Coastal Field Block 5,
+shipping,DEMO-LOT-0412,Organic Romaine,90,cases,Valley Packout Dock C,2026-04-12T19:30:00Z,,,,2026-04-12,,Valley Packhouse,,,,BOL-0412-C,SRC-PACK-0412,,Coastal Field Block 5,
+receiving,DEMO-LOT-0412,Organic Romaine,178,cases,Regional Distribution Center,2026-04-13T03:45:00Z,,,,,2026-04-13,,,Regional Distribution Center,Valley Packout Dock A,REC-0412,SRC-PACK-0412,,Coastal Field Block 5,"""
+
 BUILT_IN_SCENARIOS = [
     {
         "id": "complete-romaine-flow",
@@ -85,6 +94,16 @@ BUILT_IN_SCENARIOS = [
         "outcome": "Incomplete lot chain",
         "records": "3 CTE records",
         "csv": BROKEN_LINEAGE_CSV,
+        "created_at": "2026-04-30T00:00:00+00:00",
+        "built_in": True,
+    },
+    {
+        "id": "demo-lot-0412-three-missing-ship-tos",
+        "tenant_id": "system",
+        "name": "DEMO-LOT-0412: Three missing ship-tos block packet score",
+        "outcome": "Blocked shipping destinations",
+        "records": "7 CTE records",
+        "csv": THREE_MISSING_SHIPTO_CSV,
         "created_at": "2026-04-30T00:00:00+00:00",
         "built_in": True,
     },

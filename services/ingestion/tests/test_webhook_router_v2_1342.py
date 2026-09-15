@@ -1508,6 +1508,50 @@ class TestIngestEndpoint:
         assert body["accepted"] == 1
         assert persistence.store_calls  # fallback executed
 
+    def test_batch_partial_success_then_fallback_bills_each_label_exactly_once(self, monkeypatch):
+        """A batch that succeeds for event 1 and then blows up on event 2's
+        post-processing rolls back and re-persists BOTH events via the
+        per-event fallback. Regression for a real bug (Vercel review on
+        PR #3094): billable_event_ids accumulated event 1's id during the
+        doomed batch attempt; without clearing it on rollback, the fallback's
+        fresh ids for both events would land ALONGSIDE the stale one,
+        billing event 1 twice under two different event_ids -- bypassing
+        the UNIQUE(tenant_id, cte_event_id) idempotency guard entirely.
+        """
+        from unittest.mock import MagicMock
+
+        from app.webhook_router_v2 import routes as wr_routes
+
+        session = _FakeSession()
+        persistence = _FakePersistence(session)  # batch succeeds by default
+        client, _sess, _persistence = _client(monkeypatch, session=session, persistence=persistence)
+
+        call_count = {"n": 0}
+
+        def _raise_on_second_call(*_a, **_kw):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("canonical persist blew up on event 2")
+
+        monkeypatch.setattr(wr, "_persist_required_canonical_and_eval", _raise_on_second_call)
+        mock_charge = MagicMock()
+        monkeypatch.setattr(wr_routes, "charge_for_label", mock_charge)
+
+        resp = client.post(
+            "/api/v1/webhooks/ingest",
+            json=self._payload(events=[_make_shipping_event(tlc="TLC-A"), _make_shipping_event(tlc="TLC-B")]),
+            headers={"Idempotency-Key": "idem-partial-fallback"},
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["accepted"] == 2
+        assert persistence.store_calls, "fallback must have executed for both events"
+        assert mock_charge.call_count == 2, (
+            f"expected exactly one charge per accepted label, got {mock_charge.call_count} -- "
+            "stale event ids from the rolled-back batch attempt were not cleared before the fallback"
+        )
+
     def test_per_event_fallback_records_failure(self, monkeypatch):
         """Both batch AND per-event raise → event ends up rejected with storage error."""
         session = _FakeSession()

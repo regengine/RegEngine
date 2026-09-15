@@ -17,6 +17,7 @@ import {
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTenant } from '@/lib/tenant-context';
 import { useOnboardingStatus, useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { useSystemMetrics } from '@/hooks/use-api';
@@ -75,37 +76,35 @@ const CHECKLIST: ChecklistItem[] = [
   },
 ];
 
-function GettingStartedSlot({ pulse = false }: { pulse?: boolean }) {
-  return (
-    <div
-      className={`min-h-[244px] rounded-lg border border-transparent ${pulse ? 'animate-pulse' : ''}`}
-      aria-hidden="true"
-    />
-  );
+/** Renders nothing once the checklist is complete or dismissed. */
+function GettingStartedSlot() {
+  return null;
 }
 
 export function GettingStartedCard() {
   const { tenantId, isTenantReady } = useTenant();
-  const { data: status, isLoading } = useOnboardingStatus(isTenantReady ? tenantId : null);
+  const { data: status, isLoading, isError } = useOnboardingStatus(isTenantReady ? tenantId : null);
   const { data: metrics } = useSystemMetrics();
   const updateOnboarding = useUpdateOnboarding(tenantId);
   const [dismissing, setDismissing] = useState(false);
 
+  // Never leave a skeleton on the page: if onboarding status cannot be read
+  // (backend unreachable, no tenant yet), render nothing rather than a grey
+  // block that never resolves.
+  if (isError || (!isLoading && !status)) return <GettingStartedSlot />;
+
   if (isLoading || !status) {
     return (
-      <div
-        className="min-h-[244px] rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 animate-pulse"
-        aria-hidden="true"
-      >
-        <div className="h-5 w-36 rounded bg-muted" />
-        <div className="mt-2 h-3 w-24 rounded bg-muted" />
-        <div className="mt-5 h-2 rounded bg-muted" />
-        <div className="mt-5 space-y-3">
+      <Card aria-hidden="true">
+        <CardContent className="space-y-3">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-1.5 w-full" />
           {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-5 rounded bg-muted" />
+            <Skeleton key={item} className="h-5 w-full" />
           ))}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -146,33 +145,33 @@ export function GettingStartedCard() {
   };
 
   return (
-    <Card className="min-h-[244px] border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-      <CardContent className="pt-5 pb-4">
+    <Card>
+      <CardContent className="space-y-4">
         {/* Header */}
-        <div className="flex items-start justify-between mb-3">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">
-              Getting Started
-            </h3>
-            <p className="text-xs text-[var(--re-text-muted)] mt-0.5">
+            <h3 className="text-subheading text-re-text-primary">Getting Started</h3>
+            <p className="mt-0.5 text-small text-re-text-muted">
               {completedCount} of {CHECKLIST.length} complete
             </p>
           </div>
           <button
+            type="button"
             onClick={handleDismiss}
             disabled={dismissing}
-            className="text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors p-1 -m-1"
+            aria-label="Dismiss"
             title="Dismiss"
+            className="-m-1 rounded-md p-1 text-re-text-muted transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
           >
             {dismissing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
             ) : (
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
         </div>
 
-        <Progress value={progress} className="h-1.5 mb-4" />
+        <Progress value={progress} className="h-1.5" />
 
         {/* Checklist */}
         <ul className="space-y-1">
@@ -183,22 +182,22 @@ export function GettingStartedCard() {
               <li key={item.id}>
                 <Link
                   href={done ? '#' : item.href}
-                  className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                  className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-ui no-underline transition-colors duration-120 motion-reduce:transition-none ${
                     done
-                      ? 'text-[var(--re-text-muted)]'
-                      : 'text-[var(--re-text-secondary)] hover:bg-[var(--re-surface-elevated)] hover:text-[var(--re-text-primary)]'
+                      ? 'text-re-text-muted'
+                      : 'text-re-text-secondary hover:bg-re-surface-inset hover:text-re-text-primary'
                   }`}
                 >
                   {done ? (
-                    <CheckCircle2 className="h-4 w-4 text-re-brand flex-shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-re-success" aria-hidden="true" />
                   ) : (
-                    <Circle className="h-4 w-4 text-[var(--re-surface-border)] flex-shrink-0" />
+                    <Circle className="h-4 w-4 shrink-0 text-re-border-strong" aria-hidden="true" />
                   )}
                   <span className={done ? 'line-through' : ''}>
                     {item.label}
                   </span>
                   {!done && (
-                    <ChevronRight className="ml-auto h-3.5 w-3.5 text-[var(--re-text-muted)]" />
+                    <ChevronRight className="ml-auto h-3.5 w-3.5 text-re-text-muted" aria-hidden="true" />
                   )}
                 </Link>
               </li>
@@ -207,10 +206,10 @@ export function GettingStartedCard() {
         </ul>
 
         {/* Guided walkthrough link */}
-        <div className="mt-3 pt-3 border-t border-[var(--re-surface-border)]">
+        <div className="border-t border-re-border-subtle pt-3">
           <Link
             href="/onboarding/setup/welcome"
-            className="text-xs text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors"
+            className="text-small text-re-text-muted no-underline transition-colors duration-120 hover:text-re-brand motion-reduce:transition-none"
           >
             Prefer a guided tutorial? Take the full walkthrough &rarr;
           </Link>

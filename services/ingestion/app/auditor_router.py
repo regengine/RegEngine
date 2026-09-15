@@ -50,6 +50,47 @@ def _require_db(db_session):
 
 
 # ---------------------------------------------------------------------------
+# Chain integrity summary
+# ---------------------------------------------------------------------------
+
+
+def _summarize_chain_integrity(db, tenant_id: str) -> Dict[str, Any]:
+    """Derive the summary ``chain_integrity`` block from a full chain walk.
+
+    ``VERIFIED`` is only ever emitted when ``CTEPersistence.verify_chain``
+    walked every row from genesis to head and found no break. A chain
+    that exists but fails the walk is ``UNVERIFIED``; a tenant with no
+    chain rows and nothing that should have been chained is
+    ``NO_RECORDS``. If the walk itself cannot run, the status is the
+    neutral ``NOT_CHECKED`` — never a positive claim.
+    """
+    from shared.cte_persistence import CTEPersistence
+
+    try:
+        result = CTEPersistence(db).verify_chain(tenant_id)
+    except Exception as exc:  # noqa: BLE001 — never let a failed walk read as VERIFIED
+        logger.warning("audit summary chain walk failed for tenant %s: %s", tenant_id, exc)
+        return {
+            "chain_length": None,
+            "status": "NOT_CHECKED",
+            "errors": ["Chain verification could not be performed; see /api/v1/audit/chain"],
+            "verified_at": None,
+        }
+
+    if result.valid:
+        status = "VERIFIED" if result.chain_length > 0 else "NO_RECORDS"
+    else:
+        status = "UNVERIFIED"
+
+    return {
+        "chain_length": result.chain_length,
+        "status": status,
+        "errors": list(result.errors),
+        "verified_at": result.checked_at,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -122,14 +163,10 @@ async def audit_summary(
         {"tid": tid},
     ).fetchone()
 
-    # Chain integrity
-    chain_length = (
-        db.execute(
-            text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"),
-            {"tid": tid},
-        ).scalar()
-        or 0
-    )
+    # Chain integrity — walk the chain rather than counting rows. A
+    # positive row count says nothing about whether the interior links
+    # still verify, and this is a regulator-facing status.
+    chain_integrity = _summarize_chain_integrity(db, tid)
 
     # Ingestion sources
     sources = db.execute(
@@ -167,10 +204,7 @@ async def audit_summary(
             "submitted": request_stats[1] if request_stats else 0,
             "active": request_stats[2] if request_stats else 0,
         },
-        "chain_integrity": {
-            "chain_length": chain_length,
-            "status": "VERIFIED" if chain_length > 0 else "NO_RECORDS",
-        },
+        "chain_integrity": chain_integrity,
     }
 
 

@@ -5,9 +5,16 @@ import { useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Archive, Download, ShieldCheck, Clock, PlusCircle, Link2Off, Database, Upload, ArrowRight, CheckCircle2 } from 'lucide-react';
 import type { ArchiveExportJob } from '@/lib/customer-readiness';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, fieldControlClasses } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { filterExperimentalLinks } from '@/lib/experimental-features';
 
@@ -84,224 +91,193 @@ export default function ExportJobsPage() {
     ]);
 
     return (
-        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto space-y-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
-                            <Archive className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            FDA Export
-                        </h1>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone.
-                        </p>
-                    </div>
+        <PageContainer>
+            <PageHeader
+                title="FDA Export"
+                description="Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone."
+                primaryAction={
                     <Button
-                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]"
+                        size="lg"
+                        className="w-full sm:w-auto"
                         onClick={() => void handleSaveJob()}
                         disabled={status === 'saving' || status === 'loading' || notConnected}
                     >
-                        <PlusCircle className="h-4 w-4 mr-1" />
+                        <PlusCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         {status === 'saving' ? 'Saving...' : 'Save export job'}
                     </Button>
-                </div>
+                }
+            />
 
+            <div className="space-y-6">
                 {notConnected ? (
-                    <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/[0.06] p-4 text-sm text-re-warning">
-                        <div className="flex items-start gap-3">
-                            <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
-                            <div>
-                                <p className="font-semibold">Scheduled export jobs aren&apos;t available on this workspace yet.</p>
-                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                    Recurring archive scheduling is still in development — no amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    <Callout
+                        tone="warning"
+                        icon={Link2Off}
+                        title={"Scheduled export jobs aren't available on this workspace yet."}
+                    >
+                        Recurring archive scheduling is still in development — no amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
+                    </Callout>
                 ) : (
-                    <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/[0.04] p-4 text-sm text-muted-foreground">
+                    <Callout tone="info" icon={Archive}>
                         Create export jobs for the connected data paths available on this workspace. Configure cadence, bundle type, and delivery destination below.
-                    </div>
+                    </Callout>
                 )}
 
-                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
-                    <Card>
-                        <CardContent className="pt-4 sm:pt-6">
-                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Active jobs</div>
-                            <div className="text-2xl sm:text-3xl font-bold mt-1.5 sm:mt-2">{activeJobs}</div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-4 sm:pt-6">
-                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Archive posture</div>
-                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">External archive required</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Use scheduled exports to maintain long-term retention outside the app.</div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-4 sm:pt-6">
-                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Integrity model</div>
-                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Manifest hash per run</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Each generated bundle can include workspace context, timestamps, and integrity metadata for that run.</div>
-                        </CardContent>
-                    </Card>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <StatTile label="Active jobs" value={activeJobs} />
+                    <StatTile label="Archive posture" value={<span className="text-heading">External archive required</span>}>
+                        <p className="text-small text-re-text-tertiary">
+                            Use scheduled exports to maintain long-term retention outside the app.
+                        </p>
+                    </StatTile>
+                    <StatTile label="Integrity model" value={<span className="text-heading">Manifest hash per run</span>}>
+                        <p className="text-small text-re-text-tertiary">
+                            Each generated bundle can include workspace context, timestamps, and integrity metadata for that run.
+                        </p>
+                    </StatTile>
                 </div>
 
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex-col items-start gap-1">
                         <CardTitle>Create recurring export job</CardTitle>
                         <CardDescription>
                             Available destinations on this surface are downloadable bundles and object-storage archives for connected workspaces.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Job name</label>
-                            <Input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl min-h-[44px]" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Cadence</label>
+                    <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Job name" htmlFor="export-job-name">
+                            <Input size="lg" value={name} onChange={(e) => setName(e.target.value)} />
+                        </Field>
+                        <Field label="Cadence" htmlFor="export-job-cadence">
                             <select
                                 value={cadence}
                                 onChange={(e) => setCadence(e.target.value as ArchiveExportJob['cadence'])}
-                                className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className={`${fieldControlClasses} h-11`}
                             >
                                 <option value="Daily">Daily</option>
                                 <option value="Weekly">Weekly</option>
                                 <option value="Monthly">Monthly</option>
                             </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Export format</label>
+                        </Field>
+                        <Field label="Export format" htmlFor="export-job-format">
                             <select
                                 value={format}
                                 onChange={(e) => setFormat(e.target.value as ArchiveExportJob['format'])}
-                                className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className={`${fieldControlClasses} h-11`}
                             >
                                 <option value="FDA Package">FDA Package</option>
                                 <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0</option>
                                 <option value="Audit Bundle">Audit Bundle</option>
                             </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Destination</label>
+                        </Field>
+                        <Field label="Destination" htmlFor="export-job-destination">
                             <select
                                 value={destination}
                                 onChange={(e) => setDestination(e.target.value as ArchiveExportJob['destination'])}
-                                className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className={`${fieldControlClasses} h-11`}
                             >
                                 <option value="Object storage archive">Object storage archive</option>
                                 <option value="Downloadable bundle">Downloadable bundle</option>
                             </select>
-                        </div>
+                        </Field>
                     </CardContent>
                 </Card>
 
                 <div className="space-y-4">
                     {status === 'error' && (
-                        <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/10 p-4 text-sm text-re-warning">
+                        <Callout tone="warning" role="alert">
                             {createJobMutation.error?.message ?? 'Could not create the export job. Please check your inputs and try again.'}
-                        </div>
+                        </Callout>
                     )}
+
                     {jobs.map((job) => (
                         <Card key={job.id}>
-                            <CardContent className="pt-4 sm:pt-6">
-                                <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                                            <h2 className="text-base sm:text-lg font-semibold">{job.name}</h2>
-                                            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                                {job.status.replaceAll('_', ' ')}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                                            {job.format} · {job.cadence} · {job.destination}
-                                        </p>
-                                        <div className="mt-2 sm:mt-3 grid gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground sm:grid-cols-2">
-                                            <div className="flex items-center gap-2">
-                                                <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                                Last run: {job.lastRun}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                                Next run: {job.nextRun}
-                                            </div>
-                                            <div className="flex items-center gap-2 sm:col-span-2 break-all">
-                                                <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                                Manifest: <span className="truncate">{job.manifestHash}</span>
-                                            </div>
-                                        </div>
+                            <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <h2 className="text-subheading text-re-text-primary">{job.name}</h2>
+                                        <Badge tone="neutral" size="sm">{job.status.replaceAll('_', ' ')}</Badge>
                                     </div>
-                                    <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-3 text-xs text-muted-foreground lg:max-w-[260px]">
-                                        Customer action: verify this job points to an off-platform archive you control. RegEngine should not be your only retention location.
+                                    <p className="mt-1 text-ui text-re-text-secondary">
+                                        {job.format} · {job.cadence} · {job.destination}
+                                    </p>
+                                    <div className="mt-3 grid gap-2 text-ui text-re-text-tertiary sm:grid-cols-2">
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                            Last run: {job.lastRun}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Download className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                            Next run: {job.nextRun}
+                                        </div>
+                                        <div className="flex items-center gap-2 break-all sm:col-span-2">
+                                            <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                            Manifest: <span className="truncate font-mono text-[0.8125rem]">{job.manifestHash}</span>
+                                        </div>
                                     </div>
                                 </div>
+                                <Card variant="inset" padding="compact" className="text-small text-re-text-tertiary lg:max-w-[260px]">
+                                    Customer action: verify this job points to an off-platform archive you control. RegEngine should not be your only retention location.
+                                </Card>
                             </CardContent>
                         </Card>
                     ))}
+
                     {status === 'loading' && jobs.length === 0 && (
-                        <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5">
-                            <div className="flex items-start gap-3">
-                                <Clock className="mt-0.5 h-4 w-4 animate-pulse text-[var(--re-brand)]" />
-                                    <div>
-                                        <p className="text-sm font-semibold">Loading export jobs</p>
-                                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                            Checking configured export jobs, archive destinations, and the latest manifest state returned for this workspace.
-                                        </p>
-                                    </div>
-                                </div>
-                        </div>
+                        <Callout tone="neutral" icon={Clock} role="status" title="Loading export jobs">
+                            Checking configured export jobs, archive destinations, and the latest manifest state returned for this workspace.
+                        </Callout>
                     )}
+
                     {status !== 'loading' && jobs.length === 0 && !notConnected && (
-                        <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5 sm:p-6">
-                            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-                                <div>
-                                    <div className="flex items-start gap-3">
-                                        <Archive className="mt-0.5 h-8 w-8 text-[var(--re-brand)]" />
-                                        <div>
-                                            <p className="text-sm font-semibold">No export jobs yet</p>
-                                            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                                                Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-5 grid gap-3 md:grid-cols-3">
-                                        {exportPrereqs.map((step) => (
-                                            <div key={step.title} className="rounded-xl border border-[var(--re-border-default)] bg-background p-3 text-left">
-                                                <step.icon className="h-4 w-4 text-[var(--re-brand)]" />
-                                                <p className="mt-3 text-xs font-semibold">{step.title}</p>
-                                                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{step.detail}</p>
-                                                <Link href={step.href}>
-                                                    <Button variant="ghost" size="sm" className="mt-3 h-7 px-0 text-[11px] text-[var(--re-brand)] hover:bg-transparent">
-                                                        {step.action} <ArrowRight className="ml-1 h-3 w-3" />
-                                                    </Button>
-                                                </Link>
+                        <div className="space-y-4">
+                            <EmptyState
+                                icon={Archive}
+                                title="No export jobs yet"
+                                description="Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here."
+                            />
+                            <div className="grid gap-4 md:grid-cols-3">
+                                {exportPrereqs.map((step) => (
+                                    <Card key={step.title} padding="compact" className="flex flex-col gap-2">
+                                        <step.icon
+                                            className="h-4 w-4 text-re-text-tertiary"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
+                                        />
+                                        <p className="text-ui font-medium text-re-text-primary">{step.title}</p>
+                                        <p className="text-small text-re-text-tertiary">{step.detail}</p>
+                                        <Button variant="link" size="sm" className="mt-auto self-start" asChild>
+                                            <Link href={step.href}>
+                                                {step.action}
+                                                <ArrowRight className="ml-1 h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                                            </Link>
+                                        </Button>
+                                    </Card>
+                                ))}
+                            </div>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>What a job will show</CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <dl className="divide-y divide-re-border-subtle">
+                                        {[
+                                            ['Cadence', 'Weekly / Daily / Monthly'],
+                                            ['Bundle', 'FDA or EPCIS'],
+                                            ['Integrity', 'Manifest hash'],
+                                        ].map(([term, detail]) => (
+                                            <div key={term} className="flex items-center justify-between gap-4 px-5 py-3 text-ui">
+                                                <dt className="text-re-text-tertiary">{term}</dt>
+                                                <dd className="font-medium text-re-text-primary">{detail}</dd>
                                             </div>
                                         ))}
-                                    </div>
-                                </div>
-                                <div className="rounded-xl border border-[var(--re-border-default)] bg-background p-4">
-                                    <p className="text-sm font-semibold">What a job will show</p>
-                                    <div className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
-                                        <div className="flex items-center justify-between rounded-lg bg-[var(--re-surface-elevated)] px-3 py-2">
-                                            <span>Cadence</span>
-                                            <span className="font-medium text-foreground">Weekly / Daily / Monthly</span>
-                                        </div>
-                                        <div className="flex items-center justify-between rounded-lg bg-[var(--re-surface-elevated)] px-3 py-2">
-                                            <span>Bundle</span>
-                                            <span className="font-medium text-foreground">FDA or EPCIS</span>
-                                        </div>
-                                        <div className="flex items-center justify-between rounded-lg bg-[var(--re-surface-elevated)] px-3 py-2">
-                                            <span>Integrity</span>
-                                            <span className="font-medium text-foreground">Manifest hash</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                    </dl>
+                                </CardContent>
+                            </Card>
                         </div>
                     )}
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

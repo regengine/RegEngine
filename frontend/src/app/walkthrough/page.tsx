@@ -83,7 +83,7 @@ const TIMELINE = [
     time: 'T+1:35',
     title: 'FDA response package assembled',
     icon: Package,
-    description: 'The operator clicks "Assemble Package." RegEngine generates an immutable, SHA-256 hashed package containing all 47 records, rule evaluations, exception resolutions, and a signed manifest.',
+    description: 'The operator clicks "Assemble Package." RegEngine generates an immutable, SHA-256 hashed package containing all 47 records, rule evaluations, exception resolutions, and a manifest listing each file\'s hash.',
     detail: null,
     color: 'brand',
     packageDetails: [
@@ -100,7 +100,7 @@ const TIMELINE = [
     title: 'Package submitted to FDA',
     icon: CheckCircle2,
     description: 'The package is submitted with a recorded submission method, recipient, and timestamp. The request case moves to "submitted" status. Total time: 1 hour 40 minutes.',
-    detail: 'The SHA-256 manifest lets the FDA or your auditor verify the package hasn\'t changed since assembly. The verify_chain.py script can independently re-check the manifest. Downstream message-bus signature verification is rolling out and not yet strict-mode by default.',
+    detail: 'The SHA-256 manifest lets the FDA or your auditor check that the package files still match the manifest packaged with them. The verify_chain.py script can independently re-run that check. It is a self-consistency check, not a signature: the manifest is not signed, so it does not by itself establish who produced the package. Downstream message-bus signature verification is rolling out and not yet strict-mode by default.',
     color: 'emerald',
   },
 ];
@@ -118,7 +118,7 @@ export default function WalkthroughPage() {
           <span className="text-re-brand">Here&apos;s how you respond in&nbsp;2.</span>
         </h1>
         <p className="text-lg text-re-text-muted max-w-xl leading-relaxed mb-8">
-          A step-by-step walkthrough of an illustrative FDA records-request scenario — from messy supplier data to a cryptographically verified response package.
+          A step-by-step walkthrough of an illustrative FDA records-request scenario — from messy supplier data to a hash-manifested response package anyone can re-check.
         </p>
         <div className="flex items-center gap-4 text-sm text-re-text-disabled">
           <span className="flex items-center gap-1.5">

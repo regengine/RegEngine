@@ -12,23 +12,35 @@ import {
     FileSpreadsheet,
     FlaskConical,
     GitBranch,
-    Link2,
     Play,
     RefreshCcw,
     Save,
     ShieldCheck,
-    SlidersHorizontal,
     Terminal,
 } from 'lucide-react';
 import {
     CAPABILITY_REGISTRY,
     DELIVERY_MODE_LABELS,
     INTEGRATION_TYPE_LABELS,
+    type CapabilityRegistryEntry,
+    type CustomerVisibleStatus,
     type MappingReviewItem,
     STATUS_LABELS,
     getCapabilitiesByCategory,
 } from '@/lib/customer-readiness';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { StatTile } from '@/components/ui/stat-tile';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
@@ -39,7 +51,6 @@ import type {
     IntegrationProfileSourceType,
     MappingPreviewResponse,
 } from '@/types/api';
-import styles from './page.module.css';
 
 const CATEGORY_LABELS = [
     { id: 'food_safety_iot' as const, title: 'Food safety & IoT' },
@@ -47,6 +58,19 @@ const CATEGORY_LABELS = [
     { id: 'retailer_network' as const, title: 'Retailer exports' },
     { id: 'developer_api' as const, title: 'Developer APIs' },
 ];
+
+/** Registry status is a tone on a Badge, not a bespoke tinted chip. */
+const STATUS_TONES: Record<CustomerVisibleStatus, BadgeTone> = {
+    implemented: 'success',
+    supported: 'success',
+    export_supported: 'info',
+    file_import_supported: 'info',
+    pilot: 'warning',
+    design_partner: 'warning',
+    custom_scoped: 'neutral',
+    preparation: 'neutral',
+    contract_only: 'neutral',
+};
 
 const INFLOW_CONNECTOR = CAPABILITY_REGISTRY.find((item) => item.id === 'inflow-lab');
 
@@ -267,137 +291,199 @@ export default function DashboardIntegrationsPage() {
         }
     };
 
+    const registryColumns: DataTableColumn<CapabilityRegistryEntry>[] = [
+        {
+            key: 'name',
+            header: 'Connector',
+            width: '22rem',
+            cell: (item) => (
+                <div className="min-w-0">
+                    <span className="font-medium text-re-text-primary">{item.name}</span>
+                    <p className="mt-0.5 text-small text-re-text-tertiary">{item.customer_copy}</p>
+                </div>
+            ),
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            width: '11rem',
+            cell: (item) => (
+                <Badge tone={STATUS_TONES[item.status]} size="sm">
+                    {STATUS_LABELS[item.status]}
+                </Badge>
+            ),
+        },
+        {
+            key: 'delivery_mode',
+            header: 'Delivery',
+            width: '11rem',
+            cell: (item) => (
+                <Badge tone="neutral" size="sm">{DELIVERY_MODE_LABELS[item.delivery_mode]}</Badge>
+            ),
+        },
+        {
+            key: 'integration_type',
+            header: 'Integration type',
+            cell: (item) => (
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-re-text-secondary">{INTEGRATION_TYPE_LABELS[item.integration_type]}</span>
+                    {item.evidence_url && (
+                        <Link
+                            href={item.evidence_url}
+                            className="inline-flex items-center gap-1 text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand"
+                        >
+                            Evidence
+                            <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                        </Link>
+                    )}
+                </div>
+            ),
+        },
+    ];
+
     return (
-        <div className={styles.page}>
-            <div className={styles.shell}>
-                <div className={styles.header}>
-                    <div>
-                        <h1 className={styles.title}>
-                            <Link2 className={styles.titleIcon} />
-                            Integrations
-                        </h1>
-                        <p className={styles.lede}>
-                            Track connector readiness, Inflow Lab validation, and mapping exceptions before upstream data is treated as compliance-ready.
-                        </p>
-                    </div>
-                    <Button
-                        variant="outline"
-                        className={styles.refreshButton}
-                        onClick={() => window.location.reload()}
-                    >
-                        <RefreshCcw className={styles.buttonIcon} />
+        <PageContainer>
+            <PageHeader
+                title="Integrations"
+                description="Track connector readiness, Inflow Lab validation, and mapping exceptions before upstream data is treated as compliance-ready."
+                secondaryActions={
+                    <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+                        <RefreshCcw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         Refresh
                     </Button>
+                }
+            />
+
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <StatTile label="Registry entries" value={capabilityCount}>
+                        <p className="text-small text-re-text-tertiary">
+                            Customer-visible connectors and export surfaces.
+                        </p>
+                    </StatTile>
+                    <StatTile label="Registry items marked implemented" value={liveApiCount}>
+                        <p className="text-small text-re-text-tertiary">
+                            Status-model entries currently marked usable in supported workspaces.
+                        </p>
+                    </StatTile>
+                    <StatTile
+                        label="Open review items"
+                        value={reviewCount}
+                        empty={status === 'loading'}
+                        emptyCaption={status === 'loading' ? 'Checking the review queue.' : undefined}
+                    >
+                        <p className="text-small text-re-text-tertiary">
+                            Mapping exceptions blocking automated publication.
+                        </p>
+                    </StatTile>
                 </div>
 
-                <div className={styles.statsGrid}>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Registry entries</div>
-                        <div className={styles.statValue}>{capabilityCount}</div>
-                        <p className={styles.statCopy}>Customer-visible connectors and export surfaces.</p>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Registry items marked implemented</div>
-                        <div className={styles.statValue}>{liveApiCount}</div>
-                        <p className={styles.statCopy}>Status-model entries currently marked usable in supported workspaces.</p>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Open review items</div>
-                        <div className={styles.statValue}>{status === 'loading' ? '-' : reviewCount}</div>
-                        <p className={styles.statCopy}>Mapping exceptions blocking automated publication.</p>
-                    </div>
-                </div>
-
-                <section className={styles.card}>
-                    <div className={styles.cardHeader}>
-                        <h2 className={styles.cardTitle}>Data inflow entry points</h2>
-                        <p className={styles.cardDescription}>
+                {/* Data inflow entry points */}
+                <Card>
+                    <CardHeader className="flex-col items-start gap-1">
+                        <h2 className="text-subheading text-re-text-primary">Data inflow entry points</h2>
+                        <p className="text-small text-re-text-tertiary">
                             Pick the route by intent so simulated connector traffic stays separate from customer imports and FDA export work.
                         </p>
-                    </div>
-                    <div className={styles.cardContent}>
-                        <div className={styles.factGrid}>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <ul className="divide-y divide-re-border-subtle">
                             {filterExperimentalLinks(ROUTE_GUIDANCE).map((route) => (
-                                <Link key={route.href} href={route.href} className={styles.factCard}>
-                                    <div className={styles.connectorHeading}>
-                                        <route.icon className={styles.inlineIcon} />
-                                        <div className={styles.factValue}>{route.title}</div>
-                                        <ArrowRight className={styles.evidenceIcon} />
-                                    </div>
-                                    <div>
-                                        <p className={styles.registryCopy}>{route.description}</p>
-                                    </div>
-                                </Link>
+                                <li key={route.href}>
+                                    <Link
+                                        href={route.href}
+                                        className="flex items-start gap-3 px-5 py-4 no-underline transition-colors duration-120 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+                                    >
+                                        <route.icon
+                                            className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-ui font-medium text-re-text-primary">{route.title}</p>
+                                            <p className="mt-0.5 text-small text-re-text-tertiary">{route.description}</p>
+                                        </div>
+                                        <ArrowRight
+                                            className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
+                                        />
+                                    </Link>
+                                </li>
                             ))}
-                        </div>
-                    </div>
-                </section>
+                        </ul>
+                    </CardContent>
+                </Card>
 
-                <section className={styles.card}>
-                    <div className={styles.cardHeader}>
-                        <h2 className={styles.cardTitle}>Saved supplier integration profiles</h2>
-                        <p className={styles.cardDescription}>
+                {/* Saved supplier integration profiles */}
+                <Card>
+                    <CardHeader className="flex-col items-start gap-1">
+                        <h2 className="text-subheading text-re-text-primary">Saved supplier integration profiles</h2>
+                        <p className="text-small text-re-text-tertiary">
                             Preserve supplier-specific field mappings once, attach them to portal links, and preview messy source rows before they become evidence candidates.
                         </p>
-                    </div>
-                    <div className={styles.profileContent}>
-                        <div className={styles.profileSummaryGrid}>
-                            <div className={styles.profileMetric}>
-                                <div className={styles.statLabel}>Saved profiles</div>
-                                <div className={styles.statValue}>{profilesStatus === 'loading' ? '-' : profiles.length}</div>
-                                <p className={styles.statCopy}>Reusable mappings for CSV, spreadsheet, API, EDI-style, and supplier portal feeds.</p>
-                            </div>
-                            <div className={styles.profileMetric}>
-                                <div className={styles.statLabel}>Active profiles</div>
-                                <div className={styles.statValue}>{profilesStatus === 'loading' ? '-' : activeProfileCount}</div>
-                                <p className={styles.statCopy}>Eligible to attach to supplier self-service portal links.</p>
-                            </div>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <StatTile
+                                label="Saved profiles"
+                                value={profiles.length}
+                                loading={profilesStatus === 'loading'}
+                            >
+                                <p className="text-small text-re-text-tertiary">
+                                    Reusable mappings for CSV, spreadsheet, API, EDI-style, and supplier portal feeds.
+                                </p>
+                            </StatTile>
+                            <StatTile
+                                label="Active profiles"
+                                value={activeProfileCount}
+                                loading={profilesStatus === 'loading'}
+                            >
+                                <p className="text-small text-re-text-tertiary">
+                                    Eligible to attach to supplier self-service portal links.
+                                </p>
+                            </StatTile>
                         </div>
 
                         {!isAuthenticated && (
-                            <div className={styles.warningBox}>
+                            <Callout tone="warning">
                                 Sign in to create workspace-scoped supplier profiles and attach them to portal invites.
-                            </div>
+                            </Callout>
                         )}
-                        {profileError && <div className={styles.errorBox}>{profileError}</div>}
+                        {profileError && (
+                            <Callout tone="danger" role="alert">{profileError}</Callout>
+                        )}
 
-                        <div className={styles.profileGrid}>
-                            <div className={styles.profileBuilder}>
-                                <div className={styles.connectorHeading}>
-                                    <div className={styles.connectorIcon}>
-                                        <SlidersHorizontal className={styles.connectorSvg} />
-                                    </div>
-                                    <div>
-                                        <h3 className={styles.sectionTitle}>Create a mapping profile</h3>
-                                        <p className={styles.muted}>Start with a supplier’s real column names, then reuse the mapping on every replay and portal submission.</p>
-                                    </div>
+                        <div className="grid gap-6 lg:grid-cols-2">
+                            {/* Builder */}
+                            <section className="space-y-4">
+                                <div>
+                                    <h3 className="text-subheading text-re-text-primary">Create a mapping profile</h3>
+                                    <p className="mt-1 text-small text-re-text-tertiary">
+                                        Start with a supplier’s real column names, then reuse the mapping on every replay and portal submission.
+                                    </p>
                                 </div>
 
-                                <div className={styles.profileFormGrid}>
-                                    <label className={styles.formField}>
-                                        <span>Profile name</span>
-                                        <input
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <Field label="Profile name" htmlFor="integration-profile-name">
+                                        <Input
                                             value={profileName}
                                             onChange={(event) => setProfileName(event.target.value)}
                                             placeholder="FreshPack shipping CSV"
-                                            className={styles.input}
                                         />
-                                    </label>
-                                    <label className={styles.formField}>
-                                        <span>Supplier/source</span>
-                                        <input
+                                    </Field>
+                                    <Field label="Supplier/source" htmlFor="integration-supplier-name">
+                                        <Input
                                             value={supplierName}
                                             onChange={(event) => setSupplierName(event.target.value)}
                                             placeholder="Supplier name"
-                                            className={styles.input}
                                         />
-                                    </label>
-                                    <label className={styles.formField}>
-                                        <span>Source type</span>
+                                    </Field>
+                                    <Field label="Source type" htmlFor="integration-source-type">
                                         <select
                                             value={sourceType}
                                             onChange={(event) => setSourceType(event.target.value as IntegrationProfileSourceType)}
-                                            className={styles.input}
+                                            className={fieldControlClasses}
                                         >
                                             <option value="csv">CSV</option>
                                             <option value="spreadsheet">Spreadsheet</option>
@@ -407,13 +493,12 @@ export default function DashboardIntegrationsPage() {
                                             <option value="webhook">Webhook</option>
                                             <option value="supplier_portal">Supplier portal</option>
                                         </select>
-                                    </label>
-                                    <label className={styles.formField}>
-                                        <span>Default CTE</span>
+                                    </Field>
+                                    <Field label="Default CTE" htmlFor="integration-default-cte">
                                         <select
                                             value={defaultCteType}
                                             onChange={(event) => setDefaultCteType(event.target.value)}
-                                            className={styles.input}
+                                            className={fieldControlClasses}
                                         >
                                             <option value="shipping">Shipping</option>
                                             <option value="receiving">Receiving</option>
@@ -422,318 +507,314 @@ export default function DashboardIntegrationsPage() {
                                             <option value="cooling">Cooling</option>
                                             <option value="harvesting">Harvesting</option>
                                         </select>
-                                    </label>
+                                    </Field>
                                 </div>
 
-                                <div className={styles.mappingGrid}>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     {PROFILE_FIELDS.map(([key, label]) => (
-                                        <label key={key} className={styles.formField}>
-                                            <span>{label}</span>
-                                            <input
+                                        <Field key={key} label={label} htmlFor={`integration-mapping-${key}`}>
+                                            <Input
+                                                mono
                                                 value={fieldMapping[key] ?? ''}
                                                 onChange={(event) => handleMappingChange(key, event.target.value)}
                                                 placeholder="supplier_column"
-                                                className={styles.input}
                                             />
-                                        </label>
+                                        </Field>
                                     ))}
                                 </div>
 
-                                <label className={styles.formField}>
-                                    <span>Notes</span>
-                                    <textarea
+                                <Field label="Notes" htmlFor="integration-profile-notes">
+                                    <Textarea
                                         value={profileNotes}
                                         onChange={(event) => setProfileNotes(event.target.value)}
-                                        className={styles.textarea}
                                         rows={3}
                                     />
-                                </label>
+                                </Field>
 
                                 <Button
-                                    className={styles.primaryAction}
                                     onClick={handleCreateProfile}
                                     disabled={!isAuthenticated || !tenantId || savingProfile || !profileName.trim()}
                                 >
-                                    <Save className={styles.buttonIcon} />
+                                    <Save className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                     {savingProfile ? 'Saving...' : 'Save profile'}
                                 </Button>
-                            </div>
+                            </section>
 
-                            <div className={styles.profileListPanel}>
-                                <div className={styles.pathHeader}>
+                            {/* Workspace profiles + preview */}
+                            <section className="space-y-4">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <h3 className={styles.pathTitle}>Workspace profiles</h3>
-                                        <p className={styles.muted}>Attach one when you invite a supplier from Supplier Management.</p>
+                                        <h3 className="text-subheading text-re-text-primary">Workspace profiles</h3>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            Attach one when you invite a supplier from Supplier Management.
+                                        </p>
                                     </div>
-                                    <span className={styles.verifiedBadge}>
-                                        <ShieldCheck className={styles.badgeIcon} />
+                                    <Badge tone="neutral" size="sm">
+                                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                         Workspace-scoped
-                                    </span>
+                                    </Badge>
                                 </div>
 
-                                <div className={styles.profileList}>
-                                    {profiles.map((profile) => (
-                                        <button
-                                            key={profile.profile_id}
-                                            type="button"
-                                            className={`${styles.profileCard} ${previewProfileId === profile.profile_id ? styles.profileCardActive : ''}`}
-                                            onClick={() => setPreviewProfileId(profile.profile_id)}
-                                        >
-                                            <div className={styles.profileCardHeader}>
-                                                <div>
-                                                    <div className={styles.profileName}>{profile.display_name}</div>
-                                                    <div className={styles.profileMeta}>
-                                                        {profile.source_type.replace('_', ' ')} · {profile.default_cte_type} · {Math.round(profile.confidence * 100)}%
+                                <div className="space-y-2">
+                                    {profiles.map((profile) => {
+                                        const selected = previewProfileId === profile.profile_id;
+                                        return (
+                                            <button
+                                                key={profile.profile_id}
+                                                type="button"
+                                                aria-pressed={selected}
+                                                className={cn(
+                                                    'block w-full rounded-lg border p-4 text-left transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-card motion-reduce:transition-none',
+                                                    selected
+                                                        ? 'border-re-border-strong bg-re-surface-inset'
+                                                        : 'border-re-border bg-re-surface-card hover:border-re-border-strong'
+                                                )}
+                                                onClick={() => setPreviewProfileId(profile.profile_id)}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="text-ui font-medium text-re-text-primary">
+                                                            {profile.display_name}
+                                                        </div>
+                                                        <div className="mt-0.5 text-small text-re-text-tertiary">
+                                                            {profile.source_type.replace('_', ' ')} · {profile.default_cte_type} · {Math.round(profile.confidence * 100)}%
+                                                        </div>
                                                     </div>
+                                                    <Badge tone="neutral" size="sm">{profile.status}</Badge>
                                                 </div>
-                                                <span className={styles.metaBadge}>{profile.status}</span>
-                                            </div>
-                                            {profile.supplier_name && (
-                                                <p className={styles.registryCopy}>{profile.supplier_name}</p>
-                                            )}
-                                            <div className={styles.mappingChips}>
-                                                {Object.entries(profile.field_mapping).slice(0, 4).map(([target, source]) => (
-                                                    <span key={target} className={styles.mappingChip}>
-                                                        {source}{' -> '}{target}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </button>
-                                    ))}
-                                    {profilesStatus === 'loading' && <div className={styles.emptyBox}>Loading saved profiles...</div>}
+                                                {profile.supplier_name && (
+                                                    <p className="mt-2 text-small text-re-text-tertiary">{profile.supplier_name}</p>
+                                                )}
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {Object.entries(profile.field_mapping).slice(0, 4).map(([target, source]) => (
+                                                        <Badge key={target} tone="neutral" size="sm" mono>
+                                                            {source}{' -> '}{target}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                    {profilesStatus === 'loading' && (
+                                        <EmptyState size="sm" title="Loading saved profiles..." />
+                                    )}
                                     {profilesStatus === 'idle' && profiles.length === 0 && (
-                                        <div className={styles.emptyBox}>
-                                            No profiles yet. Save a supplier mapping to make future portal invites faster.
-                                        </div>
+                                        <EmptyState
+                                            size="sm"
+                                            title="No profiles yet."
+                                            description="Save a supplier mapping to make future portal invites faster."
+                                        />
                                     )}
                                 </div>
 
-                                <div className={styles.previewPanel}>
-                                    <div className={styles.connectorHeading}>
-                                        <Braces className={styles.inlineIcon} />
-                                        <h3 className={styles.pathTitle}>Validate-only preview</h3>
+                                <div className="space-y-3 border-t border-re-border-subtle pt-4">
+                                    <div className="flex items-center gap-2">
+                                        <Braces className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <h3 className="text-subheading text-re-text-primary">Validate-only preview</h3>
                                     </div>
-                                    <textarea
+                                    <label htmlFor="integration-preview-events" className="sr-only">
+                                        Sample events JSON
+                                    </label>
+                                    <Textarea
+                                        id="integration-preview-events"
                                         value={previewEventText}
                                         onChange={(event) => setPreviewEventText(event.target.value)}
-                                        className={styles.codeTextarea}
                                         rows={9}
+                                        className="font-mono text-[0.8125rem]"
                                     />
                                     <Button
-                                        variant="outline"
-                                        className={styles.secondaryAction}
+                                        variant="secondary"
                                         onClick={handlePreviewProfile}
                                         disabled={!previewProfileId || previewing}
                                     >
-                                        <Play className={styles.buttonIcon} />
+                                        <Play className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                         {previewing ? 'Previewing...' : 'Preview mapping'}
                                     </Button>
-                                    {previewError && <div className={styles.errorBox}>{previewError}</div>}
+                                    {previewError && (
+                                        <Callout tone="danger" role="alert">{previewError}</Callout>
+                                    )}
                                     {previewResult && (
-                                        <div className={styles.previewResult}>
-                                            <div className={styles.profileCardHeader}>
+                                        <Card variant="inset" padding="compact">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 text-small text-re-text-secondary">
                                                 <span>{previewResult.mapped} event{previewResult.mapped === 1 ? '' : 's'} mapped</span>
                                                 <span>{Object.keys(previewResult.missing_fields).length} with missing fields</span>
                                             </div>
-                                            <pre>{JSON.stringify(previewResult.events[0] ?? {}, null, 2)}</pre>
-                                        </div>
+                                            <pre className="mt-3 overflow-x-auto rounded-md bg-re-surface-card p-3 font-mono text-[0.8125rem] leading-5 text-re-text-secondary">
+                                                {JSON.stringify(previewResult.events[0] ?? {}, null, 2)}
+                                            </pre>
+                                        </Card>
                                     )}
                                 </div>
-                            </div>
+                            </section>
                         </div>
-                    </div>
-                </section>
+                    </CardContent>
+                </Card>
 
+                {/* Inflow Lab connector */}
                 {INFLOW_CONNECTOR && (
-                    <section className={styles.inflowPanel}>
-                        <div className={styles.inflowGrid}>
-                            <div className={styles.inflowMain}>
-                                <div className={styles.connectorHeading}>
-                                    <div className={styles.connectorIcon}>
-                                        <FlaskConical className={styles.connectorSvg} />
-                                    </div>
-                                    <div>
-                                        <h2 className={styles.sectionTitle}>Inflow Lab</h2>
-                                        <p className={styles.muted}>RegEngine-owned simulator connector</p>
-                                    </div>
-                                </div>
-
-                                <p className={styles.inflowCopy}>
-                                    {INFLOW_CONNECTOR.customer_copy} Use Inflow Lab for simulated FSMA event batches and webhook validation. Use Import Data for customer documents or files, then Curation Queue and FDA Export when records are ready. Inbound events use the public slug <code>inflow-lab</code>, then resolve to canonical backend id <code>inflow_lab</code>.
+                    <Card>
+                        <CardHeader className="flex-col items-start gap-1">
+                            <h2 className="text-subheading text-re-text-primary">Inflow Lab</h2>
+                            <p className="text-small text-re-text-tertiary">RegEngine-owned simulator connector</p>
+                        </CardHeader>
+                        <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                            <div className="space-y-4">
+                                <p className="max-w-[68ch] text-ui text-re-text-secondary">
+                                    {INFLOW_CONNECTOR.customer_copy} Use Inflow Lab for simulated FSMA event batches and webhook validation. Use Import Data for customer documents or files, then Curation Queue and FDA Export when records are ready. Inbound events use the public slug <code className="font-mono text-[0.8125rem]">inflow-lab</code>, then resolve to canonical backend id <code className="font-mono text-[0.8125rem]">inflow_lab</code>.
                                 </p>
 
-                                <div className={styles.factGrid}>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     {INFLOW_FACTS.map(([label, value]) => (
-                                        <div key={label} className={styles.factCard}>
-                                            <div className={styles.factLabel}>{label}</div>
-                                            <div className={styles.factValue}>{value}</div>
-                                        </div>
+                                        <Card key={label} variant="inset" padding="compact">
+                                            <div className="text-label text-re-text-muted">{label}</div>
+                                            <div className="mt-1 font-mono text-[0.8125rem] text-re-text-primary">{value}</div>
+                                        </Card>
                                     ))}
                                 </div>
 
-                                <div className={styles.actionRow}>
+                                <div className="flex flex-wrap gap-2">
                                     {experimentalFeaturesEnabled() && (
-                                        <Button asChild className={styles.primaryAction}>
+                                        <Button asChild>
                                             <Link href="/dashboard/inflow-lab">
-                                                <FlaskConical className={styles.buttonIcon} />
+                                                <FlaskConical className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                                 Open Inflow Lab
                                             </Link>
                                         </Button>
                                     )}
-                                    <Button asChild className={styles.primaryAction}>
+                                    <Button variant="secondary" asChild>
                                         <Link href="/docs/connectors/inflow-lab">
-                                            <Terminal className={styles.buttonIcon} />
+                                            <Terminal className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                             Connector docs
                                         </Link>
                                     </Button>
-                                    <Button asChild variant="outline" className={styles.secondaryAction}>
+                                    <Button variant="ghost" asChild>
                                         <Link href="/integrations">
                                             Public registry
-                                            <ArrowRight className={styles.buttonIconRight} />
+                                            <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                         </Link>
                                     </Button>
                                 </div>
                             </div>
 
-                            <div className={styles.pathPanel}>
-                                <div className={styles.pathHeader}>
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <h3 className={styles.pathTitle}>Reference path</h3>
-                                        <p className={styles.muted}>Used for simulator replay and implementation validation workflows.</p>
+                                        <h3 className="text-subheading text-re-text-primary">Reference path</h3>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            Used for simulator replay and implementation validation workflows.
+                                        </p>
                                     </div>
-                                    <span className={styles.verifiedBadge}>
-                                        <CheckCircle2 className={styles.badgeIcon} />
+                                    <Badge tone="neutral" size="sm">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                         Documented
-                                    </span>
+                                    </Badge>
                                 </div>
-                                <div className={styles.pathList}>
+                                <ol className="divide-y divide-re-border-subtle rounded-lg border border-re-border-subtle bg-re-surface-inset">
                                     {INFLOW_PATH.map(([label, detail], index) => (
-                                        <div key={label} className={styles.pathItem}>
-                                            <div className={styles.pathRail}>
-                                                <div className={styles.pathNumber}>
-                                                    {index + 1}
-                                                </div>
-                                                {index < INFLOW_PATH.length - 1 && <div className={styles.pathLine} />}
+                                        <li key={label} className="flex items-start gap-3 px-4 py-3">
+                                            <span className="font-mono text-label text-re-text-muted">
+                                                {String(index + 1).padStart(2, '0')}
+                                            </span>
+                                            <div className="min-w-0">
+                                                <div className="text-ui font-medium text-re-text-primary">{label}</div>
+                                                <div className="mt-0.5 font-mono text-[0.8125rem] text-re-text-tertiary">{detail}</div>
                                             </div>
-                                            <div className={styles.pathText}>
-                                                <div className={styles.pathItemTitle}>{label}</div>
-                                                <div className={styles.pathItemDetail}>{detail}</div>
-                                            </div>
-                                        </div>
+                                        </li>
                                     ))}
-                                </div>
+                                </ol>
                             </div>
-                        </div>
-                    </section>
+                        </CardContent>
+                    </Card>
                 )}
 
-                <section className={styles.card}>
-                    <div className={styles.cardHeader}>
-                        <h2 className={styles.cardTitle}>Capability Registry</h2>
-                        <p className={styles.cardDescription}>
+                {/* Capability registry */}
+                <Card>
+                    <CardHeader className="flex-col items-start gap-1">
+                        <h2 className="text-subheading text-re-text-primary">Capability Registry</h2>
+                        <p className="text-small text-re-text-tertiary">
                             Public integration claims are rendered from this status model instead of hardcoded live badges.
                         </p>
-                    </div>
-                    <div className={styles.cardContent}>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
                         {CATEGORY_LABELS.map((category) => (
-                            <div key={category.id} className={styles.categoryBlock}>
-                                <h3 className={styles.categoryTitle}>{category.title}</h3>
-                                <div className={styles.registryTable}>
-                                    {getCapabilitiesByCategory(category.id).map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className={`${styles.registryRow} ${item.id === 'inflow-lab' ? styles.registryRowFeatured : ''}`}
-                                        >
-                                            <div className={styles.registryNameCell}>
-                                                <div className={styles.registryName}>
-                                                    {item.id === 'inflow-lab' && <FlaskConical className={styles.inlineIcon} />}
-                                                    <span>{item.name}</span>
-                                                </div>
-                                                <p className={styles.registryCopy}>{item.customer_copy}</p>
-                                            </div>
-                                            <div className={styles.badgeGroup}>
-                                                <span className={styles.metaBadge}>
-                                                    {STATUS_LABELS[item.status]}
-                                                </span>
-                                                <span className={styles.metaBadge}>
-                                                    {DELIVERY_MODE_LABELS[item.delivery_mode]}
-                                                </span>
-                                            </div>
-                                            <div className={styles.evidenceCell}>
-                                                <span>{INTEGRATION_TYPE_LABELS[item.integration_type]}</span>
-                                                {item.evidence_url && (
-                                                    <Link href={item.evidence_url} className={styles.evidenceLink}>
-                                                        Evidence
-                                                        <ArrowRight className={styles.evidenceIcon} />
-                                                    </Link>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            <section key={category.id} className="space-y-3">
+                                <h3 className="text-subheading text-re-text-primary">{category.title}</h3>
+                                <DataTable
+                                    caption={`${category.title} connectors and their delivery status`}
+                                    columns={registryColumns}
+                                    data={getCapabilitiesByCategory(category.id)}
+                                    rowKey={(item) => item.id}
+                                    minWidth="760px"
+                                    stickyFirstColumn
+                                    empty={{ title: 'No connectors in this category yet', size: 'sm' }}
+                                />
+                            </section>
                         ))}
-                    </div>
-                </section>
+                    </CardContent>
+                </Card>
 
-                <section className={styles.card}>
-                    <div className={styles.cardHeader}>
-                        <h2 className={styles.cardTitle}>Reconciliation & Exception Queue</h2>
-                        <p className={styles.cardDescription}>
+                {/* Reconciliation & exception queue */}
+                <Card>
+                    <CardHeader className="flex-col items-start gap-1">
+                        <h2 className="text-subheading text-re-text-primary">Reconciliation &amp; Exception Queue</h2>
+                        <p className="text-small text-re-text-tertiary">
                             Missing required KDEs, unmapped fields, and identity conflicts are surfaced here from the current review-queue contract.
                         </p>
-                    </div>
-                    <div className={styles.queueContent}>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                         {notConnected && (
-                            <div className={styles.warningBox}>
+                            <Callout tone="warning">
                                 {meta?.message ?? 'Field mapping review is not yet configured for this account.'}
-                            </div>
+                            </Callout>
                         )}
-                        {items.map((item) => (
-                            <div key={item.id} className={styles.queueItem}>
-                                <div className={styles.queueItemBody}>
-                                    <div>
-                                        <div className={styles.queueHeading}>
-                                            <span className={styles.queueSource}>{item.source}</span>
-                                            <span className={styles.queueStatus}>{item.status.replaceAll('_', ' ')}</span>
+
+                        {items.length > 0 && (
+                            <ul className="divide-y divide-re-border-subtle rounded-lg border border-re-border">
+                                {items.map((item) => (
+                                    <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-ui font-medium text-re-text-primary">{item.source}</span>
+                                                <Badge tone="neutral" size="sm">{item.status.replaceAll('_', ' ')}</Badge>
+                                            </div>
+                                            <div className="mt-1 font-mono text-[0.8125rem] text-re-text-secondary">
+                                                <strong className="font-medium">{item.sourceField}</strong>
+                                                {' -> '}
+                                                <span>{item.mappedField ?? 'Unmapped'}</span>
+                                            </div>
+                                            <p className="mt-1 text-small text-re-text-tertiary">{item.detail}</p>
                                         </div>
-                                        <div className={styles.mappingLine}>
-                                            <strong>{item.sourceField}</strong>
-                                            {' -> '}
-                                            <span>{item.mappedField ?? 'Unmapped'}</span>
-                                        </div>
-                                        <p className={styles.queueDetail}>{item.detail}</p>
-                                    </div>
-                                    <ShieldCheck className={styles.queueIcon} />
-                                </div>
-                            </div>
-                        ))}
+                                        <ShieldCheck
+                                            className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
+                                        />
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
                         {status === 'loading' && items.length === 0 && (
-                            <div className={styles.emptyBox}>
-                                Loading review-queue preview data...
-                            </div>
+                            <EmptyState size="sm" title="Loading review-queue preview data..." />
                         )}
                         {status === 'idle' && !notConnected && items.length === 0 && (
-                            <div className={styles.emptyBox}>
-                                No mapping exceptions are currently queued.
-                            </div>
+                            <EmptyState size="sm" title="No mapping exceptions are currently queued." />
                         )}
                         {status === 'error' && (
-                            <div className={styles.errorBox}>
+                            <Callout tone="danger" role="alert">
                                 Mapping review is temporarily unavailable. Connector statuses above are still current.
-                            </div>
+                            </Callout>
                         )}
-                        <div className={styles.infoBox}>
-                            <AlertTriangle className={styles.infoIconWarning} />
+
+                        <Callout tone="warning" icon={AlertTriangle}>
                             Required KDE gaps block automated publication into recall-ready exports until they are resolved.
-                        </div>
-                        <div className={styles.infoBox}>
-                            <GitBranch className={styles.infoIconBrand} />
+                        </Callout>
+                        <Callout tone="info" icon={GitBranch}>
                             Inflow Lab traffic is intentionally tagged by source so simulator events can be separated from generic webhook submissions during demos and CI replay.
-                        </div>
-                    </div>
-                </section>
+                        </Callout>
+                    </CardContent>
+                </Card>
             </div>
-        </div>
+        </PageContainer>
     );
 }

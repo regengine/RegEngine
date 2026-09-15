@@ -1,51 +1,31 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, ShieldAlert, WifiOff, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge";
 import { useAuth } from "@/lib/auth-context";
 import { useQAHealth } from "@/hooks/use-api";
 import type { QAHealthStatus } from "@/types/api";
 
-function statusConfig(status: QAHealthStatus | undefined) {
+/**
+ * Each QA status maps onto the shared compliance-state vocabulary, so the same
+ * state looks identical here and everywhere else in the app.
+ */
+function statusConfig(status: QAHealthStatus | undefined): { label: string; state: ComplianceState } {
   switch (status) {
     case "passing":
-      return {
-        label: "Release gate passing",
-        tone: "text-re-success",
-        badge: "bg-re-success-muted text-re-success border-re-success/40",
-        icon: CheckCircle2,
-      };
+      return { label: "Release gate passing", state: "compliant" };
     case "degraded":
-      return {
-        label: "Advisory issues",
-        tone: "text-re-warning",
-        badge: "bg-re-warning-muted text-re-warning border-re-warning/40",
-        icon: AlertTriangle,
-      };
+      return { label: "Advisory issues", state: "at-risk" };
     case "unavailable":
-      return {
-        label: "QA signal unavailable",
-        tone: "text-muted-foreground",
-        badge: "bg-re-surface-elevated text-muted-foreground border-[var(--re-surface-border)]",
-        icon: WifiOff,
-      };
+      return { label: "QA signal unavailable", state: "unknown" };
     case "invalid_artifact":
-      return {
-        label: "QA artifact invalid",
-        tone: "text-re-danger",
-        badge: "bg-re-danger-muted text-re-danger border-re-danger/40",
-        icon: ShieldAlert,
-      };
+      return { label: "QA artifact invalid", state: "non-compliant" };
     case "failing":
     default:
-      return {
-        label: "Release gate failing",
-        tone: "text-re-danger",
-        badge: "bg-re-danger-muted text-re-danger border-re-danger/40",
-        icon: ShieldAlert,
-      };
+      return { label: "Release gate failing", state: "non-compliant" };
   }
 }
 
@@ -59,8 +39,8 @@ export function QAHealthWidget() {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">QA Health</CardTitle>
+        <CardHeader>
+          <CardTitle>QA Health</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Skeleton className="h-7 w-36" />
@@ -72,29 +52,29 @@ export function QAHealthWidget() {
   }
 
   const config = statusConfig(data?.overall.status);
-  const Icon = config.icon;
   const readyPercent = data?.overall.ready_percent ?? 0;
   const blockingCount = data?.overall.blocking_count ?? 0;
   const advisoryCount = data?.overall.advisory_count ?? 0;
 
   return (
-    <Card className="border-[var(--re-surface-border)]">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">QA Health</CardTitle>
-        <Icon className={`h-4 w-4 ${config.tone}`} />
+    <Card>
+      <CardHeader>
+        <CardTitle>QA Health</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <Badge variant="outline" className={`${config.badge} text-[11px]`}>
-            {error ? "QA signal failed" : config.label}
-          </Badge>
-          <span className="text-xs text-muted-foreground tabular-nums">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <StatusBadge
+            state={error ? "unknown" : config.state}
+            label={error ? "QA signal failed" : config.label}
+            size="sm"
+          />
+          <span className="text-small tabular-nums text-re-text-tertiary">
             {readyPercent}% ready
           </span>
         </div>
 
         <div
-          className="h-2 overflow-hidden rounded-sm bg-[var(--re-surface-elevated)]"
+          className="h-1.5 overflow-hidden rounded-full bg-re-surface-inset"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
@@ -102,29 +82,28 @@ export function QAHealthWidget() {
           aria-label="QA release readiness"
         >
           <div
-            className="h-full bg-[var(--re-brand)] transition-all"
+            className="h-full bg-re-text-primary transition-all duration-180 motion-reduce:transition-none"
             style={{ width: `${readyPercent}%` }}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-xl font-bold tabular-nums">{blockingCount}</p>
-            <p className="text-xs text-muted-foreground">Blocking</p>
+            <p className="text-title tabular-nums text-re-text-primary">{blockingCount}</p>
+            <p className="text-label text-re-text-muted">Blocking</p>
           </div>
           <div>
-            <p className="text-xl font-bold tabular-nums">{advisoryCount}</p>
-            <p className="text-xs text-muted-foreground">Advisory</p>
+            <p className="text-title tabular-nums text-re-text-primary">{advisoryCount}</p>
+            <p className="text-label text-re-text-muted">Advisory</p>
           </div>
         </div>
 
-        <Link
-          href="/dashboard/qa-health"
-          className="flex min-h-[40px] items-center justify-between rounded-md border border-[var(--re-surface-border)] px-3 text-sm font-medium text-[var(--re-text-secondary)] transition-colors hover:border-[var(--re-brand)] hover:text-foreground"
-        >
-          Open QA Health
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <Button variant="secondary" className="w-full justify-between" asChild>
+          <Link href="/dashboard/qa-health">
+            Open QA Health
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   );

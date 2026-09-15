@@ -19,8 +19,9 @@ What this locks:
 * Per-endpoint shape: ``audit_summary`` division-by-zero guards, the
   status derivation in ``audit_events``, the 404 in
   ``audit_event_detail`` when the store returns ``None``, and the
-  ``chain_integrity.status`` flip between ``VERIFIED`` and
-  ``NO_RECORDS``.
+  ``chain_integrity.status`` derivation from a full
+  ``CTEPersistence.verify_chain`` walk (``VERIFIED`` / ``UNVERIFIED``
+  / ``NO_RECORDS`` / ``NOT_CHECKED``) — never from a row count.
 * Tenant-scoping proof: every SQL fires with ``{"tid":
   resolved_tenant_id}``, so a cross-tenant bleed can't regress
   silently.
@@ -147,6 +148,46 @@ def _disable_rate_limit(monkeypatch):
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
 
 
+def _fake_chain_verifier(
+    monkeypatch,
+    *,
+    valid: bool = True,
+    chain_length: int = 0,
+    errors: Optional[List[str]] = None,
+    raise_exc: Optional[Exception] = None,
+) -> Dict[str, Any]:
+    """Replace ``CTEPersistence`` with a stub returning a canned walk.
+
+    Returns a ``captured`` dict recording the tenant passed to
+    ``verify_chain`` and how many times the walk was requested.
+    """
+    captured: Dict[str, Any] = {"calls": 0}
+
+    class _FakeResult:
+        pass
+
+    _FakeResult.valid = valid
+    _FakeResult.chain_length = chain_length
+    _FakeResult.errors = list(errors or [])
+    _FakeResult.checked_at = "2026-04-18T12:00:00+00:00"
+
+    class _FakePersistence:
+        def __init__(self, db):
+            captured["db"] = db
+
+        def verify_chain(self, tenant_id):
+            captured["calls"] += 1
+            captured["tenant"] = tenant_id
+            if raise_exc is not None:
+                raise raise_exc
+            return _FakeResult()
+
+    from shared import cte_persistence
+
+    monkeypatch.setattr(cte_persistence, "CTEPersistence", _FakePersistence)
+    return captured
+
+
 # =========================================================================
 # Auth gate: every endpoint requires audit.read
 # =========================================================================
@@ -260,16 +301,16 @@ class TestTenantResolution:
 
 
 class TestSummary:
-    def test_empty_db_returns_zero_rates_no_div_by_zero(self):
+    def test_empty_db_returns_zero_rates_no_div_by_zero(self, monkeypatch):
         """Empty DB must produce a 200 with zero totals and 0% pass
         rate — never a 500 from division-by-zero."""
+        _fake_chain_verifier(monkeypatch, valid=True, chain_length=0)
         session = FakeSession(
             {
                 r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: (0,),
                 r"COUNT\(\*\).*rule_evaluations": lambda _: (0, 0, 0, 0),
                 r"COUNT\(\*\).*exception_cases": lambda _: (0, 0, 0),
                 r"COUNT\(\*\).*request_cases": lambda _: (0, 0, 0),
-                r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (0,),
                 r"source_system, COUNT": lambda _: [],
             }
         )
@@ -283,14 +324,14 @@ class TestSummary:
         assert body["chain_integrity"]["chain_length"] == 0
         assert body["records"]["ingestion_sources"] == {}
 
-    def test_populated_db_computes_pass_rate_and_sources(self):
+    def test_populated_db_computes_pass_rate_and_sources(self, monkeypatch):
+        captured = _fake_chain_verifier(monkeypatch, valid=True, chain_length=150)
         session = FakeSession(
             {
                 r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: (150,),
                 r"COUNT\(\*\).*rule_evaluations": lambda _: (100, 70, 20, 10),
                 r"COUNT\(\*\).*exception_cases": lambda _: (12, 5, 2),
                 r"COUNT\(\*\).*request_cases": lambda _: (8, 3, 2),
-                r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (150,),
                 r"source_system, COUNT": lambda _: [("SAP", 120), ("CSV", 30)],
             }
         )
@@ -317,19 +358,21 @@ class TestSummary:
         }
         assert body["chain_integrity"]["chain_length"] == 150
         assert body["chain_integrity"]["status"] == "VERIFIED"
+        assert body["chain_integrity"]["errors"] == []
+        assert captured["tenant"] == TENANT
         # 'generated_at' is an ISO-8601 timestamp
         datetime.fromisoformat(body["generated_at"])
 
-    def test_none_scalars_treated_as_zero(self):
+    def test_none_scalars_treated_as_zero(self, monkeypatch):
         """``scalar()`` may return None on an empty aggregate — the
         router uses ``or 0`` to keep downstream math safe."""
+        _fake_chain_verifier(monkeypatch, valid=True, chain_length=0)
         session = FakeSession(
             {
                 r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: None,
                 r"COUNT\(\*\).*rule_evaluations": lambda _: None,
                 r"COUNT\(\*\).*exception_cases": lambda _: None,
                 r"COUNT\(\*\).*request_cases": lambda _: None,
-                r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: None,
                 r"source_system, COUNT": lambda _: [],
             }
         )
@@ -340,6 +383,73 @@ class TestSummary:
         assert body["records"]["total_canonical_events"] == 0
         assert body["compliance"]["total_evaluations"] == 0
         assert body["exceptions"]["total"] == 0
+
+
+class TestSummaryChainIntegrity:
+    """The summary's ``chain_integrity.status`` must come from a full
+    ``CTEPersistence.verify_chain`` walk — never from a row count. A
+    nonempty chain with a broken interior link is not VERIFIED."""
+
+    def test_nonempty_chain_with_altered_interior_hash_is_not_verified(self, monkeypatch):
+        _fake_chain_verifier(
+            monkeypatch,
+            valid=False,
+            chain_length=42,
+            errors=["Tamper detected at seq=17: recomputed chain_hash abc... != stored def..."],
+        )
+        client = _build_client(_make_principal(), FakeSession())
+        body = client.get("/api/v1/audit/summary").json()
+        chain = body["chain_integrity"]
+        assert chain["status"] == "UNVERIFIED"
+        assert chain["status"] != "VERIFIED"
+        assert chain["chain_length"] == 42
+        assert chain["errors"] and "seq=17" in chain["errors"][0]
+
+    def test_verified_only_after_full_walk(self, monkeypatch):
+        """VERIFIED requires the verifier to actually run and pass."""
+        captured = _fake_chain_verifier(monkeypatch, valid=True, chain_length=9)
+        client = _build_client(_make_principal(), FakeSession())
+        body = client.get("/api/v1/audit/summary").json()
+        assert captured["calls"] == 1
+        assert captured["tenant"] == TENANT
+        assert body["chain_integrity"]["status"] == "VERIFIED"
+        assert body["chain_integrity"]["chain_length"] == 9
+        assert body["chain_integrity"]["verified_at"] == "2026-04-18T12:00:00+00:00"
+
+    def test_summary_does_not_derive_status_from_row_count(self, monkeypatch):
+        """Even if a bare COUNT(*) on hash_chain would be positive, a
+        failing walk wins — the count must not be consulted."""
+        _fake_chain_verifier(monkeypatch, valid=False, chain_length=3, errors=["Chain break at seq=2"])
+        session = FakeSession({r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (3,)})
+        client = _build_client(_make_principal(), session)
+        body = client.get("/api/v1/audit/summary").json()
+        assert body["chain_integrity"]["status"] == "UNVERIFIED"
+        assert not any("COUNT(*) FROM fsma.hash_chain" in sql for sql, _ in session.calls)
+
+    def test_empty_chain_with_unchained_events_is_unverified(self, monkeypatch):
+        """The verifier fails closed on zero rows + live events (#1314);
+        the summary must surface that, not NO_RECORDS."""
+        _fake_chain_verifier(
+            monkeypatch,
+            valid=False,
+            chain_length=0,
+            errors=["Empty chain but 5 non-rejected events exist (5 missing chain rows)"],
+        )
+        client = _build_client(_make_principal(), FakeSession())
+        body = client.get("/api/v1/audit/summary").json()
+        assert body["chain_integrity"]["status"] == "UNVERIFIED"
+        assert body["chain_integrity"]["chain_length"] == 0
+
+    def test_walk_failure_yields_not_checked_never_verified(self, monkeypatch):
+        _fake_chain_verifier(monkeypatch, raise_exc=RuntimeError("relation does not exist"))
+        client = _build_client(_make_principal(), FakeSession())
+        resp = client.get("/api/v1/audit/summary")
+        assert resp.status_code == 200
+        chain = resp.json()["chain_integrity"]
+        assert chain["status"] == "NOT_CHECKED"
+        assert chain["chain_length"] is None
+        assert chain["verified_at"] is None
+        assert chain["errors"]
 
 
 # =========================================================================
@@ -1098,13 +1208,15 @@ class TestTenantScoping:
     to the resolved tenant. This makes a cross-tenant leak a test
     failure, not a silent production bug."""
 
-    def test_summary_all_sqls_scoped_to_tenant(self):
+    def test_summary_all_sqls_scoped_to_tenant(self, monkeypatch):
+        captured = _fake_chain_verifier(monkeypatch, valid=True, chain_length=1)
         session = FakeSession()
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/summary")
         assert session.calls, "expected at least one SQL call"
         for sql, params in session.calls:
             assert params.get("tid") == TENANT, (sql, params)
+        assert captured["tenant"] == TENANT
 
     def test_events_scoped_to_tenant(self):
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})

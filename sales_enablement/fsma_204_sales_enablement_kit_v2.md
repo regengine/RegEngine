@@ -10,7 +10,7 @@ Status: **Pre-production / Founding Design Partners only.** Not production-marke
 
 **Two paragraphs.** RegEngine is a single-container Python service backed by Postgres. It accepts FSMA 204 traceability data via EPCIS 2.0 XML/JSON, GS1 EDI, and CSV, persists it under a tenant-scoped audit chain, and runs the data through the Inflow Workbench — a preflight + commit gate that surfaces missing KDEs, malformed Lot/SSCC identifiers, and CTE coverage gaps before commit. Operators commit only what passes; nothing else mutates the trace graph.
 
-When FDA requests a record, the operator generates a sortable spreadsheet export aligned to 21 CFR 1.1455 along with a signed manifest. Anyone — auditor, customer, regulator — can verify the export off-platform using the public verifier at `frontend/public/sdk/verify_chain.py`. There is no message bus, no microservice fan-out, and no partner gateway in the production path: ingest, validate, persist, export, verify.
+When FDA requests a record, the operator generates a sortable spreadsheet export aligned to 21 CFR 1.1455 along with a SHA-256 hash manifest. Anyone — auditor, customer, regulator — can re-check the export off-platform using the public verifier at `frontend/public/sdk/verify_chain.py`. That check confirms the export's files match the manifest packaged with them; the manifest is not signed, so it does not authenticate the issuer or prove RegEngine origin. There is no message bus, no microservice fan-out, and no partner gateway in the production path: ingest, validate, persist, export, verify.
 
 ---
 

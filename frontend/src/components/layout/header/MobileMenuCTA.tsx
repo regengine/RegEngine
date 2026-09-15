@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { LayoutGrid } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { User } from '@/types/api';
 
 interface MobileMenuCTAProps {
@@ -9,121 +11,48 @@ interface MobileMenuCTAProps {
     setMobileOpen: (open: boolean) => void;
 }
 
+/**
+ * Drawer footer actions. Same CTA hierarchy as the desktop header (SPEC §6):
+ * "Free Tools" is the one primary and "Log In" is ghost. `size="lg"` (44px) is
+ * the mobile touch target.
+ */
 export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuCTAProps) {
+    const close = () => setMobileOpen(false);
+
     return (
-        <div style={{
-            padding: "16px 20px",
-            borderTop: "1px solid var(--re-mobile-border)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-            paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
-        }}>
+        <div className="flex flex-col gap-2.5 border-t border-[var(--re-mobile-border)] px-5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-4">
             {showLoggedIn ? (
                 <>
-                    <div style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        padding: "0 0 12px",
-                        borderBottom: "1px solid var(--re-mobile-border)",
-                        marginBottom: "12px",
-                    }}>
-                        <div style={{
-                            width: "36px",
-                            height: "36px",
-                            borderRadius: "2px",
-                            background: "var(--re-brand)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "14px",
-                            fontWeight: 700,
-                            color: "#fff",
-                            textTransform: "uppercase",
-                            flexShrink: 0,
-                        }}>
-                            {(user?.email?.[0] || "U")}
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--re-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {user?.email || "Account"}
-                            </div>
-                            <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>Logged in</div>
-                        </div>
+                    <div className="mb-3 flex items-center gap-3 border-b border-[var(--re-mobile-border)] pb-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-re-border bg-re-surface-inset text-ui font-semibold uppercase text-re-text-primary">
+                            {user?.email?.[0] || 'U'}
+                        </span>
+                        <span className="min-w-0">
+                            <span className="block truncate text-ui font-medium text-re-text-primary">
+                                {user?.email || 'Account'}
+                            </span>
+                            <span className="block text-small text-re-text-muted">Logged in</span>
+                        </span>
                     </div>
-                    <Link
-                        href="/dashboard"
-                        onClick={() => setMobileOpen(false)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "8px",
-                            background: "var(--re-brand)",
-                            color: "#fff",
-                            fontWeight: 600,
-                            fontSize: "15px",
-                            padding: "14px 24px",
-                            borderRadius: "2px",
-                            textDecoration: "none",
-                            minHeight: "48px",
-                            WebkitTapHighlightColor: "transparent",
-                            transition: "all 0.2s",
-                        }}
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-                        </svg>
-                        Go to Dashboard
-                    </Link>
+                    <Button asChild variant="primary" size="lg">
+                        <Link href="/dashboard" onClick={close}>
+                            <LayoutGrid aria-hidden="true" strokeWidth={1.75} />
+                            Go to Dashboard
+                        </Link>
+                    </Button>
                 </>
             ) : (
                 <>
-                    <Link
-                        href="/tools"
-                        onClick={() => setMobileOpen(false)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            background: "var(--re-text-primary)",
-                            color: "var(--re-surface-base)",
-                            fontWeight: 600,
-                            fontSize: "15px",
-                            padding: "14px 24px",
-                            borderRadius: "2px",
-                            textDecoration: "none",
-                            boxShadow: "none",
-                            minHeight: "48px",
-                            WebkitTapHighlightColor: "transparent",
-                            transition: "all 0.2s",
-                        }}
-                    >
-                        Free Tools
-                    </Link>
-                    <Link
-                        href="/login"
-                        onClick={() => setMobileOpen(false)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            border: "1px solid var(--re-mobile-border)",
-                            color: "var(--re-text-primary)",
-                            fontWeight: 500,
-                            fontSize: "15px",
-                            padding: "14px 24px",
-                            borderRadius: "2px",
-                            textDecoration: "none",
-                            background: "transparent",
-                            minHeight: "48px",
-                            WebkitTapHighlightColor: "transparent",
-                            transition: "all 0.2s",
-                        }}
-                    >
-                        Log In
-                    </Link>
+                    <Button asChild variant="primary" size="lg">
+                        <Link href="/tools" onClick={close}>
+                            Free Tools
+                        </Link>
+                    </Button>
+                    <Button asChild variant="ghost" size="lg">
+                        <Link href="/login" onClick={close}>
+                            Log In
+                        </Link>
+                    </Button>
                 </>
             )}
         </div>

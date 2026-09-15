@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { shouldHideMarketingChrome } from '@/lib/app-routes';
+import { Container } from '@/components/layout/container';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { DesktopNav, MobileMenu, MobileHamburger } from '@/components/layout/header';
 
@@ -130,17 +131,14 @@ export function MarketingHeader() {
         <>
             <nav
                 aria-label="Main navigation"
-                className="sticky top-0 z-[var(--re-z-nav)] backdrop-blur-[16px]"
-                style={{
-                    borderBottom: "1px solid var(--re-nav-border)",
-                    WebkitBackdropFilter: "blur(16px)",
-                    background: "var(--re-nav-bg)",
-                }}
+                className="sticky top-0 z-[var(--re-z-nav)] border-b border-[var(--re-nav-border)] bg-[var(--re-nav-bg)] backdrop-blur-[16px] [-webkit-backdrop-filter:blur(16px)]"
             >
-                <div className="max-w-[1200px] mx-auto px-[clamp(16px,4vw,28px)] h-14 flex items-center justify-between">
-
-                    <Link href="/" className="flex items-center gap-2.5 no-underline mr-6 shrink-0">
-                        <RegEngineWordmark size="md" />
+                <Container width="marketing" className="flex h-[60px] items-center justify-between gap-3">
+                    <Link
+                        href="/"
+                        className="flex shrink-0 items-center gap-2.5 rounded-sm no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset"
+                    >
+                        <RegEngineWordmark size="sm" />
                     </Link>
 
                     <DesktopNav
@@ -158,7 +156,7 @@ export function MarketingHeader() {
                     />
 
                     <MobileHamburger mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
-                </div>
+                </Container>
             </nav>
 
             <MobileMenu

@@ -84,6 +84,22 @@ DEFAULT_CANCEL_URL = "https://regengine.co/pricing?checkout=cancelled"
 DEFAULT_PORTAL_RETURN_URL = "https://regengine.co/dashboard"
 
 
+# ── Metered add-ons (per-label metered billing, DESIGN_metering-billing.md) ──
+#
+# A metered add-on is attached alongside a tenant's existing flat-tier
+# subscription (see stripe_billing/usage_reporting.py opt-in flow) — it is
+# not a standalone plan, so it deliberately does not appear in ``PLANS``.
+METERED_ADDONS: dict[str, dict[str, Any]] = {
+    "label_events": {
+        "id": "label_events",
+        "name": "Per-Label Metering",
+        "stripe_price_env": "STRIPE_PRICE_METERED_LABEL_EVENTS",
+        "meter_event_name": "regengine_label_events",
+        "unit_label": "label event",
+    },
+}
+
+
 def _normalize_plan_id(plan_id: str) -> str:
     normalized = PLAN_ALIASES.get(plan_id, plan_id)
     return normalized

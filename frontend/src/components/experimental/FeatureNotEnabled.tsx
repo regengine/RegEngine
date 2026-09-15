@@ -24,7 +24,7 @@ export function FeatureNotEnabled({
             data-testid="feature-not-enabled"
             className="flex min-h-[60vh] items-center justify-center px-4 py-16"
         >
-            <div className="w-full max-w-md rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-8 text-center shadow-sm">
+            <div className="w-full max-w-md rounded-lg border border-re-border bg-re-surface-elevated p-8 text-center">
                 <FlaskConical className="mx-auto h-8 w-8 text-[var(--re-text-muted)]" aria-hidden="true" />
                 <h1 className="mt-4 text-lg font-semibold text-[var(--re-text-primary)]">
                     {featureName} is not enabled

@@ -5,6 +5,22 @@ import { ChevronDown } from 'lucide-react';
 import { MARKETING_ALL_TOOLS_LINK, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
 import type { ToolsDropdownProps } from './types';
 
+/**
+ * Tools dropdown.
+ *
+ * Deliberately **not** migrated to `@radix-ui/react-dropdown-menu`: the
+ * marketing header owns the open state, the hover-intent timer, the outside
+ * -click listener, the roving ArrowUp/ArrowDown handler and the Escape
+ * return-focus behaviour, and it reaches into this subtree through
+ * `toolsWrapperRef` to find `[role="menuitem"]`. Radix portals its content out
+ * of that subtree and overwrites `aria-controls` with a generated id, which
+ * would break both the header's keyboard handler and the
+ * `aria-controls="tools-dropdown"` contract the tests key off. Restyled in
+ * place instead, with every aria hook preserved.
+ *
+ * Ledger rows, not icon cards (SPEC §6): title + one-line description, the
+ * whole row is the link. Icons are never boxed in a tinted square (SPEC §0.7).
+ */
 export function NavDropdown({
     toolsOpen,
     setToolsOpen,
@@ -17,10 +33,13 @@ export function NavDropdown({
 }: ToolsDropdownProps) {
     const AllToolsIcon = MARKETING_ALL_TOOLS_LINK.icon;
 
+    const itemClass =
+        'flex items-start gap-3 px-4 py-2.5 no-underline transition-colors duration-120 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:bg-re-surface-inset motion-reduce:transition-none';
+
     return (
         <div
             ref={toolsWrapperRef}
-            style={{ position: "relative" }}
+            className="relative"
             onMouseEnter={handleToolsEnter}
             onMouseLeave={handleToolsLeave}
             onKeyDown={handleToolsKeyDown}
@@ -51,115 +70,85 @@ export function NavDropdown({
                         focusFirstToolsItem();
                     }
                 }}
-                style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    fontFamily: "var(--re-font-mono)",
-                    textTransform: "uppercase",
-                    color: "var(--re-text-primary)",
-                    background: "transparent",
-                    padding: "8px 14px",
-                    borderRadius: "var(--re-radius-md)",
-                    textDecoration: "none",
-                    transition: "all var(--re-transition-normal)",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    border: "1px solid var(--re-surface-border)",
-                    whiteSpace: "nowrap",
-                }}
+                className={`inline-flex items-center gap-1 whitespace-nowrap rounded-sm bg-transparent text-ui font-medium normal-case ${
+                    toolsOpen ? 'text-re-text-primary' : 'text-re-text-secondary'
+                } transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none`}
             >
                 Tools
                 <ChevronDown
                     aria-hidden="true"
                     size={14}
-                    style={{
-                        transition: "transform var(--re-transition-normal)",
-                        transform: toolsOpen ? "rotate(180deg)" : "rotate(0)",
-                    }}
+                    strokeWidth={1.75}
+                    className={`transition-transform duration-180 motion-reduce:transition-none${
+                        toolsOpen ? ' rotate-180' : ''
+                    }`}
                 />
             </button>
+
             <div
                 data-tools-dropdown
-                style={{
-                    position: "absolute",
-                    top: "100%",
-                    right: 0,
-                    paddingTop: "60px",
-                    marginTop: "-30px",
-                    background: "none",
-                    border: "none",
-                    borderRadius: "var(--re-radius-md)",
-                    opacity: toolsOpen ? 1 : 0,
-                    visibility: toolsOpen ? "visible" : "hidden",
-                    pointerEvents: toolsOpen ? "auto" : "none",
-                    transform: toolsOpen ? "translateY(0)" : "translateY(10px)",
-                    transition: "opacity var(--re-transition-slow), transform var(--re-transition-slow), visibility var(--re-transition-slow)",
-                    zIndex: "var(--re-z-popover)",
-                }}
+                className={`absolute right-0 top-full z-[var(--re-z-popover)] pt-2 transition-[opacity,transform,visibility] duration-240 motion-reduce:transition-none ${
+                    toolsOpen
+                        ? 'visible translate-y-0 opacity-100'
+                        : 'invisible translate-y-2 opacity-0 pointer-events-none'
+                }`}
             >
                 <div
                     id="tools-dropdown"
                     role="menu"
                     aria-label="Free compliance tools"
                     aria-hidden={!toolsOpen}
-                    style={{
-                        background: "var(--re-nav-dropdown-bg)",
-                        border: "1px solid var(--re-nav-dropdown-border)",
-                        borderRadius: "var(--re-radius-lg)",
-                        padding: "8px 0",
-                        minWidth: "280px",
-                        backdropFilter: "blur(16px)",
-                        boxShadow: "var(--re-nav-dropdown-shadow)",
-                    }}
+                    className="min-w-[288px] overflow-hidden rounded-lg border border-[var(--re-nav-dropdown-border)] bg-[var(--re-nav-dropdown-bg)] py-1.5 shadow-re-md"
                 >
-                    <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
+                    <div className="px-4 pb-1.5 pt-1 text-label uppercase text-re-text-muted">
                         Featured Compliance Tools
                     </div>
+
                     {MARKETING_FREE_TOOLS.map((tool) => (
                         <Link
                             key={tool.href}
                             href={tool.href}
                             role="menuitem"
                             tabIndex={toolsOpen ? 0 : -1}
-                            className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                            className={itemClass}
                             onClick={() => setToolsOpen(false)}
-                            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--re-nav-hover)")}
-                            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                         >
-                            <span
+                            <tool.icon
                                 aria-hidden="true"
-                                className="flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-primary)]"
-                            >
-                                <tool.icon size={15} strokeWidth={2} />
+                                size={16}
+                                strokeWidth={1.75}
+                                className="mt-0.5 shrink-0 text-re-text-tertiary"
+                            />
+                            <span className="min-w-0">
+                                <span className="block text-ui font-medium text-re-text-primary">{tool.label}</span>
+                                <span className="mt-0.5 block text-small text-re-text-tertiary">{tool.desc}</span>
                             </span>
-                            <div>
-                                <div className="text-[13px] font-medium text-re-text-primary">{tool.label}</div>
-                                <div className="text-[11px] text-re-text-muted">{tool.desc}</div>
-                            </div>
                         </Link>
                     ))}
-                    <div style={{ height: "1px", background: "var(--re-nav-divider)", margin: "6px 12px" }} />
+
+                    <div aria-hidden="true" className="my-1.5 h-px bg-[var(--re-nav-divider)]" />
+
                     <Link
                         href={MARKETING_ALL_TOOLS_LINK.href}
                         role="menuitem"
                         tabIndex={toolsOpen ? 0 : -1}
-                        className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
+                        className={itemClass}
                         onClick={() => setToolsOpen(false)}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--re-nav-hover)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                     >
-                        <span
+                        <AllToolsIcon
                             aria-hidden="true"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] text-[var(--re-brand)]"
-                        >
-                            <AllToolsIcon size={15} strokeWidth={2} />
+                            size={16}
+                            strokeWidth={1.75}
+                            className="mt-0.5 shrink-0 text-re-text-tertiary"
+                        />
+                        <span className="min-w-0">
+                            <span className="block text-ui font-medium text-re-text-primary">
+                                {MARKETING_ALL_TOOLS_LINK.label}
+                            </span>
+                            <span className="mt-0.5 block text-small text-re-text-tertiary">
+                                {MARKETING_ALL_TOOLS_LINK.desc}
+                            </span>
                         </span>
-                        <div>
-                            <div className="text-[13px] font-semibold text-re-text-primary">{MARKETING_ALL_TOOLS_LINK.label}</div>
-                            <div className="text-[11px] text-re-text-muted">{MARKETING_ALL_TOOLS_LINK.desc}</div>
-                        </div>
                     </Link>
                 </div>
             </div>

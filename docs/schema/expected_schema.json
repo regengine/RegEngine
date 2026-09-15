@@ -1,4 +1,190 @@
 {
+  "agent_org.agent_identities": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "pod_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "role": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "pod_id"
+        ],
+        "name": "agent_identities_pod_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "agent_org",
+        "referred_table": "agent_pods"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "agent_identities_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "agent_org.agent_inboxes": {
+    "columns": {
+      "agent_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "email_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "provider": {
+        "nullable": false,
+        "type": "text"
+      },
+      "provider_ref": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "agent_id"
+        ],
+        "name": "agent_inboxes_agent_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "agent_org",
+        "referred_table": "agent_identities"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "agent_inboxes_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "agent_org.agent_pods": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "department": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "agent_pods_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "agent_org.email_suppressions": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "email_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "reason": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "email_suppressions_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
   "audit.rls_policy_restoration_log": {
     "columns": {
       "id": {
@@ -21,7 +207,8 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "audit.sysadmin_access_log": {
     "columns": {
@@ -53,7 +240,62 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
+  },
+  "billing.tenant_usage_counters": {
+    "columns": {
+      "billing_period_end": {
+        "nullable": false,
+        "type": "date"
+      },
+      "billing_period_start": {
+        "nullable": false,
+        "type": "date"
+      },
+      "last_reported_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "last_reported_count": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "unit_count": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    },
+    "foreign_keys": []
+  },
+  "billing.tenant_usage_event_ledger": {
+    "columns": {
+      "billing_period_start": {
+        "nullable": false,
+        "type": "date"
+      },
+      "counted_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
   },
   "dlq.webhook_failures": {
     "columns": {
@@ -109,7 +351,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.agent_artifact_reviews": {
     "columns": {
@@ -165,7 +408,48 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "artifact_id",
+          "tenant_id"
+        ],
+        "name": "fk_agent_reviews_artifact_tenant",
+        "referred_columns": [
+          "artifact_id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "agent_artifacts"
+      },
+      {
+        "constrained_columns": [
+          "advisory_receipt_id",
+          "tenant_id"
+        ],
+        "name": "fk_agent_reviews_receipt_tenant",
+        "referred_columns": [
+          "receipt_id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_run_receipts"
+      },
+      {
+        "constrained_columns": [
+          "ingestion_run_id",
+          "tenant_id"
+        ],
+        "name": "fk_agent_reviews_run_tenant",
+        "referred_columns": [
+          "id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_runs"
+      }
+    ]
   },
   "fsma.agent_artifacts": {
     "columns": {
@@ -261,7 +545,22 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "ingestion_run_id",
+          "tenant_id"
+        ],
+        "name": "fk_agent_artifacts_run_tenant",
+        "referred_columns": [
+          "id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_runs"
+      }
+    ]
   },
   "fsma.audit_log": {
     "columns": {
@@ -317,7 +616,8 @@
         "nullable": true,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.canonical_entities": {
     "columns": {
@@ -413,7 +713,8 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.chain_verification_log": {
     "columns": {
@@ -449,7 +750,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.compliance_alerts": {
     "columns": {
@@ -521,7 +823,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "cte_event_id"
+        ],
+        "name": "compliance_alerts_cte_event_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "cte_events"
+      }
+    ]
   },
   "fsma.compliance_evidence_snapshots": {
     "columns": {
@@ -605,7 +920,8 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.compliance_snapshots": {
     "columns": {
@@ -653,7 +969,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.correction_patches": {
     "columns": {
@@ -737,7 +1054,31 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "case_id"
+        ],
+        "name": "correction_patches_case_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "remediation_cases"
+      },
+      {
+        "constrained_columns": [
+          "manifest_record_id"
+        ],
+        "name": "correction_patches_manifest_record_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "manifest_records"
+      }
+    ]
   },
   "fsma.critical_tracking_events": {
     "columns": {
@@ -837,7 +1178,8 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.cte_events": {
     "columns": {
@@ -929,7 +1271,8 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.cte_kdes": {
     "columns": {
@@ -961,7 +1304,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "cte_event_id"
+        ],
+        "name": "cte_kdes_cte_event_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "cte_events"
+      }
+    ]
   },
   "fsma.cte_kdes_backfill_log_v059": {
     "columns": {
@@ -993,7 +1349,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.entity_aliases": {
     "columns": {
@@ -1037,7 +1394,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "entity_id"
+        ],
+        "name": "entity_aliases_entity_id_fkey",
+        "referred_columns": [
+          "entity_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "canonical_entities"
+      }
+    ]
   },
   "fsma.entity_merge_history": {
     "columns": {
@@ -1089,7 +1459,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "target_entity_id"
+        ],
+        "name": "entity_merge_history_target_entity_id_fkey",
+        "referred_columns": [
+          "entity_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "canonical_entities"
+      }
+    ]
   },
   "fsma.evidence_attachments": {
     "columns": {
@@ -1149,7 +1532,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "event_id"
+        ],
+        "name": "evidence_attachments_event_id_fkey",
+        "referred_columns": [
+          "event_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "traceability_events"
+      }
+    ]
   },
   "fsma.exception_attachments": {
     "columns": {
@@ -1193,7 +1589,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "case_id"
+        ],
+        "name": "exception_attachments_case_id_fkey",
+        "referred_columns": [
+          "case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "exception_cases"
+      }
+    ]
   },
   "fsma.exception_cases": {
     "columns": {
@@ -1277,7 +1686,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "request_case_id"
+        ],
+        "name": "fk_exception_request_case",
+        "referred_columns": [
+          "request_case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "request_cases"
+      }
+    ]
   },
   "fsma.exception_comments": {
     "columns": {
@@ -1309,7 +1731,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "case_id"
+        ],
+        "name": "exception_comments_case_id_fkey",
+        "referred_columns": [
+          "case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "exception_cases"
+      }
+    ]
   },
   "fsma.exception_signoffs": {
     "columns": {
@@ -1341,7 +1776,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "case_id"
+        ],
+        "name": "exception_signoffs_case_id_fkey",
+        "referred_columns": [
+          "case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "exception_cases"
+      }
+    ]
   },
   "fsma.exchange_packages": {
     "columns": {
@@ -1389,7 +1837,8 @@
         "nullable": false,
         "type": "array"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.fda_export_log": {
     "columns": {
@@ -1445,7 +1894,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.fda_sla_requests": {
     "columns": {
@@ -1493,7 +1943,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.fsma_audit_trail": {
     "columns": {
@@ -1557,7 +2008,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.hash_chain": {
     "columns": {
@@ -1593,7 +2045,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.identity_review_queue": {
     "columns": {
@@ -1649,7 +2102,99 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "entity_a_id"
+        ],
+        "name": "identity_review_queue_entity_a_id_fkey",
+        "referred_columns": [
+          "entity_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "canonical_entities"
+      },
+      {
+        "constrained_columns": [
+          "entity_b_id"
+        ],
+        "name": "identity_review_queue_entity_b_id_fkey",
+        "referred_columns": [
+          "entity_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "canonical_entities"
+      },
+      {
+        "constrained_columns": [
+          "previous_review_id"
+        ],
+        "name": "identity_review_queue_previous_review_id_fkey",
+        "referred_columns": [
+          "review_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "identity_review_queue"
+      }
+    ]
+  },
+  "fsma.inbound_email_audit": {
+    "columns": {
+      "accepted_attachment_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "attachment_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "details": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "message_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "received_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "recipient": {
+        "nullable": false,
+        "type": "text"
+      },
+      "rejected_attachment_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "rejection_reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "sender": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "subject": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
   },
   "fsma.incidents": {
     "columns": {
@@ -1673,7 +2218,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.inflow_workbench_commit_decisions": {
     "columns": {
@@ -1721,7 +2267,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "run_id"
+        ],
+        "name": "inflow_workbench_commit_decisions_run_id_fkey",
+        "referred_columns": [
+          "run_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "inflow_workbench_runs"
+      }
+    ]
   },
   "fsma.inflow_workbench_fix_items": {
     "columns": {
@@ -1769,7 +2328,20 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "run_id"
+        ],
+        "name": "inflow_workbench_fix_items_run_id_fkey",
+        "referred_columns": [
+          "run_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "inflow_workbench_runs"
+      }
+    ]
   },
   "fsma.inflow_workbench_runs": {
     "columns": {
@@ -1813,7 +2385,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.inflow_workbench_scenarios": {
     "columns": {
@@ -1849,7 +2422,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.ingestion_run_receipts": {
     "columns": {
@@ -1921,7 +2495,74 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "canonical_event_id",
+          "tenant_id"
+        ],
+        "name": "fk_ingestion_run_receipts_event_tenant",
+        "referred_columns": [
+          "event_id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "traceability_events"
+      },
+      {
+        "constrained_columns": [
+          "evidence_attachment_id",
+          "tenant_id"
+        ],
+        "name": "fk_ingestion_run_receipts_evidence_tenant",
+        "referred_columns": [
+          "id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "evidence_attachments"
+      },
+      {
+        "constrained_columns": [
+          "export_log_id",
+          "tenant_id"
+        ],
+        "name": "fk_ingestion_run_receipts_export_tenant",
+        "referred_columns": [
+          "id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "fda_export_log"
+      },
+      {
+        "constrained_columns": [
+          "rule_evaluation_id",
+          "tenant_id"
+        ],
+        "name": "fk_ingestion_run_receipts_rule_eval_tenant",
+        "referred_columns": [
+          "evaluation_id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "rule_evaluations"
+      },
+      {
+        "constrained_columns": [
+          "ingestion_run_id",
+          "tenant_id"
+        ],
+        "name": "fk_ingestion_run_receipts_run_tenant",
+        "referred_columns": [
+          "id",
+          "tenant_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_runs"
+      }
+    ]
   },
   "fsma.ingestion_runs": {
     "columns": {
@@ -1989,7 +2630,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.key_data_elements": {
     "columns": {
@@ -2025,7 +2667,69 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "cte_id"
+        ],
+        "name": "key_data_elements_cte_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "critical_tracking_events"
+      }
+    ]
+  },
+  "fsma.label_charges": {
+    "columns": {
+      "amount_cents": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "charged_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "currency": {
+        "nullable": false,
+        "type": "text"
+      },
+      "error_message": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "stripe_customer_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "stripe_invoice_item_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
   },
   "fsma.locations": {
     "columns": {
@@ -2069,7 +2773,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.manifest_blobs": {
     "columns": {
@@ -2109,7 +2814,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "ingestion_run_id"
+        ],
+        "name": "manifest_blobs_ingestion_run_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_runs"
+      }
+    ]
   },
   "fsma.manifest_records": {
     "columns": {
@@ -2181,7 +2899,20 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "ingestion_run_id"
+        ],
+        "name": "manifest_records_ingestion_run_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_runs"
+      }
+    ]
   },
   "fsma.mock_audit_drills": {
     "columns": {
@@ -2237,7 +2968,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.notification_outbox": {
     "columns": {
@@ -2305,7 +3037,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "case_id"
+        ],
+        "name": "notification_outbox_case_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "remediation_cases"
+      }
+    ]
   },
   "fsma.organizations": {
     "columns": {
@@ -2345,7 +3090,8 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.products": {
     "columns": {
@@ -2405,7 +3151,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.recall_assessments": {
     "columns": {
@@ -2453,7 +3200,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.remediation_cases": {
     "columns": {
@@ -2517,7 +3265,20 @@
         "nullable": false,
         "type": "jsonb"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "manifest_record_id"
+        ],
+        "name": "remediation_cases_manifest_record_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "manifest_records"
+      }
+    ]
   },
   "fsma.remediation_tokens": {
     "columns": {
@@ -2573,7 +3334,31 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "case_id"
+        ],
+        "name": "remediation_tokens_case_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "remediation_cases"
+      },
+      {
+        "constrained_columns": [
+          "superseded_by"
+        ],
+        "name": "remediation_tokens_superseded_by_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "remediation_tokens"
+      }
+    ]
   },
   "fsma.request_cases": {
     "columns": {
@@ -2661,7 +3446,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.request_signoffs": {
     "columns": {
@@ -2693,7 +3479,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "request_case_id"
+        ],
+        "name": "request_signoffs_request_case_id_fkey",
+        "referred_columns": [
+          "request_case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "request_cases"
+      }
+    ]
   },
   "fsma.response_packages": {
     "columns": {
@@ -2737,7 +3536,20 @@
         "nullable": false,
         "type": "integer"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "request_case_id"
+        ],
+        "name": "response_packages_request_case_id_fkey",
+        "referred_columns": [
+          "request_case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "request_cases"
+      }
+    ]
   },
   "fsma.rule_audit_log": {
     "columns": {
@@ -2769,7 +3581,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "rule_id"
+        ],
+        "name": "rule_audit_log_rule_id_fkey",
+        "referred_columns": [
+          "rule_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "rule_definitions"
+      }
+    ]
   },
   "fsma.rule_definitions": {
     "columns": {
@@ -2837,7 +3662,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.rule_evaluation_deadletter": {
     "columns": {
@@ -2897,7 +3723,8 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.rule_evaluations": {
     "columns": {
@@ -2941,7 +3768,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "rule_id"
+        ],
+        "name": "rule_evaluations_rule_id_fkey",
+        "referred_columns": [
+          "rule_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "rule_definitions"
+      }
+    ]
   },
   "fsma.rule_rejections": {
     "columns": {
@@ -2985,7 +3825,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.submission_log": {
     "columns": {
@@ -3037,7 +3878,31 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "package_id"
+        ],
+        "name": "submission_log_package_id_fkey",
+        "referred_columns": [
+          "package_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "response_packages"
+      },
+      {
+        "constrained_columns": [
+          "request_case_id"
+        ],
+        "name": "submission_log_request_case_id_fkey",
+        "referred_columns": [
+          "request_case_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "request_cases"
+      }
+    ]
   },
   "fsma.supplier_integration_profiles": {
     "columns": {
@@ -3097,7 +3962,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.suppliers": {
     "columns": {
@@ -3145,7 +4011,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.task_queue": {
     "columns": {
@@ -3217,7 +4084,8 @@
         "nullable": true,
         "type": "integer"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_data": {
     "columns": {
@@ -3245,7 +4113,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_exchanges": {
     "columns": {
@@ -3277,7 +4146,62 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
+  },
+  "fsma.tenant_inbound_addresses": {
+    "columns": {
+      "allowed_senders": {
+        "nullable": false,
+        "type": "array"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "inbound_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "is_active": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
+  "fsma.tenant_inbound_email_addresses": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "inbound_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_notification_prefs": {
     "columns": {
@@ -3301,7 +4225,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_onboarding": {
     "columns": {
@@ -3325,7 +4250,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_portal_links": {
     "columns": {
@@ -3369,7 +4295,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_products": {
     "columns": {
@@ -3433,7 +4360,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_seed_state": {
     "columns": {
@@ -3449,7 +4377,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_settings": {
     "columns": {
@@ -3473,7 +4402,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_suppliers": {
     "columns": {
@@ -3533,7 +4463,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.tenant_team_members": {
     "columns": {
@@ -3577,7 +4508,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "fsma.traceability_events": {
     "columns": {
@@ -3733,7 +4665,31 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "ingestion_run_id"
+        ],
+        "name": "traceability_events_ingestion_run_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "ingestion_runs"
+      },
+      {
+        "constrained_columns": [
+          "supersedes_event_id"
+        ],
+        "name": "traceability_events_supersedes_event_id_fkey",
+        "referred_columns": [
+          "event_id"
+        ],
+        "referred_schema": "fsma",
+        "referred_table": "traceability_events"
+      }
+    ]
   },
   "fsma.transformation_links": {
     "columns": {
@@ -3805,7 +4761,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "ingestion.audit_log": {
     "columns": {
@@ -3845,7 +4802,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "ingestion.documents": {
     "columns": {
@@ -3953,7 +4911,8 @@
         "nullable": false,
         "type": "varchar(50)"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "ingestion.jobs": {
     "columns": {
@@ -4021,7 +4980,8 @@
         "nullable": false,
         "type": "varchar(50)"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.admin_mfa_recovery_codes": {
     "columns": {
@@ -4045,10 +5005,27 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "admin_mfa_recovery_codes_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.api_keys": {
     "columns": {
+      "agent_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
       "allowed_jurisdictions": {
         "nullable": true,
         "type": "array"
@@ -4149,7 +5126,8 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.audit_log_buffer": {
     "columns": {
@@ -4193,7 +5171,8 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.audit_logs": {
     "columns": {
@@ -4273,7 +5252,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.auth_challenges": {
     "columns": {
@@ -4309,7 +5289,8 @@
         "nullable": false,
         "type": "varchar(8)"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.compliance_alerts": {
     "columns": {
@@ -4397,7 +5378,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.compliance_notifications": {
     "columns": {
@@ -4441,7 +5423,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "alert_id"
+        ],
+        "name": "compliance_notifications_alert_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "compliance_alerts"
+      }
+    ]
   },
   "public.compliance_status_log": {
     "columns": {
@@ -4477,7 +5472,8 @@
         "nullable": false,
         "type": "varchar(100)"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.controls": {
     "columns": {
@@ -4525,7 +5521,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "obligation_id"
+        ],
+        "name": "controls_obligation_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "obligations"
+      }
+    ]
   },
   "public.food_traceability_list": {
     "columns": {
@@ -4577,7 +5586,8 @@
         "nullable": false,
         "type": "jsonb"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.funnel_events": {
     "columns": {
@@ -4601,7 +5611,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "funnel_events_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.graph_outbox": {
     "columns": {
@@ -4657,7 +5680,8 @@
         "nullable": true,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.invites": {
     "columns": {
@@ -4701,7 +5725,42 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "created_by"
+        ],
+        "name": "invites_created_by_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      },
+      {
+        "constrained_columns": [
+          "role_id"
+        ],
+        "name": "invites_role_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "roles"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "invites_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.memberships": {
     "columns": {
@@ -4729,7 +5788,42 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "role_id"
+        ],
+        "name": "memberships_role_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "roles"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "memberships_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      },
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "memberships_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.obligation_cte_rules": {
     "columns": {
@@ -4761,7 +5855,20 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "obligation_id"
+        ],
+        "name": "obligation_cte_rules_obligation_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "obligations"
+      }
+    ]
   },
   "public.obligations": {
     "columns": {
@@ -4805,7 +5912,20 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "regulation_id"
+        ],
+        "name": "obligations_regulation_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "regulations"
+      }
+    ]
   },
   "public.organization_memberships": {
     "columns": {
@@ -4825,7 +5945,31 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "organization_id"
+        ],
+        "name": "organization_memberships_organization_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "organizations"
+      },
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "organization_memberships_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.organizations": {
     "columns": {
@@ -4849,7 +5993,8 @@
         "nullable": false,
         "type": "varchar"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.pcos_authority_documents": {
     "columns": {
@@ -4949,7 +6094,31 @@
         "nullable": true,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "supersedes_document_id"
+        ],
+        "name": "pcos_authority_documents_supersedes_document_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "pcos_authority_documents"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "pcos_authority_documents_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.pcos_extracted_facts": {
     "columns": {
@@ -5077,7 +6246,42 @@
         "nullable": false,
         "type": "integer"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "authority_document_id"
+        ],
+        "name": "pcos_extracted_facts_authority_document_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "pcos_authority_documents"
+      },
+      {
+        "constrained_columns": [
+          "previous_fact_id"
+        ],
+        "name": "pcos_extracted_facts_previous_fact_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "pcos_extracted_facts"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "pcos_extracted_facts_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.pcos_fact_citations": {
     "columns": {
@@ -5137,7 +6341,31 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "extracted_fact_id"
+        ],
+        "name": "pcos_fact_citations_extracted_fact_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "pcos_extracted_facts"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "pcos_fact_citations_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.regulations": {
     "columns": {
@@ -5173,7 +6401,8 @@
         "nullable": false,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.review_items": {
     "columns": {
@@ -5225,7 +6454,8 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.roles": {
     "columns": {
@@ -5249,7 +6479,8 @@
         "nullable": true,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.sandbox_shares": {
     "columns": {
@@ -5281,7 +6512,8 @@
         "nullable": false,
         "type": "integer"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.scheduler_job_runs": {
     "columns": {
@@ -5305,7 +6537,8 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.scheduler_seen_items": {
     "columns": {
@@ -5337,7 +6570,8 @@
         "nullable": true,
         "type": "text"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.sessions": {
     "columns": {
@@ -5401,7 +6635,31 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "active_membership_id"
+        ],
+        "name": "fk_sessions_active_membership_id",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "organization_memberships"
+      },
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "sessions_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.supplier_cte_events": {
     "columns": {
@@ -5461,7 +6719,53 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "facility_id"
+        ],
+        "name": "supplier_cte_events_facility_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "supplier_facilities"
+      },
+      {
+        "constrained_columns": [
+          "lot_id"
+        ],
+        "name": "supplier_cte_events_lot_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "supplier_traceability_lots"
+      },
+      {
+        "constrained_columns": [
+          "supplier_user_id"
+        ],
+        "name": "supplier_cte_events_supplier_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "supplier_cte_events_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.supplier_facilities": {
     "columns": {
@@ -5513,7 +6817,31 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "supplier_user_id"
+        ],
+        "name": "supplier_facilities_supplier_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "supplier_facilities_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.supplier_facility_ftl_categories": {
     "columns": {
@@ -5545,7 +6873,31 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "facility_id"
+        ],
+        "name": "supplier_facility_ftl_categories_facility_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "supplier_facilities"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "supplier_facility_ftl_categories_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.supplier_funnel_events": {
     "columns": {
@@ -5585,7 +6937,42 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "facility_id"
+        ],
+        "name": "supplier_funnel_events_facility_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "supplier_facilities"
+      },
+      {
+        "constrained_columns": [
+          "supplier_user_id"
+        ],
+        "name": "supplier_funnel_events_supplier_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "supplier_funnel_events_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.supplier_traceability_lots": {
     "columns": {
@@ -5625,7 +7012,42 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "facility_id"
+        ],
+        "name": "supplier_traceability_lots_facility_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "supplier_facilities"
+      },
+      {
+        "constrained_columns": [
+          "supplier_user_id"
+        ],
+        "name": "supplier_traceability_lots_supplier_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "supplier_traceability_lots_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.tenant_compliance_status": {
     "columns": {
@@ -5673,7 +7095,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.tenant_product_profile": {
     "columns": {
@@ -5713,7 +7136,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.tenants": {
     "columns": {
@@ -5745,7 +7169,8 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.tool_leads": {
     "columns": {
@@ -5793,7 +7218,8 @@
         "nullable": false,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.user_emails": {
     "columns": {
@@ -5817,7 +7243,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "user_emails_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.users": {
     "columns": {
@@ -5865,7 +7304,8 @@
         "nullable": true,
         "type": "timestamp"
       }
-    }
+    },
+    "foreign_keys": []
   },
   "public.webauthn_challenges": {
     "columns": {
@@ -5897,7 +7337,20 @@
         "nullable": true,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "webauthn_challenges_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.webauthn_credentials": {
     "columns": {
@@ -5929,7 +7382,20 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "user_id"
+        ],
+        "name": "webauthn_credentials_user_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "users"
+      }
+    ]
   },
   "public.webhook_outbox": {
     "columns": {
@@ -5989,6 +7455,7 @@
         "nullable": false,
         "type": "uuid"
       }
-    }
+    },
+    "foreign_keys": []
   }
 }

@@ -61,3 +61,35 @@ def test_fk_identity_ignores_ondelete_options():
     right = dict(left)
     # Option churn must not create a distinct identity.
     assert mod._fk_identity(left) == mod._fk_identity(right)
+
+
+
+def test_fk_record_uses_passed_default_schema_for_unset_referred_schema():
+    """#3102 review: on Postgres, SQLAlchemy's reflection reports
+    ``referred_schema: None`` to mean "the database's default schema"
+    (``public`` unless the connection overrides it) -- NOT "same schema as
+    the table that owns the FK". A table in a non-default schema (e.g.
+    ``agent_org.agent_pods``) with an unqualified ``REFERENCES tenants(id)``
+    resolves, via search_path, to ``public.tenants`` there, and must be
+    recorded as such rather than mislabeled as ``agent_org.tenants`` (a
+    table that need not even exist). ``dump_schema`` computes the fallback
+    once, from ``inspector.default_schema_name``, and passes it into every
+    ``_fk_record`` call regardless of which schema owns the referencing
+    table -- verified live against real Postgres for the agent_org PR that
+    surfaced this (four ``tenant_id`` FKs corrected from ``agent_org`` to
+    ``public`` by this fix, cross-checked against ``pg_constraint``
+    directly). SQLite has no equivalent cross-schema search_path
+    resolution to exercise here, so this is a narrower unit check that the
+    fallback argument -- not the owning table's schema -- is what lands in
+    the record.
+    """
+    mod = _load_module()
+    fk = {
+        "name": "agent_pods_tenant_id_fkey",
+        "referred_schema": None,
+        "referred_table": "tenants",
+        "constrained_columns": ["tenant_id"],
+        "referred_columns": ["id"],
+    }
+    assert mod._fk_record(fk, "public")["referred_schema"] == "public"
+    assert mod._fk_record(fk, "other_default")["referred_schema"] == "other_default"
