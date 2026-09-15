@@ -3,21 +3,24 @@
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
+import { Callout } from '@/components/ui/callout';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge } from '@/components/ui/status-badge';
 import {
     Package,
     Plus,
-    ShieldCheck,
-    Tag,
     Barcode,
     Users,
     Activity,
-    Leaf,
     AlertTriangle,
     RefreshCw,
     Eye,
@@ -133,6 +136,7 @@ async function apiDeleteProduct(tenantId: string, productId: string): Promise<vo
     }
 }
 
+
 export default function ProductCatalogPage() {
     const { isAuthenticated } = useAuth();
     const { tenantId, isSystemTenant } = useTenant();
@@ -165,7 +169,6 @@ export default function ProductCatalogPage() {
     });
 
     const products = productsData?.products ?? [];
-    const categories = productsData?.categories ?? [];
     const totalFtl = productsData?.totalFtl ?? 0;
     const error = productsError?.message ?? null;
 
@@ -240,292 +243,322 @@ export default function ProductCatalogPage() {
     const uniqueCategories = [...new Set(products.map(p => p.category))].sort();
 
     return (
-        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
-                            <Package className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Product Catalog
-                        </h1>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            FTL-covered products in your traceability program
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={() => loadProducts()} disabled={loading}>
-                            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                        </Button>
-                        <Button onClick={() => setShowAdd(!showAdd)} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]">
-                            <Plus className="h-4 w-4 mr-1" /> Add Product
-                        </Button>
-                    </div>
-                </div>
+        <PageContainer>
+            <PageHeader
+                title="Product Catalog"
+                description="FTL-covered products in your traceability program"
+                secondaryActions={
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label="Refresh product catalog"
+                        onClick={() => loadProducts()}
+                        disabled={loading}
+                    >
+                        <RefreshCw
+                            className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                            strokeWidth={1.75}
+                            aria-hidden="true"
+                        />
+                    </Button>
+                }
+                primaryAction={
+                    <Button
+                        onClick={() => setShowAdd(!showAdd)}
+                        aria-expanded={showAdd}
+                        leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
+                    >
+                        Add Product
+                    </Button>
+                }
+            />
 
+            <div className="space-y-6">
                 {!isLoggedIn && (
-                    <Card className="border-orange-300 dark:border-orange-700">
-                        <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                            Sign in to view your product catalog.
-                        </CardContent>
-                    </Card>
+                    <Callout tone="warning">
+                        Sign in to view your product catalog.
+                    </Callout>
                 )}
 
                 {loading && products.length === 0 && (
-                    <div className="flex justify-center py-16"><Spinner size="lg" /></div>
+                    <div className="space-y-3" aria-busy="true">
+                        {[0, 1, 2, 3].map((row) => (
+                            <Skeleton key={row} className="h-20 w-full" />
+                        ))}
+                    </div>
                 )}
 
                 {error && (
-                    <Card className="border-orange-300 dark:border-orange-700">
-                        <CardContent className="py-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
-                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                    <p className="text-sm">{error}</p>
-                                </div>
-                                <Button variant="outline" size="sm" className="rounded-xl text-xs flex-shrink-0 min-h-[44px]" onClick={() => loadProducts()} disabled={loading}>
-                                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Retry
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <Callout
+                        tone="danger"
+                        role="alert"
+                        action={
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => loadProducts()}
+                                disabled={loading}
+                                leadingIcon={
+                                    <RefreshCw
+                                        className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                                        strokeWidth={1.75}
+                                        aria-hidden="true"
+                                    />
+                                }
+                            >
+                                Retry
+                            </Button>
+                        }
+                    >
+                        {error}
+                    </Callout>
                 )}
 
                 {isLoggedIn && products.length > 0 && (
                     <>
                         {/* Stats */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
-                            {[
-                                { label: 'Total Products', value: products.length, icon: Package },
-                                { label: 'FTL Covered', value: totalFtl, icon: ShieldCheck },
-                                { label: 'Categories', value: uniqueCategories.length, icon: Tag },
-                                { label: 'Total CTEs', value: totalCtes, icon: Activity },
-                            ].map((stat) => (
-                                <Card key={stat.label} className="border-[var(--re-border-default)]">
-                                    <CardContent className="py-3 sm:py-4">
-                                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                                            <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                            <span className="text-[11px] sm:text-xs text-muted-foreground truncate">{stat.label}</span>
-                                        </div>
-                                        <div className="text-xl sm:text-2xl font-bold">{stat.value}</div>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <StatTile label="Total Products" value={products.length} />
+                            <StatTile label="FTL Covered" value={totalFtl} />
+                            <StatTile label="Categories" value={uniqueCategories.length} />
+                            <StatTile label="Total CTEs" value={totalCtes} />
                         </div>
 
                         {/* Add Form */}
                         {showAdd && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-                                <Card className="border-[var(--re-brand)]">
-                                    <CardContent className="py-4">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-                                            <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Product name" className="rounded-xl min-h-[44px]" />
-                                            <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="flex h-10 min-h-[44px] rounded-xl border border-input bg-background px-3 text-sm">
-                                                {FTL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </select>
-                                            <Input value={newSku} onChange={e => setNewSku(e.target.value)} placeholder="SKU (optional)" className="rounded-xl min-h-[44px]" />
-                                            <Button onClick={handleAdd} disabled={adding} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] active:scale-[0.97]">
-                                                {adding ? <Spinner size="sm" /> : <><Plus className="h-4 w-4 mr-1" /> Add</>}
-                                            </Button>
-                                        </div>
-                                        {addProductMutation.isError && (
-                                            <p className="mt-2 text-xs text-re-danger flex items-center gap-1.5">
-                                                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                                                {addProductMutation.error?.message || "Couldn't add the product — retry."}
-                                            </p>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
+                            <Card>
+                                <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+                                    <div className="min-w-0">
+                                        <label htmlFor="new-product-name" className="sr-only">Product name</label>
+                                        <Input id="new-product-name" size="lg" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Product name" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <label htmlFor="new-product-category" className="sr-only">Category</label>
+                                        <select id="new-product-category" value={newCategory} onChange={e => setNewCategory(e.target.value)} className={`${fieldControlClasses} h-11`}>
+                                            {FTL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <label htmlFor="new-product-sku" className="sr-only">SKU (optional)</label>
+                                        <Input id="new-product-sku" size="lg" value={newSku} onChange={e => setNewSku(e.target.value)} placeholder="SKU (optional)" />
+                                    </div>
+                                    <Button
+                                        size="lg"
+                                        onClick={handleAdd}
+                                        disabled={adding}
+                                        loading={adding}
+                                        leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
+                                    >
+                                        Add
+                                    </Button>
+                                    {addProductMutation.isError && (
+                                        <p className="flex items-center gap-1.5 text-small text-re-danger sm:col-span-2 md:col-span-4">
+                                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                            {addProductMutation.error?.message || "Couldn't add the product — retry."}
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
                         )}
 
                         {/* Category Filter */}
-                        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none no-scrollbar pb-1 -mx-1 px-1">
-                            <button
+                        <div className="-mx-1 flex gap-2 overflow-x-auto scrollbar-none no-scrollbar px-1 pb-1">
+                            <Button
+                                variant={filterCategory === 'all' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                aria-pressed={filterCategory === 'all'}
+                                className="shrink-0"
                                 onClick={() => setFilterCategory('all')}
-                                className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] ${
-                                    filterCategory === 'all'
-                                        ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
-                                        : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
-                                }`}
                             >
                                 All ({products.length})
-                            </button>
+                            </Button>
                             {uniqueCategories.map(cat => {
                                 const count = products.filter(p => p.category === cat).length;
                                 return (
-                                    <button
+                                    <Button
                                         key={cat}
+                                        variant={filterCategory === cat ? 'secondary' : 'ghost'}
+                                        size="sm"
+                                        aria-pressed={filterCategory === cat}
+                                        className="shrink-0"
                                         onClick={() => setFilterCategory(filterCategory === cat ? 'all' : cat)}
-                                        className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] ${
-                                            filterCategory === cat
-                                                ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
-                                                : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
-                                        }`}
                                     >
                                         {cat} ({count})
-                                    </button>
+                                    </Button>
                                 );
                             })}
                         </div>
 
                         {selectedProduct && (
-                            <Card role="region" aria-label="Product detail" className="border-[var(--re-brand)]">
-                                <CardContent className="py-4 space-y-4">
-                                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <Card role="region" aria-label="Product detail">
+                                <CardContent className="space-y-4">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <Leaf className="h-4 w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                                <h2 className="text-base sm:text-lg font-semibold">{selectedProduct.name}</h2>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <h2 className="text-subheading text-re-text-primary">{selectedProduct.name}</h2>
                                                 {selectedProduct.ftl_covered && (
-                                                    <Badge className="text-[10px] bg-re-brand-muted text-re-brand">
-                                                        <ShieldCheck className="h-3 w-3 mr-0.5" /> FTL
-                                                    </Badge>
+                                                    <StatusBadge state="compliant" label="FTL" size="sm" />
                                                 )}
                                             </div>
-                                            <div className="mt-1 text-xs text-muted-foreground">
+                                            <div className="mt-1 text-small text-re-text-tertiary">
                                                 {selectedProduct.category || 'Uncategorized'} · {selectedProduct.sku || 'No SKU'}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={() => handleEditProduct(selectedProduct)}>
-                                                <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit Product
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => handleEditProduct(selectedProduct)} leadingIcon={<Edit3 strokeWidth={1.75} aria-hidden="true" />}>
+                                                Edit Product
                                             </Button>
-                                            <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={() => handleDeleteProduct(selectedProduct)} disabled={deletingProduct}>
-                                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Product
+                                            <Button variant="outline" size="sm" onClick={() => handleDeleteProduct(selectedProduct)} disabled={deletingProduct} leadingIcon={<Trash2 strokeWidth={1.75} aria-hidden="true" />}>
+                                                Delete Product
                                             </Button>
-                                            <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={() => setSelectedProductId(null)}>
-                                                <X className="h-3.5 w-3.5 mr-1" /> Close
+                                            <Button variant="outline" size="sm" onClick={() => setSelectedProductId(null)} leadingIcon={<X strokeWidth={1.75} aria-hidden="true" />}>
+                                                Close
                                             </Button>
                                         </div>
                                     </div>
 
                                     {editingProductId === selectedProduct.id ? (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-                                            <div>
-                                                <label htmlFor="edit-product-name" className="text-xs font-medium text-muted-foreground mb-1 block">Product Name</label>
-                                                <Input id="edit-product-name" value={editName} onChange={e => setEditName(e.target.value)} className="rounded-xl min-h-[44px]" />
-                                            </div>
-                                            <div>
-                                                <label htmlFor="edit-product-category" className="text-xs font-medium text-muted-foreground mb-1 block">Category</label>
-                                                <select id="edit-product-category" value={editCategory} onChange={e => setEditCategory(e.target.value)} className="flex h-10 min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+                                            <Field label="Product Name" htmlFor="edit-product-name">
+                                                <Input id="edit-product-name" size="lg" value={editName} onChange={e => setEditName(e.target.value)} />
+                                            </Field>
+                                            <Field label="Category" htmlFor="edit-product-category">
+                                                <select id="edit-product-category" value={editCategory} onChange={e => setEditCategory(e.target.value)} className={`${fieldControlClasses} h-11`}>
                                                     {FTL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                                 </select>
-                                            </div>
-                                            <div>
-                                                <label htmlFor="edit-product-sku" className="text-xs font-medium text-muted-foreground mb-1 block">SKU</label>
-                                                <Input id="edit-product-sku" value={editSku} onChange={e => setEditSku(e.target.value)} className="rounded-xl min-h-[44px]" />
-                                            </div>
+                                            </Field>
+                                            <Field label="SKU" htmlFor="edit-product-sku">
+                                                <Input id="edit-product-sku" size="lg" value={editSku} onChange={e => setEditSku(e.target.value)} />
+                                            </Field>
                                             <div className="flex items-end gap-2">
-                                                <Button onClick={() => handleSaveProduct(selectedProduct)} disabled={savingProduct || !editName.trim()} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] flex-1">
-                                                    {savingProduct ? <Spinner size="sm" /> : <><Save className="h-4 w-4 mr-1" /> Save</>}
+                                                <Button
+                                                    size="lg"
+                                                    className="flex-1"
+                                                    onClick={() => handleSaveProduct(selectedProduct)}
+                                                    disabled={savingProduct || !editName.trim()}
+                                                    loading={savingProduct}
+                                                    leadingIcon={<Save strokeWidth={1.75} aria-hidden="true" />}
+                                                >
+                                                    Save
                                                 </Button>
-                                                <Button variant="outline" onClick={() => setEditingProductId(null)} className="rounded-xl min-h-[44px]">
-                                                    <X className="h-4 w-4" />
+                                                <Button variant="outline" size="lg" aria-label="Cancel edit" onClick={() => setEditingProductId(null)}>
+                                                    <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                                 </Button>
                                             </div>
                                             {updateProductMutation.isError && (
-                                                <p className="sm:col-span-2 md:col-span-4 text-xs text-re-danger flex items-center gap-1.5">
-                                                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                <p className="flex items-center gap-1.5 text-small text-re-danger sm:col-span-2 md:col-span-4">
+                                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                                     {updateProductMutation.error?.message || "Couldn't save your changes — retry."}
                                                 </p>
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                                            <div className="rounded-xl border border-[var(--re-border-default)] p-3">
-                                                <div className="text-muted-foreground">Suppliers</div>
-                                                <div className="font-medium">{selectedProduct.suppliers.length}</div>
+                                        <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                                            <div className="rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
+                                                <dt className="text-label text-re-text-muted">Suppliers</dt>
+                                                <dd className="mt-1 text-ui font-medium tabular-nums text-re-text-primary">{selectedProduct.suppliers.length}</dd>
                                             </div>
-                                            <div className="rounded-xl border border-[var(--re-border-default)] p-3">
-                                                <div className="text-muted-foreground">Facilities</div>
-                                                <div className="font-medium">{selectedProduct.facilities.length}</div>
+                                            <div className="rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
+                                                <dt className="text-label text-re-text-muted">Facilities</dt>
+                                                <dd className="mt-1 text-ui font-medium tabular-nums text-re-text-primary">{selectedProduct.facilities.length}</dd>
                                             </div>
-                                            <div className="rounded-xl border border-[var(--re-border-default)] p-3">
-                                                <div className="text-muted-foreground">CTEs</div>
-                                                <div className="font-medium">{selectedProduct.cte_count}</div>
+                                            <div className="rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
+                                                <dt className="text-label text-re-text-muted">CTEs</dt>
+                                                <dd className="mt-1 text-ui font-medium tabular-nums text-re-text-primary">{selectedProduct.cte_count}</dd>
                                             </div>
-                                            <div className="rounded-xl border border-[var(--re-border-default)] p-3">
-                                                <div className="text-muted-foreground">GTIN</div>
-                                                <div className="font-medium truncate">{selectedProduct.gtin || 'Not set'}</div>
+                                            <div className="min-w-0 rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
+                                                <dt className="text-label text-re-text-muted">GTIN</dt>
+                                                <dd className="mt-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{selectedProduct.gtin || 'Not set'}</dd>
                                             </div>
-                                        </div>
+                                        </dl>
                                     )}
                                 </CardContent>
                             </Card>
                         )}
 
                         {deleteProductMutation.isError && (
-                            <p className="text-xs text-re-danger flex items-center gap-1.5">
-                                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                            <p className="flex items-center gap-1.5 text-small text-re-danger">
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                 {deleteProductMutation.error?.message || "Couldn't delete the product — retry."}
                             </p>
                         )}
 
-                        {/* Product List */}
-                        <div className="space-y-3">
-                            {filtered.map((product, i) => (
-                                <motion.div key={product.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                                    <Card role="region" aria-label={`Product ${product.name}`} className="border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all">
-                                        <CardContent className="py-3 sm:py-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                                                        <Leaf className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                                        <span className="font-medium text-sm sm:text-base">{product.name}</span>
-                                                        {product.ftl_covered && (
-                                                            <Badge className="text-[9px] px-1.5 py-0 bg-re-brand-muted text-re-brand">
-                                                                <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> FTL
-                                                            </Badge>
-                                                        )}
-                                                        <Badge variant="outline" className="text-[9px] py-0 hidden sm:inline-flex">{product.category}</Badge>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 sm:gap-4 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
-                                                        {product.sku && <span className="flex items-center gap-1"><Barcode className="h-3 w-3" /> {product.sku}</span>}
-                                                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {product.suppliers.length} supplier{product.suppliers.length !== 1 ? 's' : ''}</span>
-                                                        <span className="flex items-center gap-1"><Activity className="h-3 w-3" /> {product.cte_count} CTEs</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col sm:items-end gap-2">
-                                                    {product.suppliers.length > 0 && (
-                                                        <div className="flex gap-1 flex-wrap justify-start sm:justify-end">
-                                                            {product.suppliers.slice(0, 3).map(s => (
-                                                                <Badge key={s} variant="outline" className="text-[9px] py-0">{s}</Badge>
-                                                            ))}
-                                                            {product.suppliers.length > 3 && (
-                                                                <Badge variant="outline" className="text-[9px] py-0">+{product.suppliers.length - 3}</Badge>
-                                                            )}
-                                                        </div>
+                        {/* Product List — hairline ledger rows. Each row keeps its
+                            role="region" + aria-label, which the authenticated e2e
+                            journey scopes its Open/Edit/Delete clicks to. */}
+                        <Card className="overflow-hidden">
+                            <ul className="divide-y divide-re-border-subtle">
+                                {filtered.map((product) => (
+                                    <li key={product.id}>
+                                        <div
+                                            role="region"
+                                            aria-label={`Product ${product.name}`}
+                                            className="flex flex-col gap-3 px-4 py-4 transition-colors duration-120 hover:bg-re-surface-inset/60 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                                    <span className="text-ui font-medium text-re-text-primary">{product.name}</span>
+                                                    {product.ftl_covered && (
+                                                        <StatusBadge state="compliant" label="FTL" size="sm" />
                                                     )}
-                                                    <div className="flex gap-1.5 flex-wrap">
-                                                        <Button variant="outline" size="sm" className="rounded-xl min-h-[40px]" onClick={() => handleOpenProduct(product)}>
-                                                            <Eye className="h-3.5 w-3.5 mr-1" /> Open
-                                                        </Button>
-                                                        <Button variant="outline" size="sm" className="rounded-xl min-h-[40px]" onClick={() => handleEditProduct(product)}>
-                                                            <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
-                                                        </Button>
-                                                        <Button variant="outline" size="sm" className="rounded-xl min-h-[40px]" onClick={() => handleDeleteProduct(product)} disabled={deletingProduct}>
-                                                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                                                        </Button>
-                                                    </div>
+                                                    <Badge size="sm" className="hidden sm:inline-flex">{product.category}</Badge>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-3 text-small text-re-text-tertiary sm:gap-4">
+                                                    {product.sku && (
+                                                        <span className="flex items-center gap-1">
+                                                            <Barcode className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                            <span className="font-mono">{product.sku}</span>
+                                                        </span>
+                                                    )}
+                                                    <span className="flex items-center gap-1">
+                                                        <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                        {product.suppliers.length} supplier{product.suppliers.length !== 1 ? 's' : ''}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <Activity className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                        {product.cte_count} CTEs
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                </motion.div>
-                            ))}
-                        </div>
+                                            <div className="flex flex-col gap-2 sm:items-end">
+                                                {product.suppliers.length > 0 && (
+                                                    <div className="flex flex-wrap justify-start gap-1 sm:justify-end">
+                                                        {product.suppliers.slice(0, 3).map(s => (
+                                                            <Badge key={s} size="sm">{s}</Badge>
+                                                        ))}
+                                                        {product.suppliers.length > 3 && (
+                                                            <Badge size="sm">+{product.suppliers.length - 3}</Badge>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenProduct(product)} leadingIcon={<Eye strokeWidth={1.75} aria-hidden="true" />}>
+                                                        Open
+                                                    </Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)} leadingIcon={<Edit3 strokeWidth={1.75} aria-hidden="true" />}>
+                                                        Edit
+                                                    </Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handleDeleteProduct(product)} disabled={deletingProduct} leadingIcon={<Trash2 strokeWidth={1.75} aria-hidden="true" />}>
+                                                        Delete
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </Card>
                     </>
                 )}
 
                 {isLoggedIn && !loading && products.length === 0 && !error && (
-                    <div className="text-center py-12 text-muted-foreground">
-                        <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                        <div className="font-medium">No products yet</div>
-                        <div className="text-sm">Add your first FTL product to start tracking</div>
-                    </div>
+                    <EmptyState
+                        icon={Package}
+                        title="No products yet"
+                        description="Add your first FTL product to start tracking"
+                    />
                 )}
             </div>
-        </div>
+        </PageContainer>
     );
 }

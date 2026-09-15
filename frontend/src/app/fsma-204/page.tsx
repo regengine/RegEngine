@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, CheckCircle, Clock, FileSpreadsheet, Shield, Upload, Users, AlertTriangle, Truck, Leaf, Anchor } from "lucide-react";
+import { ArrowRight, CheckCircle, Clock, FileSpreadsheet, Shield, Upload, Users, Truck, Leaf, Anchor } from "lucide-react";
+import { Container } from "@/components/layout/container";
+import { PageHeader } from "@/components/layout/page-header";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Compliance Guide — What Your Farm Needs to Know | RegEngine",
@@ -88,7 +94,7 @@ const STEPS = [
   {
     num: "3",
     title: "RegEngine maps your events",
-    desc: "We map your data to the 7 Critical Tracking Events defined in the FSMA 204 rule — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what\u2019s covered and what\u2019s missing.",
+    desc: "We map your data to the 7 Critical Tracking Events defined in the FSMA 204 rule — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what’s covered and what’s missing.",
     cta: null,
   },
   {
@@ -99,311 +105,279 @@ const STEPS = [
   },
 ];
 
+const KEY_FACTS = [
+  { icon: Clock, text: "24 hours to respond to an FDA request" },
+  { icon: Shield, text: "Applies to all foods on the FTL" },
+  { icon: CheckCircle, text: "Earliest enforcement date under current public posture: July 20, 2028" },
+];
+
+const FAQS = [
+  {
+    q: "I’m a small farm. Does this really apply to me?",
+    a: "If you grow, harvest, cool, pack, or ship any food on the FDA Food Traceability List, yes. There are limited exemptions for farms that sell directly to consumers, but if you sell to a distributor, retailer, or restaurant, you’re likely covered.",
+  },
+  {
+    q: "I don’t have a developer or IT person. Can I still use RegEngine?",
+    a: "Yes. You can upload your data using our CSV or Excel templates — no code required. Download the template, fill in your lot codes and dates, and upload. RegEngine handles the rest.",
+  },
+  {
+    q: "What if I already track this in spreadsheets?",
+    a: "That’s a great start. The challenge is that the FDA requires a specific format and the ability to trace lots forward and backward through your supply chain. RegEngine takes your existing data and organizes it into the structure the FDA expects.",
+  },
+  {
+    q: "How is this different from what Walmart already asks for?",
+    a: "Major retailers have been requiring traceability data ahead of the FDA deadline. If you already supply traceability data to a retailer, you’re partially prepared. RegEngine helps you produce records structured to meet retailer schemas and FDA’s §1.1455 sortable-spreadsheet format from one system.",
+  },
+  {
+    q: "What happens if I’m not compliant by July 2028?",
+    a: "FDA enforcement under §1.1455 focuses on producing the required records on request. Beyond direct enforcement, major retailers may drop non-compliant suppliers — the bigger risk for most farms is losing a key retail customer over missing traceability data.",
+  },
+  {
+    q: "How much does this cost?",
+    a: "We have plans designed for small farms and growers. Start with a free readiness assessment to see where you stand, then we’ll recommend the right plan.",
+  },
+];
+
 /* ------------------------------------------------------------------ */
 /*  PAGE                                                               */
 /* ------------------------------------------------------------------ */
 
 export default function FSMA204BusinessGuidePage() {
   return (
-    <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+    <div className="bg-re-surface-base">
       {/* — HERO — */}
-      <section className="max-w-[960px] mx-auto px-6 pt-20 pb-16">
-        <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-5">
-          FSMA 204 Compliance Guide
-        </p>        <h1 className="font-serif text-[clamp(2rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight mb-6 max-w-[720px]">
-          The FDA food traceability rule — in plain English.
-        </h1>
-        <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-4 max-w-[600px]">
-          If you grow, pack, ship, or sell food on the FDA&apos;s Food Traceability List, FSMA 204 applies to you. Here&apos;s what it requires, whether you&apos;re a 50-acre farm or a national distributor.
-        </p>
-        <p className="text-[0.9rem] text-[var(--re-text-muted)] leading-relaxed mb-8 max-w-[600px]">
-          No technical background needed. No jargon.
-        </p>
+      <Container width="marketing" className="pt-12 sm:pt-16">
+        <PageHeader
+          size="hero"
+          eyebrow="FSMA 204 Compliance Guide"
+          title="The FDA food traceability rule — in plain English."
+          description={
+            <>
+              <span className="block">
+                If you grow, pack, ship, or sell food on the FDA&apos;s Food Traceability List, FSMA 204 applies to you. Here&apos;s what it requires, whether you&apos;re a 50-acre farm or a national distributor.
+              </span>
+              <span className="mt-3 block text-small text-re-text-muted">
+                No technical background needed. No jargon.
+              </span>
+            </>
+          }
+          primaryAction={
+            <Button asChild size="lg">
+              <Link href="/tools/ftl-checker">
+                Check If Your Products Are Covered
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+          }
+          secondaryActions={
+            <Button asChild variant="secondary" size="lg">
+              <Link href="#how-to-comply">How to comply</Link>
+            </Button>
+          }
+          className="border-b-0 pb-0"
+        />
 
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/tools/ftl-checker"
-            className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-lg text-[0.925rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
-          >
-            Check If Your Products Are Covered
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href="#how-to-comply"
-            className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-lg text-[0.925rem] font-medium hover:border-[var(--re-text-muted)] transition-all"
-          >
-            How to comply
-          </Link>
-        </div>
-      </section>
-      {/* — KEY FACTS STRIP — */}
-      <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[960px] mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-6">
-          {[
-            { icon: Clock, text: "24 hours to respond to an FDA request" },
-            { icon: Shield, text: "Applies to all foods on the FTL" },
-            { icon: CheckCircle, text: "Earliest enforcement date under current public posture: July 20, 2028" },
-          ].map((fact) => (
-            <div key={fact.text} className="flex items-center gap-3">
-              <fact.icon className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
-              <span className="text-[0.9rem] text-[var(--re-text-secondary)]">{fact.text}</span>
-            </div>
+        {/* — KEY FACTS STRIP — */}
+        <ul className="mt-10 flex flex-col divide-y divide-re-border-subtle border-y border-re-border-subtle sm:flex-row sm:divide-x sm:divide-y-0">
+          {KEY_FACTS.map((fact) => (
+            <li key={fact.text} className="flex flex-1 items-center gap-3 py-4 sm:px-5 sm:first:pl-0 sm:last:pr-0">
+              <fact.icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <span className="text-ui text-re-text-secondary">{fact.text}</span>
+            </li>
           ))}
-        </div>
-      </div>
+        </ul>
+      </Container>
 
       {/* — WHAT IS FSMA 204 — */}
-      <section className="max-w-[960px] mx-auto px-6 py-20">
-        <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-6">
-          What is FSMA 204?
-        </h2>
-        <div className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed space-y-4 max-w-[680px]">
+      <Section width="marketing" flush title="What is FSMA 204?">
+        <div className="max-w-[68ch] space-y-4 text-body text-re-text-secondary">
           <p>
             The FDA&apos;s Food Safety Modernization Act Section 204 — commonly called &ldquo;FSMA 204&rdquo; or the &ldquo;Food Traceability Rule&rdquo; — requires anyone who grows, receives, ships, or transforms certain high-risk foods to keep detailed traceability records.
-          </p>          <p>
-            The goal is simple: when a foodborne illness outbreak happens, FDA can request your traceability records and you must produce a sortable electronic spreadsheet within <strong className="text-[var(--re-text-primary)]">24 hours</strong>. Before this rule, that process could take weeks.
           </p>
           <p>
-            The rule was finalized in 2022. The original compliance date was January 20, 2026. <strong className="text-[var(--re-text-primary)]">Congress directed FDA not to enforce the rule before July 20, 2028.</strong> The requirements themselves have not changed.
+            The goal is simple: when a foodborne illness outbreak happens, FDA can request your traceability records and you must produce a sortable electronic spreadsheet within <strong className="font-medium text-re-text-primary">24 hours</strong>. Before this rule, that process could take weeks.
+          </p>
+          <p>
+            The rule was finalized in 2022. The original compliance date was January 20, 2026. <strong className="font-medium text-re-text-primary">Congress directed FDA not to enforce the rule before July 20, 2028.</strong> The requirements themselves have not changed.
           </p>
         </div>
 
         {/* Enforcement callout */}
-        <div className="mt-8 p-5 rounded-xl border border-[rgba(234,179,8,0.25)] bg-[rgba(234,179,8,0.05)] max-w-[680px]">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-re-warning flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-[var(--re-text-primary)] mb-1">The deadline moved — the rule didn&apos;t.</p>
-              <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                Congress directed FDA not to enforce before July 2028, but major retailers have published supplier traceability programs that pre-date the federal enforcement date. If you sell to a major retailer, check your supplier portal — your effective deadline may already have passed.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+        <Callout tone="warning" className="mt-8 max-w-[68ch]">
+          <p className="font-medium text-re-text-primary">The deadline moved — the rule didn&apos;t.</p>
+          <p className="mt-1">
+            Congress directed FDA not to enforce before July 2028, but major retailers have published supplier traceability programs that pre-date the federal enforcement date. If you sell to a major retailer, check your supplier portal — your effective deadline may already have passed.
+          </p>
+        </Callout>
+      </Section>
+
       {/* — ARE YOUR PRODUCTS COVERED? — */}
-      <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-20 px-6">
-        <div className="max-w-[960px] mx-auto">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-            The Food Traceability List (FTL)
-          </p>
-          <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-            Are your products covered?
-          </h2>
-          <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
-            FDA&apos;s Food Traceability List identifies covered foods and certain foods containing listed ingredients in the same form. Examples are below; verify each product against FDA&apos;s current FTL and applicable exemptions.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-            {FTL_EXAMPLES.map((item) => (
-              <div
-                key={item.category}
-                className="p-4 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]"
-              >
-                <p className="font-medium text-[var(--re-text-primary)] text-[0.95rem] mb-1">{item.category}</p>
-                <p className="text-[0.82rem] text-[var(--re-text-muted)] leading-relaxed">{item.examples}</p>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-[0.9rem] text-[var(--re-text-muted)] mb-4">
-            Not sure if your specific products are on the list?
-          </p>          <Link
-            href="/tools/ftl-checker"
-            className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2.5 rounded-lg text-[0.9rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all"
-          >
-            Free FTL Checker — takes 30 seconds
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+      <Section
+        width="marketing"
+        eyebrow="The Food Traceability List (FTL)"
+        title="Are your products covered?"
+        description="FDA&apos;s Food Traceability List identifies covered foods and certain foods containing listed ingredients in the same form. Examples are below; verify each product against FDA&apos;s current FTL and applicable exemptions."
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {FTL_EXAMPLES.map((item) => (
+            <Card key={item.category} variant="inset" padding="compact">
+              <p className="text-subheading text-re-text-primary">{item.category}</p>
+              <p className="mt-1 text-ui text-re-text-tertiary">{item.examples}</p>
+            </Card>
+          ))}
         </div>
-      </section>
+
+        <p className="mt-8 text-ui text-re-text-muted">
+          Not sure if your specific products are on the list?
+        </p>
+        <div className="mt-4">
+          <Button asChild size="lg">
+            <Link href="/tools/ftl-checker">
+              Free FTL Checker — takes 30 seconds
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+      </Section>
 
       {/* — WHAT YOU HAVE TO RECORD — */}
-      <section className="max-w-[960px] mx-auto px-6 py-20">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-          What the FDA requires
-        </p>
-        <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-          Seven events you need to track.
-        </h2>
-        <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-10 max-w-[600px]">
-          FSMA 204 calls these &ldquo;Critical Tracking Events&rdquo; (CTEs). Each one has specific data points (called KDEs) you must record. Here&apos;s what they mean in practice:
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <Section
+        width="marketing"
+        eyebrow="What the FDA requires"
+        title="Seven events you need to track."
+        description={<>FSMA 204 calls these &ldquo;Critical Tracking Events&rdquo; (CTEs). Each one has specific data points (called KDEs) you must record. Here&apos;s what they mean in practice:</>}
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {CTES_PLAIN.map((cte) => (
-            <div
-              key={cte.name}
-              className="p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]"
-            >              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-lg bg-[var(--re-brand-muted)] flex items-center justify-center">
-                  <cte.icon className="h-4.5 w-4.5 text-[var(--re-brand)]" />
-                </div>
-                <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)]">{cte.name}</h3>
+            <Card key={cte.name} padding="compact">
+              <div className="flex items-center gap-2.5">
+                <cte.icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <h3 className="text-subheading text-re-text-primary">{cte.name}</h3>
               </div>
-              <p className="text-[0.82rem] text-[var(--re-brand)] font-medium mb-1.5">{cte.who}</p>
-              <p className="text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">{cte.what}</p>
-            </div>
+              <p className="mt-2 font-mono text-label uppercase text-re-text-muted">{cte.who}</p>
+              <p className="mt-2 text-ui text-re-text-secondary">{cte.what}</p>
+            </Card>
           ))}
         </div>
 
-        <div className="mt-8 p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] max-w-[680px]">
-          <p className="font-medium text-[var(--re-text-primary)] mb-2">Which events apply to you?</p>
-          <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-            Most farms need to record <strong className="text-[var(--re-text-primary)]">harvesting, cooling, packing, and shipping</strong>. Distributors typically handle receiving and shipping. Processors handle receiving and transformation. Importers must also record <strong className="text-[var(--re-text-primary)]">first land-based receiving</strong>. You only record the events that happen at your facility.
+        <Card padding="compact" className="mt-8 max-w-[68ch]">
+          <p className="text-subheading text-re-text-primary">Which events apply to you?</p>
+          <p className="mt-2 text-ui text-re-text-secondary">
+            Most farms need to record <strong className="font-medium text-re-text-primary">harvesting, cooling, packing, and shipping</strong>. Distributors typically handle receiving and shipping. Processors handle receiving and transformation. Importers must also record <strong className="font-medium text-re-text-primary">first land-based receiving</strong>. You only record the events that happen at your facility.
           </p>
-        </div>
-      </section>
+        </Card>
+      </Section>
+
       {/* — THE 24-HOUR RULE — */}
-      <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-20 px-6">
-        <div className="max-w-[960px] mx-auto">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-danger)] uppercase tracking-[0.08em] mb-4">
-            The 24-hour rule
-          </p>
-          <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-            When the FDA calls, you have one day.
-          </h2>
-          <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
-            During a recall or outbreak investigation, the FDA can request your traceability records. You must provide them in an <strong className="text-[var(--re-text-primary)]">electronic, sortable format</strong> (like a spreadsheet) within <strong className="text-[var(--re-text-primary)]">24 hours</strong>.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-[680px]">
-            <div className="p-5 rounded-xl border border-[rgba(220,38,38,0.2)] bg-[rgba(220,38,38,0.03)]">
-              <p className="font-mono text-[0.7rem] font-medium text-[var(--re-danger)] uppercase tracking-[0.06em] mb-3">Without a system</p>
-              <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                Dig through paper records, spreadsheets across multiple computers, call suppliers for missing info. Typical response: 3-5 days, incomplete.
-              </p>
-            </div>
-            <div className="p-5 rounded-xl border border-[rgba(16,163,74,0.2)] bg-[rgba(16,163,74,0.03)]">
-              <p className="font-mono text-[0.7rem] font-medium text-[var(--re-brand-dark)] uppercase tracking-[0.06em] mb-3">With RegEngine</p>
-              <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                Click &ldquo;Export&rdquo; in your dashboard. RegEngine produces a sortable electronic spreadsheet structured to FDA&apos;s §1.1455 format, populated from your uploaded lot codes, dates, and locations. Done in minutes.
-              </p>
-            </div>
-          </div>
+      <Section
+        width="marketing"
+        eyebrow="The 24-hour rule"
+        title="When the FDA calls, you have one day."
+        description={<>During a recall or outbreak investigation, the FDA can request your traceability records. You must provide them in an <strong className="font-medium text-re-text-primary">electronic, sortable format</strong> (like a spreadsheet) within <strong className="font-medium text-re-text-primary">24 hours</strong>.</>}
+      >
+        <div className="grid max-w-[68ch] grid-cols-1 gap-4 md:grid-cols-2">
+          <Card variant="inset" padding="compact">
+            <p className="font-mono text-label uppercase text-re-text-muted">Without a system</p>
+            <p className="mt-3 text-ui text-re-text-secondary">
+              Dig through paper records, spreadsheets across multiple computers, call suppliers for missing info. Typical response: 3-5 days, incomplete.
+            </p>
+          </Card>
+          <Card padding="compact">
+            <p className="font-mono text-label uppercase text-re-text-muted">With RegEngine</p>
+            <p className="mt-3 text-ui text-re-text-secondary">
+              Click &ldquo;Export&rdquo; in your dashboard. RegEngine produces a sortable electronic spreadsheet structured to FDA&apos;s §1.1455 format, populated from your uploaded lot codes, dates, and locations. Done in minutes.
+            </p>
+          </Card>
         </div>
-      </section>
+      </Section>
+
       {/* — HOW TO COMPLY — */}
-      <section id="how-to-comply" className="max-w-[960px] mx-auto px-6 py-20">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-          Getting started
-        </p>
-        <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-          How RegEngine supports your FSMA 204 program.
-        </h2>
-        <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-10 max-w-[600px]">
-          No IT department required. No six-figure software contract. If you can fill out a spreadsheet, you can use RegEngine.
-        </p>
-
-        <div className="space-y-4">
+      <Section
+        id="how-to-comply"
+        width="marketing"
+        eyebrow="Getting started"
+        title="How RegEngine supports your FSMA 204 program."
+        description="No IT department required. No six-figure software contract. If you can fill out a spreadsheet, you can use RegEngine."
+      >
+        <ol className="space-y-4">
           {STEPS.map((step) => (
-            <div
-              key={step.num}
-              className="flex gap-5 p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]"
-            >
-              <div className="w-10 h-10 rounded-full bg-[var(--re-brand-muted)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="font-serif text-[1.1rem] font-bold text-[var(--re-brand)]">{step.num}</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-serif text-[1.1rem] font-medium text-[var(--re-text-primary)] mb-2">{step.title}</h3>
-                <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">{step.desc}</p>
-                {step.cta && (
-                  <Link
-                    href={step.cta.href}
-                    className="inline-flex items-center gap-1.5 text-[0.85rem] font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors mt-3"
-                  >                    {step.cta.label}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                )}
-              </div>
-            </div>
+            <li key={step.num}>
+              <Card padding="compact" className="flex gap-5">
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-re-border font-mono text-ui tabular-nums text-re-text-muted"
+                >
+                  {step.num}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-subheading text-re-text-primary">{step.title}</h3>
+                  <p className="mt-2 text-ui text-re-text-secondary">{step.desc}</p>
+                  {step.cta && (
+                    <Link
+                      href={step.cta.href}
+                      className="mt-3 inline-flex items-center gap-1.5 text-ui font-medium text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                    >
+                      {step.cta.label}
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                    </Link>
+                  )}
+                </div>
+              </Card>
+            </li>
           ))}
-        </div>
-      </section>
+        </ol>
+      </Section>
 
       {/* — FAQ — */}
-      <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-20 px-6">
-        <div className="max-w-[960px] mx-auto">
-          <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-10">
-            Common questions
-          </h2>
-
-          <div className="space-y-8 max-w-[680px]">
-            {[
-              {
-                q: "I\u2019m a small farm. Does this really apply to me?",
-                a: "If you grow, harvest, cool, pack, or ship any food on the FDA Food Traceability List, yes. There are limited exemptions for farms that sell directly to consumers, but if you sell to a distributor, retailer, or restaurant, you\u2019re likely covered.",
-              },
-              {
-                q: "I don\u2019t have a developer or IT person. Can I still use RegEngine?",
-                a: "Yes. You can upload your data using our CSV or Excel templates \u2014 no code required. Download the template, fill in your lot codes and dates, and upload. RegEngine handles the rest.",
-              },
-              {
-                q: "What if I already track this in spreadsheets?",
-                a: "That\u2019s a great start. The challenge is that the FDA requires a specific format and the ability to trace lots forward and backward through your supply chain. RegEngine takes your existing data and organizes it into the structure the FDA expects.",
-              },              {
-                q: "How is this different from what Walmart already asks for?",
-                a: "Major retailers have been requiring traceability data ahead of the FDA deadline. If you already supply traceability data to a retailer, you\u2019re partially prepared. RegEngine helps you produce records structured to meet retailer schemas and FDA\u2019s \u00a71.1455 sortable-spreadsheet format from one system.",
-              },
-              {
-                q: "What happens if I\u2019m not compliant by July 2028?",
-                a: "FDA enforcement under §1.1455 focuses on producing the required records on request. Beyond direct enforcement, major retailers may drop non-compliant suppliers — the bigger risk for most farms is losing a key retail customer over missing traceability data.",
-              },
-              {
-                q: "How much does this cost?",
-                a: "We have plans designed for small farms and growers. Start with a free readiness assessment to see where you stand, then we\u2019ll recommend the right plan.",
-              },
-            ].map((faq) => (
-              <div key={faq.q}>
-                <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-2">{faq.q}</h3>
-                <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">{faq.a}</p>
-              </div>
-            ))}
-          </div>
+      <Section width="marketing" title="Common questions">
+        <div className="max-w-[68ch] space-y-8">
+          {FAQS.map((faq) => (
+            <div key={faq.q}>
+              <h3 className="text-subheading text-re-text-primary">{faq.q}</h3>
+              <p className="mt-2 text-ui text-re-text-secondary">{faq.a}</p>
+            </div>
+          ))}
         </div>
-      </section>
+      </Section>
+
       {/* — FINAL CTA — */}
-      <section className="bg-[var(--re-text-primary)] text-white py-20 px-6">
-        <div className="max-w-[960px] mx-auto text-center">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
+      <Section width="marketing" tone="inset">
+        <div className="mx-auto max-w-[640px] text-center">
+          <p className="font-mono text-label uppercase text-re-text-muted">
             Earliest FSMA 204 Enforcement Date: July 20, 2028
           </p>
-          <h2 className="font-serif text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
+          <h2 className="mt-4 font-display text-heading-lg text-re-text-primary">
             Don&apos;t wait for the deadline.
           </h2>
-          <p className="text-[1.05rem] text-[var(--re-text-muted)] max-w-[500px] mx-auto leading-relaxed mb-8">
+          <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
             Start with a free tool. See where you stand. Get compliant on your schedule — not the FDA&apos;s.
           </p>
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Link
-              href="/tools/ftl-checker"
-              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
-            >
-              Free FTL Checker
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/retailer-readiness"
-              className="inline-flex items-center gap-2 border border-[var(--re-border-subtle)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-lg text-[0.95rem] font-medium hover:border-[var(--re-border-strong)] transition-all"
-            >
-              Retailer Readiness Assessment
-            </Link>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg">
+              <Link href="/tools/ftl-checker">
+                Free FTL Checker
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/retailer-readiness">Retailer Readiness Assessment</Link>
+            </Button>
           </div>
 
-          <p className="text-[0.82rem] text-[var(--re-text-disabled)] mt-8">
+          <p className="mt-8 text-small text-re-text-muted">
             Have a developer?{" "}
-            <Link href="/docs/fsma-204" className="text-[var(--re-brand)] hover:underline">
+            <Link href="/docs/fsma-204" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
               Read the integration guide →
             </Link>
           </p>
-          <p className="text-[0.82rem] text-[var(--re-text-disabled)] mt-3">
+          <p className="mt-3 text-small text-re-text-muted">
             Try it:{" "}
-            <Link href="/proof" className="text-[var(--re-brand)] hover:underline">/proof</Link>
+            <Link href="/proof" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/proof</Link>
             {" "}→{" "}
-            <Link href="/verify" className="text-[var(--re-brand)] hover:underline">/verify</Link>.
+            <Link href="/verify" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/verify</Link>.
           </p>
         </div>
-      </section>
+      </Section>
     </div>
   );
 }

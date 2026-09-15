@@ -9,6 +9,11 @@ import {
   ChevronDown, ChevronUp, Download, Sparkles, ArrowRight,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatTile } from '@/components/ui/stat-tile';
 import { generateComplianceReport } from '@/components/marketing/sandbox-grid/SandboxPdfReport';
 
 // ---------------------------------------------------------------------------
@@ -91,40 +96,35 @@ export function SandboxResultView({
   }
 
   return (
-    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center justify-between">
-        <span className="text-[0.8rem] font-semibold text-[var(--re-text-primary)]">
-          FSMA 204 Sandbox Diagnosis
-        </span>
-        <button
+    <Card>
+      <CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <CardTitle>FSMA 204 Sandbox Diagnosis</CardTitle>
+        <Button
+          className="w-fit shrink-0"
+          variant="secondary"
+          size="sm"
           onClick={() => generateComplianceReport(result)}
-          className="inline-flex items-center gap-2 bg-white border border-re-border text-re-text-disabled px-3 py-1.5 rounded-lg text-[0.7rem] font-medium transition-all hover:bg-re-surface-card cursor-pointer"
+          leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
         >
-          <Download className="w-3.5 h-3.5" />
           Download PDF
-        </button>
-      </div>
+        </Button>
+      </CardHeader>
 
-      <div className="p-4 space-y-4">
+      <CardContent className="space-y-4">
         {/* Summary Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Events', value: result.total_events, color: 'text-[var(--re-text-primary)]' },
-            { label: 'Passed checks', value: result.compliant_events, color: 'text-re-brand' },
-            { label: 'Need work', value: result.non_compliant_events, color: result.non_compliant_events > 0 ? 'text-re-danger' : 'text-[var(--re-text-primary)]' },
-            { label: 'Rule issues', value: result.total_rule_failures, color: result.total_rule_failures > 0 ? 'text-re-warning' : 'text-[var(--re-text-primary)]' },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-[var(--re-surface-elevated)] rounded-lg p-3 text-center">
-              <div className={`text-xl font-bold font-mono ${stat.color}`}>{stat.value}</div>
-              <div className="text-[0.65rem] text-[var(--re-text-muted)]">{stat.label}</div>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Events" value={result.total_events} />
+          <StatTile label="Passed checks" value={result.compliant_events} />
+          <StatTile label="Need work" value={result.non_compliant_events} />
+          <StatTile label="Rule issues" value={result.total_rule_failures} />
         </div>
 
         {/* Normalization Diff */}
         {result.normalizations && result.normalizations.length > 0 && (
-          <div className="rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 overflow-hidden">
+          <div className="overflow-hidden rounded-lg border border-re-border-subtle bg-re-surface-inset">
             <button
+              type="button"
+              aria-expanded={expandedEvents.has(-1)}
               onClick={() => {
                 setExpandedEvents((prev) => {
                   const next = new Set(prev);
@@ -133,46 +133,46 @@ export function SandboxResultView({
                   return next;
                 });
               }}
-              className="w-full px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--re-brand)]/10 transition-colors"
+              className="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left transition-colors duration-120 hover:bg-re-surface-card motion-reduce:transition-none"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[var(--re-brand)]" />
-                <span className="text-[0.8rem] font-semibold text-[var(--re-brand)]">
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <span className="text-ui font-medium text-re-text-primary">
                   What RegEngine Normalized
                 </span>
-                <span className="text-[0.65rem] px-1.5 py-0.5 rounded-full bg-[var(--re-brand)]/15 text-[var(--re-brand)] font-mono">
+                <Badge size="sm" mono>
                   {result.normalizations.length}
-                </span>
-              </div>
+                </Badge>
+              </span>
               {expandedEvents.has(-1)
-                ? <ChevronUp className="w-4 h-4 text-[var(--re-brand)]" />
-                : <ChevronDown className="w-4 h-4 text-[var(--re-brand)]" />}
+                ? <ChevronUp className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                : <ChevronDown className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />}
             </button>
 
             {expandedEvents.has(-1) && (
-              <div className="border-t border-[var(--re-brand)]/10 px-4 py-3">
+              <div className="border-t border-re-border-subtle px-4 py-3">
                 {(() => {
                   const grouped: Record<string, NormalizationAction[]> = {};
                   for (const n of result.normalizations!) {
                     const label = n.action_type === 'header_alias' ? 'Headers Mapped'
                       : n.action_type === 'uom_normalize' ? 'Units Standardized'
-                      : n.action_type === 'cte_type_normalize' ? 'CTE Types Resolved'
-                      : 'Other';
+                        : n.action_type === 'cte_type_normalize' ? 'CTE Types Resolved'
+                          : 'Other';
                     (grouped[label] ??= []).push(n);
                   }
                   return Object.entries(grouped).map(([label, items]) => (
                     <div key={label} className="mb-3 last:mb-0">
-                      <div className="text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-wider mb-1.5">
+                      <div className="mb-1.5 text-label text-re-text-muted">
                         {label}
                       </div>
                       <div className="space-y-1">
                         {items.map((n, i) => (
-                          <div key={i} className="flex items-center gap-2 text-[0.7rem]">
-                            <code className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 font-mono text-[0.65rem]">
+                          <div key={i} className="flex items-center gap-2">
+                            <code className="rounded-sm border border-re-border-subtle bg-re-surface-card px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-tertiary">
                               {n.original}
                             </code>
-                            <ArrowRight className="w-3 h-3 text-[var(--re-text-disabled)]" />
-                            <code className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 font-mono text-[0.65rem]">
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                            <code className="rounded-sm border border-re-border-subtle bg-re-surface-card px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">
                               {n.normalized}
                             </code>
                           </div>
@@ -188,44 +188,35 @@ export function SandboxResultView({
 
         {/* Status Banner */}
         {result.submission_blocked && (
-          <div className="rounded-lg border-2 border-re-danger/30 bg-re-danger/10 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <ShieldAlert className="w-5 h-5 text-re-danger" />
-              <span className="text-[0.8rem] font-semibold text-re-danger">
-                TEST RUN NEEDS CORRECTION — {result.blocking_reasons.length} blocker{result.blocking_reasons.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <ul className="space-y-1">
+          <Callout tone="danger" role="alert" icon={ShieldAlert}>
+            <p className="font-medium text-re-text-primary">
+              TEST RUN NEEDS CORRECTION — {result.blocking_reasons.length} blocker{result.blocking_reasons.length !== 1 ? 's' : ''}
+            </p>
+            <ul className="mt-2 space-y-1">
               {result.blocking_reasons.slice(0, 10).map((reason, i) => (
-                <li key={i} className="text-[0.65rem] text-re-danger flex items-start gap-1.5">
-                  <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <li key={i} className="flex items-start gap-1.5 text-small">
+                  <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
                   {reason}
                 </li>
               ))}
             </ul>
-          </div>
+          </Callout>
         )}
 
         {!result.submission_blocked && result.non_compliant_events === 0 && (
-          <div className="rounded-lg border-2 border-re-brand/30 bg-re-brand-muted p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-re-brand" />
-              <span className="text-[0.8rem] font-semibold text-re-brand">
-                SANDBOX CHECKS CLEAR — ready to save as a test run
-              </span>
-            </div>
-          </div>
+          <Callout tone="success">
+            <p className="font-medium text-re-text-primary">
+              SANDBOX CHECKS CLEAR — ready to save as a test run
+            </p>
+          </Callout>
         )}
 
         {!result.submission_blocked && result.non_compliant_events > 0 && (
-          <div className="rounded-lg border-2 border-re-warning/30 bg-re-warning/10 p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-re-warning" />
-              <span className="text-[0.8rem] font-semibold text-re-warning">
-                {result.non_compliant_events} event{result.non_compliant_events !== 1 ? 's' : ''} need attention
-              </span>
-            </div>
-          </div>
+          <Callout tone="warning">
+            <p className="font-medium text-re-text-primary">
+              {result.non_compliant_events} event{result.non_compliant_events !== 1 ? 's' : ''} need attention
+            </p>
+          </Callout>
         )}
 
         {/* Per-Event Results */}
@@ -233,74 +224,74 @@ export function SandboxResultView({
           {result.events.map((ev) => (
             <div
               key={ev.event_index}
-              className={`rounded-lg border ${ev.compliant ? 'border-re-brand/20' : 'border-re-danger/20'}`}
+              className="rounded-lg border border-re-border"
             >
               <button
+                type="button"
+                aria-expanded={expandedEvents.has(ev.event_index)}
                 onClick={() => toggleEvent(ev.event_index)}
-                className="w-full px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--re-surface-elevated)]/50 transition-colors"
+                className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
               >
-                <div className="flex items-center gap-2">
+                <span className="flex min-w-0 items-center gap-2">
                   {ev.compliant
-                    ? <CheckCircle2 className="w-4 h-4 text-re-brand" />
-                    : <XCircle className="w-4 h-4 text-re-danger" />}
-                  <span className="font-mono text-[0.75rem] font-medium text-[var(--re-text-primary)]">
+                    ? <CheckCircle2 className="h-4 w-4 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                    : <XCircle className="h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />}
+                  <span className="truncate font-mono text-[0.8125rem] font-medium text-re-text-primary">
                     {ev.traceability_lot_code}
                   </span>
-                  <span className="text-[0.65rem] text-[var(--re-text-muted)] bg-[var(--re-surface-elevated)] px-2 py-0.5 rounded">
+                  <Badge size="sm" mono className="shrink-0">
                     {ev.cte_type}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[0.6rem] text-[var(--re-text-disabled)]">
+                  </Badge>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-small tabular-nums text-re-text-tertiary">
                     {ev.rules_passed}/{ev.rules_evaluated} passed
                   </span>
                   {expandedEvents.has(ev.event_index)
-                    ? <ChevronUp className="w-4 h-4 text-[var(--re-text-disabled)]" />
-                    : <ChevronDown className="w-4 h-4 text-[var(--re-text-disabled)]" />}
-                </div>
+                    ? <ChevronUp className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                    : <ChevronDown className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />}
+                </span>
               </button>
 
               {expandedEvents.has(ev.event_index) && (
-                <div className="border-t border-[var(--re-surface-border)] px-4 py-3 space-y-2">
+                <div className="space-y-3 border-t border-re-border-subtle px-4 py-3">
                   {ev.kde_errors.length > 0 && (
                     <div className="space-y-1">
-                      <span className="text-[0.65rem] font-medium text-re-warning">KDE Validation Errors:</span>
+                      <span className="text-ui font-medium text-re-text-primary">KDE Validation Errors:</span>
                       {ev.kde_errors.map((err, j) => (
-                        <div key={j} className="text-[0.65rem] text-re-warning flex items-start gap-1.5 ml-2">
-                          <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <div key={j} className="ml-2 flex items-start gap-1.5 text-small text-re-text-secondary">
+                          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                           {err}
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {ev.all_results
                       .filter((r) => r.result === 'fail' || r.result === 'warn')
                       .map((r, j) => (
                         <div
                           key={j}
-                          className={`flex items-start gap-2 text-[0.65rem] ${
-                            r.result === 'fail' ? 'text-re-danger' : 'text-re-warning'
-                          }`}
+                          className="flex items-start gap-2 text-small text-re-text-secondary"
                         >
                           {r.result === 'fail'
-                            ? <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                            : <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
+                            ? <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                            : <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />}
                           <div>
-                            <span className="font-medium">{r.rule_title}</span>
+                            <span className="font-medium text-re-text-primary">{r.rule_title}</span>
                             {r.citation && (
-                              <span className="text-[var(--re-text-disabled)] ml-1">({r.citation})</span>
+                              <span className="ml-1 font-mono text-re-text-tertiary">({r.citation})</span>
                             )}
                             {r.why_failed && (
-                              <div className="text-[0.6rem] opacity-80 mt-0.5">{r.why_failed}</div>
+                              <div className="mt-0.5 text-re-text-tertiary">{r.why_failed}</div>
                             )}
                           </div>
                         </div>
                       ))}
                     {ev.all_results.filter((r) => r.result === 'pass').length > 0 && (
-                      <div className="text-[0.65rem] text-re-brand flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
+                      <div className="flex items-center gap-1.5 text-small text-re-text-secondary">
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
                         {ev.all_results.filter((r) => r.result === 'pass').length} rules passed
                       </div>
                     )}
@@ -312,7 +303,7 @@ export function SandboxResultView({
         </div>
 
         {footer}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

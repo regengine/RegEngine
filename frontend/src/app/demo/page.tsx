@@ -2,11 +2,16 @@
 
 import Link from 'next/link';
 import {
-  Shield, ShieldCheck, ShieldAlert, TrendingUp, AlertTriangle,
-  CheckCircle2, XCircle, Clock, Truck, Leaf, Package, Anchor,
+  ShieldAlert, Clock, Truck, Leaf, Package, Anchor,
   Building2, ArrowRight, BarChart3, Users, FileText, Zap,
 } from 'lucide-react';
 import { DemoBanner } from '@/components/control-plane/demo-banner';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 
 // ---------------------------------------------------------------------------
 // Synthetic demo data — what a mid-market produce distributor would see
@@ -60,218 +65,166 @@ const CTE_BREAKDOWN = [
 // Component
 // ---------------------------------------------------------------------------
 
+const SUPPLIER_STATE: Record<string, ComplianceState> = {
+  excellent: 'compliant',
+  good: 'compliant',
+  needs_attention: 'at-risk',
+  at_risk: 'non-compliant',
+};
+
+/** Coverage bar tone. The number beside it carries the same meaning in text. */
+function coverageTone(pct: number) {
+  if (pct >= 95) return 'bg-re-success';
+  if (pct >= 90) return 'bg-re-warning';
+  return 'bg-re-danger';
+}
+
 export default function DemoPage() {
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 text-white">
+    <Container width="app" className="py-8">
       <div className="mb-6">
         <DemoBanner visible={true} />
       </div>
       {/* Page header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-2">Compliance Dashboard</h1>
-        <p className="text-[var(--re-text-muted)] text-sm">
-          DEMO WORKSPACE &mdash; FreshCo Distribution is a fictional distributor. Numbers are illustrative.
-        </p>
-      </div>
+      <PageHeader
+        title="Compliance Dashboard"
+        description={
+          <>
+            DEMO WORKSPACE &mdash; FreshCo Distribution is a fictional distributor. Numbers are illustrative.
+          </>
+        }
+      />
 
       {/* Top stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          label="FSMA Readiness Score"
-          value={`${COMPLIANCE_SCORE}%`}
-          icon={<Shield className="w-5 h-5" />}
-          color="text-[var(--re-brand)]"
-          bg="bg-[var(--re-brand)]/10"
-        />
-        <StatCard
-          label="Total Events"
-          value={TOTAL_EVENTS.toLocaleString()}
-          icon={<BarChart3 className="w-5 h-5" />}
-          color="text-blue-400"
-          bg="bg-blue-500/10"
-        />
-        <StatCard
-          label="Active Suppliers"
-          value={String(SUPPLIERS)}
-          icon={<Users className="w-5 h-5" />}
-          color="text-purple-400"
-          bg="bg-purple-500/10"
-        />
-        <StatCard
-          label="Open Violations"
-          value={String(NON_COMPLIANT_EVENTS)}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          color="text-amber-400"
-          bg="bg-amber-500/10"
-        />
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatTile label="FSMA Readiness Score" value={`${COMPLIANCE_SCORE}%`} />
+        <StatTile label="Total Events" value={TOTAL_EVENTS.toLocaleString()} />
+        <StatTile label="Active Suppliers" value={String(SUPPLIERS)} />
+        <StatTile label="Open Violations" value={String(NON_COMPLIANT_EVENTS)} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* CTE Breakdown */}
-        <div className="lg:col-span-2 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-[var(--re-brand)]" />
+        <Card padding="spacious" className="lg:col-span-2">
+          <h2 className="mb-4 flex items-center gap-2 text-subheading text-re-text-primary">
+            <BarChart3 className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             Compliance by CTE Type
           </h2>
-          <div className="space-y-3">
+          <ul className="space-y-3">
             {CTE_BREAKDOWN.map((cte) => (
-              <div key={cte.cte} className="flex items-center gap-3">
-                <cte.icon className="w-4 h-4 text-[var(--re-text-muted)] flex-shrink-0" />
-                <span className="text-xs w-28 text-[var(--re-text-secondary)]">{cte.cte}</span>
-                <div className="flex-1 bg-[var(--re-surface-base)] rounded-full h-2 overflow-hidden">
+              <li key={cte.cte} className="flex items-center gap-3">
+                <cte.icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <span className="w-28 shrink-0 text-ui text-re-text-secondary">{cte.cte}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-re-surface-inset">
                   <div
-                    className={`h-full rounded-full ${
-                      cte.pct >= 95 ? 'bg-green-500' :
-                      cte.pct >= 90 ? 'bg-amber-500' :
-                      'bg-red-500'
-                    }`}
+                    className={`h-full rounded-full ${coverageTone(cte.pct)}`}
                     style={{ width: `${cte.pct}%` }}
                   />
                 </div>
-                <span className={`text-xs font-mono w-12 text-right ${
-                  cte.pct >= 95 ? 'text-green-400' :
-                  cte.pct >= 90 ? 'text-amber-400' :
-                  'text-red-400'
-                }`}>
+                <span className="w-12 shrink-0 text-right font-mono text-ui tabular-nums text-re-text-secondary">
                   {cte.pct}%
                 </span>
-                <span className="text-[0.6rem] text-[var(--re-text-disabled)] w-16 text-right">
+                <span className="hidden w-24 shrink-0 text-right font-mono text-label tabular-nums text-re-text-muted sm:block">
                   {cte.count.toLocaleString()} events
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </Card>
 
         {/* Top Rule Violations */}
-        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-red-400" />
+        <Card padding="spacious">
+          <h2 className="mb-4 flex items-center gap-2 text-subheading text-re-text-primary">
+            <ShieldAlert className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             Top Rule Violations
           </h2>
-          <div className="space-y-2.5">
+          <ul className="space-y-3">
             {RULE_VIOLATIONS.map((v, i) => (
-              <div key={i} className="flex items-start gap-2">
-                {v.severity === 'critical'
-                  ? <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />
-                  : <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <div className="text-[0.7rem] text-[var(--re-text-primary)] leading-tight">{v.rule}</div>
-                  <div className="text-[0.6rem] text-[var(--re-text-disabled)]">{v.count} violations</div>
-                </div>
-              </div>
+              <li key={i} className="flex flex-col gap-1.5">
+                <span className="text-ui text-re-text-primary">{v.rule}</span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <StatusBadge
+                    state={v.severity === 'critical' ? 'non-compliant' : 'at-risk'}
+                    size="sm"
+                  />
+                  <span className="font-mono text-label tabular-nums text-re-text-muted">{v.count} violations</span>
+                </span>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Recent Events */}
-        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-[var(--re-brand)]" />
+        <Card padding="spacious">
+          <h2 className="mb-4 flex items-center gap-2 text-subheading text-re-text-primary">
+            <FileText className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             Recent CTE Events
           </h2>
-          <div className="space-y-2">
+          <ul className="divide-y divide-re-border-subtle">
             {RECENT_EVENTS.map((ev, i) => (
-              <div key={i} className="flex items-center gap-3 py-1.5 border-b border-[var(--re-surface-border)] last:border-0">
-                {ev.status === 'compliant'
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                  : <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[0.7rem] font-mono text-[var(--re-text-primary)]">{ev.tlc}</span>
-                    <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-[var(--re-surface-elevated)] text-[var(--re-text-disabled)]">
+              <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
+                <StatusBadge
+                  state={ev.status === 'compliant' ? 'compliant' : 'non-compliant'}
+                  size="sm"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[0.8125rem] text-re-text-primary">{ev.tlc}</span>
+                    <span className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-label text-re-text-muted">
                       {ev.cte}
                     </span>
                   </div>
-                  <div className="text-[0.6rem] text-[var(--re-text-muted)]">{ev.supplier}</div>
+                  <div className="text-ui text-re-text-tertiary">{ev.supplier}</div>
                 </div>
-                <span className="text-[0.6rem] text-[var(--re-text-disabled)]">{ev.time}</span>
-              </div>
+                <span className="font-mono text-label tabular-nums text-re-text-muted">{ev.time}</span>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </Card>
 
         {/* Supplier Compliance Grid */}
-        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <Users className="w-4 h-4 text-purple-400" />
+        <Card padding="spacious">
+          <h2 className="mb-4 flex items-center gap-2 text-subheading text-re-text-primary">
+            <Users className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             Supplier Compliance
           </h2>
-          <div className="space-y-2.5">
+          <ul className="divide-y divide-re-border-subtle">
             {SUPPLIER_SCORES.map((s, i) => (
-              <div key={i} className="flex items-center gap-3 py-1.5 border-b border-[var(--re-surface-border)] last:border-0">
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                  s.status === 'excellent' ? 'bg-green-500' :
-                  s.status === 'good' ? 'bg-blue-500' :
-                  s.status === 'needs_attention' ? 'bg-amber-500' :
-                  'bg-red-500'
-                }`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[0.7rem] text-[var(--re-text-primary)]">{s.name}</div>
-                  <div className="text-[0.6rem] text-[var(--re-text-disabled)]">{s.events.toLocaleString()} events</div>
+              <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
+                <StatusBadge state={SUPPLIER_STATE[s.status] ?? 'unknown'} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-ui text-re-text-primary">{s.name}</div>
+                  <div className="font-mono text-label tabular-nums text-re-text-muted">{s.events.toLocaleString()} events</div>
                 </div>
-                <span className={`text-sm font-mono font-semibold ${
-                  s.score >= 95 ? 'text-green-400' :
-                  s.score >= 90 ? 'text-blue-400' :
-                  s.score >= 85 ? 'text-amber-400' :
-                  'text-red-400'
-                }`}>
+                <span className="font-mono text-ui tabular-nums text-re-text-secondary">
                   {s.score}%
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </Card>
       </div>
 
       {/* CTA */}
-      <div className="bg-gradient-to-r from-[var(--re-brand)]/10 to-purple-500/10 border border-[var(--re-brand)]/20 rounded-xl p-8 text-center">
-        <h2 className="text-xl font-bold mb-2">This could be your data</h2>
-        <p className="text-[var(--re-text-muted)] text-sm mb-6 max-w-lg mx-auto">
+      <Card padding="spacious" className="text-center">
+        <h2 className="font-display text-heading-lg text-re-text-primary">This could be your data</h2>
+        <p className="mx-auto mt-4 max-w-[68ch] text-ui text-re-text-secondary">
           RegEngine ingests events from your ERP, validates them against 36 FSMA 204 validation rules (33 stateless + 3 cross-event), and surfaces gaps before they become audit findings during a §1.1455(c) records request. The compliance score shown is RegEngine&apos;s internal six-dimension readiness signal — not an FDA-issued rating.
         </p>
-        <div className="flex items-center justify-center gap-4">
-          <Link
-            href="/walkthrough"
-            className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors"
-          >
-            See the full walkthrough
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link
-            href="/pricing"
-            className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors"
-          >
-            See Pricing
-          </Link>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Button asChild size="lg">
+            <Link href="/walkthrough">
+              See the full walkthrough
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Link>
+          </Button>
+          <Button asChild variant="secondary" size="lg">
+            <Link href="/pricing">See Pricing</Link>
+          </Button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Stat card
-// ---------------------------------------------------------------------------
-
-function StatCard({ label, value, icon, color, bg }: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  color: string;
-  bg: string;
-}) {
-  return (
-    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[0.65rem] text-[var(--re-text-muted)] uppercase tracking-wider">{label}</span>
-        <div className={`p-1.5 rounded-lg ${bg}`}>
-          <div className={color}>{icon}</div>
-        </div>
-      </div>
-      <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
-    </div>
+      </Card>
+    </Container>
   );
 }

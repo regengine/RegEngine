@@ -11,7 +11,6 @@ import {
     Check,
     ChevronDown,
     ClipboardList,
-    Loader2,
     Package,
     Scan,
     ScanLine,
@@ -19,17 +18,27 @@ import {
     Sparkles,
     Upload,
     X,
-    Zap,
 } from 'lucide-react';
 import { getServiceURL } from '@/lib/api-config';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { useAuth } from '@/lib/auth-context';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
 import { isExperimentalToolEnabled } from '@/lib/experimental-features';
+import { Container } from '@/components/layout/container';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
-/* ────────────────────────────────────────────────────────────── */interface ExtractedKDE {
+/* ────────────────────────────────────────────────────────────── */
+interface ExtractedKDE {
     field: string;
     value: string | null;
     confidence: number;
@@ -59,8 +68,7 @@ interface LabelResult {
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Constants                                                    */
-/* ────────────────────────────────────────────────────────────── */const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-sm';
-
+/* ────────────────────────────────────────────────────────────── */
 const DEMO_FIELDS: { key: keyof LabelResult; label: string; icon: typeof Package }[] = [
     { key: 'product_name', label: 'Product Name', icon: Package },
     { key: 'brand', label: 'Brand', icon: ScanLine },
@@ -240,321 +248,338 @@ function LabelScannerContent() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imageFile]);
+
+    /** The one status mark for the extracted label — icon plus label, never colour alone. */
+    const fsmaBadge = (compatibleLabel: string, partialLabel: string) => result && (
+        <StatusBadge
+            state={result.fsma_compatible ? 'compliant' : 'at-risk'}
+            label={result.fsma_compatible ? compatibleLabel : partialLabel}
+        />
+    );
+
     return (
         <EmailGate toolName="label-scanner">
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+        <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
             {/* Header */}
-            <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-8">
+            <Container width="tool" as="section">
                 <Link
                     href="/tools"
-                    className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors mb-6"
+                    className="mb-6 inline-flex items-center gap-1.5 text-ui text-re-text-secondary transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                 >
-                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.75} />
                     All Tools
                 </Link>
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-xl bg-[var(--re-brand)]/10 flex items-center justify-center">
-                        <ScanLine className="h-6 w-6 text-[var(--re-brand)]" />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-bold text-[var(--re-text-primary)]">Label Scanner</h1>
-                        <p className="text-sm text-[var(--re-text-muted)]">Computer-vision food-label extraction</p>
-                    </div>
+                <div className="border-b border-re-border-subtle pb-5">
+                    <p className="mb-2 text-label text-re-text-muted">Computer-vision food-label extraction</p>
+                    <h1 className="text-title text-re-text-primary">Label Scanner</h1>
+                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
+                        Upload or photograph a food product label. Computer vision attempts to extract product name, lot code, GTIN,
+                        expiry date, and allergens, and suggests a mapping to FSMA 204 Key Data Elements. Always review extracted
+                        values before ingesting — OCR mistakes are common, and a label is not itself a CTE record.
+                    </p>
                 </div>
-                <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[640px]">
-                    Upload or photograph a food product label. Computer vision attempts to extract product name, lot code, GTIN,
-                    expiry date, and allergens, and suggests a mapping to FSMA 204 Key Data Elements. Always review extracted
-                    values before ingesting — OCR mistakes are common, and a label is not itself a CTE record.
-                </p>
-            </section>
+            </Container>
 
-            <section className="relative z-[2] max-w-[980px] mx-auto px-4 sm:px-6 pb-16">
+            <Container width="tool" as="section" className="pb-10 pt-6">
                 <div className="grid gap-6 md:grid-cols-2">
                     {/* Left: Upload area */}
-                    <div className={`${card} p-6`}>                        {!image ? (
-                            <div
-                                onDrop={handleDrop}
-                                onDragOver={(e) => e.preventDefault()}
-                                className="flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-2 border-dashed border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/40 transition-colors cursor-pointer min-h-[320px]"
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <div className="w-16 h-16 rounded-2xl bg-[var(--re-brand)]/10 flex items-center justify-center">
-                                    <Upload className="h-8 w-8 text-[var(--re-brand)]" />
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-sm font-medium text-[var(--re-text-primary)]">
-                                        Drop an image here or click to upload
-                                    </p>
-                                    <p className="text-xs text-[var(--re-text-muted)] mt-1">
-                                        JPEG, PNG, WebP — max 10 MB
-                                    </p>
-                                </div>
-                                <div className="flex gap-2 mt-2">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }}
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--re-brand)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                                    >
-                                        <Camera className="h-4 w-4" />
-                                        Take Photo
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--re-surface-border)] text-sm font-medium text-[var(--re-text-muted)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-colors"
-                                    >
-                                        <Upload className="h-4 w-4" />
-                                        Upload File
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (                            <div className="space-y-4">
-                                <div className="relative rounded-xl overflow-hidden border border-[var(--re-surface-border)]">
-                                    <img src={image} alt="Uploaded label" className="w-full max-h-[400px] object-contain bg-black/5" />
-                                    <button
-                                        onClick={reset}
-                                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-colors"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </div>
-                                {analyzing && (
-                                    <div className="flex items-center justify-center gap-2 py-4 text-sm text-[var(--re-brand)]">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span>Analyzing label with computer vision...</span>
-                                    </div>
-                                )}
-                                {!analyzing && result && (
-                                    <button
-                                        onClick={analyze}
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--re-surface-border)] text-sm font-medium text-[var(--re-text-muted)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-colors"
-                                    >
-                                        <Sparkles className="h-4 w-4" />
-                                        Re-analyze
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                        {error && (
-                            <div className="mt-4 p-3 rounded-lg bg-re-danger/10 border border-re-danger/20 text-sm text-re-danger">
-                                {error}
-                            </div>
-                        )}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                        />
-                        <input
-                            ref={cameraInputRef}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                        />
-                    </div>
-
-                    {/* Right: Results */}
-                    <div className={`${card} p-6`}>                        {!result && !analyzing && (
-                            <div className="flex flex-col items-center justify-center min-h-[320px] text-center gap-3">
-                                <Scan className="h-10 w-10 text-[var(--re-text-disabled)]" />
-                                <p className="text-sm text-[var(--re-text-muted)]">
-                                    Upload a food label to see extracted data
-                                </p>
-                            </div>
-                        )}
-
-                        {analyzing && (
-                            <div className="flex flex-col items-center justify-center min-h-[320px] gap-3">
-                                <Loader2 className="h-8 w-8 text-[var(--re-brand)] animate-spin" />
-                                <p className="text-sm text-[var(--re-text-muted)]">Extracting traceability data...</p>
-                            </div>
-                        )}
-
-                        {result && (
-                            <LeadGate
-                                source="label-scanner"
-                                headline="See Your Full Label Analysis"
-                                subheadline="Unlock allergen list, ingredient extraction, FSMA 204 KDE mapping with confidence scores, and raw OCR text."
-                                ctaText="Unlock Full Analysis"
-                                toolContext={{ toolInputs: { product_name: result.product_name, fsma_compatible: result.fsma_compatible, kdes_found: result.fsma_kdes.length } }}
-                                teaser={
-                                    <div className="space-y-3 pb-6">
-                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning/10 border border-re-warning/20'}`}>
-                                            {result.fsma_compatible ? <Check className="h-4 w-4 text-re-brand" /> : <Zap className="h-4 w-4 text-re-warning" />}
-                                            <span className={`text-sm font-medium ${result.fsma_compatible ? 'text-re-brand' : 'text-re-warning'}`}>
-                                                {result.fsma_compatible ? 'Label contains likely-KDE fields' : 'Label is missing common KDE fields'}
-                                            </span>
-                                        </div>                                        {result.product_name && (
-                                            <div className="flex items-start justify-between gap-3 py-1.5">
-                                                <span className="text-xs text-[var(--re-text-muted)] uppercase tracking-wider">Product</span>
-                                                <span className="text-sm text-[var(--re-text-primary)] font-medium text-right">{result.product_name}</span>
-                                            </div>
-                                        )}
-                                        <p className="text-xs text-[var(--re-text-disabled)] text-center">
-                                            {result.fsma_kdes.length} KDEs extracted · {result.allergens.length} allergens detected
+                    <Card>
+                        <CardContent>
+                            {!image ? (
+                                <div
+                                    onDrop={handleDrop}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    className="flex min-h-[320px] cursor-pointer flex-col items-center justify-center gap-4 rounded-md border border-dashed border-re-border p-8 transition-colors duration-120 hover:border-re-border-strong motion-reduce:transition-none"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <Upload aria-hidden="true" className="h-6 w-6 text-re-text-muted" strokeWidth={1.75} />
+                                    <div className="text-center">
+                                        <p className="text-ui font-medium text-re-text-primary">
+                                            Drop an image here or click to upload
+                                        </p>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            JPEG, PNG, WebP — max 10 MB
                                         </p>
                                     </div>
-                                }
-                            >
+                                    <div className="mt-2 flex flex-wrap justify-center gap-2">
+                                        <Button
+                                            type="button"
+                                            size="lg"
+                                            onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }}
+                                            leadingIcon={<Camera aria-hidden="true" strokeWidth={1.75} />}
+                                        >
+                                            Take Photo
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="lg"
+                                            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                                            leadingIcon={<Upload aria-hidden="true" strokeWidth={1.75} />}
+                                        >
+                                            Upload File
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
                                 <div className="space-y-4">
-                                    {/* FSMA badge */}
-                                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning/10 border border-re-warning/20'}`}>
-                                        {result.fsma_compatible ? (
-                                            <Check className="h-4 w-4 text-re-brand" />
-                                        ) : (
-                                            <Zap className="h-4 w-4 text-re-warning" />
-                                        )}
-                                        <span className={`text-sm font-medium ${result.fsma_compatible ? 'text-re-brand' : 'text-re-warning'}`}>
-                                            {result.fsma_compatible ? 'FSMA 204 Compatible' : 'Partial KDE Coverage'}
-                                        </span>
+                                    <div className="relative overflow-hidden rounded-md border border-re-border bg-re-surface-inset">
+                                        <img src={image} alt="Uploaded label" className="max-h-[400px] w-full object-contain" />
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="icon"
+                                            aria-label="Remove uploaded label"
+                                            onClick={reset}
+                                            className="absolute right-2 top-2 rounded-full"
+                                        >
+                                            <X aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
+                                        </Button>
                                     </div>
-
-                                    {/* Editable extracted fields */}
-                                    <div className="space-y-2">
-                                        <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">Extracted Fields <span className="text-xs font-normal text-[var(--re-text-muted)]">— click to edit</span></h3>
-                                        {DEMO_FIELDS.map(({ key, label }) => {
-                                            const value = getFieldValue(key);
-                                            if (!value && !editedFields[key]) return null;
-                                            return (
-                                                <div key={key} className="flex items-center gap-3 py-1 border-b border-[var(--re-surface-border)] last:border-0">
-                                                    <span className="text-xs text-[var(--re-text-muted)] uppercase tracking-wider min-w-[100px]">{label}</span>
-                                                    <input
-                                                        type="text"
-                                                        value={value}
-                                                        onChange={(e) => updateField(key, e.target.value)}
-                                                        className="flex-1 text-sm text-[var(--re-text-primary)] font-medium text-right bg-transparent border-none outline-none focus:ring-1 focus:ring-[var(--re-brand)] rounded px-1 py-0.5 transition-shadow"
-                                                    />
-                                                    {editedFields[key] !== undefined && (
-                                                        <span className="text-[10px] text-[var(--re-brand)] font-bold">EDITED</span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Confirm & Ingest */}
-                                    <div className="pt-2">
-                                        {ingested ? (
-                                            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-re-brand-muted border border-re-brand/20">
-                                                <Check className="h-4 w-4 text-re-brand" />
-                                                <span className="text-sm font-medium text-re-brand">Ingested into trace pipeline</span>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={confirmAndIngest}
-                                                disabled={ingesting}
-                                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--re-brand)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                                            >
-                                                {ingesting ? (
-                                                    <><Loader2 className="h-4 w-4 animate-spin" /> Ingesting...</>
-                                                ) : (
-                                                    <><ArrowRight className="h-4 w-4" /> Confirm &amp; Ingest</>
-                                                )}
-                                            </button>
-                                        )}
-                                        {!apiKey && !ingested && (
-                                            <p className="text-xs text-[var(--re-text-muted)] text-center mt-2">
-                                                <Link href="/login" className="text-[var(--re-brand)] hover:underline">Log in</Link> to ingest into your workspace
-                                            </p>
-                                        )}
-                                    </div>
-                                    {/* Allergens */}
-                                    {result.allergens.length > 0 && (
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Allergens</h3>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {result.allergens.map((a) => (
-                                                    <span key={a} className="px-2 py-0.5 rounded-md bg-re-danger/10 border border-re-danger/20 text-xs text-re-danger font-medium">
-                                                        {a}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
+                                    {analyzing && (
+                                        <p className="flex items-center justify-center gap-2 py-4 text-ui text-re-text-tertiary" role="status" aria-live="polite">
+                                            <Spinner size="sm" />
+                                            <span>Analyzing label with computer vision...</span>
+                                        </p>
                                     )}
-
-                                    {/* Certifications */}
-                                    {result.certifications.length > 0 && (
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Certifications</h3>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {result.certifications.map((c) => (
-                                                    <span key={c} className="px-2 py-0.5 rounded-md bg-re-brand-muted border border-re-brand/20 text-xs text-re-brand font-medium">
-                                                        {c}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Ingredients */}
-                                    {result.ingredients && (
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Ingredients</h3>
-                                            <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">{result.ingredients}</p>
-                                        </div>
-                                    )}
-                                    {/* FSMA KDEs */}
-                                    {result.fsma_kdes.length > 0 && (
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">FSMA 204 KDE Mapping</h3>
-                                            <div className="space-y-1.5">
-                                                {result.fsma_kdes.map((kde, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-xs">
-                                                        <span className="text-[var(--re-text-muted)] min-w-[120px]">{kde.field}</span>
-                                                        <span className="text-[var(--re-text-primary)] font-mono flex-1 truncate">{kde.value || '—'}</span>
-                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kde.confidence >= 0.8 ? 'bg-re-brand-muted text-re-brand' : kde.confidence >= 0.5 ? 'bg-re-warning/10 text-re-warning' : 'bg-re-danger/10 text-re-danger'}`}>
-                                                            {Math.round(kde.confidence * 100)}%
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Raw text toggle */}
-                                    {result.raw_text && (
-                                        <div>
-                                            <button
-                                                onClick={() => setShowRawText(!showRawText)}
-                                                className="flex items-center gap-1.5 text-xs text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors"
-                                            >
-                                                <ChevronDown className={`h-3 w-3 transition-transform ${showRawText ? 'rotate-180' : ''}`} />
-                                                {showRawText ? 'Hide' : 'Show'} raw text
-                                            </button>
-                                            {showRawText && (
-                                                <pre className="mt-2 p-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[10px] text-[var(--re-text-muted)] overflow-x-auto whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                                                    {result.raw_text}
-                                                </pre>
-                                            )}
-                                        </div>
+                                    {!analyzing && result && (
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={analyze}
+                                            leadingIcon={<Sparkles aria-hidden="true" strokeWidth={1.75} />}
+                                        >
+                                            Re-analyze
+                                        </Button>
                                     )}
                                 </div>
-                            </LeadGate>
-                        )}
-                    </div>
+                            )}
+                            {error && (
+                                <Callout tone="danger" role="alert" className="mt-4">
+                                    {error}
+                                </Callout>
+                            )}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                aria-label="Upload a label image"
+                                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                            />
+                            <input
+                                ref={cameraInputRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                aria-label="Photograph a label"
+                                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                            />
+                        </CardContent>
+                    </Card>
+
+                    {/* Right: Results */}
+                    <Card>
+                        <CardContent>
+                            {!result && !analyzing && (
+                                <EmptyState
+                                    bare
+                                    icon={Scan}
+                                    title="Upload a food label to see extracted data"
+                                    className="min-h-[320px]"
+                                />
+                            )}
+
+                            {analyzing && (
+                                <div className="min-h-[320px] space-y-3" role="status" aria-live="polite">
+                                    <Skeleton className="h-6 w-2/3" />
+                                    <Skeleton className="h-4 w-full" />
+                                    <Skeleton className="h-4 w-5/6" />
+                                    <Skeleton className="h-4 w-4/6" />
+                                    <p className="flex items-center gap-2 pt-2 text-small text-re-text-muted">
+                                        <Spinner size="sm" />
+                                        Extracting traceability data...
+                                    </p>
+                                </div>
+                            )}
+
+                            {result && (
+                                <LeadGate
+                                    source="label-scanner"
+                                    headline="See Your Full Label Analysis"
+                                    subheadline="Unlock allergen list, ingredient extraction, FSMA 204 KDE mapping with confidence scores, and raw OCR text."
+                                    ctaText="Unlock Full Analysis"
+                                    toolContext={{ toolInputs: { product_name: result.product_name, fsma_compatible: result.fsma_compatible, kdes_found: result.fsma_kdes.length } }}
+                                    teaser={
+                                        <div className="space-y-3 pb-6">
+                                            {fsmaBadge('Label contains likely-KDE fields', 'Label is missing common KDE fields')}
+                                            {result.product_name && (
+                                                <div className="flex items-start justify-between gap-3 py-1.5">
+                                                    <span className="text-label text-re-text-muted">Product</span>
+                                                    <span className="text-right text-ui font-medium text-re-text-primary">{result.product_name}</span>
+                                                </div>
+                                            )}
+                                            <p className="text-center text-small text-re-text-tertiary">
+                                                {result.fsma_kdes.length} KDEs extracted · {result.allergens.length} allergens detected
+                                            </p>
+                                        </div>
+                                    }
+                                >
+                                    <div className="space-y-5">
+                                        {/* FSMA badge */}
+                                        <div>{fsmaBadge('FSMA 204 Compatible', 'Partial KDE Coverage')}</div>
+
+                                        {/* Editable extracted fields */}
+                                        <div className="space-y-2">
+                                            <h3 className="text-subheading text-re-text-primary">Extracted Fields <span className="text-small font-normal text-re-text-tertiary">— click to edit</span></h3>
+                                            {DEMO_FIELDS.map(({ key, label }) => {
+                                                const value = getFieldValue(key);
+                                                if (!value && !editedFields[key]) return null;
+                                                return (
+                                                    <div key={key} className="flex items-center gap-3 border-b border-re-border-subtle py-1 last:border-0">
+                                                        <label htmlFor={`label-field-${key}`} className="min-w-[100px] text-label text-re-text-muted">{label}</label>
+                                                        <input
+                                                            id={`label-field-${key}`}
+                                                            type="text"
+                                                            value={value}
+                                                            onChange={(e) => updateField(key, e.target.value)}
+                                                            className="flex-1 rounded-sm border-none bg-transparent px-1 py-0.5 text-right text-ui font-medium text-re-text-primary outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
+                                                        />
+                                                        {editedFields[key] !== undefined && (
+                                                            <Badge tone="info" size="sm" mono>EDITED</Badge>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Confirm & Ingest */}
+                                        <div className="pt-2">
+                                            {ingested ? (
+                                                <Callout tone="success" role="status" icon={Check}>
+                                                    Ingested into trace pipeline
+                                                </Callout>
+                                            ) : (
+                                                <Button
+                                                    type="button"
+                                                    size="lg"
+                                                    onClick={confirmAndIngest}
+                                                    loading={ingesting}
+                                                    className="w-full"
+                                                    leadingIcon={<ArrowRight aria-hidden="true" strokeWidth={1.75} />}
+                                                >
+                                                    {ingesting ? 'Ingesting...' : 'Confirm & Ingest'}
+                                                </Button>
+                                            )}
+                                            {!apiKey && !ingested && (
+                                                <p className="mt-2 text-center text-small text-re-text-tertiary">
+                                                    <Link href="/login" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">Log in</Link> to ingest into your workspace
+                                                </p>
+                                            )}
+                                        </div>
+                                        {/* Allergens */}
+                                        {result.allergens.length > 0 && (
+                                            <div>
+                                                <h3 className="mb-2 text-subheading text-re-text-primary">Allergens</h3>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {result.allergens.map((a) => (
+                                                        <Badge key={a} tone="danger" size="sm">
+                                                            {a}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Certifications */}
+                                        {result.certifications.length > 0 && (
+                                            <div>
+                                                <h3 className="mb-2 text-subheading text-re-text-primary">Certifications</h3>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {result.certifications.map((c) => (
+                                                        <Badge key={c} tone="neutral" size="sm">
+                                                            {c}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Ingredients */}
+                                        {result.ingredients && (
+                                            <div>
+                                                <h3 className="mb-2 text-subheading text-re-text-primary">Ingredients</h3>
+                                                <p className="text-small leading-relaxed text-re-text-secondary">{result.ingredients}</p>
+                                            </div>
+                                        )}
+                                        {/* FSMA KDEs */}
+                                        {result.fsma_kdes.length > 0 && (
+                                            <div>
+                                                <h3 className="mb-2 text-subheading text-re-text-primary">FSMA 204 KDE Mapping</h3>
+                                                <div className="space-y-1.5">
+                                                    {result.fsma_kdes.map((kde, i) => (
+                                                        <div key={i} className="flex items-center gap-2 text-small">
+                                                            <span className="min-w-[120px] text-re-text-tertiary">{kde.field}</span>
+                                                            <span className="flex-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{kde.value || '—'}</span>
+                                                            <Badge
+                                                                size="sm"
+                                                                mono
+                                                                tone={kde.confidence >= 0.8 ? 'neutral' : kde.confidence >= 0.5 ? 'warning' : 'danger'}
+                                                            >
+                                                                {Math.round(kde.confidence * 100)}%
+                                                            </Badge>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Raw text toggle */}
+                                        {result.raw_text && (
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowRawText(!showRawText)}
+                                                    aria-expanded={showRawText}
+                                                    className="flex items-center gap-1.5 rounded-sm text-small text-re-text-secondary transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+                                                >
+                                                    <ChevronDown aria-hidden="true" strokeWidth={1.75} className={cn('h-3.5 w-3.5 transition-transform duration-120 motion-reduce:transition-none', showRawText && 'rotate-180')} />
+                                                    {showRawText ? 'Hide' : 'Show'} raw text
+                                                </button>
+                                                {showRawText && (
+                                                    <pre className="mt-2 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md border border-re-border-subtle bg-re-surface-inset p-3 font-mono text-[0.8125rem] text-re-text-secondary">
+                                                        {result.raw_text}
+                                                    </pre>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </LeadGate>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* CTA */}
                 <div className="mt-8 text-center">
-                    <p className="text-sm text-[var(--re-text-muted)] mb-3">
+                    <p className="mb-3 text-ui text-re-text-secondary">
                         Want this running on every receiving dock? Field Capture sends scans straight into your compliance pipeline.
                     </p>
-                    <div className="flex flex-wrap gap-3 justify-center">
-                        <Link href="/alpha">
-                            <span className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[var(--re-brand)] text-white text-sm font-medium hover:opacity-90 transition-opacity">
-                                Become a Design Partner <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>
-                        <Link href="/tools">
-                            <span className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border border-[var(--re-surface-border)] text-sm font-medium text-[var(--re-text-muted)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-colors">
+                    <div className="flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/alpha">
+                                Become a Design Partner <ArrowRight aria-hidden="true" className="ml-2 h-3.5 w-3.5" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/tools">
                                 All Free Tools
-                            </span>
-                        </Link>
+                            </Link>
+                        </Button>
                     </div>
                 </div>
-            </section>
+            </Container>
         </div>
         </EmailGate>
     );

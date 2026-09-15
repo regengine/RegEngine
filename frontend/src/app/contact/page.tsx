@@ -3,7 +3,15 @@
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
 import Link from "next/link";
-import { Mail, MessageSquare, Clock, Send, CheckCircle, AlertCircle } from "lucide-react";
+import { MessageSquare, Clock, Send } from "lucide-react";
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
@@ -29,54 +37,48 @@ export default function ContactPage() {
     }
   };
 
-  const inputClass =
-    "w-full rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] px-3 py-2.5 text-sm text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:border-[var(--re-brand)] focus:ring-1 focus:ring-[var(--re-brand)] transition-colors";
-
   return (
-    <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-      <section className="max-w-[900px] mx-auto px-6 py-20">
-        <p className="text-xs uppercase tracking-[0.1em] text-[var(--re-brand)] mb-3">Contact</p>
-        <h1 className="font-display text-[clamp(32px,4.5vw,48px)] font-bold text-[var(--re-text-primary)] leading-tight tracking-tight">
-          Talk with the RegEngine team
-        </h1>
-        <p className="mt-4 text-[var(--re-text-muted)] max-w-[620px] leading-relaxed">
-          Reach out for FSMA 204 implementation support, pilot onboarding, or enterprise pricing.
-        </p>
+    <main className="min-h-screen bg-re-surface-base">
+      <Container as="section" width="marketing" className="py-12 sm:py-16">
+        <PageHeader
+          size="hero"
+          eyebrow={<span className="font-mono uppercase">Contact</span>}
+          title="Talk with the RegEngine team"
+          description="Reach out for FSMA 204 implementation support, pilot onboarding, or enterprise pricing."
+          className="border-b-0 pb-0"
+        />
 
         {/* Gap Analysis Offer */}
-        <div className="mt-6 inline-flex items-center gap-3 rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-5 py-3">
-          <span className="text-sm text-[var(--re-text-primary)]">
-            <strong className="text-[var(--re-brand)]">Book a free gap-analysis call</strong>{' '}
+        <Card padding="compact" className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <span className="text-ui text-re-text-secondary">
+            <strong className="font-medium text-re-text-primary">Book a free gap-analysis call</strong>{' '}
             — 30 minutes with the founder to walk through your FSMA 204 posture and identify coverage gaps.
           </span>
-          <a
-            href="https://calendly.com/regengine/fsma-strategy-session"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 rounded-lg bg-[var(--re-brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--re-brand-dark)] transition-colors"
-          >
-            Book call
-          </a>
-        </div>
+          <Button asChild variant="secondary" size="lg" className="shrink-0">
+            <a
+              href="https://calendly.com/regengine/fsma-strategy-session"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Book call
+            </a>
+          </Button>
+        </Card>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* ── Contact Form Card ── */}
-          <div className="md:col-span-2 p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-            <Mail className="h-5 w-5 text-[var(--re-brand)] mb-2" />
-            <p className="text-sm font-semibold text-[var(--re-text-primary)]">Contact options</p>
+          <Card padding="spacious" className="md:col-span-2">
+            <p className="text-subheading text-re-text-primary">Contact options</p>
 
             {status === 'success' ? (
-              <div className="mt-4 flex items-start gap-3 rounded-lg border border-re-brand/20 bg-re-brand/5 p-4">
-                <CheckCircle className="h-5 w-5 text-re-brand shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-[var(--re-text-primary)]">Message sent</p>
-                  <p className="text-sm text-[var(--re-text-muted)] mt-1">
-                    We&apos;ll respond within one business day.
-                  </p>
-                </div>
-              </div>
+              <Callout tone="success" role="status" className="mt-4">
+                <p className="font-medium text-re-text-primary">Message sent</p>
+                <p className="mt-1">
+                  We&apos;ll respond within one business day.
+                </p>
+              </Callout>
             ) : (
-              <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+              <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
                 {/* Honeypot — hidden from humans; bots that auto-fill it are
                     dropped server-side (/api/contact). */}
                 <input
@@ -89,115 +91,98 @@ export default function ContactPage() {
                   onChange={update('website')}
                   style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="contact-name" className="sr-only">Name</label>
-                    <input
-                      id="contact-name"
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Name" htmlFor="contact-name" required>
+                    <Input
                       name="name"
                       type="text"
                       placeholder="Name"
-                      required
+                      size="lg"
                       value={form.name}
                       onChange={update('name')}
-                      className={inputClass}
                     />
-                  </div>
-                  <div>
-                    <label htmlFor="contact-email" className="sr-only">Email</label>
-                    <input
-                      id="contact-email"
+                  </Field>
+                  <Field label="Email" htmlFor="contact-email" required>
+                    <Input
                       name="email"
                       type="email"
                       placeholder="Email"
-                      required
+                      size="lg"
                       value={form.email}
                       onChange={update('email')}
-                      className={inputClass}
                     />
-                  </div>
+                  </Field>
                 </div>
-                <div>
-                  <label htmlFor="contact-company" className="sr-only">Company</label>
-                  <input
-                    id="contact-company"
+                <Field label="Company" htmlFor="contact-company">
+                  <Input
                     name="company"
                     type="text"
                     placeholder="Company"
+                    size="lg"
                     value={form.company}
                     onChange={update('company')}
-                    className={inputClass}
                   />
-                </div>
-                <div>
-                  <label htmlFor="contact-message" className="sr-only">Message</label>
-                  <textarea
-                    id="contact-message"
+                </Field>
+                <Field label="Message" htmlFor="contact-message" required>
+                  <Textarea
                     name="message"
                     placeholder="How can we help?"
-                    required
                     rows={4}
                     value={form.message}
                     onChange={update('message')}
-                    className={inputClass + " resize-none"}
+                    className={`${fieldControlClasses} h-auto min-h-[7rem] resize-none py-2.5`}
                   />
-                </div>
+                </Field>
 
                 {status === 'error' && (
-                  <div className="flex items-center gap-2 text-sm text-re-danger">
-                    <AlertCircle className="h-4 w-4" />
+                  <Callout tone="danger" role="alert">
                     Something went wrong. Please try again or email us directly.
-                  </div>
+                  </Callout>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={status === 'submitting'}
-                  className="self-start flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--re-brand-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="h-4 w-4" />
-                  {status === 'submitting' ? 'Sending\u2026' : 'Send message'}
-                </button>
+                <Button type="submit" size="lg" className="self-start" loading={status === 'submitting'} leadingIcon={<Send className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}>
+                  {status === 'submitting' ? 'Sending…' : 'Send message'}
+                </Button>
 
-                <p className="text-xs text-[var(--re-text-disabled)] mt-1">
+                <p className="text-small text-re-text-muted">
                   Or email us directly at{' '}
-                  <a href="mailto:chris@regengine.co" className="text-[var(--re-brand)] hover:underline">
+                  <a href="mailto:chris@regengine.co" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
                     chris@regengine.co
                   </a>
                 </p>
               </form>
             )}
-          </div>
+          </Card>
 
           {/* ── Side Cards ── */}
           <div className="flex flex-col gap-4">
-            <div className="p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-              <MessageSquare className="h-5 w-5 text-[var(--re-brand)] mb-2" />
-              <p className="text-sm font-semibold text-[var(--re-text-primary)]">Assessment Intake</p>
-              <p className="text-sm text-[var(--re-text-muted)] mt-1">Submit retailer readiness and receive founder review.</p>
-              <Link href="/retailer-readiness" className="text-xs text-[var(--re-brand)] mt-3 inline-block">
+            <Card padding="spacious">
+              <MessageSquare className="mb-2 h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <p className="text-subheading text-re-text-primary">Assessment Intake</p>
+              <p className="mt-1 text-ui text-re-text-secondary">Submit retailer readiness and receive founder review.</p>
+              <Link href="/retailer-readiness" className="mt-3 inline-block text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
                 Open assessment
               </Link>
-            </div>
+            </Card>
 
-            <div className="p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-              <Clock className="h-5 w-5 text-[var(--re-brand)] mb-2" />
-              <p className="text-sm font-semibold text-[var(--re-text-primary)]">Talk to the Founder</p>
-              <p className="text-sm text-[var(--re-text-muted)] mt-1">
+            <Card padding="spacious">
+              <Clock className="mb-2 h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <p className="text-subheading text-re-text-primary">Talk to the Founder</p>
+              <p className="mt-1 text-ui text-re-text-secondary">
                 Christopher Sellers, founder and engineer. Typical response within one business day.
               </p>
               <a
                 href="https://www.linkedin.com/in/christophersellers"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-[var(--re-brand)] mt-3 inline-block hover:underline"
+                className="mt-3 inline-block text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
               >
                 Connect on LinkedIn
               </a>
-            </div>
+            </Card>
           </div>
         </div>
-      </section>
+      </Container>
     </main>
   );
 }

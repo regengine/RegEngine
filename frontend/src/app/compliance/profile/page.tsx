@@ -2,16 +2,16 @@
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { PageHeader } from "@/components/layout/page-header";
 import { getServiceURL } from "@/lib/api-config";
 import { useTenant } from "@/lib/tenant-context";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Save, Settings, Leaf, MapPin, Building2, Package, ShoppingCart, AlertCircle, CheckCircle } from "lucide-react";
 import Link from "next/link";
@@ -52,10 +52,13 @@ const MAJOR_RETAILERS = [
     "Organic Market", "Mass Merchant", "Specialty Grocer", "West Coast Chain", "Discount Grocer",
 ];
 
+const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
 export default function ProductProfilePage() {
     const { tenantId } = useTenant();
     const { isAuthenticated } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [profile, setProfile] = useState<ProductProfile>({
@@ -81,12 +84,14 @@ export default function ProductProfilePage() {
             if (response.ok) {
                 const data = await response.json();
                 setProfile(data);
+                setLoadError(false);
             } else {
                 throw new Error('API unavailable');
             }
         } catch (error) {
             // Show error state - no mock fallback for production FSMA
             console.error('Profile API unavailable:', error);
+            setLoadError(true);
         } finally {
             setLoading(false);
         }
@@ -175,252 +180,275 @@ export default function ProductProfilePage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-                <PageContainer>
-                    <div className="animate-pulse space-y-4">
-                        <div className="h-8 w-64 bg-re-surface-elevated rounded" />
-                        <div className="h-64 bg-re-surface-elevated rounded" />
-                    </div>
-                </PageContainer>
-            </div>
+            <PageContainer>
+                <div className="space-y-4" aria-busy="true">
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="h-64 w-full" />
+                </div>
+            </PageContainer>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-            <PageContainer>
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                >
-                    {/* Page Header */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                        <div className="flex items-start sm:items-center gap-4">
-                            <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900">
-                                <Settings className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+        <PageContainer>
+            <PageHeader
+                title="Product Profile"
+                description="Configure what products and regions you handle for alert matching"
+                secondaryActions={
+                    <Button variant="secondary" asChild>
+                        <Link href="/compliance/status">View Status</Link>
+                    </Button>
+                }
+                primaryAction={
+                    <Button onClick={saveProfile} disabled={saving}>
+                        <Save className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                        {saving ? "Saving..." : "Save Profile"}
+                    </Button>
+                }
+            />
+
+            <div className="space-y-6">
+                {/* Save Message */}
+                {saveMessage && (
+                    <div
+                        role={saveMessage.type === 'success' ? 'status' : 'alert'}
+                        className={`flex gap-3 rounded-md border border-l-[3px] border-re-border px-4 py-3 text-ui text-re-text-secondary ${saveMessage.type === 'success'
+                            ? 'border-l-re-success bg-re-surface-card'
+                            : 'border-l-re-danger bg-re-danger-bg'
+                            }`}
+                    >
+                        {saveMessage.type === 'success' ? (
+                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                        ) : (
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                        )}
+                        <span className="min-w-0 flex-1">{saveMessage.text}</span>
+                    </div>
+                )}
+
+                {/* Load failure */}
+                {loadError && (
+                    <div
+                        role="alert"
+                        className="flex gap-3 rounded-md border border-l-[3px] border-re-border border-l-re-danger bg-re-danger-bg px-4 py-3 text-ui text-re-text-secondary"
+                    >
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                            <p className="font-medium text-re-text-primary">Couldn&apos;t load your product profile</p>
+                            <p className="mt-1">The selections below are empty until the profile service responds.</p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Button variant="secondary" size="sm" onClick={() => fetchProfile()}>
+                                    Retry
+                                </Button>
                             </div>
-                            <div>
-                                <h1 className="text-3xl sm:text-4xl font-bold">Product Profile</h1>
-                                <p className="text-muted-foreground mt-1">
-                                    Configure what products and regions you handle for alert matching
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <Link href="/compliance/status">
-                                <Button variant="outline">View Status</Button>
-                            </Link>
-                            <Button onClick={saveProfile} disabled={saving}>
-                                <Save className="h-4 w-4 mr-2" />
-                                {saving ? "Saving..." : "Save Profile"}
-                            </Button>
                         </div>
                     </div>
+                )}
 
-                    {/* Save Message */}
-                    {saveMessage && (
-                        <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${saveMessage.type === 'success'
-                            ? 'bg-re-success-muted border border-green-200 text-re-success'
-                            : 'bg-re-danger-muted border border-re-danger text-re-danger'
-                            }`}>
-                            {saveMessage.type === 'success' ? (
-                                <CheckCircle className="h-5 w-5" />
-                            ) : (
-                                <AlertCircle className="h-5 w-5" />
-                            )}
-                            <span>{saveMessage.text}</span>
-                        </div>
-                    )}
-
-                    {/* Info Banner */}
-                    <Card className="mb-8 border-blue-200 bg-re-info-muted dark:bg-re-info/20">
-                        <CardContent className="pt-6">
-                            <div className="flex items-start gap-3">
-                                <AlertCircle className="h-5 w-5 text-re-info mt-0.5" />
-                                <div>
-                                    <p className="font-medium text-re-info dark:text-blue-100">
-                                        Why configure your product profile?
-                                    </p>
-                                    <p className="text-sm text-re-info dark:text-blue-300 mt-1">
-                                        RegEngine monitors FDA recalls and alerts. By setting your product categories and supply regions,
-                                        we can automatically alert you when a recall might affect your business — before it becomes a crisis.
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Product Categories */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Package className="h-5 w-5" />
-                                    Food Traceability List Products
-                                </CardTitle>
-                                <CardDescription>
-                                    Select the FSMA 204 FTL categories you handle
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-1 gap-2">
-                                    {FTL_CATEGORIES.map(category => (
-                                        <div
-                                            key={category.id}
-                                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${profile.product_categories.includes(category.id)
-                                                ? "bg-re-success-muted border-green-200 dark:bg-re-success/20"
-                                                : "hover:bg-muted"
-                                                }`}
-                                            onClick={() => toggleCategory(category.id)}
-                                        >
-                                            <Checkbox
-                                                checked={profile.product_categories.includes(category.id)}
-                                                onCheckedChange={() => toggleCategory(category.id)}
-                                            />
-                                            <category.icon className="h-4 w-4 text-muted-foreground" />
-                                            <span className="text-sm">{category.label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Supply Regions */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <MapPin className="h-5 w-5" />
-                                    Supply Regions
-                                </CardTitle>
-                                <CardDescription>
-                                    Where do your products come from or go to?
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex flex-wrap gap-2">
-                                    {US_STATES.map(state => (
-                                        <Badge
-                                            key={state}
-                                            variant={profile.supply_regions.includes(state) ? "default" : "outline"}
-                                            className="cursor-pointer"
-                                            onClick={() => toggleRegion(state)}
-                                        >
-                                            {state}
-                                        </Badge>
-                                    ))}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-4">
-                                    Selected: {profile.supply_regions.length} states
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        {/* Suppliers */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Building2 className="h-5 w-5" />
-                                    Supplier Names
-                                </CardTitle>
-                                <CardDescription>
-                                    Add supplier names to match against recalls
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex gap-2 mb-4">
-                                    <Input
-                                        placeholder="Enter supplier name..."
-                                        value={supplierInput}
-                                        onChange={(e) => setSupplierInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && addSupplier()}
-                                    />
-                                    <Button variant="outline" onClick={addSupplier}>Add</Button>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {profile.supplier_identifiers.map(supplier => (
-                                        <Badge
-                                            key={supplier}
-                                            variant="secondary"
-                                            className="cursor-pointer"
-                                            onClick={() => removeSupplier(supplier)}
-                                        >
-                                            {supplier} ×
-                                        </Badge>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Retailer Relationships */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <ShoppingCart className="h-5 w-5" />
-                                    Retailer Relationships
-                                </CardTitle>
-                                <CardDescription>
-                                    Which retailers do you supply?
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {MAJOR_RETAILERS.map(retailer => (
-                                        <div
-                                            key={retailer}
-                                            className={`flex items-center gap-2 p-2 rounded border cursor-pointer ${profile.retailer_relationships.includes(retailer)
-                                                ? "bg-re-info-muted border-blue-200"
-                                                : "hover:bg-muted"
-                                                }`}
-                                            onClick={() => toggleRetailer(retailer)}
-                                        >
-                                            <Checkbox
-                                                checked={profile.retailer_relationships.includes(retailer)}
-                                                onCheckedChange={() => toggleRetailer(retailer)}
-                                            />
-                                            <span className="text-sm">{retailer}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
+                {/* Info Banner */}
+                <div className="flex gap-3 rounded-md border border-l-[3px] border-re-border border-l-re-info bg-re-surface-card px-4 py-3 text-ui text-re-text-secondary">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-info" strokeWidth={1.75} aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                        <p className="font-medium text-re-text-primary">
+                            Why configure your product profile?
+                        </p>
+                        <p className="mt-1">
+                            RegEngine monitors FDA recalls and alerts. By setting your product categories and supply regions,
+                            we can automatically alert you when a recall might affect your business — before it becomes a crisis.
+                        </p>
                     </div>
+                </div>
 
-                    {/* Summary */}
-                    <Card className="mt-6">
-                        <CardHeader>
-                            <CardTitle>Profile Summary</CardTitle>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {/* Product Categories */}
+                    <Card>
+                        <CardHeader className="flex-col items-stretch gap-1">
+                            <CardTitle className="flex items-center gap-2">
+                                <Package className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                Food Traceability List Products
+                            </CardTitle>
+                            <CardDescription>
+                                Select the FSMA 204 FTL categories you handle
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                                <div>
-                                    <div className="text-3xl font-bold text-re-success">
-                                        {profile.product_categories.length}
-                                    </div>
-                                    <div className="text-sm text-muted-foreground">Product Categories</div>
-                                </div>
-                                <div>
-                                    <div className="text-3xl font-bold text-re-info">
-                                        {profile.supply_regions.length}
-                                    </div>
-                                    <div className="text-sm text-muted-foreground">Supply Regions</div>
-                                </div>
-                                <div>
-                                    <div className="text-3xl font-bold text-purple-600">
-                                        {profile.supplier_identifiers.length}
-                                    </div>
-                                    <div className="text-sm text-muted-foreground">Suppliers</div>
-                                </div>
-                                <div>
-                                    <div className="text-3xl font-bold text-re-warning">
-                                        {profile.retailer_relationships.length}
-                                    </div>
-                                    <div className="text-sm text-muted-foreground">Retailers</div>
-                                </div>
+                            <div className="grid grid-cols-1 gap-1">
+                                {FTL_CATEGORIES.map(category => {
+                                    const checked = profile.product_categories.includes(category.id);
+                                    const controlId = `ftl-${category.id}`;
+                                    return (
+                                        <label
+                                            key={category.id}
+                                            htmlFor={controlId}
+                                            className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-ui transition-colors duration-120 motion-reduce:transition-none ${checked
+                                                ? "border-re-border-strong bg-re-surface-inset text-re-text-primary"
+                                                : "border-transparent text-re-text-secondary hover:bg-re-surface-inset"
+                                                }`}
+                                        >
+                                            <Checkbox
+                                                id={controlId}
+                                                checked={checked}
+                                                onCheckedChange={() => toggleCategory(category.id)}
+                                            />
+                                            <category.icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                            <span>{category.label}</span>
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </CardContent>
                     </Card>
-                </motion.div>
-            </PageContainer>
-        </div>
+
+                    {/* Supply Regions */}
+                    <Card>
+                        <CardHeader className="flex-col items-stretch gap-1">
+                            <CardTitle className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                Supply Regions
+                            </CardTitle>
+                            <CardDescription>
+                                Where do your products come from or go to?
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-wrap gap-1.5">
+                                {US_STATES.map(state => {
+                                    const selected = profile.supply_regions.includes(state);
+                                    return (
+                                        <Button
+                                            key={state}
+                                            variant="secondary"
+                                            size="sm"
+                                            aria-pressed={selected}
+                                            onClick={() => toggleRegion(state)}
+                                            className={selected ? "bg-re-brand-muted text-re-brand" : undefined}
+                                        >
+                                            {state}
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                            <p className="mt-4 text-small text-re-text-tertiary">
+                                Selected: {profile.supply_regions.length} states
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Suppliers */}
+                    <Card>
+                        <CardHeader className="flex-col items-stretch gap-1">
+                            <CardTitle className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                Supplier Names
+                            </CardTitle>
+                            <CardDescription>
+                                Add supplier names to match against recalls
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="mb-4 flex gap-2">
+                                <label htmlFor="supplier-name" className="sr-only">
+                                    Supplier name
+                                </label>
+                                <Input
+                                    id="supplier-name"
+                                    placeholder="Enter supplier name..."
+                                    value={supplierInput}
+                                    onChange={(e) => setSupplierInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && addSupplier()}
+                                />
+                                <Button variant="secondary" onClick={addSupplier}>Add</Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {profile.supplier_identifiers.map(supplier => (
+                                    <Button
+                                        key={supplier}
+                                        variant="secondary"
+                                        size="sm"
+                                        title={`Remove ${supplier}`}
+                                        onClick={() => removeSupplier(supplier)}
+                                    >
+                                        {supplier} ×
+                                    </Button>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Retailer Relationships */}
+                    <Card>
+                        <CardHeader className="flex-col items-stretch gap-1">
+                            <CardTitle className="flex items-center gap-2">
+                                <ShoppingCart className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                Retailer Relationships
+                            </CardTitle>
+                            <CardDescription>
+                                Which retailers do you supply?
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                                {MAJOR_RETAILERS.map(retailer => {
+                                    const checked = profile.retailer_relationships.includes(retailer);
+                                    const controlId = `retailer-${slug(retailer)}`;
+                                    return (
+                                        <label
+                                            key={retailer}
+                                            htmlFor={controlId}
+                                            className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-ui transition-colors duration-120 motion-reduce:transition-none ${checked
+                                                ? "border-re-border-strong bg-re-surface-inset text-re-text-primary"
+                                                : "border-transparent text-re-text-secondary hover:bg-re-surface-inset"
+                                                }`}
+                                        >
+                                            <Checkbox
+                                                id={controlId}
+                                                checked={checked}
+                                                onCheckedChange={() => toggleRetailer(retailer)}
+                                            />
+                                            <span>{retailer}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Summary */}
+                <Card>
+                    <CardHeader className="flex-col items-stretch gap-1">
+                        <CardTitle>Profile Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div>
+                                <p className="text-label text-re-text-muted">Product Categories</p>
+                                <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                    {profile.product_categories.length}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-label text-re-text-muted">Supply Regions</p>
+                                <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                    {profile.supply_regions.length}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-label text-re-text-muted">Suppliers</p>
+                                <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                    {profile.supplier_identifiers.length}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-label text-re-text-muted">Retailers</p>
+                                <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                    {profile.retailer_relationships.length}
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </PageContainer>
     );
 }

@@ -2,9 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, TrendingUp, Clock, AlertCircle, Activity } from 'lucide-react';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
 interface UsageRow {
     endpoint: string;
@@ -20,6 +25,16 @@ interface EndpointSummary {
     count: number;
     avgLatency: number;
     errorRate: number;
+}
+
+/** Segmented range control — the one place this page spends a tint. */
+function rangeButtonClass(active: boolean) {
+    return cn(
+        'rounded-sm px-3 py-1 text-[0.8125rem] transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none',
+        active
+            ? 'bg-re-surface-inset font-medium text-re-text-primary'
+            : 'text-re-text-secondary hover:text-re-text-primary',
+    );
 }
 
 export default function UsagePage() {
@@ -90,142 +105,114 @@ export default function UsagePage() {
         .sort((a, b) => b.count - a.count);
 
     if (isLoading) {
-        return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[var(--re-text-muted)]" /></div>;
+        return (
+            <div className="space-y-6">
+                <div className="space-y-2 border-b border-re-border-subtle pb-5">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-4 w-80" />
+                </div>
+                <Skeleton className="h-16 w-full rounded-md" />
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                    ))}
+                </div>
+                <Skeleton className="h-48 w-full rounded-lg" />
+            </div>
+        );
     }
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)]">API Usage</h1>
-                    <p className="text-sm mt-1 text-[var(--re-text-muted)]">
-                        Monitor your API request volume, latency, and error rates.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    {isRefreshing && (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--re-text-muted)]" aria-label="Refreshing usage" />
-                    )}
-                    <div className="flex gap-1 p-1 rounded-md bg-[var(--re-surface-card)] border border-[var(--re-surface-border)]">
+            <PageHeader
+                title="API Usage"
+                description="Monitor your API request volume, latency, and error rates."
+                meta={isRefreshing ? (
+                    <Loader2
+                        className="h-3.5 w-3.5 animate-spin text-re-text-muted motion-reduce:animate-none"
+                        strokeWidth={1.75}
+                        aria-label="Refreshing usage"
+                    />
+                ) : undefined}
+                secondaryActions={
+                    <div className="flex gap-1 rounded-md border border-re-border bg-re-surface-card p-1">
                         {(['24h', '7d', '30d'] as const).map(range => (
                             <button
                                 key={range}
                                 type="button"
                                 onClick={() => setTimeRange(range)}
                                 aria-pressed={timeRange === range}
-                                className="px-3 py-1 text-xs font-medium rounded transition-colors"
-                                style={{
-                                    background: timeRange === range ? 'var(--re-brand-muted)' : 'transparent',
-                                    color: timeRange === range ? 'var(--re-brand-light)' : 'var(--re-text-muted)',
-                                }}
+                                className={rangeButtonClass(timeRange === range)}
                             >
                                 {range}
                             </button>
                         ))}
                     </div>
-                </div>
-            </div>
+                }
+                className="mb-0"
+            />
 
             {/* Telemetry honesty: sandbox keys don't record traffic, so this page
                 can only ever show live-integration data — which is provisioned
                 during onboarding. Zeros here are expected, not a failure. */}
-            <Card style={{ background: 'var(--re-info-bg)', border: '1px solid var(--re-info-border)' }}>
-                <CardContent className="py-3">
-                    <p className="text-sm m-0" style={{ color: 'var(--re-signal-blue)' }}>
-                        Sandbox keys don&apos;t record request telemetry yet. Usage data appears here once a
-                        live <code className="font-mono">rge_live_</code> integration is enabled for your
-                        workspace during onboarding.
-                    </p>
-                </CardContent>
-            </Card>
+            <Callout tone="info">
+                Sandbox keys don&apos;t record request telemetry yet. Usage data appears here once a
+                live <code className="font-mono text-[0.8125rem]">rge_live_</code> integration is enabled for your
+                workspace during onboarding.
+            </Callout>
 
             {loadFailed && (
-                <p className="text-sm text-re-danger">
+                <Callout tone="danger" role="alert">
                     Couldn&apos;t load usage for the selected range. Pick a range again to retry.
-                </p>
+                </Callout>
             )}
 
-            {/* Summary cards */}
+            {/* Summary tiles */}
             <div
-                className="grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity"
-                style={{ opacity: isRefreshing ? 0.5 : 1 }}
+                className={cn(
+                    'grid grid-cols-2 gap-4 transition-opacity duration-180 motion-reduce:transition-none lg:grid-cols-4',
+                    isRefreshing && 'opacity-50',
+                )}
             >
-                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Activity className="w-4 h-4 text-[var(--re-brand)]" />
-                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Requests</span>
-                        </div>
-                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{totalRequests.toLocaleString()}</p>
-                    </CardContent>
-                </Card>
-                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Clock className="w-4 h-4 text-re-info" />
-                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Avg Latency</span>
-                        </div>
-                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{avgLatency}ms</p>
-                    </CardContent>
-                </Card>
-                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <AlertCircle className="w-4 h-4 text-re-danger" />
-                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Error Rate</span>
-                        </div>
-                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{errorRate}%</p>
-                    </CardContent>
-                </Card>
-                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="w-4 h-4 text-[var(--re-linkage)]" />
-                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Endpoints Hit</span>
-                        </div>
-                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{endpoints.length}</p>
-                    </CardContent>
-                </Card>
+                <StatTile label="Requests" value={totalRequests.toLocaleString()} />
+                <StatTile label="Avg Latency" value={`${avgLatency}ms`} />
+                <StatTile label="Error Rate" value={`${errorRate}%`} />
+                <StatTile label="Endpoints Hit" value={endpoints.length} />
             </div>
 
             {/* Endpoint breakdown */}
             <Card
-                className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)] transition-opacity"
-                style={{ opacity: isRefreshing ? 0.5 : 1 }}
+                className={cn(
+                    'transition-opacity duration-180 motion-reduce:transition-none',
+                    isRefreshing && 'opacity-50',
+                )}
             >
                 <CardHeader>
-                    <CardTitle className="text-sm text-[var(--re-text-primary)]">Endpoint Breakdown</CardTitle>
+                    <CardTitle>Endpoint Breakdown</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    {endpoints.length === 0 ? (
-                        <p className="text-sm text-center py-8 text-[var(--re-text-muted)]">
+                {endpoints.length === 0 ? (
+                    <CardContent>
+                        <p className="py-8 text-center text-ui text-re-text-tertiary">
                             No recorded requests in this time period.
                         </p>
-                    ) : (
-                        <div className="space-y-2">
-                            {endpoints.map((ep, i) => (
-                                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded bg-[var(--re-surface-elevated)]">
-                                    <Badge
-                                        variant="outline"
-                                        className="font-mono text-xs w-14 justify-center"
-                                        style={{
-                                            color: ep.method === 'POST' ? 'var(--re-brand-light)' : 'var(--re-signal-blue)',
-                                            borderColor: ep.method === 'POST' ? 'var(--re-success-border)' : 'var(--re-info-border)',
-                                        }}
-                                    >
-                                        {ep.method}
-                                    </Badge>
-                                    <code className="text-xs font-mono flex-1 truncate text-[var(--re-text-primary)]">{ep.endpoint}</code>
-                                    <span className="text-xs tabular-nums text-[var(--re-text-muted)]">{ep.count.toLocaleString()} req</span>
-                                    <span className="text-xs tabular-nums w-16 text-right text-[var(--re-text-disabled)]">{ep.avgLatency}ms</span>
-                                    <span className="text-xs tabular-nums w-12 text-right" style={{ color: ep.errorRate > 5 ? 'var(--re-signal-red)' : 'var(--re-text-disabled)' }}>
-                                        {ep.errorRate.toFixed(1)}%
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
+                    </CardContent>
+                ) : (
+                    <ul className="divide-y divide-re-border-subtle">
+                        {endpoints.map((ep, i) => (
+                            <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5">
+                                <Badge tone="neutral" size="sm" mono className="w-14 shrink-0 justify-center">
+                                    {ep.method}
+                                </Badge>
+                                <code className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{ep.endpoint}</code>
+                                <span className="text-small tabular-nums text-re-text-secondary">{ep.count.toLocaleString()} req</span>
+                                <span className="w-16 text-right text-small tabular-nums text-re-text-tertiary">{ep.avgLatency}ms</span>
+                                <span className="w-12 text-right text-small tabular-nums text-re-text-tertiary">
+                                    {ep.errorRate.toFixed(1)}%
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </Card>
         </div>
     );

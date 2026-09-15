@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-    ArrowRight, AlertTriangle, Clock, CheckCircle2, ShieldCheck,
+    ArrowRight, AlertTriangle, Clock, ShieldCheck,
     FileCheck, Truck, Package, Zap, Users, Building2,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Container } from '@/components/layout/container';
 
 export const metadata: Metadata = {
     title: 'Your Buyer Asked About FSMA 204 Traceability | RegEngine',
@@ -77,109 +80,101 @@ const FAQ = [
 
 export default function SupplierCompliancePage() {
     return (
-        <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+        <div className="bg-re-surface-base">
 
             {/* Hero */}
-            <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16 text-center">
-                <div className="inline-flex items-center gap-2 bg-re-warning-muted dark:bg-re-warning text-re-warning dark:text-re-warning border border-re-warning dark:border-re-warning px-4 py-2 rounded-xl text-sm font-medium mb-6">
-                    <AlertTriangle className="h-4 w-4" />
+            <Container as="section" width="tool" className="pb-12 pt-14 text-center sm:pb-16 sm:pt-20">
+                <Badge tone="warning" className="mb-6 h-auto whitespace-normal py-1 text-left">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                     Did your buyer ask about FSMA 204?
-                </div>
+                </Badge>
 
-                <h1 className="font-serif text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight mb-6">
+                <h1 className="mx-auto mb-6 max-w-[22ch] font-display text-display text-re-text-primary">
                     Start submitting traceability data{' '}
-                    <em className="font-medium text-[var(--re-brand-dark)]">in minutes.</em>
+                    <em className="font-medium">in minutes.</em>
                 </h1>
 
-                <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-8 leading-relaxed">
+                <p className="mx-auto mb-8 max-w-[60ch] text-body leading-relaxed text-re-text-secondary">
                     Major retailers are signaling traceability expectations ahead of the July 2028 FDA date. Non-compliant suppliers risk losing shelf access.
                 </p>
 
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Link
-                        href="/retailer-readiness"
-                        className="inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all hover:brightness-110 hover:-translate-y-[1px] active:translate-y-0 min-h-[48px]"
-                    >
-                        Check Your Readiness Score <ArrowRight className="h-4 w-4" />
-                    </Link>
-                    <Link
-                        href="/pricing"
-                        className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] min-h-[48px]"
-                    >
-                        See Pricing
-                    </Link>
+                <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                    <Button asChild size="lg">
+                        <Link href="/retailer-readiness" className="no-underline">
+                            Check Your Readiness Score <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                        </Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="lg">
+                        <Link href="/pricing" className="no-underline">
+                            See Pricing
+                        </Link>
+                    </Button>
                 </div>
-            </section>
+            </Container>
 
             {/* Urgency: Retailers already enforcing */}
-            <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-10 sm:py-14 px-4 sm:px-6">
-                <div className="max-w-[900px] mx-auto">
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">
+            <section className="border-t border-re-border-subtle">
+                <Container width="tool" className="py-10 sm:py-14">
+                    <div className="mb-8 text-center">
+                        <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">
                             Retailers are signaling traceability expectations
                         </h2>
-                        <p className="text-[var(--re-text-muted)]">
+                        <p className="text-body text-re-text-secondary">
                             Suppliers who cannot demonstrate FSMA 204 traceability risk losing contracts.
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-[700px] mx-auto">
+                    <div className="mx-auto grid max-w-[700px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
                         {RETAILERS_ENFORCING.map((retailer) => (
-                            <div
-                                key={retailer.name}
-                                className="flex items-start gap-3 bg-[var(--re-surface-elevated)] rounded-xl p-4 border border-[var(--re-surface-border)]"
-                            >
-                                <Building2 className="h-5 w-5 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
-                                <div>
-                                    <span className="font-semibold text-[var(--re-text-primary)] text-sm">{retailer.name}</span>
-                                    <p className="text-xs text-[var(--re-text-muted)] mt-0.5">{retailer.detail}</p>
+                            <Card key={retailer.name} padding="compact" className="flex items-start gap-3">
+                                <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <div className="min-w-0">
+                                    <span className="text-ui font-medium text-re-text-primary">{retailer.name}</span>
+                                    <p className="mt-0.5 text-small leading-relaxed text-re-text-tertiary">{retailer.detail}</p>
                                 </div>
-                            </div>
+                            </Card>
                         ))}
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* How it works */}
-            <section className="max-w-[900px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
-                <div className="text-center mb-10">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">
-                        How it works for suppliers
-                    </h2>
-                    <p className="text-[var(--re-text-muted)]">
-                        No software to install. No IT project. No learning curve.
-                    </p>
-                </div>
+            <section className="border-t border-re-border-subtle">
+                <Container width="tool" className="py-12 sm:py-16">
+                    <div className="mb-10 text-center">
+                        <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">
+                            How it works for suppliers
+                        </h2>
+                        <p className="text-body text-re-text-secondary">
+                            No software to install. No IT project. No learning curve.
+                        </p>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {COMPLIANCE_STEPS.map((step) => (
-                        <div
-                            key={step.step}
-                            className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl p-6 text-center"
-                        >
-                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] mb-4">
-                                <step.icon className="h-6 w-6 text-[var(--re-brand)]" />
-                            </div>
-                            <div className="text-xs font-mono text-[var(--re-brand)] mb-2">Step {step.step}</div>
-                            <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">
-                                {step.title}
-                            </h3>
-                            <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mb-3">
-                                {step.description}
-                            </p>
-                            <div className="inline-flex items-center gap-1.5 text-xs text-[var(--re-brand)] font-medium">
-                                <Clock className="h-3.5 w-3.5" />
-                                {step.time}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                        {COMPLIANCE_STEPS.map((step) => (
+                            <Card key={step.step} padding="spacious" className="text-center">
+                                <step.icon className="mx-auto mb-4 h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <p className="mb-2 font-mono text-label uppercase text-re-text-muted">Step {step.step}</p>
+                                <h3 className="mb-2 text-subheading text-re-text-primary">
+                                    {step.title}
+                                </h3>
+                                <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
+                                    {step.description}
+                                </p>
+                                <p className="inline-flex items-center gap-1.5 text-small text-re-text-tertiary">
+                                    <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                    {step.time}
+                                </p>
+                            </Card>
+                        ))}
+                    </div>
+                </Container>
             </section>
 
             {/* What is FSMA 204 */}
-            <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-10 sm:py-14 px-4 sm:px-6">
-                <div className="max-w-[700px] mx-auto">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-4 text-center">
+            <section className="border-t border-re-border-subtle">
+                <Container width="prose" className="py-10 sm:py-14">
+                    <h2 className="mb-4 text-center font-display text-heading-lg text-re-text-primary">
                         What you need to know about FSMA 204
                     </h2>
 
@@ -206,93 +201,89 @@ export default function SupplierCompliancePage() {
                                 body: 'The FDA can issue warning letters, charge re-inspection fees (~$225/hour), mandate product recalls, suspend facility registration (halting operations), and refuse import admission. More immediately, retailers may drop non-compliant suppliers.',
                             },
                         ].map((item) => (
-                            <div
-                                key={item.title}
-                                className="flex gap-4 bg-[var(--re-surface-elevated)] rounded-xl p-5 border border-[var(--re-surface-border)]"
-                            >
-                                <item.icon className="h-5 w-5 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
-                                <div>
-                                    <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">{item.title}</h3>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{item.body}</p>
+                            <Card key={item.title} padding="default" className="flex gap-4 p-5">
+                                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <div className="min-w-0">
+                                    <h3 className="mb-1 text-subheading text-re-text-primary">{item.title}</h3>
+                                    <p className="text-ui leading-relaxed text-re-text-secondary">{item.body}</p>
                                 </div>
-                            </div>
+                            </Card>
                         ))}
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* For buyers: invite your suppliers */}
-            <section className="max-w-[700px] mx-auto px-4 sm:px-6 py-12 sm:py-16 text-center">
-                <div className="inline-flex items-center gap-2 bg-[var(--re-brand-muted)] text-[var(--re-brand)] px-3 py-1.5 rounded-lg text-xs font-semibold mb-4">
-                    <Users className="h-3.5 w-3.5" />
-                    For Buyers
-                </div>
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">
-                    Need your suppliers to submit traceability data?
-                </h2>
-                <p className="text-[var(--re-text-muted)] mb-6 leading-relaxed max-w-[500px] mx-auto">
-                    Generate portal links from your RegEngine dashboard and share them with suppliers. They submit data directly — no account needed, no training required. Data flows into your workspace automatically.
-                </p>
-                <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="/onboarding">
-                        <Button className="bg-[var(--re-brand)] text-white font-semibold rounded-xl px-6 py-3.5 shadow-[0_4px_16px_rgba(16,185,129,0.25)]">
-                            Get Started <ArrowRight className="ml-2 w-4 h-4" />
+            <section className="border-t border-re-border-subtle">
+                <Container width="prose" className="py-12 text-center sm:py-16">
+                    <Badge tone="brand" className="mb-4">
+                        <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                        For Buyers
+                    </Badge>
+                    <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
+                        Need your suppliers to submit traceability data?
+                    </h2>
+                    <p className="mx-auto mb-6 max-w-[56ch] text-body leading-relaxed text-re-text-secondary">
+                        Generate portal links from your RegEngine dashboard and share them with suppliers. They submit data directly — no account needed, no training required. Data flows into your workspace automatically.
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/onboarding" className="no-underline">
+                                Get Started <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            </Link>
                         </Button>
-                    </Link>
-                    <Link href="/pricing">
-                        <Button variant="outline" className="rounded-xl px-6 py-3.5">
-                            See Pricing
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/pricing" className="no-underline">
+                                See Pricing
+                            </Link>
                         </Button>
-                    </Link>
-                </div>
+                    </div>
+                </Container>
             </section>
 
             {/* FAQ */}
-            <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-10 sm:py-14 px-4 sm:px-6">
-                <div className="max-w-[700px] mx-auto">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-8">
+            <section className="border-t border-re-border-subtle">
+                <Container width="prose" className="py-10 sm:py-14">
+                    <h2 className="mb-8 text-center font-display text-heading-lg text-re-text-primary">
                         Frequently Asked Questions
                     </h2>
                     <div className="space-y-4">
                         {FAQ.map((item, i) => (
-                            <div
-                                key={i}
-                                className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-xl p-5"
-                            >
-                                <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">
+                            <Card key={i} padding="default" className="p-5">
+                                <h3 className="mb-2 text-subheading text-re-text-primary">
                                     {item.q}
                                 </h3>
-                                <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                                <p className="text-ui leading-relaxed text-re-text-secondary">
                                     {item.a}
                                 </p>
-                            </div>
+                            </Card>
                         ))}
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* Bottom CTA */}
-            <section className="py-12 sm:py-16 px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
-                <div className="max-w-[600px] mx-auto text-center">
-                    <h2 className="text-2xl font-bold text-white mb-3">
+            <section className="border-t border-re-border-subtle bg-re-surface-inset">
+                <Container width="prose" className="py-12 text-center sm:py-16">
+                    <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
                         Buyers are starting to ask
                     </h2>
-                    <p className="text-base text-white/90 mb-8 leading-relaxed">
+                    <p className="mx-auto mb-8 max-w-[56ch] text-body leading-relaxed text-re-text-secondary">
                         Be ready when they do. Get a free readiness self-check and see where your traceability records stand.
                     </p>
-                    <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/retailer-readiness">
-                            <Button className="bg-white text-[var(--re-brand)] font-semibold px-6 py-3.5">
-                                Free Readiness Assessment <ArrowRight className="ml-2 w-4 h-4" />
-                            </Button>
-                        </Link>
-                        <Link href="/fsma-204">
-                            <Button variant="outline" className="bg-transparent text-white border border-white/30 px-6 py-3.5">
+                    <div className="flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/retailer-readiness" className="no-underline">
+                                Free Readiness Assessment <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/fsma-204" className="no-underline">
                                 Read the FSMA 204 Guide
-                            </Button>
-                        </Link>
+                            </Link>
+                        </Button>
                     </div>
-                </div>
+                </Container>
             </section>
         </div>
     );

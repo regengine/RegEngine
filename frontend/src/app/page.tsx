@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import {
   ArrowRight,
   Boxes,
@@ -22,6 +21,12 @@ import {
   HashVerificationStrip,
 } from "@/components/compliance";
 import { sandboxCta } from "@/lib/sandbox-cta";
+import { Container } from "@/components/layout/container";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 
 export const metadata: Metadata = {
   title: "RegEngine — FSMA 204 traceability evidence layer",
@@ -100,46 +105,22 @@ const destinations = [
   { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Verification posture" },
 ];
 
-function ActionLink({
-  href,
-  children,
-  primary = false,
-}: {
-  href: string;
-  children: ReactNode;
-  primary?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={[
-        "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-3 text-[13px] font-semibold no-underline transition-colors",
-        primary
-          ? "border-[var(--re-text-primary)] bg-[var(--re-text-primary)] text-[var(--re-surface-base)] hover:bg-[var(--re-success)]"
-          : "border-[var(--re-border-strong)] bg-[var(--re-surface-elevated)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-card)]",
-      ].join(" ")}
-    >
-      {children}
-    </Link>
-  );
-}
-
 function MetricRail() {
   return (
     <div className="mt-8">
-      <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+      <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
         Synthetic demo · example numbers · not a customer workspace
       </p>
-      <div className="re-home-command-rail">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {demoMetrics.map((metric) => (
-          <div key={metric.label} className="border-b border-r border-[var(--re-surface-border)] p-4 last:border-r-0 md:border-b-0">
-            <p className="text-2xl font-semibold leading-none text-[var(--re-text-primary)]">{metric.value}</p>
-            <div className="mt-3 flex flex-col gap-2">
-              <p className="re-label">{metric.label}</p>
-              <p className="text-xs text-[var(--re-text-muted)]">{metric.sublabel}</p>
-              <ComplianceStateBadge state={metric.state} />
-            </div>
-          </div>
+          <StatTile
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            status={<ComplianceStateBadge state={metric.state} />}
+          >
+            <p className="text-small text-re-text-tertiary">{metric.sublabel}</p>
+          </StatTile>
         ))}
       </div>
     </div>
@@ -148,41 +129,43 @@ function MetricRail() {
 
 function ChecklistRadar() {
   return (
-    <section className="border bg-[var(--re-surface-elevated)] p-4">
+    <Card padding="compact">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="re-label">Demo workspace · synthetic data · 3 open checklist items</p>
-          <h2 className="mt-2 text-xl font-semibold leading-tight text-[var(--re-text-primary)]">What the export checklist still flags</h2>
+          <p className="font-mono text-label uppercase text-re-text-muted">Demo workspace · synthetic data · 3 open checklist items</p>
+          <h2 className="mt-2 text-heading text-re-text-primary">What the export checklist still flags</h2>
         </div>
-        <Boxes className="h-5 w-5 text-[var(--re-text-muted)]" aria-hidden="true" />
+        <Boxes className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
       </div>
       <div className="mt-4 grid gap-3">
         {supplierChecklistExamples.map((item) => (
-          <article key={item.supplier} className="grid gap-3 border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-3 sm:grid-cols-[1fr_auto] sm:items-center">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{item.supplier}</h3>
-                <ComplianceStateBadge state={item.state} />
+          <Card key={item.supplier} variant="inset" padding="compact">
+            <article className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-subheading text-re-text-primary">{item.supplier}</h3>
+                  <ComplianceStateBadge state={item.state} />
+                </div>
+                <p className="mt-2 text-ui text-re-text-secondary">{item.issue}</p>
               </div>
-              <p className="mt-2 text-sm leading-5 text-[var(--re-text-muted)]">{item.issue}</p>
-            </div>
-          </article>
+            </article>
+          </Card>
         ))}
       </div>
-      <div className="mt-4 border-t border-[var(--re-border-subtle)] pt-3">
-        <p className="text-xs leading-5 text-[var(--re-text-muted)]">
+      <div className="mt-4 border-t border-re-border-subtle pt-3">
+        <p className="text-small text-re-text-tertiary">
           Export checklist (advisory) — checks configured in the workspace, not FDA certification, not retailer approval.
         </p>
       </div>
-    </section>
+    </Card>
   );
 }
 
 function CommandCenterPreview() {
   return (
-    <div className="re-home-grid-panel border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 shadow-[var(--re-shadow-md)]">
+    <div className="rounded-lg border border-re-border bg-re-surface-inset p-3">
       <div className="mb-3 flex justify-end">
-        <span className="border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] px-2.5 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+        <span className="font-mono text-label uppercase text-re-text-muted">
           Demo workspace
         </span>
       </div>
@@ -211,72 +194,78 @@ function CommandCenterPreview() {
 export default function HomePage() {
   return (
     <main className="re-compliance-os min-h-screen">
-      <section className="re-container grid min-h-[calc(100vh-56px)] items-start gap-8 py-10 lg:grid-cols-[0.9fr_1.1fr] lg:py-12">
+      <Container as="section" width="marketing" className="grid items-start gap-10 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:py-16">
         <div>
-          <p className="mb-4 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+          <p className="mb-4 font-mono text-label uppercase text-re-text-muted">
             FSMA 204 evidence layer · design-partner · pre-revenue
           </p>
-          <h1 className="max-w-[720px] text-[clamp(40px,5.2vw,64px)] font-semibold leading-[0.98] text-[var(--re-text-primary)]">
+          <h1 className="max-w-[720px] font-display text-display text-re-text-primary">
             FSMA 204 traceability evidence layer.
           </h1>
-          <p className="mt-6 max-w-[620px] text-[18px] leading-8 text-[var(--re-text-muted)]">
+          <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
             Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
           </p>
-          <div className="mt-6 rounded border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4">
-            <p className="text-sm leading-6 text-[var(--re-text-muted)]">
-              The federal compliance date for the Food Traceability Rule is <strong className="text-[var(--re-text-primary)]">July 20, 2028</strong>. That is the FDA date. Buyer programs are separate and must be confirmed with your buyer.
+          <Callout tone="neutral" className="mt-6 max-w-[68ch]">
+            <p>
+              The federal compliance date for the Food Traceability Rule is <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. That is the FDA date. Buyer programs are separate and must be confirmed with your buyer.
             </p>
-          </div>
+          </Callout>
           <div className="mt-8 flex flex-wrap gap-3">
-            <ActionLink href="/verify" primary>
-              Verify a sample export
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </ActionLink>
-            <ActionLink href="/contact">Book a 30-min call</ActionLink>
+            <Button asChild size="lg">
+              <Link href="/verify">
+                Verify a sample export
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/contact">Book a 30-min call</Link>
+            </Button>
           </div>
           <MetricRail />
         </div>
 
         <CommandCenterPreview />
+      </Container>
+
+      <section className="border-y border-re-border-subtle">
+        <Container width="marketing">
+          <ol className="grid md:grid-cols-5">
+            {workflow.map((step, index) => (
+              <li key={step.label} className="border-b border-re-border-subtle py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0 md:last:pr-0">
+                <div className="flex items-center justify-between gap-3">
+                  <step.icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                  <span className="font-mono text-label tabular-nums text-re-text-muted">{String(index + 1).padStart(2, "0")}</span>
+                </div>
+                <h2 className="mt-5 text-heading text-re-text-primary">{step.label}</h2>
+                <p className="mt-2 text-ui text-re-text-secondary">{step.detail}</p>
+              </li>
+            ))}
+          </ol>
+        </Container>
       </section>
 
-      <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
-        <div className="re-container grid gap-0 py-0 md:grid-cols-5">
-          {workflow.map((step, index) => (
-            <div key={step.label} className="border-b border-[var(--re-surface-border)] py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0">
-              <div className="flex items-center justify-between gap-3">
-                <step.icon className="h-5 w-5 text-[var(--re-text-primary)]" aria-hidden="true" />
-                <span className="font-mono text-[11px] text-[var(--re-text-muted)]">{String(index + 1).padStart(2, "0")}</span>
-              </div>
-              <h2 className="mt-5 text-xl font-semibold text-[var(--re-text-primary)]">{step.label}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--re-text-muted)]">{step.detail}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="re-section">
-        <div className="re-container grid gap-10 lg:grid-cols-[0.72fr_1fr]">
+      <Section width="marketing" flush>
+        <div className="grid gap-10 lg:grid-cols-[0.72fr_1fr]">
           <div>
-            <h2 className="max-w-[560px] text-[clamp(32px,4.5vw,56px)] font-semibold leading-tight text-[var(--re-text-primary)]">
+            <h2 className="max-w-[20ch] font-display text-heading-lg text-re-text-primary">
               Make every compliance object show its state.
             </h2>
-            <p className="mt-5 max-w-[500px] text-base leading-7 text-[var(--re-text-muted)]">
+            <p className="mt-5 max-w-[68ch] text-body text-re-text-secondary">
               Teams can see blocked, needs correction, corrected, committed, or exported. These statuses do not establish readiness for a recall, a retailer, or an FDA request.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {evidenceCards.map((card) => (
               <EvidenceCard key={card.title} {...card}>
-                <p className="text-xs leading-5 text-[var(--re-text-muted)]">Object state drives badge, border, copy, and next action.</p>
+                <p className="text-small text-re-text-tertiary">Object state drives badge, border, copy, and next action.</p>
               </EvidenceCard>
             ))}
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="re-section bg-[var(--re-surface-card)]">
-        <div className="re-container grid gap-8 lg:grid-cols-[1fr_0.9fr]">
+      <Section width="marketing" tone="inset">
+        <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
           <div className="grid gap-4">
             <EvidencePackagePreview
               packageId="RE-DEMO-PKG-0427"
@@ -293,22 +282,22 @@ export default function HomePage() {
             />
           </div>
           <div>
-            <div className="rounded border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5">
-              <p className="mb-3 font-mono text-[11px] uppercase tracking-widest text-[var(--re-text-disabled)]">
+            <Card padding="compact">
+              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
                 What this is not
               </p>
-              <ul className="space-y-2 text-sm leading-6 text-[var(--re-text-muted)]">
-                <li>• Not FDA endorsement</li>
-                <li>• Not a claim we meet §1.1455 24-hour request</li>
-                <li>• Not retailer-readiness score</li>
-                <li>• Not a commit-gate that certifies</li>
-                <li>• Not a 24-hour Recall Clock product</li>
-                <li>• Not live customer metrics</li>
-                <li>• Not legal advice</li>
+              <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
+                <li>Not FDA endorsement</li>
+                <li>Not a claim we meet §1.1455 24-hour request</li>
+                <li>Not retailer-readiness score</li>
+                <li>Not a commit-gate that certifies</li>
+                <li>Not a 24-hour Recall Clock product</li>
+                <li>Not live customer metrics</li>
+                <li>Not legal advice</li>
               </ul>
-            </div>
+            </Card>
             <div className="mt-5">
-              <p className="mb-3 inline-flex border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1 font-mono text-[11px] uppercase text-[var(--re-text-muted)]">
+              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
                 Sample data · illustrative · synthetic
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -317,58 +306,55 @@ export default function HomePage() {
                   ["Open supplier blockers", "3"],
                   ["Facilities scoped", "12/14"],
                 ].map(([label, value]) => (
-                  <div key={label} className="border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
-                    <p className="text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
-                    <p className="mt-2 re-label">{label}</p>
-                  </div>
+                  <StatTile key={label} label={label} value={value} />
                 ))}
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section id="sandbox" className="re-section border-y border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
-        <div className="re-container">
-          <h2 className="text-2xl font-semibold text-[var(--re-text-primary)]">
-            Walk the synthetic workspace
-          </h2>
-          <p className="mt-3 max-w-[620px] text-sm leading-7 text-[var(--re-text-muted)]">
-            {sandboxCta().blurb}
-          </p>
-          <div className="mt-6">
-            <ActionLink href={sandboxCta().href} primary>
+      <Section id="sandbox" width="marketing">
+        <h2 className="font-display text-heading-lg text-re-text-primary">
+          Walk the synthetic workspace
+        </h2>
+        <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
+          {sandboxCta().blurb}
+        </p>
+        <div className="mt-6">
+          <Button asChild size="lg">
+            <Link href={sandboxCta().href}>
               {sandboxCta().label}
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </ActionLink>
-          </div>
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Link>
+          </Button>
         </div>
-      </section>
+      </Section>
 
-      <section className="re-section pb-24">
-        <div className="re-container grid gap-5 md:grid-cols-4">
+      <Section width="marketing" className="pb-20 sm:pb-24">
+        <div className="grid gap-5 md:grid-cols-4">
           {destinations.map(({ label, href, icon: Icon, note }) => (
-            <Link key={label} href={href} className="group border-t border-[var(--re-border-strong)] pt-4 no-underline">
+            <Link key={label} href={href} className="group border-t border-re-border-strong pt-4 no-underline">
               <div className="flex items-center justify-between">
-                <Icon className="h-5 w-5 text-[var(--re-text-muted)]" aria-hidden="true" />
-                <ArrowRight className="h-4 w-4 text-[var(--re-text-primary)] transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                <Icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <ArrowRight className="h-4 w-4 text-re-text-tertiary transition-transform duration-120 group-hover:translate-x-1 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden="true" />
               </div>
-              <span className="mt-10 block text-2xl font-semibold text-[var(--re-text-primary)]">{label}</span>
-              <span className="mt-2 block text-sm text-[var(--re-text-muted)]">{note}</span>
+              <span className="mt-10 block text-heading text-re-text-primary">{label}</span>
+              <span className="mt-2 block text-ui text-re-text-secondary">{note}</span>
             </Link>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <footer className="border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] py-8">
-        <div className="re-container">
-          <p className="text-sm text-[var(--re-text-muted)]">
+      <footer className="border-t border-re-border-subtle py-8">
+        <Container width="marketing">
+          <p className="text-ui text-re-text-secondary">
             RegEngine · Pasadena, CA · early-stage · design-partner · pre-revenue
           </p>
-          <p className="mt-2 text-xs text-[var(--re-text-disabled)]">
+          <p className="mt-2 text-small text-re-text-muted">
             FDA date July 20, 2028. Buyer programs are not FDA. No seals, certifications, or FDA logo.
           </p>
-        </div>
+        </Container>
       </footer>
     </main>
   );

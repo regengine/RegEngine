@@ -15,6 +15,12 @@ import {
     ShieldCheck,
     Workflow,
 } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Section } from '@/components/layout/section';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
     title: 'Architecture Summary | RegEngine',
@@ -27,8 +33,6 @@ export const metadata: Metadata = {
         type: 'website',
     },
 };
-const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-sm';
-const sectionAlt = 'border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]';
 
 const STACK_LAYERS = [
     {
@@ -66,31 +70,26 @@ const DATA_FLOW_STEPS = [
         step: '1',
         title: 'Ingest',
         description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before coverage checks.',
-        color: 'bg-re-info/15 text-re-info',
     },
     {
         step: '2',
         title: 'Normalize',
         description: 'Raw event data is mapped to FSMA CTE/KDE structures. Lot codes, GLNs, and facility identities may be standardized, with exceptions or missing KDEs surfaced for review.',
-        color: 'bg-purple-500/15 text-purple-400',
     },
     {
         step: '3',
         title: 'Hash & Chain',
         description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Commit means accepted records are appended after checks you configure — not a certification. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
-        color: 'bg-re-brand/15 text-re-brand',
     },
     {
         step: '4',
         title: 'Coverage & Completeness Checklist',
         description: 'The compliance engine produces an advisory coverage and completeness checklist across six weighted dimensions: export-checklist completeness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product-list overlap. This is not a readiness score, not a badge, not an FDA or buyer decision. FTL overlap is list-membership, not a covered-person determination. Per-dimension maturity varies; rule enforcement is opt-in per workflow and is advisory in production today.',
-        color: 'bg-re-warning/15 text-re-warning',
     },
     {
         step: '5',
         title: 'Export',
         description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0, FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
-        color: 'bg-re-danger/15 text-re-danger',
     },
 ];
 
@@ -157,207 +156,192 @@ const OPTIONAL_PROCESSORS = [
     'Analytics after consent or workspace enablement',
 ];
 
+const INFRASTRUCTURE_CONTROLS = [
+    { label: 'Encryption at rest', value: 'Managed-cloud default', detail: 'Encrypted storage is part of the current managed infrastructure posture' },
+    { label: 'Encryption in transit', value: 'Encrypted transport', detail: 'Client and service connections are intended to use encrypted transport' },
+    { label: 'Data residency', value: 'US default', detail: 'Current default posture for active deployments' },
+    { label: 'Backup cadence', value: 'Platform managed', detail: 'Backup and recovery posture depends on the active hosting configuration' },
+    { label: 'CI/CD security', value: 'Current workflow controls', detail: 'Secrets, SAST, and dependency gates run in CI; DAST, SBOM, and container scans run when configured or on scheduled/main-branch workflows' },
+    { label: 'Branch protection', value: 'Repository controlled', detail: 'Review and merge controls are managed at the repository level' },
+];
+
+const BACK_LINK =
+    'inline-flex items-center gap-1.5 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none';
+const PROSE_LINK =
+    'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
+
 export default function ArchitecturePage() {
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+        <div className="re-page min-h-screen">
             {/* Header */}
-            <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10 sm:pb-14">
-                <Link
-                    href="/trust"
-                    className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors mb-6"
-                >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    Trust Center
-                </Link>
-                <span className="block text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
-                    Architecture
-                </span>                <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
-                    How RegEngine is built
-                </h1>
-                <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[720px]">
-                    Service topology, data flow from ingest to export, tenant isolation model, and infrastructure posture.
-                    This page is written for IT reviewers and security teams evaluating RegEngine for procurement.
-                </p>
-            </section>
+            <Container className="pb-10 pt-14 sm:pb-14 sm:pt-20">
+                <PageHeader
+                    breadcrumbs={
+                        <Link href="/trust" className={BACK_LINK}>
+                            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                            Trust Center
+                        </Link>
+                    }
+                    size="hero"
+                    eyebrow={<span className="font-mono uppercase">Architecture</span>}
+                    title="How RegEngine is built"
+                    description="Service topology, data flow from ingest to export, tenant isolation model, and infrastructure posture. This page is written for IT reviewers and security teams evaluating RegEngine for procurement."
+                    className="mb-0 border-b-0 pb-0"
+                />
+            </Container>
 
             {/* System flow diagram */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[1180px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <div className="mb-6 max-w-[760px]">
-                        <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">
-                            System flow at a glance
-                        </h2>
-                        <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                            The core path keeps customer-owned source data, authenticated request context, PostgreSQL
-                            tenant controls, and export review boundaries visually separate. Optional processors sit
-                            outside the default core path unless they are enabled or configured for a workspace.
-                        </p>
+            <Section
+                width="marketing"
+                title="System flow at a glance"
+                description="The core path keeps customer-owned source data, authenticated request context, PostgreSQL tenant controls, and export review boundaries visually separate. Optional processors sit outside the default core path unless they are enabled or configured for a workspace."
+            >
+                <Card className="overflow-hidden">
+                    <div className="grid gap-0 lg:grid-cols-5">
+                        {SYSTEM_FLOW.map((step) => {
+                            const Icon = step.Icon;
+                            return (
+                                <div
+                                    key={step.title}
+                                    className="border-b border-re-border-subtle p-5 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0"
+                                >
+                                    <Icon className="mb-4 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                    <h3 className="text-subheading text-re-text-primary">{step.title}</h3>
+                                    <p className="mt-2 text-ui text-re-text-secondary">{step.detail}</p>
+                                    <p className="mt-4 font-mono text-label uppercase text-re-text-muted">
+                                        {step.boundary}
+                                    </p>
+                                </div>
+                            );
+                        })}
                     </div>
-                    <div className={`${card} overflow-hidden`}>
-                        <div className="grid gap-0 lg:grid-cols-5">
-                            {SYSTEM_FLOW.map((step, index) => {
-                                const Icon = step.Icon;
-                                return (
-                                    <div
-                                        key={step.title}
-                                        className="relative border-b border-[var(--re-surface-border)] p-5 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0"
-                                    >
-                                        {index < SYSTEM_FLOW.length - 1 && (
-                                            <ArrowRight className="absolute right-[-10px] top-8 z-[1] hidden h-5 w-5 rounded-full border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-0.5 text-[var(--re-text-disabled)] lg:block" />
-                                        )}
-                                        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--re-brand)]/10">
-                                            <Icon className="h-5 w-5 text-[var(--re-brand)]" />
-                                        </div>
-                                        <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{step.title}</h3>
-                                        <p className="mt-2 text-sm leading-relaxed text-[var(--re-text-muted)]">{step.detail}</p>
-                                        <p className="mt-4 text-[11px] font-mono uppercase tracking-normal text-[var(--re-text-disabled)]">
-                                            {step.boundary}
-                                        </p>
-                                    </div>
-                                );
-                            })}
+                    <div className="border-t border-re-border-subtle bg-re-surface-inset p-4">
+                        <div className="mb-3 font-mono text-label uppercase text-re-text-muted">
+                            Conditional processors
                         </div>
-                        <div className="border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
-                            <div className="mb-3 text-[11px] font-mono uppercase tracking-widest text-[var(--re-text-disabled)]">
-                                Conditional processors
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {OPTIONAL_PROCESSORS.map((processor) => (
-                                    <span
-                                        key={processor}
-                                        className="rounded-full border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] px-3 py-1.5 text-xs text-[var(--re-text-muted)]"
-                                    >
-                                        {processor}
-                                    </span>
-                                ))}
-                            </div>
+                        <div className="flex flex-wrap gap-2">
+                            {OPTIONAL_PROCESSORS.map((processor) => (
+                                <Badge key={processor} tone="neutral">
+                                    {processor}
+                                </Badge>
+                            ))}
                         </div>
                     </div>
-                </div>
-            </section>
+                </Card>
+            </Section>
 
             {/* Stack layers */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Service topology</h2>
-                    <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        This page describes the current service topology and intended control boundaries. Exact infrastructure details can vary by deployment and environment.
-                    </p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {STACK_LAYERS.map((layer) => {
-                            const Icon = layer.Icon;
-                            return (
-                                <div key={layer.layer} className={`${card} p-5`}>
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-9 h-9 rounded-lg bg-[var(--re-brand)]/10 flex items-center justify-center">
-                                            <Icon className="h-4.5 w-4.5 text-[var(--re-brand)]" />
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-semibold text-[var(--re-text-primary)]">{layer.layer}</div>
-                                            <div className="text-xs text-[var(--re-text-disabled)]">{layer.technology}</div>                                        </div>
+            <Section
+                width="marketing"
+                title="Service topology"
+                description="This page describes the current service topology and intended control boundaries. Exact infrastructure details can vary by deployment and environment."
+            >
+                <div className="grid gap-4 md:grid-cols-2">
+                    {STACK_LAYERS.map((layer) => {
+                        const Icon = layer.Icon;
+                        return (
+                            <Card key={layer.layer} className="p-5">
+                                <div className="mb-3 flex items-center gap-3">
+                                    <Icon className="h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                    <div>
+                                        <div className="text-subheading text-re-text-primary">{layer.layer}</div>
+                                        <div className="font-mono text-[0.8125rem] text-re-text-tertiary">{layer.technology}</div>
                                     </div>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{layer.detail}</p>
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <p className="text-ui text-re-text-secondary">{layer.detail}</p>
+                            </Card>
+                        );
+                    })}
                 </div>
-            </section>
+            </Section>
 
             {/* Data flow */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Data flow: ingest to export</h2>
-                <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                    The current product posture aims for a consistent five-stage pipeline from ingest to export, with integrity controls applied after validation.
-                </p>
-                <div className="space-y-3">
-                    {DATA_FLOW_STEPS.map((step, i) => (
-                        <div key={step.step} className={`${card} p-5 flex gap-4`}>
-                            <div className={`w-8 h-8 rounded-lg ${step.color} flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5`}>
+            <Section
+                width="marketing"
+                title="Data flow: ingest to export"
+                description="The current product posture aims for a consistent five-stage pipeline from ingest to export, with integrity controls applied after validation."
+            >
+                <Card className="overflow-hidden">
+                    {DATA_FLOW_STEPS.map((step) => (
+                        <div key={step.step} className="flex gap-4 border-b border-re-border-subtle p-5 last:border-0">
+                            <span className="w-6 shrink-0 font-mono text-label uppercase tabular-nums text-re-text-muted">
                                 {step.step}
-                            </div>
+                            </span>
                             <div>
-                                <div className="text-sm font-semibold text-[var(--re-text-primary)]">{step.title}</div>
-                                <p className="text-sm text-[var(--re-text-muted)] mt-1 leading-relaxed">{step.description}</p>
+                                <div className="text-subheading text-re-text-primary">{step.title}</div>
+                                <p className="mt-1 text-ui text-re-text-secondary">{step.description}</p>
                             </div>
                         </div>
                     ))}
-                </div>
-            </section>
+                </Card>
+            </Section>
+
             {/* Tenant isolation */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Tenant isolation model</h2>
-                    <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        Isolation is intended to be enforced as close to the data layer as possible rather than depending solely on application logic.
-                    </p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {ISOLATION_CONTROLS.map((control) => {
-                            const Icon = control.Icon;
-                            return (
-                                <div key={control.title} className={`${card} p-5`}>
-                                    <div className="flex items-center gap-2.5 mb-2">
-                                        <Icon className="h-4 w-4 text-[var(--re-brand)]" />
-                                        <div className="text-sm font-semibold text-[var(--re-text-primary)]">{control.title}</div>
-                                    </div>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{control.detail}</p>
+            <Section
+                width="marketing"
+                title="Tenant isolation model"
+                description="Isolation is intended to be enforced as close to the data layer as possible rather than depending solely on application logic."
+            >
+                <div className="grid gap-4 md:grid-cols-2">
+                    {ISOLATION_CONTROLS.map((control) => {
+                        const Icon = control.Icon;
+                        return (
+                            <Card key={control.title} className="p-5">
+                                <div className="mb-2 flex items-center gap-2.5">
+                                    <Icon className="h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                    <div className="text-subheading text-re-text-primary">{control.title}</div>
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <p className="text-ui text-re-text-secondary">{control.detail}</p>
+                            </Card>
+                        );
+                    })}
                 </div>
-            </section>
+            </Section>
 
             {/* Infrastructure */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Infrastructure controls</h2>
-                <div className="grid gap-3 md:grid-cols-3">                    {[
-                        { label: 'Encryption at rest', value: 'Managed-cloud default', detail: 'Encrypted storage is part of the current managed infrastructure posture' },
-                        { label: 'Encryption in transit', value: 'Encrypted transport', detail: 'Client and service connections are intended to use encrypted transport' },
-                        { label: 'Data residency', value: 'US default', detail: 'Current default posture for active deployments' },
-                        { label: 'Backup cadence', value: 'Platform managed', detail: 'Backup and recovery posture depends on the active hosting configuration' },
-                        { label: 'CI/CD security', value: 'Current workflow controls', detail: 'Secrets, SAST, and dependency gates run in CI; DAST, SBOM, and container scans run when configured or on scheduled/main-branch workflows' },
-                        { label: 'Branch protection', value: 'Repository controlled', detail: 'Review and merge controls are managed at the repository level' },
-                    ].map((item) => (
-                        <div key={item.label} className={`${card} p-4`}>
-                            <div className="text-xs uppercase tracking-widest text-[var(--re-text-disabled)]">{item.label}</div>
-                            <div className="mt-2 text-xl font-bold text-[var(--re-text-primary)]">{item.value}</div>
-                            <div className="text-sm text-[var(--re-text-muted)] mt-1">{item.detail}</div>
-                        </div>
+            <Section width="marketing" title="Infrastructure controls">
+                <div className="grid gap-3 md:grid-cols-3">
+                    {INFRASTRUCTURE_CONTROLS.map((item) => (
+                        <Card key={item.label} padding="compact">
+                            <div className="font-mono text-label uppercase text-re-text-muted">{item.label}</div>
+                            <div className="mt-2 text-subheading text-re-text-primary">{item.value}</div>
+                            <div className="mt-1 text-ui text-re-text-secondary">{item.detail}</div>
+                        </Card>
                     ))}
                 </div>
-            </section>
+            </Section>
 
             {/* CTA */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[860px] mx-auto py-10 sm:py-14 px-4 sm:px-6 text-center">
-                    <p className="text-sm text-[var(--re-text-muted)] mb-4">
+            <Section width="marketing">
+                <div className="text-center">
+                    <p className="mx-auto max-w-[68ch] text-ui text-re-text-secondary">
                         Need more detail? The security page covers RLS testing, hash verification, and audit trail posture.
                     </p>
-                    <div className="flex flex-wrap gap-3 justify-center">
-                        <Link href="/security">
-                            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--re-brand)] hover:opacity-80 transition-opacity">
-                                Security overview <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>                        <Link href="/trust">
-                            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors">
-                                Trust Center <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>
-                        <Link href="/contact">
-                            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors">
-                                Request diligence materials <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>
+                    <div className="mt-4 flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/security">
+                                Security overview <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="lg">
+                            <Link href="/trust">
+                                Trust Center <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="lg">
+                            <Link href="/contact">
+                                Request diligence materials <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
                     </div>
-                    <p className="text-sm text-[var(--re-text-muted)] mt-6">
+                    <p className="mx-auto mt-6 max-w-[68ch] text-ui text-re-text-secondary">
                         Verify supported evidence export bundles yourself: drop a supported bundle into{' '}
-                        <Link href="/verify" className="text-[var(--re-brand)] hover:opacity-80">/verify</Link>{' '}
+                        <Link href="/verify" className={PROSE_LINK}>/verify</Link>{' '}
                         or download a synthetic sample at{' '}
-                        <Link href="/proof" className="text-[var(--re-brand)] hover:opacity-80">/proof</Link>.
+                        <Link href="/proof" className={PROSE_LINK}>/proof</Link>.
                     </p>
                 </div>
-            </section>
+            </Section>
         </div>
     );
 }

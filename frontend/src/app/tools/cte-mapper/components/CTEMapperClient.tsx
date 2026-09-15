@@ -5,7 +5,7 @@ import { ToolConfig } from '@/types/fsma-tools';
 import { usePostHog } from '@/lib/posthog-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion } from 'framer-motion';
-import { ArrowDown, Truck, Factory, Warehouse, ShoppingCart, Send, Info, ChevronRight } from 'lucide-react';
+import { Truck, Factory, Warehouse, ShoppingCart, Send, Info } from 'lucide-react';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
@@ -125,7 +125,7 @@ export function CTEMapperClient() {
 
         return (
             <div className="space-y-10">
-                <h3 className="text-2xl font-bold text-center">Your Data Flow Map</h3>
+                <h3 className="text-center text-heading text-re-text-primary">Your Data Flow Map</h3>
 
                 <div className="flex flex-col items-center gap-6 py-4">
                     {/* Source Node */}
@@ -136,19 +136,20 @@ export function CTEMapperClient() {
                                 animate={{ opacity: 1, y: 0 }}
                                 className="flex flex-col items-center"
                             >
-                                <div className="w-16 h-16 rounded-full bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] flex items-center justify-center text-[var(--re-text-tertiary)]">
+                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-re-border bg-re-surface-inset text-re-text-tertiary">
                                     <RoleIcon role={source_role} className="h-8 w-8" />
                                 </div>
-                                <span className="text-xs mt-2 font-medium">{getRoleName(source_role)}</span>
+                                <span className="mt-2 max-w-[18ch] text-center text-small font-medium text-re-text-secondary">{getRoleName(source_role)}</span>
                             </motion.div>
                             <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: 40 }}
-                                className="w-0.5 bg-gradient-to-b from-[var(--re-border-default)] to-[var(--re-brand)] relative"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="flex items-center gap-3"
                             >
-                                <div className="absolute top-1/2 left-4 w-40 text-[10px] text-[var(--re-brand)] font-bold uppercase tracking-tighter">
+                                <span className="block h-10 w-px bg-re-border-strong" aria-hidden="true" />
+                                <span className="font-mono uppercase text-label text-re-text-muted">
                                     Must Send KDEs + TLC
-                                </div>
+                                </span>
                             </motion.div>
                         </>
                     )}
@@ -159,77 +160,78 @@ export function CTEMapperClient() {
                         animate={{ scale: 1 }}
                         className="flex flex-col items-center"
                     >
-                        <div className="w-24 h-24 rounded-3xl bg-[var(--re-brand-muted)] border-2 border-[var(--re-brand)] flex flex-col items-center justify-center shadow-[0_0_20px_rgba(var(--re-brand-rgb),0.2)]">
-                            <RoleIcon role={user_role} className="h-10 w-10 text-[var(--re-brand)] mb-1" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--re-brand)]">YOU</span>
+                        <div className="flex h-24 w-24 flex-col items-center justify-center rounded-lg border border-re-border-strong bg-re-surface-inset">
+                            <RoleIcon role={user_role} className="mb-1 h-10 w-10 text-re-text-primary" />
+                            <span className="font-mono uppercase text-label text-re-text-secondary">YOU</span>
                         </div>
-                        <span className="text-sm mt-3 font-bold">{getRoleName(user_role)}</span>
+                        <span className="mt-3 max-w-[22ch] text-center text-ui font-medium text-re-text-primary">{getRoleName(user_role)}</span>
                     </motion.div>
 
                     {/* Destination Node */}
                     <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: 40 }}
-                        className="w-0.5 bg-gradient-to-b from-[var(--re-brand)] to-[var(--re-border-default)] relative"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-3"
                     >
-                        <div className="absolute top-1/2 left-4 w-40 text-[10px] text-[var(--re-text-muted)] font-bold uppercase tracking-tighter">
+                        <span className="block h-10 w-px bg-re-border-strong" aria-hidden="true" />
+                        <span className="font-mono uppercase text-label text-re-text-muted">
                             YOU Provide KDEs
-                        </div>
+                        </span>
                     </motion.div>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
                         className="flex flex-col items-center"
                     >
-                        <div className="w-16 h-16 rounded-full bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] flex items-center justify-center text-[var(--re-text-tertiary)]">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full border border-re-border bg-re-surface-inset text-re-text-tertiary">
                             <RoleIcon role={destination_role} className="h-8 w-8" />
                         </div>
-                        <span className="text-xs mt-2 font-medium">{getRoleName(destination_role)}</span>
+                        <span className="mt-2 max-w-[18ch] text-center text-small font-medium text-re-text-secondary">{getRoleName(destination_role)}</span>
                     </motion.div>
                 </div>
 
-                <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                    <CardContent className="p-4 space-y-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                            <Truck className="h-3 w-3 text-[var(--re-brand)]" /> CTEs typically assigned to your role
+                <Card>
+                    <CardContent className="space-y-3 p-4">
+                        <h4 className="flex items-center gap-2 font-mono uppercase text-label text-re-text-muted">
+                            <Truck className="h-3.5 w-3.5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> CTEs typically assigned to your role
                         </h4>
                         {ROLE_TO_CTES[user_role] ? (
                             <>
-                                <ul className="space-y-1 text-sm text-[var(--re-text-secondary)] list-disc list-inside">
+                                <ul className="list-inside list-disc space-y-1 text-ui text-re-text-secondary">
                                     {ROLE_TO_CTES[user_role].ctes.map((c) => <li key={c}>{c}</li>)}
                                 </ul>
-                                <p className="text-xs text-[var(--re-text-muted)] mt-2">{ROLE_TO_CTES[user_role].note}</p>
+                                <p className="mt-2 text-small text-re-text-tertiary">{ROLE_TO_CTES[user_role].note}</p>
                             </>
                         ) : (
-                            <p className="text-xs text-[var(--re-text-muted)]">CTE assignment depends on your operation. See the per-event KDE Checklist Builder.</p>
+                            <p className="text-small text-re-text-tertiary">CTE assignment depends on your operation. See the per-event KDE Checklist Builder.</p>
                         )}
                     </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                        <CardContent className="p-4 space-y-2">
-                            <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                <Send className="h-3 w-3 text-[var(--re-info)]" /> Incoming exchange (informational)
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Card>
+                        <CardContent className="space-y-2 p-4">
+                            <h4 className="flex items-center gap-2 font-mono uppercase text-label text-re-text-muted">
+                                <Send className="h-3.5 w-3.5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> Incoming exchange (informational)
                             </h4>
-                            <p className="text-xs text-[var(--re-text-secondary)]">
+                            <p className="text-small text-re-text-secondary">
                                 If this food is on the FDA Food Traceability List and no §1.1305 exemption applies, your {getRoleName(source_role)} is generally required to send the Traceability Lot Code and ship-from KDEs under 21 CFR §1.1340. This tool does not determine FTL status or exemptions — use the FTL Checker first.
                             </p>
                         </CardContent>
                     </Card>
-                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                        <CardContent className="p-4 space-y-2">
-                            <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                <Send className="h-3 w-3 text-[var(--re-brand)]" /> Outgoing exchange (informational)
+                    <Card>
+                        <CardContent className="space-y-2 p-4">
+                            <h4 className="flex items-center gap-2 font-mono uppercase text-label text-re-text-muted">
+                                <Send className="h-3.5 w-3.5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> Outgoing exchange (informational)
                             </h4>
-                            <p className="text-xs text-[var(--re-text-secondary)]">
+                            <p className="text-small text-re-text-secondary">
                                 If this food is on the FDA Food Traceability List and no §1.1305 exemption applies, you generally provide ship-from KDEs and the TLC to the {getRoleName(destination_role)} under §1.1340. Confirm with counsel before relying on this.
                             </p>
                         </CardContent>
                     </Card>
                 </div>
 
-                <p className="text-[10px] text-center text-[var(--re-text-muted)] max-w-2xl mx-auto">
+                <p className="mx-auto max-w-[70ch] text-center text-small text-re-text-muted">
                     This map is a starting reference under 21 CFR Part 1 Subpart S. It does not evaluate FTL coverage, partial exemptions, or your specific operation. Verify against the rule and consult counsel before relying on it.
                 </p>
             </div>
@@ -237,7 +239,7 @@ export function CTEMapperClient() {
     };
 
     return (
-        <div className="min-h-screen py-20 px-4" style={{ background: 'var(--re-surface-base)' }}>
+        <div className="space-y-8">
             <FSMAToolShell
                 config={CTE_MAPPER_CONFIG}
                 renderResults={renderResults}
@@ -252,7 +254,7 @@ export function CTEMapperClient() {
                 }}
             />
 
-            <div className="max-w-3xl mx-auto">
+            <div className="mx-auto max-w-3xl">
                 <RelatedTools
                     tools={FREE_TOOLS.filter(t => ['kde-checker', 'recall-readiness', 'drill-simulator'].includes(t.id))}
                 />

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useReviewItems, useApproveReviewItem, useRejectReviewItem } from '@/hooks/use-review';
 import { useAuth } from '@/lib/auth-context';
 
@@ -52,27 +52,9 @@ export function CuratorReview() {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4" aria-busy="true">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Skeleton className="h-7 w-48" />
-          <Skeleton className="h-6 w-32 rounded-full" />
-        </div>
-        <p className="text-ui text-re-text-tertiary">Loading queue...</p>
-        {[0, 1].map((row) => (
-          <Card key={row}>
-            <CardHeader>
-              <div className="min-w-0 space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-24" />
-              </div>
-              <Skeleton className="h-6 w-28 rounded-full" />
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </CardContent>
-          </Card>
-        ))}
+      <div className="flex flex-col items-center gap-3 p-6 text-re-text-tertiary">
+        <Spinner />
+        <p>Loading queue...</p>
       </div>
     );
   }

@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Download, FileJson, FileSpreadsheet, Hash, Terminal } from "lucide-react";
+import { Container } from "@/components/layout/container";
+import { PageHeader } from "@/components/layout/page-header";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
 
 export const metadata: Metadata = {
     title: "Proof | RegEngine",
@@ -68,189 +73,177 @@ function formatSize(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+/**
+ * A terminal transcript. SPEC §5.1: code is a well — one surface step below the
+ * card, bounded by a hairline rather than an inverted ink block. Result lines
+ * keep a status colour, but never alone: each one carries its own word ("ok",
+ * "matched", "FAILED"), so the meaning survives greyscale.
+ */
+function Transcript({ title, meta, children }: { title: string; meta?: string; children: React.ReactNode }) {
+    return (
+        <Card className="flex flex-col overflow-hidden">
+            <CardHeader className="shrink-0 py-3">
+                <p className="font-mono text-label uppercase text-re-text-muted">{title}</p>
+                {meta && <p className="font-mono text-label uppercase text-re-text-muted">{meta}</p>}
+            </CardHeader>
+            <div className="flex-1 overflow-x-auto bg-re-surface-inset px-5 py-4 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
+                {children}
+            </div>
+        </Card>
+    );
+}
+
 export default function ProofPage() {
     return (
-        <main className="re-page min-h-screen text-[var(--re-text-secondary)]">
-            <section className="re-container grid gap-10 pb-14 pt-12 md:grid-cols-[0.85fr_1fr] md:pb-20 md:pt-18">
+        <main className="re-page min-h-screen">
+            <Container className="grid gap-10 pb-14 pt-12 md:grid-cols-[0.85fr_1fr] md:pb-20 md:pt-16">
                 <div>
-                    <p className="re-label mb-5">Proof</p>
-                    <h1 className="max-w-[680px] text-[clamp(42px,7vw,78px)] font-semibold leading-[0.96]">
-                        Verify RegEngine without signing up.
-                    </h1>
-                    <p className="mt-6 max-w-[590px] text-[17px] leading-7 text-[var(--re-text-muted)]">
-                        Three artifacts. No email gate, no demo call. Download the files, open them in your tools, and check the hashes yourself. If the output does not match the claim, the product fails — and you have the receipts.
-                    </p>
+                    <PageHeader
+                        size="hero"
+                        eyebrow={<span className="font-mono uppercase">Proof</span>}
+                        title="Verify RegEngine without signing up."
+                        description="Three artifacts. No email gate, no demo call. Download the files, open them in your tools, and check the hashes yourself. If the output does not match the claim, the product fails — and you have the receipts."
+                        className="mb-0 border-b-0 pb-0"
+                    />
                     <div className="mt-8 flex flex-wrap gap-3">
-                        <Link
-                            href="#artifacts"
-                            className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]"
-                        >
-                            See the files <ArrowRight className="h-4 w-4" />
-                        </Link>
-                        <Link
-                            href="/sdk/verify_chain.py"
-                            className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-text-primary)]"
-                        >
-                            Get the verifier
-                        </Link>
+                        <Button asChild size="lg">
+                            <Link href="#artifacts">
+                                See the files <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/sdk/verify_chain.py">Get the verifier</Link>
+                        </Button>
                     </div>
                 </div>
-                <div className="re-panel overflow-hidden">
-                    <div className="border-b border-[var(--re-surface-border)] p-4">
-                        <p className="re-label">Verifier output</p>
-                    </div>
-                    <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
-                        <p>$ unzip -p audit-bundle.zip manifest.json | jq .merkle.root</p>
-                        <p className="mt-3 text-[#8fd19e]">&quot;a320428f40579ec9eaea1a640614d26649f2111a0cc6f6b379003d25278bb6d2&quot;</p>
-                        <p className="mt-3">$ python verify_chain.py audit-bundle.zip</p>
-                        <p className="mt-3 text-[#8fd19e]">manifest: ok</p>
-                        <p className="text-[#8fd19e]">files: 2 / 2 sha256 matches</p>
-                        <p className="text-[#f1c36d]">merkle: root recomputed and matched</p>
-                        <p className="mt-3 text-[#d8d2c5]">result: bundle intact</p>
-                    </div>
-                </div>
-            </section>
+                <Transcript title="Verifier output">
+                    <p>$ unzip -p audit-bundle.zip manifest.json | jq .merkle.root</p>
+                    <p className="mt-3 break-all text-re-text-primary">&quot;a320428f40579ec9eaea1a640614d26649f2111a0cc6f6b379003d25278bb6d2&quot;</p>
+                    <p className="mt-3">$ python verify_chain.py audit-bundle.zip</p>
+                    <p className="mt-3 text-re-success">manifest: ok</p>
+                    <p className="text-re-success">files: 2 / 2 sha256 matches</p>
+                    <p className="text-re-success">merkle: root recomputed and matched</p>
+                    <p className="mt-3 text-re-text-primary">result: bundle intact</p>
+                </Transcript>
+            </Container>
 
-            <section id="artifacts" className="re-section">
-                <div className="re-container">
-                    <p className="re-label mb-4">Downloads</p>
-                    <h2 className="max-w-[640px] text-3xl font-semibold leading-tight">
-                        Three artifacts. Open them in your own tools.
-                    </h2>
-                    <div className="mt-10 grid gap-5 md:grid-cols-3">
-                        {ARTIFACTS.map(({ name, href, filename, sizeBytes, icon: Icon, summary, why, formatLabel }) => (
-                            <article
-                                key={filename}
-                                className="re-panel flex h-full flex-col p-6"
-                            >
-                                <Icon className="mb-6 h-6 w-6 text-[var(--re-text-primary)]" aria-hidden="true" />
-                                <h3 className="text-lg font-semibold text-[var(--re-text-primary)]">
-                                    {name}
-                                </h3>
-                                <p className="mt-3 text-sm leading-6 text-[var(--re-text-muted)]">
-                                    {summary}
-                                </p>
-                                <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-[var(--re-surface-border)] pt-4 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--re-text-muted)]">
-                                    <div>
-                                        <dt>Format</dt>
-                                        <dd className="mt-1 text-[var(--re-text-secondary)] normal-case tracking-normal">{formatLabel}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Size</dt>
-                                        <dd className="mt-1 text-[var(--re-text-secondary)] normal-case tracking-normal">{formatSize(sizeBytes)}</dd>
-                                    </div>
-                                </dl>
-                                <a
-                                    href={href}
-                                    download={filename}
-                                    className="mt-6 inline-flex h-11 items-center justify-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]"
-                                >
-                                    <Download className="h-4 w-4" /> Download {filename}
-                                </a>
-                                <div className="mt-5 border-t border-[var(--re-surface-border)] pt-4">
-                                    <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--re-text-muted)]">Why this matters</p>
-                                    <p className="mt-2 text-sm leading-6 text-[var(--re-text-muted)]">{why}</p>
+            <Section
+                id="artifacts"
+                width="marketing"
+                eyebrow={<span className="font-mono uppercase">Downloads</span>}
+                title="Three artifacts. Open them in your own tools."
+            >
+                <div className="grid gap-5 md:grid-cols-3">
+                    {ARTIFACTS.map(({ name, href, filename, sizeBytes, icon: Icon, summary, why, formatLabel }) => (
+                        <article key={filename} className="h-full">
+                        <Card className="flex h-full flex-col p-6">
+                            <Icon className="mb-6 h-6 w-6 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                            <h3 className="text-subheading text-re-text-primary">{name}</h3>
+                            <p className="mt-3 flex-1 text-ui text-re-text-secondary">{summary}</p>
+                            <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-re-border-subtle pt-4">
+                                <div>
+                                    <dt className="font-mono text-label uppercase text-re-text-muted">Format</dt>
+                                    <dd className="mt-1 text-ui text-re-text-secondary">{formatLabel}</dd>
                                 </div>
-                            </article>
-                        ))}
-                    </div>
+                                <div>
+                                    <dt className="font-mono text-label uppercase text-re-text-muted">Size</dt>
+                                    <dd className="mt-1 font-mono text-[0.8125rem] tabular-nums text-re-text-secondary">{formatSize(sizeBytes)}</dd>
+                                </div>
+                            </dl>
+                            <Button asChild variant="secondary" size="lg" className="mt-6 w-full">
+                                <a href={href} download={filename}>
+                                    <Download aria-hidden="true" strokeWidth={1.75} /> Download {filename}
+                                </a>
+                            </Button>
+                            <div className="mt-5 border-t border-re-border-subtle pt-4">
+                                <p className="font-mono text-label uppercase text-re-text-muted">Why this matters</p>
+                                <p className="mt-2 text-ui text-re-text-secondary">{why}</p>
+                            </div>
+                        </Card>
+                        </article>
+                    ))}
                 </div>
-            </section>
+            </Section>
 
-            <section className="re-section">
-                <div className="re-container grid gap-8 md:grid-cols-[0.75fr_1fr]">
+            <Section width="marketing">
+                <div className="grid gap-8 md:grid-cols-[0.75fr_1fr]">
                     <div>
-                        <p className="re-label mb-4">Run it yourself</p>
-                        <h2 className="text-3xl font-semibold leading-tight">
+                        <p className="mb-4 font-mono text-label uppercase text-re-text-muted">Run it yourself</p>
+                        <h2 className="font-display text-heading-lg text-re-text-primary">
                             Inspect the Python verifier.
                         </h2>
-                        <p className="mt-5 text-sm leading-6 text-[var(--re-text-muted)]">
-                            <code className="font-mono text-[12px]">verify_chain.py</code> reads the manifest, recomputes each declared file&apos;s SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[12px]">services/shared/merkle_tree.py</code>. If those values disagree with the included manifest, the script exits non-zero.
+                        <p className="mt-5 text-ui text-re-text-secondary">
+                            <code className="font-mono text-[0.8125rem]">verify_chain.py</code> reads the manifest, recomputes each declared file&apos;s SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[0.8125rem]">services/shared/merkle_tree.py</code>. If those values disagree with the included manifest, the script exits non-zero.
                         </p>
-                        <Link
-                            href="/sdk/verify_chain.py"
-                            className="mt-6 inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-text-primary)]"
-                        >
-                            <Terminal className="h-4 w-4" /> Open verify_chain.py
-                        </Link>
+                        <Button asChild variant="secondary" size="lg" className="mt-6">
+                            <Link href="/sdk/verify_chain.py">
+                                <Terminal aria-hidden="true" strokeWidth={1.75} /> Open verify_chain.py
+                            </Link>
+                        </Button>
                     </div>
-                    <div className="re-panel overflow-hidden">
-                        <div className="border-b border-[var(--re-surface-border)] p-4">
-                            <p className="re-label">Three-step verify</p>
-                        </div>
-                        <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
-                            <p className="text-[#8fd19e]"># 1. Download the bundle and the verifier</p>
-                            <p>curl -O https://regengine.co/proof/audit-bundle.zip</p>
-                            <p>curl -O https://regengine.co/sdk/verify_chain.py</p>
-                            <p className="mt-3 text-[#8fd19e]"># 2. Run it</p>
-                            <p>python verify_chain.py audit-bundle.zip</p>
-                            <p className="mt-3 text-[#8fd19e]"># 3. (Optional) Recompute the leaf yourself</p>
-                            <p>shasum -a 256 fsma-204-sample.csv</p>
-                        </div>
-                    </div>
+                    <Transcript title="Three-step verify">
+                        <p className="text-re-text-tertiary"># 1. Download the bundle and the verifier</p>
+                        <p className="break-all">curl -O https://regengine.co/proof/audit-bundle.zip</p>
+                        <p className="break-all">curl -O https://regengine.co/sdk/verify_chain.py</p>
+                        <p className="mt-3 text-re-text-tertiary"># 2. Run it</p>
+                        <p>python verify_chain.py audit-bundle.zip</p>
+                        <p className="mt-3 text-re-text-tertiary"># 3. (Optional) Recompute the leaf yourself</p>
+                        <p>shasum -a 256 fsma-204-sample.csv</p>
+                    </Transcript>
                 </div>
-            </section>
+            </Section>
 
-            <section className="re-section">
-                <div className="re-container grid gap-8 md:grid-cols-[0.75fr_1fr]">
+            <Section width="marketing">
+                <div className="grid gap-8 md:grid-cols-[0.75fr_1fr]">
                     <div>
-                        <p className="re-label mb-4">Watch it fail</p>
-                        <h2 className="text-3xl font-semibold leading-tight">
+                        <p className="mb-4 font-mono text-label uppercase text-re-text-muted">Watch it fail</p>
+                        <h2 className="font-display text-heading-lg text-re-text-primary">
                             A tampered bundle is published next to the real one.
                         </h2>
-                        <p className="mt-5 text-sm leading-6 text-[var(--re-text-muted)]">
-                            <code className="font-mono text-[12px]">audit-bundle-tampered.zip</code> contains a changed CSV while the manifest&apos;s declared hash remains unchanged. Run the verifier against it and watch it exit non-zero. This demonstrates detection of changed file bytes against an unchanged manifest; replacing both the file and manifest is outside this check.
+                        <p className="mt-5 text-ui text-re-text-secondary">
+                            <code className="font-mono text-[0.8125rem]">audit-bundle-tampered.zip</code> contains a changed CSV while the manifest&apos;s declared hash remains unchanged. Run the verifier against it and watch it exit non-zero. This demonstrates detection of changed file bytes against an unchanged manifest; replacing both the file and manifest is outside this check.
                         </p>
-                        <Link
-                            href="/proof/audit-bundle-tampered.zip"
-                            className="mt-6 inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-text-primary)]"
-                        >
-                            <Download className="h-4 w-4" /> Download audit-bundle-tampered.zip
-                        </Link>
+                        <Button asChild variant="secondary" size="lg" className="mt-6">
+                            <Link href="/proof/audit-bundle-tampered.zip">
+                                <Download aria-hidden="true" strokeWidth={1.75} /> Download audit-bundle-tampered.zip
+                            </Link>
+                        </Button>
                     </div>
-                    <div className="re-panel overflow-hidden">
-                        <div className="border-b border-[var(--re-surface-border)] p-4">
-                            <p className="re-label">Tampered output</p>
-                        </div>
-                        <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
-                            <p>$ python verify_chain.py audit-bundle-tampered.zip</p>
-                            <p className="mt-3 text-[#8fd19e]">manifest: ok</p>
-                            <p className="text-[#e58c8c]">verify: FAILED — fsma-204-sample.csv: sha256 mismatch</p>
-                            <p className="text-[#e58c8c]">result: bundle TAMPERED</p>
-                            <p className="mt-3 text-[#d8d2c5]">$ echo $?</p>
-                            <p className="text-[#d8d2c5]">1</p>
-                        </div>
-                    </div>
+                    <Transcript title="Tampered output">
+                        <p>$ python verify_chain.py audit-bundle-tampered.zip</p>
+                        <p className="mt-3 text-re-success">manifest: ok</p>
+                        <p className="text-re-danger">verify: FAILED — fsma-204-sample.csv: sha256 mismatch</p>
+                        <p className="text-re-danger">result: bundle TAMPERED</p>
+                        <p className="mt-3">$ echo $?</p>
+                        <p>1</p>
+                    </Transcript>
                 </div>
-            </section>
+            </Section>
 
-            <section className="re-section">
-                <div className="re-container">
-                    <p className="re-label mb-4">Changelog</p>
-                    <div className="re-panel p-6 text-sm leading-6 text-[var(--re-text-muted)]">
-                        <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--re-text-secondary)]">2026-05-09 — verifier mismatch found and fixed</p>
-                        <p className="mt-3">
-                            A reader running the recipe on this page got an argparse error instead of a verification. The verifier we&apos;d shipped didn&apos;t match the bundle we&apos;d shipped — the hashes were correct, but the script next to them read JSON, not the zip the page describes.
-                        </p>
-                        <p className="mt-3">
-                            Replaced with a verifier that opens the zip, recomputes every per-file SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[12px]">services/shared/merkle_tree.py</code>. Added the EPCIS payload to <code className="font-mono text-[12px]">manifest.json</code>, added a <code className="font-mono text-[12px]">build</code> block (commit, generated_at, release), and published <code className="font-mono text-[12px]">audit-bundle-tampered.zip</code> so anyone can watch the new verifier fail closed.
-                        </p>
-                        <p className="mt-3">
-                            If you found the original bug before we did — thank you. That&apos;s the system working.
-                        </p>
-                    </div>
-                </div>
-            </section>
+            <Section width="marketing" eyebrow={<span className="font-mono uppercase">Changelog</span>}>
+                <Card className="p-6">
+                    <p className="font-mono text-label uppercase text-re-text-secondary">2026-05-09 — verifier mismatch found and fixed</p>
+                    <p className="mt-3 text-ui text-re-text-secondary">
+                        A reader running the recipe on this page got an argparse error instead of a verification. The verifier we&apos;d shipped didn&apos;t match the bundle we&apos;d shipped — the hashes were correct, but the script next to them read JSON, not the zip the page describes.
+                    </p>
+                    <p className="mt-3 text-ui text-re-text-secondary">
+                        Replaced with a verifier that opens the zip, recomputes every per-file SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[0.8125rem]">services/shared/merkle_tree.py</code>. Added the EPCIS payload to <code className="font-mono text-[0.8125rem]">manifest.json</code>, added a <code className="font-mono text-[0.8125rem]">build</code> block (commit, generated_at, release), and published <code className="font-mono text-[0.8125rem]">audit-bundle-tampered.zip</code> so anyone can watch the new verifier fail closed.
+                    </p>
+                    <p className="mt-3 text-ui text-re-text-secondary">
+                        If you found the original bug before we did — thank you. That&apos;s the system working.
+                    </p>
+                </Card>
+            </Section>
 
-            <div className="sticky bottom-0 z-[3] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95 backdrop-blur">
-                <div className="re-container flex flex-wrap items-center justify-between gap-3 py-3 text-[12px] text-[var(--re-text-muted)]">
+            <div className="sticky bottom-0 z-[3] border-t border-re-border-subtle bg-re-surface-card/95 backdrop-blur">
+                <Container className="flex flex-wrap items-center justify-between gap-3 py-3 text-small text-re-text-tertiary">
                     <span>
                         All artifacts are synthetic. They are regenerated by production code on every release.
                     </span>
-                    <code className="font-mono text-[11px] text-[var(--re-text-secondary)]">
+                    <code className="font-mono text-[0.8125rem] text-re-text-secondary">
                         python verify_chain.py audit-bundle.zip
                     </code>
-                </div>
+                </Container>
             </div>
         </main>
     );

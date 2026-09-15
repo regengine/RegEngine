@@ -1,33 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StatTile } from '@/components/ui/stat-tile';
 import { getServiceURL } from '@/lib/api-config';
+import type { LucideIcon } from 'lucide-react';
 import {
-    Terminal,
     Key,
-    Database,
     Shield,
     Users,
-    FileText,
-    AlertCircle,
     Copy,
     Play,
     Code,
     Book,
-    Zap,
     Lock,
     Globe,
     Layers,
     Activity,
-    Settings,
     Search,
     ChevronRight,
     ExternalLink,
@@ -82,7 +78,8 @@ const endpoints: Endpoint[] = [
 
 ];
 
-const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+
+const categoryIcons: Record<string, LucideIcon> = {
     'Health & Metrics': Activity,
     'Authentication': Lock,
     'API Keys': Key,
@@ -92,22 +89,17 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
     'Verticals': Globe,
 };
 
-const categoryColors: Record<string, string> = {
-    'Health & Metrics': 'from-re-brand to-re-brand-dark',
-    'Authentication': 'from-purple-500 to-indigo-600',
-    'API Keys': 'from-orange-500 to-amber-600',
-    'Tenants': 'from-blue-500 to-cyan-600',
-    'Overlay': 'from-pink-500 to-rose-600',
-    'Compliance': 'from-red-500 to-orange-600',
-    'Verticals': 'from-teal-500 to-green-600',
-};
-
-const methodColors = {
-    GET: 'bg-re-info/10 text-re-info border-re-info/30',
-    POST: 'bg-re-success/10 text-re-success border-green-500/30',
-    PUT: 'bg-orange-500/10 text-orange-600 border-orange-500/30',
-    DELETE: 'bg-re-danger/10 text-re-danger border-re-danger/30',
-    PATCH: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
+/**
+ * HTTP verb tones. The seven per-category gradients this file used to carry
+ * are gone: a category is an ordering device, not a state, and the only colour
+ * left on the page is the verb pill (SPEC §1.6).
+ */
+const methodTones: Record<Endpoint['method'], BadgeTone> = {
+    GET: 'info',
+    POST: 'success',
+    PUT: 'warning',
+    DELETE: 'danger',
+    PATCH: 'corrected',
 };
 
 export default function AdminAPIConsolePage() {
@@ -115,7 +107,6 @@ export default function AdminAPIConsolePage() {
     const [selectedEndpoint, setSelectedEndpoint] = useState<Endpoint | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [apiKey, setApiKey] = useState('');
-    const [testResponse, setTestResponse] = useState<any>(null);
 
     const categories = Array.from(new Set(endpoints.map(e => e.category)));
 
@@ -133,319 +124,264 @@ export default function AdminAPIConsolePage() {
     }, {} as Record<string, Endpoint[]>);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
+        <PageContainer>
+            <PageHeader
+                title="Admin API Console"
+                description={'Explore, test, and integrate with RegEngine’s tenant, traceability, and compliance APIs'}
+            />
 
-            {/* Animated background */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 -left-48 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-re-info/20 rounded-full blur-3xl animate-pulse delay-1000" />
-                <div className="absolute top-3/4 left-1/3 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse delay-500" />
-            </div>
+            <div className="space-y-6">
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 gap-4 sm:max-w-md">
+                    <StatTile label="Endpoints" value={endpoints.length} />
+                    <StatTile label="Categories" value={categories.length} />
+                </div>
 
-            <PageContainer>
-                <div className="relative z-10">
-                    {/* Hero Section */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center mb-12 pt-8"
+                {/* Search and Authentication */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <Card padding="compact" className="lg:col-span-2">
+                        <label htmlFor="api-console-search" className="sr-only">Search endpoints by path or description</label>
+                        <Input
+                            id="api-console-search"
+                            type="search"
+                            placeholder="Search endpoints by path or description..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            leadingIcon={<Search strokeWidth={1.75} />}
+                        />
+                    </Card>
+
+                    <Card padding="compact">
+                        <label htmlFor="api-console-key" className="sr-only">API Key (optional)</label>
+                        <Input
+                            id="api-console-key"
+                            type="password"
+                            placeholder="API Key (optional)"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            leadingIcon={<Key strokeWidth={1.75} />}
+                        />
+                    </Card>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="-mx-1 flex items-center gap-2 overflow-x-auto scrollbar-none no-scrollbar px-1 pb-2">
+                    <Button
+                        variant={selectedCategory === null ? 'secondary' : 'ghost'}
+                        size="sm"
+                        aria-pressed={selectedCategory === null}
+                        className="shrink-0"
+                        onClick={() => setSelectedCategory(null)}
                     >
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
-                            className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 mb-6 shadow-2xl shadow-purple-500/50"
-                        >
-                            <Terminal className="w-10 h-10 text-white" />
-                        </motion.div>
+                        All Categories
+                    </Button>
+                    {categories.map((category) => {
+                        const Icon = categoryIcons[category];
+                        return (
+                            <Button
+                                key={category}
+                                variant={selectedCategory === category ? 'secondary' : 'ghost'}
+                                size="sm"
+                                aria-pressed={selectedCategory === category}
+                                className="shrink-0"
+                                onClick={() => setSelectedCategory(category)}
+                                leadingIcon={Icon ? <Icon strokeWidth={1.75} aria-hidden="true" /> : undefined}
+                            >
+                                {category}
+                                <Badge size="sm" className="ml-1">
+                                    {endpoints.filter(e => e.category === category).length}
+                                </Badge>
+                            </Button>
+                        );
+                    })}
+                </div>
 
-                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                            Admin API Console
-                        </h1>
-                        <p className="text-xl text-re-text-secondary max-w-3xl mx-auto">
-                            Explore, test, and integrate with RegEngine&apos;s tenant, traceability, and compliance APIs
-                        </p>
-
-                        {/* Quick Stats */}
-                        <div className="flex items-center justify-center gap-6 mt-8">
-                            <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
-                                <div className="text-3xl font-bold text-white">{endpoints.length}</div>
-                                <div className="text-sm text-re-text-tertiary">Endpoints</div>
-                            </div>
-                            <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
-                                <div className="text-3xl font-bold text-white">{categories.length}</div>
-                                <div className="text-sm text-re-text-tertiary">Categories</div>
-                            </div>
-                        </div>
-                    </motion.div>
-
-                    {/* Search and Authentication */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                        <Card className="lg:col-span-2 bg-white/5 backdrop-blur-sm border-white/10">
-                            <CardContent className="pt-6">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-re-text-tertiary" />
-                                    <Input
-                                        placeholder="Search endpoints by path or description..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-re-text-muted"
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-gradient-to-br from-orange-500/10 to-amber-500/10 border-orange-500/20 backdrop-blur-sm">
-                            <CardContent className="pt-6">
-                                <div className="flex items-center gap-3">
-                                    <Key className="w-5 h-5 text-orange-400" />
-                                    <Input
-                                        type="password"
-                                        placeholder="API Key (optional)"
-                                        value={apiKey}
-                                        onChange={(e) => setApiKey(e.target.value)}
-                                        className="bg-white/5 border-white/10 text-white placeholder:text-re-text-muted"
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-2">
-                        <Button
-                            variant={selectedCategory === null ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setSelectedCategory(null)}
-                            className={selectedCategory === null ? "bg-gradient-to-r from-purple-500 to-pink-600" : "bg-white/5 border-white/10 text-white"}
-                        >
-                            All Categories
-                        </Button>
-                        {categories.map((category) => {
-                            const Icon = categoryIcons[category];
-                            return (
-                                <Button
-                                    key={category}
-                                    variant={selectedCategory === category ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => setSelectedCategory(category)}
-                                    className={selectedCategory === category
-                                        ? `bg-gradient-to-r ${categoryColors[category]}`
-                                        : "bg-white/5 border-white/10 text-white hover:bg-white/10"
-                                    }
-                                >
-                                    <Icon className="w-4 h-4 mr-2" />
-                                    {category}
-                                    <Badge variant="secondary" className="ml-2 bg-white/20">
-                                        {endpoints.filter(e => e.category === category).length}
-                                    </Badge>
-                                </Button>
-                            );
-                        })}
-                    </div>
-
-                    {/* Main Content Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Endpoints List */}
-                        <div className="lg:col-span-2 space-y-6">
-                            {Object.entries(groupedEndpoints).map(([category, categoryEndpoints]) => {
-                                const Icon = categoryIcons[category];
-                                const colorClass = categoryColors[category];
-
-                                return (
-                                    <motion.div
-                                        key={category}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                    >
-                                        <Card className="bg-white/5 backdrop-blur-sm border-white/10 overflow-hidden">
-                                            <CardHeader className={`bg-gradient-to-r ${colorClass} border-b border-white/10`}>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm">
-                                                        <Icon className="w-5 h-5 text-white" />
-                                                    </div>
-                                                    <div>
-                                                        <CardTitle className="text-white">{category}</CardTitle>
-                                                        <CardDescription className="text-white/70">
-                                                            {categoryEndpoints.length} endpoint{categoryEndpoints.length !== 1 ? 's' : ''}
-                                                        </CardDescription>
-                                                    </div>
-                                                </div>
-                                            </CardHeader>
-                                            <CardContent className="p-0">
-                                                <div className="divide-y divide-white/10">
-                                                    {categoryEndpoints.map((endpoint, idx) => (
-                                                        <motion.div
-                                                            key={endpoint.path}
-                                                            initial={{ opacity: 0, x: -20 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                            transition={{ delay: idx * 0.05 }}
-                                                            onClick={() => setSelectedEndpoint(endpoint)}
-                                                            className={`p-4 cursor-pointer transition-all hover:bg-white/10 ${selectedEndpoint?.path === endpoint.path ? 'bg-white/10 border-l-4 border-purple-500' : ''
-                                                                }`}
-                                                        >
-                                                            <div className="flex items-start justify-between gap-4">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center gap-3 mb-2">
-                                                                        <Badge className={`${methodColors[endpoint.method]} border font-mono text-xs px-2 py-0.5`}>
-                                                                            {endpoint.method}
-                                                                        </Badge>
-                                                                        <code className="text-sm text-re-text-secondary font-mono truncate">
-                                                                            {endpoint.path}
-                                                                        </code>
-                                                                    </div>
-                                                                    <p className="text-sm text-re-text-tertiary">{endpoint.description}</p>
-                                                                </div>
-                                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                                    {endpoint.requiresAuth && (
-                                                                        <Lock className="w-4 h-4 text-re-warning" />
-                                                                    )}
-                                                                    <ChevronRight className="w-4 h-4 text-re-text-muted" />
-                                                                </div>
-                                                            </div>
-                                                        </motion.div>
-                                                    ))}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    </motion.div>
-                                );
-                            })}
-
-                            {filteredEndpoints.length === 0 && (
-                                <Card className="bg-white/5 backdrop-blur-sm border-white/10">
-                                    <CardContent className="py-12 text-center">
-                                        <Search className="w-12 h-12 text-re-text-muted mx-auto mb-4" />
-                                        <h3 className="text-lg font-semibold text-white mb-2">No endpoints found</h3>
-                                        <p className="text-re-text-tertiary">Try adjusting your search or filter</p>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </div>
-
-                        {/* Endpoint Details Panel */}
-                        <div className="lg:sticky lg:top-6 h-fit">
-                            <AnimatePresence mode="wait">
-                                {selectedEndpoint ? (
-                                    <motion.div
-                                        key={selectedEndpoint.path}
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                    >
-                                        <Card className="bg-white/5 backdrop-blur-sm border-white/10">
-                                            <CardHeader className="border-b border-white/10">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Badge className={`${methodColors[selectedEndpoint.method]} border font-mono`}>
-                                                        {selectedEndpoint.method}
-                                                    </Badge>
-                                                    {selectedEndpoint.requiresAuth && (
-                                                        <Badge className="bg-re-warning/10 text-re-warning border-re-warning/30">
-                                                            <Lock className="w-3 h-3 mr-1" />
-                                                            Auth Required
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                <CardTitle className="text-white font-mono text-lg break-all">
-                                                    {selectedEndpoint.path}
-                                                </CardTitle>
-                                                <CardDescription className="text-re-text-tertiary">
-                                                    {selectedEndpoint.description}
-                                                </CardDescription>
-                                            </CardHeader>
-
-                                            <CardContent className="space-y-4 pt-6">
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-white mb-2">Request Example</h4>
-                                                    <pre className="bg-black/50 p-4 rounded-lg text-xs text-re-text-secondary overflow-x-auto border border-white/10">
-                                                        <code>{`curl -X ${selectedEndpoint.method} \\
-  ${getServiceURL('admin')}${selectedEndpoint.path} \\${selectedEndpoint.requiresAuth ? '\n  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\' : ''}
-  -H "Content-Type: application/json"`}</code>
-                                                    </pre>
-                                                </div>
-
-                                                <div className="flex gap-2">
-                                                    <Button disabled title="Coming Soon" className="flex-1 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700">
-                                                        <Play className="w-4 h-4 mr-2" />
-                                                        Try it out
-                                                    </Button>
-                                                    <Button disabled title="Coming Soon" variant="outline" className="bg-white/5 border-white/10 text-white hover:bg-white/10">
-                                                        <Copy className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
-
-                                                <div className="pt-4 border-t border-white/10">
-                                                    <a
-                                                        href={`${getServiceURL('admin')}/docs#${selectedEndpoint.path.replace(/\//g, '-')}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
-                                                    >
-                                                        <Book className="w-4 h-4" />
-                                                        View full documentation
-                                                        <ExternalLink className="w-3 h-3" />
-                                                    </a>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                    >
-                                        <Card className="bg-white/5 backdrop-blur-sm border-white/10">
-                                            <CardContent className="py-12 text-center">
-                                                <Code className="w-12 h-12 text-re-text-muted mx-auto mb-4" />
-                                                <h3 className="text-lg font-semibold text-white mb-2">Select an endpoint</h3>
-                                                <p className="text-re-text-tertiary">Click on any endpoint to view details</p>
-                                            </CardContent>
-                                        </Card>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                            {/* Quick Links */}
-                            <Card className="mt-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-re-info/20 backdrop-blur-sm">
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    {/* Endpoints List */}
+                    <div className="space-y-6 lg:col-span-2">
+                        {Object.entries(groupedEndpoints).map(([category, categoryEndpoints]) => (
+                            <Card key={category}>
                                 <CardHeader>
-                                    <CardTitle className="text-white flex items-center gap-2">
-                                        <Zap className="w-5 h-5 text-re-warning" />
-                                        Quick Links
-                                    </CardTitle>
+                                    <div className="min-w-0">
+                                        <CardTitle>{category}</CardTitle>
+                                        <CardDescription>
+                                            {categoryEndpoints.length} endpoint{categoryEndpoints.length !== 1 ? 's' : ''}
+                                        </CardDescription>
+                                    </div>
                                 </CardHeader>
-                                <CardContent className="space-y-2">
-                                    <a
-                                        href={`${getServiceURL('admin')}/docs`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
-                                    >
-                                        <span className="text-sm text-white">Swagger UI</span>
-                                        <ExternalLink className="w-4 h-4 text-re-text-tertiary group-hover:text-white transition-colors" />
-                                    </a>
-                                    <a
-                                        href={`${getServiceURL('admin')}/redoc`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
-                                    >
-                                        <span className="text-sm text-white">ReDoc</span>
-                                        <ExternalLink className="w-4 h-4 text-re-text-tertiary group-hover:text-white transition-colors" />
-                                    </a>
-                                    <a
-                                        href="/admin"
-                                        className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
-                                    >
-                                        <span className="text-sm text-white">API Key Management</span>
-                                        <ChevronRight className="w-4 h-4 text-re-text-tertiary group-hover:text-white transition-colors" />
-                                    </a>
+                                <CardContent className="p-0">
+                                    <ul className="divide-y divide-re-border-subtle">
+                                        {categoryEndpoints.map((endpoint) => {
+                                            const isSelected = selectedEndpoint?.path === endpoint.path;
+                                            return (
+                                                <li key={endpoint.path}>
+                                                    <button
+                                                        type="button"
+                                                        aria-pressed={isSelected}
+                                                        onClick={() => setSelectedEndpoint(endpoint)}
+                                                        className={`flex w-full items-start justify-between gap-4 px-5 py-4 text-left transition-colors duration-120 motion-reduce:transition-none ${isSelected ? 'bg-re-brand-muted' : 'hover:bg-re-surface-inset'}`}
+                                                    >
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="mb-2 flex flex-wrap items-center gap-3">
+                                                                <Badge tone={methodTones[endpoint.method]} size="sm" mono>
+                                                                    {endpoint.method}
+                                                                </Badge>
+                                                                <code className="truncate font-mono text-[0.8125rem] text-re-text-primary">
+                                                                    {endpoint.path}
+                                                                </code>
+                                                            </div>
+                                                            <p className="text-small text-re-text-tertiary">{endpoint.description}</p>
+                                                        </div>
+                                                        <div className="flex shrink-0 items-center gap-2">
+                                                            {endpoint.requiresAuth && (
+                                                                <Lock className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                            )}
+                                                            <ChevronRight className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                                        </div>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
                                 </CardContent>
                             </Card>
-                        </div>
+                        ))}
+
+                        {filteredEndpoints.length === 0 && (
+                            <EmptyState
+                                icon={Search}
+                                title="No endpoints found"
+                                description="Try adjusting your search or filter"
+                            />
+                        )}
+                    </div>
+
+                    {/* Endpoint Details Panel */}
+                    <div className="h-fit space-y-6 lg:sticky lg:top-6">
+                        {selectedEndpoint ? (
+                            <Card>
+                                <CardHeader>
+                                    <div className="min-w-0">
+                                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                                            <Badge tone={methodTones[selectedEndpoint.method]} size="sm" mono>
+                                                {selectedEndpoint.method}
+                                            </Badge>
+                                            {selectedEndpoint.requiresAuth && (
+                                                <Badge tone="warning" size="sm">
+                                                    <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                    Auth Required
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <CardTitle className="break-all font-mono">
+                                            {selectedEndpoint.path}
+                                        </CardTitle>
+                                        <CardDescription>
+                                            {selectedEndpoint.description}
+                                        </CardDescription>
+                                    </div>
+                                </CardHeader>
+
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <h4 className="mb-2 text-subheading text-re-text-primary">Request Example</h4>
+                                        <pre className="overflow-x-auto rounded-md border border-re-border-subtle bg-re-surface-inset p-4 font-mono text-[0.8125rem] text-re-text-secondary">
+                                            <code>{`curl -X ${selectedEndpoint.method} \\
+  ${getServiceURL('admin')}${selectedEndpoint.path} \\${selectedEndpoint.requiresAuth ? '\n  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\' : ''}
+  -H "Content-Type: application/json"`}</code>
+                                        </pre>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <Button
+                                            disabled
+                                            title="Coming Soon"
+                                            className="flex-1"
+                                            leadingIcon={<Play strokeWidth={1.75} aria-hidden="true" />}
+                                        >
+                                            Try it out
+                                        </Button>
+                                        <Button
+                                            disabled
+                                            title="Coming Soon"
+                                            variant="outline"
+                                            size="icon"
+                                            aria-label="Copy request example"
+                                            className="shrink-0"
+                                        >
+                                            <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                        </Button>
+                                    </div>
+
+                                    <div className="border-t border-re-border-subtle pt-4">
+                                        <a
+                                            href={`${getServiceURL('admin')}/docs#${selectedEndpoint.path.replace(/\//g, '-')}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                                        >
+                                            <Book className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                            View full documentation
+                                            <ExternalLink className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                        </a>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <EmptyState
+                                icon={Code}
+                                title="Select an endpoint"
+                                description="Click on any endpoint to view details"
+                            />
+                        )}
+
+                        {/* Quick Links */}
+                        <Card>
+                            <CardHeader>
+                                <div className="min-w-0">
+                                    <CardTitle>Quick Links</CardTitle>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <ul className="divide-y divide-re-border-subtle">
+                                    <li>
+                                        <a
+                                            href={`${getServiceURL('admin')}/docs`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-between gap-3 px-5 py-3 transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+                                        >
+                                            <span className="text-ui text-re-text-primary">Swagger UI</span>
+                                            <ExternalLink className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a
+                                            href={`${getServiceURL('admin')}/redoc`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-between gap-3 px-5 py-3 transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+                                        >
+                                            <span className="text-ui text-re-text-primary">ReDoc</span>
+                                            <ExternalLink className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a
+                                            href="/admin"
+                                            className="flex items-center justify-between gap-3 px-5 py-3 transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+                                        >
+                                            <span className="text-ui text-re-text-primary">API Key Management</span>
+                                            <ChevronRight className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        </a>
+                                    </li>
+                                </ul>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
-            </PageContainer>
-        </div>
+            </div>
+        </PageContainer>
     );
 }

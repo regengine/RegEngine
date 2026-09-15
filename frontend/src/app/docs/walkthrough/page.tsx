@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle, Terminal } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { filterExperimentalToolLinks } from '@/lib/experimental-features';
+import { PageHeader } from '@/components/layout/page-header';
+import { Callout } from '@/components/ui/callout';
 import { CodeBlock } from '@/components/ui/code-block';
 
 export const metadata: Metadata = {
@@ -10,50 +12,50 @@ export const metadata: Metadata = {
     'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
 };
 
+/** Inline identifier — SPEC §2.3. */
+const CODE =
+  'rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary';
+
+const PROSE_LINK =
+  'text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand';
+
 export default function WalkthroughPage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-      {/* Header */}
-      <div className="p-6 border-b border-[var(--re-surface-border)]">
-        <div className="max-w-[800px] mx-auto">
+    <>
+      <PageHeader
+        breadcrumbs={
           <Link
             href="/docs"
-            className="inline-flex items-center gap-2 text-sm text-[var(--re-brand)] no-underline mb-4"
+            className="inline-flex items-center gap-2 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft aria-hidden="true" strokeWidth={1.75} className="h-4 w-4" />
             Back to Docs
           </Link>
-          <div className="flex items-center gap-3 mb-3">
-            <Terminal className="w-7 h-7 text-[var(--re-brand)]" />
-            <span className="bg-[rgba(16,185,129,0.2)] text-[var(--re-brand)] text-[11px] font-semibold px-2.5 py-1 rounded">
-              15 min hands-on
-            </span>
-          </div>
-          <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
-            End-to-End Walkthrough
-          </h1>
-          <p className="text-[var(--re-text-muted)] text-base">
+        }
+        eyebrow="15 min hands-on"
+        title="End-to-End Walkthrough"
+        description={
+          <>
             Post a complete supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.
             Builds on{' '}
-            <Link href="/docs/quickstart" className="text-[var(--re-brand)] underline">
+            <Link href="/docs/quickstart" className={PROSE_LINK}>
               the 5-minute Quickstart
             </Link>
             .
-          </p>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {/* Content */}
-      <div className="max-w-[800px] mx-auto px-6 py-12 space-y-12">
+      <div className="space-y-8">
         {/* Prereqs */}
         <Section title="Before you start">
-          <p className="leading-[1.7] mb-3">You should have completed the Quickstart and have:</p>
-          <ul className="list-disc pl-5 space-y-1 text-sm">
-            <li><code className="bg-black/30 px-1.5 py-0.5 rounded">$REGENGINE_API_KEY</code> in your shell</li>
-            <li><code className="bg-black/30 px-1.5 py-0.5 rounded">$REGENGINE_TENANT_ID</code> in your shell</li>
-            <li>A working <code className="bg-black/30 px-1.5 py-0.5 rounded">curl</code> and ~15 minutes</li>
+          <p className="mb-3 text-body text-re-text-secondary">You should have completed the Quickstart and have:</p>
+          <ul className="list-disc space-y-1 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
+            <li><code className={CODE}>$REGENGINE_API_KEY</code> in your shell</li>
+            <li><code className={CODE}>$REGENGINE_TENANT_ID</code> in your shell</li>
+            <li>A working <code className={CODE}>curl</code> and ~15 minutes</li>
           </ul>
-          <p className="text-sm text-[var(--re-text-muted)] mt-3">
+          <p className="mt-3 text-ui text-re-text-tertiary">
             The scenario: you&apos;re a fresh-cut produce processor. One supplier sent you a romaine
             lot; you transform it; you ship it to a distributor. Three events in one supplier-to-shipping
             chain. We&apos;ll post them, list them, and export them.
@@ -62,8 +64,8 @@ export default function WalkthroughPage() {
 
         {/* Step 1 */}
         <Step n={1} title="Post the Receiving event">
-          <p className="leading-[1.7] mb-3">
-            You receive lot <code className="bg-black/30 px-1.5 py-0.5 rounded">LOT-2026-001</code> from
+          <p className="mb-3 text-body text-re-text-secondary">
+            You receive lot <code className={CODE}>LOT-2026-001</code> from
             Supplier A. This is a Receiving CTE — the starting anchor for the chain.
           </p>
           <CodeBlock
@@ -104,23 +106,23 @@ export default function WalkthroughPage() {
           </ExpectedResponse>
           <Troubleshoot>
             <li>
-              <strong>503 with &quot;Document storage is not configured&quot;</strong> — this endpoint doesn&apos;t
+              <strong className="font-medium text-re-text-primary">503 with &quot;Document storage is not configured&quot;</strong> — this endpoint doesn&apos;t
               need object storage; you shouldn&apos;t hit this. If you do, the 503 is from a different
               path; ping support.
             </li>
             <li>
-              <strong>401/403</strong> — recheck <code>$REGENGINE_API_KEY</code>. The header is{' '}
-              <code>X-RegEngine-API-Key</code> (not <code>Authorization</code>).
+              <strong className="font-medium text-re-text-primary">401/403</strong> — recheck <code className={CODE}>$REGENGINE_API_KEY</code>. The header is{' '}
+              <code className={CODE}>X-RegEngine-API-Key</code> (not <code className={CODE}>Authorization</code>).
             </li>
             <li>
-              <strong>422 validation error</strong> — the response body lists which KDE failed; fix and resubmit. Lot codes follow GS1 GTIN-14 + lot suffix.
+              <strong className="font-medium text-re-text-primary">422 validation error</strong> — the response body lists which KDE failed; fix and resubmit. Lot codes follow GS1 GTIN-14 + lot suffix.
             </li>
           </Troubleshoot>
         </Step>
 
         {/* Step 2 */}
         <Step n={2} title="Post the Transformation event">
-          <p className="leading-[1.7] mb-3">
+          <p className="mb-3 text-body text-re-text-secondary">
             You wash and bag the lot — that&apos;s a Transformation CTE. The input lot is the
             Receiving lot from Step 1; the output lot is new.
           </p>
@@ -152,16 +154,16 @@ export default function WalkthroughPage() {
   }'`}
           />
           <ExpectedResponse>
-            <p className="text-sm">
+            <p className="text-ui text-re-text-secondary">
               Same shape as Step 1. The new event chains to the receiving event via{' '}
-              <code className="bg-black/30 px-1.5 py-0.5 rounded">kdes.input_lot_codes</code>.
+              <code className={CODE}>kdes.input_lot_codes</code>.
             </p>
           </ExpectedResponse>
         </Step>
 
         {/* Step 3 */}
         <Step n={3} title="Post the Shipping event">
-          <p className="leading-[1.7] mb-3">
+          <p className="mb-3 text-body text-re-text-secondary">
             The bagged lot ships to a distributor. This closes the chain for this lot.
           </p>
           <CodeBlock
@@ -194,16 +196,16 @@ export default function WalkthroughPage() {
 
         {/* Step 4 */}
         <Step n={4} title="Check your dashboard">
-          <p className="leading-[1.7] mb-3">
-            Open <Link href="/dashboard/compliance" className="text-[var(--re-brand)] underline">
+          <p className="mb-3 text-body text-re-text-secondary">
+            Open <Link href="/dashboard/compliance" className={PROSE_LINK}>
             /dashboard/compliance</Link>. You should see:
           </p>
-          <ul className="list-disc pl-5 space-y-1 text-sm">
-            <li>3 events for tenant <code className="bg-black/30 px-1.5 py-0.5 rounded">$REGENGINE_TENANT_ID</code></li>
+          <ul className="list-disc space-y-1 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
+            <li>3 events for tenant <code className={CODE}>$REGENGINE_TENANT_ID</code></li>
             <li>The traceability lot code visible in the events list</li>
             <li>A compliance score (early-stage; will improve as more lots flow through)</li>
           </ul>
-          <p className="text-sm text-[var(--re-text-muted)] mt-3">
+          <p className="mt-3 text-ui text-re-text-tertiary">
             Empty dashboard? Confirm the tenant ID in the URL matches the one you posted with.
             Different tenant = different scope.
           </p>
@@ -211,7 +213,7 @@ export default function WalkthroughPage() {
 
         {/* Step 5 */}
         <Step n={5} title="Produce an FDA-oriented export">
-          <p className="leading-[1.7] mb-3">
+          <p className="mb-3 text-body text-re-text-secondary">
             For the lot you just shipped, generate an FDA-oriented sortable spreadsheet for operator review:
           </p>
           <CodeBlock
@@ -229,7 +231,7 @@ export default function WalkthroughPage() {
 # Inspect:
 head -20 lot-export.csv`}
           />
-          <p className="text-sm text-[var(--re-text-muted)] mt-3">
+          <p className="mt-3 text-ui text-re-text-tertiary">
             You should see header rows mapping to FDA&apos;s 1.1455(c) requirements, with one row per
             CTE event for the lot. Production records, not legal advice — your operation remains
             responsible for compliance.
@@ -237,45 +239,47 @@ head -20 lot-export.csv`}
         </Step>
 
         {/* Success */}
-        <div className="rounded-lg p-6 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)]">
-          <div className="flex items-start gap-4">
-            <CheckCircle className="w-6 h-6 text-[var(--re-brand)] shrink-0" />
-            <div>
-              <h3 className="text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
-                What you just proved
-              </h3>
-              <ul className="text-sm space-y-1.5 list-disc pl-5">
-                <li>Three CTE events with chained SHA-256 hashes are now in your tenant scope.</li>
-                <li>The compliance dashboard reflects them within seconds.</li>
-                <li>An FDA-oriented export can be produced for any subset by lot code.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        <Callout tone="success">
+          <h3 className="text-subheading text-re-text-primary">
+            What you just proved
+          </h3>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
+            <li>Three CTE events with chained SHA-256 hashes are now in your tenant scope.</li>
+            <li>The compliance dashboard reflects them within seconds.</li>
+            <li>An FDA-oriented export can be produced for any subset by lot code.</li>
+          </ul>
+        </Callout>
 
         {/* Next */}
-        <section>
-          <h2 className="text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">Where to go from here</h2>
-          <div className="grid gap-3">
+        <section className="border-t border-re-border-subtle pt-6">
+          <h2 className="text-heading text-re-text-primary">Where to go from here</h2>
+          <ul className="mt-3 list-none border-t border-re-border-subtle p-0">
             {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
               { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through Inflow Workbench preflight', href: '/tools/inflow-lab' },
               { title: 'Set up EPCIS or EDI', desc: 'Replace manual curl with your existing system-of-record', href: '/docs/connectors/inflow-lab' },
             ]).map(({ title, desc, href }) => (
-              <Link key={href} href={href} className="no-underline">
-                <div className="px-5 py-4 rounded-lg flex items-center gap-4 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)]">
-                  <div className="flex-1">
-                    <div className="font-semibold text-[var(--re-text-primary)] mb-0.5">{title}</div>
-                    <div className="text-[13px] text-[var(--re-text-muted)]">{desc}</div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-[var(--re-text-muted)]" />
-                </div>
-              </Link>
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="group flex items-center gap-4 border-b border-re-border-subtle px-1 py-4 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-ui font-medium text-re-text-primary">{title}</span>
+                    <span className="block text-small text-re-text-tertiary">{desc}</span>
+                  </span>
+                  <ArrowRight
+                    aria-hidden="true"
+                    strokeWidth={1.75}
+                    className="h-4 w-4 shrink-0 text-re-text-muted transition-colors duration-120 group-hover:text-re-text-primary motion-reduce:transition-none"
+                  />
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -283,25 +287,24 @@ head -20 lot-export.csv`}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section>
-      <h2 className="text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-3">{title}</h2>
+    <section className="border-t border-re-border-subtle pt-6">
+      <h2 className="mb-3 text-heading text-re-text-primary">{title}</h2>
       {children}
     </section>
   );
 }
 
+/** The ordinal is a mono numeral, not a brand-filled disc (SPEC §1.6). */
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <section>
-      <div className="flex items-start gap-4">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 bg-[var(--re-brand)]">
+    <section className="border-t border-re-border-subtle pt-6">
+      <div className="flex items-baseline gap-3">
+        <span aria-hidden="true" className="font-mono text-label text-re-text-muted">
           {n}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-3">{title}</h2>
-          {children}
-        </div>
+        </span>
+        <h2 className="text-heading text-re-text-primary">{title}</h2>
       </div>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
@@ -309,7 +312,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 function ExpectedResponse({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-3">
-      <div className="text-[12px] uppercase tracking-wider text-[var(--re-text-muted)] mb-1.5">
+      <div className="mb-1.5 font-mono text-label uppercase text-re-text-muted">
         Expected response
       </div>
       {children}
@@ -319,12 +322,8 @@ function ExpectedResponse({ children }: { children: React.ReactNode }) {
 
 function Troubleshoot({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-4 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <AlertCircle className="w-4 h-4 text-[var(--re-warning)]" />
-        <div className="text-sm font-semibold text-[var(--re-text-primary)]">If it didn&apos;t work</div>
-      </div>
-      <ul className="text-sm space-y-1.5 list-disc pl-5">{children}</ul>
-    </div>
+    <Callout tone="warning" title="If it didn't work" className="mt-4">
+      <ul className="list-disc space-y-1.5 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">{children}</ul>
+    </Callout>
   );
 }

@@ -39,15 +39,18 @@ export function CodeBlock({
 
   return (
     <Card variant="inset" className="group relative overflow-hidden">
-      {/* Language label */}
+      {/* Language label — a real header row, so a long first line of code can
+          never run underneath it. */}
       {language && (
-        <span
-          className={`pointer-events-none absolute top-3 font-mono text-label uppercase text-re-text-muted ${
-            copyable ? 'right-12' : 'right-4'
-          }`}
-        >
-          {language}
-        </span>
+        <div className="border-b border-re-border-subtle px-4 py-2">
+          <span
+            className={`block font-mono text-label uppercase text-re-text-muted ${
+              copyable ? 'pr-8' : ''
+            }`}
+          >
+            {language}
+          </span>
+        </div>
       )}
 
       {/* Copy button */}

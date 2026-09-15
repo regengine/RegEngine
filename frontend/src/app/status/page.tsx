@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { StatusBoard } from './StatusBoard';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
   title: 'System Status | RegEngine',
@@ -18,36 +21,40 @@ export const dynamic = 'force-dynamic';
 
 export default function StatusPage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+    <div className="min-h-screen bg-re-surface-base">
       {/* Hero */}
-      <section className="max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-6">
-        <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mb-3 leading-tight tracking-tight">
-          System Status
-        </h1>
-        <p className="text-sm text-[var(--re-text-muted)] leading-relaxed max-w-[640px]">
-          Live health of the RegEngine backend services. This page polls{' '}
-          <code className="font-mono text-xs px-1 py-0.5 rounded bg-[var(--re-surface-elevated)]">/api/health</code>{' '}
-          every 30 seconds.
-        </p>
-      </section>
+      <Container as="section" width="marketing" className="pb-6 pt-12 sm:pt-16">
+        <PageHeader
+          size="hero"
+          title="System Status"
+          description={
+            <>
+              Live health of the RegEngine backend services. This page polls{' '}
+              <code className="rounded-sm bg-re-surface-inset px-1 py-0.5 font-mono text-[0.8125rem]">/api/health</code>{' '}
+              every 30 seconds.
+            </>
+          }
+          className="border-b-0 pb-0"
+        />
+      </Container>
 
       {/* Status board */}
-      <section className="max-w-[860px] mx-auto px-4 sm:px-6 pb-10">
+      <Container as="section" width="marketing" className="pb-10">
         <StatusBoard />
-      </section>
+      </Container>
 
       {/* Support */}
-      <section className="max-w-[860px] mx-auto px-4 sm:px-6 pb-16">
-        <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
-          <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-3">
+      <Container as="section" width="marketing" className="pb-16">
+        <Card padding="spacious">
+          <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
             Pilot support
           </h2>
-          <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mb-4">
+          <p className="mb-4 max-w-[68ch] text-ui text-re-text-secondary">
             Production issues, integration questions, or anything blocking your evaluation:
             email{' '}
             <a
               href="mailto:support@regengine.co"
-              className="text-[var(--re-brand)] underline hover:opacity-90"
+              className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
             >
               support@regengine.co
             </a>
@@ -55,37 +62,37 @@ export default function StatusPage() {
             ingestion or auth issues, include your workspace slug and the timestamp
             of the request so we can correlate with logs.
           </p>
-          <div className="grid gap-3 sm:grid-cols-3 mt-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <Link
               href="/docs"
-              className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 text-sm font-medium text-[var(--re-text-primary)] hover:border-[var(--re-brand)]/40 transition-colors"
+              className="rounded-md border border-re-border bg-re-surface-inset p-3 text-ui font-medium text-re-text-primary transition-colors duration-120 hover:border-re-border-strong motion-reduce:transition-none"
             >
               Documentation →
             </Link>
             <Link
               href="/docs/changelog"
-              className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 text-sm font-medium text-[var(--re-text-primary)] hover:border-[var(--re-brand)]/40 transition-colors"
+              className="rounded-md border border-re-border bg-re-surface-inset p-3 text-ui font-medium text-re-text-primary transition-colors duration-120 hover:border-re-border-strong motion-reduce:transition-none"
             >
               Changelog →
             </Link>
             <Link
               href="/trust"
-              className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 text-sm font-medium text-[var(--re-text-primary)] hover:border-[var(--re-brand)]/40 transition-colors"
+              className="rounded-md border border-re-border bg-re-surface-inset p-3 text-ui font-medium text-re-text-primary transition-colors duration-120 hover:border-re-border-strong motion-reduce:transition-none"
             >
               Trust Center →
             </Link>
           </div>
-        </div>
-      </section>
+        </Card>
+      </Container>
 
       {/* Disclaimer */}
-      <section className="max-w-[860px] mx-auto px-4 sm:px-6 pb-20">
-        <p className="text-xs text-[var(--re-text-disabled)] leading-relaxed">
+      <Container as="section" width="marketing" className="pb-20">
+        <p className="max-w-[68ch] text-small text-re-text-tertiary">
           Status reflects backend service liveness as observed from the Vercel
           edge. It does not promise end-to-end ingestion success for every
           tenant; specific service commitments are set in your agreement.
         </p>
-      </section>
+      </Container>
     </div>
   );
 }

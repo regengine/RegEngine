@@ -5,137 +5,20 @@ export const metadata: Metadata = {
   title: 'Webhooks | RegEngine',
   description: 'Real-time event notifications for compliance changes. Planned event types and payload previews.',
 };
-import { ArrowLeft, Webhook, Mail, Zap, FileText } from 'lucide-react';
-import { T as _T } from '@/lib/design-tokens';
+import { ArrowLeft, Webhook, Mail } from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
-const T = {
-  ..._T,
-  heading: 'var(--re-text-primary)',
-  text: 'var(--re-text-secondary)',
-  textMuted: 'var(--re-text-muted)',
-  textDim: 'var(--re-text-muted)',
-  surface: 'var(--re-surface-card)',
-  border: 'var(--re-surface-border)',
-};
+const EVENT_TYPES = [
+    { event: 'record.created', desc: 'New compliance record created' },
+    { event: 'record.chain_extended', desc: 'Record appended to the hash chain' },
+    { event: 'compliance.alert', desc: 'Regulatory change detected' },
+    { event: 'document.ingested', desc: 'New document processed' },
+    { event: 'fact.extracted', desc: 'Compliance fact extracted from document' },
+];
 
-export default function WebhooksDocsPage() {
-    return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-            {/* Header */}
-            <div style={{
-                borderBottom: `1px solid ${T.border}`,
-                padding: '24px',
-            }}>
-                <div className="max-w-[700px] mx-auto">
-                    <Link
-                        href="/docs"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            color: T.accent,
-                            fontSize: '14px',
-                            textDecoration: 'none',
-                            marginBottom: '16px',
-                        }}
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Docs
-                    </Link>
-
-                    <div className="flex items-center gap-3 mb-3">
-                        <Webhook className="w-7 h-7 text-re-brand" />
-                        <span style={{
-                            background: 'rgba(16,185,129,0.2)',
-                            color: T.accent,
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                        }}>
-                            Roadmap
-                        </span>
-                    </div>
-
-                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
-                        Webhooks
-                    </h1>
-                    <p className="text-re-text-muted text-base">
-                        Real-time event notifications for compliance changes
-                    </p>
-                </div>
-            </div>
-
-            {/* Content */}
-            <div className="max-w-[700px] mx-auto py-12 px-6">
-
-                {/* Event Types Preview */}
-                <section className="mb-12">
-                    <h2 className="text-[1.3rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
-                        <Zap className="w-5 h-5 inline align-middle mr-2" />
-                        Planned Event Types
-                    </h2>
-
-                    <div className="grid gap-3">
-                        {[
-                            { event: 'record.created', desc: 'New compliance record created' },
-                            { event: 'record.chain_extended', desc: 'Record appended to the hash chain' },
-                            { event: 'compliance.alert', desc: 'Regulatory change detected' },
-                            { event: 'document.ingested', desc: 'New document processed' },
-                            { event: 'fact.extracted', desc: 'Compliance fact extracted from document' },
-                        ].map((item) => (
-                            <div key={item.event} style={{
-                                padding: '16px 20px',
-                                background: T.surface,
-                                borderRadius: '8px',
-                                border: `1px solid ${T.border}`,
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                opacity: 0.6,
-                            }}>
-                                <code style={{
-                                    background: 'rgba(16,185,129,0.2)',
-                                    color: T.accent,
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '12px',
-                                }}>{item.event}</code>
-                                <span className="text-[13px] text-re-text-muted">{item.desc}</span>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                {/* Payload Preview */}
-                <section className="mb-12">
-                    <h2 className="text-[1.3rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
-                        Sample Payload
-                    </h2>
-
-                    <div style={{
-                        background: 'rgba(0,0,0,0.6)',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        border: `1px solid ${T.border}`,
-                        opacity: 0.7,
-                    }}>
-                        <div style={{
-                            background: 'rgba(255,255,255,0.05)',
-                            padding: '8px 16px',
-                            borderBottom: `1px solid ${T.border}`,
-                        }}>
-                            <span className="text-xs text-re-text-muted">POST (to your endpoint)</span>
-                        </div>
-                        <pre style={{
-                            padding: '16px 20px',
-                            margin: 0,
-                            fontSize: '13px',
-                            lineHeight: 1.5,
-                            color: 'var(--re-text-muted)',
-                            overflowX: 'auto',
-                        }}>
-                            <code>{`{
+const SAMPLE_PAYLOAD = `{
   "id": "evt_3x7Kp9mN2vL",
   "type": "compliance.alert",
   "created": "2026-03-15T14:23:01Z",
@@ -146,46 +29,81 @@ export default function WebhooksDocsPage() {
     "new_value": "draft-guidance-2026-02",
     "source_url": "fda.gov/..."
   }
-}`}</code>
+}`;
+
+export default function WebhooksDocsPage() {
+    return (
+        <>
+            <PageHeader
+                breadcrumbs={
+                    <Link
+                        href="/docs"
+                        className="inline-flex items-center gap-2 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+                    >
+                        <ArrowLeft aria-hidden="true" strokeWidth={1.75} className="h-4 w-4" />
+                        Back to Docs
+                    </Link>
+                }
+                eyebrow="Roadmap"
+                title="Webhooks"
+                description="Real-time event notifications for compliance changes"
+            />
+
+            <div className="space-y-8">
+                {/* Event Types Preview */}
+                <section>
+                    <h2 className="mb-4 text-heading text-re-text-primary">Planned Event Types</h2>
+
+                    <Card className="overflow-hidden">
+                        <ul className="list-none p-0">
+                            {EVENT_TYPES.map((item) => (
+                                <li
+                                    key={item.event}
+                                    className="flex flex-wrap items-center justify-between gap-3 border-b border-re-border-subtle px-5 py-4 last:border-0"
+                                >
+                                    <code className="rounded-sm border border-re-border-subtle bg-re-surface-inset px-2 py-1 font-mono text-[0.8125rem] text-re-text-tertiary">
+                                        {item.event}
+                                    </code>
+                                    <span className="text-small text-re-text-tertiary">{item.desc}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </Card>
+                </section>
+
+                {/* Payload Preview */}
+                <section>
+                    <h2 className="mb-4 text-heading text-re-text-primary">Sample Payload</h2>
+
+                    <Card variant="inset" className="overflow-hidden">
+                        <div className="border-b border-re-border-subtle px-4 py-2">
+                            <span className="font-mono text-label text-re-text-muted">
+                                POST (to your endpoint)
+                            </span>
+                        </div>
+                        <pre className="m-0 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 text-re-text-tertiary">
+                            <code>{SAMPLE_PAYLOAD}</code>
                         </pre>
-                    </div>
+                    </Card>
                 </section>
 
                 {/* Notify CTA */}
-                <section style={{
-                    background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)',
-                    border: `1px solid rgba(16,185,129,0.3)`,
-                    borderRadius: '12px',
-                    padding: '32px',
-                    textAlign: 'center',
-                }}>
-                    <Webhook className="w-8 h-8 text-re-brand mx-auto mb-4" />
-                    <h3 className="text-[1.1rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
+                <Card padding="spacious" className="text-center">
+                    <Webhook aria-hidden="true" strokeWidth={1.75} className="mx-auto mb-4 h-6 w-6 text-re-text-muted" />
+                    <h3 className="mb-2 text-subheading text-re-text-primary">
                         Get Notified on Release
                     </h3>
-                    <p className="text-re-text-secondary text-sm mb-5 max-w-[400px] mx-auto">
+                    <p className="mx-auto mb-5 max-w-[48ch] text-ui text-re-text-tertiary">
                         Be the first to know when webhooks are available.
                     </p>
-                    <a
-                        href="mailto:webhooks@regengine.co?subject=Webhooks%20Interest"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            background: T.accent,
-                            color: 'white',
-                            padding: '12px 24px',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '14px',
-                            textDecoration: 'none',
-                        }}
-                    >
-                        <Mail className="w-4 h-4" />
-                        Notify Me
-                    </a>
-                </section>
+                    <Button asChild variant="primary" size="lg">
+                        <a href="mailto:webhooks@regengine.co?subject=Webhooks%20Interest" className="no-underline">
+                            <Mail aria-hidden="true" strokeWidth={1.75} />
+                            Notify Me
+                        </a>
+                    </Button>
+                </Card>
             </div>
-        </div>
+        </>
     );
 }

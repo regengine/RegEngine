@@ -31,13 +31,12 @@ export function ComplianceStateBadge({
         "inline-flex items-center gap-1.5 border px-2.5 py-1 font-mono text-[11px] font-medium uppercase leading-none",
         className,
       )}
-      style={{
-        color: style.colorVar,
-        backgroundColor: style.backgroundVar,
-        borderColor: style.borderVar,
-      }}
+      // design-lint-disable — these ARE tokens (var(--re-*)), selected per state
+      // from complianceStateStyles in lib/compliance-os.ts. A parallel class map
+      // would duplicate that source of truth and drift from it.
+      style={{ /* design-lint-disable: token vars from compliance-os */ color: style.colorVar, backgroundColor: style.backgroundVar, borderColor: style.borderVar }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: style.colorVar }} />
+      <span className="h-1.5 w-1.5 rounded-full" style={{ /* design-lint-disable: token var */ backgroundColor: style.colorVar }} />
       {style.label}
     </span>
   );
@@ -70,9 +69,9 @@ export function EvidenceCard({
       <div className="flex items-start justify-between gap-3">
         <span
           className="flex h-10 w-10 shrink-0 items-center justify-center border"
-          style={{ color: style.colorVar, backgroundColor: style.backgroundVar, borderColor: style.borderVar }}
+          style={{ /* design-lint-disable: token vars from compliance-os */ color: style.colorVar, backgroundColor: style.backgroundVar, borderColor: style.borderVar }}
         >
-          <Icon className="h-5 w-5" aria-hidden="true" />
+          <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
         </span>
         <ComplianceStateBadge state={state} />
       </div>

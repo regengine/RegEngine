@@ -2,9 +2,9 @@
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from "react";
-import { motion } from "framer-motion";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { PageHeader } from "@/components/layout/page-header";
 import { getServiceURL } from "@/lib/api-config";
 import { ComplianceStatusWidget, type ComplianceAlert } from "@/components/dashboard/compliance-status-widget";
 import { AlertDetailDialog } from "@/components/dashboard/alert-detail-dialog";
@@ -12,6 +12,7 @@ import { useTenantContext } from "@/lib/tenant-context";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { AlertCircle, Clock, Shield, Settings } from "lucide-react";
 import Link from "next/link";
 
@@ -63,97 +64,102 @@ export default function ComplianceStatusPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-            <PageContainer>
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                >
-                    {/* Page Header */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
-                        <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
-                            <Shield className="h-8 w-8 text-re-info dark:text-re-info" />
-                        </div>
-                        <div className="flex-1">
-                            <h1 className="text-3xl sm:text-4xl font-bold">Compliance Status</h1>
-                            <p className="text-muted-foreground mt-1">
-                                Real-time monitoring of your FSMA 204 compliance status and regulatory alerts
-                            </p>
-                        </div>
+        <PageContainer>
+            <PageHeader
+                title="Compliance Status"
+                description="Real-time monitoring of your FSMA 204 compliance status and regulatory alerts"
+                secondaryActions={
+                    <Button variant="secondary" size="sm" asChild>
                         <Link href="/compliance/profile">
-                            <Button variant="outline" size="sm">
-                                <Settings className="h-4 w-4 mr-2" />
-                                Configure Profile
-                            </Button>
+                            <Settings className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            Configure Profile
                         </Link>
-                    </div>
+                    </Button>
+                }
+            />
 
-                    {/* Main Status Widget */}
-                    <div className="max-w-3xl mb-8">
+            <div className="space-y-6">
+                {/* Main Status Widget */}
+                {tenantId ? (
+                    <div className="max-w-3xl">
                         <ComplianceStatusWidget
                             tenantId={tenantId}
                             onAlertClick={handleAlertClick}
                         />
                     </div>
+                ) : (
+                    <EmptyState
+                        icon={Shield}
+                        title="No workspace selected"
+                        description="Select a workspace to monitor its compliance status and regulatory alerts."
+                        action={
+                            <Button variant="secondary" size="sm" asChild>
+                                <Link href="/compliance/profile">
+                                    <Settings className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                    Configure Profile
+                                </Link>
+                            </Button>
+                        }
+                    />
+                )}
 
-                    {/* Info Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card>
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-re-warning" />
-                                    24-Hour Response
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">
-                                    FSMA 204 requires trace data within 24 hours of FDA request.
-                                    RegEngine monitors for recalls and alerts you immediately.
-                                </p>
-                            </CardContent>
-                        </Card>
+                {/* Info Cards */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
+                                24-Hour Response
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-ui text-re-text-secondary">
+                                FSMA 204 requires trace data within 24 hours of FDA request.
+                                RegEngine monitors for recalls and alerts you immediately.
+                            </p>
+                        </CardContent>
+                    </Card>
 
-                        <Card>
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <AlertCircle className="h-5 w-5 text-re-danger" />
-                                    FDA Recall Monitoring
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">
-                                    Automatic monitoring of FDA recalls, warning letters,
-                                    and import alerts. Get notified when issues affect your supply chain.
-                                </p>
-                            </CardContent>
-                        </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                                FDA Recall Monitoring
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-ui text-re-text-secondary">
+                                Automatic monitoring of FDA recalls, warning letters,
+                                and import alerts. Get notified when issues affect your supply chain.
+                            </p>
+                        </CardContent>
+                    </Card>
 
-                        <Card>
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Shield className="h-5 w-5 text-re-success" />
-                                    Audit Trail
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">
-                                    Every status change, alert, and action is logged
-                                    for complete audit compliance and regulatory review.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </motion.div>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                Audit Trail
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-ui text-re-text-secondary">
+                                Every status change, alert, and action is logged
+                                for complete audit compliance and regulatory review.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
 
-                <AlertDetailDialog
-                    alert={selectedAlert}
-                    open={dialogOpen}
-                    onClose={() => setDialogOpen(false)}
-                    onAcknowledge={handleAcknowledge}
-                    onResolve={handleResolve}
-                    userId={userId}
-                />
-            </PageContainer>
-        </div>
+            <AlertDetailDialog
+                alert={selectedAlert}
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                onAcknowledge={handleAcknowledge}
+                onResolve={handleResolve}
+                userId={userId}
+            />
+        </PageContainer>
     );
 }

@@ -53,9 +53,9 @@ export function PhaseGates({ elapsedSeconds, isComplete, className }: PhaseGates
     <div className={cn('w-full', className)}>
       <div className="flex items-center justify-between relative">
         {/* Connecting line */}
-        <div className="absolute top-5 left-0 right-0 h-0.5 bg-muted z-0" />
+        <div className="absolute left-0 right-0 top-5 z-0 h-0.5 bg-re-border" />
         <motion.div
-          className="absolute top-5 left-0 h-0.5 bg-[var(--re-brand)] z-0"
+          className="absolute left-0 top-5 z-0 h-0.5 bg-re-brand"
           initial={{ width: '0%' }}
           animate={{ width: `${Math.min(100, (activePhaseIndex / (PHASES.length - 1)) * 100)}%` }}
           transition={{ duration: 0.5 }}
@@ -68,32 +68,29 @@ export function PhaseGates({ elapsedSeconds, isComplete, className }: PhaseGates
 
           return (
             <div key={phase.label} className="flex flex-col items-center z-10 relative">
-              <motion.div
+              <div
                 className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors',
-                  isCompleted && 'bg-[var(--re-brand)] border-[var(--re-brand)] text-white',
-                  isCurrent && 'bg-white border-[var(--re-brand)] text-[var(--re-brand)]',
-                  !isCompleted && !isCurrent && 'bg-[var(--re-surface-card)] border-muted text-muted-foreground',
+                  'flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors duration-120 motion-reduce:transition-none',
+                  isCompleted && 'border-transparent bg-re-brand text-re-brand-foreground',
+                  isCurrent && 'border-re-brand bg-re-surface-card text-re-brand',
+                  !isCompleted && !isCurrent && 'border-re-border bg-re-surface-card text-re-text-tertiary',
                 )}
-                initial={{ scale: 0.8 }}
-                animate={{ scale: isCurrent ? 1.1 : 1 }}
-                transition={{ duration: 0.3 }}
               >
                 {isCompleted ? (
-                  <CheckCircle className="w-5 h-5" />
+                  <CheckCircle className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
                 ) : (
-                  <Icon className="w-4 h-4" />
+                  <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 )}
-              </motion.div>
+              </div>
               <span className={cn(
-                'text-xs mt-2 text-center max-w-[80px]',
-                isCompleted && 'text-[var(--re-brand)] font-medium',
-                isCurrent && 'text-foreground font-medium',
-                !isCompleted && !isCurrent && 'text-muted-foreground',
+                'mt-2 max-w-[80px] text-center text-small',
+                isCompleted && 'font-medium text-re-text-primary',
+                isCurrent && 'font-medium text-re-text-primary',
+                !isCompleted && !isCurrent && 'text-re-text-tertiary',
               )}>
                 {phase.label}
               </span>
-              <span className="text-[10px] text-muted-foreground mt-0.5">
+              <span className="mt-0.5 text-label text-re-text-muted">
                 {phase.targetHours === 0 ? 'Start' : `${phase.targetHours}h target`}
               </span>
             </div>

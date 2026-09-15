@@ -1,22 +1,22 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Card, CardContent } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
+import { Callout } from '@/components/ui/callout';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
     Users,
     Link2,
     CheckCircle2,
-    AlertTriangle,
-    XCircle,
     Clock,
     Plus,
-    Package,
-    Activity,
     Mail,
     RefreshCw,
     Download,
@@ -36,9 +36,6 @@ import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { fetchWorkbenchReadinessSummary, type WorkbenchReadinessSnapshot } from '@/lib/api-hooks';
 import type {
     SupplierFacility,
-    SupplierComplianceScore,
-    SupplierComplianceGapsResponse,
-    SupplierTLC,
     PortalLink,
     IntegrationProfile,
 } from '@/types/api';
@@ -73,11 +70,17 @@ function friendlyError(err: unknown, fallback: string): string {
 /*  Config                                                             */
 /* ------------------------------------------------------------------ */
 
-function complianceLabel(score: number | null): { color: string; bg: string; label: string; icon: typeof CheckCircle2 } {
-    if (score === null) return { color: '#6b7280', bg: 'rgba(107,114,128,0.08)', label: 'No Data', icon: Clock };
-    if (score >= 80) return { color: '#10b981', bg: 'rgba(16,185,129,0.08)', label: 'Compliant', icon: CheckCircle2 };
-    if (score >= 50) return { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', label: 'Partial', icon: AlertTriangle };
-    return { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', label: 'Non-Compliant', icon: XCircle };
+/**
+ * Compliance state, not colour. The previous version returned raw hexes that
+ * were applied through inline `style`, which put four ad-hoc greens/ambers/reds
+ * outside the token layer and made the badge colour the *only* carrier of
+ * meaning. A StatusBadge ships the icon and the label together (SPEC §1.6).
+ */
+function complianceLabel(score: number | null): { state: ComplianceState; label: string } {
+    if (score === null) return { state: 'unknown', label: 'No Data' };
+    if (score >= 80) return { state: 'compliant', label: 'Compliant' };
+    if (score >= 50) return { state: 'at-risk', label: 'Partial' };
+    return { state: 'non-compliant', label: 'Non-Compliant' };
 }
 
 const SUPPLIER_SETUP_STEPS = [
@@ -97,6 +100,12 @@ const SUPPLIER_SETUP_STEPS = [
         icon: SlidersHorizontal,
     },
 ];
+
+const POST_SETUP_ROWS = [
+    { label: 'Facility rows', value: 'score + gaps' },
+    { label: 'Portal links', value: 'active / revoked' },
+    { label: 'FDA exports', value: 'per facility' },
+] as const;
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -339,219 +348,200 @@ export default function SupplierDashboardPage() {
     }
 
     /* ---------- Render -------------------------------------------- */
-    return (
-        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-3">
-                            <Users className="h-6 w-6 text-[var(--re-brand)]" />
-                            Supplier Management
-                        </h1>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            Track facilities, compliance & traceability across your supply chain
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-xl min-h-[44px]"
-                            onClick={() => loadData()}
-                            disabled={loading}
-                        >
-                            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
-                        </Button>
-                        <Button
-                            onClick={() => setShowAddForm(!showAddForm)}
-                            className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]"
-                            disabled={!isLoggedIn}
-                        >
-                            <Plus className="h-4 w-4 mr-1" /> Add Facility
-                        </Button>
-                    </div>
-                </div>
+    const workbenchState = complianceLabel(workbenchSummary?.score ?? null);
+    const openFixCount = workbenchSummary?.unresolved_fix_count ?? 0;
+    const activePortalLinks = portalLinks.filter(l => l.status === 'active').length;
 
+    return (
+        <PageContainer>
+            <PageHeader
+                title="Supplier Management"
+                description="Track facilities, compliance & traceability across your supply chain"
+                secondaryActions={
+                    <Button
+                        variant="outline"
+                        onClick={() => loadData()}
+                        disabled={loading}
+                        leadingIcon={
+                            <RefreshCw
+                                className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                            />
+                        }
+                    >
+                        Refresh
+                    </Button>
+                }
+                primaryAction={
+                    <Button
+                        onClick={() => setShowAddForm(!showAddForm)}
+                        aria-expanded={showAddForm}
+                        disabled={!isLoggedIn}
+                        leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
+                    >
+                        Add Facility
+                    </Button>
+                }
+            />
+
+            <div className="space-y-6">
                 {/* Error Banner */}
                 {error && (
-                    <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                            <span>{error}</span>
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-shrink-0 rounded-lg text-xs min-h-[32px] border-re-danger text-re-danger hover:bg-re-danger/10"
-                            onClick={() => { setError(null); loadData(); }}
-                        >
-                            <RefreshCw className="h-3 w-3 mr-1" /> Retry
-                        </Button>
-                    </div>
+                    <Callout
+                        tone="danger"
+                        role="alert"
+                        action={
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { setError(null); loadData(); }}
+                                leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />}
+                            >
+                                Retry
+                            </Button>
+                        }
+                    >
+                        {error}
+                    </Callout>
                 )}
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
-                    {[
-                        { label: 'Facilities', value: totalFacilities, icon: Users },
-                        { label: 'Compliant', value: compliantCount, icon: CheckCircle2 },
-                        { label: 'Lot Codes Tracked', value: totalTLCs, icon: Package },
-                        { label: 'Compliance Rate', value: `${complianceRate}%`, icon: Activity },
-                    ].map((stat) => (
-                        <Card key={stat.label} className="border-[var(--re-border-default)]">
-                            <CardContent className="py-3 sm:py-4">
-                                <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                                    <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                    <span className="text-[11px] sm:text-xs text-muted-foreground truncate">{stat.label}</span>
-                                </div>
-                                <div className="text-xl sm:text-2xl font-bold">{loading ? '—' : stat.value}</div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    <StatTile label="Facilities" value={totalFacilities} loading={loading} />
+                    <StatTile label="Compliant" value={compliantCount} loading={loading} />
+                    <StatTile label="Lot Codes Tracked" value={totalTLCs} loading={loading} />
+                    <StatTile label="Compliance Rate" value={`${complianceRate}%`} loading={loading} />
                 </div>
 
                 {/* Inflow Workbench readiness */}
-                <Card className="border-[var(--re-border-default)]">
-                    <CardContent className="py-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                                <div
-                                    className="h-12 w-12 rounded-xl border border-[var(--re-border-default)] flex items-center justify-center text-lg font-bold tabular-nums"
-                                    style={{
-                                        color: workbenchSummary?.score != null ? complianceLabel(workbenchSummary.score).color : '#6b7280',
-                                        background: workbenchSummary?.score != null ? complianceLabel(workbenchSummary.score).bg : 'rgba(107,114,128,0.08)',
-                                    }}
-                                >
-                                    {workbenchSummary?.score ?? '—'}
-                                </div>
-                                <div>
-                                    <div className="text-sm font-semibold">Inflow Workbench readiness</div>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {workbenchSummary?.label ?? 'No supplier preflight run saved yet'}
-                                    </p>
-                                </div>
+                <Card>
+                    <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-re-border bg-re-surface-inset text-subheading tabular-nums text-re-text-primary">
+                                {workbenchSummary?.score ?? '—'}
                             </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <Badge
-                                    variant="secondary"
-                                    className={`text-[10px] ${
-                                        (workbenchSummary?.unresolved_fix_count ?? 0) > 0
-                                            ? 'bg-re-warning-muted0/10 text-re-warning'
-                                            : 'bg-re-brand-muted text-re-brand'
-                                    }`}
-                                >
-                                    {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
-                                </Badge>
-                                {experimentalFeaturesEnabled() && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
-                                        onClick={() => { window.location.href = '/dashboard/inflow-lab'; }}
-                                    >
-                                        Open Workbench <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                                    </Button>
-                                )}
+                            <div className="min-w-0">
+                                <div className="text-ui font-medium text-re-text-primary">Inflow Workbench readiness</div>
+                                <p className="mt-0.5 text-small text-re-text-tertiary">
+                                    {workbenchSummary?.label ?? 'No supplier preflight run saved yet'}
+                                </p>
                             </div>
+                        </div>
+                        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+                            <StatusBadge state={workbenchState.state} label={workbenchState.label} size="sm" />
+                            <Badge tone={openFixCount > 0 ? 'warning' : 'neutral'} size="sm">
+                                {openFixCount} open fix{openFixCount === 1 ? '' : 'es'}
+                            </Badge>
+                            {experimentalFeaturesEnabled() && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => { window.location.href = '/dashboard/inflow-lab'; }}
+                                    trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
+                                >
+                                    Open Workbench
+                                </Button>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Portal Links — Invite Suppliers */}
-                <Card className="border-[var(--re-border-default)]">
-                    <CardContent className="py-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                                <Link2 className="h-4 w-4 text-[var(--re-brand)]" />
-                                <h2 className="text-sm font-semibold">Supplier Portal Links</h2>
-                                <Badge variant="outline" className="text-[10px] py-0">
-                                    {portalLinks.filter(l => l.status === 'active').length} active
-                                </Badge>
-                            </div>
-                            <Button
-                                onClick={() => setShowInviteForm(!showInviteForm)}
-                                size="sm"
-                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
-                                disabled={!isLoggedIn}
-                            >
-                                <Send className="h-3.5 w-3.5 mr-1" /> Invite Supplier
-                            </Button>
+                <Card>
+                    <CardHeader>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <h2 className="text-subheading text-re-text-primary">Supplier Portal Links</h2>
+                            <Badge size="sm">{activePortalLinks} active</Badge>
                         </div>
-
-                        <p className="text-xs text-muted-foreground mb-3">
+                        <Button
+                            onClick={() => setShowInviteForm(!showInviteForm)}
+                            aria-expanded={showInviteForm}
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            disabled={!isLoggedIn}
+                            leadingIcon={<Send strokeWidth={1.75} aria-hidden="true" />}
+                        >
+                            Invite Supplier
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <p className="max-w-[70ch] text-ui text-re-text-secondary">
                             Generate portal links for your suppliers to submit shipment data directly. Attach a saved mapping profile when a source already has known field names.
                         </p>
 
                         {/* Invite Form */}
                         {showInviteForm && (
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                className="mb-3"
-                            >
-                                <div className="bg-[var(--re-surface-elevated)] rounded-xl p-4 border border-[var(--re-brand)] space-y-3">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                            <div className="space-y-3 rounded-md border border-re-border-subtle bg-re-surface-inset p-4">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div className="min-w-0">
+                                        <label htmlFor="invite-supplier-name" className="sr-only">Supplier name</label>
                                         <Input
+                                            id="invite-supplier-name"
                                             value={inviteSupplierName}
                                             onChange={(e) => setInviteSupplierName(e.target.value)}
                                             placeholder="Supplier name *"
-                                            className="rounded-xl min-h-[40px] text-sm"
                                         />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <label htmlFor="invite-supplier-email" className="sr-only">Contact email (optional)</label>
                                         <Input
+                                            id="invite-supplier-email"
                                             value={inviteSupplierEmail}
                                             onChange={(e) => setInviteSupplierEmail(e.target.value)}
                                             placeholder="Contact email (optional)"
                                             type="email"
-                                            className="rounded-xl min-h-[40px] text-sm"
                                         />
-                                        <select
-                                            value={inviteProfileId}
-                                            onChange={(e) => setInviteProfileId(e.target.value)}
-                                            className="px-3 py-2 rounded-xl border border-input bg-background text-sm"
-                                            aria-label="Saved integration profile"
-                                        >
-                                            <option value="">No saved profile</option>
-                                            {integrationProfiles
-                                                .filter((profile) => profile.status !== 'archived')
-                                                .map((profile) => (
-                                                    <option key={profile.profile_id} value={profile.profile_id}>
-                                                        {profile.display_name}
-                                                    </option>
-                                                ))}
-                                        </select>
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={inviteExpiresDays}
-                                                onChange={(e) => setInviteExpiresDays(Number(e.target.value))}
-                                                className="flex-1 px-3 py-2 rounded-xl border border-input bg-background text-sm"
-                                            >
-                                                <option value={30}>30 days</option>
-                                                <option value={90}>90 days</option>
-                                                <option value={180}>180 days</option>
-                                                <option value={365}>1 year</option>
-                                            </select>
-                                            <Button
-                                                onClick={handleCreatePortalLink}
-                                                disabled={creatingLink || !inviteSupplierName.trim()}
-                                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[40px] text-xs active:scale-[0.97]"
-                                            >
-                                                {creatingLink ? <Spinner size="sm" /> : 'Generate Link'}
-                                            </Button>
-                                        </div>
                                     </div>
-                                    {integrationProfiles.length === 0 && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Create reusable mapping profiles from the Integrations dashboard to preconfigure supplier portal links.
-                                        </p>
-                                    )}
+                                    <select
+                                        value={inviteProfileId}
+                                        onChange={(e) => setInviteProfileId(e.target.value)}
+                                        className={fieldControlClasses}
+                                        aria-label="Saved integration profile"
+                                    >
+                                        <option value="">No saved profile</option>
+                                        {integrationProfiles
+                                            .filter((profile) => profile.status !== 'archived')
+                                            .map((profile) => (
+                                                <option key={profile.profile_id} value={profile.profile_id}>
+                                                    {profile.display_name}
+                                                </option>
+                                            ))}
+                                    </select>
+                                    <div className="flex min-w-0 gap-2">
+                                        <select
+                                            value={inviteExpiresDays}
+                                            onChange={(e) => setInviteExpiresDays(Number(e.target.value))}
+                                            className={`${fieldControlClasses} flex-1`}
+                                            aria-label="Portal link expiry"
+                                        >
+                                            <option value={30}>30 days</option>
+                                            <option value={90}>90 days</option>
+                                            <option value={180}>180 days</option>
+                                            <option value={365}>1 year</option>
+                                        </select>
+                                        <Button
+                                            onClick={handleCreatePortalLink}
+                                            disabled={creatingLink || !inviteSupplierName.trim()}
+                                            loading={creatingLink}
+                                            className="shrink-0"
+                                        >
+                                            Generate Link
+                                        </Button>
+                                    </div>
                                 </div>
-                            </motion.div>
+                                {integrationProfiles.length === 0 && (
+                                    <p className="text-small text-re-text-tertiary">
+                                        Create reusable mapping profiles from the Integrations dashboard to preconfigure supplier portal links.
+                                    </p>
+                                )}
+                            </div>
                         )}
 
                         {/* Portal Links List */}
                         {portalLinks.length > 0 && (
-                            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                            <ul className="max-h-[200px] divide-y divide-re-border-subtle overflow-y-auto rounded-md border border-re-border-subtle">
                                 {portalLinks.map((link) => {
                                     const isActive = link.status === 'active';
                                     const isCopied = copiedLinkId === link.portal_id;
@@ -560,320 +550,305 @@ export default function SupplierDashboardPage() {
                                         : 'N/A';
 
                                     return (
-                                        <div
+                                        <li
                                             key={link.portal_id}
-                                            className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${
-                                                isActive
-                                                    ? 'bg-[var(--re-surface-elevated)]'
-                                                    : 'bg-[var(--re-surface-base)] opacity-60'
-                                            }`}
+                                            className="flex items-center justify-between gap-2 px-3 py-2 text-small"
                                         >
-                                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                                    isActive ? 'bg-[var(--re-brand)]' : 'bg-re-text-disabled'
-                                                }`} />
-                                                <span className="font-medium text-[var(--re-text-primary)] truncate">
+                                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                                                <StatusBadge
+                                                    state={isActive ? 'compliant' : 'blocked'}
+                                                    label={link.status}
+                                                    size="sm"
+                                                    className="capitalize"
+                                                />
+                                                <span className="truncate font-medium text-re-text-primary">
                                                     {link.supplier_name}
                                                 </span>
-                                                <span className="text-[var(--re-text-disabled)] flex-shrink-0">
+                                                <span className="shrink-0 text-re-text-tertiary">
                                                     expires {expiresDate}
                                                 </span>
                                                 {link.integration_profile_id && (
-                                                    <span className="inline-flex items-center gap-1 text-[var(--re-brand)] flex-shrink-0">
-                                                        <SlidersHorizontal className="h-3 w-3" />
+                                                    <span className="inline-flex shrink-0 items-center gap-1 text-re-text-tertiary">
+                                                        <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                                                         {integrationProfiles.find((profile) => profile.profile_id === link.integration_profile_id)?.display_name ?? 'Saved profile'}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                                                {isActive && (
-                                                    <>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0"
-                                                            onClick={() => handleCopyLink(link)}
-                                                            title="Copy link"
-                                                        >
-                                                            {isCopied ? (
-                                                                <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" />
-                                                            ) : (
-                                                                <Copy className="h-3.5 w-3.5" />
-                                                            )}
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0"
-                                                            onClick={() => window.open(link.portal_url, '_blank')}
-                                                            title="Open portal"
-                                                        >
-                                                            <ExternalLink className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 text-re-danger hover:text-re-danger"
-                                                            onClick={() => handleRevokeLink(link.portal_id)}
-                                                            title="Revoke link"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </>
-                                                )}
-                                                {!isActive && (
-                                                    <Badge variant="outline" className="text-[9px] py-0 text-[var(--re-text-disabled)]">
-                                                        {link.status}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
+                                            {isActive && (
+                                                <div className="ml-2 flex shrink-0 items-center gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8"
+                                                        onClick={() => handleCopyLink(link)}
+                                                        title="Copy link"
+                                                        aria-label="Copy link"
+                                                    >
+                                                        {isCopied ? (
+                                                            <CheckCircle2 className="h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                                        ) : (
+                                                            <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                        )}
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8"
+                                                        onClick={() => window.open(link.portal_url, '_blank')}
+                                                        title="Open portal"
+                                                        aria-label="Open portal"
+                                                    >
+                                                        <ExternalLink className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-re-danger hover:text-re-danger"
+                                                        onClick={() => handleRevokeLink(link.portal_id)}
+                                                        title="Revoke link"
+                                                        aria-label="Revoke link"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </li>
                                     );
                                 })}
-                            </div>
+                            </ul>
                         )}
 
                         {portalLinks.length === 0 && !showInviteForm && (
-                            <div className="text-center py-3">
-                                <p className="text-xs text-muted-foreground">
-                                    No portal links yet. Invite a supplier to start collecting traceability data.
-                                </p>
-                            </div>
+                            <p className="py-3 text-center text-small text-re-text-tertiary">
+                                No portal links yet. Invite a supplier to start collecting traceability data.
+                            </p>
                         )}
                     </CardContent>
                 </Card>
 
                 {/* Add Facility Form */}
                 {showAddForm && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-                        <Card className="border-[var(--re-brand)]">
-                            <CardContent className="py-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
-                                    <Input
-                                        value={newName}
-                                        onChange={e => setNewName(e.target.value)}
-                                        placeholder="Facility name"
-                                        className="rounded-xl min-h-[44px]"
-                                    />
-                                    <Input
-                                        value={newStreet}
-                                        onChange={e => setNewStreet(e.target.value)}
-                                        placeholder="Street address"
-                                        className="rounded-xl min-h-[44px]"
-                                    />
-                                    <Input
-                                        value={newCity}
-                                        onChange={e => setNewCity(e.target.value)}
-                                        placeholder="City"
-                                        className="rounded-xl min-h-[44px]"
-                                    />
-                                    <Input
-                                        value={newState}
-                                        onChange={e => setNewState(e.target.value)}
-                                        placeholder="State"
-                                        className="rounded-xl min-h-[44px]"
-                                    />
-                                    <Input
-                                        value={newPostalCode}
-                                        onChange={e => setNewPostalCode(e.target.value)}
-                                        placeholder="Postal code"
-                                        className="rounded-xl min-h-[44px]"
-                                    />
-                                    <Button
-                                        onClick={handleAdd}
-                                        disabled={adding || !newName.trim() || !newStreet.trim()}
-                                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] active:scale-[0.97]"
-                                    >
-                                        {adding ? <Spinner size="sm" /> : <><Plus className="h-4 w-4 mr-1" /> Create</>}
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+                    <Card>
+                        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                            <div className="min-w-0">
+                                <label htmlFor="new-facility-name" className="sr-only">Facility name</label>
+                                <Input
+                                    id="new-facility-name"
+                                    size="lg"
+                                    value={newName}
+                                    onChange={e => setNewName(e.target.value)}
+                                    placeholder="Facility name"
+                                />
+                            </div>
+                            <div className="min-w-0">
+                                <label htmlFor="new-facility-street" className="sr-only">Street address</label>
+                                <Input
+                                    id="new-facility-street"
+                                    size="lg"
+                                    value={newStreet}
+                                    onChange={e => setNewStreet(e.target.value)}
+                                    placeholder="Street address"
+                                />
+                            </div>
+                            <div className="min-w-0">
+                                <label htmlFor="new-facility-city" className="sr-only">City</label>
+                                <Input
+                                    id="new-facility-city"
+                                    size="lg"
+                                    value={newCity}
+                                    onChange={e => setNewCity(e.target.value)}
+                                    placeholder="City"
+                                />
+                            </div>
+                            <div className="min-w-0">
+                                <label htmlFor="new-facility-state" className="sr-only">State</label>
+                                <Input
+                                    id="new-facility-state"
+                                    size="lg"
+                                    value={newState}
+                                    onChange={e => setNewState(e.target.value)}
+                                    placeholder="State"
+                                />
+                            </div>
+                            <div className="min-w-0">
+                                <label htmlFor="new-facility-postal-code" className="sr-only">Postal code</label>
+                                <Input
+                                    id="new-facility-postal-code"
+                                    size="lg"
+                                    value={newPostalCode}
+                                    onChange={e => setNewPostalCode(e.target.value)}
+                                    placeholder="Postal code"
+                                />
+                            </div>
+                            <Button
+                                size="lg"
+                                onClick={handleAdd}
+                                disabled={adding || !newName.trim() || !newStreet.trim()}
+                                loading={adding}
+                                leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
+                            >
+                                Create
+                            </Button>
+                        </CardContent>
+                    </Card>
                 )}
 
                 {/* Loading State */}
                 {loading && (
-                    <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5">
-                        <div className="flex items-start gap-3">
-                            <Spinner size="lg" />
-                            <div>
-                                <p className="text-sm font-semibold">Loading supplier network</p>
-                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                    Checking facilities, portal links, saved mapping profiles, compliance gaps, and latest lot activity.
-                                </p>
+                    <Card aria-busy="true">
+                        <CardContent>
+                            <p className="text-ui font-medium text-re-text-primary">Loading supplier network</p>
+                            <p className="mt-1 max-w-[70ch] text-small text-re-text-tertiary">
+                                Checking facilities, portal links, saved mapping profiles, compliance gaps, and latest lot activity.
+                            </p>
+                            <div className="mt-5 grid gap-3 md:grid-cols-3">
+                                {[1, 2, 3].map((item) => (
+                                    <Skeleton key={item} className="h-20 w-full" />
+                                ))}
                             </div>
-                        </div>
-                        <div className="mt-5 grid gap-3 md:grid-cols-3">
-                            {[1, 2, 3].map((item) => (
-                                <div key={item} className="h-20 animate-pulse rounded-xl bg-background" />
-                            ))}
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
                 )}
 
                 {/* Empty State */}
                 {!loading && facilities.length === 0 && !error && (
                     <Card className="border-dashed">
-                        <CardContent className="p-5 sm:p-6">
+                        <CardContent>
                             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-                                <div>
-                                    <div className="flex items-start gap-3">
-                                        <Users className="mt-0.5 h-9 w-9 text-[var(--re-brand)]" />
-                                        <div>
-                                            <p className="text-base font-semibold">No supplier facilities yet</p>
-                                            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                                                Supplier Management is where each facility, portal link, mapping profile, and supplier-specific readiness signal comes together. Add one facility or invite a supplier to begin collecting traceability data.
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="min-w-0">
+                                    <p className="text-subheading text-re-text-primary">No supplier facilities yet</p>
+                                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
+                                        Supplier Management is where each facility, portal link, mapping profile, and supplier-specific readiness signal comes together. Add one facility or invite a supplier to begin collecting traceability data.
+                                    </p>
                                     <div className="mt-5 grid gap-3 md:grid-cols-3">
                                         {SUPPLIER_SETUP_STEPS.map((step) => (
-                                            <div key={step.title} className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-3">
-                                                <step.icon className="h-4 w-4 text-[var(--re-brand)]" />
-                                                <p className="mt-3 text-xs font-semibold">{step.title}</p>
-                                                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{step.detail}</p>
+                                            <div key={step.title} className="rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
+                                                <step.icon className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                                <p className="mt-3 text-ui font-medium text-re-text-primary">{step.title}</p>
+                                                <p className="mt-1 text-small text-re-text-tertiary">{step.detail}</p>
                                             </div>
                                         ))}
                                     </div>
                                     <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                                         <Button
+                                            size="lg"
                                             onClick={() => setShowAddForm(true)}
-                                            className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]"
+                                            leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
                                         >
-                                            <Plus className="h-4 w-4 mr-1" /> Add Facility
+                                            Add Facility
                                         </Button>
                                         <Button
                                             variant="outline"
+                                            size="lg"
                                             onClick={() => setShowInviteForm(true)}
-                                            className="rounded-xl min-h-[44px]"
+                                            leadingIcon={<Send strokeWidth={1.75} aria-hidden="true" />}
                                         >
-                                            <Send className="h-4 w-4 mr-1" /> Invite Supplier
+                                            Invite Supplier
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4">
-                                    <p className="text-sm font-semibold">What will populate after setup</p>
-                                    <div className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
-                                        <div className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
-                                            <span>Facility rows</span>
-                                            <span className="font-medium text-foreground">score + gaps</span>
-                                        </div>
-                                        <div className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
-                                            <span>Portal links</span>
-                                            <span className="font-medium text-foreground">active / revoked</span>
-                                        </div>
-                                        <div className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
-                                            <span>FDA exports</span>
-                                            <span className="font-medium text-foreground">per facility</span>
-                                        </div>
-                                    </div>
+                                <div className="min-w-0 rounded-md border border-re-border-subtle bg-re-surface-inset p-4">
+                                    <p className="text-ui font-medium text-re-text-primary">What will populate after setup</p>
+                                    <dl className="mt-3 space-y-2 text-small text-re-text-tertiary">
+                                        {POST_SETUP_ROWS.map((row) => (
+                                            <div key={row.label} className="flex items-center justify-between gap-2 rounded-md bg-re-surface-card px-3 py-2">
+                                                <dt>{row.label}</dt>
+                                                <dd className="font-medium text-re-text-primary">{row.value}</dd>
+                                            </div>
+                                        ))}
+                                    </dl>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
                 )}
 
-                {/* Facility List */}
-                {!loading && (
-                    <div className="space-y-3">
-                        {facilities.map((facility, i) => {
-                            const comp = complianceLabel(facility.complianceScore);
-                            const CompIcon = comp.icon;
+                {/* Facility List — hairline ledger rows */}
+                {!loading && facilities.length > 0 && (
+                    <Card>
+                        <ul className="divide-y divide-re-border-subtle">
+                            {facilities.map((facility) => {
+                                const comp = complianceLabel(facility.complianceScore);
 
-                            return (
-                                <motion.div
-                                    key={facility.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                >
-                                    <Card className="border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all">
-                                        <CardContent className="py-3 sm:py-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                                                        <span className="font-medium text-sm sm:text-base">{facility.name}</span>
-                                                        <Badge
-                                                            className="text-[9px] px-1.5 py-0"
-                                                            style={{ background: comp.bg, color: comp.color }}
-                                                        >
-                                                            <CompIcon className="h-2.5 w-2.5 mr-0.5 inline" />
-                                                            {comp.label}
-                                                            {facility.complianceScore !== null && ` (${facility.complianceScore})`}
-                                                        </Badge>
-                                                        {facility.gapCount > 0 && (
-                                                            <Badge
-                                                                className="text-[9px] px-1.5 py-0"
-                                                                variant="outline"
-                                                                style={{ color: '#f59e0b', borderColor: '#f59e0b' }}
-                                                            >
-                                                                {facility.gapCount} gap{facility.gapCount !== 1 ? 's' : ''}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 sm:gap-4 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
-                                                        <span className="flex items-center gap-1">
-                                                            <Mail className="h-3 w-3 flex-shrink-0" />
-                                                            {facility.city}, {facility.state} {facility.postal_code}
-                                                        </span>
-                                                        <span>{facility.tlcCount} lot code{facility.tlcCount !== 1 ? 's' : ''}</span>
-                                                        {facility.lastEvent && (
-                                                            <span className="flex items-center gap-1">
-                                                                <Clock className="h-3 w-3" /> {relativeTime(facility.lastEvent)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {facility.roles && facility.roles.length > 0 && (
-                                                        <div className="flex gap-1 mt-1.5 sm:mt-2 flex-wrap">
-                                                            {facility.roles.map((role) => (
-                                                                <Badge key={role} variant="outline" className="text-[9px] py-0">
-                                                                    {role}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <Button
-                                                    variant="outline"
+                                return (
+                                    <li
+                                        key={facility.id}
+                                        className="flex flex-col gap-3 px-4 py-4 transition-colors duration-120 hover:bg-re-surface-inset/60 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                                                <span className="text-ui font-medium text-re-text-primary">{facility.name}</span>
+                                                <StatusBadge
+                                                    state={comp.state}
                                                     size="sm"
-                                                    className="rounded-xl flex-shrink-0 min-h-[44px] active:scale-[0.97] w-full sm:w-auto"
-                                                    onClick={() => handleFDAExport('xlsx', facility.id)}
-                                                >
-                                                    <Download className="h-3.5 w-3.5 mr-1" />
-                                                    FDA Export
-                                                </Button>
+                                                    label={`${comp.label}${facility.complianceScore !== null ? ` (${facility.complianceScore})` : ''}`}
+                                                />
+                                                {facility.gapCount > 0 && (
+                                                    <Badge tone="warning" size="sm">
+                                                        {facility.gapCount} gap{facility.gapCount !== 1 ? 's' : ''}
+                                                    </Badge>
+                                                )}
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
+                                            <div className="flex flex-wrap items-center gap-3 text-small text-re-text-tertiary sm:gap-4">
+                                                <span className="flex items-center gap-1">
+                                                    <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                    {facility.city}, {facility.state} {facility.postal_code}
+                                                </span>
+                                                <span>{facility.tlcCount} lot code{facility.tlcCount !== 1 ? 's' : ''}</span>
+                                                {facility.lastEvent && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" /> {relativeTime(facility.lastEvent)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {facility.roles && facility.roles.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap gap-1">
+                                                    {facility.roles.map((role) => (
+                                                        <Badge key={role} size="sm">
+                                                            {role}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full shrink-0 sm:w-auto"
+                                            onClick={() => handleFDAExport('xlsx', facility.id)}
+                                            leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
+                                        >
+                                            FDA Export
+                                        </Button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </Card>
                 )}
 
                 {/* Bulk FDA Export */}
                 {!loading && facilities.length > 0 && (
-                    <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+                    <div className="flex flex-col justify-end gap-2 pt-2 sm:flex-row">
                         <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl min-h-[44px] active:scale-[0.97]"
                             onClick={() => handleFDAExport('xlsx')}
+                            leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
                         >
-                            <Download className="h-3.5 w-3.5 mr-1" /> Export All (XLSX)
+                            Export All (XLSX)
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl min-h-[44px] active:scale-[0.97]"
                             onClick={() => handleFDAExport('csv')}
+                            leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
                         >
-                            <Download className="h-3.5 w-3.5 mr-1" /> Export All (CSV)
+                            Export All (CSV)
                         </Button>
                     </div>
                 )}
             </div>
-        </div>
+        </PageContainer>
     );
 }

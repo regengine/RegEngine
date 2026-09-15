@@ -3,6 +3,10 @@ import type { Metadata } from 'next';
 import { ArrowRight, BookOpen, Leaf, Database, CheckSquare, Users, FileText, BarChart3, Clock, Tag } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { BLOG_POST_TITLES, type BlogPostSlug } from '@/lib/blog-posts';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
   title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
@@ -95,93 +99,82 @@ const BLOG_POSTS: BlogPost[] = [
 
 export default function BlogPage() {
   return (
-    <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+    <div className="bg-re-surface-base">
       {/* Hero */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16">
-        <div className="max-w-[700px]">
-          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-5">
-            FSMA 204 Resources
-          </p>
-          <h1 className="font-serif text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight mb-6">
-            FSMA 204 Compliance Resources for Food Businesses
-          </h1>
-          <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
-            Learn the fundamentals of FDA food traceability rules, food safety compliance software, and how to prepare your business for the July 2028 deadline.
-          </p>
-        </div>
-      </section>
+      <Container width="marketing" className="pt-12 sm:pt-16">
+        <PageHeader
+          size="hero"
+          eyebrow="FSMA 204 Resources"
+          title="FSMA 204 Compliance Resources for Food Businesses"
+          description="Learn the fundamentals of FDA food traceability rules, food safety compliance software, and how to prepare your business for the July 2028 deadline."
+          className="border-b-0 pb-0"
+        />
+      </Container>
 
-      {/* Blog Grid */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Blog list */}
+      <Container width="marketing" className="pb-16 sm:pb-20">
+        <ul className="border-t border-re-border-subtle">
           {BLOG_POSTS.map((post) => {
             const Icon = post.icon;
             return (
-              <Link
-                key={post.slug}
-                href={`/blog/${post.slug}`}
-                className="group relative overflow-hidden rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-secondary)] transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:shadow-[0_8px_30px_rgba(16,185,129,0.15)] hover:-translate-y-1"
-              >
-                <div className="p-6 sm:p-8 flex flex-col h-full">
-                  {/* Icon */}
-                  <div className="mb-6">
-                    <div className="w-12 h-12 rounded-lg bg-[var(--re-brand)]/10 flex items-center justify-center group-hover:bg-[var(--re-brand)]/20 transition-colors duration-300">
-                      <Icon className="w-6 h-6 text-[var(--re-brand)]" />
-                    </div>
+              <li key={post.slug} className="border-b border-re-border-subtle">
+                <Link
+                  href={`/blog/${post.slug}`}
+                  className="group -mx-3 flex flex-col gap-2 rounded-md px-3 py-5 transition-colors duration-120 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring sm:flex-row sm:items-start sm:gap-6 motion-reduce:transition-none"
+                >
+                  <Icon
+                    className="mt-0.5 h-5 w-5 shrink-0 text-re-text-tertiary"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-subheading text-re-text-primary sm:text-heading">
+                      {BLOG_POST_TITLES[post.slug]}
+                    </h3>
+                    <p className="mt-1.5 max-w-[68ch] text-ui text-re-text-secondary">
+                      {post.excerpt}
+                    </p>
                   </div>
-
-                  {/* Content */}
-                  <h3 className="text-lg sm:text-xl font-semibold text-[var(--re-text-primary)] mb-3 group-hover:text-[var(--re-brand)] transition-colors duration-300 line-clamp-3">
-                    {BLOG_POST_TITLES[post.slug]}
-                  </h3>
-                  <p className="text-[var(--re-text-secondary)] leading-relaxed mb-6 flex-grow line-clamp-2">
-                    {post.excerpt}
-                  </p>
-
-                  {/* Meta */}
-                  <div className="flex items-center justify-between pt-6 border-t border-[var(--re-surface-border)] group-hover:border-[var(--re-brand)]/30 transition-colors duration-300">
-                    <div className="flex gap-4 text-xs text-[var(--re-text-muted)]">
-                      <span>{post.date}</span>
-                      <span>{post.readTime}</span>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-[var(--re-brand)] group-hover:translate-x-1 transition-transform duration-300" />
+                  <div className="flex shrink-0 items-center gap-3 sm:w-52 sm:justify-end">
+                    <span className="font-mono text-label uppercase text-re-text-muted">{post.date}</span>
+                    <span className="font-mono text-label uppercase text-re-text-muted">{post.readTime}</span>
+                    <ArrowRight
+                      className="h-4 w-4 shrink-0 text-re-text-tertiary transition-transform duration-120 group-hover:translate-x-0.5 motion-reduce:transition-none"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </li>
             );
           })}
-        </div>
-      </section>
+        </ul>
+      </Container>
 
       {/* CTA Section */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--re-brand)]/10 to-cyan-600/5 p-8 sm:p-12 border border-[var(--re-brand)]/20">
-          <div className="relative z-10 max-w-[600px]">
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+      <Container width="marketing" className="pb-16 sm:pb-20">
+        <Card padding="spacious">
+          <div className="max-w-[600px]">
+            <h2 className="font-display text-heading-lg text-re-text-primary">
               Need hands-on help?
             </h2>
-            <p className="text-[var(--re-text-secondary)] mb-8 leading-relaxed">
+            <p className="mt-4 text-body text-re-text-secondary">
               RegEngine helps turn supplier data into FSMA 204 traceability evidence in minutes, not months. Get your free readiness score and see what needs attention.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href="/retailer-readiness"
-                className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px]"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Get Your Readiness Score</span>
-                <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
-              </Link>
-              <Link
-                href="/fsma-204"
-                className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
-              >
-                Read Our FSMA 204 Guide
-              </Link>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link href="/retailer-readiness">
+                  Get Your Readiness Score
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/fsma-204">Read Our FSMA 204 Guide</Link>
+              </Button>
             </div>
           </div>
-        </div>
-      </section>
+        </Card>
+      </Container>
     </div>
   );
 }

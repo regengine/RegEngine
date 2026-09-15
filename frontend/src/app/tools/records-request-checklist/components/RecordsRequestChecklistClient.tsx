@@ -3,9 +3,13 @@
 import { useState } from 'react';
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Shield, AlertCircle, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { StatTile } from '@/components/ui/stat-tile';
 import Link from 'next/link';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
@@ -125,6 +129,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
 };
 
 export function RecordsRequestChecklistClient() {
+    const reduceMotion = useReducedMotion();
     const [leadSubmitted, setLeadSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
@@ -179,136 +184,161 @@ export function RecordsRequestChecklistClient() {
         setLastAnswers(answers);
 
         return (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-                <div className="re-panel p-8 mb-6">
-                    <div className="text-center mb-6">
-                        <h3 className="re-title-2 mb-2">What You Reported</h3>
-                        <p className="re-copy text-sm text-[var(--re-text-muted)]">
-                            Summary of your self-reported answers. Not a readiness score, not a regulatory determination.
-                        </p>
-                        <div className="mt-4 text-sm text-[var(--re-text-muted)] max-w-2xl mx-auto">
-                            <p>The federal Food Traceability Rule compliance date is <strong>July 20, 2028</strong>.</p>
-                        </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4 mb-8">
-                        <div className="re-panel p-6 text-center">
-                            <div className="text-5xl font-bold mb-2" style={{ color: 'var(--re-brand)' }}>{score}</div>
-                            <div className="text-sm text-[var(--re-text-muted)]">Self-Reported Points</div>
-                        </div>
-                        <div className="re-panel p-6">
-                            <h4 className="font-semibold mb-2 text-[var(--re-text-primary)]">What This Is Not</h4>
-                            <ul className="text-sm space-y-1 text-[var(--re-text-muted)]">
-                                <li className="flex items-start gap-2">
-                                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                                    <span>Not a 24-hour capability test</span>
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                                    <span>Not a recall-readiness score</span>
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                                    <span>Not legal advice</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        {RECORDS_REQUEST_TOOL_CONFIG.stages.questions.map(q => {
-                            const selectedValue = answers[q.id];
-                            const option = q.options?.find(opt => opt.value === selectedValue);
-                            const isComplete = selectedValue === 'yes';
-                            return (
-                                <div key={q.id} className="re-panel p-4 flex items-start gap-3">
-                                    {isComplete ? (
-                                        <CheckCircle2 size={20} className="text-re-brand mt-0.5 flex-shrink-0" />
-                                    ) : (
-                                        <AlertTriangle size={20} className="text-re-warning mt-0.5 flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1">
-                                        <p className="font-medium text-sm text-[var(--re-text-primary)] mb-1">{q.text}</p>
-                                        <p className="text-sm text-[var(--re-text-muted)]">
-                                            You reported: <strong>{option?.label || 'No answer'}</strong>
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className="mt-8 p-6 rounded-xl bg-[var(--re-brand-muted)] border border-[var(--re-brand-muted)]">
-                        <div className="flex items-start gap-3">
-                            <Shield size={24} className="text-re-brand mt-0.5 flex-shrink-0" />
-                            <div>
-                                <h4 className="font-semibold mb-2 text-[var(--re-text-primary)]">Next Steps</h4>
-                                <p className="text-sm text-[var(--re-text-muted)] mb-4">
-                                    We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.
-                                </p>
-                                <Link href="/contact">
-                                    <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)]">
-                                        Book a 30-min Call
-                                        <ArrowRight size={16} className="ml-2" />
-                                    </Button>
-                                </Link>
+            <motion.div
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18 }}
+            >
+                <div className="mb-6">
+                    <div className="px-1">
+                        <div className="mb-6 text-center">
+                            <h3 className="text-heading text-re-text-primary">What You Reported</h3>
+                            <p className="mt-1 text-ui text-re-text-tertiary">
+                                Summary of your self-reported answers. Not a readiness score, not a regulatory determination.
+                            </p>
+                            <div className="mx-auto mt-4 max-w-[70ch] text-ui text-re-text-tertiary">
+                                <p>The federal Food Traceability Rule compliance date is <strong className="font-medium text-re-text-secondary">July 20, 2028</strong>.</p>
                             </div>
                         </div>
+
+                        <div className="mb-8 grid gap-4 md:grid-cols-2">
+                            <StatTile label="Self-Reported Points" value={score} />
+                            <Card variant="inset">
+                                <CardContent>
+                                    <h4 className="mb-2 text-subheading text-re-text-primary">What This Is Not</h4>
+                                    <ul className="space-y-1 text-ui text-re-text-tertiary">
+                                        <li className="flex items-start gap-2">
+                                            <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
+                                            <span>Not a 24-hour capability test</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
+                                            <span>Not a recall-readiness score</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
+                                            <span>Not legal advice</span>
+                                        </li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="space-y-3">
+                            {RECORDS_REQUEST_TOOL_CONFIG.stages.questions.map(q => {
+                                const selectedValue = answers[q.id];
+                                const option = q.options?.find(opt => opt.value === selectedValue);
+                                const isComplete = selectedValue === 'yes';
+                                return (
+                                    <div key={q.id} className="flex items-start gap-3 rounded-md border border-re-border bg-re-surface-card p-4">
+                                        {isComplete ? (
+                                            <CheckCircle2 aria-hidden="true" size={20} strokeWidth={1.75} className="mt-0.5 flex-shrink-0 text-re-text-tertiary" />
+                                        ) : (
+                                            <AlertTriangle aria-hidden="true" size={20} strokeWidth={1.75} className="mt-0.5 flex-shrink-0 text-re-warning" />
+                                        )}
+                                        <div className="flex-1">
+                                            <p className="mb-1 text-ui font-medium text-re-text-primary">{q.text}</p>
+                                            <p className="text-ui text-re-text-tertiary">
+                                                You reported: <strong className="font-medium text-re-text-secondary">{option?.label || 'No answer'}</strong>
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <Callout tone="neutral" role="note" icon={Shield} title="Next Steps" className="mt-8">
+                            <p className="text-ui text-re-text-tertiary">
+                                We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.
+                            </p>
+                            <div className="mt-4">
+                                <Button asChild variant="secondary" size="sm">
+                                    <Link href="/contact">
+                                        Book a 30-min Call
+                                        <ArrowRight aria-hidden="true" size={16} strokeWidth={1.75} className="ml-2" />
+                                    </Link>
+                                </Button>
+                            </div>
+                        </Callout>
                     </div>
                 </div>
 
                 {!leadSubmitted && (
-                    <div className="re-panel p-8">
-                        <h3 className="re-title-3 mb-4 text-center">Want to Discuss Your Checklist?</h3>
-                        <form onSubmit={handleLeadSubmit} className="max-w-md mx-auto space-y-4">
-                            <input
-                                type="text"
-                                name="name"
-                                placeholder="Full Name"
-                                required
-                                className="re-input w-full"
-                            />
-                            <input
-                                type="email"
-                                name="email"
-                                placeholder="Work Email"
-                                required
-                                className="re-input w-full"
-                            />
-                            <input
-                                type="text"
-                                name="company"
-                                placeholder="Company (Optional)"
-                                className="re-input w-full"
-                            />
-                            <input
-                                type="tel"
-                                name="phone"
-                                placeholder="Phone (Optional)"
-                                className="re-input w-full"
-                            />
-                            <input
-                                type="hidden"
-                                name="role"
-                                value="Unknown"
-                            />
-                            {submitError && (
-                                <div className="text-sm text-re-danger">{submitError}</div>
-                            )}
-                            <Button type="submit" disabled={submitting} className="w-full">
-                                {submitting ? 'Submitting...' : 'Send My Checklist'}
-                            </Button>
-                        </form>
+                    <div className="border-t border-re-border-subtle pt-8">
+                        <div>
+                            <h3 className="mb-4 text-center text-subheading text-re-text-primary">Want to Discuss Your Checklist?</h3>
+                            <form onSubmit={handleLeadSubmit} className="mx-auto max-w-md space-y-4">
+                                <div>
+                                    <label htmlFor="rrc-name" className="sr-only">Full Name</label>
+                                    <Input
+                                        id="rrc-name"
+                                        type="text"
+                                        name="name"
+                                        placeholder="Full Name"
+                                        required
+                                        size="lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="rrc-email" className="sr-only">Work Email</label>
+                                    <Input
+                                        id="rrc-email"
+                                        type="email"
+                                        name="email"
+                                        placeholder="Work Email"
+                                        required
+                                        size="lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="rrc-company" className="sr-only">Company (Optional)</label>
+                                    <Input
+                                        id="rrc-company"
+                                        type="text"
+                                        name="company"
+                                        placeholder="Company (Optional)"
+                                        size="lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="rrc-phone" className="sr-only">Phone (Optional)</label>
+                                    <Input
+                                        id="rrc-phone"
+                                        type="tel"
+                                        name="phone"
+                                        placeholder="Phone (Optional)"
+                                        size="lg"
+                                    />
+                                </div>
+                                <input
+                                    type="hidden"
+                                    name="role"
+                                    value="Unknown"
+                                />
+                                {submitError && (
+                                    <Callout tone="danger" role="alert">{submitError}</Callout>
+                                )}
+                                <Button type="submit" size="lg" loading={submitting} className="w-full">
+                                    {submitting ? 'Submitting...' : 'Send My Checklist'}
+                                </Button>
+                            </form>
+                        </div>
                     </div>
                 )}
 
                 {leadSubmitted && (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="re-panel p-8 text-center">
-                        <CheckCircle2 size={48} className="text-re-brand mx-auto mb-4" />
-                        <h3 className="re-title-3 mb-2">Thank You!</h3>
-                        <p className="re-copy text-[var(--re-text-muted)]">
-                            We'll be in touch soon to discuss your checklist.
-                        </p>
+                    <motion.div
+                        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18 }}
+                    >
+                        <div className="border-t border-re-border-subtle pt-8 text-center">
+                            <CheckCircle2 aria-hidden="true" size={24} strokeWidth={1.75} className="mx-auto mb-4 text-re-text-tertiary" />
+                            <h3 className="mb-2 text-subheading text-re-text-primary">Thank You!</h3>
+                            <p className="text-ui text-re-text-tertiary">
+                                We&apos;ll be in touch soon to discuss your checklist.
+                            </p>
+                        </div>
                     </motion.div>
                 )}
             </motion.div>

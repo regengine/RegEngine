@@ -49,7 +49,7 @@ interface ComplianceStatusWidgetProps {
 const STATUS_CONFIG = {
     COMPLIANT: {
         bgClass: "bg-re-success-muted dark:bg-re-success/20",
-        borderClass: "border-green-200 dark:border-green-800",
+        borderClass: "border-re-success-border",
         textClass: "text-re-success dark:text-re-success",
         iconClass: "text-re-success",
         Icon: CheckCircle,
@@ -104,7 +104,7 @@ function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () =>
     const severityColors: Record<string, string> = {
         CRITICAL: "bg-re-danger-muted text-re-danger border-re-danger",
         HIGH: "bg-re-warning-muted text-re-warning border-re-warning",
-        MEDIUM: "bg-re-info-muted text-re-info border-blue-200",
+        MEDIUM: "bg-re-info-muted text-re-info border-re-info-border",
         LOW: "bg-re-surface-elevated text-re-text-primary border-re-border",
     };
 
@@ -114,7 +114,7 @@ function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () =>
 
     return (
         <div
-            className="p-4 border rounded-lg bg-white dark:bg-re-surface-base hover:shadow-md transition-shadow cursor-pointer"
+            className="cursor-pointer rounded-lg border border-re-border bg-re-surface-card p-4 transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset motion-reduce:transition-none"
             onClick={onClick}
         >
             <div className="flex items-start justify-between">
