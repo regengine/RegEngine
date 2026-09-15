@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { Badge, type BadgeTone } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import type { IconComponent } from "@/components/ui/icon"
 
 /**
  * StatusBadge — SPEC §4.
@@ -38,7 +39,7 @@ export type ComplianceState =
 
 type StateConfig = {
   tone: BadgeTone
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>
+  icon: IconComponent
   label: string
   spin?: boolean
 }

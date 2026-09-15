@@ -79,9 +79,19 @@ export default function CanonicalRecordsPage() {
   const records = events.data?.events ?? [];
   const detail = eventDetail.data;
 
+  const pageHeader = (
+    <PageHeader
+      title="Canonical Records"
+      description="Every record answers: what is it, where did it come from, what rules applied, what failed, what happens next"
+      meta={<Badge>{events.data?.total ?? 0} total records</Badge>}
+    />
+  );
+
+
   if (events.error) {
     return (
       <PageContainer>
+        {pageHeader}
         <Callout
           tone="danger"
           role="alert"
@@ -144,11 +154,7 @@ export default function CanonicalRecordsPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Canonical Records"
-        description="Every record answers: what is it, where did it come from, what rules applied, what failed, what happens next"
-        meta={<Badge>{events.data?.total ?? 0} total records</Badge>}
-      />
+      {pageHeader}
 
       <DemoBanner visible={!!(events.data?.__isDemo)} />
 

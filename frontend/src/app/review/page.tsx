@@ -1,17 +1,19 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { PageContainer } from '@/components/layout/page-container';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CuratorReview } from '@/components/dashboard/curator-review';
 import { WorkflowStepper } from '@/components/layout/workflow-stepper';
 import { HelpTooltip } from '@/components/ui/tooltip';
 import { Tutorial, useTutorial, reviewTutorialSteps } from '@/components/ui/tutorial';
 import { useAuth } from '@/lib/auth-context';
-import { ShieldCheck, ClipboardCheck, Lightbulb, ArrowRight, Upload, HelpCircle } from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, ArrowRight, Upload, HelpCircle } from 'lucide-react';
 
 export default function ReviewPage() {
   const { hasAdminSession, hasTenantSession, isAuthenticated, isOnboarded } = useAuth();
@@ -20,148 +22,129 @@ export default function ReviewPage() {
   const setupLabel = isAuthenticated ? 'Finish Setup' : 'Sign In';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+    <>
       <PageContainer>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-5xl mx-auto space-y-6"
-        >
-          {/* Workflow Progress */}
-          {hasTenantSession && (
-            <div className="mb-6">
-              <WorkflowStepper currentStep="review" completedSteps={isOnboarded ? ['setup', 'ingest'] : ['setup']} />
-            </div>
-          )}
+        {/* Workflow Progress */}
+        {hasTenantSession && (
+          <div className="mb-6">
+            <WorkflowStepper currentStep="review" completedSteps={isOnboarded ? ['setup', 'ingest'] : ['setup']} />
+          </div>
+        )}
 
-          {/* Page Header */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 rounded-lg bg-re-warning-muted dark:bg-re-warning">
-              <ClipboardCheck className="h-8 w-8 text-re-warning dark:text-re-warning" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-4xl font-bold">Curator Review</h1>
-              <div className="mt-1 flex items-center gap-1 text-muted-foreground">
-                <p>Review extracted regulatory data and validate ML extractions</p>
-                <HelpTooltip content="Items here were extracted with lower confidence and need human validation before being added to the knowledge graph." />
-              </div>
-            </div>
+        <PageHeader
+          title="Curator Review"
+          description="Review extracted regulatory data and validate ML extractions"
+          secondaryActions={
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={tutorial.startTutorial}
-              className="hidden sm:flex"
+              className="hidden sm:inline-flex"
             >
-              <HelpCircle className="h-4 w-4 mr-2" />
+              <HelpCircle className="mr-2 h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               Tutorial
             </Button>
-          </div>
+          }
+        />
 
-          {/* Review Access Warning */}
-          {!hasAdminSession && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-3">
-                    <ShieldCheck className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-medium text-re-warning dark:text-re-warning">
-                        Review access required
-                      </p>
-                      <p className="text-sm text-re-warning dark:text-re-warning mt-1">
-                        {isAuthenticated
-                          ? 'Use a workspace admin or sysadmin session to review and approve items. Finish setup or switch to an admin-capable account to continue.'
-                          : 'Sign in with a workspace admin or sysadmin account to review and approve items.'}
-                      </p>
-                      <Link href={setupHref}>
-                        <Button size="sm" variant="outline" className="mt-3">
-                          {setupLabel}
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+        {/* Review Access Warning */}
+        {!hasAdminSession && (
+          <Callout
+            tone="warning"
+            icon={ShieldCheck}
+            className="mb-6"
+            title="Review access required"
+            action={
+              <Button asChild variant="secondary" size="sm">
+                <Link href={setupHref}>
+                  {setupLabel}
+                  <ArrowRight className="ml-2 h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </Button>
+            }
+          >
+            {isAuthenticated
+              ? 'Use a workspace admin or sysadmin session to review and approve items. Finish setup or switch to an admin-capable account to continue.'
+              : 'Sign in with a workspace admin or sysadmin account to review and approve items.'}
+          </Callout>
+        )}
 
-          {/* Main Review Card */}
-          <Card data-tutorial="review-queue">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div className="space-y-2">
-                <CardTitle className="text-2xl font-bold">Review Queue</CardTitle>
-                <CardDescription>
-                  Approve high-quality extractions and reject inaccuracies to keep the knowledge graph clean.
-                </CardDescription>
+        {/* Main Review Card */}
+        <Card data-tutorial="review-queue">
+          <CardHeader>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <CardTitle>Review Queue</CardTitle>
+                {/* PageHeader renders its description in a <p>, and Tooltip's root
+                    is a <div> — so the help marker lives on the queue it explains. */}
+                <HelpTooltip content="Items here were extracted with lower confidence and need human validation before being added to the knowledge graph." />
               </div>
-              <div className="p-3 rounded-lg bg-re-success-muted dark:bg-re-success/30 text-re-success dark:text-re-success border border-green-200 dark:border-green-800">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <ShieldCheck className="h-4 w-4" />
-                  Quality Gate
-                </div>
-              </div>
+              <CardDescription className="mt-1">
+                Approve high-quality extractions and reject inaccuracies to keep the knowledge graph clean.
+              </CardDescription>
+            </div>
+            <Badge tone="success">
+              <ClipboardCheck className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+              Quality Gate
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <CuratorReview />
+          </CardContent>
+        </Card>
+
+        {/* Help Cards */}
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Review Tips</CardTitle>
             </CardHeader>
             <CardContent>
-              <CuratorReview />
+              <ul className="space-y-2 text-ui text-re-text-secondary">
+                <li className="flex items-start gap-2">
+                  <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-re-text-muted" />
+                  Approve items where the extraction matches the source text
+                </li>
+                <li className="flex items-start gap-2">
+                  <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-re-text-muted" />
+                  Reject items with incorrect entity types or missing context
+                </li>
+                <li className="flex items-start gap-2">
+                  <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-re-text-muted" />
+                  Higher confidence scores generally mean more accurate extractions
+                </li>
+              </ul>
             </CardContent>
           </Card>
 
-          {/* Help Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Lightbulb className="h-5 w-5 text-re-warning" />
-                  Review Tips
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <span className="text-re-success mt-1">•</span>
-                    Approve items where the extraction matches the source text
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-re-danger mt-1">•</span>
-                    Reject items with incorrect entity types or missing context
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-re-info mt-1">•</span>
-                    Higher confidence scores generally mean more accurate extractions
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Need More Items?</CardTitle>
-                <CardDescription>
+          <Card>
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle>Need More Items?</CardTitle>
+                <CardDescription className="mt-1">
                   Ingest more documents to populate the review queue
                 </CardDescription>
-              </CardHeader>
-              <CardContent>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="secondary" className="w-full">
                 <Link href="/ingest">
-                  <Button variant="outline" className="w-full">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Ingest Documents
-                  </Button>
+                  <Upload className="mr-2 h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  Ingest Documents
                 </Link>
-              </CardContent>
-            </Card>
-          </div>
-        </motion.div>
-      </PageContainer>      {/* Tutorial */}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </PageContainer>
+
+      {/* Tutorial */}
       <Tutorial
         steps={reviewTutorialSteps}
         isOpen={tutorial.isOpen}
         onClose={tutorial.closeTutorial}
         storageKey="regengine-review-tutorial"
       />
-    </div>
+    </>
   );
 }

@@ -2,10 +2,17 @@
 
 import { DemoBanner } from '@/components/control-plane/demo-banner';
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Section } from '@/components/layout/section';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
@@ -13,18 +20,7 @@ import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { useQuery } from '@tanstack/react-query';
 
-import {
-  CheckCircle,
-  Eye,
-  FileText,
-  Hash,
-  Shield,
-  AlertTriangle,
-  XCircle,
-  Database,
-  Timer,
-  Lock,
-} from 'lucide-react';
+import { Lock, Shield } from 'lucide-react';
 
 const INGESTION_API = '/api/ingestion';
 
@@ -59,6 +55,12 @@ interface AuditSummary {
   generated_at: string;
 }
 
+const SEVERITY_TONE: Record<string, BadgeTone> = {
+  critical: 'danger',
+  warning: 'warning',
+  info: 'info',
+};
+
 export default function AuditReviewPage() {
   if (!experimentalFeaturesEnabled()) {
     return (
@@ -91,117 +93,151 @@ function AuditReviewContent() {
   });
 
   const s = summary.data;
+  const ruleList = rules.data?.rules ?? [];
+
+  const ruleColumns: DataTableColumn<AuditRule>[] = [
+    {
+      key: 'severity',
+      header: 'Severity',
+      width: '8rem',
+      cell: (rule) => (
+        <Badge tone={SEVERITY_TONE[rule.severity] ?? 'neutral'} size="sm">{rule.severity}</Badge>
+      ),
+    },
+    {
+      key: 'title',
+      header: 'Rule',
+      cell: (rule) => <span className="font-medium text-re-text-primary">{rule.title}</span>,
+    },
+    {
+      key: 'citation_reference',
+      header: 'Citation',
+      mono: true,
+      width: '12rem',
+      cell: (rule) => (
+        <span className="text-re-text-tertiary">{rule.citation_reference || '—'}</span>
+      ),
+    },
+    {
+      key: 'pass_rate',
+      header: 'Pass rate',
+      align: 'right',
+      width: '9rem',
+      cell: (rule) =>
+        rule.evaluation_stats.total > 0 ? (
+          <span
+            className={cn(
+              'tabular-nums',
+              rule.evaluation_stats.pass_rate_percent >= 90
+                ? 'text-re-success'
+                : rule.evaluation_stats.pass_rate_percent >= 70
+                  ? 'text-re-warning'
+                  : 'text-re-danger'
+            )}
+          >
+            {rule.evaluation_stats.pass_rate_percent}% pass
+          </span>
+        ) : (
+          <span className="text-re-text-muted">No evals</span>
+        ),
+    },
+    {
+      key: 'evals',
+      header: 'Evaluations',
+      align: 'right',
+      width: '8rem',
+      cell: (rule) => (
+        <span className="tabular-nums text-re-text-tertiary">{rule.evaluation_stats.total}</span>
+      ),
+    },
+  ];
 
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Eye className="h-6 w-6 text-slate-600" />
-            Auditor Review
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Read-only compliance posture view — evidentiary chain, rule evaluations, exception history
-          </p>
-        </div>
-        <Badge variant="outline" className="flex items-center gap-1 text-sm px-3 py-1">
-          <Lock className="h-3.5 w-3.5" />
-          Read-Only Mode
-        </Badge>
-      </div>
+      <PageHeader
+        title="Auditor Review"
+        description="Read-only compliance posture view — evidentiary chain, rule evaluations, exception history"
+        meta={
+          <Badge>
+            <Lock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+            Read-Only Mode
+          </Badge>
+        }
+      />
 
       <DemoBanner visible={false} />
 
+      {summary.error && (
+        <Callout
+          tone="danger"
+          role="alert"
+          className="mb-6"
+          title="Unable to load data from the control plane API."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => summary.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {(summary.error as Error).message}
+        </Callout>
+      )}
+
       {summary.isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
         </div>
       ) : s ? (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <Card>
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Database className="h-4 w-4 text-indigo-500" />
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Records</span>
-                </div>
-                <p className="text-3xl font-bold">{s.records.total_canonical_events.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {Object.keys(s.records.ingestion_sources).length} source systems
-                </p>
-              </CardContent>
-            </Card>
+          <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatTile label="Records" value={s.records.total_canonical_events.toLocaleString()}>
+              <p className="text-small text-re-text-tertiary">
+                {Object.keys(s.records.ingestion_sources).length} source systems
+              </p>
+            </StatTile>
 
-            <Card>
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-4 w-4 text-re-success" />
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Compliance</span>
-                </div>
-                <p className="text-3xl font-bold">{s.compliance.pass_rate_percent}%</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {s.compliance.passed} pass / {s.compliance.failed} fail / {s.compliance.warned} warn
-                </p>
-              </CardContent>
-            </Card>
+            <StatTile label="Compliance" value={s.compliance.pass_rate_percent} unit="%">
+              <p className="text-small text-re-text-tertiary">
+                {s.compliance.passed} pass / {s.compliance.failed} fail / {s.compliance.warned} warn
+              </p>
+            </StatTile>
 
-            <Card>
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="h-4 w-4 text-re-warning" />
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Exceptions</span>
-                </div>
-                <p className="text-3xl font-bold">{s.exceptions.open}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {s.exceptions.critical_open} critical / {s.exceptions.total} total
-                </p>
-              </CardContent>
-            </Card>
+            <StatTile label="Exceptions" value={s.exceptions.open}>
+              <p className="text-small text-re-text-tertiary">
+                {s.exceptions.critical_open} critical / {s.exceptions.total} total
+              </p>
+            </StatTile>
 
-            <Card>
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Hash className="h-4 w-4 text-re-info" />
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Chain Integrity</span>
-                </div>
-                <p className="text-3xl font-bold">
-                  {s.chain_integrity.status === 'VERIFIED' ? (
-                    <span className="text-re-success flex items-center gap-1">
-                      <CheckCircle className="h-6 w-6" /> OK
-                    </span>
-                  ) : s.chain_integrity.status === 'UNVERIFIED' ? (
-                    <span className="text-re-danger flex items-center gap-1">
-                      <XCircle className="h-6 w-6" /> FAILED
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">N/A</span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {s.chain_integrity.chain_length === null
-                    ? 'Chain not checked'
-                    : `${s.chain_integrity.chain_length} chain entries`}
-                </p>
-              </CardContent>
-            </Card>
+            <StatTile
+              label="Chain Integrity"
+              value={
+                s.chain_integrity.status === 'VERIFIED'
+                  ? 'OK'
+                  : s.chain_integrity.status === 'UNVERIFIED'
+                    ? 'FAILED'
+                    : 'N/A'
+              }
+            >
+              <p className="text-small text-re-text-tertiary">
+                {s.chain_integrity.chain_length === null
+                  ? 'Chain not checked'
+                  : `${s.chain_integrity.chain_length} chain entries`}
+              </p>
+            </StatTile>
           </div>
 
-          {/* Compliance Gauge */}
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle className="text-lg">Rule Compliance Rate</CardTitle>
-              <CardDescription>
-                {s.compliance.total_evaluations.toLocaleString()} total evaluations across all records
-              </CardDescription>
+              <div className="min-w-0">
+                <CardTitle>Rule Compliance Rate</CardTitle>
+                <CardDescription className="mt-1">
+                  {s.compliance.total_evaluations.toLocaleString()} total evaluations across all records
+                </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
-              <Progress
-                value={s.compliance.pass_rate_percent}
-                className="h-4 mb-2"
-              />
-              <div className="flex justify-between text-sm">
+              <Progress value={s.compliance.pass_rate_percent} className="mb-2 h-4" />
+              <div className="flex flex-wrap justify-between gap-2 text-ui">
                 <span className="text-re-success">{s.compliance.passed} passed</span>
                 <span className="text-re-danger">{s.compliance.failed} failed</span>
                 <span className="text-re-warning">{s.compliance.warned} warned</span>
@@ -209,107 +245,74 @@ function AuditReviewContent() {
             </CardContent>
           </Card>
 
-          {/* Ingestion Sources */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Ingestion Sources</CardTitle>
+                <CardTitle>Ingestion Sources</CardTitle>
               </CardHeader>
               <CardContent>
                 {Object.keys(s.records.ingestion_sources).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No records ingested yet</p>
+                  <p className="text-ui text-re-text-tertiary">No records ingested yet</p>
                 ) : (
-                  <div className="space-y-2">
+                  <dl>
                     {Object.entries(s.records.ingestion_sources).map(([source, count]) => (
-                      <div key={source} className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">{source.replace(/_/g, ' ')}</span>
-                        <Badge variant="outline">{(count as number).toLocaleString()}</Badge>
+                      <div
+                        key={source}
+                        className="flex items-center justify-between border-b border-re-border-subtle py-2 last:border-0"
+                      >
+                        <dt className="text-ui text-re-text-secondary">{source.replace(/_/g, ' ')}</dt>
+                        <dd><Badge size="sm">{(count as number).toLocaleString()}</Badge></dd>
                       </div>
                     ))}
-                  </div>
+                  </dl>
                 )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Request Cases</CardTitle>
+                <CardTitle>Request Cases</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Cases</span>
-                    <span className="font-bold">{s.requests.total}</span>
+                <dl>
+                  <div className="flex items-center justify-between border-b border-re-border-subtle py-2">
+                    <dt className="text-ui text-re-text-secondary">Total Cases</dt>
+                    <dd className="tabular-nums text-ui text-re-text-primary">{s.requests.total}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Submitted</span>
-                    <span className="font-bold text-re-success">{s.requests.submitted}</span>
+                  <div className="flex items-center justify-between border-b border-re-border-subtle py-2">
+                    <dt className="text-ui text-re-text-secondary">Submitted</dt>
+                    <dd className="tabular-nums text-ui text-re-text-primary">{s.requests.submitted}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Active</span>
-                    <span className="font-bold text-re-info">{s.requests.active}</span>
+                  <div className="flex items-center justify-between py-2">
+                    <dt className="text-ui text-re-text-secondary">Active</dt>
+                    <dd className="tabular-nums text-ui text-re-text-primary">{s.requests.active}</dd>
                   </div>
-                </div>
+                </dl>
               </CardContent>
             </Card>
           </div>
 
-          {/* Rule Catalog with Stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Shield className="h-5 w-5 text-re-info" />
-                Rule Catalog
-              </CardTitle>
-              <CardDescription>
-                Active compliance rules with evaluation statistics
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {rules.isLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {(rules.data?.rules ?? []).map((rule: AuditRule) => (
-                    <div key={rule.rule_id} className="border rounded-lg p-3 text-sm">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={rule.severity === 'critical' ? 'destructive' : rule.severity === 'warning' ? 'warning' : 'secondary'}>
-                              {rule.severity}
-                            </Badge>
-                            <span className="font-medium">{rule.title}</span>
-                          </div>
-                          {rule.citation_reference && (
-                            <p className="text-xs text-muted-foreground mt-1">{rule.citation_reference}</p>
-                          )}
-                        </div>
-                        <div className="text-right text-xs">
-                          {rule.evaluation_stats.total > 0 ? (
-                            <>
-                              <span className={rule.evaluation_stats.pass_rate_percent >= 90 ? 'text-re-success' : rule.evaluation_stats.pass_rate_percent >= 70 ? 'text-re-warning' : 'text-re-danger'}>
-                                {rule.evaluation_stats.pass_rate_percent}% pass
-                              </span>
-                              <p className="text-muted-foreground">
-                                {rule.evaluation_stats.total} evals
-                              </p>
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground">No evals</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <Section
+            spacing="app"
+            title="Rule Catalog"
+            description="Active compliance rules with evaluation statistics"
+          >
+            <DataTable
+              caption="Active compliance rules with evaluation statistics"
+              columns={ruleColumns}
+              data={ruleList}
+              minWidth="880px"
+              rowKey={(rule) => rule.rule_id}
+              status={rules.isLoading ? 'loading' : ruleList.length === 0 ? 'empty' : 'idle'}
+              empty={{
+                icon: Shield,
+                title: 'No rules published',
+                description: 'Rules appear here once the catalog is seeded.',
+              }}
+            />
+          </Section>
 
-          {/* Timestamp */}
-          <p className="text-xs text-muted-foreground text-center mt-6">
+          <p className="mt-6 text-center text-small text-re-text-tertiary">
             Report generated at {new Date(s.generated_at).toLocaleString()}
           </p>
         </>

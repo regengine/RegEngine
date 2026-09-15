@@ -95,6 +95,10 @@ function IdentityResolutionPageContent() {
     const refetchAll = () => { entities.refetch(); reviews.refetch(); };
     return (
       <PageContainer>
+        <PageHeader
+          title="Identity Resolution"
+          description="Canonical entities, alias management, and ambiguous match review"
+        />
         <Callout
           tone="danger"
           role="alert"

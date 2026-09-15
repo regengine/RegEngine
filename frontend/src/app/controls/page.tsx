@@ -4,7 +4,22 @@ import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -165,195 +180,184 @@ export default function MyControlsPage() {
 
   if (!isHydrated || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl">Loading controls...</div>
-      </div>
+      <PageContainer>
+        <p className="py-16 text-center text-ui text-re-text-tertiary">Loading controls...</p>
+      </PageContainer>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl">Sign in to view your controls.</div>
-      </div>
+      <PageContainer>
+        <p className="py-16 text-center text-ui text-re-text-tertiary">
+          Sign in to view your controls.
+        </p>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">My Controls</h1>
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-re-info hover:bg-re-info text-white px-6 py-2 rounded-lg transition"
-        >
-          {showCreateForm ? 'Cancel' : 'Create Control'}
-        </button>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="My Controls"
+        primaryAction={
+          <Button
+            variant={showCreateForm ? 'secondary' : 'primary'}
+            onClick={() => setShowCreateForm(!showCreateForm)}
+          >
+            {showCreateForm ? 'Cancel' : 'Create Control'}
+          </Button>
+        }
+      />
 
       {loadError && (
-        <div
+        <Callout
+          tone="danger"
           role="alert"
-          className="mb-6 rounded-lg border border-re-danger bg-re-danger-muted px-4 py-3 text-sm text-re-danger"
+          className="mb-6"
+          title="Controls unavailable"
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setLoading(true); fetchControls(); }}
+            >
+              Retry
+            </Button>
+          }
         >
-          <p className="font-semibold">Controls unavailable</p>
-          <p>{loadError}</p>
-          <button
-            type="button"
-            onClick={() => { setLoading(true); fetchControls(); }}
-            className="mt-2 underline underline-offset-2"
-          >
-            Retry
-          </button>
-        </div>
+          {loadError}
+        </Callout>
       )}
 
       {actionError && (
-        <div
-          role="alert"
-          className="mb-6 rounded-lg border border-re-danger bg-re-danger-muted px-4 py-3 text-sm text-re-danger"
-        >
+        <Callout tone="danger" role="alert" className="mb-6">
           {actionError}
-        </div>
+        </Callout>
       )}
 
       {showCreateForm && (
-        <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-          <h2 className="text-2xl font-semibold mb-4">Create New Control</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Control ID</label>
-              <input
-                type="text"
-                required
-                value={formData.control_id}
-                onChange={(e) => setFormData({ ...formData, control_id: e.target.value })}
-                className="w-full border border-re-border rounded-lg px-4 py-2"
-                placeholder="e.g., CSF-AC-1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Title</label>
-              <input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full border border-re-border rounded-lg px-4 py-2"
-                placeholder="e.g., Access Control Policy"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <textarea
-                required
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full border border-re-border rounded-lg px-4 py-2 h-24"
-                placeholder="Detailed description of the control..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Standards</label>
-              <select
-                value={formData.framework}
-                onChange={(e) => setFormData({ ...formData, framework: e.target.value })}
-                className="w-full border border-re-border rounded-lg px-4 py-2"
-              >
-                <option value="FSMA 204">FSMA 204</option>
-                <option value="FDA CTE">FDA CTE</option>
-                <option value="EPCIS 2.0">EPCIS 2.0</option>
-                <option value="GS1">GS1</option>
-              </select>
-            </div>
-            <div className="flex gap-4">
-              <button
-                type="submit"
-                className="bg-re-info hover:bg-re-info text-white px-6 py-2 rounded-lg transition"
-              >
-                Create Control
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCreateForm(false)}
-                className="bg-re-surface-elevated hover:bg-re-surface-elevated text-re-text-primary px-6 py-2 rounded-lg transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
+        <Card className="mb-8">
+          <CardHeader>
+            <h2 className="text-subheading text-re-text-primary">Create New Control</h2>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Field label="Control ID" htmlFor="control-id">
+                <Input
+                  id="control-id"
+                  type="text"
+                  required
+                  value={formData.control_id}
+                  onChange={(e) => setFormData({ ...formData, control_id: e.target.value })}
+                  placeholder="e.g., CSF-AC-1"
+                />
+              </Field>
+              <Field label="Title" htmlFor="control-title">
+                <Input
+                  id="control-title"
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g., Access Control Policy"
+                />
+              </Field>
+              <Field label="Description" htmlFor="control-description">
+                <textarea
+                  id="control-description"
+                  required
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className={cn(fieldControlClasses, 'h-24 py-2')}
+                  placeholder="Detailed description of the control..."
+                />
+              </Field>
+              <Field label="Standards" htmlFor="control-framework">
+                <select
+                  id="control-framework"
+                  value={formData.framework}
+                  onChange={(e) => setFormData({ ...formData, framework: e.target.value })}
+                  className={fieldControlClasses}
+                >
+                  <option value="FSMA 204">FSMA 204</option>
+                  <option value="FDA CTE">FDA CTE</option>
+                  <option value="EPCIS 2.0">EPCIS 2.0</option>
+                  <option value="GS1">GS1</option>
+                </select>
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">Create Control</Button>
+                <Button type="button" variant="ghost" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-re-surface-card">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
-                Control ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
-                Title
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
-                Framework
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-re-text-muted uppercase tracking-wider">
-                Created
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-re-text-muted uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+      {/* The column headers stay mounted even with no rows: an e2e spec asserts
+          the "Control ID" columnheader is visible on an empty tenant. */}
+      <div className="rounded-lg border border-re-border bg-re-surface-card">
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Control ID</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Framework</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {controls.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-re-text-muted">
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="py-12 text-center font-normal text-re-text-tertiary"
+                >
                   {/* #2835 An empty list after a failed request is NOT an empty
                       state — say so rather than inviting the user to create a
                       control against a backend we could not reach. */}
                   {loadError
                     ? 'Controls could not be loaded. See the error above.'
                     : 'No controls found. Create your first control to get started.'}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               controls.map((control) => (
-                <tr key={control.id} className="hover:bg-re-surface-card">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-re-text-primary">
-                    {control.control_id}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-re-text-primary">
-                    {control.title}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-re-text-muted">
-                    {control.framework}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-re-text-muted">
+                <TableRow key={control.id}>
+                  <TableCell className="font-mono text-[0.8125rem]">{control.control_id}</TableCell>
+                  <TableCell>{control.title}</TableCell>
+                  <TableCell>{control.framework}</TableCell>
+                  <TableCell className="text-re-text-tertiary">
                     {new Date(control.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => router.push(`/controls/${control.id}`)}
-                      className="text-re-info hover:text-re-info mr-4"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => setPendingDeleteId(control.id)}
-                      className="text-re-danger hover:text-re-danger"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/controls/${control.id}`)}
+                      >
+                        View
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-re-danger hover:text-re-danger"
+                        onClick={() => setPendingDeleteId(control.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
-        </div>
+          </TableBody>
+        </Table>
       </div>
 
       <Dialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
@@ -365,15 +369,15 @@ export default function MyControlsPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeleteId(null)}>
+            <Button variant="secondary" onClick={() => setPendingDeleteId(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => pendingDeleteId && handleDelete(pendingDeleteId)}>
+            <Button variant="danger" onClick={() => pendingDeleteId && handleDelete(pendingDeleteId)}>
               Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

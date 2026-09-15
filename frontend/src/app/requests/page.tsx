@@ -91,9 +91,26 @@ export default function RequestWorkflowPage() {
   const activeCases = cases.filter(c => !['submitted', 'amended'].includes(c.package_status));
   const completedCases = cases.filter(c => ['submitted', 'amended'].includes(c.package_status));
 
+  const pageHeader = (
+    <PageHeader
+      title="Request-Response Workflow"
+      description="24-hour FDA response readiness — from request intake to sealed package submission"
+      primaryAction={
+        <Button
+          variant={showCreate ? 'secondary' : 'primary'}
+          onClick={() => setShowCreate(!showCreate)}
+          leadingIcon={<PlayCircle strokeWidth={1.75} aria-hidden="true" />}
+        >
+          New Request Case
+        </Button>
+      }
+    />
+  );
+
   if (requests.error) {
     return (
       <PageContainer>
+        {pageHeader}
         <Callout
           tone="danger"
           role="alert"
@@ -124,19 +141,7 @@ export default function RequestWorkflowPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Request-Response Workflow"
-        description="24-hour FDA response readiness — from request intake to sealed package submission"
-        primaryAction={
-          <Button
-            variant={showCreate ? 'secondary' : 'primary'}
-            onClick={() => setShowCreate(!showCreate)}
-            leadingIcon={<PlayCircle strokeWidth={1.75} aria-hidden="true" />}
-          >
-            New Request Case
-          </Button>
-        }
-      />
+      {pageHeader}
 
       <DemoBanner visible={!!(requests.data?.__isDemo)} />
 

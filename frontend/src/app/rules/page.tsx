@@ -63,9 +63,23 @@ export default function RulesDashboardPage() {
 
   const ruleList = rules.data?.rules ?? [];
 
+  const pageHeader = (
+    <PageHeader
+      title="Compliance Rules"
+      description="Versioned FSMA 204 compliance rules — every rule is citable, explainable, and independently deployable"
+      meta={<Badge>{ruleList.length} rules</Badge>}
+      primaryAction={
+        <Button onClick={() => seedRules.mutate()} disabled={seedRules.isPending}>
+          {seedRules.isPending ? 'Loading...' : 'Load Rules'}
+        </Button>
+      }
+    />
+  );
+
   if (rules.error) {
     return (
       <PageContainer>
+        {pageHeader}
         <Callout
           tone="danger"
           role="alert"
@@ -158,16 +172,7 @@ export default function RulesDashboardPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Compliance Rules"
-        description="Versioned FSMA 204 compliance rules — every rule is citable, explainable, and independently deployable"
-        meta={<Badge>{ruleList.length} rules</Badge>}
-        primaryAction={
-          <Button onClick={() => seedRules.mutate()} disabled={seedRules.isPending}>
-            {seedRules.isPending ? 'Loading...' : 'Load Rules'}
-          </Button>
-        }
-      />
+      {pageHeader}
 
       <DemoBanner visible={!!(rules.data?.__isDemo)} />
 

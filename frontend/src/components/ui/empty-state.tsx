@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import type { IconComponent } from "@/components/ui/icon"
 
 /**
  * EmptyState — SPEC §4.
@@ -10,7 +11,7 @@ import { cn } from "@/lib/utils"
  * already draws one.
  */
 export interface EmptyStateProps {
-  icon?: React.ComponentType<{ className?: string }>
+  icon?: IconComponent
   title: string
   description?: string
   action?: React.ReactNode

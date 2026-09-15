@@ -82,9 +82,25 @@ export default function ExceptionQueuePage() {
   const blockingCount = blocking.data?.blocking_count ?? 0;
   const cases = (exceptions.data?.cases ?? []) as ExceptionRow[];
 
+  const pageHeader = (
+    <PageHeader
+      title="Exception Queue"
+      description="Manage compliance exceptions — resolve defects before they block response packages"
+      meta={
+        blockingCount > 0 ? (
+          <StatusBadge state="blocked" label={`${blockingCount} Blocking`} />
+        ) : (
+          <StatusBadge state="compliant" label="No Blockers" />
+        )
+      }
+    />
+  );
+
+
   if (exceptions.error) {
     return (
       <PageContainer>
+        {pageHeader}
         <Callout
           tone="danger"
           role="alert"
@@ -105,7 +121,7 @@ export default function ExceptionQueuePage() {
     {
       key: 'severity',
       header: 'Severity',
-      width: '7.5rem',
+      width: '6.5rem',
       cell: (exc) => {
         const sev = SEVERITY_BADGE[exc.severity] || SEVERITY_BADGE.info;
         return <Badge tone={sev.tone} size="sm">{sev.label}</Badge>;
@@ -114,15 +130,16 @@ export default function ExceptionQueuePage() {
     {
       key: 'status',
       header: 'Status',
-      width: '11rem',
+      width: '9.5rem',
       cell: (exc) => {
         const stat = STATUS_BADGE[exc.status] || STATUS_BADGE.open;
-        return <StatusBadge state={stat.state} label={stat.label} size="sm" />;
+        return <StatusBadge state={stat.state} label={stat.label} size="sm" className="whitespace-nowrap" />;
       },
     },
     {
       key: 'rule_category',
       header: 'Category',
+      width: '7.5rem',
       cell: (exc) => (
         <span className="text-re-text-secondary">{exc.rule_category?.replace(/_/g, ' ') || '-'}</span>
       ),
@@ -130,18 +147,22 @@ export default function ExceptionQueuePage() {
     {
       key: 'source_supplier',
       header: 'Supplier',
+      width: '8.5rem',
       cell: (exc) => (
-        <span className="block max-w-[14ch] truncate sm:max-w-[22ch]">{exc.source_supplier || '-'}</span>
+        <span className="block max-w-[12ch] truncate" title={exc.source_supplier || undefined}>
+          {exc.source_supplier || '-'}
+        </span>
       ),
     },
     {
       key: 'owner_user_id',
       header: 'Owner',
+      width: '9rem',
       cell: (exc) =>
         exc.owner_user_id ? (
-          <span className="flex items-center gap-1.5 text-re-text-secondary">
+          <span className="flex items-center gap-1.5 text-re-text-secondary" title={exc.owner_user_id}>
             <User className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            {exc.owner_user_id}
+            <span className="max-w-[11ch] truncate">{exc.owner_user_id}</span>
           </span>
         ) : (
           <span className="text-re-text-muted">Unassigned</span>
@@ -150,6 +171,7 @@ export default function ExceptionQueuePage() {
     {
       key: 'due_date',
       header: 'Due',
+      width: '7rem',
       cell: (exc) => {
         const isOverdue = exc.due_date && new Date(exc.due_date) < new Date();
         if (!exc.due_date) return <span className="text-re-text-muted">-</span>;
@@ -167,7 +189,10 @@ export default function ExceptionQueuePage() {
       key: 'recommended_remediation',
       header: 'Remediation',
       cell: (exc) => (
-        <span className="block max-w-[24ch] truncate text-re-text-tertiary sm:max-w-[32ch]">
+        <span
+          className="block max-w-[14ch] truncate text-re-text-tertiary xl:max-w-[22ch]"
+          title={exc.recommended_remediation || undefined}
+        >
           {exc.recommended_remediation || '-'}
         </span>
       ),
@@ -176,7 +201,7 @@ export default function ExceptionQueuePage() {
       key: 'actions',
       header: 'Actions',
       align: 'right',
-      width: '10rem',
+      width: '11rem',
       cell: (exc) => {
         const isActive = exc.status !== 'resolved' && exc.status !== 'waived';
         if (!isActive) return null;
@@ -212,17 +237,7 @@ export default function ExceptionQueuePage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Exception Queue"
-        description="Manage compliance exceptions — resolve defects before they block response packages"
-        meta={
-          blockingCount > 0 ? (
-            <StatusBadge state="blocked" label={`${blockingCount} Blocking`} />
-          ) : (
-            <StatusBadge state="compliant" label="No Blockers" />
-          )
-        }
-      />
+      {pageHeader}
 
       <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
 
@@ -248,7 +263,8 @@ export default function ExceptionQueuePage() {
           caption="Compliance exception cases"
           columns={columns}
           data={cases}
-          minWidth="1040px"
+          minWidth="920px"
+          stickyFirstColumn
           rowKey={(exc) => exc.case_id}
           status={exceptions.isLoading ? 'loading' : cases.length === 0 ? 'empty' : 'idle'}
           empty={{

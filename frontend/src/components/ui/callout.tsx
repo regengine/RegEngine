@@ -3,6 +3,7 @@
 import * as React from "react"
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { IconComponent } from "@/components/ui/icon"
 
 /**
  * Callout — SPEC §4.
@@ -34,7 +35,7 @@ const TONE_ICON_COLOR: Record<CalloutTone, string> = {
   neutral: "text-re-text-tertiary",
 }
 
-const TONE_DEFAULT_ICON: Record<CalloutTone, React.ComponentType<{ className?: string }>> = {
+const TONE_DEFAULT_ICON: Record<CalloutTone, IconComponent> = {
   info: Info,
   success: CheckCircle2,
   warning: AlertTriangle,
@@ -45,7 +46,7 @@ const TONE_DEFAULT_ICON: Record<CalloutTone, React.ComponentType<{ className?: s
 export interface CalloutProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "role" | "title"> {
   tone?: CalloutTone
   title?: React.ReactNode
-  icon?: React.ComponentType<{ className?: string }>
+  icon?: IconComponent
   action?: React.ReactNode
   dismissible?: boolean
   onDismiss?: () => void
