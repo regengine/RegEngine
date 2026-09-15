@@ -56,6 +56,13 @@ def upgrade() -> None:
             ON fsma.tenant_inbound_email_addresses (LOWER(inbound_address))
         """
     )
+    # This branch's TABLE-returning shape conflicts with the sibling v121
+    # branch (ccaa01e4fd7c, RETURNS UUID). CREATE OR REPLACE cannot change a
+    # return type, so on a scratch database that replays both branches the
+    # second definition must drop first; the security-hardened v122
+    # (d14f8a2b9c31) redefines the function last in topological order, so the
+    # final shape is identical regardless of branch replay order.
+    op.execute("DROP FUNCTION IF EXISTS fsma.get_tenant_by_inbound_address(TEXT)")
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_tenant_inbound_email_addresses_tid
