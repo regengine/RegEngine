@@ -5,7 +5,8 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { fieldControlClasses } from "@/components/ui/input"
+// Not from "@/components/ui/input": several suites partially mock that module.
+import { fieldControlClasses } from "@/components/ui/field-control"
 
 const Select = SelectPrimitive.Root
 
