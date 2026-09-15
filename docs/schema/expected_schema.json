@@ -2139,6 +2139,63 @@
       }
     ]
   },
+  "fsma.inbound_email_audit": {
+    "columns": {
+      "accepted_attachment_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "attachment_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "details": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "message_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "received_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "recipient": {
+        "nullable": false,
+        "type": "text"
+      },
+      "rejected_attachment_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "rejection_reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "sender": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "subject": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.incidents": {
     "columns": {
       "created_at": {
@@ -4088,6 +4145,35 @@
       "updated_at": {
         "nullable": false,
         "type": "timestamp"
+      }
+    },
+    "foreign_keys": []
+  },
+  "fsma.tenant_inbound_addresses": {
+    "columns": {
+      "allowed_senders": {
+        "nullable": false,
+        "type": "array"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "inbound_address": {
+        "nullable": false,
+        "type": "text"
+      },
+      "is_active": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
       }
     },
     "foreign_keys": []
