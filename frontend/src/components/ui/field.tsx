@@ -12,6 +12,14 @@ import { cn } from "@/lib/utils"
  * every page author remembering it. The inventory found labels not bound to
  * their inputs on most forms in the app.
  */
+/** The wiring Field hands to its control. */
+export interface FieldControlProps {
+  id: string
+  "aria-describedby": string | undefined
+  "aria-invalid": true | undefined
+  required: true | undefined
+}
+
 export interface FieldProps {
   label: string
   /** Must match the control's `id`. */
@@ -20,13 +28,34 @@ export interface FieldProps {
   error?: string
   required?: boolean
   className?: string
-  children: React.ReactNode
+  /**
+   * A single control element — Field clones it and applies the wiring — or a
+   * render function that receives the wiring and applies it itself.
+   *
+   * Use the function form for compound controls whose outermost element is not
+   * the focusable one: cloning a Radix `<Select>` puts the `id` on the Root,
+   * which renders no DOM, so the label points at nothing. Spread the argument
+   * onto `<SelectTrigger>` instead.
+   */
+  children: React.ReactNode | ((control: FieldControlProps) => React.ReactNode)
 }
 
 export function Field({ label, htmlFor, hint, error, required, className, children }: FieldProps) {
   const hintId = hint ? `${htmlFor}-hint` : undefined
   const errorId = error ? `${htmlFor}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
+
+  const control: FieldControlProps = {
+    id: htmlFor,
+    "aria-describedby": describedBy,
+    "aria-invalid": error ? true : undefined,
+    required: required || undefined,
+  }
+
+  // A caller's own value wins, but only when they actually set one — spreading
+  // the child's props wholesale let an explicit `undefined` erase the wiring.
+  const defined = (props: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(props).filter(([, v]) => v !== undefined))
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
@@ -40,15 +69,14 @@ export function Field({ label, htmlFor, hint, error, required, className, childr
       </label>
 
       {/* The control receives the wiring without the caller repeating it. */}
-      {React.isValidElement(children)
-        ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
-          id: htmlFor,
-          "aria-describedby": describedBy,
-          "aria-invalid": error ? true : undefined,
-          required: required || undefined,
-          ...(children.props as Record<string, unknown>),
-        })
-        : children}
+      {typeof children === "function"
+        ? children(control)
+        : React.isValidElement(children)
+          ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+            ...control,
+            ...defined(children.props as Record<string, unknown>),
+          })
+          : children}
 
       {hint && !error && (
         <p id={hintId} className="text-small text-re-text-tertiary">

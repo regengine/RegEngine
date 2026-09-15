@@ -60,7 +60,7 @@ export function FreeToolPageShell({
                     title={`RegEngine • ${title}`}
                     description={subtitle}
                     meta={
-                        <Badge tone="brand">
+                        <Badge tone="brand" className="whitespace-nowrap">
                             <Zap aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.75} />
                             Free Tool — No Login Required
                         </Badge>

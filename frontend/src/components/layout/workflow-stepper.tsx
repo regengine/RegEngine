@@ -27,7 +27,7 @@ const steps = [
  * step — the numeral is the state, the label is the name.
  */
 const nodeBase =
-  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-label no-underline transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none';
+  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-label tracking-normal no-underline transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none';
 
 /**
  * Zero-padded mono numerals ("01".."04"), matching the numbered mono labels the

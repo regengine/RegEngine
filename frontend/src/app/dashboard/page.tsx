@@ -229,18 +229,11 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Welcome to RegEngine. Here's your compliance overview."
         meta={
-          <>
-            {partnerTier === "founding" && <Badge tone="brand">Founding Partner</Badge>}
-            {healthStatus === "loading" ? (
-              <StatusBadge state="in-progress" label="Checking..." size="sm" />
-            ) : healthStatus === "operational" ? (
-              <StatusBadge state="compliant" label="All Systems Operational" size="sm" />
-            ) : healthStatus === "degraded" ? (
-              <StatusBadge state="at-risk" label="Degraded Performance" size="sm" />
-            ) : (
-              <StatusBadge state="non-compliant" label="Services Unreachable" size="sm" />
-            )}
-          </>
+          // Service health lives in the shell's status strip and nowhere else
+          // (SPEC §3.3); this header used to render a second copy of it.
+          partnerTier === "founding" ? (
+            <Badge tone="brand">Founding Partner</Badge>
+          ) : undefined
         }
         secondaryActions={
           <Button variant="secondary" asChild>

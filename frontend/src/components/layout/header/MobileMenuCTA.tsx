@@ -13,8 +13,8 @@ interface MobileMenuCTAProps {
 
 /**
  * Drawer footer actions. Same CTA hierarchy as the desktop header (SPEC §6):
- * one primary — "Book a call" — with "Free Tools" secondary and "Log In"
- * ghost. `size="lg"` (44px) is the mobile touch target.
+ * "Free Tools" is the one primary and "Log In" is ghost. `size="lg"` (44px) is
+ * the mobile touch target.
  */
 export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuCTAProps) {
     const close = () => setMobileOpen(false);
@@ -44,11 +44,6 @@ export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuC
             ) : (
                 <>
                     <Button asChild variant="primary" size="lg">
-                        <Link href="/contact" onClick={close}>
-                            Book a call
-                        </Link>
-                    </Button>
-                    <Button asChild variant="secondary" size="lg">
                         <Link href="/tools" onClick={close}>
                             Free Tools
                         </Link>

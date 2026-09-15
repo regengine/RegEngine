@@ -46,7 +46,7 @@ export default function SetupLayout({ children }: { children: ReactNode }) {
                   <span
                     aria-current={isCurrent ? 'step' : undefined}
                     className={cn(
-                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-label transition-colors duration-120 motion-reduce:transition-none',
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-label tracking-normal transition-colors duration-120 motion-reduce:transition-none',
                       isComplete && 'border-re-text-primary bg-re-text-primary text-re-surface-card',
                       isCurrent && 'border-re-text-primary text-re-text-primary',
                       !isComplete && !isCurrent && 'border-re-border text-re-text-tertiary',

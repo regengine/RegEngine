@@ -16,10 +16,10 @@ import type { DesktopNavProps } from './types';
  * reserved for eyebrows and table heads. The label strings themselves are
  * untouched (unit and e2e specs match on them) — only the type changes.
  *
- * CTA hierarchy (SPEC §6 amendment): the single primary is "Book a call",
- * because a VP-level buyer previously had no path to sales from the chrome —
- * the only primary in the header was a lead-gen tool. "Free Tools" demotes to
- * secondary and "Log In" is a ghost link.
+ * CTA hierarchy (SPEC §6): exactly one primary per region. "Free Tools" keeps
+ * that slot — it is the CTA this header has always carried — and "Log In" is a
+ * ghost chrome link. Adding a new call-to-action is a marketing decision, not a
+ * restyle, so this redesign does not introduce one.
  *
  * The `.marketing-desktop-nav` class hook stays: globals.css hides it under
  * 768px with `!important` and shows `.marketing-mobile-toggle` instead. The
@@ -102,11 +102,8 @@ export function DesktopNav({
                     <Link href="/login" className={NAV_LINK}>
                         Log In
                     </Link>
-                    <Button asChild variant="secondary" size="sm">
-                        <Link href="/tools">Free Tools</Link>
-                    </Button>
                     <Button asChild variant="primary" size="sm">
-                        <Link href="/contact">Book a call</Link>
+                        <Link href="/tools">Free Tools</Link>
                     </Button>
                 </div>
             )}

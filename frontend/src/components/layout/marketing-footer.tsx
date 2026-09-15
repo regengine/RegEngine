@@ -12,7 +12,6 @@ import {
 } from '@/components/layout/marketing-nav';
 import { Container } from '@/components/layout/container';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
-import { Badge } from '@/components/ui/badge';
 import { requestShowCookiePrefs } from '@/lib/cookie-consent';
 import { shouldHideMarketingChrome } from '@/lib/app-routes';
 
@@ -24,11 +23,11 @@ import { shouldHideMarketingChrome } from '@/lib/app-routes';
  * from `marketing-nav.ts` is unchanged — `public-site-fixes.test.tsx` asserts
  * the Product column's data directly.
  *
- * The trust row above the legal line is SPEC §6's graft from proposal B: three
- * neutral chips carrying **stated** proof points from the brand doc, plus the
- * enforcement date in mono. Nothing here is a new claim.
+ * The row above the legal line carries the enforcement date in mono. It is the
+ * same string the brand column used to hold, moved — not new copy. Proof-point
+ * chips were tried here and removed: asserting compliance status in the site
+ * footer is a claim the business makes, not one a restyle gets to add.
  */
-const TRUST_CHIPS = ['SHA-256 verified chains', 'EPCIS 2.0 native', 'SOC 2 Type I in progress'];
 
 const COLUMN_HEADING = 'mb-3 text-label uppercase text-re-text-tertiary';
 const FOOTER_LINK =
@@ -95,11 +94,6 @@ export function MarketingFooter() {
                 width="marketing"
                 className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-re-border-subtle py-4"
             >
-                {TRUST_CHIPS.map((chip) => (
-                    <Badge key={chip} tone="neutral" size="sm">
-                        {chip}
-                    </Badge>
-                ))}
                 <span className="font-mono text-small text-re-text-tertiary">
                     FSMA 204 Enforcement: July 20, 2028
                 </span>
