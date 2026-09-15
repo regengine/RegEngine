@@ -26,6 +26,16 @@ const SCAN = targets.length ? targets : ['src'];
 /** The Inflow Lab embed is a separate product skin with its own palette. */
 const EXEMPT_PATH = /inflow/i;
 
+/**
+ * Social-card renderers are exempt from the inline-style rule.
+ *
+ * `next/og` rasterises JSX through Satori, which supports inline styles only —
+ * it never sees a stylesheet, so a Tailwind class on an OG card renders as
+ * nothing. Flagging these files would push an author to "fix" them into blank
+ * images.
+ */
+const isSatori = (src) => /from ['"]next\/og['"]/.test(src);
+
 /** Primitives own the raw recipes; pages may not write them. */
 const isPrimitive = (p) =>
   p.includes(`components${sep}ui${sep}`) || p.includes(`components${sep}layout${sep}`);
@@ -113,9 +123,11 @@ for (const file of files) {
   if (rel.endsWith('globals.css')) continue;
 
   const src = readFileSync(file, 'utf8');
+  const satori = isSatori(src);
   const lines = src.split('\n');
   for (const rule of RULES) {
     if (rule.skipPrimitives && isPrimitive(rel)) continue;
+    if (satori && rule.id === 'inline-style-visual') continue;
     lines.forEach((line, i) => {
       if (line.includes('design-lint-disable')) return;
       const matches = line.match(rule.re);
