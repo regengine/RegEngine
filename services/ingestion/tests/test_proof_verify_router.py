@@ -235,6 +235,267 @@ class TestSchemaValidation:
         assert len(data["merkle_root_recomputed"]) == 64
 
 
+def _rewrite_legacy_bundle(
+    bundle: bytes,
+    *,
+    mutate_manifest: Any = None,
+    drop_members: set[str] | None = None,
+    add_members: dict[str, bytes] | None = None,
+    duplicate_member: str | None = None,
+) -> bytes:
+    """Re-zip a legacy ``file_hashes`` bundle with targeted structural edits."""
+    zin = zipfile.ZipFile(io.BytesIO(bundle))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.namelist():
+            if item in (drop_members or set()):
+                continue
+            data = zin.read(item)
+            if item == "manifest.json" and mutate_manifest is not None:
+                manifest = json.loads(data)
+                manifest = mutate_manifest(manifest) or manifest
+                data = json.dumps(manifest).encode("utf-8")
+            zout.writestr(item, data)
+        for name, data in (add_members or {}).items():
+            zout.writestr(name, data)
+        if duplicate_member is not None:
+            with pytest.warns(UserWarning, match="Duplicate name"):
+                zout.writestr(duplicate_member, b"forged duplicate")
+    return out.getvalue()
+
+
+def _checks(resp_json: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {c["name"]: c for c in resp_json["checks"]}
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed — a structurally incomplete bundle must never verify
+# ---------------------------------------------------------------------------
+class TestFailClosed:
+    """Optional commitments and partial file coverage are not verification.
+
+    Regression coverage for the finding that a missing Merkle anchor was
+    recorded as ``passed=True`` and that the legacy ZIP verifier skipped
+    undeclared / missing members before computing ``all(checks)``.
+    """
+
+    def test_json_missing_declared_root_is_unverified(self, client: TestClient):
+        hashes = _make_event_hashes(3)
+        body = {"manifest": {"version": "1.0"}, "events": [{"event_hash": h} for h in hashes]}
+        resp = client.post("/api/v1/proof/verify", json=body)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["verified"] is False
+        assert _checks(data)["merkle_root_matches_declared"]["passed"] is False
+        # Recomputed root is still reported for the caller's information.
+        assert data["merkle_root_recomputed"] == MerkleTree(hashes).root
+
+    @pytest.mark.parametrize("root", ["", None])
+    def test_json_empty_or_null_root_is_unverified(self, client: TestClient, root: str | None):
+        hashes = _make_event_hashes(2)
+        body = {
+            "manifest": {"version": "1.0"},
+            "events": [{"event_hash": h} for h in hashes],
+            "merkle_root": root,
+        }
+        resp = client.post("/api/v1/proof/verify", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["verified"] is False
+        assert _checks(data)["merkle_root_matches_declared"]["passed"] is False
+
+    @pytest.mark.parametrize(
+        "root",
+        [
+            "z" * 64,  # 64 non-hex characters
+            "G" * 64,
+            MerkleTree(_make_event_hashes(2)).root.upper(),  # correct digits, wrong case
+            "ab" * 31,  # too short
+            "ab" * 33,  # too long
+        ],
+    )
+    def test_json_non_hex_root_is_rejected(self, client: TestClient, root: str):
+        hashes = _make_event_hashes(2)
+        body = {
+            "manifest": {"version": "1.0"},
+            "events": [{"event_hash": h} for h in hashes],
+            "merkle_root": root,
+        }
+        resp = client.post("/api/v1/proof/verify", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["verified"] is False
+        check = _checks(data)["merkle_root_matches_declared"]
+        assert check["passed"] is False
+
+    def test_json_non_hex_event_hash_is_rejected(self, client: TestClient):
+        body = {
+            "manifest": {"version": "1.0"},
+            "events": [{"event_hash": "z" * 64}],
+            "merkle_root": "00" * 32,
+        }
+        resp = client.post("/api/v1/proof/verify", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["verified"] is False
+        assert _checks(data)["event_hashes_well_formed"]["passed"] is False
+
+    def _post_zip(self, client: TestClient, bundle: bytes) -> Any:
+        return client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("bundle.zip", bundle, "application/zip")},
+        )
+
+    def test_legacy_zip_baseline_verifies(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+        data = self._post_zip(client, bundle).json()
+        assert data["verified"] is True, data
+        assert _checks(data)["manifest_covers_bundle_members"]["passed"] is True
+
+    def test_legacy_zip_missing_declared_file_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+        tampered = _rewrite_legacy_bundle(bundle, drop_members={"fda_spreadsheet_test.csv"})
+        resp = self._post_zip(client, tampered)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["verified"] is False
+        check = _checks(data)["manifest_covers_bundle_members"]
+        assert check["passed"] is False
+        assert "fda_spreadsheet_test.csv" in check["detail"]
+
+    def test_legacy_zip_declared_but_absent_entry_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+
+        def add_phantom(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest["file_hashes"]["phantom.csv"] = "00" * 32
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=add_phantom)
+        data = self._post_zip(client, tampered).json()
+        assert data["verified"] is False
+        assert _checks(data)["manifest_covers_bundle_members"]["passed"] is False
+
+    def test_legacy_zip_undeclared_extra_member_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+        tampered = _rewrite_legacy_bundle(bundle, add_members={"smuggled.csv": b"not in manifest"})
+        data = self._post_zip(client, tampered).json()
+        assert data["verified"] is False
+        check = _checks(data)["manifest_covers_bundle_members"]
+        assert check["passed"] is False
+        assert "smuggled.csv" in check["detail"]
+
+    def test_legacy_zip_duplicate_member_rejected(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+        tampered = _rewrite_legacy_bundle(bundle, duplicate_member="fda_spreadsheet_test.csv")
+        resp = self._post_zip(client, tampered)
+        assert resp.status_code == 400
+        assert "duplicate ZIP entries" in resp.json()["detail"]
+
+    def test_legacy_zip_unsafe_declared_path_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+
+        def add_traversal(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest["file_hashes"]["../escape.csv"] = "00" * 32
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=add_traversal)
+        data = self._post_zip(client, tampered).json()
+        assert data["verified"] is False
+        check = _checks(data)["manifest_covers_bundle_members"]
+        assert check["passed"] is False
+        assert "../escape.csv" in check["detail"]
+
+    def test_legacy_zip_non_hex_file_digest_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+
+        def corrupt_digest(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest["file_hashes"]["fda_spreadsheet_test.csv"] = "z" * 64
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=corrupt_digest)
+        data = self._post_zip(client, tampered).json()
+        assert data["verified"] is False
+        assert _checks(data)["manifest_covers_bundle_members"]["passed"] is False
+
+    def test_legacy_zip_without_file_hashes_map_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+
+        def drop_map(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest.pop("file_hashes")
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=drop_map)
+        data = self._post_zip(client, tampered).json()
+        assert data["verified"] is False
+        assert _checks(data)["manifest_covers_bundle_members"]["passed"] is False
+
+    def test_legacy_zip_malformed_file_hashes_shape_fails(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+
+        def as_list(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest["file_hashes"] = list(manifest["file_hashes"].values())
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=as_list)
+        data = self._post_zip(client, tampered).json()
+        assert data["verified"] is False
+        assert _checks(data)["manifest_covers_bundle_members"]["passed"] is False
+
+    def test_legacy_zip_missing_root_is_unverified(self, client: TestClient):
+        hashes = _make_event_hashes(4)
+        bundle = _make_zip_bundle(hashes, declared_root=None)
+        data = self._post_zip(client, bundle).json()
+        assert data["verified"] is False
+        assert _checks(data)["merkle_root_matches_declared"]["passed"] is False
+        assert data["merkle_root_recomputed"] == MerkleTree(hashes).root
+
+    def test_zip_manifest_that_is_not_an_object_returns_400(self, client: TestClient):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("manifest.json", json.dumps(["not", "an", "object"]))
+        resp = self._post_zip(client, buf.getvalue())
+        assert resp.status_code == 400
+        assert "JSON object" in resp.json()["detail"]
+
+    def test_zip_chain_artifact_that_is_not_an_object_returns_400(self, client: TestClient):
+        hashes = _make_event_hashes(2)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+        zin = zipfile.ZipFile(io.BytesIO(bundle))
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as zout:
+            for item in zin.namelist():
+                data = zin.read(item)
+                if item.startswith("chain_verification"):
+                    data = json.dumps([1, 2, 3]).encode("utf-8")
+                zout.writestr(item, data)
+        resp = self._post_zip(client, out.getvalue())
+        assert resp.status_code == 400, resp.text
+        assert "chain_verification" in resp.json()["detail"]
+
+    def test_legacy_zip_non_object_summary_and_chain_result_do_not_crash(self, client: TestClient):
+        hashes = _make_event_hashes(2)
+        bundle = _make_zip_bundle(hashes, declared_root=None)
+
+        def hostile_shapes(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest["summary"] = ["not", "a", "dict"]
+            manifest["events"] = {"not": "a list"}
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=hostile_shapes)
+        resp = self._post_zip(client, tampered)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["verified"] is False
+
+
 # ---------------------------------------------------------------------------
 # Failure modes — oversized, malformed ZIP, traversal, missing manifest
 # ---------------------------------------------------------------------------
