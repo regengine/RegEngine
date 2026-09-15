@@ -458,6 +458,43 @@ class TestFailClosed:
         assert _checks(data)["merkle_root_matches_declared"]["passed"] is False
         assert data["merkle_root_recomputed"] == MerkleTree(hashes).root
 
+    def test_zip_manifest_that_is_not_an_object_returns_400(self, client: TestClient):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("manifest.json", json.dumps(["not", "an", "object"]))
+        resp = self._post_zip(client, buf.getvalue())
+        assert resp.status_code == 400
+        assert "JSON object" in resp.json()["detail"]
+
+    def test_zip_chain_artifact_that_is_not_an_object_returns_400(self, client: TestClient):
+        hashes = _make_event_hashes(2)
+        bundle = _make_zip_bundle(hashes, declared_root=MerkleTree(hashes).root)
+        zin = zipfile.ZipFile(io.BytesIO(bundle))
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as zout:
+            for item in zin.namelist():
+                data = zin.read(item)
+                if item.startswith("chain_verification"):
+                    data = json.dumps([1, 2, 3]).encode("utf-8")
+                zout.writestr(item, data)
+        resp = self._post_zip(client, out.getvalue())
+        assert resp.status_code == 400, resp.text
+        assert "chain_verification" in resp.json()["detail"]
+
+    def test_legacy_zip_non_object_summary_and_chain_result_do_not_crash(self, client: TestClient):
+        hashes = _make_event_hashes(2)
+        bundle = _make_zip_bundle(hashes, declared_root=None)
+
+        def hostile_shapes(manifest: dict[str, Any]) -> dict[str, Any]:
+            manifest["summary"] = ["not", "a", "dict"]
+            manifest["events"] = {"not": "a list"}
+            return manifest
+
+        tampered = _rewrite_legacy_bundle(bundle, mutate_manifest=hostile_shapes)
+        resp = self._post_zip(client, tampered)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["verified"] is False
+
 
 # ---------------------------------------------------------------------------
 # Failure modes — oversized, malformed ZIP, traversal, missing manifest

@@ -609,6 +609,8 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
         manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=f"manifest.json unreadable: {exc}")
+    if not isinstance(manifest, dict):
+        raise HTTPException(status_code=400, detail="manifest.json must contain a JSON object")
 
     manifest_file_result = _verify_manifest_file_bundle(
         zf=zf,
@@ -686,16 +688,25 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
                 status_code=400,
                 detail=f"chain_verification JSON unreadable: {exc}",
             )
+        if not isinstance(chain_payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="chain_verification JSON must contain an object",
+            )
         events = chain_payload.get("events") or []
-        declared_root = chain_payload.get("merkle_root") or (chain_payload.get("chain_verification") or {}).get(
-            "merkle_root"
+        chain_result = chain_payload.get("chain_verification")
+        declared_root = chain_payload.get("merkle_root") or (
+            chain_result.get("merkle_root") if isinstance(chain_result, dict) else None
         )
 
     # Manifest may also carry an embedded event list / root for simpler bundles.
     if not events:
         events = manifest.get("events") or []
     if not declared_root:
-        declared_root = manifest.get("merkle_root") or (manifest.get("summary") or {}).get("merkle_root")
+        summary = manifest.get("summary")
+        declared_root = manifest.get("merkle_root") or (
+            summary.get("merkle_root") if isinstance(summary, dict) else None
+        )
 
     return _verify_payload(
         manifest=manifest,
