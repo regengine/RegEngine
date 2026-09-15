@@ -177,6 +177,12 @@ def _inbound_address_lookup() -> None:
         """
     )
 
+    # Sibling v121 branch 8301f3cad96a defines the same function with
+    # RETURNS TABLE; CREATE OR REPLACE cannot change a return type, so on a
+    # scratch database replaying both branches the later one must drop first.
+    # v122 (d14f8a2b9c31) redefines the hardened shape last either way.
+    op.execute("DROP FUNCTION IF EXISTS fsma.get_tenant_by_inbound_address(TEXT)")
+
     op.execute(
         """
         CREATE OR REPLACE FUNCTION fsma.get_tenant_by_inbound_address(p_address TEXT)
