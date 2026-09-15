@@ -21,14 +21,17 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
   };
 
   const arrowClasses = {
-    top: 'top-full left-1/2 -translate-x-1/2 border-t-gray-900 border-x-transparent border-b-transparent',
-    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-gray-900 border-x-transparent border-t-transparent',
-    left: 'left-full top-1/2 -translate-y-1/2 border-l-gray-900 border-y-transparent border-r-transparent',
-    right: 'right-full top-1/2 -translate-y-1/2 border-r-gray-900 border-y-transparent border-l-transparent',
+    top: 'top-full left-1/2 -translate-x-1/2 border-t-re-surface-inverse border-x-transparent border-b-transparent',
+    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-re-surface-inverse border-x-transparent border-t-transparent',
+    left: 'left-full top-1/2 -translate-y-1/2 border-l-re-surface-inverse border-y-transparent border-r-transparent',
+    right: 'right-full top-1/2 -translate-y-1/2 border-r-re-surface-inverse border-y-transparent border-l-transparent',
   };
 
   return (
-    <div
+    // A <span>, not a <div>: this renders inside PageHeader's description,
+    // CardDescription and Field hints, which are <p> elements. A block-level
+    // root there is invalid HTML and React reports a hydration error.
+    <span
       className="relative inline-flex"
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
@@ -37,24 +40,24 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
     >
       {children}
       {isVisible && (
-        <div
+        <span
           className={cn(
-            'absolute z-50 px-3 py-2 text-sm text-white bg-re-surface-base rounded-lg shadow-lg max-w-xs whitespace-normal',
+            'absolute z-[var(--re-z-popover)] block max-w-xs whitespace-normal rounded-md bg-re-surface-inverse px-3 py-2 text-small text-re-text-inverse',
             sideClasses[side],
             className
           )}
           role="tooltip"
         >
           {content}
-          <div
+          <span
             className={cn(
-              'absolute w-0 h-0 border-4',
+              'absolute h-0 w-0 border-4',
               arrowClasses[side]
             )}
           />
-        </div>
+        </span>
       )}
-    </div>
+    </span>
   );
 }
 

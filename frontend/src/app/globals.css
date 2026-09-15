@@ -290,6 +290,11 @@ body[data-inflow-lab="true"] {
         --re-surface-inset: #eef0f3;
         --re-surface-secondary: #eef0f3;
         --re-surface-muted: #eef0f3;
+        /* Always-opposite pair, for tooltips and other high-contrast overlays.
+           16.46:1 — the tooltip used to be text-white on surface-base, i.e.
+           near-white on near-white in light mode. */
+        --re-surface-inverse: #14181f;
+        --re-text-inverse: #f5f6f8;
 
         /* ── Text ─────────────────────────────────────────────────────── */
         --re-text-primary: #14181f;
@@ -488,6 +493,9 @@ body[data-inflow-lab="true"] {
         --re-surface-inset: #0b0d11;
         --re-surface-secondary: #0b0d11;
         --re-surface-muted: #0b0d11;
+        /* Inverted again in dark: the bubble is light on a dark page. 15.59:1. */
+        --re-surface-inverse: #e8eaee;
+        --re-text-inverse: #0f1216;
 
         --re-text-primary: #eef1f5;
         /* 16.57 on base — not pure white, to avoid halation */

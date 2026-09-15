@@ -74,8 +74,10 @@ const config = {
                     elevated: "var(--re-surface-elevated)",
                     overlay: "var(--re-surface-overlay)",
                     inset: "var(--re-surface-inset)",
+                    inverse: "var(--re-surface-inverse)",
                 },
                 "re-text": {
+                    inverse: "var(--re-text-inverse)",
                     primary: "var(--re-text-primary)",
                     secondary: "var(--re-text-secondary)",
                     tertiary: "var(--re-text-tertiary)",

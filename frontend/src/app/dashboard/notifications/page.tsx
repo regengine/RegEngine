@@ -235,7 +235,9 @@ export default function NotificationPrefsPage() {
                 }
             />
 
-            <div className="space-y-6">
+            {/* Settings surfaces keep a readable form column inside the app width
+                (SPEC §6.10) — a toggle 1,100px from its label is unusable. */}
+            <div className="max-w-[760px] space-y-6">
                 {loading && (
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}

@@ -78,7 +78,11 @@ vi.mock('@/components/ui/badge', () => ({
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
 }));
 
-vi.mock('@/components/ui/input', () => ({
+// Spread the real module: these suites only need to replace <Input> itself, and
+// a hand-written factory silently breaks any page importing another export
+// (fieldControlClasses, the shared control recipe) the moment one is added.
+vi.mock('@/components/ui/input', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/components/ui/input')>()),
     Input: (props: any) => <input {...props} />,
 }));
 

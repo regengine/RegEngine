@@ -351,6 +351,7 @@ export default function IssuesPage() {
                     <EmptyState
                         icon={CheckCircle2}
                         title="No issues in the current view"
+                        titleAs="h2"
                         description="No blocking defects, urgent deadlines, or warnings were returned for this workspace at the moment."
                     />
                 )}

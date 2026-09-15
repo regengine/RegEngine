@@ -7,9 +7,6 @@ import {
     CheckCircle2,
     CircleHelp,
     Copy,
-    Eye,
-    Filter,
-    GitBranch,
     RefreshCw,
     Search,
     ShieldAlert,
@@ -27,9 +24,15 @@ import type {
     AgentReviewItem,
     AgentReviewStatus,
 } from '@/types/agent-review';
-import { Badge } from '@/components/ui/badge';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
     Dialog,
     DialogContent,
@@ -101,55 +104,24 @@ function formatDate(value: string | null | undefined) {
     }).format(new Date(value));
 }
 
-function riskTone(score: number) {
-    if (score >= 75) {
-        return {
-            label: 'Critical',
-            badge: 'border-[var(--re-danger-border)] bg-[var(--re-danger-bg)] text-[var(--re-danger)]',
-            bar: 'bg-[var(--re-danger)]',
-        };
-    }
-    if (score >= 45) {
-        return {
-            label: 'Elevated',
-            badge: 'border-[var(--re-warning-border)] bg-[var(--re-warning-bg)] text-[var(--re-warning)]',
-            bar: 'bg-[var(--re-warning)]',
-        };
-    }
-    return {
-        label: 'Low',
-        badge: 'border-[var(--re-success-border)] bg-[var(--re-success-bg)] text-[var(--re-success)]',
-        bar: 'bg-[var(--re-success)]',
-    };
+/** Risk, review status and chain validity are tones, never hard-coded hexes. */
+function riskTone(score: number): { label: string; tone: BadgeTone; bar: string } {
+    if (score >= 75) return { label: 'Critical', tone: 'danger', bar: 'bg-re-danger' };
+    if (score >= 45) return { label: 'Elevated', tone: 'warning', bar: 'bg-re-warning' };
+    return { label: 'Low', tone: 'success', bar: 'bg-re-success' };
 }
 
-function statusTone(status: AgentReviewStatus) {
-    if (status === 'accepted') return 'border-[var(--re-success-border)] bg-[var(--re-success-bg)] text-[var(--re-success)]';
-    if (status === 'rejected') return 'border-[var(--re-danger-border)] bg-[var(--re-danger-bg)] text-[var(--re-danger)]';
-    if (status === 'needs_more_evidence') return 'border-[var(--re-warning-border)] bg-[var(--re-warning-bg)] text-[var(--re-warning)]';
-    return 'border-[var(--re-info-border)] bg-[var(--re-info-bg)] text-[var(--re-info)]';
+function statusTone(status: AgentReviewStatus): BadgeTone {
+    if (status === 'accepted') return 'success';
+    if (status === 'rejected') return 'danger';
+    if (status === 'needs_more_evidence') return 'warning';
+    return 'info';
 }
 
-function chainBadge(item: AgentReviewItem) {
-    if (item.chain_valid === true) {
-        return {
-            icon: CheckCircle2,
-            label: 'Valid',
-            className: 'border-[var(--re-success-border)] bg-[var(--re-success-bg)] text-[var(--re-success)]',
-        };
-    }
-    if (item.chain_valid === false) {
-        return {
-            icon: XCircle,
-            label: 'Broken',
-            className: 'border-[var(--re-danger-border)] bg-[var(--re-danger-bg)] text-[var(--re-danger)]',
-        };
-    }
-    return {
-        icon: CircleHelp,
-        label: 'Unlinked',
-        className: 'border-[var(--re-warning-border)] bg-[var(--re-warning-bg)] text-[var(--re-warning)]',
-    };
+function chainState(item: AgentReviewItem): { state: ComplianceState; label: string } {
+    if (item.chain_valid === true) return { state: 'compliant', label: 'Valid' };
+    if (item.chain_valid === false) return { state: 'non-compliant', label: 'Broken' };
+    return { state: 'at-risk', label: 'Unlinked' };
 }
 
 function chainValidityLabel(value: AgentReviewItem['chain_valid']) {
@@ -184,34 +156,6 @@ function sortAgentReviewItems(items: AgentReviewItem[]): AgentReviewItem[] {
     });
 }
 
-function MetricCard({
-    label,
-    value,
-    tone,
-    icon: Icon,
-}: {
-    label: string;
-    value: string | number;
-    tone: string;
-    icon: React.ComponentType<{ className?: string }>;
-}) {
-    return (
-        <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-            <CardContent className="flex items-center justify-between gap-4 p-4">
-                <div>
-                    <p className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                        {label}
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-[var(--re-text-primary)]">{value}</p>
-                </div>
-                <div className={cn('grid h-10 w-10 place-items-center rounded-md border', tone)}>
-                    <Icon className="h-5 w-5" />
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
 function RiskScore({ score }: { score: number }) {
     const tone = riskTone(score);
     const width = `${Math.max(0, Math.min(100, Math.round(score)))}%`;
@@ -219,12 +163,12 @@ function RiskScore({ score }: { score: number }) {
     return (
         <div className="min-w-[124px]">
             <div className="flex items-center gap-2">
-                <span className="text-xl font-semibold tabular-nums text-[var(--re-text-primary)]">
+                <span className="text-subheading tabular-nums text-re-text-primary">
                     {score.toFixed(1)}
                 </span>
-                <Badge className={cn('px-2 py-0.5', tone.badge)}>{tone.label}</Badge>
+                <Badge tone={tone.tone} size="sm">{tone.label}</Badge>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--re-border-subtle)]">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-re-border-subtle">
                 <div className={cn('h-full rounded-full', tone.bar)} style={{ width }} />
             </div>
         </div>
@@ -238,14 +182,10 @@ function EvidenceAnchorSummary({ item }: { item: AgentReviewItem }) {
     return (
         <div className="min-w-[160px] space-y-1">
             <div className="flex flex-wrap gap-1.5">
-                <Badge variant="outline" className="border-[var(--re-border-default)]">
-                    {item.evidence_ids.length} evidence
-                </Badge>
-                <Badge variant="outline" className="border-[var(--re-border-default)]">
-                    {item.source_hashes.length} hashes
-                </Badge>
+                <Badge tone="neutral" size="sm">{item.evidence_ids.length} evidence</Badge>
+                <Badge tone="neutral" size="sm">{item.source_hashes.length} hashes</Badge>
             </div>
-            <p className="font-mono text-[11px] text-[var(--re-text-muted)]">
+            <p className="font-mono text-label text-re-text-muted">
                 {anchorCount > 0 ? shortId(firstHash ?? item.evidence_ids[0] ?? item.canonical_event_ids[0], 12) : 'No anchors'}
             </p>
         </div>
@@ -275,8 +215,8 @@ function AgentReviewDetailDialog({
 
     if (!item) return null;
 
-    const chain = chainBadge(item);
-    const ChainIcon = chain.icon;
+    const chain = chainState(item);
+    const risk = riskTone(item.risk_score);
     const isSubmittingDecision = pendingDecision !== null;
 
     const handleAuditCopy = async () => {
@@ -290,13 +230,12 @@ function AgentReviewDetailDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[86vh] max-w-5xl overflow-y-auto p-0">
-                <DialogHeader className="border-b border-[var(--re-border-subtle)] p-5 pr-12">
-                    <DialogTitle className="flex items-center gap-2 text-xl">
-                        <Bot className="h-5 w-5 text-[var(--re-brand)]" />
+            <DialogContent className="max-h-[86vh] max-w-4xl overflow-y-auto p-0">
+                <DialogHeader className="border-b border-re-border-subtle p-5 pr-12">
+                    <DialogTitle className="text-heading text-re-text-primary">
                         Agent artifact review
                     </DialogTitle>
-                    <DialogDescription className="font-mono text-xs">
+                    <DialogDescription className="font-mono text-[0.8125rem]">
                         {item.artifact_id}
                     </DialogDescription>
                 </DialogHeader>
@@ -304,10 +243,8 @@ function AgentReviewDetailDialog({
                 <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <div className="space-y-5">
                         <section>
-                            <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                                Suggestion
-                            </h3>
-                            <p className="mt-2 text-sm leading-6 text-[var(--re-text-primary)]">{item.suggestion}</p>
+                            <h3 className="text-label text-re-text-muted">Suggestion</h3>
+                            <p className="mt-2 text-ui text-re-text-primary">{item.suggestion}</p>
                         </section>
 
                         <section className="grid gap-3 sm:grid-cols-2">
@@ -318,9 +255,7 @@ function AgentReviewDetailDialog({
                         </section>
 
                         <section>
-                            <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                                Evidence anchors
-                            </h3>
+                            <h3 className="text-label text-re-text-muted">Evidence anchors</h3>
                             <AnchorList title="Evidence IDs" values={item.evidence_ids} />
                             <AnchorList title="Canonical Event IDs" values={item.canonical_event_ids} />
                             <AnchorList title="Source Hashes" values={item.source_hashes} />
@@ -328,28 +263,28 @@ function AgentReviewDetailDialog({
                     </div>
 
                     <aside className="space-y-4">
-                        <div className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)] p-4">
+                        <Card variant="inset" padding="compact">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
-                                    <p className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                                        Review decision
-                                    </p>
-                                    <p className="mt-1 text-sm text-[var(--re-text-secondary)]">
+                                    <p className="text-label text-re-text-muted">Review decision</p>
+                                    <p className="mt-1 text-ui text-re-text-secondary">
                                         Current: {REVIEW_STATUS_LABELS[item.review_status]}
                                     </p>
                                 </div>
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     onClick={handleAuditCopy}
                                     className="min-w-[112px]"
+                                    leadingIcon={
+                                        copyState === 'copied' ? (
+                                            <CheckCircle2 strokeWidth={1.75} aria-hidden="true" />
+                                        ) : (
+                                            <Copy strokeWidth={1.75} aria-hidden="true" />
+                                        )
+                                    }
                                 >
-                                    {copyState === 'copied' ? (
-                                        <CheckCircle2 className="mr-2 h-4 w-4 text-[var(--re-success)]" />
-                                    ) : (
-                                        <Copy className="mr-2 h-4 w-4" />
-                                    )}
                                     {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy audit'}
                                 </Button>
                             </div>
@@ -362,110 +297,94 @@ function AgentReviewDetailDialog({
                                         void onDecision('accepted');
                                     }}
                                     disabled={isSubmittingDecision}
-                                    className="min-w-[120px] border-[var(--re-success-border)] bg-[var(--re-success)] text-white hover:bg-[var(--re-success)]"
+                                    loading={pendingDecision === 'accepted'}
+                                    leadingIcon={<CheckCircle2 strokeWidth={1.75} aria-hidden="true" />}
                                 >
-                                    {pendingDecision === 'accepted' ? (
-                                        <Spinner className="mr-2 border-white border-t-transparent" size="sm" />
-                                    ) : (
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                    )}
                                     Accept
                                 </Button>
                                 <Button
                                     type="button"
-                                    variant="destructive"
+                                    variant="danger"
                                     size="sm"
                                     onClick={() => {
                                         void onDecision('rejected');
                                     }}
                                     disabled={isSubmittingDecision}
-                                    className="min-w-[120px]"
+                                    loading={pendingDecision === 'rejected'}
+                                    leadingIcon={<XCircle strokeWidth={1.75} aria-hidden="true" />}
                                 >
-                                    {pendingDecision === 'rejected' ? (
-                                        <Spinner className="mr-2 border-white border-t-transparent" size="sm" />
-                                    ) : (
-                                        <XCircle className="mr-2 h-4 w-4" />
-                                    )}
                                     Reject
                                 </Button>
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     onClick={() => {
                                         void onDecision('needs_more_evidence');
                                     }}
                                     disabled={isSubmittingDecision}
-                                    className="min-w-[120px] border-[var(--re-warning-border)] text-[var(--re-warning)] hover:bg-[var(--re-warning-bg)]"
+                                    loading={pendingDecision === 'needs_more_evidence'}
+                                    leadingIcon={<CircleHelp strokeWidth={1.75} aria-hidden="true" />}
                                 >
-                                    {pendingDecision === 'needs_more_evidence' ? (
-                                        <Spinner className="mr-2 border-[var(--re-warning)] border-t-transparent" size="sm" />
-                                    ) : (
-                                        <CircleHelp className="mr-2 h-4 w-4" />
-                                    )}
                                     Needs evidence
                                 </Button>
                             </div>
 
                             {decisionError && (
-                                <p className="mt-3 rounded-md border border-[var(--re-danger-border)] bg-[var(--re-danger-bg)] px-3 py-2 text-xs leading-5 text-[var(--re-danger)]">
+                                <Callout tone="danger" role="alert" className="mt-3">
                                     {decisionError}
-                                </p>
+                                </Callout>
                             )}
-                        </div>
+                        </Card>
 
-                        <div className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)] p-4">
+                        <Card variant="inset" padding="compact">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
-                                    <p className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                                        Risk score
+                                    <p className="text-label text-re-text-muted">Risk score</p>
+                                    <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                        {item.risk_score.toFixed(1)}
                                     </p>
-                                    <p className="mt-1 text-3xl font-semibold tabular-nums">{item.risk_score.toFixed(1)}</p>
                                 </div>
-                                <Badge className={riskTone(item.risk_score).badge}>{riskTone(item.risk_score).label}</Badge>
+                                <Badge tone={risk.tone} size="sm">{risk.label}</Badge>
                             </div>
-                            <dl className="mt-4 grid gap-2 text-xs">
+                            <dl className="mt-4 grid gap-2 text-small">
                                 <BreakdownRow label="Confidence" value={item.risk_breakdown.confidence_risk} />
                                 <BreakdownRow label="Review" value={item.risk_breakdown.review_risk} />
                                 <BreakdownRow label="Artifact" value={item.risk_breakdown.artifact_type_risk} />
                                 <BreakdownRow label="Evidence" value={item.risk_breakdown.evidence_gap_risk} />
                                 <BreakdownRow label="Rule" value={item.risk_breakdown.rule_gap_risk} />
                             </dl>
-                        </div>
+                        </Card>
 
-                        <div className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)] p-4">
+                        <Card variant="inset" padding="compact">
                             <div className="flex items-center justify-between gap-3">
-                                <span className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                                    Chain validity
-                                </span>
-                                <Badge className={chain.className}>
-                                    <ChainIcon className="mr-1 h-3.5 w-3.5" />
-                                    {chain.label}
-                                </Badge>
+                                <span className="text-label text-re-text-muted">Chain validity</span>
+                                <StatusBadge state={chain.state} label={chain.label} size="sm" />
                             </div>
-                            <div className="mt-3 space-y-2 text-xs text-[var(--re-text-muted)]">
+                            <div className="mt-3 space-y-2 text-small text-re-text-tertiary">
                                 <p>Receipt state: {item.advisory_receipt_state ?? 'None'}</p>
                                 <p>Run state: {item.ingestion_run_status ?? 'None'}</p>
                             </div>
-                        </div>
+                        </Card>
 
-                        <div className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)] p-4">
-                            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                                Compliance gaps
-                            </p>
+                        <Card variant="inset" padding="compact">
+                            <p className="text-label text-re-text-muted">Compliance gaps</p>
                             <div className="mt-3 space-y-2">
                                 {item.compliance_gaps.length > 0 ? (
                                     item.compliance_gaps.map((gap) => (
-                                        <div key={gap.code} className="rounded-md border border-[var(--re-warning-border)] bg-[var(--re-warning-bg)] p-2">
-                                            <p className="font-mono text-[11px] font-medium text-[var(--re-warning)]">{gap.code}</p>
-                                            <p className="mt-1 text-xs leading-5 text-[var(--re-text-secondary)]">{gap.message}</p>
+                                        <div
+                                            key={gap.code}
+                                            className="rounded-md border border-re-border-subtle bg-re-surface-card p-2"
+                                        >
+                                            <p className="font-mono text-label text-re-text-secondary">{gap.code}</p>
+                                            <p className="mt-1 text-small text-re-text-tertiary">{gap.message}</p>
                                         </div>
                                     ))
                                 ) : (
-                                    <p className="text-sm text-[var(--re-text-muted)]">No deterministic gaps.</p>
+                                    <p className="text-ui text-re-text-tertiary">No deterministic gaps.</p>
                                 )}
                             </div>
-                        </div>
+                        </Card>
                     </aside>
                 </div>
             </DialogContent>
@@ -475,11 +394,9 @@ function AgentReviewDetailDialog({
 
 function KeyValue({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
     return (
-        <div className="rounded-md border border-[var(--re-border-subtle)] bg-[var(--re-surface-base)] p-3">
-            <dt className="font-mono text-[11px] font-medium uppercase tracking-[0.02em] text-[var(--re-text-muted)]">
-                {label}
-            </dt>
-            <dd className={cn('mt-1 break-words text-sm text-[var(--re-text-primary)]', mono && 'font-mono text-xs')}>
+        <div className="rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
+            <dt className="text-label text-re-text-muted">{label}</dt>
+            <dd className={cn('mt-1 break-words text-ui text-re-text-primary', mono && 'font-mono text-[0.8125rem]')}>
                 {value}
             </dd>
         </div>
@@ -488,21 +405,21 @@ function KeyValue({ label, value, mono = false }: { label: string; value: string
 
 function AnchorList({ title, values }: { title: string; values: string[] }) {
     return (
-        <div className="mt-3 rounded-md border border-[var(--re-border-subtle)] bg-[var(--re-surface-base)] p-3">
+        <div className="mt-3 rounded-md border border-re-border-subtle bg-re-surface-inset p-3">
             <div className="flex items-center justify-between gap-2">
-                <h4 className="text-sm font-medium">{title}</h4>
-                <Badge variant="outline" className="border-[var(--re-border-default)]">{values.length}</Badge>
+                <h4 className="text-ui font-medium text-re-text-primary">{title}</h4>
+                <Badge tone="neutral" size="sm">{values.length}</Badge>
             </div>
             {values.length > 0 ? (
                 <div className="mt-2 space-y-1">
                     {values.map((value) => (
-                        <p key={value} className="break-all font-mono text-[11px] leading-5 text-[var(--re-text-muted)]">
+                        <p key={value} className="break-all font-mono text-label leading-5 text-re-text-tertiary">
                             {value}
                         </p>
                     ))}
                 </div>
             ) : (
-                <p className="mt-2 text-sm text-[var(--re-text-muted)]">None</p>
+                <p className="mt-2 text-ui text-re-text-tertiary">None</p>
             )}
         </div>
     );
@@ -511,8 +428,8 @@ function AnchorList({ title, values }: { title: string; values: string[] }) {
 function BreakdownRow({ label, value }: { label: string; value: number }) {
     return (
         <div className="flex items-center justify-between gap-3">
-            <dt className="text-[var(--re-text-muted)]">{label}</dt>
-            <dd className="font-mono tabular-nums text-[var(--re-text-primary)]">{value.toFixed(1)}</dd>
+            <dt className="text-re-text-tertiary">{label}</dt>
+            <dd className="font-mono tabular-nums text-re-text-primary">{value.toFixed(1)}</dd>
         </div>
     );
 }
@@ -601,252 +518,241 @@ export function AgentReviewDashboard() {
     }, [query.data?.items]);
 
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)]">
-            <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-                <header className="flex flex-col gap-4 border-b border-[var(--re-border-subtle)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                        <div className="flex items-center gap-2 text-[var(--re-brand)]">
-                            <ShieldCheck className="h-5 w-5" />
-                            <span className="font-mono text-[11px] font-medium uppercase tracking-[0.02em]">Operator dashboard</span>
-                        </div>
-                        <h1 className="mt-2 text-3xl font-semibold tracking-normal text-[var(--re-text-primary)]">
-                            Agent reviews
-                        </h1>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--re-text-secondary)]">
-                            Agent activity, deterministic risk, evidence anchors, and receipt-chain status in one queue.
-                        </p>
-                    </div>
-                    <Button
-                        variant="outline"
-                        onClick={() => query.refetch()}
-                        disabled={!queryEnabled || query.isFetching}
-                        className="w-full sm:w-fit"
-                    >
-                        <RefreshCw className={cn('mr-2 h-4 w-4', query.isFetching && 'animate-spin')} />
-                        Refresh
-                    </Button>
-                </header>
+        <>
+            <PageContainer>
+                <PageHeader
+                    eyebrow={
+                        <span className="inline-flex items-center gap-1.5">
+                            <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                            Operator dashboard
+                        </span>
+                    }
+                    title="Agent reviews"
+                    description="Agent activity, deterministic risk, evidence anchors, and receipt-chain status in one queue."
+                    secondaryActions={
+                        <Button
+                            variant="secondary"
+                            onClick={() => query.refetch()}
+                            disabled={!queryEnabled || query.isFetching}
+                            className="w-full sm:w-fit"
+                        >
+                            <RefreshCw
+                                className={cn('h-4 w-4', query.isFetching && 'animate-spin motion-reduce:animate-none')}
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                            />
+                            Refresh
+                        </Button>
+                    }
+                />
 
-                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard
-                        label="Needs review"
-                        value={metrics.pending}
-                        icon={Eye}
-                        tone="border-[var(--re-info-border)] bg-[var(--re-info-bg)] text-[var(--re-info)]"
-                    />
-                    <MetricCard
-                        label="High risk"
-                        value={metrics.highRisk}
-                        icon={ShieldAlert}
-                        tone="border-[var(--re-danger-border)] bg-[var(--re-danger-bg)] text-[var(--re-danger)]"
-                    />
-                    <MetricCard
-                        label="Compliance gaps"
-                        value={metrics.gaps}
-                        icon={AlertTriangle}
-                        tone="border-[var(--re-warning-border)] bg-[var(--re-warning-bg)] text-[var(--re-warning)]"
-                    />
-                    <MetricCard
-                        label="Broken chains"
-                        value={metrics.brokenChains}
-                        icon={GitBranch}
-                        tone="border-[var(--re-success-border)] bg-[var(--re-success-bg)] text-[var(--re-success)]"
-                    />
-                </section>
+                <div className="space-y-6">
+                    <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                        <StatTile label="Needs review" value={metrics.pending} />
+                        <StatTile label="High risk" value={metrics.highRisk} />
+                        <StatTile label="Compliance gaps" value={metrics.gaps} />
+                        <StatTile label="Broken chains" value={metrics.brokenChains} />
+                    </section>
 
-                <section className="rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                    <div className="flex flex-col gap-3 border-b border-[var(--re-border-subtle)] p-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                                <Filter className="h-4 w-4 text-[var(--re-text-muted)]" />
-                                <h2 className="text-sm font-semibold text-[var(--re-text-primary)]">Review queue</h2>
+                    <Card>
+                        <CardHeader className="flex-col items-stretch gap-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <h2 className="text-subheading text-re-text-primary">Review queue</h2>
+                                <Badge tone="neutral" size="sm">
+                                    {query.data?.total ?? sortedItems.length} total
+                                </Badge>
                             </div>
-                            <Badge variant="outline" className="border-[var(--re-border-default)]">
-                                {query.data?.total ?? sortedItems.length} total
-                            </Badge>
-                        </div>
 
-                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
-                            {isSysadmin && (
+                            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+                                {isSysadmin && (
+                                    <Input
+                                        aria-label="Tenant ID"
+                                        value={tenantFilter}
+                                        onChange={(event) => setTenantFilter(event.target.value)}
+                                        placeholder="Tenant ID"
+                                        className="xl:col-span-2"
+                                    />
+                                )}
+                                <div className="xl:col-span-2">
+                                    <Input
+                                        aria-label="Ingestion run ID"
+                                        value={ingestionRunId}
+                                        onChange={(event) => setIngestionRunId(event.target.value)}
+                                        placeholder="Ingestion run ID"
+                                        leadingIcon={<Search strokeWidth={1.75} />}
+                                    />
+                                </div>
+                                <Select value={reviewStatus} onValueChange={(value) => setReviewStatus(value as AgentReviewStatus | 'all')}>
+                                    <SelectTrigger aria-label="Review status">
+                                        <SelectValue placeholder="Review status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {REVIEW_STATUS_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={artifactType} onValueChange={(value) => setArtifactType(value as AgentArtifactType | 'all')}>
+                                    <SelectTrigger aria-label="Artifact type">
+                                        <SelectValue placeholder="Artifact type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {ARTIFACT_TYPE_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 <Input
-                                    aria-label="Tenant ID"
-                                    value={tenantFilter}
-                                    onChange={(event) => setTenantFilter(event.target.value)}
-                                    placeholder="Tenant ID"
-                                    className="xl:col-span-2"
+                                    aria-label="Created after"
+                                    type="date"
+                                    value={createdAfter}
+                                    onChange={(event) => setCreatedAfter(event.target.value)}
                                 />
-                            )}
-                            <div className="relative xl:col-span-2">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--re-text-disabled)]" />
                                 <Input
-                                    aria-label="Ingestion run ID"
-                                    value={ingestionRunId}
-                                    onChange={(event) => setIngestionRunId(event.target.value)}
-                                    placeholder="Ingestion run ID"
-                                    className="pl-9"
+                                    aria-label="Created before"
+                                    type="date"
+                                    value={createdBefore}
+                                    onChange={(event) => setCreatedBefore(event.target.value)}
                                 />
                             </div>
-                            <Select value={reviewStatus} onValueChange={(value) => setReviewStatus(value as AgentReviewStatus | 'all')}>
-                                <SelectTrigger aria-label="Review status">
-                                    <SelectValue placeholder="Review status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {REVIEW_STATUS_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select value={artifactType} onValueChange={(value) => setArtifactType(value as AgentArtifactType | 'all')}>
-                                <SelectTrigger aria-label="Artifact type">
-                                    <SelectValue placeholder="Artifact type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {ARTIFACT_TYPE_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Input
-                                aria-label="Created after"
-                                type="date"
-                                value={createdAfter}
-                                onChange={(event) => setCreatedAfter(event.target.value)}
-                            />
-                            <Input
-                                aria-label="Created before"
-                                type="date"
-                                value={createdBefore}
-                                onChange={(event) => setCreatedBefore(event.target.value)}
-                            />
-                        </div>
-                    </div>
+                        </CardHeader>
 
-                    <CardContent className="p-0">
-                        {!queryEnabled ? (
-                            <EmptyState
-                                icon={ShieldAlert}
-                                title="Workspace context required"
-                                body="Select a workspace or sign in with a workspace-scoped operator session."
-                            />
-                        ) : query.isLoading ? (
-                            <div className="flex min-h-[340px] flex-col items-center justify-center gap-3 text-[var(--re-text-muted)]">
-                                <Spinner />
-                                <p className="text-sm">Loading agent reviews...</p>
-                            </div>
-                        ) : query.error ? (
-                            <EmptyState
-                                icon={AlertTriangle}
-                                title="Review queue unavailable"
-                                body={query.error instanceof Error ? query.error.message : 'Unable to load agent review items.'}
-                            />
-                        ) : sortedItems.length === 0 ? (
-                            <EmptyState
-                                icon={CheckCircle2}
-                                title="No agent reviews"
-                                body="The current filters did not return any advisory artifacts."
-                            />
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-[var(--re-surface-base)] hover:bg-[var(--re-surface-base)]">
-                                        <TableHead className="min-w-[280px]">Agent Suggestion</TableHead>
-                                        <TableHead className="min-w-[150px]">Risk Score</TableHead>
-                                        <TableHead className="min-w-[130px]">Gap Count</TableHead>
-                                        <TableHead className="min-w-[140px]">Review Status</TableHead>
-                                        <TableHead className="min-w-[180px]">Ingestion Run ID</TableHead>
-                                        <TableHead className="min-w-[180px]">Evidence Anchors</TableHead>
-                                        <TableHead className="min-w-[170px]">Advisory Receipt</TableHead>
-                                        <TableHead className="min-w-[130px]">Chain Validity</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {sortedItems.map((item) => {
-                                        const chain = chainBadge(item);
-                                        const ChainIcon = chain.icon;
-                                        return (
-                                            <TableRow
-                                                key={item.artifact_id}
-                                                className="cursor-pointer focus-within:bg-[var(--re-brand-muted)] hover:bg-[var(--re-brand-muted)]"
-                                                onClick={() => setSelectedItem(item)}
-                                            >
-                                                <TableCell>
-                                                    <button
-                                                        type="button"
-                                                        className="block w-full min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--re-brand)]"
-                                                        onClick={() => setSelectedItem(item)}
-                                                    >
-                                                        <span className="line-clamp-2 text-sm font-medium leading-5 text-[var(--re-text-primary)]">
-                                                            {item.suggestion}
-                                                        </span>
-                                                        <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--re-text-muted)]">
-                                                            <Bot className="h-3.5 w-3.5" />
-                                                            {item.agent_name}
-                                                            <span className="font-mono">{formatArtifactType(item.artifact_type)}</span>
-                                                        </span>
-                                                    </button>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <RiskScore score={item.risk_score} />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-lg font-semibold tabular-nums">{item.compliance_gap_count}</span>
-                                                        {item.compliance_gap_count > 0 ? (
-                                                            <AlertTriangle className="h-4 w-4 text-[var(--re-warning)]" />
-                                                        ) : (
-                                                            <CheckCircle2 className="h-4 w-4 text-[var(--re-success)]" />
+                        <CardContent className="p-0">
+                            {!queryEnabled ? (
+                                <EmptyState
+                                    bare
+                                    icon={ShieldAlert}
+                                    title="Workspace context required"
+                                    description="Select a workspace or sign in with a workspace-scoped operator session."
+                                />
+                            ) : query.isLoading ? (
+                                <div className="flex min-h-[340px] flex-col items-center justify-center gap-3">
+                                    <Spinner />
+                                    <p className="text-ui text-re-text-tertiary">Loading agent reviews...</p>
+                                </div>
+                            ) : query.error ? (
+                                <EmptyState
+                                    bare
+                                    icon={AlertTriangle}
+                                    title="Review queue unavailable"
+                                    description={query.error instanceof Error ? query.error.message : 'Unable to load agent review items.'}
+                                />
+                            ) : sortedItems.length === 0 ? (
+                                <EmptyState
+                                    bare
+                                    icon={CheckCircle2}
+                                    title="No agent reviews"
+                                    description="The current filters did not return any advisory artifacts."
+                                />
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="min-w-[280px]">Agent Suggestion</TableHead>
+                                            <TableHead className="min-w-[150px]">Risk Score</TableHead>
+                                            <TableHead className="min-w-[130px]">Gap Count</TableHead>
+                                            <TableHead className="min-w-[140px]">Review Status</TableHead>
+                                            <TableHead className="min-w-[180px]">Ingestion Run ID</TableHead>
+                                            <TableHead className="min-w-[180px]">Evidence Anchors</TableHead>
+                                            <TableHead className="min-w-[170px]">Advisory Receipt</TableHead>
+                                            <TableHead className="min-w-[130px]">Chain Validity</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {sortedItems.map((item) => {
+                                            const chain = chainState(item);
+                                            return (
+                                                <TableRow
+                                                    key={item.artifact_id}
+                                                    className="cursor-pointer"
+                                                    onClick={() => setSelectedItem(item)}
+                                                >
+                                                    <TableCell>
+                                                        <button
+                                                            type="button"
+                                                            className="block w-full min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
+                                                            onClick={() => setSelectedItem(item)}
+                                                        >
+                                                            <span className="line-clamp-2 text-ui font-medium text-re-text-primary">
+                                                                {item.suggestion}
+                                                            </span>
+                                                            <span className="mt-1 flex flex-wrap items-center gap-2 text-small text-re-text-tertiary">
+                                                                <Bot className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                                                                {item.agent_name}
+                                                                <span className="font-mono">{formatArtifactType(item.artifact_type)}</span>
+                                                            </span>
+                                                        </button>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <RiskScore score={item.risk_score} />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-subheading tabular-nums text-re-text-primary">
+                                                                {item.compliance_gap_count}
+                                                            </span>
+                                                            {item.compliance_gap_count > 0 ? (
+                                                                <AlertTriangle
+                                                                    className="h-4 w-4 text-re-warning"
+                                                                    strokeWidth={1.75}
+                                                                    aria-hidden="true"
+                                                                />
+                                                            ) : (
+                                                                <CheckCircle2
+                                                                    className="h-4 w-4 text-re-success"
+                                                                    strokeWidth={1.75}
+                                                                    aria-hidden="true"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                                            {item.compliance_gaps[0]?.code ?? 'clear'}
+                                                        </p>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge tone={statusTone(item.review_status)} size="sm">
+                                                            {REVIEW_STATUS_LABELS[item.review_status]}
+                                                        </Badge>
+                                                        {item.requires_human_review && (
+                                                            <p className="mt-2 text-small text-re-text-tertiary">Human review</p>
                                                         )}
-                                                    </div>
-                                                    <p className="mt-1 text-xs text-[var(--re-text-muted)]">
-                                                        {item.compliance_gaps[0]?.code ?? 'clear'}
-                                                    </p>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge className={statusTone(item.review_status)}>
-                                                        {REVIEW_STATUS_LABELS[item.review_status]}
-                                                    </Badge>
-                                                    {item.requires_human_review && (
-                                                        <p className="mt-2 text-xs text-[var(--re-text-muted)]">Human review</p>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <p className="font-mono text-xs text-[var(--re-text-primary)]">
-                                                        {shortId(item.ingestion_run_id, 12)}
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-[var(--re-text-muted)]">
-                                                        {item.ingestion_run_status ?? item.source_file_name ?? 'No run'}
-                                                    </p>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <EvidenceAnchorSummary item={item} />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className="border-[var(--re-border-default)]">
-                                                        {item.advisory_receipt_state ?? 'No receipt'}
-                                                    </Badge>
-                                                    <p className="mt-2 font-mono text-[11px] text-[var(--re-text-muted)]">
-                                                        {shortId(item.receipt_hash, 12)}
-                                                    </p>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge className={chain.className}>
-                                                        <ChainIcon className="mr-1 h-3.5 w-3.5" />
-                                                        {chain.label}
-                                                    </Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
-                        )}
-                    </CardContent>
-                </section>
-            </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <p className="font-mono text-[0.8125rem] text-re-text-primary">
+                                                            {shortId(item.ingestion_run_id, 12)}
+                                                        </p>
+                                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                                            {item.ingestion_run_status ?? item.source_file_name ?? 'No run'}
+                                                        </p>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <EvidenceAnchorSummary item={item} />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge tone="neutral" size="sm">
+                                                            {item.advisory_receipt_state ?? 'No receipt'}
+                                                        </Badge>
+                                                        <p className="mt-2 font-mono text-label text-re-text-tertiary">
+                                                            {shortId(item.receipt_hash, 12)}
+                                                        </p>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <StatusBadge state={chain.state} label={chain.label} size="sm" />
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </PageContainer>
 
             <AgentReviewDetailDialog
                 item={selectedItem}
@@ -863,28 +769,6 @@ export function AgentReviewDashboard() {
                 }
                 decisionError={decisionError}
             />
-        </div>
-    );
-}
-
-function EmptyState({
-    icon: Icon,
-    title,
-    body,
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    body: string;
-}) {
-    return (
-        <div className="flex min-h-[340px] flex-col items-center justify-center gap-3 p-6 text-center">
-            <div className="grid h-11 w-11 place-items-center rounded-md border border-[var(--re-border-default)] bg-[var(--re-surface-base)]">
-                <Icon className="h-5 w-5 text-[var(--re-text-muted)]" />
-            </div>
-            <div>
-                <h3 className="text-base font-semibold text-[var(--re-text-primary)]">{title}</h3>
-                <p className="mt-1 max-w-md text-sm leading-6 text-[var(--re-text-muted)]">{body}</p>
-            </div>
-        </div>
+        </>
     );
 }

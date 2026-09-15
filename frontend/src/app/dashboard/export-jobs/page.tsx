@@ -125,12 +125,12 @@ export default function ExportJobsPage() {
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <StatTile label="Active jobs" value={activeJobs} />
-                    <StatTile label="Archive posture" value="External archive required">
+                    <StatTile label="Archive posture" value={<span className="text-heading">External archive required</span>}>
                         <p className="text-small text-re-text-tertiary">
                             Use scheduled exports to maintain long-term retention outside the app.
                         </p>
                     </StatTile>
-                    <StatTile label="Integrity model" value="Manifest hash per run">
+                    <StatTile label="Integrity model" value={<span className="text-heading">Manifest hash per run</span>}>
                         <p className="text-small text-re-text-tertiary">
                             Each generated bundle can include workspace context, timestamps, and integrity metadata for that run.
                         </p>

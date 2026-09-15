@@ -487,6 +487,7 @@ export default function AuditLogPage() {
                     <EmptyState
                         icon={ScrollText}
                         title="No Audit Entries Yet"
+                        titleAs="h2"
                         description="Events will appear here as your team scans labels, imports data, and generates reports. Every action is SHA-256 hash-chained and protected from modification by append-only database triggers."
                         action={
                             <Badge tone="success">

@@ -13,6 +13,13 @@ import type { IconComponent } from "@/components/ui/icon"
 export interface EmptyStateProps {
   icon?: IconComponent
   title: string
+  /**
+   * Element for the title. An empty state that replaces a section with its own
+   * heading must keep that heading level, or the document outline loses a node
+   * and screen-reader users lose the landmark. Defaults to `p` because most
+   * empty states sit inside a card that already has one.
+   */
+  titleAs?: "p" | "h2" | "h3" | "h4"
   description?: string
   action?: React.ReactNode
   secondaryAction?: React.ReactNode
@@ -25,6 +32,7 @@ export interface EmptyStateProps {
 export function EmptyState({
   icon: Icon,
   title,
+  titleAs: TitleTag = "p",
   description,
   action,
   secondaryAction,
@@ -42,7 +50,7 @@ export function EmptyState({
       )}
     >
       {Icon && <Icon className="h-6 w-6 text-re-text-muted" aria-hidden="true" />}
-      <p className="text-subheading text-re-text-primary">{title}</p>
+      <TitleTag className="text-subheading text-re-text-primary">{title}</TitleTag>
       {description && (
         <p className="max-w-[48ch] text-ui text-re-text-tertiary">{description}</p>
       )}
