@@ -111,7 +111,7 @@ export default function IntegrationsPage() {
   })).filter((group) => group.items.length > 0);
 
   return (
-    <main className="bg-re-surface-base">
+    <div className="bg-re-surface-base">
       <Container as="section" width="marketing" className="grid items-start gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,430px)]">
         <div>
           <p className={cn(factTermClass, "mb-4")}>Supplier data intake</p>
@@ -296,6 +296,6 @@ export default function IntegrationsPage() {
           </div>
         </Container>
       </section>
-    </main>
+    </div>
   );
 }

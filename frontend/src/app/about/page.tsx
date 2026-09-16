@@ -87,7 +87,7 @@ const PRINCIPLES = [
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen bg-re-surface-base">
+    <div className="min-h-screen bg-re-surface-base">
       {/* ── Hero ── */}
       <Container width="marketing" className="pt-12 sm:pt-16">
         <PageHeader
@@ -272,6 +272,6 @@ export default function AboutPage() {
           </div>
         </div>
       </Section>
-    </main>
+    </div>
   );
 }

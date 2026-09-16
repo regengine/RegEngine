@@ -50,7 +50,7 @@ const OBLIGATIONS = [
 export default function ObligationScannerPage() {
     return (
         <EmailGate toolName="obligation-scanner">
-        <main className="min-h-screen bg-re-surface-base py-6 sm:py-8">
+        <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
             <Container width="tool">
                 <div className="border-b border-re-border-subtle pb-5">
                     <p className="mb-2 text-label text-re-text-muted">FSMA Obligation Scanner</p>
@@ -111,7 +111,7 @@ export default function ObligationScannerPage() {
                     </Button>
                 </div>
             </Container>
-        </main>
+        </div>
         </EmailGate>
     );
 }

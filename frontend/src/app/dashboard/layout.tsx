@@ -410,7 +410,7 @@ function DashboardShellSkeleton() {
                             <Skeleton className="h-9 w-9 rounded-md" />
                         </div>
                     </div>
-                    <main className="flex-1 pb-20 md:pb-0">
+                    <div className="flex-1 pb-20 md:pb-0">
                         <Container width="app" className="space-y-6 py-6">
                             <Skeleton className="h-8 w-44" />
                             <Skeleton className="h-[244px] rounded-lg" />
@@ -419,7 +419,7 @@ function DashboardShellSkeleton() {
                                 <Skeleton className="h-[360px] rounded-lg" />
                             </div>
                         </Container>
-                    </main>
+                    </div>
                 </div>
             </div>
             <div className="fixed inset-x-0 bottom-0 border-t border-re-border-subtle bg-re-surface-elevated pb-[env(safe-area-inset-bottom,0px)] md:hidden">
@@ -664,11 +664,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                     {/* Main content. overflow-x keeps a wide table inside the
                         content column instead of widening the whole page. */}
-                    <main className="min-w-0 flex-1 overflow-x-auto pb-20 md:pb-0">
+                    <div className="min-w-0 flex-1 overflow-x-auto pb-20 md:pb-0">
                         <DashboardErrorBoundary>
                             {children}
                         </DashboardErrorBoundary>
-                    </main>
+                    </div>
                 </div>
             </div>
 

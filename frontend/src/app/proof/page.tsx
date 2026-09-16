@@ -95,7 +95,7 @@ function Transcript({ title, meta, children }: { title: string; meta?: string; c
 
 export default function ProofPage() {
     return (
-        <main className="re-page min-h-screen">
+        <div className="re-page min-h-screen">
             <Container className="grid gap-10 pb-14 pt-12 md:grid-cols-[0.85fr_1fr] md:pb-20 md:pt-16">
                 <div>
                     <PageHeader
@@ -245,6 +245,6 @@ export default function ProofPage() {
                     </code>
                 </Container>
             </div>
-        </main>
+        </div>
     );
 }

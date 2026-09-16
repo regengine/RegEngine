@@ -314,7 +314,7 @@ function StepBlock({ step, index }: { step: Step; index: number }) {
 
 export default function TransformationProofPage() {
   return (
-    <main className="re-page min-h-screen">
+    <div className="re-page min-h-screen">
       {/* Hero */}
       <header className="border-b border-re-border-subtle">
         <Container width="docs" className="py-16 md:py-20">
@@ -376,6 +376,6 @@ export default function TransformationProofPage() {
           </p>
         </Card>
       </Section>
-    </main>
+    </div>
   );
 }

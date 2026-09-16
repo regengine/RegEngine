@@ -193,7 +193,7 @@ function CommandCenterPreview() {
 
 export default function HomePage() {
   return (
-    <main className="re-compliance-os min-h-screen">
+    <div className="re-compliance-os min-h-screen">
       <Container as="section" width="marketing" className="grid items-start gap-10 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:py-16">
         <div>
           <p className="mb-4 font-mono text-label uppercase text-re-text-muted">
@@ -356,6 +356,6 @@ export default function HomePage() {
           </p>
         </Container>
       </footer>
-    </main>
+    </div>
   );
 }

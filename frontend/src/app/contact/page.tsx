@@ -38,7 +38,7 @@ export default function ContactPage() {
   };
 
   return (
-    <main className="min-h-screen bg-re-surface-base">
+    <div className="min-h-screen bg-re-surface-base">
       <Container as="section" width="marketing" className="py-12 sm:py-16">
         <PageHeader
           size="hero"
@@ -183,6 +183,6 @@ export default function ContactPage() {
           </div>
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

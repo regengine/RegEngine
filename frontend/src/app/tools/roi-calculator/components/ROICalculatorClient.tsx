@@ -103,9 +103,9 @@ export function ROICalculatorClient() {
             <Container width="tool">
                 <div className="mb-10 space-y-3 border-b border-re-border-subtle pb-5">
                     <p className="text-label text-re-text-muted">ROI Engine</p>
-                    <h1 className="text-title text-re-text-primary">
+                    <p className="text-title text-re-text-primary">
                         Estimate the Savings Opportunity
-                    </h1>
+                    </p>
                     <p className="max-w-[70ch] text-ui text-re-text-secondary">
                         Get an illustrative sense of where traceability workflow automation could pay back. We don&apos;t
                         publish a promised ROI or payback period.

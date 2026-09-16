@@ -192,11 +192,11 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                 </div>
             </aside>
 
-            <main className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto">
                 <Container width="docs" className="py-8">
                     {children}
                 </Container>
-            </main>
+            </div>
         </div>
     );
 }

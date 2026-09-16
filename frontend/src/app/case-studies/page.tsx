@@ -84,7 +84,7 @@ const timingRow = 'flex items-center justify-between gap-4 border-b border-re-bo
 
 export default function CaseStudy() {
     return (
-        <main className="bg-re-surface-base text-re-text-primary">
+        <div className="bg-re-surface-base text-re-text-primary">
             {/* Hero */}
             <Container as="section" width="marketing" className="py-12 sm:py-16">
                 <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -587,6 +587,6 @@ export default function CaseStudy() {
                     </div>
                 </Container>
             </section>
-        </main>
+        </div>
     );
 }

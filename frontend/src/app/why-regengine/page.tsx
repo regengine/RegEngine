@@ -173,7 +173,7 @@ const DIFFERENTIATORS = [
 
 export default function WhyRegEnginePage() {
     return (
-        <main className="min-h-screen bg-re-surface-base">
+        <div className="min-h-screen bg-re-surface-base">
             {/* Hero Section */}
             <section className="border-b border-re-border-subtle py-16 sm:py-20">
                 <Container width="marketing">
@@ -795,6 +795,6 @@ HTTP 201
                     </p>
                 </Container>
             </section>
-        </main>
+        </div>
     );
 }

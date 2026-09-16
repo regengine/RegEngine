@@ -1423,7 +1423,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     ];
 
     return (
-        <main
+        <div
             data-inflow-lab-app
             data-inflow-lab-mode={mode}
             className={cn("text-slate-950", isStandalone ? "min-h-screen bg-[#f6f8f5]" : "min-h-full bg-slate-50")}
@@ -2878,6 +2878,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 onComplete={() => dismissInflowLabTutorialBanner(INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY)}
                 storageKey={INFLOW_LAB_CLIENT_TUTORIAL_STORAGE_KEY}
             />
-        </main>
+        </div>
     );
 }

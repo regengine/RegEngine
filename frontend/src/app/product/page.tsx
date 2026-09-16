@@ -184,7 +184,7 @@ function InflowImpactDiagram() {
 
 export default function ProductPage() {
   return (
-    <main className="re-page min-h-screen">
+    <div className="re-page min-h-screen">
       <Container width="marketing" className="pb-12 pt-12 md:pb-16 md:pt-16">
         <PageHeader
           size="hero"
@@ -251,6 +251,6 @@ export default function ProductPage() {
           ))}
         </div>
       </Section>
-    </main>
+    </div>
   );
 }
