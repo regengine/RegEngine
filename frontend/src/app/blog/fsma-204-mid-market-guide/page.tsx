@@ -5,6 +5,8 @@ import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FSMA 204 for Mid-Market: Compliance Strategies for Growing Food Companies',
@@ -21,6 +23,7 @@ export const metadata: Metadata = {
 export default function FSMA204MidMarketGuide() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('fsma-204-mid-market-guide', 'Mid-market food companies (10-500 employees) face unique FSMA 204 challenges. Learn how to implement traceability without overwhelming your operations.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"

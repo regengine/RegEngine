@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: "The FSMA 204 24-Hour Rule Explained | RegEngine Blog",
@@ -51,6 +53,7 @@ const COMMON_MISTAKES = [
 export default function TwentyFourHourRulePage() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('24-hour-rule', 'The FDA can request your traceability records within 24 hours of a recall or outbreak. Learn what records you need, how to organize them, and how to respond in time.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"

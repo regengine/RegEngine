@@ -6,6 +6,8 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'Food Traceability Software: How to Choose the Right Platform | RegEngine',
@@ -22,6 +24,7 @@ export const metadata: Metadata = {
 export default function FoodTraceabilitySoftwarePage() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('food-traceability-software', 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership. A practical guide to selecting FSMA 204 software.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         {/* Back to Blog */}
         <Link

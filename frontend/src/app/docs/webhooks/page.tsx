@@ -4,6 +4,12 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Webhooks | RegEngine',
   description: 'Real-time event notifications for compliance changes. Planned event types and payload previews.',
+  openGraph: {
+    title: 'Webhooks',
+    description: 'Real-time event notifications for compliance changes. Planned event types and payload previews.',
+    url: 'https://regengine.co/docs/webhooks',
+    type: 'website',
+  },
 };
 import { ArrowLeft, Webhook, Mail } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';

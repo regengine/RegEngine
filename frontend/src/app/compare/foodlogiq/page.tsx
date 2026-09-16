@@ -11,6 +11,12 @@ export const metadata: Metadata = {
   title: "RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
+  openGraph: {
+    title: 'RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison',
+    description: 'Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.',
+    url: 'https://regengine.co/compare/foodlogiq',
+    type: 'website',
+  },
 };
 
 const FEATURES = [

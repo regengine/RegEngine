@@ -10,6 +10,12 @@ export const metadata: Metadata = {
   title: 'End-to-End Walkthrough | RegEngine',
   description:
     'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
+  openGraph: {
+    title: 'End-to-End Walkthrough',
+    description: 'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
+    url: 'https://regengine.co/docs/walkthrough',
+    type: 'website',
+  },
 };
 
 /** Inline identifier — SPEC §2.3. */

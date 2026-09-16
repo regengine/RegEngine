@@ -6,6 +6,8 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
@@ -22,6 +24,7 @@ export const metadata: Metadata = {
 export default function FSMA204ComplianceGuide() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('fsma-204-compliance-guide', 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"

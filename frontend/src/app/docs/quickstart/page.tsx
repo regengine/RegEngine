@@ -4,6 +4,12 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Quickstart | RegEngine',
   description: 'Create your first traceability event with a chained SHA-256 hash in under 5 minutes with the RegEngine API.',
+  openGraph: {
+    title: 'Quickstart',
+    description: 'Create your first traceability event with a chained SHA-256 hash in under 5 minutes with the RegEngine API.',
+    url: 'https://regengine.co/docs/quickstart',
+    type: 'website',
+  },
 };
 import { ArrowLeft, Key, FileText, Code, ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';

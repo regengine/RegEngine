@@ -5,6 +5,8 @@ import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
@@ -21,6 +23,7 @@ export const metadata: Metadata = {
 export default function RegEngineVsSpreadsheets() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('regengine-vs-spreadsheets-traceability', 'Why spreadsheets fail for FSMA 204 compliance. Learn how RegEngine solves the audit trail, scale, and 24-hour response problems.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"

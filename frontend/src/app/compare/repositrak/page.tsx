@@ -11,6 +11,12 @@ export const metadata: Metadata = {
   title: "RegEngine vs ReposiTrak — FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.",
+  openGraph: {
+    title: 'RegEngine vs ReposiTrak — FSMA 204 Compliance Comparison',
+    description: 'Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.',
+    url: 'https://regengine.co/compare/repositrak',
+    type: 'website',
+  },
 };
 
 const FEATURES = [

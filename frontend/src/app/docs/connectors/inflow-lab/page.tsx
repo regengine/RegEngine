@@ -10,6 +10,12 @@ export const metadata: Metadata = {
   title: "Inflow Lab Connector | RegEngine",
   description:
     "Use Inflow Lab to distinguish sandbox diagnosis, mock feed validation, authenticated ingest, and production evidence boundaries.",
+  openGraph: {
+    title: 'Inflow Lab Connector',
+    description: 'Use Inflow Lab to distinguish sandbox diagnosis, mock feed validation, authenticated ingest, and production evidence boundaries.',
+    url: 'https://regengine.co/docs/connectors/inflow-lab',
+    type: 'website',
+  },
 };
 
 const ingestExample = `curl -X POST ${API_BASE}/webhooks/ingest \\

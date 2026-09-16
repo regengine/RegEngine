@@ -5,6 +5,8 @@ import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'CTEs and KDEs Explained | FSMA 204 Data Requirements Guide | RegEngine',
@@ -21,6 +23,7 @@ export const metadata: Metadata = {
 export default function CTEKDEGuidePage() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('fsma-204-cte-kde-guide', 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 formats.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         {/* Back to Blog Link */}
         <Link

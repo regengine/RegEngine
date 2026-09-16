@@ -6,6 +6,8 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
@@ -22,6 +24,7 @@ export const metadata: Metadata = {
 export default function FDAFoodTraceabilityRequirements() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('fda-food-traceability-requirements', 'Understand FDA food traceability requirements, FTL products, CTEs, KDEs, and the 24-hour response requirement for FSMA 204 compliance.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"

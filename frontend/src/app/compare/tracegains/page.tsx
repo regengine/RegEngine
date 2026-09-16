@@ -11,6 +11,12 @@ export const metadata: Metadata = {
   title: "RegEngine vs TraceGains — FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.",
+  openGraph: {
+    title: 'RegEngine vs TraceGains — FSMA 204 Compliance Comparison',
+    description: 'Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.',
+    url: 'https://regengine.co/compare/tracegains',
+    type: 'website',
+  },
 };
 
 const FEATURES = [

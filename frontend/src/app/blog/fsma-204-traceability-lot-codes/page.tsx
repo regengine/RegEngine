@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: "FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide | RegEngine Blog",
@@ -81,6 +83,7 @@ const BEST_PRACTICES = [
 export default function TLCGuidePage() {
   return (
     <div className="bg-re-surface-base">
+      <JSONLD data={blogPostingJsonLd('fsma-204-traceability-lot-codes', 'Learn how to assign, track, and maintain Traceability Lot Codes under FSMA 204. Covers TLC requirements, best practices, and common mistakes for food businesses.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"
