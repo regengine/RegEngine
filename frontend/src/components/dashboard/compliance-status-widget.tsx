@@ -48,23 +48,23 @@ interface ComplianceStatusWidgetProps {
 
 const STATUS_CONFIG = {
     COMPLIANT: {
-        bgClass: "bg-re-success-muted dark:bg-re-success/20",
+        bgClass: "bg-re-success-muted",
         borderClass: "border-re-success-border",
-        textClass: "text-re-success dark:text-re-success",
+        textClass: "text-re-success",
         iconClass: "text-re-success",
         Icon: CheckCircle,
     },
     AT_RISK: {
-        bgClass: "bg-re-warning-muted dark:bg-re-warning/20",
-        borderClass: "border-re-warning dark:border-re-warning",
-        textClass: "text-re-warning dark:text-re-warning",
+        bgClass: "bg-re-warning-muted",
+        borderClass: "border-re-warning",
+        textClass: "text-re-warning",
         iconClass: "text-re-warning",
         Icon: AlertTriangle,
     },
     NON_COMPLIANT: {
-        bgClass: "bg-re-danger-muted dark:bg-re-danger/20",
-        borderClass: "border-re-danger dark:border-re-danger",
-        textClass: "text-re-danger dark:text-re-danger",
+        bgClass: "bg-re-danger-muted",
+        borderClass: "border-re-danger",
+        textClass: "text-re-danger",
         iconClass: "text-re-danger",
         Icon: XCircle,
     },
@@ -91,7 +91,7 @@ function CountdownTimer({ seconds, display }: { seconds: number; display: string
         ? "text-re-danger animate-pulse"
         : hours < 12
             ? "text-re-warning"
-            : "text-re-text-disabled";
+            : "text-re-text-tertiary";
 
     return (
         <div className={`font-mono text-2xl font-bold ${urgencyClass}`}>
@@ -127,9 +127,9 @@ function AlertCard({ alert, onClick }: { alert: ComplianceAlert; onClick?: () =>
                             <Badge variant="destructive">EXPIRED</Badge>
                         )}
                     </div>
-                    <h4 className="font-semibold text-re-text-primary dark:text-re-text-primary">{alert.title}</h4>
+                    <h4 className="font-semibold text-re-text-primary">{alert.title}</h4>
                     {alert.summary && (
-                        <p className="text-sm text-re-text-disabled dark:text-re-text-tertiary mt-1 line-clamp-2">
+                        <p className="text-sm text-re-text-tertiary mt-1 line-clamp-2">
                             {alert.summary}
                         </p>
                     )}
@@ -221,7 +221,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
                                 <h2 className={`text-3xl font-bold ${config.textClass}`}>
                                     {status.status_emoji} {status.status_label}
                                 </h2>
-                                <p className="text-sm text-re-text-disabled dark:text-re-text-tertiary">
+                                <p className="text-sm text-re-text-tertiary">
                                     {status.active_alert_count > 0
                                         ? `${status.active_alert_count} active alert${status.active_alert_count > 1 ? 's' : ''}`
                                         : 'No active alerts'

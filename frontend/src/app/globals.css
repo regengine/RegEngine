@@ -584,6 +584,52 @@ body[data-inflow-lab="true"] {
         --re-state-corrected: #c4b5fd;
         --re-state-corrected-bg: #211a3a;
         --re-state-corrected-border: #6e58b2;
+
+        /* var() aliases are resolved on the element that declares them. The
+           .re-devportal wrapper is not :root, so without these it would inherit
+           aliases already computed against the LIGHT palette above. */
+        --re-shadow-glow: 0 0 0 3px var(--re-brand-muted);
+        --re-shadow-glow-strong: 0 0 0 3px var(--re-brand-muted);
+        --re-nav-bg: var(--re-sticky-bg);
+        --re-nav-border: var(--re-border-subtle);
+        --re-nav-dropdown-bg: var(--re-surface-elevated);
+        --re-nav-dropdown-border: var(--re-border-default);
+        --re-nav-dropdown-shadow: var(--re-shadow-lg);
+        --re-nav-hover: var(--re-surface-inset);
+        --re-nav-divider: var(--re-border-subtle);
+        --re-mobile-menu-bg: var(--re-surface-elevated);
+        --re-mobile-border: var(--re-border-subtle);
+        --re-mobile-toggle-border: var(--re-border-default);
+        --re-state-invited: var(--re-text-tertiary);
+        --re-state-invited-bg: var(--re-surface-inset);
+        --re-state-invited-border: var(--re-border-default);
+        --re-state-event: var(--re-info);
+        --re-state-event-bg: var(--re-info-bg);
+        --re-state-event-border: var(--re-info-border);
+        --re-evidence-bg: var(--re-warning-bg);
+        --re-evidence-border: var(--re-warning-border);
+        --re-signal-red: var(--re-danger);
+        --re-signal-yellow: var(--re-warning);
+        --re-signal-green: var(--re-success);
+        --re-signal-blue: var(--re-info);
+        --re-discovery: var(--re-info);
+        --re-decomposition: var(--re-success);
+        --re-linkage: var(--re-text-tertiary);
+        --re-evidence: var(--re-warning);
+        --re-accent-blue: var(--re-cat-1);
+        --re-accent-purple: var(--re-cat-4);
+        --re-purple: var(--re-cat-4);
+        --re-cyan: var(--re-cat-5);
+        --re-feeling-control: var(--re-text-primary);
+        --re-feeling-traceability: var(--re-info);
+        --re-feeling-readiness: var(--re-brand);
+        --re-feeling-trust: var(--re-warning);
+        --re-feeling-calm-urgency: var(--re-danger);
+        --re-command-bg: var(--re-surface-base);
+        --re-command-grid: var(--re-border-subtle);
+        --re-command-ink: var(--re-text-primary);
+        --re-ledger-bg: var(--re-surface-card);
+        --re-workbench-bg: var(--re-surface-base);
     }
 
     /* ── Element defaults ─────────────────────────────────────────────── */

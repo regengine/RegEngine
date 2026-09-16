@@ -276,7 +276,7 @@ function MetricCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-r border-[var(--re-border-subtle)] px-3 py-3 last:border-r-0">
       <p className="re-label">{label}</p>
-      <p className="mt-1 text-base font-semibold text-[var(--re-text-primary)]">{value}</p>
+      <p className="mt-1 break-words text-base font-semibold text-[var(--re-text-primary)]">{value}</p>
     </div>
   );
 }
