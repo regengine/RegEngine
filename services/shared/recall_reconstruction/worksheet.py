@@ -13,6 +13,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from shared.fda_export.csv_safety import safe_cell
+
 from .chain import CustodyModel, PalletTimeline
 from .labels import LinkLabel
 from .records import RecordSet, SourceRef
@@ -151,7 +153,9 @@ class Worksheet:
             data["finding_ids"] = " ".join(row.finding_ids)
             data["unresolved_questions"] = " || ".join(row.unresolved_questions)
             data["notes"] = " || ".join(row.notes)
-            writer.writerow({col: data[col] for col in CSV_COLUMNS})
+            # Every cell passes through the repo's formula-injection guard: source-derived
+            # strings (names, reasons, evidence refs) reach a reviewer's spreadsheet.
+            writer.writerow({col: safe_cell(data[col]) for col in CSV_COLUMNS})
         return out.getvalue()
 
 
