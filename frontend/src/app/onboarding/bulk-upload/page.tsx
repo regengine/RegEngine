@@ -286,7 +286,7 @@ export default function BulkUploadPage() {
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${
                       i <= activeStep
-                        ? 'bg-[var(--re-brand)] border-[var(--re-brand)] text-white'
+                        ? 'bg-[var(--re-brand)] border-[var(--re-brand)] text-[var(--re-brand-foreground)]'
                         : 'bg-[var(--re-surface-elevated)] border-[var(--re-surface-border)] text-[var(--re-text-disabled)]'
                     }`}
                   >
@@ -402,7 +402,7 @@ export default function BulkUploadPage() {
               onClick={onParseAndValidate}
               disabled={!file || isBusy}
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
             >
               {isBusy && !commitResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               {isBusy && !commitResult ? 'Working...' : 'Parse + Validate'}
@@ -412,7 +412,7 @@ export default function BulkUploadPage() {
               onClick={onCommit}
               disabled={!canCommit || isBusy || !isAuthenticated}
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
             >
               <CheckCircle2 className="w-4 h-4" />
               Commit Import
@@ -523,7 +523,7 @@ export default function BulkUploadPage() {
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link
                       href="/login?next=/onboarding/bulk-upload"
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
                     >
                       Continue with email
                       <ArrowRight className="w-4 h-4" />
@@ -706,7 +706,7 @@ export default function BulkUploadPage() {
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link
                       href="/login?next=/onboarding/bulk-upload"
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
                     >
                       Continue with email
                       <ArrowRight className="w-4 h-4" />

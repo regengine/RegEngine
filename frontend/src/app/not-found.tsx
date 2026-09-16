@@ -19,14 +19,14 @@ export default function NotFound() {
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--re-brand)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--re-brand)] text-[var(--re-brand-foreground)] text-sm font-medium hover:opacity-90 transition-opacity"
                     >
                         <Home className="h-4 w-4" />
                         Back to Home
                     </Link>
                     <Link
                         href="/tools"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-re-border dark:border-re-border text-sm font-medium hover:bg-re-surface-card dark:hover:bg-re-surface-card transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-re-border text-sm font-medium hover:bg-re-surface-card transition-colors"
                     >
                         <Wrench className="h-4 w-4" />
                         Free Tools

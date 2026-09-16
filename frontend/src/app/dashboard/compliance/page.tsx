@@ -767,7 +767,7 @@ export default function ComplianceDashboardPage() {
                                     <p className="text-xs text-muted-foreground mt-0.5">Scan labels or import data to improve this dimension.</p>
                                 </div>
                                 <Link href="/ingest">
-                                    <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white text-xs whitespace-nowrap">
+                                    <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-[var(--re-brand-foreground)] text-xs whitespace-nowrap">
                                         Import Data <ArrowRight className="ml-1 h-3 w-3" />
                                     </Button>
                                 </Link>
