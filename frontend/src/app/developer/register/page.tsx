@@ -16,10 +16,14 @@ export default function DeveloperRegisterPage() {
     }, [router]);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[var(--re-surface-base)]">
+        <div className="flex items-center justify-center bg-re-surface-base py-24">
             <div className="text-center">
-                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-[var(--re-text-muted)]" />
-                <p className="text-sm text-[var(--re-text-muted)]">Redirecting to sign up...</p>
+                <Loader2
+                    className="mx-auto mb-3 h-6 w-6 animate-spin text-re-text-muted motion-reduce:animate-none"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                />
+                <p className="text-ui text-re-text-tertiary">Redirecting to sign up...</p>
             </div>
         </div>
     );

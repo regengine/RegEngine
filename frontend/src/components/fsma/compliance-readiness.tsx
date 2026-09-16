@@ -5,12 +5,12 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { RecallReadiness } from '@/types/fsma';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
-  CheckCircle,
   AlertTriangle,
-  XCircle,
   Shield,
   Clock,
   FileText,
@@ -33,10 +33,11 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
   if (isLoading) {
     return (
       <Card className={className}>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
+        <CardContent className="space-y-3" aria-busy="true">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-28 w-28 rounded-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
         </CardContent>
       </Card>
     );
@@ -45,25 +46,25 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
   if (!readiness || readiness.overall_score == null) {
     return (
       <Card className={className}>
-        <CardContent className="pt-6">
-          <div className="text-center py-8 text-muted-foreground">
-            <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>{readiness ? "Compliance readiness has not been measured" : "Unable to load compliance readiness"}</p>
-          </div>
+        <CardContent>
+          <EmptyState
+            bare
+            icon={Shield}
+            title={readiness ? "Compliance readiness has not been measured" : "Unable to load compliance readiness"}
+          />
         </CardContent>
       </Card>
     );
   }
 
   // Determine overall status
-  const getOverallStatus = (score: number) => {
-    if (score >= 90) return { label: 'Ready', color: 'text-re-success', bg: 'bg-re-success-muted', icon: CheckCircle };
-    if (score >= 70) return { label: 'At Risk', color: 'text-re-warning', bg: 'bg-re-warning-muted', icon: AlertTriangle };
-    return { label: 'Not Ready', color: 'text-re-danger', bg: 'bg-re-danger-muted', icon: XCircle };
+  const getOverallStatus = (score: number): { label: string; state: ComplianceState } => {
+    if (score >= 90) return { label: 'Ready', state: 'compliant' };
+    if (score >= 70) return { label: 'At Risk', state: 'at-risk' };
+    return { label: 'Not Ready', state: 'non-compliant' };
   };
 
   const status = getOverallStatus(readiness.overall_score ?? 0);
-  const StatusIcon = status.icon;
 
   // Control dimension configuration
   const controlDimensions = [
@@ -106,22 +107,25 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
 
   return (
     <Card className={className}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+      <CardHeader className="flex-col items-stretch gap-1">
+        <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5" />
+            <Shield className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             FDA Recall Readiness
           </CardTitle>
           <div className="flex items-center gap-2">
             {onExportReport && (
-              <Button variant="ghost" size="sm" onClick={onExportReport} title="Download Report">
-                <Download className="w-4 h-4" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onExportReport}
+                title="Download Report"
+                aria-label="Download Report"
+              >
+                <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Button>
             )}
-            <Badge className={cn(status.bg, status.color)}>
-              <StatusIcon className="w-3 h-3 mr-1" />
-              {status.label}
-            </Badge>
+            <StatusBadge state={status.state} label={status.label} />
           </div>
         </div>
         <CardDescription>
@@ -136,48 +140,45 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-4 py-4 border-y">
-          <div className="text-center">
-            <p className="text-2xl font-bold">
+        <div className="grid grid-cols-3 gap-4 border-y border-re-border-subtle py-4">
+          <div>
+            <p className="text-label text-re-text-muted">SLA Met</p>
+            <p className="mt-1 text-title tabular-nums text-re-text-primary">
               {typeof readiness.sla_compliance === 'object' && readiness.sla_compliance !== null
                 ? ((readiness.sla_compliance as { rate_pct?: number }).rate_pct ?? 0)
                 : (readiness.sla_compliance ?? 0)}%
             </p>
-            <p className="text-xs text-muted-foreground">SLA Met</p>
           </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold">{(readiness.average_response_time_hours ?? 0).toFixed(1)}h</p>
-            <p className="text-xs text-muted-foreground">Avg Response</p>
+          <div>
+            <p className="text-label text-re-text-muted">Avg Response</p>
+            <p className="mt-1 text-title tabular-nums text-re-text-primary">{(readiness.average_response_time_hours ?? 0).toFixed(1)}h</p>
           </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold">{readiness.total_drills ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Total Drills</p>
+          <div>
+            <p className="text-label text-re-text-muted">Total Drills</p>
+            <p className="mt-1 text-title tabular-nums text-re-text-primary">{readiness.total_drills ?? 0}</p>
           </div>
         </div>
 
         {/* Control Dimensions */}
         <div className="space-y-3">
-          <h4 className="font-medium text-sm">Control Dimensions</h4>
+          <h4 className="text-subheading text-re-text-primary">Control Dimensions</h4>
           {controlDimensions.map((dim) => {
             const score = readiness.control_scores?.[dim.key as keyof typeof readiness.control_scores] ?? 0;
             const Icon = dim.icon;
 
             return (
               <div key={dim.key} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-4 h-4 text-muted-foreground" />
-                    <span>{dim.label}</span>
-                    <span className="text-xs text-muted-foreground">({dim.weight})</span>
+                <div className="flex items-center justify-between gap-3 text-ui">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                    <span className="truncate text-re-text-secondary">{dim.label}</span>
+                    <span className="text-small text-re-text-tertiary">({dim.weight})</span>
                   </div>
-                  <span className={cn(
-                    'font-medium',
-                    score >= 80 ? 'text-re-success' : score >= 60 ? 'text-re-warning' : 'text-re-danger'
-                  )}>
+                  <span className="font-medium tabular-nums text-re-text-primary">
                     {score}%
                   </span>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-2 overflow-hidden rounded-full bg-re-surface-inset">
                   <motion.div
                     className={cn(
                       'h-full rounded-full',
@@ -195,15 +196,15 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
 
         {/* Recommendations */}
         {readiness.recommendations && readiness.recommendations.length > 0 && (
-          <div className="space-y-2 pt-4 border-t">
-            <h4 className="font-medium text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-re-warning" />
+          <div className="space-y-2 border-t border-re-border-subtle pt-4">
+            <h4 className="flex items-center gap-2 text-subheading text-re-text-primary">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
               Recommendations
             </h4>
             <ul className="space-y-1">
               {readiness.recommendations.slice(0, 3).map((rec, i) => (
-                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                  <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <li key={i} className="flex items-start gap-2 text-ui text-re-text-secondary">
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                   {rec}
                 </li>
               ))}
@@ -243,8 +244,7 @@ function ReadinessGauge({ score, size = 'md' }: ReadinessGaugeProps) {
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (normalizedScore / 100) * circumference;
 
-  const color = normalizedScore >= 90 ? 'stroke-re-brand' : normalizedScore >= 70 ? 'stroke-amber-500' : 'stroke-re-danger';
-  const textColor = normalizedScore >= 90 ? 'text-re-success' : normalizedScore >= 70 ? 'text-re-warning' : 'text-re-danger';
+  const color = normalizedScore >= 90 ? 'stroke-re-success' : normalizedScore >= 70 ? 'stroke-re-warning' : 'stroke-re-danger';
 
   return (
     <div className="relative" style={{ width: config.outer, height: config.outer }}>
@@ -262,7 +262,7 @@ function ReadinessGauge({ score, size = 'md' }: ReadinessGaugeProps) {
           fill="none"
           stroke="currentColor"
           strokeWidth={config.stroke}
-          className="text-muted"
+          className="text-re-border-subtle"
         />
         {/* Progress circle */}
         <motion.circle
@@ -280,8 +280,8 @@ function ReadinessGauge({ score, size = 'md' }: ReadinessGaugeProps) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={cn('font-bold', config.text, textColor)}>{Math.round(normalizedScore)}</span>
-        <span className="text-xs text-muted-foreground">/ 100</span>
+        <span className={cn('font-semibold tabular-nums text-re-text-primary', config.text)}>{Math.round(normalizedScore)}</span>
+        <span className="text-label text-re-text-muted">/ 100</span>
       </div>
     </div>
   );
@@ -294,18 +294,17 @@ interface ReadinessBadgeProps {
 }
 
 export function ReadinessBadge({ score, className }: ReadinessBadgeProps) {
-  const status = score >= 90
-    ? { label: 'Ready', color: 'bg-re-success-muted text-re-success', icon: CheckCircle }
+  const status: { label: string; state: ComplianceState } = score >= 90
+    ? { label: 'Ready', state: 'compliant' }
     : score >= 70
-      ? { label: 'At Risk', color: 'bg-re-warning-muted text-re-warning', icon: AlertTriangle }
-      : { label: 'Not Ready', color: 'bg-re-danger-muted text-re-danger', icon: XCircle };
-
-  const Icon = status.icon;
+      ? { label: 'At Risk', state: 'at-risk' }
+      : { label: 'Not Ready', state: 'non-compliant' };
 
   return (
-    <Badge className={cn(status.color, className)}>
-      <Icon className="w-3 h-3 mr-1" />
-      {score}% - {status.label}
-    </Badge>
+    <StatusBadge
+      state={status.state}
+      label={`${score}% - ${status.label}`}
+      className={className}
+    />
   );
 }

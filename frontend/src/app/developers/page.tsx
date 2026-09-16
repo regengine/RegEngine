@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cardVariants } from '@/components/ui/card';
+import { Container } from '@/components/layout/container';
 import { API_BASE } from '@/lib/api-base';
 
 export const metadata: Metadata = {
@@ -81,12 +83,12 @@ const curlSnippet = `curl -X POST ${API_BASE}/webhooks/ingest \\
 
 export default function DevelopersPage() {
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+        <div className="bg-re-surface-base text-re-text-secondary">
             {/* ═══ HERO ═══ */}
-            <section className="relative z-[2] mx-auto grid max-w-[1120px] items-start gap-8 px-4 pb-10 pt-12 sm:px-6 sm:pb-14 sm:pt-16 lg:grid-cols-[0.82fr_1fr]">
+            <Container as="section" width="marketing" className="grid items-start gap-8 pb-10 pt-12 sm:pb-14 sm:pt-16 lg:grid-cols-[0.95fr_1fr]">
                 <div>
-                    <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
-                        <Terminal className="w-3.5 h-3.5 mr-1.5" />
+                    <Badge tone="brand" className="mb-5">
+                        <Terminal className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                         Developer Platform
                     </Badge>
                     <h1 className="re-hero-title">
@@ -98,24 +100,24 @@ export default function DevelopersPage() {
                         export workflows with the RegEngine team.
                     </p>
                     <div className="mt-8 flex flex-wrap gap-3">
-                        <Link href="/alpha">
-                            <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                        <Button asChild size="lg">
+                            <Link href="/alpha" className="no-underline">
                                 Request Developer Access
-                                <ArrowRight className="ml-2 w-4 h-4" />
-                            </Button>
-                        </Link>
-                        <Link href="/docs">
-                            <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
-                                <BookOpen className="mr-2 w-4 h-4" />
+                                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/docs" className="no-underline">
+                                <BookOpen className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                 Full Documentation
-                            </Button>
-                        </Link>
+                            </Link>
+                        </Button>
                     </div>
                 </div>
 
-                <aside className="re-panel overflow-hidden">
-                    <div className="border-b border-[var(--re-surface-border)] px-4 py-3">
-                        <p className="font-mono text-[11px] font-semibold uppercase text-[var(--re-text-muted)]">
+                <aside className={cardVariants({ className: "overflow-hidden" })}>
+                    <div className="border-b border-re-border-subtle px-4 py-3">
+                        <p className="font-mono text-label uppercase text-re-text-muted">
                             Integration path
                         </p>
                     </div>
@@ -124,129 +126,119 @@ export default function DevelopersPage() {
                         ['Validate', 'Run KDE, TLC, and rule checks before evidence commit.'],
                         ['Export', 'Generate FDA-oriented sortable records where configured data supports the request.'],
                     ].map(([label, detail], index) => (
-                        <div key={label} className="grid grid-cols-[32px_110px_1fr] gap-3 border-b border-[var(--re-surface-border)] px-4 py-4 last:border-b-0">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--re-brand-muted)] font-mono text-xs font-semibold text-[var(--re-brand)]">
+                        <div key={label} className="grid grid-cols-[28px_1fr] gap-x-3 gap-y-1 border-b border-re-border-subtle px-4 py-4 last:border-b-0 sm:grid-cols-[28px_110px_1fr]">
+                            <span className="font-mono text-label text-re-text-muted">
                                 {index + 1}
                             </span>
-                            <span className="font-semibold text-[var(--re-text-primary)]">{label}</span>
-                            <span className="text-sm leading-6 text-[var(--re-text-muted)]">{detail}</span>
+                            <span className="text-ui font-medium text-re-text-primary">{label}</span>
+                            <span className="col-start-2 text-ui leading-6 text-re-text-secondary sm:col-start-3">{detail}</span>
                         </div>
                     ))}
                 </aside>
-            </section>
+            </Container>
 
             {/* ═══ QUICK START CURL ═══ */}
-            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-10 sm:pb-14">
-                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Quick start</h2>
-                <p className="text-sm text-re-text-muted text-center mb-8 max-w-lg mx-auto">
+            <Container as="section" width="tool" className="pb-10 sm:pb-14">
+                <h2 className="mb-3 text-center font-display text-heading-lg text-re-text-primary">Quick start</h2>
+                <p className="mx-auto mb-8 max-w-[60ch] text-center text-ui text-re-text-secondary">
                     Record your first critical tracking event in one request.
                 </p>
-                <div
-                    className="rounded-2xl border border-[var(--re-surface-border)] overflow-hidden"
-                    style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.10)' }}
-                >
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)]">
-                        <Terminal className="w-3.5 h-3.5 text-[var(--re-brand)]" />
-                        <span className="text-xs font-mono font-semibold text-re-text-muted">bash</span>
+                <div className="overflow-hidden rounded-lg border border-re-border">
+                    <div className="flex items-center gap-2 border-b border-re-border-subtle bg-re-surface-card px-4 py-2.5">
+                        <Terminal className="h-3.5 w-3.5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                        <span className="font-mono text-label text-re-text-muted">bash</span>
                     </div>
-                    <pre className="bg-[var(--re-surface-card)] p-4 overflow-x-auto text-[11px] leading-relaxed font-mono text-re-text-secondary sm:p-5 sm:text-[13px]">
+                    <pre className="overflow-x-auto bg-re-surface-inset p-4 font-mono text-[0.8125rem] leading-relaxed text-re-text-secondary sm:p-5">
                         <code>{curlSnippet}</code>
                     </pre>
                 </div>
-            </section>
+            </Container>
 
             {/* ═══ API CAPABILITIES GRID ═══ */}
-            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">API capabilities</h2>
-                <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
+            <Container as="section" width="marketing" className="pb-12 sm:pb-16">
+                <h2 className="mb-3 text-center font-display text-heading-lg text-re-text-primary">API capabilities</h2>
+                <p className="mx-auto mb-10 max-w-[68ch] text-center text-ui text-re-text-secondary">
                     Six core capabilities, one unified API. The building blocks for FSMA 204 traceability workflows, supplier readiness, and FDA response prep.
                 </p>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                     {capabilities.map((cap) => (
-                        <article
-                            key={cap.title}
-                            className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 flex flex-col"
-                            style={{
-                                borderTop: '3px solid var(--re-brand)',
-                                boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
-                            }}
-                        >
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
-                                    <cap.Icon className="w-5 h-5 text-[var(--re-brand)]" />
-                                </div>
-                                <h3 className="text-base font-semibold text-re-text-primary">{cap.title}</h3>
+                        <article key={cap.title} className={cardVariants({ padding: "spacious", className: "flex flex-col" })}>
+                            <div className="mb-4 flex items-center gap-3">
+                                <cap.Icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <h3 className="text-subheading text-re-text-primary">{cap.title}</h3>
                             </div>
-                            <p className="text-sm text-re-text-muted leading-relaxed">{cap.description}</p>
+                            <p className="text-ui leading-relaxed text-re-text-secondary">{cap.description}</p>
                         </article>
                     ))}
                 </div>
-            </section>
+            </Container>
 
             {/* ═══ SDKs Coming Soon ═══ */}
-            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-                <div className="max-w-[900px] mx-auto py-16 px-6 text-center">
-                    <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3">SDKs Coming Soon</h2>
-                    <p className="text-sm text-re-text-muted mb-6 max-w-md mx-auto">
+            <section className="border-t border-re-border-subtle">
+                <Container width="tool" className="py-16 text-center">
+                    <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">SDKs Coming Soon</h2>
+                    <p className="mx-auto mb-6 max-w-[60ch] text-ui text-re-text-secondary">
                         Official client libraries for Python, Node.js, and Go are planned.
                         In the meantime, use our REST API directly &mdash; all endpoints accept and return JSON.
                     </p>
-                    <Link href="/docs/sdks">
-                        <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                    <Button asChild variant="secondary" size="lg">
+                        <Link href="/docs/sdks" className="no-underline">
                             Get Notified When SDKs Launch
-                        </Button>
-                    </Link>
-                </div>
+                        </Link>
+                    </Button>
+                </Container>
             </section>
 
             {/* ═══ RATE LIMITS ═══ */}
-            <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
-                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Rate limits</h2>
-                <p className="text-sm text-re-text-muted text-center mb-6 max-w-lg mx-auto">
-                    All API requests are rate limited per API key.
-                    If you hit a limit, the API returns a <code className="text-re-text-secondary">429</code> with a <code className="text-re-text-secondary">Retry-After</code> header.
-                </p>
-                <p className="text-sm text-re-text-muted text-center max-w-lg mx-auto">
-                    Need higher throughput?{' '}
-                    <Link href="/alpha" className="text-[var(--re-brand)] underline">Contact us</Link> to discuss your requirements.
-                </p>
+            <section className="border-t border-re-border-subtle">
+                <Container width="tool" className="py-16">
+                    <h2 className="mb-3 text-center font-display text-heading-lg text-re-text-primary">Rate limits</h2>
+                    <p className="mx-auto mb-6 max-w-[60ch] text-center text-ui text-re-text-secondary">
+                        All API requests are rate limited per API key.
+                        If you hit a limit, the API returns a <code className="font-mono text-[0.8125rem] text-re-text-primary">429</code> with a <code className="font-mono text-[0.8125rem] text-re-text-primary">Retry-After</code> header.
+                    </p>
+                    <p className="mx-auto max-w-[60ch] text-center text-ui text-re-text-secondary">
+                        Need higher throughput?{' '}
+                        <Link href="/alpha" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">Contact us</Link> to discuss your requirements.
+                    </p>
+                </Container>
             </section>
 
             {/* ═══ CTA ═══ */}
-            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-                <div className="max-w-[700px] mx-auto py-16 px-6 text-center">
-                    <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
+            <section className="border-t border-re-border-subtle bg-re-surface-inset">
+                <Container width="prose" className="py-16 text-center">
+                    <Badge tone="brand" className="mb-4">
                         Ready to integrate?
                     </Badge>
-                    <h2 className="font-display text-xl font-bold text-re-text-primary mb-2">Start building on RegEngine</h2>
-                    <p className="text-sm text-re-text-muted max-w-md mx-auto mb-6">
+                    <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">Start building on RegEngine</h2>
+                    <p className="mx-auto mb-6 max-w-[60ch] text-ui text-re-text-secondary">
                         Request preview access and we&apos;ll scope your first integration path, credentials, and payload contract with you.
                     </p>
-                    <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/alpha">
-                            <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                    <div className="flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/alpha" className="no-underline">
                                 Request Developer Access
-                                <ArrowRight className="ml-2 w-4 h-4" />
-                            </Button>
-                        </Link>
-                        <Link href="/developer/portal">
-                            <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
-                                <LogIn className="mr-2 w-4 h-4" />
+                                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/developer/portal" className="no-underline">
+                                <LogIn className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                 Developer Portal
-                            </Button>
-                        </Link>
+                            </Link>
+                        </Button>
                     </div>
-                    <p className="text-xs text-re-text-disabled mt-6">
+                    <p className="mt-6 text-small text-re-text-tertiary">
                         Already have an account?{' '}
-                        <Link href="/developer/portal" className="text-[var(--re-brand)] underline">
+                        <Link href="/developer/portal" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
                             Sign in to the portal
                         </Link>
                         {' '}&middot;{' '}
-                        <Link href="/docs" className="text-[var(--re-brand)] underline">
+                        <Link href="/docs" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
                             Read the docs
                         </Link>
                     </p>
-                </div>
+                </Container>
             </section>
         </div>
     );

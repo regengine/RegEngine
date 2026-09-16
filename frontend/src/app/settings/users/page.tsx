@@ -1,18 +1,13 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow
-} from '@/components/ui/table';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -24,12 +19,13 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
 import { User, Invite, Role } from '@/types/api';
-import { Loader2, UserPlus, Shield, Ban, CheckCircle, Clock } from 'lucide-react';
+import { UserPlus, Ban, Clock } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function UserSettingsPage() {
     const { user } = useAuth();
@@ -154,66 +150,175 @@ export default function UserSettingsPage() {
         }
     };
 
-    if (isLoading) {
-        return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-    }
+    const tableStatus = isLoading ? 'loading' : 'idle';
+
+    const userColumns: DataTableColumn<User>[] = [
+        {
+            key: 'email',
+            header: 'User',
+            width: '18rem',
+            cell: (u) => (
+                <div className="min-w-0">
+                    <div className="truncate font-medium text-re-text-primary">{u.email}</div>
+                    <div className="text-small text-re-text-tertiary">
+                        Joined {new Date(u.created_at || '').toLocaleDateString()}
+                    </div>
+                </div>
+            ),
+        },
+        {
+            key: 'role_id',
+            header: 'Role',
+            width: '11rem',
+            cell: (u) => (
+                <>
+                    <label htmlFor={`user-role-${u.id}`} className="sr-only">
+                        Role
+                    </label>
+                    <select
+                        id={`user-role-${u.id}`}
+                        className={cn(fieldControlClasses, 'h-8 w-full')}
+                        value={u.role_id}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                        disabled={u.id === user?.id} // Prevent self-demotion lockout prevention logic (frontend safeguard)
+                    >
+                        {roles.map(r => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                    </select>
+                </>
+            ),
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            width: '9rem',
+            cell: (u) => (
+                <StatusBadge
+                    state={u.status === 'active' ? 'compliant' : 'pending'}
+                    label={u.status}
+                />
+            ),
+        },
+        {
+            key: 'actions',
+            header: 'Actions',
+            width: '6rem',
+            cell: (u) =>
+                u.id !== user?.id ? (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${u.email}`}
+                        onClick={() => handleDeactivate(u.id)}
+                    >
+                        <Ban className="h-4 w-4 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                    </Button>
+                ) : null,
+        },
+    ];
+
+    const inviteColumns: DataTableColumn<Invite>[] = [
+        { key: 'email', header: 'Email', width: '16rem' },
+        {
+            key: 'role',
+            header: 'Role',
+            width: '9rem',
+            cell: (inv) => roles.find(r => r.id === inv.role_id)?.name || 'Unknown',
+        },
+        {
+            key: 'created_at',
+            header: 'Sent',
+            width: '8rem',
+            mono: true,
+            cell: (inv) => new Date(inv.created_at).toLocaleDateString(),
+        },
+        {
+            key: 'expires_at',
+            header: 'Expires',
+            width: '9rem',
+            mono: true,
+            cell: (inv) => (
+                <span className="flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                    {new Date(inv.expires_at).toLocaleDateString()}
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            header: 'Actions',
+            width: '13rem',
+            cell: (inv) => (
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => {
+                        navigator.clipboard.writeText(inv.invite_link || '');
+                        toast({ title: "Link Copied" });
+                    }}>
+                        Copy Link
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handleRevoke(inv.id)}>
+                        Revoke
+                    </Button>
+                </div>
+            ),
+        },
+    ];
 
     return (
-        <div className="container mx-auto py-6 sm:py-8 px-4 sm:px-6 max-w-5xl space-y-6 sm:space-y-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Team Management</h1>
-                    <p className="text-muted-foreground">Manage users, roles, and invitations.</p>
-                </div>
-                <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Invite User
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Invite New User</DialogTitle>
-                            <DialogDescription>
-                                Implement strict access control by assigning the correct role.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleInvite} className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Email Address</label>
-                                <Input
-                                    type="email"
-                                    placeholder="colleague@company.com"
-                                    value={inviteEmail}
-                                    onChange={e => setInviteEmail(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Role</label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={inviteRoleId}
-                                    onChange={e => setInviteRoleId(e.target.value)}
-                                >
-                                    {roles.map(role => (
-                                        <option key={role.id} value={role.id}>
-                                            {role.name} {role.is_system ? '(System)' : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <DialogFooter>
-                                <Button type="submit" disabled={isInviting}>
-                                    {isInviting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Send Invite
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </div>
+        <PageContainer>
+            <PageHeader
+                title="Team Management"
+                description="Manage users, roles, and invitations."
+                primaryAction={
+                    <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+                        <DialogTrigger asChild>
+                            <Button leadingIcon={<UserPlus strokeWidth={1.75} aria-hidden="true" />}>
+                                Invite User
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Invite New User</DialogTitle>
+                                <DialogDescription>
+                                    Implement strict access control by assigning the correct role.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleInvite} className="space-y-4">
+                                <Field label="Email Address" htmlFor="invite-email">
+                                    <Input
+                                        id="invite-email"
+                                        type="email"
+                                        placeholder="colleague@company.com"
+                                        value={inviteEmail}
+                                        onChange={e => setInviteEmail(e.target.value)}
+                                        required
+                                    />
+                                </Field>
+                                <Field label="Role" htmlFor="invite-role">
+                                    <select
+                                        id="invite-role"
+                                        className={fieldControlClasses}
+                                        value={inviteRoleId}
+                                        onChange={e => setInviteRoleId(e.target.value)}
+                                    >
+                                        {roles.map(role => (
+                                            <option key={role.id} value={role.id}>
+                                                {role.name} {role.is_system ? '(System)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <DialogFooter>
+                                    <Button type="submit" disabled={isInviting} loading={isInviting}>
+                                        Send Invite
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                }
+            />
 
             <Tabs defaultValue="users">
                 <TabsList>
@@ -224,54 +329,23 @@ export default function UserSettingsPage() {
                 <TabsContent value="users">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Active Members</CardTitle>
-                            <CardDescription>People with access to this workspace.</CardDescription>
+                            <div className="min-w-0">
+                                <CardTitle>Active Members</CardTitle>
+                                <CardDescription>People with access to this workspace.</CardDescription>
+                            </div>
                         </CardHeader>
-                        <CardContent className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>User</TableHead>
-                                        <TableHead>Role</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {users.map(u => (
-                                        <TableRow key={u.id}>
-                                            <TableCell>
-                                                <div className="font-medium">{u.email}</div>
-                                                <div className="text-xs text-muted-foreground">Joined {new Date(u.created_at || '').toLocaleDateString()}</div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <select
-                                                    className="h-8 rounded border border-input bg-transparent px-2 text-sm"
-                                                    value={u.role_id}
-                                                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                                                    disabled={u.id === user?.id} // Prevent self-demotion lockout prevention logic (frontend safeguard)
-                                                >
-                                                    {roles.map(r => (
-                                                        <option key={r.id} value={r.id}>{r.name}</option>
-                                                    ))}
-                                                </select>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={u.status === 'active' ? 'default' : 'secondary'}>
-                                                    {u.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                {u.id !== user?.id && (
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeactivate(u.id)}>
-                                                        <Ban className="h-4 w-4 text-re-danger" />
-                                                    </Button>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                        <CardContent className="p-0">
+                            <DataTable
+                                caption="Active workspace members, their role and status"
+                                columns={userColumns}
+                                data={users}
+                                rowKey={(u) => u.id}
+                                status={tableStatus}
+                                empty={{ title: 'No active members.' }}
+                                minWidth="640px"
+                                stickyFirstColumn
+                                className="rounded-none border-0"
+                            />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -279,62 +353,27 @@ export default function UserSettingsPage() {
                 <TabsContent value="invites">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Pending Invitations</CardTitle>
-                            <CardDescription>Invitations sent but not yet accepted.</CardDescription>
+                            <div className="min-w-0">
+                                <CardTitle>Pending Invitations</CardTitle>
+                                <CardDescription>Invitations sent but not yet accepted.</CardDescription>
+                            </div>
                         </CardHeader>
-                        <CardContent className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Role</TableHead>
-                                        <TableHead>Sent</TableHead>
-                                        <TableHead>Expires</TableHead>
-                                        <TableHead>Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {invites.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                                No pending invitations.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                    {invites.map(inv => (
-                                        <TableRow key={inv.id}>
-                                            <TableCell>{inv.email}</TableCell>
-                                            <TableCell>
-                                                {roles.find(r => r.id === inv.role_id)?.name || 'Unknown'}
-                                            </TableCell>
-                                            <TableCell>{new Date(inv.created_at).toLocaleDateString()}</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-1">
-                                                    <Clock className="h-3 w-3" />
-                                                    {new Date(inv.expires_at).toLocaleDateString()}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => {
-                                                        navigator.clipboard.writeText(inv.invite_link || '');
-                                                        toast({ title: "Link Copied" });
-                                                    }}>
-                                                        Copy Link
-                                                    </Button>
-                                                    <Button variant="destructive" size="sm" onClick={() => handleRevoke(inv.id)}>
-                                                        Revoke
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                        <CardContent className="p-0">
+                            <DataTable
+                                caption="Invitations sent but not yet accepted"
+                                columns={inviteColumns}
+                                data={invites}
+                                rowKey={(inv) => inv.id}
+                                status={tableStatus}
+                                empty={{ title: 'No pending invitations.' }}
+                                minWidth="720px"
+                                stickyFirstColumn
+                                className="rounded-none border-0"
+                            />
                         </CardContent>
                     </Card>
                 </TabsContent>
             </Tabs>
-        </div>
+        </PageContainer>
     );
 }

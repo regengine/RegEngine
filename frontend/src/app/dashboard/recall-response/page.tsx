@@ -2,14 +2,17 @@
 
 import React, { useState, useCallback } from 'react';
 import Link from 'next/link';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
-import { Spinner } from '@/components/ui/spinner';
+import { Callout } from '@/components/ui/callout';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
   AlertTriangle,
-  Bell,
   CheckCircle,
   Clock,
   Download,
@@ -38,11 +41,16 @@ import type { RecallDrill } from '@/types/fsma';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const STATUS_DISPLAY: Record<RequestStatus, { label: string; color: string; bg: string }> = {
-  open: { label: 'Open', color: 'text-re-info', bg: 'bg-re-info-muted' },
-  in_progress: { label: 'In Progress', color: 'text-re-warning', bg: 'bg-re-warning-muted' },
-  completed: { label: 'Completed', color: 'text-re-success', bg: 'bg-re-success-muted' },
-  overdue: { label: 'Overdue', color: 'text-re-danger', bg: 'bg-re-danger-muted' },
+/**
+ * Request status as a compliance state, not a colour pair. The labels are
+ * unchanged; a StatusBadge carries them with a glyph so the state survives
+ * greyscale and forced-colours mode (SPEC §1.6/§4).
+ */
+const STATUS_DISPLAY: Record<RequestStatus, { label: string; state: ComplianceState }> = {
+  open: { label: 'Open', state: 'pending' },
+  in_progress: { label: 'In Progress', state: 'in-progress' },
+  completed: { label: 'Completed', state: 'compliant' },
+  overdue: { label: 'Overdue', state: 'non-compliant' },
 };
 
 /** Map an SLA request to the RecallDrill shape the RecallTimer component expects. */
@@ -103,232 +111,205 @@ export default function RecallResponsePage() {
   }, [tenantId, createRequest]);
 
   return (
-    <div className="space-y-6">
-      <Breadcrumbs items={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Recall Response' },
-      ]} />
+    <PageContainer>
+      {/* The dashboard shell owns the breadcrumb and the service-health badge;
+          this page only renders its own header. */}
+      <PageHeader
+        title="FDA Recall Response"
+        description="24-hour response-objective tracking for FDA records requests"
+        primaryAction={
+          <Button
+            onClick={handleCreateRequest}
+            disabled={createRequest.isPending}
+            loading={createRequest.isPending}
+            leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
+          >
+            {createRequest.isPending ? 'Creating...' : 'New Records Request'}
+          </Button>
+        }
+      />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">FDA Recall Response</h1>
-          <p className="text-muted-foreground">
-            24-hour response-objective tracking for FDA records requests
-          </p>
+      <div className="space-y-6">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+          <StatTile label="Active Requests" value={dashboard?.open_requests ?? 0} />
+          <StatTile label="Overdue" value={dashboard?.overdue_requests ?? 0} />
+          <StatTile
+            label="Avg Response"
+            value={
+              dashboard?.avg_response_hours != null
+                ? `${dashboard.avg_response_hours.toFixed(1)}h`
+                : '--'
+            }
+          />
+          <Card padding="compact">
+            <div className="flex h-full items-center justify-center">
+              <SLAGauge percentage={dashboard?.compliance_rate_pct ?? 100} />
+            </div>
+          </Card>
         </div>
-        <Button onClick={handleCreateRequest} disabled={createRequest.isPending}>
-          <Plus className="w-4 h-4 mr-2" />
-          {createRequest.isPending ? 'Creating...' : 'New Records Request'}
-        </Button>
-      </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Active Requests</p>
-                <p className="text-3xl font-bold">{dashboard?.open_requests ?? 0}</p>
-              </div>
-              <Clock className="w-8 h-8 text-re-info" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Overdue</p>
-                <p className="text-3xl font-bold text-re-danger">{dashboard?.overdue_requests ?? 0}</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-re-danger" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Response</p>
-                <p className="text-3xl font-bold">
-                  {dashboard?.avg_response_hours != null
-                    ? `${dashboard.avg_response_hours.toFixed(1)}h`
-                    : '--'}
-                </p>
-              </div>
-              <FileText className="w-8 h-8 text-re-warning" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6 flex items-center justify-center">
-            <SLAGauge percentage={dashboard?.compliance_rate_pct ?? 100} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content: Timer + Phase Gates */}
-      {requestsLoading ? (
-        <div className="flex justify-center py-12">
-          <Spinner className="w-8 h-8" />
-        </div>
-      ) : focusedRequest ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Timer Column */}
-          <div className="lg:col-span-1">
-            <RecallTimer
-              drill={toRecallDrill(focusedRequest)}
-              onComplete={() => {
-                // Will be handled by the export + complete flow below
-              }}
-            />
+        {/* Main Content: Timer + Phase Gates */}
+        {requestsLoading ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3" aria-busy="true">
+            <Skeleton className="h-[280px] w-full lg:col-span-1" />
+            <Skeleton className="h-[280px] w-full lg:col-span-2" />
           </div>
+        ) : focusedRequest ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Timer Column */}
+            <div className="lg:col-span-1">
+              <RecallTimer
+                drill={toRecallDrill(focusedRequest)}
+                onComplete={() => {
+                  // Will be handled by the export + complete flow below
+                }}
+              />
+            </div>
 
-          {/* Details Column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Phase Gates */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Response Timeline</CardTitle>
-                <CardDescription>
-                  FDA FSMA 204 requires records within 24 hours of request
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PhaseGates
-                  elapsedSeconds={
-                    Math.floor((renderedAt - new Date(focusedRequest.requested_at).getTime()) / 1000)
-                  }
-                  isComplete={focusedRequest.status === 'completed'}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button variant="outline" asChild>
-                  <Link href="/ingest">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Import Missing Records
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href="/dashboard/compliance">
-                    <Shield className="w-4 h-4 mr-2" />
-                    Check FSMA Readiness Score
-                  </Link>
-                </Button>
-                <ExportAndCompleteButton request={focusedRequest} />
-                <Button variant="outline" asChild>
-                  <Link href="/dashboard/recall-drills">
-                    <Clock className="w-4 h-4 mr-2" />
-                    Run Recall Drill
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Alerts */}
-            {alerts && alerts.length > 0 && (
+            {/* Details Column */}
+            <div className="space-y-6 lg:col-span-2">
+              {/* Phase Gates */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-re-warning" />
-                    Active Alerts
-                  </CardTitle>
+                  <div className="min-w-0">
+                    <CardTitle>Response Timeline</CardTitle>
+                    <CardDescription>
+                      FDA FSMA 204 requires records within 24 hours of request
+                    </CardDescription>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  {alerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className={`flex items-start gap-3 p-3 rounded-lg ${
-                        alert.alert_type === 'overdue' ? 'bg-re-danger-muted' : 'bg-re-warning-muted'
-                      }`}
-                    >
-                      {alert.alert_type === 'overdue' ? (
-                        <XCircle className="w-5 h-5 text-re-danger shrink-0 mt-0.5" />
-                      ) : (
-                        <AlertTriangle className="w-5 h-5 text-re-warning shrink-0 mt-0.5" />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium">{alert.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(alert.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                <CardContent>
+                  <PhaseGates
+                    elapsedSeconds={
+                      Math.floor((renderedAt - new Date(focusedRequest.requested_at).getTime()) / 1000)
+                    }
+                    isComplete={focusedRequest.status === 'completed'}
+                  />
                 </CardContent>
               </Card>
-            )}
+
+              {/* Actions */}
+              <Card>
+                <CardHeader>
+                  <div className="min-w-0">
+                    <CardTitle>Quick Actions</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Button variant="outline" asChild>
+                    <Link href="/ingest">
+                      <FileText className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      Import Missing Records
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/dashboard/compliance">
+                      <Shield className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      Check FSMA Readiness Score
+                    </Link>
+                  </Button>
+                  <ExportAndCompleteButton request={focusedRequest} />
+                  <Button variant="outline" asChild>
+                    <Link href="/dashboard/recall-drills">
+                      <Clock className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      Run Recall Drill
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Alerts */}
+              {alerts && alerts.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <div className="min-w-0">
+                      <CardTitle>Active Alerts</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {alerts.map((alert) => (
+                      <Callout
+                        key={alert.id}
+                        tone={alert.alert_type === 'overdue' ? 'danger' : 'warning'}
+                        icon={alert.alert_type === 'overdue' ? XCircle : AlertTriangle}
+                        title={alert.message}
+                      >
+                        <p className="font-mono text-small text-re-text-tertiary">
+                          {new Date(alert.created_at).toLocaleString()}
+                        </p>
+                      </Callout>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
-        </div>
-      ) : (
-        /* Empty State */
-        <Card>
-          <CardContent className="py-16">
-            <div className="text-center">
-              <Shield className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">No Active Records Requests</h3>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                When FDA requests your traceability records, start a new request here
-                to track your 24-hour response deadline.
-              </p>
-              <Button onClick={handleCreateRequest} disabled={createRequest.isPending}>
-                <Plus className="w-4 h-4 mr-2" />
+        ) : (
+          /* Empty State */
+          <EmptyState
+            icon={Shield}
+            title="No Active Records Requests"
+            description="When FDA requests your traceability records, start a new request here to track your 24-hour response deadline."
+            action={
+              <Button
+                onClick={handleCreateRequest}
+                disabled={createRequest.isPending}
+                loading={createRequest.isPending}
+                leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
+              >
                 Start New Request
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            }
+          />
+        )}
 
-      {/* Request History */}
-      {activeRequests.length > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Active Requests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {activeRequests.map((req) => (
-                <RequestRow
-                  key={req.id}
-                  request={req}
-                  isSelected={req.id === focusedRequest?.id}
-                  onSelect={() => setSelectedRequestId(req.id)}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {/* Request History */}
+        {activeRequests.length > 1 && (
+          <Card>
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle>Active Requests</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-re-border-subtle">
+                {activeRequests.map((req) => (
+                  <RequestRow
+                    key={req.id}
+                    request={req}
+                    isSelected={req.id === focusedRequest?.id}
+                    onSelect={() => setSelectedRequestId(req.id)}
+                  />
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
-      {completedRequests.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Completed Requests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {completedRequests.slice(0, 10).map((req) => (
-                <RequestRow
-                  key={req.id}
-                  request={req}
-                  isSelected={false}
-                  onSelect={() => setSelectedRequestId(req.id)}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {completedRequests.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle>Completed Requests</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-re-border-subtle">
+                {completedRequests.slice(0, 10).map((req) => (
+                  <RequestRow
+                    key={req.id}
+                    request={req}
+                    isSelected={false}
+                    onSelect={() => setSelectedRequestId(req.id)}
+                  />
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </PageContainer>
   );
 }
 
@@ -346,39 +327,45 @@ function RequestRow({
   onSelect: () => void;
 }) {
   const display = STATUS_DISPLAY[request.status];
+  const isUrgent = request.time_remaining_seconds != null && request.time_remaining_seconds <= 3600;
+
   return (
-    <button
-      onClick={onSelect}
-      className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-left ${
-        isSelected ? 'border-[var(--re-brand)] bg-[var(--re-brand)]/5' : 'border-transparent hover:bg-muted/50'
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <Badge className={`${display.bg} ${display.color}`}>{display.label}</Badge>
-        <div>
-          <p className="text-sm font-medium">
-            {request.request_type === 'records_request' ? 'FDA Records Request' : request.request_type}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {new Date(request.requested_at).toLocaleString()}
-          </p>
+    <li>
+      <button
+        onClick={onSelect}
+        aria-pressed={isSelected}
+        className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-120 motion-reduce:transition-none sm:px-5 ${
+          isSelected ? 'bg-re-brand-muted' : 'hover:bg-re-surface-inset'
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <StatusBadge state={display.state} label={display.label} size="sm" className="shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-ui font-medium text-re-text-primary">
+              {request.request_type === 'records_request' ? 'FDA Records Request' : request.request_type}
+            </p>
+            <p className="font-mono text-small text-re-text-tertiary">
+              {new Date(request.requested_at).toLocaleString()}
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="text-right">
-        {request.status === 'completed' && request.response_hours != null ? (
-          <p className="text-sm font-mono">
-            <CheckCircle className="w-3 h-3 inline mr-1 text-re-success" />
-            {request.response_hours.toFixed(1)}h
-          </p>
-        ) : request.time_remaining_seconds != null ? (
-          <p className={`text-sm font-mono ${
-            request.time_remaining_seconds <= 3600 ? 'text-re-danger' : 'text-muted-foreground'
-          }`}>
-            {formatHoursRemaining(request.time_remaining_seconds)}
-          </p>
-        ) : null}
-      </div>
-    </button>
+        <div className="shrink-0 text-right">
+          {request.status === 'completed' && request.response_hours != null ? (
+            <p className="flex items-center gap-1 font-mono text-[0.8125rem] text-re-text-secondary">
+              <CheckCircle className="h-3.5 w-3.5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              {request.response_hours.toFixed(1)}h
+            </p>
+          ) : request.time_remaining_seconds != null ? (
+            <p className="flex items-center gap-1 font-mono text-[0.8125rem] text-re-text-secondary">
+              {isUrgent && (
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+              )}
+              {formatHoursRemaining(request.time_remaining_seconds)}
+            </p>
+          ) : null}
+        </div>
+      </button>
+    </li>
   );
 }
 
@@ -398,9 +385,9 @@ function ExportAndCompleteButton({ request }: { request: FDARequestData }) {
     <Button
       onClick={handleExportAndComplete}
       disabled={complete.isPending}
-      className="bg-re-success hover:bg-re-success text-white"
+      loading={complete.isPending}
+      leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
     >
-      <Download className="w-4 h-4 mr-2" />
       {complete.isPending ? 'Submitting...' : 'Export & Complete'}
     </Button>
   );

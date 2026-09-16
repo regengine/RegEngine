@@ -13,8 +13,12 @@ import {
     ArrowRight,
     Workflow,
 } from 'lucide-react';
+import { Container } from '@/components/layout/container';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export const metadata: Metadata = {
     title: 'Why RegEngine | FSMA 204 Compliance, API-First',
@@ -169,212 +173,225 @@ const DIFFERENTIATORS = [
 
 export default function WhyRegEnginePage() {
     return (
-        <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+        <div className="min-h-screen bg-re-surface-base">
             {/* Hero Section */}
-            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-5xl mx-auto">
+            <section className="border-b border-re-border-subtle py-16 sm:py-20">
+                <Container width="marketing">
                     <div className="inline-flex items-center gap-2 mb-6">
-                        <Badge variant="outline" className="bg-[var(--re-surface-elevated)] border-[var(--re-border-subtle)] text-[var(--re-text-primary)]">
+                        <Badge>
                             Built for FSMA 204
                         </Badge>
                     </div>
-                    <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-[var(--re-text-primary)] mb-6 leading-tight">
+                    <h1 className="mb-6 max-w-[20ch] font-display text-display text-re-text-primary">
                         FSMA 204 Compliance,{' '}
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--re-brand)] to-[var(--re-brand-light)]">
+                        <span>
                             Built for You
                         </span>
                     </h1>
-                    <p className="text-lg sm:text-xl text-re-text-secondary mb-8 max-w-3xl leading-relaxed">
+                    <p className="mb-8 max-w-[68ch] text-body text-re-text-secondary">
                         RegEngine pairs an API-first architecture with published pricing and a self-serve onboarding path designed to get your first FSMA 204 export ready for review in days, not months.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row">
                         <Button asChild size="lg">
                             <Link href="/signup">
                                 Start Setup
-                                <ArrowRight className="ml-2 h-4 w-4" />
+                                <ArrowRight className="ml-2 h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                             </Link>
                         </Button>
-                        <Button asChild variant="outline" size="lg" className="border-[var(--re-border-subtle)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]">
+                        <Button asChild variant="secondary" size="lg">
                             <Link href="/pricing">
                                 View Pricing
                             </Link>
                         </Button>
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* Differentiators Grid */}
-            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-6xl mx-auto">
-                    <div className="mb-16 text-center">
-                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
+            <section className="border-b border-re-border-subtle py-16 sm:py-20">
+                <Container width="marketing">
+                    <div className="mb-10 max-w-[68ch]">
+                        <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
                             Six Reasons Teams Choose RegEngine
                         </h2>
-                        <p className="text-re-text-tertiary text-lg max-w-2xl mx-auto">
+                        <p className="text-body text-re-text-secondary">
                             We built RegEngine for technical teams, ops managers, and founders who need compliance fast without compromise.
                         </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                         {DIFFERENTIATORS.map((item, idx) => {
                             const Icon = item.icon;
                             return (
-                                <div
-                                    key={idx}
-                                    className="group rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 hover:border-[var(--re-border-subtle)] hover:bg-[var(--re-surface-elevated)] transition-all"
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className="rounded-lg bg-re-info/20 p-3 text-re-info group-hover:bg-re-info/30 transition-colors">
-                                            <Icon className="h-5 w-5" />
-                                        </div>
+                                <Card key={idx} variant="interactive" padding="compact">
+                                    <div className="flex items-start gap-3">
+                                        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <div className="flex-1">
-                                            <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-2">
+                                            <h3 className="mb-2 text-subheading text-re-text-primary">
                                                 {item.title}
                                             </h3>
-                                            <p className="text-sm text-re-text-tertiary mb-3">
+                                            <p className="mb-3 text-ui text-re-text-secondary">
                                                 {item.description}
                                             </p>
-                                            <p className="text-xs text-re-text-muted">
+                                            <p className="text-small text-re-text-tertiary">
                                                 {item.detail}
                                             </p>
                                         </div>
                                     </div>
-                                </div>
+                                </Card>
                             );
                         })}
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* Comparison Section */}
-            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-7xl mx-auto">
-                    <div className="mb-12 text-center">
-                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
+            <section className="border-b border-re-border-subtle py-16 sm:py-20">
+                <Container width="marketing">
+                    <div className="mb-10 max-w-[68ch]">
+                        <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
                             Feature-by-Feature Comparison
                         </h2>
-                        <p className="text-re-text-tertiary text-lg max-w-2xl mx-auto">
+                        <p className="text-body text-re-text-secondary">
                             See how RegEngine stacks up against the industry standard and legacy competitors.
                         </p>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr className="border-b border-[var(--re-surface-border)]">
-                                    <th className="text-left py-4 px-4 font-semibold text-[var(--re-text-primary)]">
-                                        Feature
-                                    </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-re-info">
-                                        RegEngine
-                                    </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
-                                        Trustwell
-                                    </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
-                                        SafetyChain
-                                    </th>
-                                    <th className="text-center py-4 px-4 font-semibold text-re-text-tertiary">
-                                        ReposiTrak
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <Table className="min-w-[720px]">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>
+                                    Feature
+                                </TableHead>
+                                <TableHead className="text-center">
+                                    RegEngine
+                                </TableHead>
+                                <TableHead className="text-center">
+                                    Trustwell
+                                </TableHead>
+                                <TableHead className="text-center">
+                                    SafetyChain
+                                </TableHead>
+                                <TableHead className="text-center">
+                                    ReposiTrak
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                                 {COMPARISON_DATA.map((row, idx) => (
-                                    <tr
-                                        key={idx}
-                                        className="border-b border-[var(--re-border-subtle)] hover:bg-[var(--re-surface-card)] transition-colors"
-                                    >
-                                        <td className="py-4 px-4 text-[var(--re-text-primary)] font-medium text-sm">
+                                    <TableRow key={idx}>
+                                        <TableCell>
                                             {row.feature}
-                                        </td>
-                                        <td className="text-center py-4 px-4">
+                                        </TableCell>
+                                        <TableCell className="text-center">
                                             {typeof row.regengine === 'boolean' ? (
                                                 row.regengine ? (
-                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
+                                                    <>
+                                                        <Check className="mx-auto h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">Yes</span>
+                                                    </>
                                                 ) : (
-                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
+                                                    <>
+                                                        <X className="mx-auto h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">No</span>
+                                                    </>
                                                 )
                                             ) : (
-                                                <span className="text-xs text-re-text-secondary font-medium">
+                                                <span className="text-small text-re-text-tertiary">
                                                     {row.regengine}
                                                 </span>
                                             )}
-                                        </td>
-                                        <td className="text-center py-4 px-4">
+                                        </TableCell>
+                                        <TableCell className="text-center">
                                             {typeof row.trustwell === 'boolean' ? (
                                                 row.trustwell ? (
-                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
+                                                    <>
+                                                        <Check className="mx-auto h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">Yes</span>
+                                                    </>
                                                 ) : (
-                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
+                                                    <>
+                                                        <X className="mx-auto h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">No</span>
+                                                    </>
                                                 )
                                             ) : (
-                                                <span className="text-xs text-re-text-tertiary">
+                                                <span className="text-small text-re-text-tertiary">
                                                     {row.trustwell}
                                                 </span>
                                             )}
-                                        </td>
-                                        <td className="text-center py-4 px-4">
+                                        </TableCell>
+                                        <TableCell className="text-center">
                                             {typeof row.safetychain === 'boolean' ? (
                                                 row.safetychain ? (
-                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
+                                                    <>
+                                                        <Check className="mx-auto h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">Yes</span>
+                                                    </>
                                                 ) : (
-                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
+                                                    <>
+                                                        <X className="mx-auto h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">No</span>
+                                                    </>
                                                 )
                                             ) : (
-                                                <span className="text-xs text-re-text-tertiary">
+                                                <span className="text-small text-re-text-tertiary">
                                                     {row.safetychain}
                                                 </span>
                                             )}
-                                        </td>
-                                        <td className="text-center py-4 px-4">
+                                        </TableCell>
+                                        <TableCell className="text-center">
                                             {typeof row.repositrak === 'boolean' ? (
                                                 row.repositrak ? (
-                                                    <Check className="h-5 w-5 text-re-success mx-auto" />
+                                                    <>
+                                                        <Check className="mx-auto h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">Yes</span>
+                                                    </>
                                                 ) : (
-                                                    <X className="h-5 w-5 text-re-danger mx-auto" />
+                                                    <>
+                                                        <X className="mx-auto h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="sr-only">No</span>
+                                                    </>
                                                 )
                                             ) : (
-                                                <span className="text-xs text-re-text-tertiary">
+                                                <span className="text-small text-re-text-tertiary">
                                                     {row.repositrak}
                                                 </span>
                                             )}
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
+                        </TableBody>
+                    </Table>
 
-                    <div className="mt-8 p-4 rounded-lg border border-re-info/20 bg-[var(--re-info-bg)] flex gap-3">
-                        <AlertCircle className="h-5 w-5 text-re-info flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-[var(--re-text-secondary)]">
+                    <Callout tone="info" className="mt-8">
+                        <p>
                             <strong>Note:</strong> Comparison data is based on public pricing and vendor documentation as of April 2026. Competitor features change; if you spot an error, email{' '}
                             <a
                                 href="mailto:support@regengine.co"
-                                className="underline hover:text-re-info"
+                                className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
                             >
                                 support@regengine.co
                             </a>
                             .
                         </p>
-                    </div>
-                </div>
+                    </Callout>
+                </Container>
             </section>
 
             {/* Detailed Differentiator Sections */}
-            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-5xl mx-auto space-y-16">
+            <section className="border-b border-re-border-subtle py-16 sm:py-20">
+                <Container width="marketing" className="space-y-16">
                     {/* API-First */}
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
+                    <div className="grid items-center gap-8 md:grid-cols-2">
                         <div>
-                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+                            <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 API-First, Not UI-Only
                             </h3>
-                            <p className="text-re-text-secondary mb-4 leading-relaxed">
+                            <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 Every feature in RegEngine has an API. REST endpoints. Webhooks for real-time events. CSV templates for ops teams. Your developers can integrate in hours, not months.
                             </p>
-                            <p className="text-re-text-tertiary text-sm mb-6">
+                            <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 RegEngine started with APIs and added the dashboard on top, so every dashboard action is reachable programmatically. Verify API surface depth with each vendor for your stack.
                             </p>
                             <ul className="space-y-2">
@@ -384,15 +401,15 @@ export default function WhyRegEnginePage() {
                                     'CSV import with smart field mapping',
                                     'Native integrations with Shopify, WooCommerce (coming soon)',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
-                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
-                        <div className="hidden md:block rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6">
-                            <code className="text-xs text-re-text-secondary font-mono leading-relaxed block">
+                        <Card padding="spacious" className="hidden md:block">
+                            <code className="block font-mono text-small leading-relaxed text-re-text-secondary">
                                 {`POST /api/ctes
 Content-Type: application/json
 
@@ -411,38 +428,38 @@ HTTP 201
   "missing_kdes": []
 }`}
                             </code>
-                        </div>
+                        </Card>
                     </div>
 
                     {/* Pricing */}
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="order-2 md:order-1 hidden md:block rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
+                    <div className="grid items-center gap-8 md:grid-cols-2">
+                        <Card padding="spacious" className="order-2 hidden md:order-1 md:block">
                             <div className="space-y-4">
-                                <div className="rounded-lg bg-re-info/20 p-4 border border-re-info/30">
-                                    <p className="text-sm text-re-text-tertiary mb-1">Base Plan</p>
-                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$425/mo <span className="text-sm font-normal text-re-text-tertiary line-through opacity-60">$849/mo</span></p>
-                                    <p className="text-xs text-re-text-tertiary mt-2">Founding design partner rate, billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
-                                </div>
-                                <div className="rounded-lg bg-[var(--re-surface-elevated)] p-4 border border-[var(--re-surface-border)]">
-                                    <p className="text-sm text-re-text-tertiary mb-1">Standard Plan</p>
-                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$549/mo <span className="text-sm font-normal text-re-text-tertiary line-through opacity-60">$1,099/mo</span></p>
-                                    <p className="text-xs text-re-text-tertiary mt-2">Founding design partner rate, billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
-                                </div>
-                                <div className="rounded-lg bg-[var(--re-surface-elevated)] p-4 border border-[var(--re-surface-border)]">
-                                    <p className="text-sm text-re-text-tertiary mb-1">Premium Plan</p>
-                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$639/mo <span className="text-sm font-normal text-re-text-tertiary line-through opacity-60">$1,275/mo</span></p>
-                                    <p className="text-xs text-re-text-tertiary mt-2">Founding design partner rate, billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
-                                </div>
+                                <Card variant="inset" padding="compact">
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Base Plan</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">$425/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$849/mo</span></p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Founding design partner rate, billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
+                                </Card>
+                                <Card variant="inset" padding="compact">
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Standard Plan</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">$549/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,099/mo</span></p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Founding design partner rate, billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
+                                </Card>
+                                <Card variant="inset" padding="compact">
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Premium Plan</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">$639/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,275/mo</span></p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Founding design partner rate, billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
+                                </Card>
                             </div>
-                        </div>
+                        </Card>
                         <div className="order-1 md:order-2">
-                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+                            <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 Pricing You Can See Before You Sign
                             </h3>
-                            <p className="text-re-text-secondary mb-4 leading-relaxed">
+                            <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
                             </p>
-                            <p className="text-re-text-tertiary text-sm mb-6">
+                            <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Founding Design Partners get preferred pricing for the life of their account. Plans start at $425/mo (billed annually) or $499/mo monthly. Honest pricing for honest work.
                             </p>
                             <ul className="space-y-2">
@@ -451,8 +468,8 @@ HTTP 201
                                     'API access for contracted workspaces',
                                     'Founding Design Partner rate never increases',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
-                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
@@ -461,15 +478,15 @@ HTTP 201
                     </div>
 
                     {/* Speed */}
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
+                    <div className="grid items-center gap-8 md:grid-cols-2">
                         <div>
-                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+                            <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 Self-serve onboarding, days not months
                             </h3>
-                            <p className="text-re-text-secondary mb-4 leading-relaxed">
+                            <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 When a deadline approaches, every week matters. RegEngine takes teams from signup to mapped supplier data and retailer-readiness review in days. Once records are mapped, FSMA-formatted exports build in minutes.
                             </p>
-                            <p className="text-re-text-tertiary text-sm mb-6">
+                            <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Sales-led platforms typically run multi-month implementations. Verify timelines with each vendor.
                             </p>
                             <div className="space-y-3">
@@ -480,43 +497,43 @@ HTTP 201
                                     { step: '4', label: 'Export §1.1455-formatted trace data' },
                                 ].map((item) => (
                                     <div key={item.step} className="flex gap-4 items-start">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-re-info/30 border border-[var(--re-info)]/50 text-sm font-semibold text-[var(--re-info)]">
+                                        <div aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-re-border font-mono text-ui tabular-nums text-re-text-muted">
                                             {item.step}
                                         </div>
-                                        <p className="text-re-text-secondary pt-1">{item.label}</p>
+                                        <p className="pt-1 text-ui text-re-text-secondary">{item.label}</p>
                                     </div>
                                 ))}
                             </div>
                         </div>
-                        <div className="rounded-lg border border-[var(--re-surface-border)] bg-gradient-to-br from-[var(--re-info)]/10 to-transparent p-8">
+                        <Card variant="inset" padding="spacious">
                             <div className="text-center">
-                                <p className="text-sm text-re-text-tertiary mb-2">Onboarding model</p>
+                                <p className="mb-2 font-mono text-label uppercase text-re-text-muted">Onboarding model</p>
                                 <div className="space-y-4">
                                     <div>
-                                        <p className="text-2xl font-bold text-re-success mb-1">Self-serve</p>
-                                        <p className="text-xs text-re-text-tertiary">RegEngine</p>
+                                        <p className="mb-1 text-heading text-re-text-primary">Self-serve</p>
+                                        <p className="text-small text-re-text-tertiary">RegEngine</p>
                                     </div>
-                                    <div className="h-px bg-[var(--re-surface-border)]" />
+                                    <div className="h-px bg-re-border-subtle" />
                                     <div>
-                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">Sales-led</p>
-                                        <p className="text-xs text-re-text-muted">Trustwell, SafetyChain (per their public materials)</p>
+                                        <p className="mb-1 text-heading text-re-text-tertiary">Sales-led</p>
+                                        <p className="text-small text-re-text-muted">Trustwell, SafetyChain (per their public materials)</p>
                                     </div>
                                     <div>
-                                        <p className="text-2xl font-bold text-re-text-tertiary mb-1">Retailer-coordinated</p>
-                                        <p className="text-xs text-re-text-muted">ReposiTrak (per their public materials)</p>
+                                        <p className="mb-1 text-heading text-re-text-tertiary">Retailer-coordinated</p>
+                                        <p className="text-small text-re-text-muted">ReposiTrak (per their public materials)</p>
                                     </div>
                                 </div>
-                                <p className="text-[10px] text-re-text-muted mt-4 leading-relaxed">
+                                <p className="mt-4 text-label text-re-text-muted">
                                     Competitors named are trademarks of their respective owners. Verify current onboarding timelines directly with each vendor.
                                 </p>
                             </div>
-                        </div>
+                        </Card>
                     </div>
 
                     {/* CTE Coverage */}
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="order-2 md:order-1 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
-                            <h4 className="text-sm font-semibold text-re-text-secondary mb-6">All 7 FSMA 204 CTE Types</h4>
+                    <div className="grid items-center gap-8 md:grid-cols-2">
+                        <Card padding="spacious" className="order-2 md:order-1">
+                            <h4 className="mb-6 text-subheading text-re-text-primary">All 7 FSMA 204 CTE Types</h4>
                             <div className="space-y-3">
                                 {[
                                     'Harvesting',
@@ -527,21 +544,21 @@ HTTP 201
                                     'Receiving',
                                     'Transformation',
                                 ].map((item, idx) => (
-                                    <div key={idx} className="flex gap-2">
-                                        <Check className="h-4 w-4 text-re-success flex-shrink-0 mt-0.5" />
-                                        <span className="text-xs text-re-text-secondary">{item}</span>
+                                    <div key={idx} className="flex gap-2 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="text-ui text-re-text-secondary">{item}</span>
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </Card>
                         <div className="order-1 md:order-2">
-                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+                            <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 Complete CTE/KDE Coverage
                             </h3>
-                            <p className="text-re-text-secondary mb-4 leading-relaxed">
+                            <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Incomplete CTEs are a common gap teams discover during recall drills.
                             </p>
-                            <p className="text-re-text-tertiary text-sm mb-6">
+                            <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Verify CTE coverage and validation depth with each vendor for your stack. RegEngine covers all 7 with per-CTE KDE validation that surfaces errors before submission.
                             </p>
                             <ul className="space-y-2">
@@ -551,8 +568,8 @@ HTTP 201
                                     'Location traceability from source to receiver',
                                     'FDA 204 naming conventions built in',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
-                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
@@ -561,15 +578,15 @@ HTTP 201
                     </div>
 
                     {/* EPCIS */}
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
+                    <div className="grid items-center gap-8 md:grid-cols-2">
                         <div>
-                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+                            <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 EPCIS 2.0 Native
                             </h3>
-                            <p className="text-re-text-secondary mb-4 leading-relaxed">
+                            <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 as a supported schema where the enabled workflow and source data allow it.
                             </p>
-                            <p className="text-re-text-tertiary text-sm mb-6">
+                            <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Verify EPCIS coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
                             </p>
                             <ul className="space-y-2">
@@ -579,15 +596,15 @@ HTTP 201
                                     'No third-party conversion needed',
                                     'Designed for buyer and trading-partner interoperability checks',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
-                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
-                        <div className="hidden md:block rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6">
-                            <code className="text-xs text-re-text-secondary font-mono leading-relaxed block overflow-auto">
+                        <Card padding="spacious" className="hidden md:block">
+                            <code className="block overflow-auto font-mono text-small leading-relaxed text-re-text-secondary">
                                 {`<events>
   <EPCISEvent>
     <eventTime>2026-04-05T...</eventTime>
@@ -606,13 +623,13 @@ HTTP 201
   </EPCISEvent>
 </events>`}
                             </code>
-                        </div>
+                        </Card>
                     </div>
 
                     {/* SMB Focus */}
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="order-2 md:order-1 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8">
-                            <p className="text-sm text-re-text-tertiary mb-4">RegEngine is built for companies like:</p>
+                    <div className="grid items-center gap-8 md:grid-cols-2">
+                        <Card padding="spacious" className="order-2 md:order-1">
+                            <p className="mb-4 text-ui text-re-text-tertiary">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
                                     'Regional produce distributors ($5M–$50M annual revenue)',
@@ -621,21 +638,21 @@ HTTP 201
                                     'Small farms and grower cooperatives',
                                     'Emerging CPG brands reaching FDA compliance',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-2 text-xs text-re-text-secondary">
-                                        <Check className="h-4 w-4 text-re-success flex-shrink-0 mt-0.5" />
+                                    <li key={idx} className="flex gap-2 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
                             </ul>
-                        </div>
+                        </Card>
                         <div className="order-1 md:order-2">
-                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+                            <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 Built for SMBs, Not Enterprises Only
                             </h3>
-                            <p className="text-re-text-secondary mb-4 leading-relaxed">
+                            <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 Compliance shouldn't require a 50-person implementation team. You need FSMA 204 compliance, fast and cheap. Self-serve signup, no minimums, no sales calls.
                             </p>
-                            <p className="text-re-text-tertiary text-sm mb-6">
+                            <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Legacy platforms built for 100+ facility enterprises. RegEngine scales from 1 to 1,000 facilities. You start small; you grow without ripping out the platform.
                             </p>
                             <ul className="space-y-2">
@@ -645,25 +662,25 @@ HTTP 201
                                     'Scales from 1 to 1,000 facilities',
                                     'Direct support channel based on plan and rollout scope',
                                 ].map((item, idx) => (
-                                    <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
-                                        <Check className="h-5 w-5 text-re-success flex-shrink-0" />
+                                    <li key={idx} className="flex gap-3 text-ui text-re-text-secondary">
+                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span>{item}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* Honest Positioning */}
-            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-4xl mx-auto">
-                    <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8 sm:p-12">
-                        <h2 className="font-display text-3xl font-bold text-[var(--re-text-primary)] mb-4">
+            <section className="border-b border-re-border-subtle py-16 sm:py-20">
+                <Container width="marketing">
+                    <Card padding="spacious">
+                        <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
                             What RegEngine Is NOT
                         </h2>
-                        <p className="text-re-text-secondary mb-8">
+                        <p className="mb-8 max-w-[68ch] text-body text-re-text-secondary">
                             RegEngine is a compliance layer, not a replacement for your ERP or WMS. We work alongside your existing systems, filling the traceability gaps that packaged software doesn't solve.
                         </p>
                         <div className="space-y-4">
@@ -686,103 +703,98 @@ HTTP 201
                                 },
                             ].map((item, idx) => (
                                 <div key={idx} className="flex gap-4">
-                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-re-warning/30 border border-re-warning/50 flex-shrink-0 mt-0.5">
-                                        <AlertCircle className="h-3 w-3 text-re-warning" />
-                                    </div>
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                     <div>
-                                        <p className="font-semibold text-[var(--re-text-primary)]">{item.title}</p>
-                                        <p className="text-sm text-re-text-tertiary">{item.detail}</p>
+                                        <p className="text-subheading text-re-text-primary">{item.title}</p>
+                                        <p className="text-ui text-re-text-secondary">{item.detail}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                </div>
+                    </Card>
+                </Container>
             </section>
 
             {/* Social Proof / Industry Fit */}
-            <section className="border-b border-[var(--re-surface-border)] px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
+            <section className="border-b border-re-border-subtle py-16 sm:py-20">
+                <Container width="marketing">
+                    <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
                         Who's RegEngine For?
                     </h2>
-                    <p className="text-re-text-secondary text-lg mb-12 max-w-2xl mx-auto">
+                    <p className="mb-10 max-w-[68ch] text-body text-re-text-secondary">
                         If you fit any of these categories, RegEngine is built for you.
                     </p>
-                    <div className="grid sm:grid-cols-2 gap-6">
+                    <div className="grid gap-5 sm:grid-cols-2">
                         {[
                             {
-                                emoji: '🔧',
+                                Icon: Code2,
                                 title: 'Technical Buyers',
                                 detail: 'Your team owns integrations. You want APIs, webhooks, and source control. RegEngine gives you that.',
                             },
                             {
-                                emoji: '👔',
+                                Icon: Workflow,
                                 title: 'Operations Teams',
                                 detail: 'You need FSMA 204 compliance done quickly. CSV upload is fast enough. No custom dev needed.',
                             },
                             {
-                                emoji: '🚀',
+                                Icon: Zap,
                                 title: 'Founders & SMBs',
                                 detail: 'You need compliance but can\'t afford enterprise fees. Founding Design Partner rates from $425/mo (billed annually) get you live. Scale as you grow.',
                             },
                             {
-                                emoji: '⚖️',
+                                Icon: Lightbulb,
                                 title: 'Compliance Officers',
                                 detail: 'You need per-CTE validation and FDA-oriented sortable exports. RegEngine gives you audit trails and supporting records.',
                             },
                         ].map((item, idx) => (
-                            <div
-                                key={idx}
-                                className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 hover:border-[var(--re-border-subtle)] hover:bg-[var(--re-surface-elevated)] transition-all"
-                            >
-                                <div className="text-4xl mb-3">{item.emoji}</div>
-                                <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-2">
+                            <Card key={idx} variant="interactive" padding="compact">
+                                <item.Icon className="mb-3 h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <h3 className="mb-2 text-subheading text-re-text-primary">
                                     {item.title}
                                 </h3>
-                                <p className="text-sm text-re-text-tertiary">{item.detail}</p>
-                            </div>
+                                <p className="text-ui text-re-text-secondary">{item.detail}</p>
+                            </Card>
                         ))}
                     </div>
-                </div>
+                </Container>
             </section>
 
             {/* CTA Section */}
-            <section className="px-4 sm:px-6 py-16 sm:py-24">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
+            <section className="py-16 sm:py-20">
+                <Container width="marketing" className="text-center">
+                    <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
                         Ready to Get Compliant?
                     </h2>
-                    <p className="text-re-text-secondary text-lg mb-8 max-w-2xl mx-auto">
+                    <p className="mx-auto mb-8 max-w-[68ch] text-body text-re-text-secondary">
                         Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements — no multi-year lock-in.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">
+                    <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                        <Button asChild size="lg">
                             <Link href="/signup">
                                 Start Setup
-                                <ArrowRight className="ml-2 h-4 w-4" />
+                                <ArrowRight className="ml-2 h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                             </Link>
                         </Button>
-                        <Button asChild variant="outline" size="lg" className="border-[var(--re-border-subtle)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]">
+                        <Button asChild variant="secondary" size="lg">
                             <Link href="/contact">
                                 Talk to Us
                             </Link>
                         </Button>
-                        <Button asChild variant="outline" size="lg" className="border-[var(--re-border-subtle)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-elevated)]">
+                        <Button asChild variant="secondary" size="lg">
                             <Link href="/pricing">
                                 View Pricing
                             </Link>
                         </Button>
                     </div>
-                    <p className="text-sm text-re-text-muted mt-8">
+                    <p className="mt-8 text-ui text-re-text-muted">
                         Questions? Email{' '}
-                        <a href="mailto:support@regengine.co" className="text-re-text-tertiary hover:text-[var(--re-text-primary)] underline">
+                        <a href="mailto:support@regengine.co" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
                             support@regengine.co
                         </a>
                         {' '}for rollout or integration questions.
                     </p>
-                </div>
+                </Container>
             </section>
-        </main>
+        </div>
     );
 }

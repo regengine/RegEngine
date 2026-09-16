@@ -17,16 +17,21 @@ import {
   Package,
   Download,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-// Facility type icons and colors
-const facilityConfig: Record<FacilityType, { icon: React.ElementType; color: string; bgColor: string }> = {
-  FARM: { icon: Leaf, color: 'text-re-success', bgColor: 'bg-re-success-muted dark:bg-green-900' },
-  PROCESSOR: { icon: Factory, color: 'text-re-info', bgColor: 'bg-re-info-muted dark:bg-blue-900' },
-  DISTRIBUTOR: { icon: Truck, color: 'text-purple-600', bgColor: 'bg-purple-100 dark:bg-purple-900' },
-  RETAILER: { icon: Store, color: 'text-orange-600', bgColor: 'bg-orange-100 dark:bg-orange-900' },
-  RESTAURANT: { icon: ChefHat, color: 'text-re-danger', bgColor: 'bg-re-danger-muted dark:bg-re-danger' },
+// Facility type is *categorical*, not a status: it uses the --re-cat-* ramp and
+// never a status colour. The node itself is a neutral inset well with a hairline
+// — icons are never set in a tinted disc (SPEC §5.4).
+const facilityConfig: Record<FacilityType, { icon: React.ElementType; color: string }> = {
+  FARM: { icon: Leaf, color: 'text-re-cat-3' },
+  PROCESSOR: { icon: Factory, color: 'text-re-cat-1' },
+  DISTRIBUTOR: { icon: Truck, color: 'text-re-cat-4' },
+  RETAILER: { icon: Store, color: 'text-re-cat-2' },
+  RESTAURANT: { icon: ChefHat, color: 'text-re-cat-6' },
 };
+
+const NODE_SURFACE = 'border border-re-border bg-re-surface-inset';
 
 interface SupplyChainGraphProps {
   facilities: Facility[];
@@ -79,8 +84,8 @@ export function SupplyChainGraph({
     >
       {onExport && (
         <div className="absolute top-0 right-0 z-10">
-          <Button variant="outline" size="sm" onClick={onExport}>
-            <Download className="w-4 h-4 mr-2" />
+          <Button variant="secondary" size="sm" onClick={onExport}>
+            <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             Export CSV
           </Button>
         </div>
@@ -100,43 +105,42 @@ export function SupplyChainGraph({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.1 }}
               className={cn(
-                'relative flex flex-col items-center cursor-pointer transition-all',
-                isHighlighted && 'scale-110',
-                isAffected && 'ring-2 ring-re-danger ring-offset-2 rounded-xl'
+                'relative flex cursor-pointer flex-col items-center rounded-lg transition-colors duration-120 motion-reduce:transition-none',
+                isAffected && 'ring-2 ring-re-danger ring-offset-2 ring-offset-re-surface-card'
               )}
               onClick={() => onFacilityClick?.(facility)}
             >
               {/* Node Circle */}
               <div
                 className={cn(
-                  'relative w-16 h-16 rounded-xl flex items-center justify-center transition-all',
-                  config.bgColor,
-                  isHighlighted && 'shadow-lg',
-                  isAffected && 'animate-pulse'
+                  'relative flex h-16 w-16 items-center justify-center rounded-lg transition-colors duration-120 motion-reduce:transition-none',
+                  NODE_SURFACE,
+                  isHighlighted && 'border-re-border-strong bg-re-surface-card',
+                  isAffected && 'animate-pulse motion-reduce:animate-none'
                 )}
               >
-                <Icon className={cn('w-8 h-8', config.color)} />
+                <Icon className={cn('h-6 w-6', config.color)} strokeWidth={1.75} aria-hidden="true" />
 
                 {/* Event count badge */}
                 {facilityEvents.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground rounded-full">
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-re-border bg-re-surface-card font-mono text-label tabular-nums text-re-text-primary">
                     {facilityEvents.length}
                   </span>
                 )}
 
                 {/* Affected indicator */}
                 {isAffected && (
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center bg-re-danger text-white rounded-full">
-                    <AlertTriangle className="w-3 h-3" />
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-re-danger text-re-danger-foreground">
+                    <AlertTriangle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                   </span>
                 )}
               </div>
 
               {/* Labels */}
               {showLabels && (
-                <div className="mt-2 text-center max-w-[100px]">
-                  <p className="text-xs font-medium truncate">{facility.name}</p>
-                  <p className="text-xs text-muted-foreground">{facility.type}</p>
+                <div className="mt-2 max-w-[100px] text-center">
+                  <p className="truncate text-small font-medium text-re-text-primary">{facility.name}</p>
+                  <p className="text-label text-re-text-muted">{facility.type}</p>
                 </div>
               )}
             </motion.div>
@@ -152,11 +156,8 @@ export function SupplyChainGraph({
                   isHorizontal ? 'flex-row px-2' : 'flex-col py-2 rotate-90'
                 )}
               >
-                <div className={cn(
-                  'h-0.5 bg-muted-foreground/30',
-                  isHorizontal ? 'w-8' : 'w-8'
-                )} />
-                <ArrowRight className="w-4 h-4 text-muted-foreground/50 -mx-1" />
+                <div className="h-px w-8 bg-re-border" />
+                <ArrowRight className="-mx-1 h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
               </motion.div>
             )}
           </React.Fragment>
@@ -196,16 +197,16 @@ export function MiniSupplyChain({ facilities, affectedFacilities = [], className
           <React.Fragment key={facility.gln}>
             <div
               className={cn(
-                'w-8 h-8 rounded-md flex items-center justify-center',
-                config.bgColor,
+                'flex h-8 w-8 items-center justify-center rounded-md',
+                NODE_SURFACE,
                 isAffected && 'ring-2 ring-re-danger'
               )}
               title={`${facility.name} (${facility.type})`}
             >
-              <Icon className={cn('w-4 h-4', config.color)} />
+              <Icon className={cn('h-4 w-4', config.color)} strokeWidth={1.75} aria-hidden="true" />
             </div>
             {index < sortedFacilities.length - 1 && (
-              <ArrowRight className="w-3 h-3 text-muted-foreground/50" />
+              <ArrowRight className="h-3 w-3 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             )}
           </React.Fragment>
         );
@@ -236,33 +237,32 @@ export function FacilityCard({
   const Icon = config.icon;
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+    <div
       className={cn(
-        'p-4 rounded-lg border cursor-pointer transition-all',
-        isSelected && 'ring-2 ring-primary',
-        isAffected && 'border-re-danger bg-re-danger-muted dark:bg-re-danger/20',
-        !isAffected && !isSelected && 'hover:shadow-md',
+        'cursor-pointer rounded-lg border bg-re-surface-card p-4 transition-colors duration-120 hover:border-re-border-strong motion-reduce:transition-none',
+        isSelected ? 'border-re-border-strong' : 'border-re-border',
         className
       )}
       onClick={onClick}
     >
       <div className="flex items-start gap-3">
-        <div className={cn('p-2 rounded-lg', config.bgColor)}>
-          <Icon className={cn('w-6 h-6', config.color)} />
+        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-md', NODE_SURFACE)}>
+          <Icon className={cn('h-5 w-5', config.color)} strokeWidth={1.75} aria-hidden="true" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="font-medium truncate">{facility.name}</h4>
+            <h4 className="truncate text-subheading text-re-text-primary">{facility.name}</h4>
             {isAffected && (
-              <AlertTriangle className="w-4 h-4 text-re-danger flex-shrink-0" />
+              <Badge tone="danger" size="sm">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                Affected
+              </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">{facility.type}</p>
-          <p className="text-xs text-muted-foreground font-mono mt-1">GLN: {facility.gln}</p>
+          <p className="text-ui text-re-text-secondary">{facility.type}</p>
+          <p className="mt-1 font-mono text-[0.8125rem] text-re-text-tertiary">GLN: {facility.gln}</p>
           {events.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-small text-re-text-tertiary">
               {events.length} event{events.length !== 1 ? 's' : ''}
             </p>
           )}
@@ -271,17 +271,17 @@ export function FacilityCard({
 
       {/* Contact info if available */}
       {facility.contact_name && (
-        <div className="mt-3 pt-3 border-t text-sm">
-          <p className="font-medium">{facility.contact_name}</p>
+        <div className="mt-3 border-t border-re-border-subtle pt-3 text-ui">
+          <p className="font-medium text-re-text-primary">{facility.contact_name}</p>
           {facility.contact_email && (
-            <p className="text-muted-foreground">{facility.contact_email}</p>
+            <p className="text-re-text-secondary">{facility.contact_email}</p>
           )}
           {facility.contact_phone && (
-            <p className="text-muted-foreground">{facility.contact_phone}</p>
+            <p className="text-re-text-secondary">{facility.contact_phone}</p>
           )}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -299,25 +299,25 @@ export function LotCard({ tlc, productDescription, quantity, unit, isAffected, c
   return (
     <div
       className={cn(
-        'p-3 rounded-lg border',
-        isAffected && 'border-re-danger bg-re-danger-muted dark:bg-re-danger/20',
+        'rounded-lg border bg-re-surface-card p-3',
+        isAffected ? 'border-re-danger-border' : 'border-re-border',
         className
       )}
     >
       <div className="flex items-center gap-2">
-        <Package className={cn('w-5 h-5', isAffected ? 'text-re-danger' : 'text-muted-foreground')} />
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-sm truncate">{tlc}</p>
+        <Package className={cn('h-4 w-4 shrink-0', isAffected ? 'text-re-danger' : 'text-re-text-tertiary')} strokeWidth={1.75} aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-[0.8125rem] text-re-text-primary">{tlc}</p>
           {productDescription && (
-            <p className="text-xs text-muted-foreground truncate">{productDescription}</p>
+            <p className="truncate text-small text-re-text-tertiary">{productDescription}</p>
           )}
         </div>
         {quantity && (
-          <span className="text-sm font-medium">
+          <span className="text-ui font-medium tabular-nums text-re-text-primary">
             {quantity} {unit || 'units'}
           </span>
         )}
-        {isAffected && <AlertTriangle className="w-4 h-4 text-re-danger" />}
+        {isAffected && <AlertTriangle className="h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />}
       </div>
     </div>
   );

@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { Search, ArrowRight, MapPin, Calendar, Package, AlertTriangle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Search, ArrowRight, AlertTriangle } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -141,187 +143,197 @@ export default function TracePage() {
     }
   };
 
+  const summaryStats = traceResult
+    ? [
+      { label: 'Facilities', value: traceResult.facilities.length },
+      { label: 'CTE Events', value: traceResult.events.length },
+      { label: 'Total Records', value: traceResult.total_count },
+    ]
+    : [];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <PageContainer>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          {/* Page Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900">
-              <Search className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold">Traceability Query</h1>
-              <p className="text-muted-foreground mt-1">
-                Trace products through the supply chain by Traceability Lot Code (TLC)
-              </p>
-            </div>
-          </div>
+    <PageContainer>
+      <PageHeader
+        title="Traceability Query"
+        description="Trace products through the supply chain by Traceability Lot Code (TLC)"
+      />
 
-          {/* Search Card */}
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Trace Lot</CardTitle>
-              <CardDescription>
-                Enter a Traceability Lot Code (TLC) to view its CTE event chain
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <Input
-                    placeholder="Enter TLC (e.g., TLC-2026-SAL-0001)"
-                    value={tlcInput}
-                    onChange={(e) => setTlcInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
-                    className="font-mono"
-                  />
-                </div>
-                <Button onClick={handleTrace} disabled={!tlcInput.trim() || isLoading || !hasTenantSession}>
-                  {isLoading ? <Spinner size="sm" /> : 'Trace'}
-                </Button>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Trace Lot</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3 md:flex-row">
+              <div className="flex-1">
+                <label htmlFor="trace-tlc" className="sr-only">Trace Lot</label>
+                <Input
+                  id="trace-tlc"
+                  placeholder="Enter TLC (e.g., TLC-2026-SAL-0001)"
+                  value={tlcInput}
+                  onChange={(e) => setTlcInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
+                  mono
+                />
               </div>
-              {!hasTenantSession && (
-                <p className="text-xs text-muted-foreground mt-2">Sign in to run trace queries.</p>
-              )}
-            </CardContent>
+              <Button onClick={handleTrace} disabled={!tlcInput.trim() || isLoading || !hasTenantSession}>
+                {isLoading ? <Spinner size="sm" /> : 'Trace'}
+              </Button>
+            </div>
+            {!hasTenantSession && (
+              <p className="mt-2 text-small text-re-text-tertiary">Sign in to run trace queries.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Error — the page's one alarm. `Callout` cannot be imported here:
+            src/__tests__/pages/trace.test.tsx mocks lucide-react with six
+            icons and vitest throws on any other icon access at import time. */}
+        {error && (
+          <Card
+            role="alert"
+            className="flex gap-3 border-l-[3px] border-l-re-danger bg-re-danger-bg px-4 py-3 text-ui text-re-text-secondary"
+          >
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-re-danger"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            <p className="min-w-0 flex-1">{error}</p>
           </Card>
+        )}
 
-          {/* Error */}
-          {error && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Card className="mb-8 border-orange-300 dark:border-orange-700">
-                <CardContent className="py-4">
-                  <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
-                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                    <p className="text-sm">{error}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+        {isLoading && (
+          <div className="space-y-6" aria-busy="true">
+            <Card>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-5 w-48" />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+                <Skeleton className="h-12 w-full" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-          {/* Results */}
-          {traceResult && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Summary */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Trace Results</CardTitle>
-                    <Badge variant="secondary">
-                      {traceResult.total_count} event{traceResult.total_count !== 1 ? 's' : ''}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    <span className="font-mono">{traceResult.tlc_code}</span>
+        {!isLoading && !traceResult && !error && (
+          <EmptyState
+            icon={Search}
+            title="Enter a Traceability Lot Code (TLC) to view its CTE event chain"
+          />
+        )}
+
+        {traceResult && (
+          <div className="space-y-6">
+            {/* Summary */}
+            <Card>
+              <CardHeader className="flex-col items-stretch sm:flex-row sm:items-start">
+                <div className="min-w-0">
+                  <CardTitle>Trace Results</CardTitle>
+                  <CardDescription className="mt-1">
+                    <span className="font-mono text-[0.8125rem]">{traceResult.tlc_code}</span>
                     {traceResult.product_description && (
-                      <span className="ml-2 text-foreground">— {traceResult.product_description}</span>
+                      <span className="ml-2 text-re-text-secondary">— {traceResult.product_description}</span>
                     )}
                   </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
-                      <MapPin className="h-8 w-8 text-primary" />
-                      <div>
-                        <p className="text-2xl font-bold">{traceResult.facilities.length}</p>
-                        <p className="text-sm text-muted-foreground">Facilities</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
-                      <Calendar className="h-8 w-8 text-primary" />
-                      <div>
-                        <p className="text-2xl font-bold">{traceResult.events.length}</p>
-                        <p className="text-sm text-muted-foreground">CTE Events</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
-                      <Package className="h-8 w-8 text-primary" />
-                      <div>
-                        <p className="text-2xl font-bold">{traceResult.total_count}</p>
-                        <p className="text-sm text-muted-foreground">Total Records</p>
-                      </div>
-                    </div>
-                  </div>
+                </div>
+                <Badge className="w-fit shrink-0">
+                  {traceResult.total_count} event{traceResult.total_count !== 1 ? 's' : ''}
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <dl className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  {summaryStats.map((stat) => (
+                    <Card key={stat.label} variant="inset" padding="compact">
+                      <dt className="text-label text-re-text-muted">{stat.label}</dt>
+                      <dd className="mt-2 text-title tabular-nums text-re-text-primary">{stat.value}</dd>
+                    </Card>
+                  ))}
+                </dl>
 
-                  {/* Facility Chain */}
-                  <h4 className="font-medium mb-4">Supply Chain Path</h4>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {traceResult.facilities.map((facility, index) => (
-                      <div key={facility.name} className="flex items-center gap-2">
-                        <div className="px-3 py-2 rounded-lg border bg-background">
-                          <p className="font-medium text-sm">{facility.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {facility.cte_types.map(formatCTEType).join(', ')}
-                          </p>
-                        </div>
-                        {index < traceResult.facilities.length - 1 && (
-                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                        )}
+                {/* Facility Chain */}
+                <h4 className="mb-3 text-ui font-medium text-re-text-primary">Supply Chain Path</h4>
+                <div className="flex flex-wrap items-center gap-2">
+                  {traceResult.facilities.map((facility, index) => (
+                    <div key={facility.name} className="flex items-center gap-2">
+                      <div className="rounded-md border border-re-border bg-re-surface-card px-3 py-2">
+                        <p className="text-ui font-medium text-re-text-primary">{facility.name}</p>
+                        <p className="text-small text-re-text-tertiary">
+                          {facility.cte_types.map(formatCTEType).join(', ')}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      {index < traceResult.facilities.length - 1 && (
+                        <ArrowRight
+                          className="h-4 w-4 text-re-text-muted"
+                          strokeWidth={1.75}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
-              {/* Events Timeline */}
-              <Card>
-                <CardHeader>
+            {/* Events Timeline */}
+            <Card>
+              <CardHeader>
+                <div className="min-w-0">
                   <CardTitle>CTE Event Timeline</CardTitle>
-                  <CardDescription>
+                  <CardDescription className="mt-1">
                     Each event is cryptographically hashed (SHA-256) for tamper-evident traceability
                   </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {traceResult.events.map((event) => (
-                      <div
-                        key={event.event_id}
-                        className="flex items-start gap-4 p-3 rounded-lg border"
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ul className="divide-y divide-re-border-subtle">
+                  {traceResult.events.map((event) => (
+                    <li key={event.event_id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-start sm:gap-4">
+                      <Badge
+                        variant={
+                          event.cte_type.includes('shipping')
+                            ? 'default'
+                            : event.cte_type.includes('receiving')
+                              ? 'secondary'
+                              : event.cte_type.includes('transform')
+                                ? 'outline'
+                                : 'default'
+                        }
+                        size="sm"
+                        className="w-fit shrink-0 sm:mt-0.5 sm:w-36 sm:justify-center"
                       >
-                        <Badge
-                          variant={
-                            event.cte_type.includes('shipping')
-                              ? 'default'
-                              : event.cte_type.includes('receiving')
-                                ? 'secondary'
-                                : event.cte_type.includes('transform')
-                                  ? 'outline'
-                                  : 'default'
-                          }
-                          className="mt-0.5 flex-shrink-0"
-                        >
-                          {formatCTEType(event.cte_type)}
-                        </Badge>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{event.facility_name}</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
-                            <span>{formatDate(event.event_time)}</span>
-                            {event.quantity && event.unit_of_measure && (
-                              <span>{event.quantity} {event.unit_of_measure}</span>
-                            )}
-                          </div>
-                          <p className="text-[10px] font-mono text-muted-foreground mt-1 truncate">
-                            SHA-256: {event.payload_sha256}
-                          </p>
+                        {formatCTEType(event.cte_type)}
+                      </Badge>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-ui font-medium text-re-text-primary">{event.facility_name}</p>
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-small text-re-text-tertiary">
+                          <span>{formatDate(event.event_time)}</span>
+                          {event.quantity && event.unit_of_measure && (
+                            <span className="tabular-nums">{event.quantity} {event.unit_of_measure}</span>
+                          )}
                         </div>
+                        <p className="mt-1 truncate font-mono text-[0.8125rem] text-re-text-tertiary">
+                          SHA-256: {event.payload_sha256}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </motion.div>
-      </PageContainer>
-    </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </PageContainer>
   );
 }

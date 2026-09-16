@@ -2,10 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity, LayoutDashboard, LogOut } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 
+import { PageContainer } from "@/components/layout/page-container"
+import { PageHeader } from "@/components/layout/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Callout } from "@/components/ui/callout"
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { StatTile } from "@/components/ui/stat-tile"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { useAuth } from "@/lib/auth-context"
 import { getServiceURL } from "@/lib/api-config"
 
@@ -26,8 +32,38 @@ interface SystemMetrics {
     active_jobs: number;
 }
 
+const SERVICE_COLUMNS: DataTableColumn<ServiceInfo>[] = [
+    {
+        key: "name",
+        header: "Service Name",
+        width: "14rem",
+        cell: (service) => <span className="capitalize">{service.name}</span>,
+    },
+    {
+        key: "status",
+        header: "Status",
+        width: "12rem",
+        cell: (service) =>
+            service.status === "healthy" ? (
+                <StatusBadge state="compliant" label="Healthy" size="sm" />
+            ) : (
+                <StatusBadge state="non-compliant" label={service.status} size="sm" />
+            ),
+    },
+    {
+        key: "details",
+        header: "Details",
+        mono: true,
+        cell: (service) => (
+            <span className="block truncate" title={JSON.stringify(service.details)}>
+                {JSON.stringify(service.details)}
+            </span>
+        ),
+    },
+];
+
 export default function SysAdminDashboard() {
-    const { user, accessToken, isHydrated, logout } = useAuth()
+    const { user, accessToken, isHydrated } = useAuth()
     const router = useRouter()
     const [status, setStatus] = useState<SystemStatus | null>(null)
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
@@ -81,125 +117,81 @@ export default function SysAdminDashboard() {
         return null // Redirecting
     }
 
+    const healthyCount = status?.services.filter((s: ServiceInfo) => s.status === 'healthy').length || 0
+    const serviceCount = status?.services.length || 0
+
     return (
-        <div className="container mx-auto py-10 space-y-8">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">System Administration</h1>
-                    <p className="text-muted-foreground">Real-time system health and operational metrics</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => router.push("/dashboard")}>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        Dashboard
-                    </Button>
-                    <Button onClick={fetchData} disabled={loading}>
-                        <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        <PageContainer>
+            {/* The dashboard shell owns the breadcrumb, the service-health badge
+                and the Dashboard / Sign Out links — this page only keeps its own
+                Refresh action. */}
+            <PageHeader
+                title="System Administration"
+                description="Real-time system health and operational metrics"
+                primaryAction={
+                    <Button
+                        onClick={fetchData}
+                        disabled={loading}
+                        leadingIcon={
+                            <RefreshCw
+                                className={loading ? "animate-spin motion-reduce:animate-none" : undefined}
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                            />
+                        }
+                    >
                         Refresh
                     </Button>
-                    <Button variant="outline" onClick={async () => { await logout(); router.replace("/login"); }}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Sign Out
-                    </Button>
-                </div>
-            </div>
+                }
+            />
 
-            {error && (
-                <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <div>
-                        <p className="font-semibold">Error</p>
-                        <p>{error}</p>
-                    </div>
-                </div>
-            )}
+            <div className="space-y-6">
+                {error && (
+                    <Callout tone="danger" role="alert" title="Error">
+                        {error}
+                    </Callout>
+                )}
 
-            {/* Overview Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Overall Health</CardTitle>
-                        <Activity className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold capitalize">
-                            {status?.overall_status || "Unknown"}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            {status?.services.filter((s: ServiceInfo) => s.status === 'healthy').length || 0} / {status?.services.length || 0} services healthy
+                {/* Overview Cards */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <StatTile
+                        label="Overall Health"
+                        value={<span className="capitalize">{status?.overall_status || "Unknown"}</span>}
+                    >
+                        <p className="text-small text-re-text-tertiary">
+                            {healthyCount} / {serviceCount} services healthy
                         </p>
-                    </CardContent>
-                </Card>
+                    </StatTile>
+                    <StatTile label="Active Tenants" value={metrics?.total_tenants || "-"} />
+                    <StatTile label="Total Documents" value={metrics?.total_documents || "-"} />
+                    <StatTile label="Active Jobs" value={metrics?.active_jobs || "-"} />
+                </div>
 
+                {/* Service Health Table */}
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Tenants</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                    <CardHeader>
+                        <div className="min-w-0">
+                            <CardTitle>Service Status</CardTitle>
+                            <CardDescription>
+                                Detailed health check results from internal services.
+                            </CardDescription>
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{metrics?.total_tenants || "-"}</div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Documents</CardTitle>
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{metrics?.total_documents || "-"}</div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
-                        <Server className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{metrics?.active_jobs || "-"}</div>
+                    <CardContent className="p-0">
+                        <DataTable
+                            caption="Detailed health check results from internal services"
+                            columns={SERVICE_COLUMNS}
+                            data={status?.services ?? []}
+                            rowKey={(service) => service.name}
+                            status={loading && !status ? 'loading' : 'idle'}
+                            empty={{ title: 'No service data available' }}
+                            minWidth="560px"
+                            stickyFirstColumn
+                            className="rounded-none border-0"
+                        />
                     </CardContent>
                 </Card>
             </div>
-
-            {/* Service Health Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Service Status</CardTitle>
-                    <CardDescription>
-                        Detailed health check results from internal services.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border overflow-x-auto">
-                        <div className="grid grid-cols-3 min-w-[500px] p-4 font-medium border-b bg-muted/50">
-                            <div>Service Name</div>
-                            <div>Status</div>
-                            <div>Details</div>
-                        </div>
-                        {status?.services.map((service: ServiceInfo) => (
-                            <div key={service.name} className="grid grid-cols-3 min-w-[500px] p-4 border-b last:border-0 items-center">
-                                <div className="font-semibold capitalize">{service.name}</div>
-                                <div className="flex items-center">
-                                    {service.status === "healthy" ? (
-                                        <span className="flex items-center text-re-success">
-                                            <CheckCircle className="mr-2 h-4 w-4" /> Healthy
-                                        </span>
-                                    ) : (
-                                        <span className="flex items-center text-re-danger">
-                                            <AlertCircle className="mr-2 h-4 w-4" /> {service.status}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-sm text-muted-foreground truncate" title={JSON.stringify(service.details)}>
-                                    {JSON.stringify(service.details)}
-                                </div>
-                            </div>
-                        ))}
-                        {!status && !loading && <div className="p-4 text-center">No service data available</div>}
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
+        </PageContainer>
     )
 }

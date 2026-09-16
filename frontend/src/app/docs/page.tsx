@@ -4,36 +4,22 @@ import {
   ArrowRight,
   Key,
   BookOpen,
-  Shield,
-  FileSearch,
-  Activity,
-  Database,
-  Send,
-  AlertTriangle,
-  Gauge,
   Zap,
   Code2,
   Terminal,
-  FileCode,
   Webhook,
+  AlertTriangle,
   Clock,
   Package,
   FileText,
 } from 'lucide-react';
-import { T as _T } from '@/lib/design-tokens';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { CodeBlock } from '@/components/ui/code-block';
 import { API_BASE } from '@/lib/api-base';
-
-// Wrap design tokens to use theme-aware CSS variables for text/heading colors,
-// while keeping accent/border tokens that work across themes.
-const T = {
-  ..._T,
-  heading: 'var(--re-text-primary)',
-  text: 'var(--re-text-secondary)',
-  textMuted: 'var(--re-text-muted)',
-  textDim: 'var(--re-text-muted)',
-  surface: 'var(--re-surface-card)',
-  border: 'var(--re-surface-border)',
-};
 
 export const metadata: Metadata = {
   title: 'API Documentation | RegEngine',
@@ -57,42 +43,32 @@ const endpoints = [
     path: '/webhooks/ingest',
     title: 'Ingest Records',
     description: 'Ingest traceability records with CTE/KDE data. Each record is hash-chained so you can detect tampering between ingest and export.',
-    icon: Database,
   },
   {
     method: 'GET' as const,
     path: '/records',
     title: 'Query Records',
     description: 'Query canonical records with filters by CTE type, lot code, date range, and location.',
-    icon: FileSearch,
   },
   {
     method: 'POST' as const,
     path: '/compliance/evaluate',
     title: 'Evaluate Compliance',
     description: 'Run FSMA 204 rule evaluation against your records. Returns advisory findings with CFR citations; informational and does not block ingestion.',
-    icon: Shield,
   },
   {
     method: 'GET' as const,
     path: '/fda-export/{request_id}',
     title: 'FDA Export',
     description: 'Export an audit package formatted to the §1.1455(c) sortable spreadsheet structure for a specific request, including supporting records.',
-    icon: Send,
   },
   {
     method: 'GET' as const,
     path: '/readiness/assessment',
     title: 'Readiness Score',
     description: 'Get your current compliance readiness score with a breakdown by CTE coverage and KDE completeness.',
-    icon: Activity,
   },
 ];
-
-const METHOD_COLORS: Record<string, { bg: string; text: string }> = {
-  GET: { bg: 'rgba(59,130,246,0.15)', text: '#60a5fa' },
-  POST: { bg: 'rgba(16,185,129,0.15)', text: '#34d399' },
-};
 
 const subPages = [
   { title: 'Quickstart', href: '/docs/quickstart', icon: Zap, description: 'Your first API call in about 5 minutes' },
@@ -106,19 +82,13 @@ const subPages = [
   { title: 'FSMA 204 Guide', href: '/docs/fsma-204', icon: FileText, description: 'FSMA 204 regulation reference and implementation' },
 ];
 
-/* ─── Helpers ──────────────────────────────────────────────── */
+const quickStartSteps = [
+  { step: '1', label: 'Read the docs', href: '/docs/quickstart', icon: BookOpen },
+  { step: '2', label: 'Request developer access', href: '/developers', icon: Key },
+  { step: '3', label: 'Make your first call', href: '/docs/quickstart', icon: Terminal },
+];
 
-function MethodBadge({ method }: { method: string }) {
-  const colors = METHOD_COLORS[method] ?? METHOD_COLORS.GET;
-  return (
-    <span
-      className="font-mono text-[11px] font-bold px-2 py-0.5 rounded"
-      style={{ background: colors.bg, color: colors.text }}
-    >
-      {method}
-    </span>
-  );
-}
+const SECTION_LABEL = 'mb-5 font-mono text-label uppercase text-re-text-muted';
 
 /* ─── Code Samples ─────────────────────────────────────────── */
 
@@ -227,320 +197,211 @@ const codeTabs = [
 
 export default function DocsHomePage() {
   return (
-    <div className="min-h-screen re-page text-[var(--re-text-secondary)]">
+    <div className="re-page min-h-screen">
+      <Container width="docs" className="py-10 sm:py-14">
+        <PageHeader
+          eyebrow="Developer Docs"
+          title="RegEngine API Documentation"
+          description="Wire FSMA 204 traceability into any supply-chain system. Preflight supplier data, surface gaps, fix missing KDEs, and commit records to an FDA-oriented sortable export workflow. Your operation remains responsible for compliance."
+          meta={<Badge tone="neutral" size="sm" mono>v1</Badge>}
+        />
 
-      {/* ── Hero ────────────────────────────────────────────── */}
-      <section
-        className="px-6 py-16"
-        style={{
-          background:
-            'linear-gradient(90deg, rgba(29,29,27,0.035) 1px, transparent 1px), linear-gradient(180deg, rgba(29,29,27,0.025) 1px, transparent 1px), var(--re-surface-base)',
-          backgroundSize: '48px 48px',
-          borderBottom: `1px solid ${T.border}`,
-        }}
-      >
-        <div className="max-w-[1000px] mx-auto">
-          <div className="flex items-center gap-3 mb-5">
-            <span
-              className="font-mono text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded"
-              style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
-            >
-              Developer Docs
-            </span>
-            <span className="text-xs" style={{ color: T.textMuted }}>v1</span>
-          </div>
-
-          <h1
-            className="font-display text-[2.25rem] md:text-[2.75rem] font-bold leading-tight mb-3"
-            style={{ color: T.heading }}
-          >
-            RegEngine API Documentation
-          </h1>
-          <p className="text-[16px] max-w-[600px] mb-8 leading-relaxed" style={{ color: T.textMuted }}>
-            Wire FSMA 204 traceability into any supply-chain system.
-            Preflight supplier data, surface gaps, fix missing KDEs, and commit records to an FDA-oriented sortable export workflow. Your operation remains responsible for compliance.
-          </p>
-
-          {/* Quick start steps */}
-          <div className="flex flex-wrap gap-4 mb-8">
-            {[
-              { step: '1', label: 'Read the docs', href: '/docs/quickstart', icon: BookOpen },
-              { step: '2', label: 'Request developer access', href: '/developers', icon: Key },
-              { step: '3', label: 'Make your first call', href: '/docs/quickstart', icon: Terminal },
-            ].map((item) => (
+        {/* Quick start steps */}
+        <ul className="mb-8 grid list-none gap-2 sm:grid-cols-3">
+          {quickStartSteps.map((item) => (
+            <li key={item.step}>
               <Link
-                key={item.step}
                 href={item.href}
-                className="flex items-center gap-3 px-5 py-3 rounded-lg no-underline group"
-                style={{ background: T.surface, border: `1px solid ${T.border}` }}
+                className="group flex h-full items-center gap-3 rounded-lg border border-re-border bg-re-surface-card px-4 py-3 no-underline transition-colors duration-120 hover:border-re-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none"
               >
-                <span
-                  className="flex items-center justify-center w-7 h-7 rounded-full font-mono text-xs font-bold"
-                  style={{ background: T.accentBg, color: T.accent }}
-                >
+                <span aria-hidden="true" className="font-mono text-label text-re-text-muted">
                   {item.step}
                 </span>
-                <item.icon className="w-4 h-4" style={{ color: T.textMuted }} />
-                <span className="text-sm font-medium" style={{ color: T.heading }}>
+                <item.icon aria-hidden="true" strokeWidth={1.75} className="h-4 w-4 shrink-0 text-re-text-muted" />
+                <span className="min-w-0 flex-1 text-ui font-medium text-re-text-primary">
                   {item.label}
                 </span>
                 <ArrowRight
-                  className="w-3.5 h-3.5 opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0"
-                  style={{ color: T.accent }}
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                  className="h-4 w-4 shrink-0 text-re-text-muted transition-colors duration-120 group-hover:text-re-text-primary motion-reduce:transition-none"
                 />
               </Link>
-            ))}
-          </div>
+            </li>
+          ))}
+        </ul>
 
-          {/* Base URL + Auth */}
-          <div className="flex flex-wrap gap-6">
-            <div>
-              <span className="block text-[11px] font-mono uppercase tracking-wider mb-1.5" style={{ color: T.textMuted }}>
-                Base URL
-              </span>
-              <code
-                className="block text-sm px-4 py-2 rounded-md"
-                style={{
-                  background: 'var(--re-surface-elevated)',
-                  border: `1px solid ${T.border}`,
-                  color: T.accent,
-                  fontFamily: T.fontMono,
-                }}
-              >
+        {/* Base URL + Auth */}
+        <dl className="mb-14 grid gap-4 sm:grid-cols-2">
+          <div>
+            <dt className="mb-1.5 font-mono text-label uppercase text-re-text-muted">Base URL</dt>
+            <dd className="m-0">
+              <code className="block overflow-x-auto rounded-md border border-re-border-subtle bg-re-surface-inset px-4 py-2 font-mono text-[0.8125rem] text-re-text-primary">
                 {API_BASE}
               </code>
-            </div>
-            <div>
-              <span className="block text-[11px] font-mono uppercase tracking-wider mb-1.5" style={{ color: T.textMuted }}>
-                Authentication
-              </span>
-              <code
-                className="block text-sm px-4 py-2 rounded-md"
-                style={{
-                  background: 'var(--re-surface-elevated)',
-                  border: `1px solid ${T.border}`,
-                  color: T.text,
-                  fontFamily: T.fontMono,
-                }}
-              >
-                X-RegEngine-API-Key: <span style={{ color: T.textMuted }}>rge_live_...</span>
-              </code>
-            </div>
+            </dd>
           </div>
-        </div>
-      </section>
-
-      <div className="max-w-[1000px] mx-auto px-6 py-14">
+          <div>
+            <dt className="mb-1.5 font-mono text-label uppercase text-re-text-muted">Authentication</dt>
+            <dd className="m-0">
+              <code className="block overflow-x-auto rounded-md border border-re-border-subtle bg-re-surface-inset px-4 py-2 font-mono text-[0.8125rem] text-re-text-primary">
+                X-RegEngine-API-Key: <span className="text-re-text-tertiary">rge_live_...</span>
+              </code>
+            </dd>
+          </div>
+        </dl>
 
         {/* ── Core Endpoints ────────────────────────────────── */}
-        <section className="mb-16">
-          <h2
-            className="font-display text-[11px] font-bold uppercase tracking-widest mb-6"
-            style={{ color: T.textMuted }}
-          >
-            Core Endpoints
-          </h2>
-          <div className="grid gap-3">
-            {endpoints.map((ep) => (
-              <div
-                key={ep.path}
-                className="flex items-start gap-4 px-5 py-4 rounded-lg"
-                style={{ background: T.surface, border: `1px solid ${T.border}` }}
-              >
-                <div
-                  className="flex items-center justify-center w-9 h-9 rounded-lg mt-0.5 shrink-0"
-                  style={{ background: T.accentBg }}
+        <section className="mb-14">
+          <h2 className={SECTION_LABEL}>Core Endpoints</h2>
+
+          <Card className="overflow-hidden">
+            <ul className="list-none">
+              {endpoints.map((ep) => (
+                <li
+                  key={ep.path}
+                  className="flex flex-col gap-3 border-b border-re-border-subtle px-5 py-4 last:border-0 sm:flex-row sm:items-start sm:justify-between"
                 >
-                  <ep.icon className="w-[18px] h-[18px]" style={{ color: T.accent }} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3 mb-1 flex-wrap">
-                    <MethodBadge method={ep.method} />
-                    <code className="text-[13px]" style={{ color: T.heading, fontFamily: T.fontMono }}>
-                      {ep.path}
-                    </code>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <Badge tone="neutral" size="sm" mono>
+                        {ep.method}
+                      </Badge>
+                      <code className="font-mono text-[0.8125rem] text-re-text-primary">{ep.path}</code>
+                    </div>
+                    <p className="text-small text-re-text-tertiary">{ep.description}</p>
                   </div>
-                  <p className="text-[13px] leading-relaxed m-0" style={{ color: T.textMuted }}>
-                    {ep.description}
-                  </p>
-                </div>
-                <Link
-                  href="/docs/api"
-                  className="shrink-0 text-[12px] font-medium no-underline px-3 py-1.5 rounded-md mt-0.5"
-                  style={{ color: T.accent, background: T.accentBg }}
-                >
-                  Reference
-                </Link>
-              </div>
-            ))}
-          </div>
+                  <Link
+                    href="/docs/api"
+                    className="shrink-0 self-start text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+                  >
+                    Reference
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </section>
 
         {/* ── Code Samples ──────────────────────────────────── */}
-        <section className="mb-16">
-          <h2
-            className="font-display text-[11px] font-bold uppercase tracking-widest mb-2"
-            style={{ color: T.textMuted }}
-          >
-            Ingest Your First Record
-          </h2>
-          <p className="text-sm mb-6" style={{ color: T.textMuted }}>
-            Send a traceability event to the <code className="font-mono text-[13px]" style={{ color: T.accent }}>POST /webhooks/ingest</code> endpoint.
+        <section className="mb-14">
+          <h2 className="mb-2 font-mono text-label uppercase text-re-text-muted">Ingest Your First Record</h2>
+          <p className="mb-5 text-ui text-re-text-secondary">
+            Send a traceability event to the{' '}
+            <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">
+              POST /webhooks/ingest
+            </code>{' '}
+            endpoint.
           </p>
 
           {/* Tab bar (static, no JS needed -- all samples shown with labels) */}
           <div className="space-y-4">
             {codeTabs.map((tab) => (
-              <div
-                key={tab.label}
-                className="rounded-lg overflow-hidden"
-                style={{ border: `1px solid ${T.border}` }}
-              >
-                <div
-                  className="flex items-center justify-between px-4 py-2"
-                  style={{ background: 'var(--re-surface-elevated)', borderBottom: `1px solid ${T.border}` }}
-                >
-                  <span className="font-mono text-xs" style={{ color: T.textMuted }}>{tab.label}</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wide" style={{ color: T.accent }}>{tab.lang}</span>
+              <div key={tab.label} className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-label text-re-text-muted">{tab.label}</span>
+                  <span className="font-mono text-label text-re-text-muted">{tab.lang}</span>
                 </div>
-                <pre
-                  className="m-0 px-5 py-4 overflow-x-auto text-[13px] leading-relaxed"
-                  style={{ background: 'var(--re-surface-elevated)', color: T.text }}
-                >
-                  <code>{tab.code}</code>
-                </pre>
+                <CodeBlock code={tab.code} />
               </div>
             ))}
           </div>
 
           {/* Response */}
-          <div className="mt-4 rounded-lg overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-            <div
-              className="flex items-center gap-2 px-4 py-2"
-              style={{ background: T.accentBg, borderBottom: `1px solid ${T.border}` }}
-            >
-              <span className="w-2 h-2 rounded-full" style={{ background: T.accent }} />
-              <span className="font-mono text-xs font-bold" style={{ color: T.accent }}>201 Created</span>
-              <span className="font-mono text-[10px] ml-auto uppercase tracking-wide" style={{ color: T.textMuted }}>response</span>
+          <div className="mt-6 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Badge tone="success" size="sm" mono>201 Created</Badge>
+              <span className="font-mono text-label uppercase text-re-text-muted">response</span>
             </div>
-            <pre
-              className="m-0 px-5 py-4 overflow-x-auto text-[13px] leading-relaxed"
-              style={{ background: 'var(--re-surface-elevated)', color: T.textMuted }}
-            >
-              <code>{responseSample}</code>
-            </pre>
+            <CodeBlock code={responseSample} />
           </div>
         </section>
 
         {/* ── Documentation Pages Grid ──────────────────────── */}
-        <section className="mb-16">
-          <h2
-            className="font-display text-[11px] font-bold uppercase tracking-widest mb-6"
-            style={{ color: T.textMuted }}
-          >
-            Documentation
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-3">
+        <section className="mb-14">
+          <h2 className={SECTION_LABEL}>Documentation</h2>
+
+          <ul className="grid list-none gap-2 sm:grid-cols-2">
             {subPages.map((page) => (
-              <Link
-                key={page.href}
-                href={page.href}
-                className="flex items-start gap-4 px-5 py-4 rounded-lg no-underline group"
-                style={{ background: T.surface, border: `1px solid ${T.border}` }}
-              >
-                <div
-                  className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 mt-0.5"
-                  style={{ background: T.accentBg }}
+              <li key={page.href}>
+                <Link
+                  href={page.href}
+                  className="group flex h-full items-start gap-3 rounded-lg border border-re-border bg-re-surface-card px-5 py-4 no-underline transition-colors duration-120 hover:border-re-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none"
                 >
-                  <page.icon className="w-[18px] h-[18px]" style={{ color: T.accent }} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[14px] font-semibold" style={{ color: T.heading }}>
-                      {page.title}
+                  <page.icon
+                    aria-hidden="true"
+                    strokeWidth={1.75}
+                    className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="mb-0.5 flex items-center gap-2">
+                      <span className="text-ui font-medium text-re-text-primary">{page.title}</span>
+                      <ArrowRight
+                        aria-hidden="true"
+                        strokeWidth={1.75}
+                        className="h-3.5 w-3.5 shrink-0 text-re-text-muted opacity-0 transition-opacity duration-120 group-hover:opacity-100 motion-reduce:transition-none"
+                      />
                     </span>
-                    <ArrowRight
-                      className="w-3.5 h-3.5 opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0"
-                      style={{ color: T.accent }}
-                    />
-                  </div>
-                  <p className="text-[13px] leading-relaxed m-0" style={{ color: T.textMuted }}>
-                    {page.description}
-                  </p>
-                </div>
-              </Link>
+                    <span className="block text-small text-re-text-tertiary">{page.description}</span>
+                  </span>
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
 
         {/* ── CTA Banner ────────────────────────────────────── */}
-        <section
-          className="rounded-lg px-8 py-8 mb-16 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6"
-          style={{
-            background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.06) 100%)',
-            border: `1px solid ${T.accentBorder}`,
-          }}
-        >
+        <section className="mb-14 flex flex-col items-start justify-between gap-6 rounded-lg border border-re-border bg-re-surface-card px-6 py-6 sm:flex-row sm:items-center">
           <div>
-            <h3 className="text-lg font-semibold mb-1" style={{ color: T.heading }}>
+            <h3 className="mb-1 text-subheading text-re-text-primary">
               Ready to get started?
             </h3>
-            <p className="text-sm m-0" style={{ color: T.textMuted }}>
+            <p className="text-ui text-re-text-tertiary">
               Developer access is request-gated — tell us about your integration and we&apos;ll provision your API key.
             </p>
           </div>
-          <div className="flex gap-3 shrink-0">
-            <Link
-              href="/developers"
-              className="inline-flex items-center gap-2 text-white px-6 py-3 rounded-md font-semibold text-sm no-underline"
-              style={{ background: T.accent }}
-            >
-              <Key className="w-4 h-4" />
-              Request developer access
-            </Link>
-            <Link
-              href="/docs/quickstart"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-md font-semibold text-sm no-underline"
-              style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.heading }}
-            >
-              Quickstart
-              <ArrowRight className="w-4 h-4" />
-            </Link>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/docs/quickstart" className="no-underline">
+                Quickstart
+                <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+              </Link>
+            </Button>
+            <Button asChild variant="primary" size="lg">
+              <Link href="/developers" className="no-underline">
+                <Key aria-hidden="true" strokeWidth={1.75} />
+                Request developer access
+              </Link>
+            </Button>
           </div>
         </section>
 
         {/* ── Footer ────────────────────────────────────────── */}
-        <footer
-          className="pt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-          style={{ borderTop: `1px solid ${T.border}` }}
-        >
-          <div className="flex items-center gap-4">
-            <code
-              className="px-4 py-2 rounded-md text-[13px]"
-              style={{ background: 'var(--re-surface-elevated)', color: T.textMuted, fontFamily: T.fontMono }}
-            >
+        <footer className="flex flex-col items-start justify-between gap-4 border-t border-re-border-subtle pt-8 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-center gap-4">
+            <code className="rounded-md border border-re-border-subtle bg-re-surface-inset px-4 py-2 font-mono text-[0.8125rem] text-re-text-secondary">
               python verify_chain.py --audit
             </code>
-            <span className="text-sm" style={{ color: T.textMuted }}>
+            <span className="text-ui text-re-text-tertiary">
               Don&apos;t trust, verify.
             </span>
           </div>
-          <div className="flex gap-6">
-            <Link href="/docs/quickstart" className="text-[13px] no-underline" style={{ color: T.textMuted }}>
+          <div className="flex flex-wrap gap-6">
+            <Link href="/docs/quickstart" className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none">
               Quickstart
             </Link>
-            <Link href="/docs/api" className="text-[13px] no-underline" style={{ color: T.textMuted }}>
+            <Link href="/docs/api" className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none">
               API Reference
             </Link>
-            <Link href="/docs/fsma-204" className="text-[13px] no-underline" style={{ color: T.textMuted }}>
+            <Link href="/docs/fsma-204" className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none">
               FSMA 204
             </Link>
-            <a href="mailto:support@regengine.co" className="text-[13px] no-underline" style={{ color: T.textMuted }}>
+            <a href="mailto:support@regengine.co" className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none">
               Support
             </a>
           </div>
         </footer>
-      </div>
+      </Container>
     </div>
   );
 }

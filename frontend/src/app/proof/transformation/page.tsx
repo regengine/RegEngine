@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, FileSpreadsheet, Database, ShieldCheck } from "lucide-react";
+import { ArrowRight, FileSpreadsheet, Database, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Container } from "@/components/layout/container";
+import { PageHeader } from "@/components/layout/page-header";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Proof: CSV → CTE → FDA row | RegEngine",
@@ -238,25 +243,23 @@ const STEPS: Step[] = [
   },
 ];
 
-function CodeBlock({ children, label, Icon }: { children: React.ReactNode; label: string; Icon: React.ComponentType<{ className?: string }> }) {
+function Pane({ children, label, Icon }: { children: React.ReactNode; label: string; Icon: LucideIcon }) {
   return (
-    <div className="flex flex-col rounded-lg border border-slate-200 bg-slate-50 overflow-hidden h-full">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
-        <Icon className="h-4 w-4 text-slate-500" />
-        <span className="text-xs font-semibold tracking-wide uppercase text-slate-600">
-          {label}
-        </span>
+    <Card variant="inset" className="flex h-full flex-col overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-re-border-subtle bg-re-surface-card px-3 py-2">
+        <Icon className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+        <span className="text-label text-re-text-tertiary">{label}</span>
       </div>
-      <div className="overflow-x-auto p-3 flex-1">{children}</div>
-    </div>
+      <div className="flex-1 overflow-x-auto p-3">{children}</div>
+    </Card>
   );
 }
 
 function Arrow({ note }: { note: string }) {
   return (
-    <div className="flex md:flex-col items-center justify-center gap-2 py-4 md:py-0 md:px-2">
-      <ArrowRight className="h-5 w-5 text-emerald-600 md:rotate-0 rotate-90" />
-      <p className="text-xs text-slate-500 italic max-w-[180px] text-center leading-snug">
+    <div className="flex items-center justify-center gap-2 py-4 md:flex-col md:px-2 md:py-0">
+      <ArrowRight className="h-5 w-5 rotate-90 text-re-text-muted md:rotate-0" strokeWidth={1.75} aria-hidden="true" />
+      <p className="max-w-[180px] text-center text-small text-re-text-tertiary">
         {note}
       </p>
     </div>
@@ -265,120 +268,114 @@ function Arrow({ note }: { note: string }) {
 
 function StepBlock({ step, index }: { step: Step; index: number }) {
   return (
-    <section className="border-t border-slate-200 pt-12 mt-12 first:border-0 first:pt-0 first:mt-0">
-      <div className="mb-8">
-        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-          Step {index + 1} · CTE {step.cte}
-        </div>
-        <h2 className="mt-3 text-3xl font-bold text-slate-900">{step.title}</h2>
-        <p className="mt-2 max-w-3xl text-slate-600">{step.subtitle}</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-stretch">
+    <Section
+      width="docs"
+      flush={index === 0}
+      eyebrow={<span className="font-mono uppercase">{`Step ${index + 1} · CTE ${step.cte}`}</span>}
+      title={step.title}
+      description={step.subtitle}
+    >
+      <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
         {/* Column A: raw CSV */}
-        <CodeBlock label="A · Raw supplier CSV" Icon={FileSpreadsheet}>
-          <pre className="text-[11px] leading-relaxed font-mono text-slate-800 whitespace-pre">
-            <span className="text-slate-400">{step.csvHeader}</span>
+        <Pane label="A · Raw supplier CSV" Icon={FileSpreadsheet}>
+          <pre className="whitespace-pre font-mono text-small leading-5 text-re-text-secondary">
+            <span className="text-re-text-muted">{step.csvHeader}</span>
             {"\n"}
             {step.csvRows.join("\n")}
           </pre>
-        </CodeBlock>
+        </Pane>
 
         <Arrow note={step.canonicalAnnotation} />
 
         {/* Column B: canonical TraceabilityEvent */}
-        <CodeBlock label="B · Canonical TraceabilityEvent" Icon={Database}>
-          <pre className="text-[11px] leading-relaxed font-mono text-slate-800 whitespace-pre">
+        <Pane label="B · Canonical TraceabilityEvent" Icon={Database}>
+          <pre className="whitespace-pre font-mono text-small leading-5 text-re-text-secondary">
             {step.canonical}
           </pre>
-        </CodeBlock>
+        </Pane>
 
         <Arrow note={step.fdaAnnotation} />
 
         {/* Column C: FDA spreadsheet row */}
-        <CodeBlock label="C · FDA spreadsheet row" Icon={ShieldCheck}>
-          <table className="text-[11px] font-mono w-full">
-            <tbody>
-              {step.fdaRow.map(([col, val]) => (
-                <tr key={col} className="border-b border-slate-200 last:border-0">
-                  <td className="py-1 pr-3 text-slate-500 align-top whitespace-nowrap">
-                    {col}
-                  </td>
-                  <td className="py-1 text-slate-900 break-all">{val}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CodeBlock>
+        <Pane label="C · FDA spreadsheet row" Icon={ShieldCheck}>
+          <dl className="w-full">
+            {step.fdaRow.map(([col, val]) => (
+              <div key={col} className="border-b border-re-border-subtle py-1.5 last:border-0">
+                <dt className="font-mono text-label uppercase text-re-text-muted">{col}</dt>
+                <dd className="mt-0.5 break-all font-mono text-small text-re-text-primary">{val}</dd>
+              </div>
+            ))}
+          </dl>
+        </Pane>
       </div>
-    </section>
+    </Section>
   );
 }
 
 export default function TransformationProofPage() {
   return (
-    <main className="min-h-screen bg-white">
+    <div className="re-page min-h-screen">
       {/* Hero */}
-      <header className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white">
-        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
+      <header className="border-b border-re-border-subtle">
+        <Container width="docs" className="py-16 md:py-20">
           <Link
             href="/proof"
-            className="text-sm text-emerald-700 hover:underline"
+            className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
           >
             ← Proof
           </Link>
-          <h1 className="mt-4 text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
-            How a supplier CSV becomes an FDA-oriented sortable record.
-          </h1>
-          <p className="mt-4 text-lg text-slate-600 max-w-3xl">
+          <PageHeader
+            size="hero"
+            title="How a supplier CSV becomes an FDA-oriented sortable record."
+            className="mb-0 mt-4 border-b-0 pb-0"
+          />
+          <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             Three CTEs, three transformations. Real production code, synthetic
             data. Every row you see comes from{" "}
-            <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm">
+            <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem]">
               sample_data/
             </code>{" "}
             and matches the canonical event shape and FDA spreadsheet column
             spec used in production.
           </p>
-        </div>
+        </Container>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        {STEPS.map((step, i) => (
-          <StepBlock key={step.cte} step={step} index={i} />
-        ))}
+      {STEPS.map((step, i) => (
+        <StepBlock key={step.cte} step={step} index={i} />
+      ))}
 
-        {/* CTA */}
-        <section className="mt-20 rounded-2xl border border-emerald-200 bg-emerald-50 p-8 md:p-10">
-          <h2 className="text-2xl font-bold text-slate-900">
+      {/* CTA */}
+      <Section width="docs">
+        <Card className="p-8 md:p-10">
+          <h2 className="text-heading text-re-text-primary">
             Verify this for yourself.
           </h2>
-          <p className="mt-2 text-slate-700 max-w-2xl">
+          <p className="mt-2 max-w-[68ch] text-body text-re-text-secondary">
             Download the same sample CSVs, run the canonical pipeline, and
             verify the SHA-256 + chain hashes with our open verifier.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link
-              href="/proof"
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Download sample data
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/verify"
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
-            >
-              Open the verifier
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <Button asChild size="lg">
+              <Link href="/proof">
+                Download sample data
+                <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/verify">
+                Open the verifier
+                <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+              </Link>
+            </Button>
           </div>
-          <p className="mt-6 text-xs text-slate-500">
+          <p className="mt-6 text-small text-re-text-tertiary">
             Code references: canonical shape ·{" "}
-            <code>services/shared/canonical_event.py</code> · FDA columns ·{" "}
-            <code>services/ingestion/app/fda_export_service.py</code>
+            <code className="font-mono">services/shared/canonical_event.py</code> · FDA columns ·{" "}
+            <code className="font-mono">services/ingestion/app/fda_export_service.py</code>
           </p>
-        </section>
-      </div>
-    </main>
+        </Card>
+      </Section>
+    </div>
   );
 }

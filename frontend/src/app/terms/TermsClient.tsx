@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Callout } from '@/components/ui/callout';
 
 const sections = [
     {
@@ -142,6 +145,9 @@ RegEngine LLC
 Los Angeles, California`,
     },
 ];
+const PROSE_LINK =
+    'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
+
 export default function TermsClient() {
     const [activeId, setActiveId] = useState('');
 
@@ -163,47 +169,42 @@ export default function TermsClient() {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+        <div className="re-page min-h-screen">
             {/* ═══ HERO ═══ */}
-            <section className="relative z-[2] max-w-[960px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10">
-                <span className="text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
-                    Legal
-                </span>
-                <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-3 leading-tight">
-                    Terms of Service
-                </h1>
-                <p className="text-sm text-[var(--re-text-disabled)] font-mono">
+            <Container width="prose" className="pb-10 pt-14 sm:pt-20">
+                <PageHeader
+                    size="hero"
+                    eyebrow={<span className="font-mono uppercase">Legal</span>}
+                    title="Terms of Service"
+                    className="mb-0 border-b-0 pb-0"
+                />
+                <p className="mt-3 font-mono text-[0.8125rem] text-re-text-tertiary">
                     Effective: March 11, 2026 &middot; Last updated: March 11, 2026
                 </p>
-                <p className="text-base text-[var(--re-text-muted)] leading-relaxed mt-5 max-w-[700px]">
+                <p className="mt-5 text-body text-re-text-secondary">
                     These are the rules for using RegEngine. We&apos;ve written them in plain language because compliance professionals shouldn&apos;t need a lawyer to understand a terms page.
                 </p>
-            </section>
+            </Container>
+
             {/* ═══ TL;DR CALLOUT ═══ */}
-            <section className="relative z-[2] max-w-[960px] mx-auto px-4 sm:px-6 pb-8">
-                <div className="max-w-[700px]">
-                    <div className="rounded-2xl border-2 border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] p-6">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-md bg-[var(--re-brand)] flex items-center justify-center">
-                                <span className="text-white text-xs font-bold">TL</span>
-                            </div>
-                            <h3 className="text-sm font-bold text-[var(--re-brand)] uppercase tracking-wider">
-                                TL;DR
-                            </h3>
-                        </div>
-                        <p className="text-sm text-[var(--re-text-secondary)] leading-relaxed">
-                            You retain rights in Customer Data you submit. We process it to provide, secure, support, and improve the service under the applicable terms. Free tools are informational. Paid-plan and legal terms may be controlled by a signed agreement. We&apos;re a software tool, not legal advice. Don&apos;t try to access other people&apos;s data.
-                        </p>
-                    </div>
-                </div>
-            </section>
+            <Container width="prose" className="pb-8">
+                <Callout tone="info">
+                    <h3 className="font-mono text-label uppercase text-re-text-primary">
+                        TL;DR
+                    </h3>
+                    <p className="mt-2 text-ui text-re-text-secondary">
+                        You retain rights in Customer Data you submit. We process it to provide, secure, support, and improve the service under the applicable terms. Free tools are informational. Paid-plan and legal terms may be controlled by a signed agreement. We&apos;re a software tool, not legal advice. Don&apos;t try to access other people&apos;s data.
+                    </p>
+                </Callout>
+            </Container>
+
             {/* ═══ MAIN CONTENT: TOC + SECTIONS ═══ */}
-            <section className="relative z-[2] max-w-[960px] mx-auto px-4 sm:px-6 pb-20">
-                <div className="flex gap-10">
+            <Container width="docs" className="pb-20">
+                <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,720px)] lg:justify-center lg:gap-10">
                     {/* Sticky TOC — desktop only */}
-                    <nav className="hidden lg:block w-[220px] shrink-0">
+                    <nav className="hidden lg:block">
                         <div className="sticky top-24">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-3">
+                            <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
                                 On this page
                             </p>
                             <div className="flex flex-col gap-0.5">
@@ -217,10 +218,10 @@ export default function TermsClient() {
                                                 e.preventDefault();
                                                 document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                             }}
-                                            className={`text-[12px] py-1 pl-3 border-l-2 transition-all ${
+                                            className={`border-l-2 py-1 pl-3 text-ui no-underline transition-colors duration-120 motion-reduce:transition-none ${
                                                 activeId === s.id
-                                                    ? 'border-[var(--re-brand)] text-[var(--re-brand)] font-semibold'
-                                                    : 'border-transparent text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] hover:border-[var(--re-surface-border)]'
+                                                    ? 'border-re-brand font-medium text-re-text-primary'
+                                                    : 'border-transparent text-re-text-secondary hover:border-re-border hover:text-re-text-primary'
                                             }`}
                                         >
                                             {shortTitle}
@@ -231,26 +232,26 @@ export default function TermsClient() {
                         </div>
                     </nav>
                     {/* Content */}
-                    <div className="flex-grow min-w-0 max-w-[700px]">
+                    <div className="min-w-0">
                         {sections.map((section) => (
                             <div
                                 key={section.id}
                                 id={section.id}
-                                className="scroll-mt-24 py-8 border-t border-[var(--re-surface-border)]"
+                                className="scroll-mt-24 border-t border-re-border-subtle py-8"
                             >
-                                <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-4 flex items-center gap-3">
-                                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-xs font-bold text-[var(--re-text-muted)]">
+                                <h2 className="mb-4 flex items-baseline gap-3 text-heading text-re-text-primary">
+                                    <span className="font-mono text-label tabular-nums text-re-text-muted">
                                         {section.title.match(/^\d+/)?.[0]}
                                     </span>
                                     <span>{section.title.replace(/^\d+\.\s*/, '')}</span>
                                 </h2>
-                                <p className="text-sm text-[var(--re-text-muted)] leading-[1.75] whitespace-pre-line">
+                                <p className="whitespace-pre-line text-ui leading-[1.75] text-re-text-secondary">
                                     {section.content}
                                 </p>
                                 {'hasPrivacyLink' in section && section.hasPrivacyLink && (
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mt-3">
+                                    <p className="mt-3 text-ui text-re-text-secondary">
                                         See our{' '}
-                                        <Link href="/privacy" className="text-[var(--re-brand)] underline hover:opacity-90">
+                                        <Link href="/privacy" className={PROSE_LINK}>
                                             Privacy Policy
                                         </Link>{' '}
                                         for details on how we collect and process personal data.
@@ -260,7 +261,7 @@ export default function TermsClient() {
                         ))}
                     </div>
                 </div>
-            </section>
+            </Container>
         </div>
     );
 }

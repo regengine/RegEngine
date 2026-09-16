@@ -5,11 +5,16 @@ import Link from 'next/link';
 import {
     Check, Zap, Rocket, Crown, ArrowRight, HelpCircle, Lock, ShieldCheck, KeyRound,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Container } from '@/components/layout/container';
 import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 import { analytics } from '@/lib/analytics';
+import { cn } from '@/lib/utils';
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, LucideIcon> = {
     zap: Zap,
     rocket: Rocket,
     crown: Crown,
@@ -56,67 +61,60 @@ export function PricingPageClient({
     }, []);
 
     return (
-        <div className="re-page min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-            <section className="relative z-[2] max-w-[900px] mx-auto pt-10 sm:pt-14 pb-7 sm:pb-10 px-4 sm:px-6 text-center">
-                <h1 className="font-display text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-4">
+        <div className="re-page bg-re-surface-base text-re-text-secondary">
+            <Container as="section" width="marketing" className="pb-7 pt-10 text-center sm:pb-10 sm:pt-14">
+                <h1 className="mx-auto max-w-[34ch] font-display text-display text-re-text-primary">
                     FSMA 204 traceability readiness,<br />
                     priced for facility teams.
                 </h1>
-                <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-3 leading-relaxed">
+                <p className="mx-auto mb-3 mt-4 max-w-[68ch] text-body text-re-text-secondary">
                     Three indicative plans sized by facility count. Founding Design Partner discounts are documented in the executed order form or design-partner agreement.
                 </p>
-                <p className="font-display text-base font-semibold text-[var(--re-text-muted)] tracking-tight">
+                <p className="mx-auto max-w-[68ch] text-body font-medium text-re-text-primary">
                     Pricing shown is indicative. Executed agreement controls final plan, billing period, and checkout availability.
                 </p>
-                <p className="text-sm text-[var(--re-text-disabled)] mt-2">
+                <p className="mt-2 text-small text-re-text-tertiary">
                     Annual billing saves ~15%. Monthly billing also available.
                 </p>
-            </section>
+            </Container>
 
-            <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+            <Container as="section" width="marketing" className="pb-10 sm:pb-16">
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
                     {pricingTiers.map((tier) => {
                         const Icon = ICON_MAP[tier.icon] ?? Zap;
                         return (
-                            <div
+                            <Card
                                 key={tier.id}
-                                className={`bg-[var(--re-surface-card)] rounded-sm overflow-hidden flex flex-col transition-all duration-300 ${
-                                    tier.highlighted
-                                        ? 'border-2 border-[var(--re-text-primary)]'
-                                        : 'border border-[var(--re-surface-border)]'
-                                }`}
+                                className={cn(
+                                    'flex flex-col overflow-hidden',
+                                    tier.highlighted && 'border-re-border-strong',
+                                )}
                             >
                                 {tier.highlighted && (
-                                    <div className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] text-center p-2 font-mono text-[11px] font-medium uppercase tracking-normal">
+                                    <p className="bg-re-text-primary p-2 text-center font-mono text-label uppercase text-re-surface-base">
                                         Best fit for multi-facility teams
-                                    </div>
+                                    </p>
                                 )}
-                                <div className="p-6 flex-1 flex flex-col">
-                                    <div className="flex items-center gap-2.5 mb-2">
-                                        <div className={`border border-[var(--re-surface-border)] rounded-sm p-2 ${
-                                            tier.highlighted ? 'bg-[var(--re-brand-muted)]' : 'bg-[var(--re-surface-elevated)]'
-                                        }`}>
-                                            <Icon className={`w-[18px] h-[18px] ${
-                                                tier.highlighted ? 'text-[var(--re-brand)]' : 'text-[var(--re-text-muted)]'
-                                            }`} />
-                                        </div>
-                                        <span className="text-lg font-semibold text-[var(--re-text-primary)]">{tier.name}</span>
+                                <div className="flex flex-1 flex-col p-6">
+                                    <div className="mb-2 flex items-center gap-2.5">
+                                        <Icon className="h-[18px] w-[18px] shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="text-subheading text-re-text-primary">{tier.name}</span>
                                     </div>
-                                    <p className="text-[13px] text-[var(--re-text-disabled)] mb-3">{tier.description}</p>
-                                    <span className="inline-block text-[11px] font-semibold bg-[rgba(16,185,129,0.1)] text-[var(--re-brand)] px-2 py-[3px] rounded-md mb-4">
+                                    <p className="mb-3 text-small text-re-text-tertiary">{tier.description}</p>
+                                    <Badge tone="brand" size="sm" className="mb-4 self-start">
                                         Founding design partner rate
-                                    </span>
+                                    </Badge>
 
                                     <div className="mb-5">
                                         <div className="flex items-baseline gap-1.5">
-                                            <span className="text-4xl font-bold text-[var(--re-text-primary)]">${tier.partnerAnnual}</span>
-                                            <span className="text-[var(--re-text-muted)] text-sm">/mo</span>
+                                            <span className="text-title tabular-nums text-re-text-primary">${tier.partnerAnnual}</span>
+                                            <span className="text-ui text-re-text-tertiary">/mo</span>
                                         </div>
-                                        <p className="text-xs text-[var(--re-text-disabled)] mt-1">
-                                            <span className="line-through opacity-60">${tier.gaAnnual}/mo</span>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            <span className="line-through">${tier.gaAnnual}/mo</span>
                                             {' '}Post-pilot list price · billed annually
                                         </p>
-                                        <p className="text-[11px] text-[var(--re-text-disabled)] mt-0.5">
+                                        <p className="mt-0.5 text-small text-re-text-tertiary">
                                             ${tier.partnerMonthly}/mo if billed monthly
                                         </p>
                                     </div>
@@ -125,158 +123,149 @@ export function PricingPageClient({
                                         tierId={tier.id}
                                         label={tier.cta}
                                         highlighted={tier.highlighted}
-                                        style={{
-                                            background: tier.highlighted ? 'var(--re-brand)' : 'var(--re-surface-elevated)',
-                                            color: tier.highlighted ? '#fff' : 'var(--re-text-primary)',
-                                            border: tier.highlighted ? 'none' : '1px solid var(--re-surface-border)',
-                                            boxShadow: 'none',
-                                            marginBottom: '20px',
-                                        }}
                                     />
 
-                                    <div className="flex flex-col gap-2.5 flex-1">
+                                    <ul className="flex flex-1 flex-col gap-2.5">
                                         {tier.features.map((f, i) => (
-                                            <div key={i} className="flex items-start gap-2">
-                                                <Check className="w-3.5 h-3.5 text-[var(--re-brand)] mt-[3px] shrink-0" />
-                                                <span className="text-[13px] text-[var(--re-text-secondary)]">{f}</span>
-                                            </div>
+                                            <li key={i} className="flex items-start gap-2">
+                                                <Check className="mt-[3px] h-3.5 w-3.5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                <span className="text-small text-re-text-secondary">{f}</span>
+                                            </li>
                                         ))}
-                                    </div>
+                                    </ul>
                                 </div>
-                            </div>
+                            </Card>
                         );
                     })}
                 </div>
-                <p className="text-center text-xs text-[var(--re-text-disabled)] mt-5">
+                <p className="mt-5 text-center text-small text-re-text-tertiary">
                     Base plan includes 500 CTEs/month. Standard and Premium are unlimited. Need more on Base? Add CTEs at $0.002 each.{' '}
-                    <Link href="/terms" className="text-[var(--re-brand)] underline">See Terms</Link> for full details.
+                    <Link href="/terms" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">See Terms</Link> for full details.
                 </p>
 
-                <div className="max-w-[680px] mx-auto mt-10 rounded-sm border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-8 py-7 text-center">
-                    <p className="text-base font-bold text-[var(--re-brand)] mb-2">
+                <Card padding="spacious" className="mx-auto mt-10 max-w-[68ch] text-center">
+                    <p className="mb-2 text-subheading text-re-text-primary">
                         Founding Design Partner Program
                     </p>
-                    <p className="text-sm text-[var(--re-text-muted)] leading-[1.7] max-w-[520px] mx-auto mb-2">
+                    <p className="mx-auto mb-2 max-w-[60ch] text-ui leading-relaxed text-re-text-secondary">
                         50% off post-pilot list pricing under your executed design-partner terms. White-glove onboarding, custom integration scoping, and direct founder support.
                     </p>
-                    <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-3">
+                    <p className="mx-auto mb-3 max-w-[60ch] text-small leading-relaxed text-re-text-tertiary">
                         We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement, including scope for facilities, add-ons, taxes, and plan changes.
                     </p>
-                    <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
+                    <p className="mx-auto mb-5 max-w-[60ch] text-small leading-relaxed text-re-text-tertiary">
                         Larger deployments are scoped with the team so onboarding, billing, and integration support match your operating model.
                     </p>
-                    <Link href="/signup">
-                        <Button className="bg-[var(--re-text-primary)] text-[var(--re-surface-base)] font-semibold rounded-sm px-7 py-3 shadow-none">
-                            Apply as founding design partner <ArrowRight className="ml-2 w-4 h-4" />
-                        </Button>
-                    </Link>
-                </div>
-            </section>
+                    <Button asChild size="lg">
+                        <Link href="/signup" className="no-underline">
+                            Apply as founding design partner <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                        </Link>
+                    </Button>
+                </Card>
+            </Container>
 
-            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-                <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-7">
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
-                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
-                            <Lock className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+            <section className="border-y border-re-border-subtle">
+                <Container width="marketing" className="py-7">
+                    <div className="flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-10">
+                        <div className="flex items-center gap-2.5 text-ui text-re-text-secondary">
+                            <Lock className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                             <span>Managed-provider encryption at rest · encrypted transport</span>
                         </div>
-                        <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
-                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
-                            <ShieldCheck className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                        <div className="hidden h-4 w-px bg-re-border sm:block" />
+                        <div className="flex items-center gap-2.5 text-ui text-re-text-secondary">
+                            <ShieldCheck className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                             <span>Security posture and subprocessors documented in the Trust Center</span>
                         </div>
-                        <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
-                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
-                            <KeyRound className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
-                            <span>Core PostgreSQL tenant scoping · <Link href="/security" className="text-[var(--re-brand)] hover:underline">Security details →</Link></span>
+                        <div className="hidden h-4 w-px bg-re-border sm:block" />
+                        <div className="flex items-center gap-2.5 text-ui text-re-text-secondary">
+                            <KeyRound className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                            <span>Core PostgreSQL tenant scoping · <Link href="/security" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">Security details →</Link></span>
                         </div>
                     </div>
-                </div>
+                </Container>
             </section>
 
-            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-surface-card)] border-t border-b border-[var(--re-surface-border)]">
-                <div className="max-w-[1000px] mx-auto">
-                    <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-3">
+            <section className="border-b border-re-border-subtle">
+                <Container width="marketing" className="py-10 sm:py-16">
+                    <h2 className="mb-3 text-center font-display text-heading-lg text-re-text-primary">
                         Compare the operating model
                     </h2>
-                    <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
+                    <p className="mx-auto mb-4 max-w-[60ch] text-center text-body text-re-text-secondary">
                         RegEngine is priced around facility operations, not a long enterprise procurement cycle.
                     </p>
-                    <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
+                    <p className="mx-auto mb-10 max-w-[64ch] text-center text-small leading-relaxed text-re-text-tertiary">
                         A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine starts at $425/mo (billed annually) for Founding Design Partners.
                     </p>
-                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-sm overflow-hidden shadow-none">
-                        <div className="overflow-x-auto">
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr className="border-b border-[var(--re-surface-border)]">
-                                        <th className="text-left p-4 text-xs text-[var(--re-text-primary)] font-semibold uppercase tracking-[0.04em]">Feature</th>
-                                        <th className="text-center p-4 text-xs bg-[var(--re-brand-muted)]">
-                                            <span className="text-[var(--re-brand)] font-bold">RegEngine</span>
-                                        </th>
-                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">Trustwell</th>
-                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">ReposiTrak</th>
-                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">TraceGains</th>
+                    <div className="overflow-x-auto rounded-lg border border-re-border bg-re-surface-card">
+                        <table className="w-full min-w-[640px] border-collapse text-ui">
+                            <thead>
+                                <tr className="border-b border-re-border-subtle bg-re-surface-inset">
+                                    <th scope="col" className="p-4 text-left text-label text-re-text-tertiary">Feature</th>
+                                    <th scope="col" className="p-4 text-center text-label text-re-text-primary">
+                                        <span>RegEngine</span>
+                                    </th>
+                                    <th scope="col" className="p-4 text-center text-label text-re-text-tertiary">Trustwell</th>
+                                    <th scope="col" className="p-4 text-center text-label text-re-text-tertiary">ReposiTrak</th>
+                                    <th scope="col" className="p-4 text-center text-label text-re-text-tertiary">TraceGains</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {comparisonRows.map((row, i) => (
+                                    <tr key={i} className="border-b border-re-border-subtle last:border-0">
+                                        <th scope="row" className="px-4 py-3.5 text-left text-small font-medium text-re-text-secondary">{row.feature}</th>
+                                        <td className="px-4 py-3.5 text-center text-small font-medium text-re-text-primary">{row.regengine}</td>
+                                        <td className="px-4 py-3.5 text-center text-small text-re-text-tertiary">{row.foodlogiq}</td>
+                                        <td className="px-4 py-3.5 text-center text-small text-re-text-tertiary">{row.repositrak}</td>
+                                        <td className="px-4 py-3.5 text-center text-small text-re-text-tertiary">{row.tracegains}</td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {comparisonRows.map((row, i) => (
-                                        <tr key={i} className={`border-b border-[var(--re-surface-border)] ${i % 2 === 1 ? 'bg-[var(--re-surface-elevated)]' : 'bg-transparent'}`}>
-                                            <td className="px-4 py-3.5 text-[13px] text-[var(--re-text-secondary)] font-medium">{row.feature}</td>
-                                            <td className="text-center px-4 py-3.5 text-[13px] bg-[var(--re-brand-muted)] text-[var(--re-brand)] font-semibold">{row.regengine}</td>
-                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.foodlogiq}</td>
-                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.repositrak}</td>
-                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.tracegains}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
+                    <p className="mt-4 text-center text-small text-re-text-tertiary">
                         Operating-model comparison based on public information and RegEngine&apos;s current design-partner posture; validate competitor capabilities directly before procurement decisions.
                     </p>
-                </div>
+                </Container>
             </section>
 
-            <section className="relative z-[2] max-w-[700px] mx-auto py-10 sm:py-[60px] px-4 sm:px-6">
-                <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-10">
+            <Container as="section" width="prose" className="py-10 sm:py-16">
+                <h2 className="mb-10 text-center font-display text-heading-lg text-re-text-primary">
                     Frequently Asked Questions
                 </h2>
                 <div className="flex flex-col gap-4">
                     {faq.map((item, i) => (
-                        <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-sm p-5">
-                            <div className="flex items-start gap-3 mb-3">
-                                <HelpCircle className="w-[18px] h-[18px] text-[var(--re-brand)] mt-0.5 shrink-0" />
-                                <span className="text-[15px] font-semibold text-[var(--re-text-primary)]">{item.q}</span>
+                        <Card key={i} padding="default" className="p-5">
+                            <div className="mb-3 flex items-start gap-3">
+                                <HelpCircle className="mt-0.5 h-[18px] w-[18px] shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <span className="text-subheading text-re-text-primary">{item.q}</span>
                             </div>
-                            <p className="text-sm text-[var(--re-text-muted)] pl-[30px] leading-relaxed">{item.a}</p>
-                        </div>
+                            <p className="pl-[30px] text-ui leading-relaxed text-re-text-secondary">{item.a}</p>
+                        </Card>
                     ))}
                 </div>
-            </section>
+            </Container>
 
-            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-text-primary)]">
-                <div className="max-w-[600px] mx-auto text-center">
-                    <h2 className="font-display text-[28px] font-bold text-white tracking-tight mb-3">
+            <section className="border-t border-re-border-subtle bg-re-surface-inset">
+                <Container width="marketing" className="py-10 text-center sm:py-16">
+                    <h2 className="mx-auto font-display text-heading-lg text-re-text-primary">
                         Become a founding design partner
                     </h2>
-                    <p className="text-base text-white/90 mb-8">
+                    <p className="mx-auto mb-8 mt-3 max-w-[64ch] text-body text-re-text-secondary">
                         Founding Design Partners start at $425/mo, billed annually. Apply now and get the product shaped around real supplier data.
                     </p>
-                    <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/signup">
-                            <Button className="bg-[var(--re-surface-base)] text-[var(--re-text-primary)] font-semibold px-6 py-3.5">
-                                Apply now <ArrowRight className="ml-2 w-4 h-4" />
-                            </Button>
-                        </Link>
-                        <Link href="/trust">
-                            <Button variant="outline" className="bg-transparent text-white border border-white/30 px-6 py-3.5">
+                    <div className="flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/signup" className="no-underline">
+                                Apply now <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/trust" className="no-underline">
                                 Review Trust Center
-                            </Button>
-                        </Link>
+                            </Link>
+                        </Button>
                     </div>
-                </div>
+                </Container>
             </section>
         </div>
     );

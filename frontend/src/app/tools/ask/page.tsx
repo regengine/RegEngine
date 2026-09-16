@@ -2,12 +2,23 @@
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
-import { Zap, ArrowRight, AlertTriangle, Check, Clock, Database } from 'lucide-react';
+import { Zap, ArrowRight, AlertTriangle, Check, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
 import { isExperimentalToolEnabled } from '@/lib/experimental-features';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { DataTable } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { fieldControlClasses } from '@/components/ui/field-control';
+import { cn } from '@/lib/utils';
 
 // Types
 interface QueryResult {
@@ -43,15 +54,30 @@ interface ComplianceGap {
   remediation: string;
 }
 
-// Intent color mapping
-const intentColors: Record<string, { bg: string; text: string; badge: string }> = {
-  trace_forward: { bg: 'bg-re-info-muted', text: 'text-re-info', badge: 'bg-blue-200 text-re-info' },
-  trace_backward: { bg: 'bg-purple-50', text: 'text-purple-700', badge: 'bg-purple-200 text-purple-800' },
-  lot_timeline: { bg: 'bg-re-success-muted', text: 'text-re-success', badge: 'bg-green-200 text-re-success' },
-  events_search: { bg: 'bg-re-surface-card', text: 'text-re-text-disabled', badge: 'bg-re-surface-elevated text-re-text-primary' },
-  compliance_gaps: { bg: 'bg-orange-50', text: 'text-orange-700', badge: 'bg-orange-200 text-orange-800' },
-  orphan_lots: { bg: 'bg-re-danger-muted', text: 'text-re-danger', badge: 'bg-re-danger-muted text-re-danger' },
+// Intent → Badge tone. Colour lives in the badge only (SPEC §1.6): the panel
+// itself stays on the card surface so a result page never becomes a colour field.
+const intentTones: Record<string, BadgeTone> = {
+  trace_forward: 'info',
+  trace_backward: 'corrected',
+  lot_timeline: 'success',
+  events_search: 'neutral',
+  compliance_gaps: 'warning',
+  orphan_lots: 'danger',
 };
+
+const severityTones: Record<ComplianceGap['severity'], BadgeTone> = {
+  high: 'danger',
+  medium: 'warning',
+  low: 'warning',
+};
+
+const EVENT_COLUMNS = [
+  { key: 'timestamp', header: 'Timestamp', mono: true, cell: (row: Event) => row.timestamp },
+  { key: 'eventType', header: 'Event Type', cell: (row: Event) => row.eventType },
+  { key: 'facility', header: 'Facility', cell: (row: Event) => row.facility },
+  { key: 'product', header: 'Product', cell: (row: Event) => row.product },
+  { key: 'lot', header: 'Lot', mono: true, cell: (row: Event) => row.lot },
+];
 
 // Query parser logic
 function parseQuery(query: string): QueryResult {
@@ -406,24 +432,20 @@ function AskPageContent() {
         subtitle="Ask questions about your supply chain in plain English. No SQL required."
         relatedToolIds={['cte-mapper', 'kde-checker', 'ftl-checker']}
       >
-      <div className="max-w-4xl mx-auto space-y-8">
         {/* How It Works Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {[
             { step: '1', label: 'Type', desc: 'Ask a natural language question' },
             { step: '2', label: 'Parse', desc: 'Engine detects intent & extracts filters' },
             { step: '3', label: 'Trace', desc: 'Results show your supply chain data' },
           ].map((item) => (
-            <div
-              key={item.step}
-              className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-4 text-center border border-slate-200"
-            >
-              <div className="flex items-center justify-center w-10 h-10 bg-re-info text-white rounded-full font-semibold mx-auto mb-2">
+            <Card key={item.step} variant="inset" padding="compact" className="text-center">
+              <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full border border-re-border bg-re-surface-card font-mono uppercase text-label text-re-text-secondary">
                 {item.step}
-              </div>
-              <h4 className="font-semibold text-slate-900 mb-1">{item.label}</h4>
-              <p className="text-sm text-slate-600">{item.desc}</p>
-            </div>
+              </span>
+              <h4 className="mb-1 text-subheading text-re-text-primary">{item.label}</h4>
+              <p className="text-ui text-re-text-secondary">{item.desc}</p>
+            </Card>
           ))}
         </div>
 
@@ -433,8 +455,8 @@ function AskPageContent() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          <div className="relative">
-            <textarea
+          <Field label="Ask" htmlFor="ask-query" className="[&>label]:sr-only">
+            <Textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -443,34 +465,36 @@ function AskPageContent() {
                 }
               }}
               placeholder="Where did lot LOT-2024-001 go after leaving the packing facility?"
-              className="w-full p-4 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
+              className={cn(fieldControlClasses, 'h-auto min-h-[88px] resize-none py-3')}
               rows={3}
             />
-            <button
+          </Field>
+          <div className="flex justify-end">
+            <Button
               onClick={() => { void handleQuery(); }}
               disabled={!query.trim() || isLoading}
-              className="absolute bottom-4 right-4 inline-flex items-center gap-2 px-4 py-2 bg-re-info text-white rounded-lg hover:bg-re-info disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors font-medium"
+              leadingIcon={<Zap size={18} strokeWidth={1.75} aria-hidden="true" />}
             >
-              <Zap size={18} />
               Ask
-            </button>
+            </Button>
           </div>
 
           {/* Example Queries */}
           <div className="space-y-2">
-            <p className="text-sm font-medium text-slate-700">Quick examples:</p>
+            <p className="text-ui font-medium text-re-text-secondary">Quick examples:</p>
             <div className="flex flex-wrap gap-2">
               {examples.map((example, idx) => (
-                <button
+                <Button
                   key={idx}
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     handleExampleClick(example.label);
                     setTimeout(() => { void handleQuery(example.label); }, 100);
                   }}
-                  className="px-3 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors border border-slate-200"
                 >
                   {example.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -487,48 +511,36 @@ function AskPageContent() {
             >
               {/* Live vs simulated notice */}
               {nlpError && (
-                <div className="flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-yellow-600" />
-                  <span>{nlpError}</span>
-                </div>
+                <Callout tone="warning" role="status" icon={AlertTriangle}>
+                  {nlpError}
+                </Callout>
               )}
               {isLiveResult && (
-                <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-re-success-muted px-4 py-3 text-sm text-re-success">
-                  <Check size={16} className="shrink-0 text-re-success" />
-                  <span>Live results from your connected supply chain data.</span>
-                </div>
+                <Callout tone="success" role="status" icon={Check}>
+                  Live results from your connected supply chain data.
+                </Callout>
               )}
 
               {/* Query Analysis */}
-              <div className={`rounded-lg border-2 p-6 ${intentColors[result.intent].bg}`}>
+              <Card padding="spacious">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-slate-900">Query Analysis</h3>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${intentColors[result.intent].badge}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-subheading text-re-text-primary">Query Analysis</h3>
+                    <Badge tone={intentTones[result.intent] ?? 'neutral'} mono>
                       {result.intent.replace(/_/g, ' ').toUpperCase()}
-                    </span>
+                    </Badge>
                   </div>
 
                   <div>
-                    <p className="text-sm text-slate-600 mb-2">Confidence Score</p>
+                    <p className="mb-2 font-mono uppercase text-label text-re-text-muted">Confidence Score</p>
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 bg-slate-200 rounded-full h-2">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-re-surface-inset">
                         <div
-                          className={`h-2 rounded-full transition-all ${
-                            result.intent === 'trace_forward' || result.intent === 'trace_backward'
-                              ? 'bg-re-info'
-                              : result.intent === 'lot_timeline'
-                              ? 'bg-re-success'
-                              : result.intent === 'compliance_gaps'
-                              ? 'bg-orange-600'
-                              : result.intent === 'orphan_lots'
-                              ? 'bg-re-danger'
-                              : 'bg-re-surface-elevated'
-                          }`}
+                          className="h-2 rounded-full bg-re-text-tertiary transition-[width] duration-240 motion-reduce:transition-none"
                           style={{ width: `${result.confidence * 100}%` }}
                         />
                       </div>
-                      <span className="text-sm font-medium text-slate-700 w-12">
+                      <span className="w-12 text-ui font-medium tabular-nums text-re-text-secondary">
                         {Math.round(result.confidence * 100)}%
                       </span>
                     </div>
@@ -536,128 +548,104 @@ function AskPageContent() {
 
                   {Object.keys(result.filters).length > 0 && (
                     <div>
-                      <p className="text-sm text-slate-600 mb-2">Extracted Filters</p>
+                      <p className="mb-2 font-mono uppercase text-label text-re-text-muted">Extracted Filters</p>
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(result.filters).map(([key, value]) => (
-                          <span key={key} className="px-3 py-1 bg-white border border-slate-300 rounded-full text-sm text-slate-700">
-                            <span className="font-semibold">{key}:</span> {value}
-                          </span>
+                          <Badge key={key} tone="neutral" mono>
+                            <span className="font-medium">{key}:</span> {value}
+                          </Badge>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
+              </Card>
 
               {/* Results Display */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-subheading text-re-text-primary">
                   {isLiveResult ? 'Results' : 'Simulated Results'}
                 </h3>
 
                 {result.intent === 'trace_forward' || result.intent === 'trace_backward' ? (
-                  <div className="bg-white border border-slate-300 rounded-lg p-6">
+                  <Card padding="spacious">
                     <div className="space-y-4">
                       {(result.results[0] as TraceResult | undefined)?.nodes?.map((node: TraceNode, idx: number) => (
                         <div key={idx} className="flex items-center gap-4">
-                          <div className="flex-1 bg-slate-50 rounded-lg p-4 border border-slate-200">
-                            <p className="font-medium text-slate-900">{node.facility}</p>
-                            <p className="text-sm text-slate-600">GLN: {node.gln}</p>
-                            <p className="text-xs text-slate-500 mt-2">{node.date}</p>
+                          <div className="min-w-0 flex-1 rounded-md border border-re-border-subtle bg-re-surface-inset p-4">
+                            <p className="text-ui font-medium text-re-text-primary">{node.facility}</p>
+                            <p className="font-mono text-[0.8125rem] text-re-text-secondary">GLN: {node.gln}</p>
+                            <p className="mt-2 font-mono text-[0.8125rem] text-re-text-tertiary">{node.date}</p>
                           </div>
                           {idx < ((result.results[0] as TraceResult | undefined)?.nodes?.length || 0) - 1 && (
-                            <ArrowRight className="text-slate-400" size={24} />
+                            <ArrowRight className="shrink-0 text-re-text-tertiary" size={20} strokeWidth={1.75} aria-hidden="true" />
                           )}
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 ) : result.intent === 'lot_timeline' ? (
                   <div className="space-y-3">
                     {(result.results as Event[]).map((event, idx) => (
                       <div key={event.id} className="flex gap-4">
-                        <div className="flex flex-col items-center">
-                          <div className="w-4 h-4 bg-re-info rounded-full mt-1" />
+                        <div className="flex flex-col items-center" aria-hidden="true">
+                          <span className="mt-1 h-3 w-3 rounded-full border border-re-border-strong bg-re-surface-card" />
                           {idx < (result.results as Event[]).length - 1 && (
-                            <div className="w-1 h-12 bg-slate-200 my-2" />
+                            <span className="my-2 h-12 w-px bg-re-border" />
                           )}
                         </div>
-                        <div className="bg-white border border-slate-300 rounded-lg p-4 flex-1">
-                          <div className="flex items-start justify-between mb-2">
-                            <p className="font-semibold text-slate-900">{event.eventType}</p>
-                            <span className="text-xs text-slate-500">{event.timestamp}</span>
+                        <Card padding="compact" className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-ui font-medium text-re-text-primary">{event.eventType}</p>
+                            <span className="font-mono text-[0.8125rem] text-re-text-tertiary">{event.timestamp}</span>
                           </div>
-                          <p className="text-sm text-slate-700">{event.facility}</p>
-                          <p className="text-sm text-slate-600">
+                          <p className="text-ui text-re-text-secondary">{event.facility}</p>
+                          <p className="text-ui text-re-text-tertiary">
                             {event.product} · {event.quantity}
                           </p>
-                        </div>
+                        </Card>
                       </div>
                     ))}
                   </div>
                 ) : result.intent === 'events_search' ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-300 bg-slate-50">
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Timestamp</th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Event Type</th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Facility</th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Product</th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Lot</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(result.results as Event[]).map((event) => (
-                          <tr key={event.id} className="border-b border-slate-200 hover:bg-slate-50">
-                            <td className="px-4 py-3 text-slate-700">{event.timestamp}</td>
-                            <td className="px-4 py-3 font-medium text-slate-900">{event.eventType}</td>
-                            <td className="px-4 py-3 text-slate-700">{event.facility}</td>
-                            <td className="px-4 py-3 text-slate-700">{event.product}</td>
-                            <td className="px-4 py-3 font-mono text-slate-700">{event.lot}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    caption={isLiveResult ? 'Results' : 'Simulated Results'}
+                    columns={EVENT_COLUMNS}
+                    data={result.results as Event[]}
+                    rowKey={(row) => row.id}
+                    stickyFirstColumn
+                  />
                 ) : result.intent === 'compliance_gaps' ? (
                   <div className="space-y-3">
                     {(result.results as ComplianceGap[]).map((gap, idx) => (
-                      <div key={idx} className="bg-white border border-slate-300 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <p className="font-semibold text-slate-900">{gap.gap}</p>
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-semibold ${
-                              gap.severity === 'high'
-                                ? 'bg-re-danger-muted text-re-danger'
-                                : gap.severity === 'medium'
-                                ? 'bg-orange-100 text-orange-800'
-                                : 'bg-re-warning-muted text-yellow-800'
-                            }`}
-                          >
+                      <Card key={idx} padding="compact">
+                        <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                          <p className="text-ui font-medium text-re-text-primary">{gap.gap}</p>
+                          <Badge tone={severityTones[gap.severity]} size="sm" mono>
                             {gap.severity.toUpperCase()}
-                          </span>
+                          </Badge>
                         </div>
-                        <p className="text-sm text-slate-600 mb-3">{gap.affectedLots} affected lots</p>
-                        <div className="bg-slate-50 rounded p-3 border-l-4 border-blue-600">
-                          <p className="text-sm font-medium text-slate-900">Remediation:</p>
-                          <p className="text-sm text-slate-700 mt-1">{gap.remediation}</p>
-                        </div>
-                      </div>
+                        <p className="mb-3 text-ui text-re-text-secondary">{gap.affectedLots} affected lots</p>
+                        <Callout tone="info" role="note" title="Remediation:">
+                          {gap.remediation}
+                        </Callout>
+                      </Card>
                     ))}
                   </div>
                 ) : result.intent === 'orphan_lots' ? (
                   <div className="space-y-3">
                     {(result.results as OrphanLot[]).map((orphan, idx) => (
-                      <div key={idx} className="bg-re-danger-muted border border-re-danger rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <p className="font-mono font-semibold text-re-danger">{orphan.lot}</p>
-                          <AlertTriangle size={20} className="text-re-danger" />
-                        </div>
-                        <p className="text-sm text-re-danger mb-1">{orphan.product}</p>
-                        <p className="text-sm text-re-danger">Origin: {orphan.origin}</p>
-                        <p className="text-xs text-re-danger mt-2">First seen: {orphan.firstSeen}</p>
-                      </div>
+                      <Callout
+                        key={idx}
+                        tone="danger"
+                        role="alert"
+                        icon={AlertTriangle}
+                        title={<span className="font-mono">{orphan.lot}</span>}
+                      >
+                        <p>{orphan.product}</p>
+                        <p>Origin: {orphan.origin}</p>
+                        <p className="mt-2 text-small">First seen: {orphan.firstSeen}</p>
+                      </Callout>
                     ))}
                   </div>
                 ) : null}
@@ -665,39 +653,38 @@ function AskPageContent() {
 
               {/* API Evidence */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">Endpoints this query would call</h3>
+                <h3 className="text-subheading text-re-text-primary">Endpoints this query would call</h3>
                 <div className="space-y-3">
                   {result.apiEndpoints.map((endpoint, idx) => (
-                    <div key={idx} className="bg-slate-50 border border-slate-300 rounded-lg p-4 font-mono text-sm">
-                      <p className="text-re-info font-semibold mb-2">{endpoint.path}</p>
-                      <p className="text-slate-700 text-xs mb-2">
-                        <span className="text-slate-600">Parameters:</span>{' '}
+                    <Card key={idx} variant="inset" padding="compact" className="overflow-x-auto font-mono text-[0.8125rem]">
+                      <p className="mb-2 font-medium text-re-text-primary">{endpoint.path}</p>
+                      <p className="mb-2 text-re-text-secondary">
+                        <span className="text-re-text-tertiary">Parameters:</span>{' '}
                         {JSON.stringify(endpoint.params)}
                       </p>
-                      <p className="text-slate-600 text-xs">
-                        <span className="text-slate-700 font-semibold">Result Type:</span> {endpoint.resultType}
+                      <p className="text-re-text-secondary">
+                        <span className="font-medium text-re-text-tertiary">Result Type:</span> {endpoint.resultType}
                       </p>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               </div>
 
               {/* CTA */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-6 text-center text-white">
-                <p className="text-lg font-semibold mb-2">
-                  This is a demo of RegEngine's query engine.
+              <Card variant="inset" padding="spacious" className="text-center">
+                <p className="mb-2 text-subheading text-re-text-primary">
+                  This is a demo of RegEngine&apos;s query engine.
                 </p>
-                <p className="text-blue-100 mb-4">
+                <p className="mb-4 text-ui text-re-text-secondary">
                   Connect your data for live results across your entire supply chain.
                 </p>
-                <a
-                  href="/onboarding"
-                  className="inline-flex items-center gap-2 px-6 py-2 bg-white text-re-info rounded-lg font-semibold hover:bg-re-info-muted transition-colors"
-                >
-                  Get Started
-                  <ArrowRight size={18} />
-                </a>
-              </div>
+                <Button asChild>
+                  <a href="/onboarding">
+                    Get Started
+                    <ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" />
+                  </a>
+                </Button>
+              </Card>
             </motion.div>
           )}
         </AnimatePresence>
@@ -707,12 +694,12 @@ function AskPageContent() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex items-center justify-center py-12"
+            className="space-y-4 py-6"
+            aria-busy="true"
           >
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
-              <p className="text-slate-600 font-medium">Parsing query...</p>
-            </div>
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-40 w-full rounded-lg" />
+            <p className="text-center text-ui font-medium text-re-text-secondary">Parsing query...</p>
           </motion.div>
         )}
 
@@ -722,16 +709,14 @@ function AskPageContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-center py-12"
           >
-            <Database size={48} className="mx-auto text-slate-400 mb-4" />
-            <p className="text-slate-600 text-lg">Ask a question to see simulated traceability results</p>
-            <p className="text-slate-500 text-sm mt-2">
-              Or click an example above to try a pre-built query
-            </p>
+            <EmptyState
+              icon={Database}
+              title="Ask a question to see simulated traceability results"
+              description="Or click an example above to try a pre-built query"
+            />
           </motion.div>
         )}
-      </div>
       </FreeToolPageShell>
     </EmailGate>
   );

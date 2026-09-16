@@ -66,6 +66,7 @@ export function WorkflowStepper({ currentStep, completedSteps = [], className }:
                   href={step.href}
                   className={nodeClasses(state)}
                   aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`Step ${index + 1}: ${step.label}`}
                 >
                   {isComplete ? (
                     <Check className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
@@ -116,6 +117,7 @@ export function WorkflowStepperInline({ currentStep, completedSteps = [] }: Work
             <Link
               href={step.href}
               aria-current={isCurrent ? 'step' : undefined}
+              aria-label={`Step ${index + 1}: ${step.label}`}
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-1 py-1 no-underline transition-colors duration-120 motion-reduce:transition-none',
                 isCurrent ? 'text-re-text-primary' : 'text-re-text-tertiary hover:text-re-text-primary',

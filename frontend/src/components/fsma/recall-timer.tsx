@@ -6,33 +6,26 @@ import { cn } from '@/lib/utils';
 import type { RecallDrill, RecallStatus } from '@/types/fsma';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
-  AlertTriangle,
-  Clock,
   CheckCircle,
-  XCircle,
   PlayCircle,
   StopCircle,
-  RefreshCw,
   Bell,
   Timer,
 } from 'lucide-react';
 
-// Status configuration
-const statusConfig: Record<RecallStatus, {
-  label: string;
-  color: string;
-  bgColor: string;
-  icon: React.ElementType;
-}> = {
-  PENDING: { label: 'Pending', color: 'text-re-text-disabled', bgColor: 'bg-re-surface-elevated', icon: Clock },
-  IN_PROGRESS: { label: 'In Progress', color: 'text-re-info', bgColor: 'bg-re-info-muted', icon: RefreshCw },
-  MET: { label: 'SLA Met', color: 'text-re-success', bgColor: 'bg-re-success-muted', icon: CheckCircle },
-  AT_RISK: { label: 'At Risk', color: 'text-re-warning', bgColor: 'bg-re-warning-muted', icon: AlertTriangle },
-  BREACHED: { label: 'SLA Breached', color: 'text-re-danger', bgColor: 'bg-re-danger-muted', icon: XCircle },
-  COMPLETED: { label: 'Completed', color: 'text-re-success', bgColor: 'bg-re-success-muted', icon: CheckCircle },
-  CANCELLED: { label: 'Cancelled', color: 'text-re-text-disabled', bgColor: 'bg-re-surface-elevated', icon: StopCircle },
+// Status configuration — every state travels as a StatusBadge (icon + label),
+// so the drill's state survives greyscale and forced-colours mode.
+const statusConfig: Record<RecallStatus, { label: string; state: ComplianceState }> = {
+  PENDING: { label: 'Pending', state: 'pending' },
+  IN_PROGRESS: { label: 'In Progress', state: 'in-progress' },
+  MET: { label: 'SLA Met', state: 'compliant' },
+  AT_RISK: { label: 'At Risk', state: 'at-risk' },
+  BREACHED: { label: 'SLA Breached', state: 'non-compliant' },
+  COMPLETED: { label: 'Completed', state: 'compliant' },
+  CANCELLED: { label: 'Cancelled', state: 'unknown' },
 };
 
 // FDA 24-hour response objective in seconds
@@ -94,49 +87,34 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
   if (!drill) {
     return (
       <Card className={className}>
-        <CardContent className="pt-6">
-          <div className="text-center py-8">
-            <Timer className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">No active recall drill</p>
-            <Button className="mt-4" variant="outline" onClick={onStartDrill} disabled={!onStartDrill}>
-              <PlayCircle className="w-4 h-4 mr-2" />
-              Run Recall Drill
-            </Button>
-          </div>
+        <CardContent>
+          <EmptyState
+            bare
+            icon={Timer}
+            title="No active recall drill"
+            action={
+              <Button variant="secondary" onClick={onStartDrill} disabled={!onStartDrill}>
+                <PlayCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Run Recall Drill
+              </Button>
+            }
+          />
         </CardContent>
       </Card>
     );
   }
 
   const status = statusConfig[drill.status];
-  const StatusIcon = status.icon;
 
   return (
-    <Card className={cn(
-      'relative overflow-hidden',
-      timeData?.urgency === 'critical' && 'border-re-danger',
-      timeData?.urgency === 'warning' && 'border-re-warning',
-      className
-    )}>
-      {/* Urgency overlay animation */}
-      {timeData?.urgency === 'critical' && drill.status === 'IN_PROGRESS' && (
-        <motion.div
-          className="absolute inset-0 bg-re-danger/10 pointer-events-none"
-          animate={{ opacity: [0.1, 0.3, 0.1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        />
-      )}
-
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+    <Card className={cn('relative overflow-hidden', className)}>
+      <CardHeader className="flex-col items-stretch gap-1">
+        <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
-            <Bell className="w-5 h-5 text-re-danger" />
+            <Bell className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             FDA Recall Drill
           </CardTitle>
-          <Badge className={cn(status.bgColor, status.color)}>
-            <StatusIcon className="w-3 h-3 mr-1" />
-            {status.label}
-          </Badge>
+          <StatusBadge state={status.state} label={status.label} />
         </div>
         <CardDescription>
           24-Hour Response Objective Tracking
@@ -151,18 +129,18 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             urgency={timeData?.urgency || 'normal'}
             isActive={drill.status === 'IN_PROGRESS'}
           />
-          <p className="text-sm text-muted-foreground mt-2">
+          <p className="mt-2 text-ui text-re-text-tertiary">
             Time Remaining for FDA 24-Hour Response Objective
           </p>
         </div>
 
         {/* Progress Bar */}
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between text-ui text-re-text-secondary">
             <span>Elapsed</span>
-            <span>{formatDuration(timeData?.elapsed || 0)}</span>
+            <span className="font-mono tabular-nums text-re-text-primary">{formatDuration(timeData?.elapsed || 0)}</span>
           </div>
-          <div className="h-3 bg-muted rounded-full overflow-hidden">
+          <div className="h-2 overflow-hidden rounded-full bg-re-surface-inset">
             <motion.div
               className={cn(
                 'h-full rounded-full',
@@ -176,46 +154,46 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
               transition={{ duration: 0.5 }}
             />
           </div>
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-label text-re-text-muted">
             <span>0h</span>
             <span>24h SLA</span>
           </div>
         </div>
 
         {/* Drill Details */}
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+        <div className="grid grid-cols-2 gap-4 border-t border-re-border-subtle pt-4">
           <div>
-            <p className="text-sm text-muted-foreground">Target Lot</p>
-            <p className="font-mono text-sm truncate">{drill.target_tlc}</p>
+            <p className="text-label text-re-text-muted">Target Lot</p>
+            <p className="mt-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{drill.target_tlc}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Type</p>
-            <p className="font-medium text-sm">{drill.type}</p>
+            <p className="text-label text-re-text-muted">Type</p>
+            <p className="mt-1 text-ui font-medium text-re-text-primary">{drill.type}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Facilities Contacted</p>
-            <p className="font-medium text-sm">
+            <p className="text-label text-re-text-muted">Facilities Contacted</p>
+            <p className="mt-1 text-ui font-medium tabular-nums text-re-text-primary">
               {drill.facilities_contacted} / {drill.total_facilities}
             </p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Lots Traced</p>
-            <p className="font-medium text-sm">{drill.lots_traced}</p>
+            <p className="text-label text-re-text-muted">Lots Traced</p>
+            <p className="mt-1 text-ui font-medium tabular-nums text-re-text-primary">{drill.lots_traced}</p>
           </div>
         </div>
 
         {/* Actions */}
         {drill.status === 'IN_PROGRESS' && (
-          <div className="flex gap-2 pt-4 border-t">
+          <div className="flex gap-2 border-t border-re-border-subtle pt-4">
             {onComplete && (
               <Button className="flex-1" onClick={onComplete}>
-                <CheckCircle className="w-4 h-4 mr-2" />
+                <CheckCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 Complete Drill
               </Button>
             )}
             {onCancel && (
-              <Button variant="outline" onClick={onCancel}>
-                <StopCircle className="w-4 h-4 mr-2" />
+              <Button variant="secondary" onClick={onCancel}>
+                <StopCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 Cancel
               </Button>
             )}
@@ -239,14 +217,14 @@ function CountdownDisplay({ seconds, urgency, isActive }: CountdownDisplayProps)
   const secs = seconds % 60;
 
   const colorClass = {
-    normal: 'text-foreground',
+    normal: 'text-re-text-primary',
     warning: 'text-re-warning',
     critical: 'text-re-danger',
     breached: 'text-re-danger',
   }[urgency];
 
   return (
-    <div className={cn('font-mono text-6xl font-bold tabular-nums', colorClass)}>
+    <div className={cn('font-mono text-[3.5rem] font-semibold leading-none tabular-nums', colorClass)}>
       <AnimatePresence mode="popLayout">
         <motion.span
           key={hours}
@@ -257,7 +235,7 @@ function CountdownDisplay({ seconds, urgency, isActive }: CountdownDisplayProps)
           {String(hours).padStart(2, '0')}
         </motion.span>
       </AnimatePresence>
-      <span className={cn(isActive && 'animate-pulse')}>:</span>
+      <span className={cn(isActive && 'animate-pulse motion-reduce:animate-none')}>:</span>
       <AnimatePresence mode="popLayout">
         <motion.span
           key={minutes}
@@ -268,7 +246,7 @@ function CountdownDisplay({ seconds, urgency, isActive }: CountdownDisplayProps)
           {String(minutes).padStart(2, '0')}
         </motion.span>
       </AnimatePresence>
-      <span className={cn(isActive && 'animate-pulse')}>:</span>
+      <span className={cn(isActive && 'animate-pulse motion-reduce:animate-none')}>:</span>
       <AnimatePresence mode="popLayout">
         <motion.span
           key={secs}
@@ -293,7 +271,6 @@ interface RecallStatusBadgeProps {
 export function RecallStatusBadge({ drill, showTimer = true, className }: RecallStatusBadgeProps) {
   const [remaining, setRemaining] = useState(drill.remaining_seconds);
   const status = statusConfig[drill.status];
-  const StatusIcon = status.icon;
 
   useEffect(() => {
     if (drill.status !== 'IN_PROGRESS') return;
@@ -307,14 +284,11 @@ export function RecallStatusBadge({ drill, showTimer = true, className }: Recall
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <Badge className={cn(status.bgColor, status.color)}>
-        <StatusIcon className="w-3 h-3 mr-1" />
-        {status.label}
-      </Badge>
+      <StatusBadge state={status.state} label={status.label} />
       {showTimer && drill.status === 'IN_PROGRESS' && (
         <span className={cn(
-          'font-mono text-sm',
-          remaining <= 3600 ? 'text-re-danger' : 'text-muted-foreground'
+          'font-mono text-[0.8125rem] tabular-nums',
+          remaining <= 3600 ? 'text-re-danger' : 'text-re-text-tertiary'
         )}>
           {formatDuration(remaining)}
         </span>
@@ -333,7 +307,7 @@ export function SLAGauge({ percentage, className }: SLAGaugeProps) {
   const circumference = 2 * Math.PI * 45; // radius = 45
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
-  const color = percentage >= 90 ? 'stroke-re-brand' : percentage >= 70 ? 'stroke-amber-500' : 'stroke-re-danger';
+  const color = percentage >= 90 ? 'stroke-re-success' : percentage >= 70 ? 'stroke-re-warning' : 'stroke-re-danger';
 
   return (
     <div className={cn('relative w-32 h-32', className)}>
@@ -346,7 +320,7 @@ export function SLAGauge({ percentage, className }: SLAGaugeProps) {
           fill="none"
           stroke="currentColor"
           strokeWidth="8"
-          className="text-muted"
+          className="text-re-border-subtle"
         />
         {/* Progress circle */}
         <motion.circle
@@ -364,8 +338,8 @@ export function SLAGauge({ percentage, className }: SLAGaugeProps) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold">{Math.round(percentage)}%</span>
-        <span className="text-xs text-muted-foreground">SLA Met</span>
+        <span className="text-title tabular-nums text-re-text-primary">{Math.round(percentage)}%</span>
+        <span className="text-label text-re-text-muted">SLA Met</span>
       </div>
     </div>
   );

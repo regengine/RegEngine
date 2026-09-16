@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/ui/spinner';
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchRecallReport } from '@/lib/api-hooks';
@@ -62,7 +63,7 @@ interface RecallReport {
     demo_disclaimer?: string | null;
 }
 
-/* ── Icon + Colour Mappings ── */
+/* ── Icon + tone mappings ── */
 
 const DIMENSION_ICONS: Record<string, React.ElementType> = {
     trace_speed: Timer,
@@ -72,6 +73,18 @@ const DIMENSION_ICONS: Record<string, React.ElementType> = {
     export_readiness: Upload,
     team_readiness: GraduationCap,
 };
+
+/**
+ * Notice recipe.
+ *
+ * Inlined rather than imported from `@/components/ui/callout`:
+ * `src/__tests__/pages/recall-report.test.tsx` replaces `lucide-react` with a
+ * partial factory mock, and Callout (like StatusBadge, StatTile and DataTable,
+ * which imports Callout) builds its icon map at module scope, so importing any
+ * of them throws before the suite runs. Classes match the primitive exactly.
+ */
+const NOTICE_BASE =
+    'flex gap-3 rounded-md border border-l-[3px] border-re-border px-4 py-3 text-ui text-re-text-secondary';
 
 /* ── Demo Fallback Data (shown only when demo_mode=true from API) ── */
 
@@ -96,29 +109,35 @@ const DEMO_AFFECTED_LOTS = [
 ];
 
 const DEMO_TIMELINE = [
-    { time: '08:30', label: 'FDA Request Received', desc: 'FSMA 204 records request for romaine lettuce lots from Salinas Valley region', icon: AlertTriangle, color: 'text-re-danger', done: true },
-    { time: '08:35', label: 'Automated Trace Initiated', desc: 'RegEngine backward trace from retail to harvest across 8 facilities', icon: Zap, color: 'text-[var(--re-brand)]', done: true },
-    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution — 3 supplier origins confirmed', icon: Package, color: 'text-re-info', done: true },
-    { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, color: 'text-re-warning', done: true },
-    { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, color: 'text-re-brand', done: true },
-    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload — confirm specific format with each buyer', icon: ShoppingCart, color: 'text-muted-foreground', done: false },
-    { time: '—', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, color: 'text-muted-foreground', done: false },
+    { time: '08:30', label: 'FDA Request Received', desc: 'FSMA 204 records request for romaine lettuce lots from Salinas Valley region', icon: AlertTriangle, done: true },
+    { time: '08:35', label: 'Automated Trace Initiated', desc: 'RegEngine backward trace from retail to harvest across 8 facilities', icon: Zap, done: true },
+    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution — 3 supplier origins confirmed', icon: Package, done: true },
+    { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, done: true },
+    { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, done: true },
+    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload — confirm specific format with each buyer', icon: ShoppingCart, done: false },
+    { time: '—', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, done: false },
 ];
 
 /* ── Helpers ── */
 
-function gradeColor(grade: string) {
-    if (grade === 'A') return '#10b981';
-    if (grade === 'B') return '#22c55e';
-    if (grade === 'C') return '#f59e0b';
-    if (grade === 'D') return '#ef4444';
-    return '#dc2626';
+/** Grade as a badge tone. Numbers stay ink; only the grade pill carries colour. */
+function gradeTone(grade: string): BadgeTone {
+    if (grade === 'A' || grade === 'B') return 'success';
+    if (grade === 'C') return 'warning';
+    if (grade === '—') return 'neutral';
+    return 'danger';
 }
 
-function riskBadge(risk: string) {
-    if (risk === 'high') return 'bg-re-danger/10 text-re-danger border-re-danger/20';
-    if (risk === 'medium') return 'bg-re-warning/10 text-re-warning border-re-warning/20';
-    return 'bg-re-brand-muted text-re-brand border-re-brand/20';
+function riskTone(risk: string): BadgeTone {
+    if (risk === 'high') return 'danger';
+    if (risk === 'medium') return 'warning';
+    return 'success';
+}
+
+function priorityTone(priority: string): BadgeTone {
+    if (priority === 'HIGH') return 'danger';
+    if (priority === 'MEDIUM') return 'warning';
+    return 'info';
 }
 
 /* ── Page Component ── */
@@ -139,11 +158,20 @@ export default function RecallReportPage() {
 
     if (error || (!isLoading && !report)) {
         return (
-            <div className="p-8" role="alert">
-                <h1 className="text-2xl font-semibold">Recall report unavailable</h1>
-                <p>No recall result could be loaded. Try again when your connection is available.</p>
-                <Button onClick={() => refetch()}>Retry</Button>
-            </div>
+            <PageContainer>
+                <div role="alert">
+                    <PageHeader title="Recall report unavailable" />
+                    <div className={`${NOTICE_BASE} border-l-re-danger bg-re-danger-bg`}>
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                            <p>No recall result could be loaded. Try again when your connection is available.</p>
+                            <div className="mt-3">
+                                <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </PageContainer>
         );
     }
 
@@ -156,121 +184,117 @@ export default function RecallReportPage() {
 
     // Demo-mode fallback stats for summary banner
     const demoSlaPercent = Math.round((DEMO_INVESTIGATION.response_time_hours / DEMO_INVESTIGATION.sla_target) * 100);
+    const gaugeCircumference = 2 * Math.PI * 80;
+
+    const handleExport = async () => {
+        if (!tenantId) return;
+        setExporting(true);
+        setExportError(null);
+        try {
+            const { getServiceURL } = await import('@/lib/api-config');
+            const base = getServiceURL('ingestion');
+            const res = await fetchWithCsrf(
+                `${base}/api/v1/fda/export/all?tenant_id=${tenantId}&format=csv`,
+                { credentials: 'include' }
+            );
+            if (!res.ok) {
+                // Surface the real reason instead of a bare status
+                // code — 402 is the billing gate, and users saw
+                // "Export failed: Export failed: 402" with no way
+                // to tell what to do about it.
+                if (res.status === 402) {
+                    throw new Error(
+                        'FDA export requires an active plan. Choose one under Settings → Manage Plan, then retry.'
+                    );
+                }
+                let detail = '';
+                try {
+                    const payload = await res.json();
+                    detail = payload?.error?.message || payload?.detail || '';
+                } catch {
+                    /* non-JSON body */
+                }
+                throw new Error(detail || `The export service returned status ${res.status}. Try again or check system health.`);
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `fda_24hr_response_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            setExportError(err instanceof Error ? err.message : 'Export failed');
+        } finally {
+            setExporting(false);
+        }
+    };
 
     return (
-        <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
-            <div className="mx-auto max-w-7xl space-y-6">
-                <Breadcrumbs items={[
-                    { label: 'Dashboard', href: '/dashboard' },
-                    { label: 'Recall Report' },
-                ]} />
-
-                {/* Header */}
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
-                            <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-danger" />
-                            Recall Report
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            FSMA 204 Traceability Response &amp; Readiness Assessment
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+        <PageContainer>
+            {/* The dashboard shell owns the breadcrumb and the service-health
+                badge — this page only renders its own header. */}
+            <PageHeader
+                title="Recall Report"
+                description={<>FSMA 204 Traceability Response &amp; Readiness Assessment</>}
+                secondaryActions={
+                    <>
                         <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl min-h-[44px] active:scale-[0.97]"
                             onClick={() => refetch()}
                             disabled={isLoading}
+                            leadingIcon={
+                                <RefreshCw
+                                    className={isLoading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                                    strokeWidth={1.75}
+                                    aria-hidden="true"
+                                />
+                            }
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
                             Refresh
                         </Button>
                         <Link href="/dashboard/recall-drills">
-                            <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]">
-                                <Play className="h-3.5 w-3.5 mr-1.5" /> Run Recall Drill
+                            <Button variant="outline" size="sm" leadingIcon={<Play strokeWidth={1.75} aria-hidden="true" />}>
+                                Run Recall Drill
                             </Button>
                         </Link>
-                        <Button
-                            size="sm"
-                            className="rounded-xl min-h-[44px] bg-re-danger hover:bg-re-danger text-white active:scale-[0.97]"
-                            disabled={exporting || isDemo}
-                            onClick={async () => {
-                                if (!tenantId) return;
-                                setExporting(true);
-                                setExportError(null);
-                                try {
-                                    const { getServiceURL } = await import('@/lib/api-config');
-                                    const base = getServiceURL('ingestion');
-                                    const res = await fetchWithCsrf(
-                                        `${base}/api/v1/fda/export/all?tenant_id=${tenantId}&format=csv`,
-                                        { credentials: 'include' }
-                                    );
-                                    if (!res.ok) {
-                                        // Surface the real reason instead of a bare status
-                                        // code — 402 is the billing gate, and users saw
-                                        // "Export failed: Export failed: 402" with no way
-                                        // to tell what to do about it.
-                                        if (res.status === 402) {
-                                            throw new Error(
-                                                'FDA export requires an active plan. Choose one under Settings → Manage Plan, then retry.'
-                                            );
-                                        }
-                                        let detail = '';
-                                        try {
-                                            const payload = await res.json();
-                                            detail = payload?.error?.message || payload?.detail || '';
-                                        } catch {
-                                            /* non-JSON body */
-                                        }
-                                        throw new Error(detail || `The export service returned status ${res.status}. Try again or check system health.`);
-                                    }
-                                    const blob = await res.blob();
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `fda_24hr_response_${new Date().toISOString().slice(0, 10)}.csv`;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    a.remove();
-                                    window.URL.revokeObjectURL(url);
-                                } catch (err) {
-                                    setExportError(err instanceof Error ? err.message : 'Export failed');
-                                } finally {
-                                    setExporting(false);
-                                }
-                            }}
-                        >
-                            {exporting ? (
-                                <><Clock className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Generating...</>
-                            ) : (
-                                <><Download className="h-3.5 w-3.5 mr-1.5" /> {isDemo ? 'Connect Live Data To Enable FDA Export' : 'Generate FDA 24-Hour Response'}</>
-                            )}
-                        </Button>
-                    </div>
-                </div>
+                    </>
+                }
+                primaryAction={
+                    <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={exporting || isDemo}
+                        onClick={handleExport}
+                        leadingIcon={
+                            exporting
+                                ? <Clock className="animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden="true" />
+                                : <Download strokeWidth={1.75} aria-hidden="true" />
+                        }
+                    >
+                        {exporting
+                            ? 'Generating...'
+                            : isDemo ? 'Connect Live Data To Enable FDA Export' : 'Generate FDA 24-Hour Response'}
+                    </Button>
+                }
+            />
 
+            <div className="space-y-6">
                 {/* Export error */}
                 {exportError && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-re-danger text-xs">
-                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <div className={`${NOTICE_BASE} border-l-re-danger bg-re-danger-bg`} role="alert">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
                         <span>{exportError}</span>
-                    </div>
-                )}
-
-                {/* API error */}
-                {error && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-orange-500/[0.06] border border-orange-500/20 text-orange-400 text-xs">
-                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span>Could not load report.</span>
                     </div>
                 )}
 
                 {/* Demo notice */}
                 {isDemo && !isLoading && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-info/[0.06] border border-re-info/20 text-blue-300 text-xs">
-                        <Info className="h-3.5 w-3.5 flex-shrink-0" />
+                    <div className={`${NOTICE_BASE} border-l-re-info bg-re-surface-card`}>
+                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-re-info" strokeWidth={1.75} aria-hidden="true" />
                         <span>
                             {report?.demo_disclaimer ??
                                 'Sample scenario only. Live recall evidence appears after data and export workflows are connected for this workspace.'}
@@ -280,8 +304,16 @@ export default function RecallReportPage() {
 
                 {/* Loading */}
                 {isLoading && (
-                    <div className="flex justify-center py-16">
-                        <Spinner size="lg" />
+                    <div className="space-y-4" aria-busy="true">
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                            {[0, 1, 2, 3, 4].map((tile) => (
+                                <Skeleton key={tile} className="h-24 w-full" />
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                            <Skeleton className="h-[320px] w-full" />
+                            <Skeleton className="h-[320px] w-full lg:col-span-2" />
+                        </div>
                     </div>
                 )}
 
@@ -289,116 +321,91 @@ export default function RecallReportPage() {
                     <>
                         {/* ── DEMO ONLY: Risk Summary Banner ── */}
                         {isDemo && (
-                            <motion.div
-                                className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                            >
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-re-danger tabular-nums">{DEMO_INVESTIGATION.lots_at_risk}</div>
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">Lots at Risk</div>
-                                </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-warning/[0.06] border border-re-warning/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-re-warning tabular-nums">{DEMO_INVESTIGATION.suppliers_impacted}</div>
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">Suppliers Impacted</div>
-                                </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-info/[0.06] border border-re-info/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-re-info tabular-nums">{DEMO_INVESTIGATION.facilities_in_chain}</div>
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">Facilities in Chain</div>
-                                </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold tabular-nums">{DEMO_INVESTIGATION.consumers_potentially_affected}</div>
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">Consumers at Risk</div>
-                                </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-brand/[0.06] border border-re-brand/20 text-center">
-                                    <div className="text-2xl sm:text-3xl font-bold text-re-brand tabular-nums">{DEMO_INVESTIGATION.response_time_hours}h</div>
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">Response Time</div>
-                                </div>
-                            </motion.div>
+                            <dl className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                                {[
+                                    { label: 'Lots at Risk', value: DEMO_INVESTIGATION.lots_at_risk },
+                                    { label: 'Suppliers Impacted', value: DEMO_INVESTIGATION.suppliers_impacted },
+                                    { label: 'Facilities in Chain', value: DEMO_INVESTIGATION.facilities_in_chain },
+                                    { label: 'Consumers at Risk', value: DEMO_INVESTIGATION.consumers_potentially_affected },
+                                    { label: 'Response Time', value: `${DEMO_INVESTIGATION.response_time_hours}h` },
+                                ].map((tile) => (
+                                    <Card key={tile.label} padding="compact">
+                                        <dt className="text-label text-re-text-muted">{tile.label}</dt>
+                                        <dd className="mt-2 text-title tabular-nums text-re-text-primary">{tile.value}</dd>
+                                    </Card>
+                                ))}
+                            </dl>
                         )}
 
                         {/* ── DEMO ONLY: SLA Gauge + Timeline ── */}
                         {isDemo && (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                                 {/* SLA Gauge */}
-                                <Card className="border-[var(--re-border-default)]">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <Clock className="h-4 w-4 text-[var(--re-brand)]" />
-                                            24-Hour Response Status
-                                        </CardTitle>
+                                <Card>
+                                    <CardHeader>
+                                        <div className="min-w-0">
+                                            <CardTitle>24-Hour Response Status</CardTitle>
+                                        </div>
                                     </CardHeader>
                                     <CardContent className="flex flex-col items-center">
-                                        <div className="relative w-36 h-36 sm:w-44 sm:h-44">
-                                            <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                                                <circle cx="100" cy="100" r="80" stroke="var(--re-border-default)" strokeWidth="10" fill="none" opacity="0.3" />
-                                                <motion.circle
+                                        <div className="relative h-36 w-36 sm:h-44 sm:w-44">
+                                            <svg className="h-full w-full -rotate-90 text-re-brand" viewBox="0 0 200 200" aria-hidden="true">
+                                                <circle cx="100" cy="100" r="80" className="stroke-re-border" strokeWidth="10" fill="none" />
+                                                <circle
                                                     cx="100" cy="100" r="80"
-                                                    stroke="#10b981"
+                                                    stroke="currentColor"
                                                     strokeWidth="12" fill="none" strokeLinecap="round"
-                                                    strokeDasharray={2 * Math.PI * 80}
-                                                    initial={{ strokeDashoffset: 2 * Math.PI * 80 }}
-                                                    animate={{ strokeDashoffset: 2 * Math.PI * 80 - (demoSlaPercent / 100) * 2 * Math.PI * 80 }}
-                                                    transition={{ duration: 1.5, ease: 'easeOut' }}
+                                                    strokeDasharray={gaugeCircumference}
+                                                    strokeDashoffset={gaugeCircumference - (demoSlaPercent / 100) * gaugeCircumference}
                                                 />
                                             </svg>
                                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <div className="text-3xl sm:text-4xl font-bold text-re-brand tabular-nums">{DEMO_INVESTIGATION.response_time_hours}h</div>
-                                                <div className="text-[10px] text-muted-foreground mt-0.5">of 24h SLA</div>
+                                                <div className="text-title tabular-nums text-re-text-primary">{DEMO_INVESTIGATION.response_time_hours}h</div>
+                                                <div className="mt-0.5 text-label text-re-text-muted">of 24h SLA</div>
                                             </div>
                                         </div>
-                                        <div className="mt-3 flex items-center gap-1.5">
-                                            <CheckCircle2 className="h-4 w-4 text-re-brand" />
-                                            <span className="text-xs font-medium text-re-brand">SLA Met — {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare</span>
-                                        </div>
+                                        <Badge tone="success" size="sm" className="mt-3">
+                                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                            SLA Met — {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare
+                                        </Badge>
                                     </CardContent>
                                 </Card>
 
                                 {/* Investigation Timeline */}
-                                <Card className="border-[var(--re-border-default)] lg:col-span-2">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <Timer className="h-4 w-4 text-[var(--re-brand)]" />
-                                            Investigation Timeline
-                                        </CardTitle>
-                                        <CardDescription className="text-xs">
-                                            {DEMO_INVESTIGATION.scenario}
-                                        </CardDescription>
+                                <Card className="lg:col-span-2">
+                                    <CardHeader>
+                                        <div className="min-w-0">
+                                            <CardTitle>Investigation Timeline</CardTitle>
+                                            <CardDescription>
+                                                {DEMO_INVESTIGATION.scenario}
+                                            </CardDescription>
+                                        </div>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="relative">
+                                    <CardContent className="p-0">
+                                        <ol className="divide-y divide-re-border-subtle">
                                             {DEMO_TIMELINE.map((evt, i) => {
                                                 const Icon = evt.icon;
                                                 return (
-                                                    <motion.div
-                                                        key={i}
-                                                        className="flex gap-3 pb-4 last:pb-0"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                        transition={{ delay: 0.1 * i }}
-                                                    >
-                                                        <div className="flex flex-col items-center">
-                                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${evt.done ? 'bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]' : 'bg-[var(--re-surface-card)] border border-dashed border-[var(--re-border-default)]'}`}>
-                                                                <Icon className={`h-3.5 w-3.5 ${evt.color}`} />
-                                                            </div>
-                                                            {i < DEMO_TIMELINE.length - 1 && (
-                                                                <div className={`w-px flex-1 min-h-[16px] ${evt.done ? 'bg-[var(--re-border-default)]' : 'bg-[var(--re-border-default)] opacity-30'}`} />
-                                                            )}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0 pb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`text-xs sm:text-sm font-medium ${evt.done ? '' : 'text-muted-foreground'}`}>{evt.label}</span>
+                                                    <li key={i} className="flex gap-3 px-5 py-3">
+                                                        <Icon
+                                                            className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary"
+                                                            strokeWidth={1.75}
+                                                            aria-hidden="true"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className={evt.done ? 'text-ui font-medium text-re-text-primary' : 'text-ui font-medium text-re-text-tertiary'}>{evt.label}</span>
                                                                 {evt.done && (
-                                                                    <Badge variant="secondary" className="text-[9px] bg-re-brand-muted text-re-brand border-re-brand/20">Done</Badge>
+                                                                    <Badge tone="success" size="sm">Done</Badge>
                                                                 )}
                                                             </div>
-                                                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{evt.desc}</p>
-                                                            <span className="text-[10px] text-muted-foreground font-mono">{evt.time}</span>
+                                                            <p className="mt-0.5 text-small text-re-text-tertiary">{evt.desc}</p>
+                                                            <span className="font-mono text-label text-re-text-muted">{evt.time}</span>
                                                         </div>
-                                                    </motion.div>
+                                                    </li>
                                                 );
                                             })}
-                                        </div>
+                                        </ol>
                                     </CardContent>
                                 </Card>
                             </div>
@@ -406,103 +413,94 @@ export default function RecallReportPage() {
 
                         {/* ── DEMO ONLY: Affected Lots ── */}
                         {isDemo && (
-                            <Card className="border-[var(--re-border-default)]">
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <Package className="h-4 w-4 text-[var(--re-brand)]" />
-                                            Affected Lots ({DEMO_AFFECTED_LOTS.length})
-                                        </CardTitle>
-                                        <span className="text-[10px] text-muted-foreground">{DEMO_INVESTIGATION.total_quantity} total</span>
+                            <Card>
+                                <CardHeader>
+                                    <div className="min-w-0">
+                                        <CardTitle>Affected Lots ({DEMO_AFFECTED_LOTS.length})</CardTitle>
                                     </div>
+                                    <span className="shrink-0 font-mono text-label text-re-text-muted">{DEMO_INVESTIGATION.total_quantity} total</span>
                                 </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-2">
-                                        {DEMO_AFFECTED_LOTS.map((lot, i) => (
-                                            <motion.div
+                                <CardContent className="p-0">
+                                    <ul className="divide-y divide-re-border-subtle">
+                                        {DEMO_AFFECTED_LOTS.map((lot) => (
+                                            <li
                                                 key={lot.tlc}
-                                                className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]"
-                                                initial={{ opacity: 0, y: 5 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: 0.05 * i }}
+                                                className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:gap-4"
                                             >
-                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${lot.risk === 'high' ? 'bg-re-danger' : lot.risk === 'medium' ? 'bg-re-warning' : 'bg-re-brand'}`} />
-                                                    <div className="min-w-0">
-                                                        <div className="font-mono text-xs truncate">{lot.tlc}</div>
-                                                        <div className="text-[11px] text-muted-foreground truncate">{lot.product}</div>
-                                                    </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate font-mono text-[0.8125rem] text-re-text-primary">{lot.tlc}</div>
+                                                    <div className="truncate text-small text-re-text-tertiary">{lot.product}</div>
                                                 </div>
-                                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                                        <MapPin className="h-3 w-3" /> {lot.facility}
+                                                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                                                    <span className="flex items-center gap-1 text-small text-re-text-tertiary">
+                                                        <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" /> {lot.facility}
                                                     </span>
-                                                    <Badge variant="secondary" className="text-[9px]">{lot.cte_count} CTEs</Badge>
-                                                    <Badge variant="secondary" className={`text-[9px] ${riskBadge(lot.risk)}`}>
+                                                    <Badge size="sm">{lot.cte_count} CTEs</Badge>
+                                                    <Badge tone={riskTone(lot.risk)} size="sm" className="capitalize">
                                                         {lot.risk}
                                                     </Badge>
-                                                    {lot.status === 'traced' ? (
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-re-brand flex-shrink-0" />
-                                                    ) : (
-                                                        <Clock className="h-3.5 w-3.5 text-re-warning flex-shrink-0" />
-                                                    )}
+                                                    <Badge
+                                                        tone={lot.status === 'traced' ? 'success' : 'warning'}
+                                                        size="sm"
+                                                        className="capitalize"
+                                                    >
+                                                        {lot.status === 'traced' ? (
+                                                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                        ) : (
+                                                            <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                        )}
+                                                        {lot.status}
+                                                    </Badge>
                                                 </div>
-                                            </motion.div>
+                                            </li>
                                         ))}
-                                    </div>
+                                    </ul>
                                 </CardContent>
                             </Card>
                         )}
 
                         {/* ── LIVE ONLY: No Active Recall Empty State ── */}
                         {!isDemo && (
-                            <motion.div
-                                className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed border-[var(--re-border-default)]"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                            >
-                                <ShieldCheck className="h-12 w-12 text-re-brand/40 mb-4" />
-                                <h2 className="text-lg font-semibold">No Active Recall Report</h2>
-                                <p className="text-sm text-muted-foreground mt-1 max-w-md">
-This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team&apos;s response speed.
-                                </p>
-                                <Link href="/dashboard/recall-drills">
-                                    <Button size="sm" className="mt-4 rounded-xl min-h-[44px]">
-                                        <Play className="mr-1.5 h-3.5 w-3.5" /> Run Recall Drill
-                                    </Button>
-                                </Link>
-                            </motion.div>
+                            <EmptyState
+                                icon={ShieldCheck}
+                                title="No Active Recall Report"
+                                description={'This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team’s response speed.'}
+                                action={
+                                    <Link href="/dashboard/recall-drills">
+                                        <Button size="sm" leadingIcon={<Play strokeWidth={1.75} aria-hidden="true" />}>
+                                            Run Recall Drill
+                                        </Button>
+                                    </Link>
+                                }
+                            />
                         )}
 
                         {/* ── Readiness Score + Dimensions (always shown, live or demo) ── */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                             {/* Overall Score */}
-                            <Card className="border-[var(--re-border-default)] overflow-hidden">
-                                <div className="h-1 bg-gradient-to-r from-[var(--re-brand)] to-blue-500" />
-                                <CardContent className="py-5 sm:py-6">
-                                    <div className="text-xs text-muted-foreground mb-1">Recall Response Readiness</div>
-                                    <div className="flex items-baseline gap-3">
-                                        <span className="text-4xl sm:text-5xl font-bold" style={{ color: gradeColor(overallGrade) }}>
+                            <Card>
+                                <CardContent>
+                                    <div className="text-label text-re-text-muted">Recall Response Readiness</div>
+                                    <div className="mt-2 flex flex-wrap items-baseline gap-3">
+                                        <span className="text-[3.5rem] leading-none tracking-[-0.02em] tabular-nums text-re-text-primary">
                                             {overallScore}
                                         </span>
-                                        <span className="text-lg text-muted-foreground">/100</span>
+                                        <span className="text-ui text-re-text-tertiary">/100</span>
                                         {overallGrade !== '—' && (
-                                            <Badge className="text-sm px-2.5 py-0.5" style={{ background: gradeColor(overallGrade), color: '#fff' }}>
-                                                {overallGrade}
-                                            </Badge>
+                                            <Badge tone={gradeTone(overallGrade)}>{overallGrade}</Badge>
                                         )}
                                     </div>
-                                    <div className="text-xs text-muted-foreground mt-3">
-                                        Response time: <strong className="text-foreground">{responseTimeStr}</strong>
+                                    <div className="mt-3 text-ui text-re-text-secondary">
+                                        Response time: <strong className="font-medium text-re-text-primary">{responseTimeStr}</strong>
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground mt-1">
+                                    <div className="mt-1 font-mono text-label text-re-text-muted">
                                         21 CFR 1.1455 Assessment ·{' '}
                                         {report?.generated_at
                                             ? new Date(report.generated_at).toLocaleDateString()
                                             : new Date().toLocaleDateString()}
                                     </div>
                                     {!isDemo && report?.executive_summary && (
-                                        <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed border-t border-[var(--re-border-default)] pt-3">
+                                        <p className="mt-3 border-t border-re-border-subtle pt-3 text-small text-re-text-tertiary">
                                             {report.executive_summary}
                                         </p>
                                     )}
@@ -510,73 +508,75 @@ This drill measures how quickly you could assemble a 24-hour FDA records-request
                             </Card>
 
                             {/* Dimension Grid */}
-                            <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-2">
                                 {dimensions.map((dim) => {
                                     const Icon = DIMENSION_ICONS[dim.id] ?? Timer;
-                                    const dimColor = gradeColor(dim.grade);
                                     const isExpanded = expanded === dim.id;
                                     return (
-                                        <motion.div key={dim.id} layout className={isExpanded ? 'sm:col-span-2' : ''}>
-                                            <Card
-                                                className={`cursor-pointer border transition-all active:scale-[0.98] h-full ${isExpanded ? 'border-[var(--re-brand)]' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]/50'}`}
+                                        <Card
+                                            key={dim.id}
+                                            variant="interactive"
+                                            className={`h-full ${isExpanded ? 'sm:col-span-2' : ''}`}
+                                        >
+                                            <button
+                                                type="button"
+                                                aria-expanded={isExpanded}
                                                 onClick={() => setExpanded(isExpanded ? null : dim.id)}
+                                                className="w-full p-4 text-left focus-visible:outline-none"
                                             >
-                                                <CardContent className="py-3 sm:py-4">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <Icon className="h-4 w-4 flex-shrink-0" style={{ color: dimColor }} />
-                                                            <span className="text-xs sm:text-sm font-medium truncate">{dim.name}</span>
+                                                <div className="mb-2 flex items-center justify-between gap-2">
+                                                    <div className="flex min-w-0 items-center gap-2">
+                                                        <Icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                        <span className="truncate text-ui font-medium text-re-text-primary">{dim.name}</span>
+                                                    </div>
+                                                    <div className="flex shrink-0 items-center gap-1.5">
+                                                        <span className="text-ui font-medium tabular-nums text-re-text-primary">{dim.score}</span>
+                                                        <Badge tone={gradeTone(dim.grade)} size="sm">{dim.grade}</Badge>
+                                                        {isExpanded
+                                                            ? <ChevronUp className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                                            : <ChevronDown className="h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />}
+                                                    </div>
+                                                </div>
+                                                {/* Score bar */}
+                                                <div
+                                                    className="h-1.5 w-full overflow-hidden rounded-full bg-re-surface-inset"
+                                                    role="progressbar"
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-valuenow={dim.score}
+                                                    aria-label={`${dim.name} score`}
+                                                >
+                                                    <div
+                                                        className="h-full rounded-full bg-re-text-tertiary"
+                                                        style={{ width: `${dim.score}%` }}
+                                                    />
+                                                </div>
+                                                {isExpanded && (
+                                                    <div className="mt-3 space-y-3">
+                                                        <div>
+                                                            <div className="mb-1 text-label text-re-text-muted">Findings</div>
+                                                            <ul className="space-y-1 text-small text-re-text-tertiary">
+                                                                {dim.findings.map((f, i) => (
+                                                                    <li key={i} className="flex items-start gap-1.5">
+                                                                        <span aria-hidden="true">•</span> {f}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="text-sm font-bold tabular-nums" style={{ color: dimColor }}>{dim.score}</span>
-                                                            <Badge className="text-[10px] px-1.5" style={{ background: gradeColor(dim.grade), color: '#fff' }}>{dim.grade}</Badge>
-                                                            {isExpanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                                                        <div>
+                                                            <div className="mb-1 text-label text-re-text-muted">Recommendations</div>
+                                                            <ul className="space-y-1 text-small text-re-text-secondary">
+                                                                {dim.recommendations.map((r, i) => (
+                                                                    <li key={i} className="flex items-start gap-1.5">
+                                                                        <ArrowUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> {r}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
                                                         </div>
                                                     </div>
-                                                    {/* Score bar */}
-                                                    <div className="w-full bg-[var(--re-surface-card)] rounded-full h-1.5">
-                                                        <motion.div
-                                                            className="h-full rounded-full"
-                                                            style={{ background: dimColor }}
-                                                            initial={{ width: 0 }}
-                                                            animate={{ width: `${dim.score}%` }}
-                                                            transition={{ duration: 0.8, delay: 0.1 }}
-                                                        />
-                                                    </div>
-                                                    <AnimatePresence>
-                                                        {isExpanded && (
-                                                            <motion.div
-                                                                initial={{ opacity: 0, height: 0 }}
-                                                                animate={{ opacity: 1, height: 'auto' }}
-                                                                exit={{ opacity: 0, height: 0 }}
-                                                                className="mt-3 space-y-2.5 overflow-hidden"
-                                                            >
-                                                                <div>
-                                                                    <div className="text-[10px] font-medium text-muted-foreground mb-1">Findings</div>
-                                                                    <ul className="text-xs space-y-1">
-                                                                        {dim.findings.map((f, i) => (
-                                                                            <li key={i} className="flex items-start gap-1.5 text-muted-foreground">
-                                                                                <span>•</span> {f}
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </div>
-                                                                <div>
-                                                                    <div className="text-[10px] font-medium text-muted-foreground mb-1">Recommendations</div>
-                                                                    <ul className="text-xs space-y-1">
-                                                                        {dim.recommendations.map((r, i) => (
-                                                                            <li key={i} className="flex items-start gap-1.5 text-[var(--re-brand)]">
-                                                                                <ArrowUp className="h-3 w-3 mt-0.5 flex-shrink-0" /> {r}
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </div>
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </CardContent>
-                                            </Card>
-                                        </motion.div>
+                                                )}
+                                            </button>
+                                        </Card>
                                     );
                                 })}
                             </div>
@@ -584,57 +584,46 @@ This drill measures how quickly you could assemble a 24-hour FDA records-request
 
                         {/* Action Items */}
                         {actionItems.length > 0 && (
-                            <Card className="border-[var(--re-border-default)]">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        <Zap className="h-4 w-4 text-[var(--re-brand)]" />
-                                        Prioritized Actions
-                                    </CardTitle>
-                                    <CardDescription className="text-xs">
-                                        {isDemo ? 'Address these to improve recall readiness' : 'Personalized recommendations based on your traceability data'}
-                                    </CardDescription>
+                            <Card>
+                                <CardHeader>
+                                    <div className="min-w-0">
+                                        <CardTitle>Prioritized Actions</CardTitle>
+                                        <CardDescription>
+                                            {isDemo ? 'Address these to improve recall readiness' : 'Personalized recommendations based on your traceability data'}
+                                        </CardDescription>
+                                    </div>
                                 </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-2">
+                                <CardContent className="p-0">
+                                    <ul className="divide-y divide-re-border-subtle">
                                         {actionItems.map((item, i) => (
-                                            <motion.div
-                                                key={i}
-                                                className="flex items-center gap-2 sm:gap-3 p-3 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]"
-                                                initial={{ opacity: 0, x: 10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: 0.05 * i }}
-                                            >
-                                                <Badge variant="secondary" className={`text-[9px] px-2 flex-shrink-0 uppercase tracking-widest ${
-                                                    item.priority === 'HIGH' ? 'bg-re-danger/10 text-re-danger border-re-danger/20' :
-                                                    item.priority === 'MEDIUM' ? 'bg-re-warning/10 text-re-warning border-re-warning/20' :
-                                                    'bg-re-info/10 text-re-info border-re-info/20'
-                                                }`}>
+                                            <li key={i} className="flex items-center gap-3 px-5 py-3">
+                                                <Badge tone={priorityTone(item.priority)} size="sm" mono className="shrink-0">
                                                     {item.priority}
                                                 </Badge>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-xs sm:text-sm">{item.action}</div>
-                                                    <div className="text-[10px] text-muted-foreground">{item.impact} · {item.effort} effort</div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="text-ui text-re-text-primary">{item.action}</div>
+                                                    <div className="text-small text-re-text-tertiary">{item.impact} · {item.effort} effort</div>
                                                 </div>
-                                            </motion.div>
+                                            </li>
                                         ))}
-                                    </div>
+                                    </ul>
                                 </CardContent>
                             </Card>
                         )}
 
                         {/* What This Means */}
                         {overallScore > 0 && (
-                            <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                                <CardContent className="py-4">
+                            <Card variant="inset">
+                                <CardContent>
                                     <div className="flex items-start gap-3">
-                                        <Info className="h-4 w-4 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
-                                        <div className="text-xs text-muted-foreground leading-relaxed">
-                                            <span className="font-medium text-foreground">What this means for your facility: </span>
+                                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <div className="max-w-[70ch] text-ui text-re-text-secondary">
+                                            <span className="font-medium text-re-text-primary">What this means for your facility: </span>
                                             {overallScore >= 80
                                                 ? 'Your facility can respond to an FDA 204 records request well within the 24-hour mandate. Trace-back, lot identification, and export packaging are all functional. Continue running monthly mock drills to maintain readiness.'
                                                 : overallScore >= 60
-                                                ? 'Your facility has basic recall capabilities but gaps in supplier coverage and trace speed could delay an FDA response. Address the high-priority actions above to reduce risk before your next audit or inspection.'
-                                                : 'Critical gaps in your traceability system would likely prevent a timely response to an FDA records request. Immediate action on supplier onboarding and data completeness is recommended to avoid regulatory exposure.'}
+                                                    ? 'Your facility has basic recall capabilities but gaps in supplier coverage and trace speed could delay an FDA response. Address the high-priority actions above to reduce risk before your next audit or inspection.'
+                                                    : 'Critical gaps in your traceability system would likely prevent a timely response to an FDA records request. Immediate action on supplier onboarding and data completeness is recommended to avoid regulatory exposure.'}
                                         </div>
                                     </div>
                                 </CardContent>
@@ -644,11 +633,11 @@ This drill measures how quickly you could assemble a 24-hour FDA records-request
                 )}
 
                 {/* Regulatory Footer */}
-                <div className="text-center text-[10px] text-muted-foreground py-4 space-y-0.5">
+                <div className="space-y-0.5 py-4 text-center text-small text-re-text-tertiary">
                     <div>Per 21 CFR Part 1, Subpart S · 21 CFR 1.1455 (24-hour mandate) · FSMA Section 204</div>
                     <div>This report is generated from traceability data in your RegEngine instance.</div>
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

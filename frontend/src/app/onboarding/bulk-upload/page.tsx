@@ -277,7 +277,6 @@ export default function BulkUploadPage() {
         {/* Stepper */}
         <div
           className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 mb-6"
-          style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
         >
           {/* Mobile: 2×2 grid. Desktop: horizontal row */}
           <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-3 sm:gap-0">
@@ -287,7 +286,7 @@ export default function BulkUploadPage() {
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${
                       i <= activeStep
-                        ? 'bg-[var(--re-brand)] border-[var(--re-brand)] text-white'
+                        ? 'bg-[var(--re-brand)] border-[var(--re-brand)] text-[var(--re-brand-foreground)]'
                         : 'bg-[var(--re-surface-elevated)] border-[var(--re-surface-border)] text-[var(--re-text-disabled)]'
                     }`}
                   >
@@ -329,7 +328,6 @@ export default function BulkUploadPage() {
         {/* Merkle integrity callout */}
         <div
           className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 mb-5 sm:mb-6 flex items-start gap-3 sm:gap-4"
-          style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
         >
           <div className="w-10 h-10 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center flex-shrink-0">
             <Hash className="w-5 h-5 text-[var(--re-brand)]" />
@@ -348,8 +346,7 @@ export default function BulkUploadPage() {
             onClick={() => onDownloadTemplate('csv')}
             disabled={isBusy || !isAuthenticated}
             type="button"
-            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 active:scale-[0.98] min-h-[48px]"
-            style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[48px]"
           >
             <div className="flex items-center sm:items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
@@ -365,8 +362,7 @@ export default function BulkUploadPage() {
             onClick={() => onDownloadTemplate('xlsx')}
             disabled={isBusy || !isAuthenticated}
             type="button"
-            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 active:scale-[0.98] min-h-[48px]"
-            style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[48px]"
           >
             <div className="flex items-center sm:items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
@@ -406,8 +402,7 @@ export default function BulkUploadPage() {
               onClick={onParseAndValidate}
               disabled={!file || isBusy}
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
-              style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
             >
               {isBusy && !commitResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               {isBusy && !commitResult ? 'Working...' : 'Parse + Validate'}
@@ -417,8 +412,7 @@ export default function BulkUploadPage() {
               onClick={onCommit}
               disabled={!canCommit || isBusy || !isAuthenticated}
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
-              style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
             >
               <CheckCircle2 className="w-4 h-4" />
               Commit Import
@@ -428,7 +422,7 @@ export default function BulkUploadPage() {
               onClick={onRefreshStatus}
               disabled={!parseResult?.session_id || isBusy || !isAuthenticated}
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-5 py-2.5 text-sm font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all disabled:cursor-not-allowed disabled:opacity-50 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-5 py-2.5 text-sm font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all disabled:cursor-not-allowed disabled:opacity-50 min-h-[48px] w-full sm:w-auto"
             >
               Refresh Status
             </button>
@@ -437,7 +431,6 @@ export default function BulkUploadPage() {
           {/* Client-side CSV preview (no auth required) */}
           {csvPreview && !parseResult && (
             <div className="mt-5 rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 p-4 sm:p-5"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 className="w-4 h-4 text-[var(--re-brand)]" />
@@ -530,8 +523,7 @@ export default function BulkUploadPage() {
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link
                       href="/login?next=/onboarding/bulk-upload"
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px] active:scale-[0.98]"
-                      style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
                     >
                       Continue with email
                       <ArrowRight className="w-4 h-4" />
@@ -545,7 +537,6 @@ export default function BulkUploadPage() {
           {/* Client-side validation results (no auth required) */}
           {clientValidation && !parseResult && (
             <div className="mt-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4 sm:p-5"
-              style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
             >
               {/* Header with completeness score */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -635,14 +626,14 @@ export default function BulkUploadPage() {
                     <div key={col} className="flex items-center gap-2 text-xs">
                       <CheckCircle2 className="w-3.5 h-3.5 text-re-brand shrink-0" />
                       <span className="text-[var(--re-text-secondary)]">{col}</span>
-                      <span className="text-[10px] text-re-brand font-medium">required</span>
+                      <span className="text-label text-re-brand font-medium">required</span>
                     </div>
                   ))}
                   {clientValidation.requiredColumnsMissing.map(col => (
                     <div key={col} className="flex items-center gap-2 text-xs">
-                      <span className="w-3.5 h-3.5 rounded-full bg-re-danger/10 text-re-danger text-[10px] font-bold flex items-center justify-center shrink-0">!</span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-re-danger/10 text-re-danger text-label font-bold flex items-center justify-center shrink-0">!</span>
                       <span className="text-re-danger">{col}</span>
-                      <span className="text-[10px] text-re-danger font-medium">missing</span>
+                      <span className="text-label text-re-danger font-medium">missing</span>
                     </div>
                   ))}
                   {clientValidation.recommendedColumnsPresent.map(col => (
@@ -653,9 +644,9 @@ export default function BulkUploadPage() {
                   ))}
                   {clientValidation.recommendedColumnsMissing.map(col => (
                     <div key={col} className="flex items-center gap-2 text-xs">
-                      <span className="w-3.5 h-3.5 rounded-full bg-re-warning/10 text-re-warning text-[10px] font-bold flex items-center justify-center shrink-0">~</span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-re-warning/10 text-re-warning text-label font-bold flex items-center justify-center shrink-0">~</span>
                       <span className="text-re-warning">{col}</span>
-                      <span className="text-[10px] text-re-warning font-medium">recommended</span>
+                      <span className="text-label text-re-warning font-medium">recommended</span>
                     </div>
                   ))}
                 </div>
@@ -715,8 +706,7 @@ export default function BulkUploadPage() {
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link
                       href="/login?next=/onboarding/bulk-upload"
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px] active:scale-[0.98]"
-                      style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
                     >
                       Continue with email
                       <ArrowRight className="w-4 h-4" />
@@ -738,7 +728,6 @@ export default function BulkUploadPage() {
           {/* Parse result */}
           {parseResult && (
             <div className="mt-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)] mb-2">Parsed ({parseResult.detected_format})</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -767,7 +756,6 @@ export default function BulkUploadPage() {
           {/* Validation preview */}
           {validateResult && (
             <div className="mt-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)] mb-2">Validation Preview</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm text-[var(--re-text-secondary)]">
@@ -807,7 +795,6 @@ export default function BulkUploadPage() {
           {/* Commit result */}
           {commitResult && (
             <div className="mt-4 rounded-xl border border-re-brand/20 bg-re-brand/5 p-4"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)] mb-2 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-re-brand" />
@@ -849,7 +836,6 @@ export default function BulkUploadPage() {
           {/* Status result */}
           {statusResult && (
             <div className="mt-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)]">Latest Status: {statusResult.status}</p>
               {statusResult.error && <p className="mt-1 text-sm text-re-danger">{statusResult.error}</p>}

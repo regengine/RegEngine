@@ -12,7 +12,10 @@ import {
     CheckCircle2,
     XCircle,
     Download,
-    Clock,
+    Check,
+    Circle,
+    ClipboardList,
+    GitCompare,
     FileCheck,
     Plus,
     Hash,
@@ -23,6 +26,19 @@ import {
     PenLine,
     Timer
 } from 'lucide-react';
+
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
+import { cn } from '@/lib/utils';
 
 interface Snapshot {
     id: string;
@@ -452,593 +468,591 @@ export default function SnapshotsPage() {
         });
     };
 
-    const getStatusColor = (status: string) => {
+    // Compliance status and degradation state both travel as a StatusBadge:
+    // icon + label, never colour alone. The API-supplied emoji stays inside the
+    // label so the recorded string is unchanged.
+    const getComplianceState = (status: string): ComplianceState => {
         switch (status) {
-            case 'COMPLIANT': return 'bg-re-success/10 text-re-success border-green-500/30';
-            case 'AT_RISK': return 'bg-re-warning/10 text-re-warning border-yellow-500/30';
-            case 'NON_COMPLIANT': return 'bg-re-danger/10 text-re-danger border-re-danger/30';
-            default: return 'bg-re-surface-card0/10 text-re-text-tertiary border-re-border/30';
+            case 'COMPLIANT': return 'compliant';
+            case 'AT_RISK': return 'at-risk';
+            case 'NON_COMPLIANT': return 'non-compliant';
+            default: return 'unknown';
+        }
+    };
+
+    const getSnapshotState = (state: string): ComplianceState => {
+        switch (state) {
+            case 'VALID': return 'compliant';
+            case 'STALE': return 'at-risk';
+            default: return 'non-compliant';
         }
     };
 
     const getCountdownColor = (seconds?: number) => {
         if (!seconds) return 'text-re-text-tertiary';
-        if (seconds <= 0) return 'text-re-danger animate-pulse';
+        if (seconds <= 0) return 'text-re-danger animate-pulse motion-reduce:animate-none';
         if (seconds < 3600) return 'text-re-danger';  // < 1 hour
-        if (seconds < 14400) return 'text-orange-400';  // < 4 hours
+        if (seconds < 14400) return 'text-re-warning';  // < 4 hours
         return 'text-re-warning';
     };
 
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white p-4 sm:p-6 lg:p-8">
-            <div className="max-w-6xl mx-auto">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
-                            <Camera className="h-8 w-8 text-purple-400" />
-                            Compliance Snapshots
-                        </h1>
-                        <p className="text-re-text-tertiary mt-2">
-                            Point-in-time compliance state capture for audit defense
-                        </p>
-                    </div>
+        <PageContainer>
+            <PageHeader
+                title="Compliance Snapshots"
+                description="Point-in-time compliance state capture for audit defense"
+                meta={
+                    selectedForDiff.length > 0 && selectedForDiff.length < 2 ? (
+                        <span>Select 1 more to compare</span>
+                    ) : undefined
+                }
+                secondaryActions={
+                    selectedForDiff.length === 2 ? (
+                        <Button variant="secondary" onClick={compareSnapshots}>
+                            <GitCompare className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            Compare Selected
+                        </Button>
+                    ) : undefined
+                }
+                primaryAction={
+                    <Button onClick={() => setShowCreateModal(true)}>
+                        <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                        Manual Freeze
+                    </Button>
+                }
+            />
 
-                    <div className="flex items-center gap-3">
-                        {selectedForDiff.length === 2 && (
-                            <button
-                                onClick={compareSnapshots}
-                                className="flex items-center gap-2 px-6 py-3 bg-re-info hover:bg-re-info rounded-xl font-medium transition-all"
-                            >
-                                Compare Selected
-                            </button>
-                        )}
-                        {selectedForDiff.length > 0 && selectedForDiff.length < 2 && (
-                            <span className="text-re-text-tertiary text-sm">Select 1 more to compare</span>
-                        )}
-                        <button
-                            onClick={() => setShowCreateModal(true)}
-                            className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-medium transition-all"
-                        >
-                            <Plus className="h-5 w-5" />
-                            Manual Freeze
-                        </button>
-                    </div>
-                </div>
-
+            <div className="space-y-6">
                 {/* Info Banner */}
-                <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-4 mb-8">
-                    <div className="flex items-start gap-3">
-                        <Shield className="h-6 w-6 text-purple-400 mt-0.5" />
-                        <div>
-                            <h3 className="font-semibold text-purple-300">Living Compliance Artifacts</h3>
-                            <p className="text-sm text-re-text-tertiary mt-1">
-                                Snapshots are automatically created when CRITICAL or HIGH alerts trigger.
-                                Each requires <strong>owner attestation</strong> before the alert can be resolved.
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                <Callout tone="info" icon={Shield} title="Living Compliance Artifacts">
+                    Snapshots are automatically created when CRITICAL or HIGH alerts trigger.
+                    Each requires <strong className="font-medium text-re-text-primary">owner attestation</strong> before the alert can be resolved.
+                </Callout>
 
                 {/* Error State */}
                 {fetchError && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-re-danger text-sm mb-4">
-                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                        <span>{fetchError}</span>
-                    </div>
+                    <Callout tone="danger" role="alert" icon={AlertTriangle}>
+                        {fetchError}
+                    </Callout>
                 )}
 
                 {/* Snapshots List */}
                 {loading ? (
-                    <div className="text-center py-12 text-re-text-tertiary">Loading snapshots...</div>
+                    <div className="space-y-4" aria-busy="true">
+                        <span className="sr-only">Loading snapshots...</span>
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <Skeleton key={i} className="h-40 w-full rounded-lg" />
+                        ))}
+                    </div>
                 ) : snapshots.length === 0 && !fetchError ? (
-                    <div
-                        data-testid="snapshot-empty-state"
-                        className="text-center py-16 bg-white/5 rounded-xl border border-white/10"
-                    >
-                        <Camera className="h-16 w-16 text-re-text-disabled mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-re-text-secondary mb-2">No Snapshots Yet</h3>
-                        <p className="text-re-text-muted mb-2">
-                            Snapshots auto-create when CRITICAL/HIGH alerts trigger.
-                        </p>
-                        <p className="text-re-text-disabled text-sm">
-                            Or create a manual snapshot for proactive audit prep.
-                        </p>
+                    <div data-testid="snapshot-empty-state">
+                        <EmptyState
+                            icon={Camera}
+                            title="No Snapshots Yet"
+                            description="Snapshots auto-create when CRITICAL/HIGH alerts trigger."
+                            action={
+                                <p className="text-small text-re-text-tertiary">
+                                    Or create a manual snapshot for proactive audit prep.
+                                </p>
+                            }
+                        />
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {snapshots.map((snapshot) => (
-                            <div
-                                key={snapshot.id}
-                                data-testid={`snapshot-card-${snapshot.id}`}
-                                className={`bg-white/5 rounded-xl border p-6 transition-all ${snapshot.is_auto_created && !snapshot.is_attested
-                                    ? 'border-orange-500/50 shadow-lg shadow-orange-500/10'
-                                    : 'border-white/10 hover:border-white/20'
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        {/* Header Row */}
-                                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                            <h3 className="text-xl font-semibold">{snapshot.snapshot_name}</h3>
-                                            {/* Degradation State Badge */}
-                                            <span
-                                                className={`px-2 py-1 rounded-full text-sm border cursor-help ${snapshot.snapshot_state === 'VALID'
-                                                    ? 'bg-re-success/10 text-re-success border-green-500/30'
-                                                    : snapshot.snapshot_state === 'STALE'
-                                                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
-                                                        : 'bg-re-danger/10 text-re-danger border-re-danger/30'
-                                                    }`}
-                                                title={snapshot.degradation_reason || `${snapshot.age_hours}h old`}
-                                            >
-                                                {snapshot.state_emoji} {snapshot.snapshot_state}
-                                            </span>
-                                            <span className={`px-3 py-1 rounded-full text-sm border ${getStatusColor(snapshot.compliance_status)}`}>
-                                                {snapshot.compliance_status_emoji} {snapshot.compliance_status}
-                                            </span>
-                                            {snapshot.is_auto_created && (
-                                                <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full border border-orange-500/30">
-                                                    AUTO-TRIGGERED
-                                                </span>
-                                            )}
-                                            {snapshot.integrity_verified && (
-                                                <span className="flex items-center gap-1.5 px-3 py-1 bg-re-success/10 text-re-success text-xs font-bold rounded-full border border-green-500/30 shadow-sm shadow-green-500/20">
-                                                    <ShieldCheck className="h-3.5 w-3.5" />
-                                                    INTEGRITY VERIFIED
-                                                </span>
-                                            )}
-                                            {snapshot.is_attested ? (
-                                                <span className="flex items-center gap-1 text-re-success text-sm">
-                                                    <CheckCircle2 className="h-4 w-4" />
-                                                    Attested by {snapshot.attested_by}
-                                                </span>
-                                            ) : snapshot.is_auto_created && (
-                                                <span className="flex items-center gap-1 text-orange-400 text-sm animate-pulse">
-                                                    <AlertTriangle className="h-4 w-4" />
-                                                    Awaiting Attestation
-                                                </span>
-                                            )}
-                                        </div>
+                        {snapshots.map((snapshot) => {
+                            const needsAttestation = snapshot.is_auto_created && !snapshot.is_attested;
+                            const isSelectedForDiff = selectedForDiff.includes(snapshot.id);
 
-
-                                        {/* Deadline + Citation Row */}
-                                        {snapshot.deadline && (
-                                            <div className="flex items-center gap-4 mb-3 bg-black/30 rounded-lg px-4 py-2 w-fit">
-                                                <span className={`flex items-center gap-2 font-mono text-lg font-bold ${getCountdownColor(snapshot.countdown_seconds)}`}>
-                                                    <Timer className="h-5 w-5" />
-                                                    {snapshot.countdown_display || 'EXPIRED'}
+                            return (
+                                <Card
+                                    key={snapshot.id}
+                                    data-testid={`snapshot-card-${snapshot.id}`}
+                                    padding="spacious"
+                                    className={cn(needsAttestation && 'border-re-border-strong')}
+                                >
+                                    <div className="flex flex-col justify-between gap-6 lg:flex-row">
+                                        <div className="min-w-0 flex-1">
+                                            {/* Header Row */}
+                                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                                <h3 className="text-heading text-re-text-primary">{snapshot.snapshot_name}</h3>
+                                                {/* Degradation State Badge */}
+                                                <span title={snapshot.degradation_reason || `${snapshot.age_hours}h old`}>
+                                                    <StatusBadge
+                                                        state={getSnapshotState(snapshot.snapshot_state)}
+                                                        label={`${snapshot.state_emoji} ${snapshot.snapshot_state}`}
+                                                    />
                                                 </span>
-                                                {snapshot.regulatory_citation && (
-                                                    <span className="flex items-center gap-1 text-re-info text-sm">
-                                                        <BookOpen className="h-4 w-4" />
-                                                        {snapshot.regulatory_citation}
+                                                <StatusBadge
+                                                    state={getComplianceState(snapshot.compliance_status)}
+                                                    label={`${snapshot.compliance_status_emoji} ${snapshot.compliance_status}`}
+                                                />
+                                                {snapshot.is_auto_created && (
+                                                    <Badge tone="neutral" size="sm" mono>
+                                                        AUTO-TRIGGERED
+                                                    </Badge>
+                                                )}
+                                                {snapshot.integrity_verified && (
+                                                    <Badge tone="success" size="sm" mono>
+                                                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                        INTEGRITY VERIFIED
+                                                    </Badge>
+                                                )}
+                                                {snapshot.is_attested ? (
+                                                    <span className="flex items-center gap-1.5 text-small text-re-text-secondary">
+                                                        <CheckCircle2 className="h-4 w-4 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                                        Attested by {snapshot.attested_by}
+                                                    </span>
+                                                ) : snapshot.is_auto_created && (
+                                                    <span className="flex items-center gap-1.5 text-small text-re-text-secondary">
+                                                        <AlertTriangle className="h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
+                                                        Awaiting Attestation
                                                     </span>
                                                 )}
                                             </div>
-                                        )}
 
-                                        {/* Metadata Row */}
-                                        <div className="flex flex-wrap items-center gap-4 text-sm text-re-text-tertiary mt-3">
-                                            <span className="flex items-center gap-1">
-                                                <Calendar className="h-4 w-4" />
-                                                {formatDate(snapshot.captured_at)}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <User className="h-4 w-4" />
-                                                {snapshot.created_by}
-                                            </span>
-                                            <span className="flex items-center gap-1 font-mono text-xs">
-                                                <Hash className="h-4 w-4" />
-                                                {snapshot.content_hash}
-                                            </span>
-                                        </div>
 
-                                        <div className="flex items-center gap-4 mt-4 text-sm">
-                                            <span className="text-re-text-tertiary">
-                                                {snapshot.active_alert_count} active alerts
-                                            </span>
-                                            {snapshot.critical_alert_count > 0 && (
-                                                <span className="text-re-danger">
-                                                    {snapshot.critical_alert_count} critical
-                                                </span>
+                                            {/* Deadline + Citation Row */}
+                                            {snapshot.deadline && (
+                                                <div className="mb-3 flex w-fit flex-wrap items-center gap-4 rounded-md bg-re-surface-inset px-4 py-2">
+                                                    <span className={cn('flex items-center gap-2 font-mono text-subheading tabular-nums', getCountdownColor(snapshot.countdown_seconds))}>
+                                                        <Timer className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                        {snapshot.countdown_display || 'EXPIRED'}
+                                                    </span>
+                                                    {snapshot.regulatory_citation && (
+                                                        <span className="flex items-center gap-1.5 text-small text-re-text-secondary">
+                                                            <BookOpen className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                                            {snapshot.regulatory_citation}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
-                                        </div>
 
-                                        {snapshot.snapshot_reason && (
-                                            <p className="mt-4 text-sm text-re-text-secondary">
-                                                {snapshot.snapshot_reason}
-                                            </p>
-                                        )}
-                                    </div>
+                                            {/* Metadata Row */}
+                                            <div className="mt-3 flex flex-wrap items-center gap-4 text-small text-re-text-tertiary">
+                                                <span className="flex items-center gap-1.5">
+                                                    <Calendar className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                    {formatDate(snapshot.captured_at)}
+                                                </span>
+                                                <span className="flex items-center gap-1.5">
+                                                    <User className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                    {snapshot.created_by}
+                                                </span>
+                                                <span className="flex min-w-0 items-center gap-1.5 font-mono text-[0.8125rem]">
+                                                    <Hash className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                                    <span className="truncate">{snapshot.content_hash}</span>
+                                                </span>
+                                            </div>
 
-                                    <div className="flex flex-col items-end gap-2">
-                                        {/* Primary Action: Attest if not attested */}
-                                        {snapshot.is_auto_created && !snapshot.is_attested && (
-                                            <button
-                                                onClick={() => {
-                                                    setAttestingSnapshotId(snapshot.id);
-                                                    setShowAttestModal(true);
-                                                }}
-                                                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-all font-medium"
-                                            >
-                                                <PenLine className="h-4 w-4" />
-                                                Attest Now
-                                            </button>
-                                        )}
-
-                                        {/* Re-freeze button for degraded snapshots */}
-                                        {(snapshot.snapshot_state === 'STALE' || snapshot.snapshot_state === 'INVALID') && (
-                                            <button
-                                                onClick={() => refreezeSnapshot(snapshot.id)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-re-warning text-white rounded-lg transition-all font-medium"
-                                            >
-                                                <Camera className="h-4 w-4" />
-                                                Re-freeze
-                                            </button>
-                                        )}
-
-                                        <div className="flex items-center gap-2">
-                                            {/* Compare checkbox */}
-                                            <button
-                                                onClick={() => toggleDiffSelection(snapshot.id)}
-                                                aria-label={`Select snapshot ${snapshot.snapshot_name} for comparison`}
-                                                title={`Select snapshot ${snapshot.snapshot_name} for comparison`}
-                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${selectedForDiff.includes(snapshot.id)
-                                                    ? 'bg-re-info text-white'
-                                                    : 'bg-re-surface-elevated/20 hover:bg-re-surface-elevated/30 text-re-text-tertiary'
-                                                    }`}
-                                            >
-                                                {selectedForDiff.includes(snapshot.id) ? '✓' : '○'}
-                                            </button>
-                                            <button
-                                                onClick={() => getFdaResponse(snapshot.id)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg transition-all"
-                                                title="Generate FDA Response"
-                                            >
-                                                📋 FDA
-                                            </button>
-                                            <button
-                                                onClick={() => verifySnapshot(snapshot.id)}
-                                                aria-label={`Verify snapshot ${snapshot.snapshot_name}`}
-                                                className="flex items-center gap-2 px-4 py-2 bg-re-info/20 hover:bg-re-info/30 text-re-info rounded-lg transition-all"
-                                            >
-                                                <FileCheck className="h-4 w-4" />
-                                                Verify
-                                            </button>
-                                            <button
-                                                onClick={() => downloadAuditPack(snapshot.id, snapshot.snapshot_name)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all font-bold shadow-lg shadow-purple-500/20 border border-purple-400/30"
-                                                title="Generate Zero-Trust Audit Pack"
-                                            >
-                                                <ShieldCheck className="h-4 w-4" />
-                                                Audit Pack
-                                            </button>
-                                            <button
-                                                onClick={() => exportSnapshot(snapshot.id, snapshot.snapshot_name)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-re-success/20 hover:bg-re-success/30 text-re-success rounded-lg transition-all"
-                                            >
-                                                <Download className="h-4 w-4" />
-                                                PDF
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Create Modal */}
-                {showCreateModal && (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-re-surface-base rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
-                            <h2 className="text-2xl font-bold mb-2 flex items-center gap-3">
-                                <Camera className="h-6 w-6 text-purple-400" />
-                                Manual Compliance Freeze
-                            </h2>
-                            <p className="text-re-text-tertiary mb-6">
-                                Create a manual snapshot for proactive audit preparation.
-                                Note: CRITICAL/HIGH alerts auto-create bound snapshots.
-                            </p>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
-                                        Snapshot Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        aria-label="Snapshot Name"
-                                        value={snapshotName}
-                                        onChange={(e) => setSnapshotName(e.target.value)}
-                                        placeholder="e.g., Pre-Audit Q1 2026"
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
-                                        Reason (optional)
-                                    </label>
-                                    <textarea
-                                        aria-label="Snapshot Reason"
-                                        value={snapshotReason}
-                                        onChange={(e) => setSnapshotReason(e.target.value)}
-                                        placeholder="e.g., FDA audit scheduled for next week"
-                                        rows={3}
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 mt-8">
-                                <button
-                                    onClick={() => setShowCreateModal(false)}
-                                    className="px-6 py-2 text-re-text-tertiary hover:text-white transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={createSnapshot}
-                                    disabled={!snapshotName.trim() || creating}
-                                    className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-medium transition-all"
-                                >
-                                    {creating ? (
-                                        <>
-                                            <Clock className="h-4 w-4 animate-spin" />
-                                            Creating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Camera className="h-4 w-4" />
-                                            Create Snapshot
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Attest Modal */}
-                {showAttestModal && (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                        <div className="bg-re-surface-base rounded-2xl border border-orange-500/30 p-8 max-w-lg w-full mx-4">
-                            <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-orange-400">
-                                <PenLine className="h-6 w-6" />
-                                Owner Attestation Required
-                            </h2>
-                            <p className="text-re-text-tertiary mb-2">
-                                By attesting, you take <strong>personal accountability</strong> for this compliance state.
-                            </p>
-                            <p className="text-re-text-muted text-sm mb-6">
-                                Your name will be permanently attached to this snapshot for regulatory review.
-                            </p>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
-                                        Your Full Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={attestName}
-                                        onChange={(e) => setAttestName(e.target.value)}
-                                        placeholder="e.g., Jane Smith"
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-re-text-secondary mb-2">
-                                        Your Title/Role *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={attestTitle}
-                                        onChange={(e) => setAttestTitle(e.target.value)}
-                                        placeholder="e.g., VP Operations"
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="bg-re-danger/20 border border-re-danger/30 rounded-xl p-4 mt-6">
-                                <p className="text-re-danger text-sm">
-                                    ⚠️ This action cannot be undone. Once attested, your name is permanently on record.
-                                </p>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 mt-8">
-                                <button
-                                    onClick={() => {
-                                        setShowAttestModal(false);
-                                        setAttestingSnapshotId(null);
-                                        setAttestName('');
-                                        setAttestTitle('');
-                                    }}
-                                    className="px-6 py-2 text-re-text-tertiary hover:text-white transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={attestSnapshot}
-                                    disabled={!attestName.trim() || !attestTitle.trim()}
-                                    className="flex items-center gap-2 px-6 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-medium transition-all"
-                                >
-                                    <PenLine className="h-4 w-4" />
-                                    I Attest to This State
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Verify Result Modal */}
-                {showVerifyModal && verifyResult && (
-                    <div
-                        data-testid="snapshot-verify-modal"
-                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-                    >
-                        <div className="bg-re-surface-base rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
-                            <div className="text-center">
-                                {verifyResult.is_valid ? (
-                                    <>
-                                        <CheckCircle2 className="h-16 w-16 text-re-success mx-auto mb-4" />
-                                        <h2 className="text-2xl font-bold text-re-success mb-2">
-                                            Integrity Verified ✅
-                                        </h2>
-                                        <p className="text-re-text-tertiary mb-6">
-                                            The snapshot data has not been modified. Hash matches.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <XCircle className="h-16 w-16 text-re-danger mx-auto mb-4" />
-                                        <h2 className="text-2xl font-bold text-re-danger mb-2">
-                                            Integrity Check Failed ❌
-                                        </h2>
-                                        <p className="text-re-text-tertiary mb-6">
-                                            Warning: The snapshot data may have been modified.
-                                        </p>
-                                    </>
-                                )}
-
-                                <div className="bg-white/5 rounded-xl p-4 text-left space-y-3 mb-6">
-                                    <div>
-                                        <span className="text-re-text-muted text-sm">Stored Hash:</span>
-                                        <p className="font-mono text-xs text-re-text-secondary break-all">
-                                            {verifyResult.stored_hash}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <span className="text-re-text-muted text-sm">Computed Hash:</span>
-                                        <p className="font-mono text-xs text-re-text-secondary break-all">
-                                            {verifyResult.computed_hash}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-re-text-muted">Verified by:</span>
-                                        <span className="text-re-text-secondary">{verifyResult.verified_by}</span>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => setShowVerifyModal(false)}
-                                    className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* FDA Response Modal */}
-                {showFdaModal && (
-                    <div
-                        data-testid="snapshot-fda-modal"
-                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-                    >
-                        <div className="bg-re-surface-base rounded-2xl border border-purple-500/30 p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-purple-400">
-                                📋 FDA Response Template
-                            </h2>
-                            <p className="text-re-text-tertiary mb-4">
-                                Copy this pre-formatted text directly into your FDA response.
-                            </p>
-
-                            <pre className="bg-black/50 p-4 rounded-xl font-mono text-xs text-re-text-secondary whitespace-pre-wrap break-all mb-4 max-h-96 overflow-y-auto">
-                                {fdaResponse}
-                            </pre>
-
-                            <div className="flex items-center justify-end gap-3">
-                                <button
-                                    onClick={() => setShowFdaModal(false)}
-                                    className="px-6 py-2 text-re-text-tertiary hover:text-white transition-all"
-                                >
-                                    Close
-                                </button>
-                                <button
-                                    onClick={() => copyToClipboard(fdaResponse)}
-                                    className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl font-medium transition-all"
-                                >
-                                    📋 Copy to Clipboard
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Diff Modal */}
-                {showDiffModal && diffResult && (
-                    <div
-                        data-testid="snapshot-diff-modal"
-                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-                    >
-                        <div className="bg-re-surface-base rounded-2xl border border-re-info/30 p-8 max-w-2xl w-full mx-4">
-                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-3 text-re-info">
-                                📊 Snapshot Comparison
-                            </h2>
-
-                            <div className="flex items-center justify-between mb-6 text-sm">
-                                <div className="text-re-text-tertiary">
-                                    <span className="text-re-text-muted">From:</span> {diffResult.snapshot_a?.name}
-                                </div>
-                                <span className="text-re-text-disabled">→</span>
-                                <div className="text-re-text-tertiary">
-                                    <span className="text-re-text-muted">To:</span> {diffResult.snapshot_b?.name}
-                                </div>
-                            </div>
-
-                            {diffResult.changes?.length === 0 ? (
-                                <div className="text-center py-8 text-re-text-tertiary">
-                                    No changes detected between snapshots.
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {diffResult.changes?.map((change: DiffChange, index: number) => (
-                                        <div
-                                            key={index}
-                                            className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-re-danger/50 bg-re-danger/10' :
-                                                change.severity === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
-                                                    change.severity === 'positive' ? 'border-re-success/50 bg-re-success/10' :
-                                                        'border-white/10 bg-white/5'
-                                                }`}
-                                        >
-                                            <div className="font-medium mb-2">{change.label}</div>
-                                            <div className="flex items-center gap-4 text-sm">
-                                                <span className="text-re-danger line-through">{change.before}</span>
-                                                <span className="text-re-text-muted">→</span>
-                                                <span className="text-re-success">{change.after}</span>
-                                                {change.diff && (
-                                                    <span className={`font-mono ${change.diff.startsWith('+') ? 'text-re-danger' : 'text-re-success'
-                                                        }`}>
-                                                        ({change.diff})
+                                            <div className="mt-4 flex items-center gap-4 text-ui">
+                                                <span className="text-re-text-tertiary">
+                                                    {snapshot.active_alert_count} active alerts
+                                                </span>
+                                                {snapshot.critical_alert_count > 0 && (
+                                                    <span className="flex items-center gap-1.5 text-re-text-secondary">
+                                                        <AlertTriangle className="h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                                                        {snapshot.critical_alert_count} critical
                                                     </span>
                                                 )}
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
 
-                            <div className="flex items-center justify-end mt-6">
-                                <button
-                                    onClick={() => {
-                                        setShowDiffModal(false);
-                                        setDiffResult(null);
-                                        setSelectedForDiff([]);
-                                    }}
-                                    className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
+                                            {snapshot.snapshot_reason && (
+                                                <p className="mt-4 text-ui text-re-text-secondary">
+                                                    {snapshot.snapshot_reason}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="flex shrink-0 flex-col items-stretch gap-2 lg:items-end">
+                                            {/* Primary Action: Attest if not attested */}
+                                            {needsAttestation && (
+                                                <Button
+                                                    onClick={() => {
+                                                        setAttestingSnapshotId(snapshot.id);
+                                                        setShowAttestModal(true);
+                                                    }}
+                                                >
+                                                    <PenLine className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    Attest Now
+                                                </Button>
+                                            )}
+
+                                            {/* Re-freeze button for degraded snapshots */}
+                                            {(snapshot.snapshot_state === 'STALE' || snapshot.snapshot_state === 'INVALID') && (
+                                                <Button variant="secondary" onClick={() => refreezeSnapshot(snapshot.id)}>
+                                                    <Camera className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    Re-freeze
+                                                </Button>
+                                            )}
+
+                                            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                                {/* Compare checkbox */}
+                                                <Button
+                                                    variant="secondary"
+                                                    size="icon"
+                                                    className={isSelectedForDiff ? 'bg-re-brand-muted text-re-brand' : undefined}
+                                                    aria-pressed={isSelectedForDiff}
+                                                    onClick={() => toggleDiffSelection(snapshot.id)}
+                                                    aria-label={`Select snapshot ${snapshot.snapshot_name} for comparison`}
+                                                    title={`Select snapshot ${snapshot.snapshot_name} for comparison`}
+                                                >
+                                                    {isSelectedForDiff ? (
+                                                        <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    ) : (
+                                                        <Circle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    onClick={() => getFdaResponse(snapshot.id)}
+                                                    title="Generate FDA Response"
+                                                >
+                                                    <ClipboardList className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    FDA
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    onClick={() => verifySnapshot(snapshot.id)}
+                                                    aria-label={`Verify snapshot ${snapshot.snapshot_name}`}
+                                                >
+                                                    <FileCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    Verify
+                                                </Button>
+                                                <Button
+                                                    variant={needsAttestation ? 'secondary' : 'primary'}
+                                                    onClick={() => downloadAuditPack(snapshot.id, snapshot.snapshot_name)}
+                                                    title="Generate Zero-Trust Audit Pack"
+                                                >
+                                                    <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    Audit Pack
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    onClick={() => exportSnapshot(snapshot.id, snapshot.snapshot_name)}
+                                                >
+                                                    <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                                    PDF
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })}
                     </div>
                 )}
             </div>
-        </div>
+
+            {/* Create Modal */}
+            {showCreateModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-re-surface-overlay p-4">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="snapshot-create-title"
+                        className="w-full max-w-lg rounded-xl border border-re-border bg-re-surface-elevated p-6"
+                    >
+                        <h2 id="snapshot-create-title" className="mb-2 flex items-center gap-3 text-heading text-re-text-primary">
+                            <Camera className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                            Manual Compliance Freeze
+                        </h2>
+                        <p className="mb-6 text-ui text-re-text-secondary">
+                            Create a manual snapshot for proactive audit preparation.
+                            Note: CRITICAL/HIGH alerts auto-create bound snapshots.
+                        </p>
+
+                        <div className="space-y-4">
+                            <Field label="Snapshot Name" htmlFor="snapshot-name" required>
+                                <Input
+                                    id="snapshot-name"
+                                    type="text"
+                                    aria-label="Snapshot Name"
+                                    value={snapshotName}
+                                    onChange={(e) => setSnapshotName(e.target.value)}
+                                    placeholder="e.g., Pre-Audit Q1 2026"
+                                />
+                            </Field>
+
+                            <Field label="Reason (optional)" htmlFor="snapshot-reason">
+                                <textarea
+                                    id="snapshot-reason"
+                                    aria-label="Snapshot Reason"
+                                    value={snapshotReason}
+                                    onChange={(e) => setSnapshotReason(e.target.value)}
+                                    placeholder="e.g., FDA audit scheduled for next week"
+                                    rows={3}
+                                    className={cn(fieldControlClasses, 'h-auto resize-none py-2')}
+                                />
+                            </Field>
+                        </div>
+
+                        <div className="mt-8 flex items-center justify-end gap-2">
+                            <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={createSnapshot}
+                                disabled={!snapshotName.trim()}
+                                loading={creating}
+                                leadingIcon={<Camera strokeWidth={1.75} aria-hidden="true" />}
+                            >
+                                {creating ? 'Creating...' : 'Create Snapshot'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Attest Modal */}
+            {showAttestModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-re-surface-overlay p-4">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="snapshot-attest-title"
+                        className="w-full max-w-lg rounded-xl border border-re-border bg-re-surface-elevated p-6"
+                    >
+                        <h2 id="snapshot-attest-title" className="mb-2 flex items-center gap-3 text-heading text-re-text-primary">
+                            <PenLine className="h-5 w-5 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
+                            Owner Attestation Required
+                        </h2>
+                        <p className="mb-2 text-ui text-re-text-secondary">
+                            By attesting, you take <strong className="font-medium text-re-text-primary">personal accountability</strong> for this compliance state.
+                        </p>
+                        <p className="mb-6 text-small text-re-text-tertiary">
+                            Your name will be permanently attached to this snapshot for regulatory review.
+                        </p>
+
+                        <div className="space-y-4">
+                            <Field label="Your Full Name" htmlFor="attest-name" required>
+                                <Input
+                                    id="attest-name"
+                                    type="text"
+                                    value={attestName}
+                                    onChange={(e) => setAttestName(e.target.value)}
+                                    placeholder="e.g., Jane Smith"
+                                />
+                            </Field>
+
+                            <Field label="Your Title/Role" htmlFor="attest-title" required>
+                                <Input
+                                    id="attest-title"
+                                    type="text"
+                                    value={attestTitle}
+                                    onChange={(e) => setAttestTitle(e.target.value)}
+                                    placeholder="e.g., VP Operations"
+                                />
+                            </Field>
+                        </div>
+
+                        <div className="mt-6">
+                            <Callout tone="danger" role="alert" icon={AlertTriangle}>
+                                This action cannot be undone. Once attested, your name is permanently on record.
+                            </Callout>
+                        </div>
+
+                        <div className="mt-8 flex items-center justify-end gap-2">
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    setShowAttestModal(false);
+                                    setAttestingSnapshotId(null);
+                                    setAttestName('');
+                                    setAttestTitle('');
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={attestSnapshot}
+                                disabled={!attestName.trim() || !attestTitle.trim()}
+                                leadingIcon={<PenLine strokeWidth={1.75} aria-hidden="true" />}
+                            >
+                                I Attest to This State
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Verify Result Modal */}
+            {showVerifyModal && verifyResult && (
+                <div
+                    data-testid="snapshot-verify-modal"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-re-surface-overlay p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="snapshot-verify-title"
+                        className="w-full max-w-lg rounded-xl border border-re-border bg-re-surface-elevated p-6"
+                    >
+                        <div className="text-center">
+                            {verifyResult.is_valid ? (
+                                <>
+                                    <CheckCircle2 className="mx-auto mb-4 h-8 w-8 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                    <h2 id="snapshot-verify-title" className="mb-2 text-heading text-re-text-primary">
+                                        Integrity Verified
+                                    </h2>
+                                    <p className="mb-6 text-ui text-re-text-secondary">
+                                        The snapshot data has not been modified. Hash matches.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <XCircle className="mx-auto mb-4 h-8 w-8 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                                    <h2 id="snapshot-verify-title" className="mb-2 text-heading text-re-text-primary">
+                                        Integrity Check Failed
+                                    </h2>
+                                    <p className="mb-6 text-ui text-re-text-secondary">
+                                        Warning: The snapshot data may have been modified.
+                                    </p>
+                                </>
+                            )}
+
+                            <div className="mb-6 space-y-3 rounded-md bg-re-surface-inset p-4 text-left">
+                                <div>
+                                    <span className="text-label text-re-text-muted">Stored Hash:</span>
+                                    <p className="break-all font-mono text-[0.8125rem] text-re-text-secondary">
+                                        {verifyResult.stored_hash}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-label text-re-text-muted">Computed Hash:</span>
+                                    <p className="break-all font-mono text-[0.8125rem] text-re-text-secondary">
+                                        {verifyResult.computed_hash}
+                                    </p>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-ui">
+                                    <span className="text-re-text-muted">Verified by:</span>
+                                    <span className="truncate text-re-text-secondary">{verifyResult.verified_by}</span>
+                                </div>
+                            </div>
+
+                            <Button variant="secondary" onClick={() => setShowVerifyModal(false)}>
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FDA Response Modal */}
+            {showFdaModal && (
+                <div
+                    data-testid="snapshot-fda-modal"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-re-surface-overlay p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="snapshot-fda-title"
+                        className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-re-border bg-re-surface-elevated p-6"
+                    >
+                        <h2 id="snapshot-fda-title" className="mb-4 flex items-center gap-3 text-heading text-re-text-primary">
+                            <ClipboardList className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                            FDA Response Template
+                        </h2>
+                        <p className="mb-4 text-ui text-re-text-secondary">
+                            Copy this pre-formatted text directly into your FDA response.
+                        </p>
+
+                        <pre className="mb-4 max-h-96 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-re-surface-inset p-4 font-mono text-[0.8125rem] text-re-text-secondary">
+                            {fdaResponse}
+                        </pre>
+
+                        <div className="flex items-center justify-end gap-2">
+                            <Button variant="ghost" onClick={() => setShowFdaModal(false)}>
+                                Close
+                            </Button>
+                            <Button
+                                onClick={() => copyToClipboard(fdaResponse)}
+                                leadingIcon={<ClipboardList strokeWidth={1.75} aria-hidden="true" />}
+                            >
+                                Copy to Clipboard
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Diff Modal */}
+            {showDiffModal && diffResult && (
+                <div
+                    data-testid="snapshot-diff-modal"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-re-surface-overlay p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="snapshot-diff-title"
+                        className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-re-border bg-re-surface-elevated p-6"
+                    >
+                        <h2 id="snapshot-diff-title" className="mb-4 flex items-center gap-3 text-heading text-re-text-primary">
+                            <GitCompare className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                            Snapshot Comparison
+                        </h2>
+
+                        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-ui">
+                            <div className="text-re-text-secondary">
+                                <span className="text-re-text-muted">From:</span> {diffResult.snapshot_a?.name}
+                            </div>
+                            <span className="text-re-text-tertiary" aria-hidden="true">→</span>
+                            <div className="text-re-text-secondary">
+                                <span className="text-re-text-muted">To:</span> {diffResult.snapshot_b?.name}
+                            </div>
+                        </div>
+
+                        {diffResult.changes?.length === 0 ? (
+                            <EmptyState
+                                size="sm"
+                                bare
+                                title="No changes detected between snapshots."
+                            />
+                        ) : (
+                            <div className="space-y-3">
+                                {diffResult.changes?.map((change: DiffChange, index: number) => (
+                                    <div
+                                        key={index}
+                                        className={cn(
+                                            'rounded-md border border-l-[3px] border-re-border bg-re-surface-card p-4',
+                                            change.severity === 'critical' ? 'border-l-re-danger' :
+                                                change.severity === 'high' ? 'border-l-re-warning' :
+                                                    change.severity === 'positive' ? 'border-l-re-success' :
+                                                        'border-l-re-border-strong'
+                                        )}
+                                    >
+                                        <div className="mb-2 text-subheading text-re-text-primary">{change.label}</div>
+                                        <div className="flex flex-wrap items-center gap-3 text-ui">
+                                            <span className="text-re-text-tertiary line-through">{change.before}</span>
+                                            <span className="text-re-text-muted" aria-hidden="true">→</span>
+                                            <span className="text-re-text-primary">{change.after}</span>
+                                            {change.diff && (
+                                                <span className="font-mono text-[0.8125rem] text-re-text-secondary">
+                                                    ({change.diff})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex items-center justify-end">
+                            <Button
+                                variant="secondary"
+                                onClick={() => {
+                                    setShowDiffModal(false);
+                                    setDiffResult(null);
+                                    setSelectedForDiff([]);
+                                }}
+                            >
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </PageContainer>
     );
 }

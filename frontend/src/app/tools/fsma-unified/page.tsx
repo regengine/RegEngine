@@ -1,9 +1,11 @@
 import { Metadata } from "next";
 import { UnifiedDashboardClient } from "./components/UnifiedDashboardClient";
 import { Suspense } from "react";
+import { Container } from "@/components/layout/container";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { Skeleton } from "@/components/ui/skeleton";
 import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
@@ -38,21 +40,30 @@ const jsonLd = {
     }
 };
 
+function UnifiedDashboardFallback() {
+    return (
+        <div className="min-h-screen bg-re-surface-base py-6 sm:py-8" aria-busy="true">
+            <Container width="tool">
+                <div className="mx-auto max-w-2xl text-center">
+                    <h1 className="text-title text-re-text-primary">Unified FSMA Dashboard</h1>
+                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">A consolidated command center for FSMA 204 compliance. Combines anomaly detection, supply chain knowledge graphs, and compliance scoring into a single view. Monitor your traceability data integrity in real time.</p>
+                </div>
+                <div className="mt-8 space-y-4">
+                    <Skeleton className="h-10 w-1/3 rounded-md" />
+                    <Skeleton className="h-64 w-full rounded-lg" />
+                </div>
+                <p className="mt-4 text-center text-small text-re-text-muted">
+                    Loading dashboard…
+                </p>
+            </Container>
+        </div>
+    );
+}
+
 export default function UnifiedDashboardPage() {
     return (
         <>
-            <Suspense fallback={
-                <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
-                    <div className="max-w-2xl mx-auto text-center">
-                        <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Unified FSMA Dashboard</h1>
-                        <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-4 leading-relaxed">A consolidated command center for FSMA 204 compliance. Combines anomaly detection, supply chain knowledge graphs, and compliance scoring into a single view. Monitor your traceability data integrity in real time.</p>
-                        <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
-                            <div className="w-3 h-3 rounded-full border-2 border-re-brand border-t-transparent animate-spin" />
-                            Loading dashboard…
-                        </div>
-                    </div>
-                </div>
-            }>
+            <Suspense fallback={<UnifiedDashboardFallback />}>
                 <JSONLD data={jsonLd} />
                 <EmailGate toolName="fsma-unified">
                     <UnifiedDashboardClient />

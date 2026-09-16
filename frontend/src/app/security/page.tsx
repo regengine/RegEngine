@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Database, Download, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
+import { Container } from "@/components/layout/container";
+import { PageHeader } from "@/components/layout/page-header";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Security | RegEngine",
@@ -39,112 +44,118 @@ const links = [
 
 export default function SecurityPage() {
   return (
-    <main className="re-page min-h-screen text-[var(--re-text-secondary)]">
-      <section className="re-container grid gap-10 pb-14 pt-12 md:grid-cols-[0.85fr_1fr] md:pb-20 md:pt-18">
+    <div className="re-page min-h-screen">
+      <Container className="grid gap-10 pb-14 pt-12 md:grid-cols-[0.85fr_1fr] md:pb-20 md:pt-16">
         <div>
-          <p className="re-label mb-5">Security</p>
-          <h1 className="max-w-[680px] text-[clamp(42px,7vw,78px)] font-semibold leading-[0.96]">
-            Verify the evidence, not just the dashboard.
-          </h1>
-          <p className="mt-6 max-w-[590px] text-[17px] leading-7 text-[var(--re-text-muted)]">
-            Compliance security should be mechanical: isolate tenants, preserve lineage, hash the evidence, and make verification possible without asking anyone to believe the UI.
-          </p>
-          <p className="mt-4 max-w-[590px] text-sm leading-6 text-[var(--re-text-muted)]">
+          <PageHeader
+            size="hero"
+            eyebrow={<span className="font-mono uppercase">Security</span>}
+            title="Verify the evidence, not just the dashboard."
+            description="Compliance security should be mechanical: isolate tenants, preserve lineage, hash the evidence, and make verification possible without asking anyone to believe the UI."
+            className="mb-0 border-b-0 pb-0"
+          />
+          <p className="mt-4 max-w-[70ch] text-small text-re-text-tertiary">
             These statements describe controls verified in source and pre-production staging. Production
             validation requires a release-evidence record bound to the deployed frontend and backend commits.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/verify" className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]">
-              See verification <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="/trust" className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-text-primary)]">
-              Trust center
-            </Link>
+            <Button asChild size="lg">
+              <Link href="/verify">
+                See verification <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/trust">Trust center</Link>
+            </Button>
           </div>
         </div>
-        <div className="re-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[var(--re-surface-border)] p-4">
-            <p className="re-label">Verifier output</p>
-            <p className="re-label text-[var(--re-text-muted)]">Sample · illustrative</p>
-          </div>
-          <div className="bg-[var(--re-text-primary)] p-5 font-mono text-[12px] leading-6 text-[var(--re-surface-base)]">
+        <Card className="overflow-hidden">
+          <CardHeader className="items-center py-3">
+            <p className="font-mono text-label uppercase text-re-text-muted">Verifier output</p>
+            <p className="font-mono text-label uppercase text-re-text-muted">Sample · illustrative</p>
+          </CardHeader>
+          <div className="overflow-x-auto bg-re-surface-inset px-5 py-4 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
             <p>$ python verify_chain.py --export fsma_package.json</p>
-            <p className="mt-3 text-[#8fd19e]">verified: 430 records</p>
-            <p className="text-[#8fd19e]">failed: 0 records</p>
-            <p className="text-[#f1c36d]">manifest: hash matched</p>
-            <p className="mt-3 text-[#d8d2c5]">result: evidence package intact</p>
+            <p className="mt-3 text-re-success">verified: 430 records</p>
+            <p className="text-re-success">failed: 0 records</p>
+            <p className="text-re-success">manifest: hash matched</p>
+            <p className="mt-3 text-re-text-primary">result: evidence package intact</p>
           </div>
-          <div className="grid gap-3 p-5 sm:grid-cols-3">
+          <div className="grid gap-5 border-t border-re-border-subtle p-5 sm:grid-cols-3">
             <div>
-              <p className="re-label mb-1">Bundle</p>
-              <p className="text-sm font-semibold text-[var(--re-text-primary)]">fsma_package.json</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">Export package selected by the customer workflow.</p>
+              <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Bundle</p>
+              <p className="font-mono text-[0.8125rem] text-re-text-primary">fsma_package.json</p>
+              <p className="mt-1 text-small text-re-text-tertiary">Export package selected by the customer workflow.</p>
             </div>
             <div>
-              <p className="re-label mb-1">Manifest</p>
-              <p className="text-sm font-semibold text-[var(--re-text-primary)]">SHA-256</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">Integrity check for records after ingest, not upstream entry proof.</p>
+              <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Manifest</p>
+              <p className="font-mono text-[0.8125rem] text-re-text-primary">SHA-256</p>
+              <p className="mt-1 text-small text-re-text-tertiary">Integrity check for records after ingest, not upstream entry proof.</p>
             </div>
             <div>
-              <p className="re-label mb-1">Review path</p>
-              <p className="text-sm font-semibold text-[var(--re-text-primary)]">Outside the UI</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">A supported bundle can be checked independently.</p>
+              <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Review path</p>
+              <p className="text-ui font-medium text-re-text-primary">Outside the UI</p>
+              <p className="mt-1 text-small text-re-text-tertiary">A supported bundle can be checked independently.</p>
             </div>
           </div>
-        </div>
-      </section>
+        </Card>
+      </Container>
 
-      <section className="re-section">
-        <div className="re-container grid gap-5 md:grid-cols-4">
+      <Section width="marketing">
+        <div className="grid gap-5 md:grid-cols-4">
           {verified.map(({ title, body, icon: Icon }) => (
-            <article key={title} className="re-panel p-5">
-              <Icon className="mb-8 h-5 w-5 text-[var(--re-text-primary)]" />
-              <h2 className="text-lg font-semibold">{title}</h2>
-              <p className="mt-3 text-sm leading-6 text-[var(--re-text-muted)]">{body}</p>
+            <article key={title} className="h-full">
+              <Card className="h-full p-5">
+                <Icon className="mb-8 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                <h2 className="text-subheading text-re-text-primary">{title}</h2>
+                <p className="mt-3 text-ui text-re-text-secondary">{body}</p>
+              </Card>
             </article>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <section className="re-section">
-        <div className="re-container grid gap-8 md:grid-cols-[0.75fr_1fr]">
+      <Section width="marketing">
+        <div className="grid gap-8 md:grid-cols-[0.75fr_1fr]">
           <div>
-            <p className="re-label mb-4">Control surface</p>
-            <h2 className="text-3xl font-semibold leading-tight">Security claims expressed as checks.</h2>
+            <p className="mb-4 font-mono text-label uppercase text-re-text-muted">Control surface</p>
+            <h2 className="font-display text-heading-lg text-re-text-primary">Security claims expressed as checks.</h2>
           </div>
-          <div className="re-panel overflow-hidden">
+          <Card className="overflow-x-auto">
             <table className="re-rule-table">
               <tbody>
-                {controls.map(([label, detail], index) => (
+                {controls.map(([label, detail]) => (
                   <tr key={label}>
-                    <td className="w-1/3 font-mono text-[12px] uppercase text-[var(--re-text-muted)]">
+                    <td className="w-1/3 align-top font-mono text-label uppercase text-re-text-muted">
                       <span className="inline-flex items-center gap-2">
-                        <span className="re-signal" style={{ color: index % 3 === 0 ? "var(--re-info)" : index % 3 === 1 ? "var(--re-warning)" : "var(--re-success)" }} />
+                        <span className="re-signal text-re-text-tertiary" aria-hidden="true" />
                         {label}
                       </span>
                     </td>
-                    <td className="text-[var(--re-text-primary)]">{detail}</td>
+                    <td className="text-re-text-primary">{detail}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </div>
-      </section>
+      </Section>
 
-      <section className="re-section">
-        <div className="re-container grid gap-5 md:grid-cols-4">
+      <Section width="marketing">
+        <Card className="overflow-hidden">
           {links.map(({ icon: Icon, label, href }) => (
-            <Link key={label} href={href} className="re-panel flex min-h-[120px] flex-col justify-between p-5 no-underline">
-              <Icon className="h-5 w-5 text-[var(--re-text-muted)]" />
-              <span className="flex items-center justify-between text-lg font-semibold text-[var(--re-text-primary)]">
-                {label}
-                <ArrowRight className="h-4 w-4" />
-              </span>
+            <Link
+              key={label}
+              href={href}
+              className="flex items-center gap-3 border-b border-re-border-subtle px-5 py-4 text-subheading text-re-text-primary no-underline transition-colors duration-120 last:border-0 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+            >
+              <Icon className="h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+              <span className="flex-1">{label}</span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
             </Link>
           ))}
-        </div>
-      </section>
-    </main>
+        </Card>
+      </Section>
+    </div>
   );
 }

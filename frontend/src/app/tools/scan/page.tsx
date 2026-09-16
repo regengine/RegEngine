@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { Lock } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
@@ -115,7 +116,7 @@ export default function ScanPage() {
             <h3 className={styles.sectionTitle}>Camera Scanner</h3>
 
             {cameraError ? (
-              <div className={styles.errorBanner}>
+              <div className={styles.errorBanner} role="alert">
                 <p className={styles.errorText}>{cameraError}</p>
                 <p className={styles.errorHint}>
                   Camera unavailable. Use manual input below or check permissions.
@@ -130,6 +131,7 @@ export default function ScanPage() {
             )}
 
             <button
+              type="button"
               onClick={isScanning ? stopCamera : startCamera}
               disabled={!!cameraError}
               className={`${styles.button} ${isScanning ? styles.buttonSecondary : styles.buttonPrimary}`}
@@ -150,7 +152,11 @@ export default function ScanPage() {
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>Manual Input</h3>
             <div className={styles.inputGroup}>
+              <label htmlFor="scan-manual-input" className="sr-only">
+                Paste or type barcode string…
+              </label>
               <input
+                id="scan-manual-input"
                 type="text"
                 value={manualInput}
                 onChange={(e) => setManualInput(e.target.value)}
@@ -163,6 +169,7 @@ export default function ScanPage() {
                 }}
               />
               <button
+                type="button"
                 onClick={() => handleParse(manualInput)}
                 className={`${styles.button} ${styles.buttonPrimary}`}
               >
@@ -179,6 +186,7 @@ export default function ScanPage() {
                 {scanHistory.map((barcode, idx) => (
                   <li key={idx}>
                     <button
+                      type="button"
                       onClick={() => handleParse(barcode)}
                       className={styles.historyButton}
                     >
@@ -225,7 +233,7 @@ export default function ScanPage() {
                 <h3 className={styles.sectionTitle}>Parsed Fields</h3>
                 <div className={styles.fieldsGrid}>
                   <div className={styles.field}>
-                    <label className={styles.fieldLabel}>GTIN</label>
+                    <span className={styles.fieldLabel}>GTIN</span>
                     <div className={styles.fieldValue}>
                       {parsed.gtin || 'Not found'}
                       {parsed.gtin && (
@@ -243,30 +251,30 @@ export default function ScanPage() {
                   </div>
 
                   <div className={styles.field}>
-                    <label className={styles.fieldLabel}>
+                    <span className={styles.fieldLabel}>
                       Traceability Lot Code (TLC)
-                    </label>
+                    </span>
                     <div className={styles.fieldValue}>
                       {parsed.tlc || 'Not found'}
                     </div>
                   </div>
 
                   <div className={styles.field}>
-                    <label className={styles.fieldLabel}>Serial Number</label>
+                    <span className={styles.fieldLabel}>Serial Number</span>
                     <div className={styles.fieldValue}>
                       {parsed.serial || 'Not found'}
                     </div>
                   </div>
 
                   <div className={styles.field}>
-                    <label className={styles.fieldLabel}>Pack Date</label>
+                    <span className={styles.fieldLabel}>Pack Date</span>
                     <div className={styles.fieldValue}>
                       {formatDate(parsed.packDate)}
                     </div>
                   </div>
 
                   <div className={styles.field}>
-                    <label className={styles.fieldLabel}>Expiry Date</label>
+                    <span className={styles.fieldLabel}>Expiry Date</span>
                     <div className={styles.fieldValue}>
                       {formatDate(parsed.expiryDate)}
                     </div>
@@ -281,8 +289,9 @@ export default function ScanPage() {
                 </h3>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Event Type</label>
+                  <label className={styles.label} htmlFor="scan-event-type">Event Type</label>
                   <select
+                    id="scan-event-type"
                     value={eventType}
                     onChange={(e) => setEventType(e.target.value)}
                     className={styles.input}
@@ -295,14 +304,15 @@ export default function ScanPage() {
                     <option>Receiving (§1.1345)</option>
                     <option>Transformation (§1.1350)</option>
                   </select>
-                  <p className="text-[10px] text-[var(--re-text-muted)] mt-1">
+                  <p className="mt-1 text-label text-re-text-tertiary">
                     Selecting Receiving? §1.1305(j) may exempt restaurants and retail food establishments — confirm your role first.
                   </p>
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Product Description</label>
+                  <label className={styles.label} htmlFor="scan-product-description">Product Description</label>
                   <input
+                    id="scan-product-description"
                     type="text"
                     placeholder="From GTIN lookup…"
                     disabled
@@ -311,8 +321,9 @@ export default function ScanPage() {
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Lot Code</label>
+                  <label className={styles.label} htmlFor="scan-lot-code">Lot Code</label>
                   <input
+                    id="scan-lot-code"
                     type="text"
                     value={parsed.tlc || ''}
                     disabled
@@ -322,8 +333,9 @@ export default function ScanPage() {
 
                 <div className={styles.twoCol}>
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Quantity</label>
+                    <label className={styles.label} htmlFor="scan-quantity">Quantity</label>
                     <input
+                      id="scan-quantity"
                       type="number"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
@@ -333,8 +345,9 @@ export default function ScanPage() {
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Unit of Measure</label>
+                    <label className={styles.label} htmlFor="scan-uom">Unit of Measure</label>
                     <select
+                      id="scan-uom"
                       value={uom}
                       onChange={(e) => setUom(e.target.value)}
                       className={styles.input}
@@ -348,8 +361,9 @@ export default function ScanPage() {
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Location GLN</label>
+                  <label className={styles.label} htmlFor="scan-location-gln">Location GLN</label>
                   <input
+                    id="scan-location-gln"
                     type="text"
                     value={locationGLN}
                     onChange={(e) => setLocationGLN(e.target.value)}
@@ -359,8 +373,9 @@ export default function ScanPage() {
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Timestamp</label>
+                  <label className={styles.label} htmlFor="scan-timestamp">Timestamp</label>
                   <input
+                    id="scan-timestamp"
                     type="text"
                     value={new Date().toISOString()}
                     disabled
@@ -371,10 +386,10 @@ export default function ScanPage() {
 
               {/* Ingest Button */}
               <div className={styles.section}>
-                <Link href="/onboarding">
-                  <button className={`${styles.button} ${styles.buttonIngest}`}>
-                    Ingest Event
-                  </button>
+                {/* One control, not a <button> nested inside a <Link>: the nested
+                    pair was invalid HTML and double-fired on keyboard activation. */}
+                <Link href="/onboarding" className={`${styles.button} ${styles.buttonIngest}`}>
+                  Ingest Event
                 </Link>
                 <p className={styles.ingestNote}>
                   Requires RegEngine account to save events
@@ -399,8 +414,9 @@ export default function ScanPage() {
 
       {/* Privacy Note */}
       <div className={styles.privacyNote}>
+        <Lock aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} />
         <p className={styles.privacyText}>
-          🔒 100% client-side parsing. No barcode data is transmitted until you
+          100% client-side parsing. No barcode data is transmitted until you
           explicitly ingest.
         </p>
       </div>
