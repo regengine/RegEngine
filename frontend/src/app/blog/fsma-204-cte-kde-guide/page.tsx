@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, Code, Database, Zap, BarChart3, FileText } from 'lucide-react';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'CTEs and KDEs Explained | FSMA 204 Data Requirements Guide | RegEngine',
@@ -17,6 +19,7 @@ export const metadata: Metadata = {
 export default function CTEKDEGuidePage() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+      <JSONLD data={blogPostingJsonLd('fsma-204-cte-kde-guide', 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 formats.')} />
       {/* Back to Blog Link */}
       <div className="max-w-[900px] mx-auto px-4 sm:px-6 pt-8 pb-4">
         <Link href="/blog" className="inline-flex items-center gap-2 text-[var(--re-text-secondary)] hover:text-[var(--re-brand)] transition-colors">

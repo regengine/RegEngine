@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Clock, AlertTriangle, CheckCircle, FileText, Shield } from "lucide-react";
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: "The FSMA 204 24-Hour Rule Explained | RegEngine Blog",
@@ -46,6 +48,7 @@ const COMMON_MISTAKES = [
 export default function TwentyFourHourRulePage() {
   return (
     <div className="min-h-screen bg-[var(--re-surface-base)]">
+      <JSONLD data={blogPostingJsonLd('24-hour-rule', 'The FDA can request your traceability records within 24 hours of a recall or outbreak. Learn what records you need, how to organize them, and how to respond in time.')} />
       <article className="max-w-[900px] mx-auto px-6 py-16 md:py-24">
         <Link
           href="/blog"

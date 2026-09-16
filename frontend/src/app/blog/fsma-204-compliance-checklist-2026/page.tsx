@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, ClipboardList, BarChart3, Shield } from 'lucide-react';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
@@ -17,6 +19,7 @@ export const metadata: Metadata = {
 export default function FSMA204ComplianceChecklist() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+      <JSONLD data={blogPostingJsonLd('fsma-204-compliance-checklist-2026', 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.')} />
       {/* Hero */}
       <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
         <div className="mb-8">

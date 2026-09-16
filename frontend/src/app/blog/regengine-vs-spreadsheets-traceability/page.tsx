@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, X, TrendingUp, Lock } from 'lucide-react';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
@@ -17,6 +19,7 @@ export const metadata: Metadata = {
 export default function RegEngineVsSpreadsheets() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+      <JSONLD data={blogPostingJsonLd('regengine-vs-spreadsheets-traceability', 'Why spreadsheets fail for FSMA 204 compliance. Learn how RegEngine solves the audit trail, scale, and 24-hour response problems.')} />
       {/* Hero */}
       <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
         <div className="mb-8">

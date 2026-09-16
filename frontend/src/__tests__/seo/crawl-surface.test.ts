@@ -98,6 +98,15 @@ describe('sitemap', () => {
     });
 });
 
+describe('structured data', () => {
+    it('renders BlogPosting JSON-LD on every published post', () => {
+        for (const slug of BLOG_POST_SLUGS) {
+            const src = fs.readFileSync(path.join(APP_DIR, 'blog', slug, 'page.tsx'), 'utf8');
+            expect(src, `/blog/${slug} must render blogPostingJsonLd`).toContain('blogPostingJsonLd(');
+        }
+    });
+});
+
 describe('robots', () => {
     const rules = robots();
     const rule = Array.isArray(rules.rules) ? rules.rules[0] : rules.rules;

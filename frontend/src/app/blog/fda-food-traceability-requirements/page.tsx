@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, Leaf, Clock, MapPin } from 'lucide-react';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
@@ -17,6 +19,7 @@ export const metadata: Metadata = {
 export default function FDAFoodTraceabilityRequirements() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+      <JSONLD data={blogPostingJsonLd('fda-food-traceability-requirements', 'Understand FDA food traceability requirements, FTL products, CTEs, KDEs, and the 24-hour response requirement for FSMA 204 compliance.')} />
       {/* Hero */}
       <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
         <div className="mb-8">

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, TrendingUp, BarChart3, Zap } from 'lucide-react';
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'Food Traceability Software: How to Choose the Right Platform | RegEngine',
@@ -17,6 +19,7 @@ export const metadata: Metadata = {
 export default function FoodTraceabilitySoftwarePage() {
   return (
     <div className="overflow-x-hidden bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
+      <JSONLD data={blogPostingJsonLd('food-traceability-software', 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership. A practical guide to selecting FSMA 204 software.')} />
       {/* Back to Blog */}
       <div className="max-w-[900px] mx-auto px-4 sm:px-6 pt-8 pb-4">
         <Link href="/blog" className="inline-flex items-center gap-2 text-[var(--re-brand)] hover:text-[var(--re-brand)]/80 transition-colors text-sm font-medium">

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Clock, CheckCircle, Tag, Layers, AlertTriangle, ArrowRight } from "lucide-react";
+import { JSONLD } from '@/components/seo/json-ld';
+import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: "FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide | RegEngine Blog",
@@ -75,6 +77,7 @@ const BEST_PRACTICES = [
 export default function TLCGuidePage() {
   return (
     <div className="min-h-screen bg-[var(--re-surface-base)]">
+      <JSONLD data={blogPostingJsonLd('fsma-204-traceability-lot-codes', 'Learn how to assign, track, and maintain Traceability Lot Codes under FSMA 204. Covers TLC requirements, best practices, and common mistakes for food businesses.')} />
       <article className="max-w-[900px] mx-auto px-6 py-16 md:py-24">
         <Link
           href="/blog"
