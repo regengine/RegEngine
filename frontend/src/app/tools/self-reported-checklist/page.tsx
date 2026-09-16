@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { Container } from "@/components/layout/container";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "Self-Reported Checklist | RegEngine",
@@ -46,17 +48,21 @@ const relatedTools = [
 export default function SelfReportedChecklistPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
-                <div className="max-w-2xl mx-auto text-center">
-                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Self-Reported Checklist</h1>
-                    <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-8 leading-relaxed">
-                        You answer. We echo what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.
-                    </p>
-                    <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
-                        <div className="w-3 h-3 rounded-full border-2 border-re-brand border-t-transparent animate-spin" />
-                        Loading checklist…
+            <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
+                <Container width="tool">
+                    <div className="border-b border-re-border-subtle pb-5">
+                        <h1 className="text-title text-re-text-primary">Self-Reported Checklist</h1>
+                        <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
+                            You answer. We echo what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.
+                        </p>
                     </div>
-                </div>
+                    <div className="mt-6 space-y-3" role="status" aria-live="polite">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-4/5" />
+                        <p className="pt-2 text-small text-re-text-muted">Loading checklist…</p>
+                    </div>
+                </Container>
             </div>
         }>
             <JSONLD data={jsonLd} />

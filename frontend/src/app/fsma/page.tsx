@@ -1,21 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import DashboardLayout from '../dashboard/layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { HelpTooltip } from '@/components/ui/tooltip';
 
 // FSMA Components
-import { SupplyChainGraph, MiniSupplyChain, FacilityCard } from '@/components/fsma/supply-chain-graph';
-import { RecallTimer, SLAGauge } from '@/components/fsma/recall-timer';
+import { SupplyChainGraph, FacilityCard } from '@/components/fsma/supply-chain-graph';
+import { RecallTimer } from '@/components/fsma/recall-timer';
 import { MassBalanceWidget } from '@/components/fsma/mass-balance-widget';
 
 import { ComplianceReadiness } from '@/components/fsma/compliance-readiness';
@@ -41,16 +45,9 @@ import {
   Shield,
   Search,
   AlertTriangle,
-  Clock,
-  Activity,
-  TrendingUp,
-  Bell,
-  Package,
-  MapPin,
   ArrowRight,
   PlayCircle,
   Key,
-  RefreshCw,
   CheckCircle,
   XCircle,
 } from 'lucide-react';
@@ -119,148 +116,88 @@ function FSMADashboardContent() {
 
   return (
     <DashboardLayout>
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <PageContainer>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
-        >
-          {/* Page Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-re-brand-muted dark:bg-re-brand">
-                <Shield className="h-8 w-8 text-re-brand-dark dark:text-re-brand" />
-              </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-4xl font-bold">FSMA 204 Dashboard</h1>
-                  <Badge className="bg-re-brand-muted text-re-brand-dark border border-re-brand/20 text-xs">Supported</Badge>
-                </div>
-                <div className="mt-1 flex items-center gap-1 text-muted-foreground">
-                  <p>Food Safety Traceability & Recall Management</p>
-                  <HelpTooltip content="FDA Food Safety Modernization Act Section 204 (21 CFR Part 1, Subpart S) requires covered persons to maintain traceability records and provide a sortable electronic spreadsheet of those records within 24 hours of an official FDA request, per §1.1455(c)." />
-                </div>
-              </div>
-            </div>
-
-            {/* System Status */}
-            <div className="flex items-center gap-2">
+        <PageHeader
+          title="FSMA 204 Dashboard"
+          description={
+            <span className="inline-flex items-start gap-1">
+              Food Safety Traceability &amp; Recall Management
+              <HelpTooltip content="FDA Food Safety Modernization Act Section 204 (21 CFR Part 1, Subpart S) requires covered persons to maintain traceability records and provide a sortable electronic spreadsheet of those records within 24 hours of an official FDA request, per §1.1455(c)." />
+            </span>
+          }
+          meta={
+            <>
+              <Badge tone="neutral" size="sm">Supported</Badge>
+              {/* System Status */}
               {dashboard.data?.system_health === 'HEALTHY' ? (
-                <Badge className="bg-re-success-muted text-re-success">
-                  <Activity className="w-3 h-3 mr-1" />
-                  All Systems Operational
-                </Badge>
+                <StatusBadge state="compliant" label="All Systems Operational" size="sm" />
               ) : dashboard.data?.system_health === 'DEGRADED' ? (
-                <Badge className="bg-re-warning-muted text-re-warning">
-                  <AlertTriangle className="w-3 h-3 mr-1" />
-                  Degraded Performance
-                </Badge>
+                <StatusBadge state="at-risk" label="Degraded Performance" size="sm" />
               ) : (
-                <Badge variant="secondary">
-                  <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                  Checking...
-                </Badge>
+                <StatusBadge state="in-progress" label="Checking..." size="sm" />
               )}
-            </div>
-          </div>
+            </>
+          }
+        />
 
+        <div className="space-y-6">
           {/* Auth warning */}
           {!isAuthenticated && (
-            <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-medium text-re-warning dark:text-re-warning">
-                      Sign in to unlock live FSMA data
-                    </p>
-                    <p className="text-sm text-re-warning dark:text-re-warning mt-1">
-                      Cookie-backed session auth now powers the live FSMA dashboard. Until you sign in,
-                      demo visualization is shown below.
-                    </p>
-                    <Link href="/login?next=/fsma">
-                      <Button size="sm" variant="outline" className="mt-3">
-                        Sign In
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <Callout
+              tone="warning"
+              icon={Key}
+              title="Sign in to unlock live FSMA data"
+              action={
+                <Button size="sm" variant="secondary" asChild>
+                  <Link href="/login?next=/fsma">
+                    Sign In
+                    <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  </Link>
+                </Button>
+              }
+            >
+              Cookie-backed session auth now powers the live FSMA dashboard. Until you sign in,
+              demo visualization is shown below.
+            </Callout>
           )}
 
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <Package className="h-8 w-8 text-re-info" />
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {dashboard.data?.total_lots?.toLocaleString() || '—'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Total Lots</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <MapPin className="h-8 w-8 text-purple-500" />
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {dashboard.data?.total_facilities?.toLocaleString() || '—'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Facilities</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <TrendingUp className="h-8 w-8 text-re-success" />
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {dashboard.data?.kde_completeness_percent
-                        ? `${dashboard.data.kde_completeness_percent}%`
-                        : '—'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">KDE Complete</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <Bell className={`h-8 w-8 ${dashboard.data?.active_recalls ? 'text-re-danger' : 'text-muted-foreground'}`} />
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {dashboard.data?.active_recalls ?? '0'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Active Recalls</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatTile
+              label="Total Lots"
+              loading={dashboard.isLoading}
+              value={dashboard.data?.total_lots?.toLocaleString() || '—'}
+            />
+            <StatTile
+              label="Facilities"
+              loading={dashboard.isLoading}
+              value={dashboard.data?.total_facilities?.toLocaleString() || '—'}
+            />
+            <StatTile
+              label="KDE Complete"
+              loading={dashboard.isLoading}
+              value={
+                dashboard.data?.kde_completeness_percent
+                  ? `${dashboard.data.kde_completeness_percent}%`
+                  : '—'
+              }
+            />
+            <StatTile
+              label="Active Recalls"
+              loading={dashboard.isLoading}
+              value={dashboard.data?.active_recalls ?? '0'}
+            />
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Left Column - Traceability Query */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-6 lg:col-span-2">
               {/* Trace Query */}
               <Card>
-                <CardHeader>
+                <CardHeader className="flex-col items-stretch gap-1">
                   <CardTitle className="flex items-center gap-2">
-                    <Search className="w-5 h-5" />
+                    <Search className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                     Traceability Query
                   </CardTitle>
                   <CardDescription>
@@ -269,24 +206,28 @@ function FSMADashboardContent() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-2">
+                    <label htmlFor="fsma-tlc-query" className="sr-only">
+                      Traceability Lot Code (TLC)
+                    </label>
                     <Input
+                      id="fsma-tlc-query"
+                      mono
                       placeholder="Enter TLC (e.g., LOT-2025-001)"
                       value={tlcQuery}
                       onChange={(e) => setTlcQuery(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
-                      className="font-mono"
                     />
                     <Button onClick={handleTrace} disabled={!tlcQuery.trim()}>
-                      <Search className="w-4 h-4 mr-2" />
+                      <Search className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                       Trace
                     </Button>
                   </div>
 
                   {/* Demo Facilities Hint */}
                   {!activeTlc && (
-                    <p className="text-sm text-muted-foreground">
-                      Try: <code className="bg-muted px-1 rounded">LOT-2025-ROMAINE-001</code> or{' '}
-                      <code className="bg-muted px-1 rounded">TLC-LETTUCE-BATCH-42</code>
+                    <p className="text-ui text-re-text-tertiary">
+                      Try: <code className="rounded-sm bg-re-surface-inset px-1 font-mono text-[0.8125rem]">LOT-2025-ROMAINE-001</code> or{' '}
+                      <code className="rounded-sm bg-re-surface-inset px-1 font-mono text-[0.8125rem]">TLC-LETTUCE-BATCH-42</code>
                     </p>
                   )}
                 </CardContent>
@@ -294,7 +235,7 @@ function FSMADashboardContent() {
 
               {/* Supply Chain Visualization */}
               <Card>
-                <CardHeader>
+                <CardHeader className="flex-col items-stretch gap-1">
                   <CardTitle>Supply Chain Path</CardTitle>
                   <CardDescription>
                     {activeTlc
@@ -304,9 +245,16 @@ function FSMADashboardContent() {
                 </CardHeader>
                 <CardContent>
                   {traceResult.isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground" />
+                    <div className="flex items-center gap-4 py-12" aria-busy="true">
+                      <Skeleton className="h-16 w-16 rounded-lg" />
+                      <Skeleton className="h-16 w-16 rounded-lg" />
+                      <Skeleton className="h-16 w-16 rounded-lg" />
+                      <Skeleton className="h-16 w-16 rounded-lg" />
                     </div>
+                  ) : traceResult.isError ? (
+                    <Callout tone="danger" role="alert" icon={AlertTriangle}>
+                      Couldn&apos;t trace that lot code. Check your connection and retry.
+                    </Callout>
                   ) : (
                     <SupplyChainGraph
                       facilities={traceResult.data?.facilities || EMPTY_FACILITIES}
@@ -318,20 +266,30 @@ function FSMADashboardContent() {
                     />
                   )}
 
+                  {!traceResult.isLoading && !traceResult.isError && !traceResult.data?.facilities?.length && (
+                    <EmptyState
+                      bare
+                      size="sm"
+                      icon={Shield}
+                      title="No supply chain path yet"
+                      description="Run a traceability query to draw the chain for a lot code."
+                    />
+                  )}
+
                   {/* Trace Statistics */}
                   {traceResult.data && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-4 border-t">
-                      <div className="text-center">
-                        <p className="text-xl font-bold">{traceResult.data.total_facilities}</p>
-                        <p className="text-xs text-muted-foreground">Facilities</p>
+                    <div className="mt-6 grid grid-cols-1 gap-4 border-t border-re-border-subtle pt-4 sm:grid-cols-3">
+                      <div>
+                        <p className="text-label text-re-text-muted">Facilities</p>
+                        <p className="mt-1 text-title tabular-nums text-re-text-primary">{traceResult.data.total_facilities}</p>
                       </div>
-                      <div className="text-center">
-                        <p className="text-xl font-bold">{traceResult.data.total_events}</p>
-                        <p className="text-xs text-muted-foreground">Events</p>
+                      <div>
+                        <p className="text-label text-re-text-muted">Events</p>
+                        <p className="mt-1 text-title tabular-nums text-re-text-primary">{traceResult.data.total_events}</p>
                       </div>
-                      <div className="text-center">
-                        <p className="text-xl font-bold">{traceResult.data.query_time_ms}ms</p>
-                        <p className="text-xs text-muted-foreground">Query Time</p>
+                      <div>
+                        <p className="text-label text-re-text-muted">Query Time</p>
+                        <p className="mt-1 text-title tabular-nums text-re-text-primary">{traceResult.data.query_time_ms}ms</p>
                       </div>
                     </div>
                   )}
@@ -348,17 +306,12 @@ function FSMADashboardContent() {
 
               {/* Selected Facility Details */}
               {selectedFacility && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <FacilityCard
-                    facility={selectedFacility}
-                    events={traceResult.data?.events?.filter(e => e.facility_gln === selectedFacility.gln)}
-                    isSelected
-                    onClick={() => setSelectedFacility(null)}
-                  />
-                </motion.div>
+                <FacilityCard
+                  facility={selectedFacility}
+                  events={traceResult.data?.events?.filter(e => e.facility_gln === selectedFacility.gln)}
+                  isSelected
+                  onClick={() => setSelectedFacility(null)}
+                />
               )}
             </div>
 
@@ -383,9 +336,9 @@ function FSMADashboardContent() {
               {/* Recent Alerts */}
               {dashboard.data?.recent_alerts && dashboard.data.recent_alerts.length > 0 && (
                 <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-re-warning" />
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                       Recent Alerts
                     </CardTitle>
                   </CardHeader>
@@ -394,18 +347,18 @@ function FSMADashboardContent() {
                       {dashboard.data.recent_alerts.slice(0, 5).map((alert) => (
                         <div
                           key={alert.id}
-                          className="flex items-start gap-2 p-2 rounded bg-muted/50 text-sm"
+                          className="flex items-start gap-2 rounded-md bg-re-surface-inset p-2 text-ui"
                         >
                           {alert.severity === 'CRITICAL' ? (
-                            <XCircle className="w-4 h-4 text-re-danger mt-0.5" />
+                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
                           ) : alert.severity === 'WARNING' ? (
-                            <AlertTriangle className="w-4 h-4 text-re-warning mt-0.5" />
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                           ) : (
-                            <CheckCircle className="w-4 h-4 text-re-info mt-0.5" />
+                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-re-info" strokeWidth={1.75} aria-hidden="true" />
                           )}
-                          <div className="flex-1 min-w-0">
-                            <p className="truncate">{alert.message}</p>
-                            <p className="text-xs text-muted-foreground">{alert.source}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-re-text-secondary">{alert.message}</p>
+                            <p className="text-small text-re-text-tertiary">{alert.source}</p>
                           </div>
                         </div>
                       ))}
@@ -416,50 +369,49 @@ function FSMADashboardContent() {
 
               {/* Quick Actions */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Quick Actions</CardTitle>
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Link href="/fsma/assessment">
-                    <Button variant="default" className="w-full justify-start bg-re-brand hover:bg-re-brand-dark">
-                      <CheckCircle className="w-4 h-4 mr-2" />
+                  <Button className="w-full justify-start" asChild>
+                    <Link href="/fsma/assessment">
+                      <CheckCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                       Readiness Assessment
-                    </Button>
-                  </Link>
-                  <Link href="/fsma/integration">
-                    <Button variant="outline" className="w-full justify-start">
-                      <ArrowRight className="w-4 h-4 mr-2" />
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" className="w-full justify-start" asChild>
+                    <Link href="/fsma/integration">
+                      <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                       Integration Blueprint
-                    </Button>
-                  </Link>
-                  <Link href="/trace">
-                    <Button variant="outline" className="w-full justify-start">
-                      <Search className="w-4 h-4 mr-2" />
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" className="w-full justify-start" asChild>
+                    <Link href="/trace">
+                      <Search className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                       Advanced Trace Query
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     className="w-full justify-start"
                     onClick={() => activeTlc && handleStartDrill('BACKWARD')}
                     disabled={!activeTlc}
                   >
-                    <PlayCircle className="w-4 h-4 mr-2" />
+                    <PlayCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     Start Backward Drill
                   </Button>
-                  <Link href="/compliance">
-                    <Button variant="outline" className="w-full justify-start">
-                      <Shield className="w-4 h-4 mr-2" />
+                  <Button variant="secondary" className="w-full justify-start" asChild>
+                    <Link href="/compliance">
+                      <Shield className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                       View Compliance Checklists
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             </div>
           </div>
-        </motion.div>
+        </div>
       </PageContainer>
-    </div>
     </DashboardLayout>
   );
 }

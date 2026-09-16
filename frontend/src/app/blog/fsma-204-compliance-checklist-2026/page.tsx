@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, AlertCircle, ClipboardList, BarChart3, Shield } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
@@ -18,52 +22,43 @@ export const metadata: Metadata = {
 
 export default function FSMA204ComplianceChecklist() {
   return (
-    <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+    <div className="bg-re-surface-base">
       <JSONLD data={blogPostingJsonLd('fsma-204-compliance-checklist-2026', 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.')} />
-      {/* Hero */}
-      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
-        <div className="mb-8">
-          <Link
-            href="/blog"
-            className="inline-flex items-center gap-2 text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors duration-200 text-sm font-medium mb-6"
-          >
-            ← Back to Blog
-          </Link>
-          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-            Action Steps
-          </p>
-          <h1 className="font-serif text-[clamp(2rem,5vw,3rem)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-6">
-            FSMA 204 Compliance Checklist for 2026: What to Do Now
-          </h1>
-          <p className="text-[1.1rem] text-[var(--re-text-secondary)] leading-relaxed mb-4">
-            A step-by-step checklist to prepare your food business for the July 2028 FSMA 204 deadline.
-          </p>
-          <div className="flex gap-6 text-sm text-[var(--re-text-muted)] pt-4 border-t border-[var(--re-surface-border)]">
-            <span>April 2026</span>
-            <span>9 min read</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Content */}
-      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-        <article className="prose max-w-none prose-headings:text-[var(--re-text-primary)] prose-p:text-[var(--re-text-secondary)] prose-strong:text-[var(--re-text-primary)] prose-li:text-[var(--re-text-secondary)] prose-a:text-[var(--re-brand)]">
+      <Container as="article" width="prose" className="py-12 sm:py-16">
+        <Link
+          href="/blog"
+          className="mb-8 inline-flex items-center gap-2 text-ui text-re-text-secondary transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+        >
+          ← Back to Blog
+        </Link>
+        <PageHeader
+          eyebrow="Action Steps"
+          title="FSMA 204 Compliance Checklist for 2026: What to Do Now"
+          description="A step-by-step checklist to prepare your food business for the July 2028 FSMA 204 deadline."
+          meta={
+            <>
+              <span>April 2026</span>
+              <span>9 min read</span>
+            </>
+          }
+        />
+        <div>
           {/* Introduction */}
           <div className="mb-10">
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
+            <p className="text-body text-re-text-secondary mb-6">
               Current public FDA posture points to July 20, 2028 as the earliest enforcement date under congressional direction. That may sound like a long way off, but implementation typically takes 6-18 months depending on your business complexity. The difference between companies that start now and those that wait is the difference between smooth adoption and a last-minute scramble.
             </p>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               This checklist breaks FSMA 204 compliance into manageable phases. Use it to track your progress, identify gaps, and keep your team aligned. Work through these items over the next 24 months, and you'll be ready well before the deadline.
             </p>
           </div>
 
           {/* Phase 1 */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6 mt-12">
+            <h2 className="text-heading text-re-text-primary mb-6 mt-12">
               Phase 1: Assessment (Now - Q2 2026)
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               Before you can implement FSMA 204, you need to understand your current state. This phase answers the critical question: "Where are we today?"
             </p>
             <div className="space-y-4 mb-8">
@@ -76,29 +71,29 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Estimate implementation cost and timeline', detail: 'Get quotes from 2-3 FSMA 204 platform vendors. Build a budget for 2026-2027', done: false },
                 { task: 'Assign a compliance lead', detail: 'Designate one person to own FSMA 204 implementation. This is a significant role—don\'t dilute it', done: false },
               ].map((item, idx) => (
-                <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
+                <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">
-                    <div className="w-6 h-6 rounded-full border-2 border-[var(--re-brand)] flex items-center justify-center mt-0.5 flex-none" />
+                    <div aria-hidden="true" className="mt-1 h-4 w-4 flex-none rounded-full border border-re-border-strong" />
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h4 className="text-subheading text-re-text-primary mb-1">
                       {item.task}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {item.detail}
                     </p>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
 
           {/* Phase 2 */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Phase 2: Planning & Selection (Q2-Q3 2026)
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               Now that you understand your current state, it's time to plan your path forward and select the tools you'll use.
             </p>
             <div className="space-y-4 mb-8">
@@ -111,29 +106,29 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Get IT and Operations buy-in', detail: 'Brief your IT and Operations teams on what\'s coming. Identify integration points and resource needs', done: false },
                 { task: 'Identify regulatory and audit requirements', detail: 'Do you need to update your Food Safety Plan? Audit procedures? Documentation requirements?', done: false },
               ].map((item, idx) => (
-                <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
+                <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">
-                    <div className="w-6 h-6 rounded-full border-2 border-[var(--re-brand)] flex items-center justify-center mt-0.5 flex-none" />
+                    <div aria-hidden="true" className="mt-1 h-4 w-4 flex-none rounded-full border border-re-border-strong" />
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h4 className="text-subheading text-re-text-primary mb-1">
                       {item.task}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {item.detail}
                     </p>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
 
           {/* Phase 3 */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Phase 3: Pilot & Implementation (Q3 2026 - Q1 2027)
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               This is where FSMA 204 goes live. Start with a pilot, validate, then scale.
             </p>
             <div className="space-y-4 mb-8">
@@ -146,29 +141,29 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Identify and fix gaps', detail: 'Review your test results. What data is missing? What processes are slow? Fix these before rolling out broadly', done: false },
                 { task: 'Document your standard operating procedures (SOPs)', detail: 'Write step-by-step guides for how to capture CTEs, generate TLCs, handle recalls, etc. Make these available to your team', done: false },
               ].map((item, idx) => (
-                <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
+                <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">
-                    <div className="w-6 h-6 rounded-full border-2 border-[var(--re-brand)] flex items-center justify-center mt-0.5 flex-none" />
+                    <div aria-hidden="true" className="mt-1 h-4 w-4 flex-none rounded-full border border-re-border-strong" />
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h4 className="text-subheading text-re-text-primary mb-1">
                       {item.task}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {item.detail}
                     </p>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
 
           {/* Phase 4 */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Phase 4: Scale & Hardening (Q1-Q2 2027)
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               Roll out FSMA 204 traceability work to all applicable product lines and refine your processes for consistent, reliable records.
             </p>
             <div className="space-y-4 mb-8">
@@ -180,29 +175,29 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Conduct compliance audits', detail: 'Use a third-party auditor or consultant to validate your FSMA 204 readiness. Address any findings', done: false },
                 { task: 'Update your Food Safety Plan', detail: 'Incorporate FSMA 204 compliance into your formal Food Safety Plan and risk management documentation', done: false },
               ].map((item, idx) => (
-                <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
+                <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">
-                    <div className="w-6 h-6 rounded-full border-2 border-[var(--re-brand)] flex items-center justify-center mt-0.5 flex-none" />
+                    <div aria-hidden="true" className="mt-1 h-4 w-4 flex-none rounded-full border border-re-border-strong" />
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h4 className="text-subheading text-re-text-primary mb-1">
                       {item.task}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {item.detail}
                     </p>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
 
           {/* Phase 5 */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Phase 5: Maintenance & Readiness (Q2 2027 - July 2028)
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               Once you reach compliance, the focus shifts to maintaining your system and staying ready for the deadline.
             </p>
             <div className="space-y-4 mb-8">
@@ -215,29 +210,29 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Maintain supplier relationships', detail: 'Keep communication open with suppliers. Make sure they continue to submit accurate, timely traceability data', done: false },
                 { task: 'Target readiness before July 20, 2028', detail: 'Your FSMA 204 traceability workflow is live, tested, and ready for operator review before enforcement resumes', done: false },
               ].map((item, idx) => (
-                <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
+                <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">
-                    <div className="w-6 h-6 rounded-full border-2 border-[var(--re-brand)] flex items-center justify-center mt-0.5 flex-none" />
+                    <div aria-hidden="true" className="mt-1 h-4 w-4 flex-none rounded-full border border-re-border-strong" />
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h4 className="text-subheading text-re-text-primary mb-1">
                       {item.task}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {item.detail}
                     </p>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
 
           {/* Quick Tools Reference */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               RegEngine Tools to Support Your Checklist
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               Use these free tools throughout your compliance journey:
             </p>
             <div className="space-y-4 mb-8">
@@ -282,20 +277,20 @@ export default function FSMA204ComplianceChecklist() {
                 <Link
                   key={idx}
                   href={tool.link}
-                  className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200 group"
+                  className="flex gap-4 p-4 rounded-lg bg-re-surface-inset border border-re-border hover:border-re-border-strong transition-colors duration-120 group"
                 >
                   <div className="flex-shrink-0">
-                    <Shield className="w-5 h-5 text-[var(--re-brand)] mt-0.5 group-hover:scale-110 transition-transform duration-300" />
+                    <Shield className="h-4 w-4 text-re-text-tertiary mt-0.5 group-hover:scale-110 transition-transform duration-120" strokeWidth={1.75} aria-hidden="true" />
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1 group-hover:text-[var(--re-brand)] transition-colors duration-300">
+                    <h4 className="text-subheading text-re-text-primary mb-1 group-hover:text-re-brand transition-colors duration-120">
                       {tool.name}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {tool.desc}
                     </p>
                   </div>
-                  <div className="text-xs font-medium text-[var(--re-brand)] whitespace-nowrap ml-2">
+                  <div className="text-xs font-medium text-re-brand whitespace-nowrap ml-2">
                     {tool.phase}
                   </div>
                 </Link>
@@ -305,60 +300,55 @@ export default function FSMA204ComplianceChecklist() {
 
           {/* Key Takeaways */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Your FSMA 204 Checklist Summary
             </h2>
-            <ul className="space-y-3 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <ul className="space-y-3 text-body text-re-text-secondary">
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Start your assessment now. You have about 24 months to implement.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Work through the phases in order: Assess → Plan → Pilot → Scale → Maintain.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Pilot before you scale. Test your 24-hour response early and often.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Engage suppliers and customers throughout. FSMA 204 is not a solo effort.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Assign a compliance lead and get executive sponsorship. Make it a priority.</span>
               </li>
             </ul>
           </div>
 
           {/* CTA */}
-          <div className="p-8 sm:p-12 rounded-xl border border-[var(--re-brand)]/20 bg-gradient-to-br from-[var(--re-brand)]/5 to-cyan-600/5">
-            <h3 className="font-serif text-xl font-bold text-[var(--re-text-primary)] mb-4">
+          <Card padding="spacious">
+            <h3 className="text-heading text-re-text-primary">
               Ready to work through your FSMA 204 checklist?
             </h3>
-            <p className="text-[var(--re-text-secondary)] mb-8">
+            <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
               Use RegEngine to track your progress, run compliance drills, and stay on schedule for July 2028.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href="/retailer-readiness"
-                className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px] max-w-fit"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Get Your Readiness Score</span>
-                <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
-              </Link>
-              <Link
-                href="/blog"
-                className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
-              >
-                Back to Blog
-              </Link>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link href="/retailer-readiness">
+                  Get Your Readiness Score
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/blog">Back to Blog</Link>
+              </Button>
             </div>
-          </div>
-        </article>
-      </section>
+          </Card>
+        </div>
+      </Container>
     </div>
   );
 }

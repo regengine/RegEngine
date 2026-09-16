@@ -4,8 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
@@ -22,6 +20,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
 
 // ── Lazy-loaded recharts ──
@@ -208,13 +207,15 @@ export function AnomalyDetectionSimulator() {
     }, [dataset.suppliers, lotsData]);
 
     const topFlags = useMemo(() => dataset.points.filter(p => det.flaggedHours.has(p.hour)).slice(-12).reverse(), [dataset.points, det.flaggedHours]);
-    const sevColor = (s: number) => s > 0.7 ? "#ef4444" : s > 0.4 ? "#f59e0b" : s > 0.1 ? "#f59e0b88" : "#10b98133";
+    // Chart marks read the token layer so they follow the theme (SPEC §1.6).
+    const sevFill = (s: number) => (s > 0.4 ? "var(--re-danger)" : s > 0.1 ? "var(--re-warning)" : "var(--re-success)");
+    const sevOpacity = (s: number) => (s > 0.7 ? 1 : s > 0.4 ? 0.8 : s > 0.1 ? 0.55 : 0.25);
 
     if (!recharts) {
         return (
-            <div className="flex items-center justify-center p-12">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                <span className="text-sm text-muted-foreground">Loading charts...</span>
+            <div className="flex items-center justify-center p-12" aria-busy="true">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin text-re-text-tertiary motion-reduce:animate-none" strokeWidth={1.75} aria-hidden="true" />
+                <span className="text-ui text-re-text-tertiary">Loading charts...</span>
             </div>
         );
     }
@@ -227,16 +228,16 @@ export function AnomalyDetectionSimulator() {
     return (
         <div className="space-y-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-muted"><AlertTriangle className="h-5 w-5" /></div>
+                <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                     <div>
-                        <div className="text-xl font-semibold">Anomaly Detection Simulator</div>
-                        <div className="text-sm text-muted-foreground">Seeded cold-chain + lot-flow simulator.</div>
+                        <div className="text-heading text-re-text-primary">Anomaly Detection Simulator</div>
+                        <div className="text-ui text-re-text-secondary">Seeded cold-chain + lot-flow simulator.</div>
                     </div>
                 </div>
                 <div className="flex gap-2 items-center">
                     <Select value={mode} onValueChange={v => setMode(v as AlgoMode)}>
-                        <SelectTrigger className="w-[200px] rounded-2xl"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-[200px]" aria-label="Detection algorithm"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="ensemble">Ensemble (recommended)</SelectItem>
                             <SelectItem value="statistical">Statistical (Z-score)</SelectItem>
@@ -244,31 +245,32 @@ export function AnomalyDetectionSimulator() {
                             <SelectItem value="pattern">Pattern (drift)</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" className="rounded-2xl" onClick={() => { setSeed(s => (s + 1) % 10000); setSelectedHour(null); }}><RefreshCw className="mr-2 h-4 w-4" />Reseed</Button>
+                    <Button variant="secondary" leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />} onClick={() => { setSeed(s => (s + 1) % 10000); setSelectedHour(null); }}>Reseed</Button>
                 </div>
             </div>
 
-            <Card className="rounded-3xl"><CardContent className="p-4 md:p-6">
+            <Card><CardContent className="p-4 md:p-6">
                 <div className="grid gap-4 md:grid-cols-12 md:items-center">
                     <div className="md:col-span-5">
-                        <div className="text-sm font-medium">Sensitivity</div>
-                        <div className="text-xs text-muted-foreground">Higher = more flags.</div>
+                        <label htmlFor="anomaly-sensitivity" className="text-ui font-medium text-re-text-primary">Sensitivity</label>
+                        <div className="text-small text-re-text-tertiary">Higher = more flags.</div>
                         <div className="mt-3">
                             <input
+                                id="anomaly-sensitivity"
                                 type="range"
-                                className="w-full h-2 bg-[var(--re-border-default)] rounded-lg appearance-none cursor-pointer accent-[var(--re-brand)]"
+                                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-re-surface-inset accent-re-brand"
                                 value={sensitivity}
                                 onChange={e => setSensitivity(Number(e.target.value))}
                                 min={0} max={100} step={1}
                             />
-                            <div className="mt-2 text-xs text-muted-foreground">{sensitivity}/100</div>
+                            <div className="mt-2 text-small tabular-nums text-re-text-tertiary">{sensitivity}/100</div>
                         </div>
                     </div>
                     <div className="md:col-span-7">
                         <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="rounded-2xl border p-3"><div className="text-xs text-muted-foreground">Precision</div><div className="text-2xl font-semibold">{fmt(conf.precision * 100, 1)}%</div></div>
-                            <div className="rounded-2xl border p-3"><div className="text-xs text-muted-foreground">Recall</div><div className="text-2xl font-semibold">{fmt(conf.recall * 100, 1)}%</div></div>
-                            <div className="rounded-2xl border p-3"><div className="text-xs text-muted-foreground">F1</div><div className="text-2xl font-semibold">{fmt(conf.f1 * 100, 1)}%</div></div>
+                            <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">Precision</div><div className="text-title tabular-nums text-re-text-primary">{fmt(conf.precision * 100, 1)}%</div></div>
+                            <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">Recall</div><div className="text-title tabular-nums text-re-text-primary">{fmt(conf.recall * 100, 1)}%</div></div>
+                            <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">F1</div><div className="text-title tabular-nums text-re-text-primary">{fmt(conf.f1 * 100, 1)}%</div></div>
                         </div>
                     </div>
                 </div>
@@ -276,77 +278,77 @@ export function AnomalyDetectionSimulator() {
                 <div className="mt-5 grid gap-4 md:grid-cols-12">
                     <div className="md:col-span-9">
                         <Tabs value={tab} onValueChange={v => setTab(v as "stream" | "daily" | "lots" | "suppliers" | "eval")}>
-                            <TabsList className="rounded-2xl">
-                                <TabsTrigger value="stream" className="rounded-2xl">Temp stream</TabsTrigger>
-                                <TabsTrigger value="daily" className="rounded-2xl">Daily overview</TabsTrigger>
-                                <TabsTrigger value="lots" className="rounded-2xl">Lot scatter</TabsTrigger>
-                                <TabsTrigger value="suppliers" className="rounded-2xl">Supplier risk</TabsTrigger>
-                                <TabsTrigger value="eval" className="rounded-2xl">Evaluation</TabsTrigger>
+                            <TabsList className="max-w-full flex-wrap overflow-x-auto">
+                                <TabsTrigger value="stream">Temp stream</TabsTrigger>
+                                <TabsTrigger value="daily">Daily overview</TabsTrigger>
+                                <TabsTrigger value="lots">Lot scatter</TabsTrigger>
+                                <TabsTrigger value="suppliers">Supplier risk</TabsTrigger>
+                                <TabsTrigger value="eval">Evaluation</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="stream" className="mt-3">
-                                <div className="h-[300px] w-full rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
+                                <div className="h-[300px] w-full rounded-lg border border-re-border p-2"><ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={streamData} margin={{ top: 10, right: 14, bottom: 6, left: 6 }}>
                                         <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="idx" tick={false} label={{ value: "90 days (hourly)", position: "insideBottom", offset: -2 }} /><YAxis domain={[32, 46]} />
                                         <Tooltip formatter={(v, n) => n === "tempF" ? [`${fmt(Number(v ?? 0))} °F`, "Temp"] : [String(v ?? ""), String(n)]} labelFormatter={(l) => streamData[Number(l)]?.hour || String(l)} />
-                                        <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" /><Legend /><Line type="monotone" dataKey="tempF" dot={false} strokeWidth={2} stroke="#3b82f6" />
+                                        <ReferenceLine y={40} stroke="var(--re-danger)" strokeDasharray="6 3" /><Legend /><Line type="monotone" dataKey="tempF" dot={false} strokeWidth={2} stroke="var(--re-cat-1)" />
                                     </LineChart>
                                 </ResponsiveContainer></div>
                                 <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                    <div className="rounded-2xl border p-3"><div className="text-sm font-medium">Recent flags</div><div className="mt-2 space-y-1 max-h-[240px] overflow-auto">
-                                        {topFlags.length === 0 ? <div className="text-sm text-muted-foreground">No flags.</div> : topFlags.map(p => (
-                                            <button key={p.hour} className={`w-full rounded-xl border px-3 py-1.5 text-left text-xs transition hover:bg-muted/40 ${selectedHour === p.hour ? "bg-muted/50" : ""}`} onClick={() => setSelectedHour(p.hour)}>
-                                                <span className="font-medium">{p.hour}</span> · {fmt(p.tempF)}°F {p.injectedAnomaly && <Badge className="rounded-xl ml-1" variant="secondary">GT</Badge>}
+                                    <div className="rounded-lg border border-re-border p-3"><div className="text-ui font-medium text-re-text-primary">Recent flags</div><div className="mt-2 space-y-1 max-h-[240px] overflow-auto">
+                                        {topFlags.length === 0 ? <EmptyState bare size="sm" title="No flags." /> : topFlags.map(p => (
+                                            <button key={p.hour} type="button" aria-pressed={selectedHour === p.hour} className={`w-full rounded-md border border-re-border px-3 py-1.5 text-left text-small text-re-text-secondary transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none ${selectedHour === p.hour ? "border-re-border-strong bg-re-surface-inset text-re-text-primary" : ""}`} onClick={() => setSelectedHour(p.hour)}>
+                                                <span className="font-mono font-medium">{p.hour}</span> · {fmt(p.tempF)}°F {p.injectedAnomaly && <Badge tone="neutral" size="sm" mono className="ml-1">GT</Badge>}
                                             </button>
                                         ))}
                                     </div></div>
-                                    <div className="rounded-2xl border p-3"><div className="text-sm font-medium">Explainability</div><div className="mt-2 text-sm">
-                                        {selectedHour ? <div><div className="font-medium text-xs">{selectedHour}</div><div className="mt-2 rounded-2xl bg-muted/40 p-3 text-sm">{det.explanations.get(selectedHour) || "No explanation."}</div></div> : <div className="text-muted-foreground">Click a flag to view explanation.</div>}
+                                    <div className="rounded-lg border border-re-border p-3"><div className="text-ui font-medium text-re-text-primary">Explainability</div><div className="mt-2 text-sm">
+                                        {selectedHour ? <div><div className="font-mono text-small font-medium text-re-text-primary">{selectedHour}</div><div className="mt-2 rounded-md bg-re-surface-inset p-3 text-ui text-re-text-secondary">{det.explanations.get(selectedHour) || "No explanation."}</div></div> : <div className="text-ui text-re-text-tertiary">Click a flag to view explanation.</div>}
                                     </div></div>
                                 </div>
                             </TabsContent>
 
                             <TabsContent value="daily" className="mt-3">
-                                <div className="h-[260px] w-full rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
+                                <div className="h-[260px] w-full rounded-lg border border-re-border p-2"><ResponsiveContainer width="100%" height="100%">
                                     <ComposedChart data={dailyData} margin={{ top: 10, right: 14, bottom: 6, left: 6 }}>
                                         <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.max(1, Math.floor(dailyData.length / 15))} /><YAxis domain={["dataMin - 1", "dataMax + 1"]} tick={{ fontSize: 10 }} />
-                                        <Tooltip /><ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" />
-                                        <Area type="monotone" dataKey="min" stackId="r" fill="transparent" stroke="transparent" /><Area type="monotone" dataKey="max" stackId="r" fill="rgba(59,130,246,0.08)" stroke="transparent" />
-                                        <Line type="monotone" dataKey="avg" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="Avg" />
-                                        <Line type="monotone" dataKey="max" stroke="#ef4444" strokeWidth={1} dot={(props: Record<string, unknown>) => { const { cx, cy, payload } = props as { cx?: number; cy?: number; payload?: { anomalyCount?: number; day?: number } }; return (payload?.anomalyCount ?? 0) > 0 ? <circle cx={cx} cy={cy} r={4} fill="#ef4444" opacity={0.8} /> : <React.Fragment key={`d-${payload?.day}`} />; }} name="Max" />
-                                        <Line type="monotone" dataKey="min" stroke="#10b981" strokeWidth={1} dot={false} name="Min" /><Legend />
+                                        <Tooltip /><ReferenceLine y={40} stroke="var(--re-danger)" strokeDasharray="6 3" />
+                                        <Area type="monotone" dataKey="min" stackId="r" fill="transparent" stroke="transparent" /><Area type="monotone" dataKey="max" stackId="r" fill="var(--re-cat-1)" fillOpacity={0.08} stroke="transparent" />
+                                        <Line type="monotone" dataKey="avg" stroke="var(--re-cat-1)" strokeWidth={1.5} dot={false} name="Avg" />
+                                        <Line type="monotone" dataKey="max" stroke="var(--re-danger)" strokeWidth={1} dot={(props: Record<string, unknown>) => { const { cx, cy, payload } = props as { cx?: number; cy?: number; payload?: { anomalyCount?: number; day?: number } }; return (payload?.anomalyCount ?? 0) > 0 ? <circle cx={cx} cy={cy} r={4} fill="var(--re-danger)" opacity={0.8} /> : <React.Fragment key={`d-${payload?.day}`} />; }} name="Max" />
+                                        <Line type="monotone" dataKey="min" stroke="var(--re-success)" strokeWidth={1} dot={false} name="Min" /><Legend />
                                     </ComposedChart>
                                 </ResponsiveContainer></div>
-                                <div className="mt-3 h-[90px] rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
+                                <div className="mt-3 h-[90px] rounded-lg border border-re-border p-2"><ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={dailyData}><XAxis dataKey="label" tick={{ fontSize: 9 }} interval={Math.max(1, Math.floor(dailyData.length / 15))} /><YAxis domain={[0, 1]} tick={{ fontSize: 9 }} /><Tooltip />
-                                        <Bar dataKey="maxScore" radius={[2, 2, 0, 0]} name="Score">{dailyData.map((d, i) => <Cell key={i} fill={sevColor(d.maxScore)} />)}</Bar>
+                                        <Bar dataKey="maxScore" radius={[2, 2, 0, 0]} name="Score">{dailyData.map((d, i) => <Cell key={i} fill={sevFill(d.maxScore)} fillOpacity={sevOpacity(d.maxScore)} />)}</Bar>
                                     </BarChart>
                                 </ResponsiveContainer></div>
                             </TabsContent>
 
                             <TabsContent value="lots" className="mt-3">
-                                <div className="h-[320px] w-full rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
+                                <div className="h-[320px] w-full rounded-lg border border-re-border p-2"><ResponsiveContainer width="100%" height="100%">
                                     <ScatterChart margin={{ top: 10, right: 14, bottom: 30, left: 10 }}>
                                         <CartesianGrid strokeDasharray="3 3" />
                                         <XAxis dataKey="transitHours" name="Transit" type="number" label={{ value: "Transit Time (hours)", position: "insideBottom", offset: -15, fontSize: 11 }} />
                                         <YAxis dataKey="tempOnArrival" name="Temp" type="number" label={{ value: "Arrival Temp (°F)", angle: -90, position: "insideLeft", fontSize: 11 }} />
-                                        <ZAxis range={[30, 30]} /><ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" /><ReferenceLine x={36} stroke="#f59e0b" strokeDasharray="6 3" />
-                                        <Tooltip content={(({ payload }: { payload?: Array<{ payload: Record<string, unknown> }> }) => { if (!payload?.[0]) return null; const d = payload[0].payload as { lot?: string; supplier?: string; transitHours?: number; tempOnArrival?: number }; return <div className="rounded-xl border bg-background p-2 text-xs shadow-lg"><div className="font-semibold">{d.lot}</div><div className="text-muted-foreground">{d.supplier}</div><div>Transit: {d.transitHours}h · {d.tempOnArrival}°F</div></div>; }) as never} />
-                                        <Legend /><Scatter name="Normal" data={normalLots} fill="#10b98166" /><Scatter name="Flagged" data={flaggedLots} fill="#ef4444" />
+                                        <ZAxis range={[30, 30]} /><ReferenceLine y={40} stroke="var(--re-danger)" strokeDasharray="6 3" /><ReferenceLine x={36} stroke="var(--re-warning)" strokeDasharray="6 3" />
+                                        <Tooltip content={(({ payload }: { payload?: Array<{ payload: Record<string, unknown> }> }) => { if (!payload?.[0]) return null; const d = payload[0].payload as { lot?: string; supplier?: string; transitHours?: number; tempOnArrival?: number }; return <div className="rounded-md border border-re-border-strong bg-re-surface-elevated p-2 text-small"><div className="font-medium text-re-text-primary">{d.lot}</div><div className="text-re-text-tertiary">{d.supplier}</div><div>Transit: {d.transitHours}h · {d.tempOnArrival}°F</div></div>; }) as never} />
+                                        <Legend /><Scatter name="Normal" data={normalLots} fill="var(--re-success)" fillOpacity={0.4} /><Scatter name="Flagged" data={flaggedLots} fill="var(--re-danger)" />
                                     </ScatterChart>
                                 </ResponsiveContainer></div>
                             </TabsContent>
 
                             <TabsContent value="suppliers" className="mt-3">
                                 <div className="grid gap-3 md:grid-cols-12">
-                                    <div className="md:col-span-7 h-[300px] rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
+                                    <div className="md:col-span-7 h-[300px] rounded-lg border border-re-border p-2"><ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={supplierMatrix}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="supplier" tick={false} /><YAxis domain={[0, 100]} /><Tooltip /><Legend />
-                                            <Bar dataKey="score" name="Risk score" radius={[3, 3, 0, 0]}>{supplierMatrix.map((s, i) => <Cell key={i} fill={s.score > 40 ? "#ef4444" : s.score > 20 ? "#f59e0b" : "#10b981"} />)}</Bar>
+                                            <Bar dataKey="score" name="Risk score" radius={[3, 3, 0, 0]}>{supplierMatrix.map((s, i) => <Cell key={i} fill={s.score > 40 ? "var(--re-danger)" : s.score > 20 ? "var(--re-warning)" : "var(--re-success)"} />)}</Bar>
                                         </BarChart>
                                     </ResponsiveContainer></div>
-                                    <div className="md:col-span-5 max-h-[300px] overflow-auto rounded-2xl border">
+                                    <div className="md:col-span-5 max-h-[300px] overflow-auto rounded-lg border border-re-border">
                                         <Table><TableHeader><TableRow><TableHead>Supplier</TableHead><TableHead className="text-right">Flag%</TableHead><TableHead className="text-right">Score</TableHead></TableRow></TableHeader>
-                                            <TableBody>{supplierMatrix.map(r => <TableRow key={r.id}><TableCell><div className="font-medium">{r.supplier}</div><div className="text-xs text-muted-foreground">{r.region} · {r.lots} lots · {r.avgTemp}°F avg</div></TableCell><TableCell className="text-right">{r.flaggedRate}%</TableCell><TableCell className="text-right"><Badge variant="secondary" className="rounded-xl">{r.score}</Badge></TableCell></TableRow>)}</TableBody>
+                                            <TableBody>{supplierMatrix.map(r => <TableRow key={r.id}><TableCell><div className="font-medium">{r.supplier}</div><div className="text-small text-re-text-tertiary">{r.region} · {r.lots} lots · {r.avgTemp}°F avg</div></TableCell><TableCell className="text-right">{r.flaggedRate}%</TableCell><TableCell className="text-right"><Badge tone="neutral" mono>{r.score}</Badge></TableCell></TableRow>)}</TableBody>
                                         </Table></div>
                                 </div>
                             </TabsContent>
@@ -354,18 +356,18 @@ export function AnomalyDetectionSimulator() {
                             <TabsContent value="eval" className="mt-3">
                                 <div className="grid gap-3 md:grid-cols-2">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <div className="rounded-2xl bg-re-brand-muted border border-re-brand/20 p-3"><div className="text-xs text-muted-foreground">True positives</div><div className="text-2xl font-semibold text-re-brand-dark">{conf.tp}</div></div>
-                                        <div className="rounded-2xl bg-re-warning/10 border border-re-warning/20 p-3"><div className="text-xs text-muted-foreground">False positives</div><div className="text-2xl font-semibold text-re-warning">{conf.fp}</div></div>
-                                        <div className="rounded-2xl bg-re-danger/10 border border-re-danger/20 p-3"><div className="text-xs text-muted-foreground">False negatives</div><div className="text-2xl font-semibold text-re-danger">{conf.fn}</div></div>
-                                        <div className="rounded-2xl bg-muted/40 p-3"><div className="text-xs text-muted-foreground">True negatives</div><div className="text-2xl font-semibold">{conf.tn}</div></div>
+                                        <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">True positives</div><div className="text-title tabular-nums text-re-text-primary">{conf.tp}</div></div>
+                                        <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">False positives</div><div className="text-title tabular-nums text-re-text-primary">{conf.fp}</div></div>
+                                        <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">False negatives</div><div className="text-title tabular-nums text-re-text-primary">{conf.fn}</div></div>
+                                        <div className="rounded-lg border border-re-border p-3"><div className="font-mono uppercase text-label text-re-text-muted">True negatives</div><div className="text-title tabular-nums text-re-text-primary">{conf.tn}</div></div>
                                     </div>
                                 </div>
                             </TabsContent>
                         </Tabs>
                     </div>
-                    <div className="md:col-span-3 rounded-2xl border p-3">
-                        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4" /><div className="text-sm font-medium">What this proves</div></div>
-                        <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                    <div className="md:col-span-3 rounded-lg border border-re-border p-3">
+                        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /><div className="text-ui font-medium text-re-text-primary">What this proves</div></div>
+                        <ul className="mt-2 space-y-2 text-ui text-re-text-secondary">
                             <li>• Multi-algorithm detection</li><li>• Evaluation harness</li><li>• Explainability per event</li><li>• Cost-based tuning lens</li><li>• Daily aggregation</li>
                         </ul>
                     </div>

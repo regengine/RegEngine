@@ -3,10 +3,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Key, Plus, Copy, Trash2, Check, Loader2 } from 'lucide-react';
 
 interface ApiKey {
@@ -119,176 +124,169 @@ export default function ApiKeysPage() {
         }
     }
 
+    // The skeleton mirrors the header, notice and key rows so nothing shifts on load.
     if (isLoading) {
-        return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} /></div>;
+        return (
+            <div className="space-y-6">
+                <div className="space-y-2 border-b border-re-border-subtle pb-5">
+                    <Skeleton className="h-8 w-56" />
+                    <Skeleton className="h-4 w-80" />
+                </div>
+                <Skeleton className="h-16 w-full rounded-md" />
+                <Skeleton className="h-32 w-full rounded-lg" />
+            </div>
+        );
     }
 
     // Hydrated with no session: prompt for sign-in instead of showing an
     // empty key manager that can't actually do anything.
     if (!authUser) {
         return (
-            <div className="rounded-lg p-8 text-center" style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
-                <h1 className="text-lg font-semibold" style={{ color: 'var(--re-text-primary)' }}>Your session has expired</h1>
-                <p className="text-sm mt-2" style={{ color: 'var(--re-text-muted)' }}>
+            <Card className="px-6 py-14 text-center">
+                <h1 className="text-title text-re-text-primary">Your session has expired</h1>
+                <p className="mx-auto mt-2 max-w-[48ch] text-ui text-re-text-tertiary">
                     Sign in again to manage your sandbox API keys.
                 </p>
-                <a
-                    href="/login?next=/developer/portal/keys"
-                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-md text-sm font-semibold no-underline"
-                    style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
-                >
-                    Sign in
-                </a>
-            </div>
+                <Button asChild size="lg" className="mt-6">
+                    <a href="/login?next=/developer/portal/keys" className="no-underline">
+                        Sign in
+                    </a>
+                </Button>
+            </Card>
         );
     }
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>Sandbox API Keys</h1>
-                    <p className="text-sm mt-1" style={{ color: 'var(--re-text-muted)' }}>
-                        Generate and manage sandbox keys for exploring the portal. Keys are shown once — store them securely.
-                    </p>
-                </div>
-                <Button
-                    onClick={() => setShowCreate(true)}
-                    style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)', fontWeight: 600 }}
-                >
-                    <Plus className="w-4 h-4 mr-2" /> New Key
-                </Button>
-            </div>
+            <PageHeader
+                title="Sandbox API Keys"
+                description="Generate and manage sandbox keys for exploring the portal. Keys are shown once — store them securely."
+                primaryAction={
+                    <Button onClick={() => setShowCreate(true)} leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}>
+                        New Key
+                    </Button>
+                }
+                className="mb-0"
+            />
 
             {/* Sandbox-only notice */}
-            <Card style={{ background: 'var(--re-info-bg)', border: '1px solid var(--re-info-border)' }}>
-                <CardContent className="py-3">
-                    <p className="text-sm m-0" style={{ color: 'var(--re-signal-blue)' }}>
-                        Keys created here are <code className="font-mono">rge_test_</code> sandbox credentials — they
-                        cannot authenticate requests to the live RegEngine API. Live{' '}
-                        <code className="font-mono">rge_live_</code> keys are provisioned by the RegEngine team during
-                        onboarding.
-                    </p>
-                </CardContent>
-            </Card>
+            <Callout tone="info">
+                Keys created here are <code className="font-mono text-[0.8125rem]">rge_test_</code> sandbox credentials — they
+                cannot authenticate requests to the live RegEngine API. Live{' '}
+                <code className="font-mono text-[0.8125rem]">rge_live_</code> keys are provisioned by the RegEngine team during
+                onboarding.
+            </Callout>
 
             {error && (
-                <Card role="alert" style={{ background: 'var(--re-danger-bg)', border: '1px solid var(--re-danger-border)' }}>
-                    <CardContent className="py-3">
-                        <p className="text-sm m-0 text-re-danger">{error}</p>
-                    </CardContent>
-                </Card>
+                <Callout tone="danger" role="alert">
+                    {error}
+                </Callout>
             )}
 
             {/* Revealed key banner */}
             {revealedKey && (
-                <Card style={{ background: 'var(--re-success-bg)', border: '1px solid var(--re-success-border)' }}>
-                    <CardContent className="py-4">
-                        <p className="text-sm font-medium mb-2" style={{ color: 'var(--re-brand)' }}>
-                            Your new sandbox key (copy it now — it won't be shown again):
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono px-3 py-2 rounded" style={{ background: 'var(--re-surface-inset)', color: 'var(--re-text-primary)' }}>
-                                {revealedKey}
-                            </code>
-                            <Button variant="outline" size="sm" onClick={copyKey}>
-                                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                            </Button>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mt-2 text-xs"
-                            onClick={() => setRevealedKey(null)}
-                            style={{ color: 'var(--re-text-muted)' }}
-                        >
+                <Callout
+                    tone="success"
+                    title="Your new sandbox key (copy it now — it won't be shown again):"
+                    action={
+                        <Button variant="ghost" size="sm" onClick={() => setRevealedKey(null)}>
                             Dismiss
                         </Button>
-                    </CardContent>
-                </Card>
+                    }
+                >
+                    <div className="flex items-center gap-2">
+                        <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-re-surface-inset px-3 py-2 font-mono text-[0.8125rem] text-re-text-primary">
+                            {revealedKey}
+                        </code>
+                        <Button
+                            variant="secondary"
+                            size="icon"
+                            onClick={copyKey}
+                            aria-label={copied ? 'Copied' : 'Copy'}
+                        >
+                            {copied
+                                ? <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                : <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                        </Button>
+                    </div>
+                </Callout>
             )}
 
             {/* Create key form */}
             {showCreate && (
-                <Card style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
-                    <CardContent className="py-4">
-                        <div className="flex items-end gap-3">
-                            <div className="flex-1">
-                                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--re-text-muted)' }}>Key Name</label>
+                <Card>
+                    <CardContent>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                            <Field label="Key Name" htmlFor="new-key-name" className="flex-1">
                                 <Input
                                     placeholder="e.g. Local testing, CI experiments"
                                     value={newKeyName}
                                     onChange={(e) => setNewKeyName(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && createKey()}
-                                    style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
                                 />
+                            </Field>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    onClick={createKey}
+                                    loading={isCreating}
+                                    disabled={!newKeyName.trim() || isCreating || !developerId}
+                                >
+                                    Generate
+                                </Button>
+                                <Button variant="ghost" onClick={() => { setShowCreate(false); setNewKeyName(''); }}>
+                                    Cancel
+                                </Button>
                             </div>
-                            <Button
-                                onClick={createKey}
-                                disabled={!newKeyName.trim() || isCreating || !developerId}
-                                style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)', fontWeight: 600 }}
-                            >
-                                {isCreating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                                Generate
-                            </Button>
-                            <Button variant="ghost" onClick={() => { setShowCreate(false); setNewKeyName(''); }}>
-                                Cancel
-                            </Button>
                         </div>
                     </CardContent>
                 </Card>
             )}
 
             {/* Keys list */}
-            <div className="space-y-2">
-                {keys.length === 0 ? (
-                    <Card style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
-                        <CardContent className="py-12 text-center">
-                            <Key className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--re-text-disabled)' }} />
-                            <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>No API keys yet. Create one to get started.</p>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    keys.map((key) => (
-                        <Card key={key.id} style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
-                            <CardContent className="flex items-center gap-4 py-3">
-                                <Key className="w-4 h-4 flex-shrink-0" style={{ color: key.enabled ? 'var(--re-brand)' : 'var(--re-text-disabled)' }} />
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm font-medium truncate" style={{ color: 'var(--re-text-primary)' }}>{key.name}</p>
-                                        <Badge variant={key.enabled ? 'default' : 'secondary'} className="text-xs">
-                                            {key.enabled ? 'Active' : 'Revoked'}
-                                        </Badge>
+            {keys.length === 0 ? (
+                <EmptyState icon={Key} title="No API keys yet. Create one to get started." />
+            ) : (
+                <Card>
+                    <ul className="divide-y divide-re-border-subtle">
+                        {keys.map((key) => (
+                            <li key={key.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+                                <Key className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="truncate text-ui font-medium text-re-text-primary">{key.name}</p>
+                                        {key.enabled
+                                            ? <StatusBadge state="compliant" label="Active" size="sm" />
+                                            : <StatusBadge state="blocked" label="Revoked" size="sm" />}
                                     </div>
-                                    <p className="text-xs font-mono" style={{ color: 'var(--re-text-disabled)' }}>
+                                    <p className="truncate font-mono text-[0.8125rem] text-re-text-muted">
                                         {key.key_prefix}••••••••
                                     </p>
                                 </div>
-                                <div className="text-right flex-shrink-0">
-                                    <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>{key.total_requests.toLocaleString()} requests</p>
-                                    <p className="text-xs" style={{ color: 'var(--re-text-disabled)' }}>
+                                <div className="shrink-0 text-right">
+                                    <p className="text-small tabular-nums text-re-text-secondary">{key.total_requests.toLocaleString()} requests</p>
+                                    <p className="text-small text-re-text-tertiary">
                                         {key.last_used_at ? `Last used ${new Date(key.last_used_at).toLocaleDateString()}` : 'Never used'}
                                     </p>
                                 </div>
                                 {key.enabled && (
                                     <Button
                                         variant="ghost"
-                                        size="sm"
+                                        size="icon"
                                         onClick={() => revokeKey(key.id)}
                                         disabled={revokingKeyId !== null}
                                         aria-label={`Revoke ${key.name}`}
-                                        className="text-re-danger hover:text-re-danger hover:bg-re-danger/10"
+                                        className="shrink-0 text-re-danger hover:text-re-danger"
                                     >
                                         {revokingKeyId === key.id
-                                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                                            : <Trash2 className="w-4 h-4" />}
+                                            ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden="true" />
+                                            : <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
                                     </Button>
                                 )}
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
-            </div>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            )}
         </div>
     );
 }

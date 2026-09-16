@@ -11,18 +11,19 @@ export const metadata: Metadata = {
     type: 'website',
   },
 };
-import { ArrowLeft, AlertCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
-import { T as _T } from '@/lib/design-tokens';
-
-const T = {
-  ..._T,
-  heading: 'var(--re-text-primary)',
-  text: 'var(--re-text-secondary)',
-  textMuted: 'var(--re-text-muted)',
-  textDim: 'var(--re-text-muted)',
-  surface: 'var(--re-surface-card)',
-  border: 'var(--re-surface-border)',
-};
+import { ArrowLeft } from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 
 const errorCodes = [
     // 4xx Client Errors
@@ -51,180 +52,15 @@ const apiErrors = [
     { code: 'rate_limit_exceeded', message: 'Too many requests in time window', fix: 'Implement exponential backoff, see Rate Limits docs' },
 ];
 
-export default function ErrorCodesPage() {
-    return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-            {/* Header */}
-            <div className="p-6" style={{ borderBottom: `1px solid ${T.border}` }}>
-                <div className="max-w-[900px] mx-auto">
-                    <Link
-                        href="/docs"
-                        className="inline-flex items-center gap-2 text-sm no-underline mb-4"
-                        style={{ color: T.accent }}
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Docs
-                    </Link>
-                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
-                        Error Codes
-                    </h1>
-                    <p className="text-re-text-muted text-base">
-                        HTTP status codes and API-specific error responses
-                    </p>
-                </div>
-            </div>
-
-            {/* Content */}
-            <div className="max-w-[900px] mx-auto py-12 px-6">
-
-                {/* HTTP Status Codes Section */}
-                <section className="mb-14">
-                    <h2 className="text-2xl font-semibold text-[var(--re-text-primary)] mb-6">
-                        HTTP Status Codes
-                    </h2>
-
-                    {/* Client Errors */}
-                    <div className="mb-8">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 flex items-center gap-2" style={{ color: T.textMuted }}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-[var(--re-warning)]" />
-                            4xx Client Errors
-                        </h3>
-
-                        <div className="rounded-lg overflow-x-auto" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold w-[100px]" style={{ color: T.textMuted }}>Code</th>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold w-[150px]" style={{ color: T.textMuted }}>Name</th>
-                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Description</th>
-                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">How to Fix</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {errorCodes.filter(e => e.category === 'client').map((error, i) => (
-                                        <tr key={error.code} style={{ borderBottom: i < errorCodes.filter(e => e.category === 'client').length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                            <td className="px-4 py-3">
-                                                <code className="bg-[rgba(234,179,8,0.2)] text-[var(--re-warning)] px-2 py-1 rounded text-[13px] font-semibold">{error.code}</code>
-                                            </td>
-                                            <td className="px-4 py-3 text-re-text-primary font-medium">{error.name}</td>
-                                            <td className="px-4 py-3 text-re-text-secondary text-sm">{error.description}</td>
-                                            <td className="px-4 py-3 text-re-text-muted text-sm">{error.fix}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* Server Errors */}
-                    <div>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 flex items-center gap-2" style={{ color: T.textMuted }}>
-                            <XCircle className="w-3.5 h-3.5 text-[var(--re-danger)]" />
-                            5xx Server Errors
-                        </h3>
-
-                        <div className="rounded-lg overflow-x-auto" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold w-[100px]" style={{ color: T.textMuted }}>Code</th>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold w-[150px]" style={{ color: T.textMuted }}>Name</th>
-                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Description</th>
-                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">How to Fix</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {errorCodes.filter(e => e.category === 'server').map((error, i) => (
-                                        <tr key={error.code} style={{ borderBottom: i < errorCodes.filter(e => e.category === 'server').length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                            <td className="px-4 py-3">
-                                                <code className="bg-[rgba(239,68,68,0.2)] text-[var(--re-danger)] px-2 py-1 rounded text-[13px] font-semibold">{error.code}</code>
-                                            </td>
-                                            <td className="px-4 py-3 text-re-text-primary font-medium">{error.name}</td>
-                                            <td className="px-4 py-3 text-re-text-secondary text-sm">{error.description}</td>
-                                            <td className="px-4 py-3 text-re-text-muted text-sm">{error.fix}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                {/* API Error Codes Section */}
-                <section className="mb-14">
-                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
-                        API Error Codes
-                    </h2>
-                    <p className="leading-relaxed mb-6" style={{ color: T.text }}>
-                        In addition to HTTP status codes, the response body includes a machine-readable error code:
-                    </p>
-
-                    {/* Example Response */}
-                    <div className="bg-black/60 rounded-lg overflow-hidden mb-6" style={{ border: `1px solid ${T.border}` }}>
-                        <div className="bg-[rgba(239,68,68,0.1)] px-4 py-2 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.border}` }}>
-                            <div className="w-2 h-2 rounded-full bg-[var(--re-danger)]" />
-                            <span className="text-xs text-[var(--re-danger)]">401 Unauthorized</span>
-                        </div>
-                        <pre className="p-4 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
-                            <code>{`{
+const ERROR_RESPONSE = `{
   "error": {
     "code": "invalid_api_key",
     "message": "The API key provided is not valid",
     "request_id": "req_a1b2c3d4e5f6"
   }
-}`}</code>
-                        </pre>
-                    </div>
+}`;
 
-                    {/* Error Code Table */}
-                    <div className="rounded-lg overflow-x-auto" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                                    <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Error Code</th>
-                                    <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Message</th>
-                                    <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">How to Fix</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {apiErrors.map((error, i) => (
-                                    <tr key={error.code} style={{ borderBottom: i < apiErrors.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                        <td className="px-4 py-3">
-                                            <code className="bg-white/10 text-[var(--re-text-primary)] px-2 py-1 rounded text-xs">{error.code}</code>
-                                        </td>
-                                        <td className="px-4 py-3 text-re-text-secondary text-sm">{error.message}</td>
-                                        <td className="px-4 py-3 text-re-text-muted text-sm">{error.fix}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                {/* Retry Strategy */}
-                <section className="mb-12">
-                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
-                        Retry Strategy
-                    </h2>
-
-                    <div className="bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)] rounded-lg p-5 mb-6">
-                        <div className="flex items-start gap-3">
-                            <Info className="w-5 h-5 shrink-0 mt-0.5" style={{ color: T.accent }} />
-                            <div>
-                                <p className="text-[var(--re-text-primary)] font-semibold mb-1">Best Practice</p>
-                                <p className="text-re-text-secondary text-sm m-0">
-                                    Use exponential backoff with jitter for 429 and 5xx errors. Start at 1 second, double each retry, cap at 32 seconds.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-black/40 rounded-lg overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-                        <div className="bg-white/5 px-4 py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
-                            <span className="text-xs text-re-text-muted">Python Example</span>
-                        </div>
-                        <pre className="px-5 py-4 m-0 text-[13px] leading-normal text-[var(--re-text-tertiary)] overflow-x-auto">
-                            <code>{`import time
+const RETRY_SNIPPET = `import time
 import random
 import requests
 
@@ -239,30 +75,163 @@ def make_request_with_retry(url, headers, max_retries=5):
         
         return response
     
-    raise Exception("Max retries exceeded")`}</code>
-                        </pre>
+    raise Exception("Max retries exceeded")`;
+
+function StatusTable({
+    rows,
+    tone,
+}: {
+    rows: typeof errorCodes;
+    tone: 'warning' | 'danger';
+}) {
+    return (
+        <Card className="overflow-hidden">
+            <Table className="min-w-[36rem]">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-[5rem]">Code</TableHead>
+                        <TableHead className="w-[9rem]">Name</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>How to Fix</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {rows.map((error) => (
+                        <TableRow key={error.code}>
+                            <TableCell>
+                                <Badge tone={tone} size="sm" mono>
+                                    {error.code}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="text-re-text-primary">{error.name}</TableCell>
+                            <TableCell>{error.description}</TableCell>
+                            <TableCell className="text-re-text-tertiary">{error.fix}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </Card>
+    );
+}
+
+export default function ErrorCodesPage() {
+    return (
+        <>
+            <PageHeader
+                breadcrumbs={
+                    <Link
+                        href="/docs"
+                        className="inline-flex items-center gap-2 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+                    >
+                        <ArrowLeft aria-hidden="true" strokeWidth={1.75} className="h-4 w-4" />
+                        Back to Docs
+                    </Link>
+                }
+                title="Error Codes"
+                description="HTTP status codes and API-specific error responses"
+            />
+
+            <div className="space-y-10">
+                {/* HTTP Status Codes Section */}
+                <section>
+                    <h2 className="mb-5 text-heading text-re-text-primary">HTTP Status Codes</h2>
+
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="mb-3 font-mono text-label uppercase text-re-text-muted">
+                                4xx Client Errors
+                            </h3>
+                            <StatusTable rows={errorCodes.filter((e) => e.category === 'client')} tone="warning" />
+                        </div>
+
+                        <div>
+                            <h3 className="mb-3 font-mono text-label uppercase text-re-text-muted">
+                                5xx Server Errors
+                            </h3>
+                            <StatusTable rows={errorCodes.filter((e) => e.category === 'server')} tone="danger" />
+                        </div>
                     </div>
                 </section>
 
+                {/* API Error Codes Section */}
+                <section>
+                    <h2 className="mb-3 text-heading text-re-text-primary">API Error Codes</h2>
+                    <p className="mb-5 text-body text-re-text-secondary">
+                        In addition to HTTP status codes, the response body includes a machine-readable error code:
+                    </p>
+
+                    {/* Example Response */}
+                    <Card variant="inset" className="mb-5 overflow-hidden">
+                        <div className="border-b border-re-border-subtle px-4 py-2">
+                            <Badge tone="danger" size="sm" mono>
+                                401 Unauthorized
+                            </Badge>
+                        </div>
+                        <pre className="m-0 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 text-re-text-primary">
+                            <code>{ERROR_RESPONSE}</code>
+                        </pre>
+                    </Card>
+
+                    {/* Error Code Table */}
+                    <Card className="overflow-hidden">
+                        <Table className="min-w-[36rem]">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[12rem]">Error Code</TableHead>
+                                    <TableHead>Message</TableHead>
+                                    <TableHead>How to Fix</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {apiErrors.map((error) => (
+                                    <TableRow key={error.code}>
+                                        <TableCell className="font-mono text-[0.8125rem]">{error.code}</TableCell>
+                                        <TableCell>{error.message}</TableCell>
+                                        <TableCell className="text-re-text-tertiary">{error.fix}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </section>
+
+                {/* Retry Strategy */}
+                <section>
+                    <h2 className="mb-3 text-heading text-re-text-primary">Retry Strategy</h2>
+
+                    <Callout tone="info" title="Best Practice" className="mb-5">
+                        <p className="text-ui text-re-text-secondary">
+                            Use exponential backoff with jitter for 429 and 5xx errors. Start at 1 second, double each retry, cap at 32 seconds.
+                        </p>
+                    </Callout>
+
+                    <Card variant="inset" className="overflow-hidden">
+                        <div className="border-b border-re-border-subtle px-4 py-2">
+                            <span className="font-mono text-label uppercase text-re-text-muted">Python Example</span>
+                        </div>
+                        <pre className="m-0 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 text-re-text-primary">
+                            <code>{RETRY_SNIPPET}</code>
+                        </pre>
+                    </Card>
+                </section>
+
                 {/* Navigation */}
-                <div className="rounded-lg p-6 flex justify-between items-center" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+                <nav className="flex items-center justify-between gap-4 border-t border-re-border-subtle pt-6">
                     <Link
                         href="/docs/rate-limits"
-                        className="text-sm no-underline flex items-center gap-2"
-                        style={{ color: T.accent }}
+                        className="inline-flex items-center gap-2 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft aria-hidden="true" strokeWidth={1.75} className="h-4 w-4" />
                         Rate Limits
                     </Link>
                     <Link
                         href="/docs/api"
-                        className="text-sm no-underline"
-                        style={{ color: T.accent }}
+                        className="text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                     >
                         API Reference →
                     </Link>
-                </div>
+                </nav>
             </div>
-        </div>
+        </>
     );
 }

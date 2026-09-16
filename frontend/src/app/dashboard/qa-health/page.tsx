@@ -2,35 +2,30 @@
 
 import { useMemo } from "react";
 import {
-  Activity,
   AlertTriangle,
   CheckCircle2,
-  ClipboardList,
-  FileJson,
   RefreshCw,
-  ShieldAlert,
   WifiOff,
   XCircle,
 } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/page-container";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { StatTile } from "@/components/ui/stat-tile";
+import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQAHealth } from "@/hooks/use-api";
 import { useAuth } from "@/lib/auth-context";
 import type {
+  QAHealthArtifactRef,
   QADecisionStatus,
+  QAHealthCluster,
   QAHealthResponse,
   QAHealthStatus,
   QAHealthSuite,
@@ -45,85 +40,73 @@ const SUMMARY_SUITE_ORDER = [
   "frontend-install",
 ];
 
-function overallConfig(status: QAHealthStatus) {
+/* ── State vocabulary ──
+   Every status below ships as a StatusBadge / Callout (icon + label), never as
+   a bare colour: the compliance-state vocabulary is the only place these hues
+   are allowed to appear (SPEC §1.6). */
+
+function overallConfig(status: QAHealthStatus): { label: string; state: ComplianceState } {
   switch (status) {
     case "passing":
-      return {
-        label: "Release gate passing",
-        badge: "bg-re-success-muted text-re-success border-re-success/40",
-        icon: CheckCircle2,
-      };
+      return { label: "Release gate passing", state: "compliant" };
     case "degraded":
-      return {
-        label: "Advisory issues",
-        badge: "bg-re-warning-muted text-re-warning border-re-warning/40",
-        icon: AlertTriangle,
-      };
+      return { label: "Advisory issues", state: "at-risk" };
     case "unavailable":
-      return {
-        label: "QA signal unavailable",
-        badge: "bg-re-surface-elevated text-muted-foreground border-[var(--re-surface-border)]",
-        icon: WifiOff,
-      };
+      return { label: "QA signal unavailable", state: "unknown" };
     case "invalid_artifact":
-      return {
-        label: "QA artifact invalid",
-        badge: "bg-re-danger-muted text-re-danger border-re-danger/40",
-        icon: ShieldAlert,
-      };
+      return { label: "QA artifact invalid", state: "non-compliant" };
     case "failing":
     default:
-      return {
-        label: "Release gate failing",
-        badge: "bg-re-danger-muted text-re-danger border-re-danger/40",
-        icon: ShieldAlert,
-      };
+      return { label: "Release gate failing", state: "non-compliant" };
   }
 }
 
-function suiteTone(status: QASuiteStatus) {
+function suiteState(status: QASuiteStatus): ComplianceState {
   switch (status) {
     case "passed":
-      return "text-re-success";
+      return "compliant";
     case "degraded":
     case "skipped":
-      return "text-re-warning";
+      return "at-risk";
     case "unavailable":
-      return "text-muted-foreground";
+      return "unknown";
     case "failed":
     default:
-      return "text-re-danger";
+      return "non-compliant";
   }
 }
 
-function severityBadge(severity: QASeverity) {
+function severityTone(severity: QASeverity): BadgeTone {
   switch (severity) {
     case "critical":
-      return "bg-re-danger-muted text-re-danger border-re-danger/40";
+      return "danger";
     case "high":
-      return "bg-orange-500/10 text-orange-400 border-orange-500/40";
     case "medium":
-      return "bg-re-warning-muted text-re-warning border-re-warning/40";
+      return "warning";
     case "low":
-      return "bg-re-info-muted text-re-info border-re-info/40";
+      return "info";
     case "info":
     default:
-      return "bg-re-surface-elevated text-muted-foreground border-[var(--re-surface-border)]";
+      return "neutral";
   }
 }
 
+const DECISION_ICON = {
+  passed: CheckCircle2,
+  unavailable: WifiOff,
+  advisory: AlertTriangle,
+  blocking: XCircle,
+} as const;
+
 function decisionIcon(status: QADecisionStatus) {
-  if (status === "passed") return CheckCircle2;
-  if (status === "unavailable") return WifiOff;
-  if (status === "advisory") return AlertTriangle;
-  return XCircle;
+  return DECISION_ICON[status as keyof typeof DECISION_ICON] ?? XCircle;
 }
 
 function decisionTone(status: QADecisionStatus) {
-  if (status === "passed") return "text-re-success";
-  if (status === "unavailable") return "text-muted-foreground";
-  if (status === "advisory") return "text-re-warning";
-  return "text-re-danger";
+  if (status === "passed") return "success" as const;
+  if (status === "unavailable") return "neutral" as const;
+  if (status === "advisory") return "warning" as const;
+  return "danger" as const;
 }
 
 function formatDate(value: string) {
@@ -154,28 +137,26 @@ function suiteById(data: QAHealthResponse, id: string): QAHealthSuite | undefine
 
 function QAPageSkeleton() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)]" aria-busy="true">
-      <PageContainer>
-        <div className="space-y-6 animate-pulse">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-36" />
-              <Skeleton className="h-4 w-72" />
-            </div>
-            <Skeleton className="h-10 w-32" />
+    <PageContainer>
+      <div aria-busy="true" className="space-y-6">
+        <div className="flex items-center justify-between gap-4 border-b border-re-border-subtle pb-5">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-36" />
+            <Skeleton className="h-4 w-72" />
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {[1, 2, 3, 4].map((item) => (
-              <Skeleton key={item} className="h-[132px] w-full" />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <Skeleton className="h-[360px] w-full" />
-            <Skeleton className="h-[360px] w-full" />
-          </div>
+          <Skeleton className="h-9 w-32" />
         </div>
-      </PageContainer>
-    </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((item) => (
+            <Skeleton key={item} className="h-[132px] w-full" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <Skeleton className="h-[360px] w-full" />
+          <Skeleton className="h-[360px] w-full" />
+        </div>
+      </div>
+    </PageContainer>
   );
 }
 
@@ -193,25 +174,91 @@ export default function QAHealthPage() {
     return [...ordered, ...remaining].slice(0, 4);
   }, [data]);
 
+  const clusterColumns: DataTableColumn<QAHealthCluster>[] = [
+    {
+      key: "title",
+      header: "Cluster",
+      width: "26%",
+      cell: (cluster) => (
+        <div className="space-y-1.5">
+          <p className="break-words font-medium text-re-text-primary">{cluster.title}</p>
+          <Badge tone={severityTone(cluster.severity)} size="sm" className="capitalize">
+            {cluster.severity}
+          </Badge>
+        </div>
+      ),
+    },
+    { key: "impact", header: "Impact", width: "23%" },
+    {
+      key: "affected_suites",
+      header: "Suites",
+      width: "13%",
+      cell: (cluster) => cluster.affected_suites.join(", "),
+    },
+    {
+      key: "owner_lane",
+      header: "Owner",
+      width: "14%",
+      cell: (cluster) => formatOwnerLane(cluster.owner_lane),
+    },
+    { key: "next_action", header: "Next action", width: "24%" },
+  ];
+
+  const suiteColumns: DataTableColumn<QAHealthSuite>[] = [
+    { key: "label", header: "Suite", width: "12rem" },
+    {
+      key: "command",
+      header: "Command",
+      width: "17rem",
+      mono: true,
+      cell: (suite) => (
+        <span className="block max-w-[17rem] truncate" title={suite.command}>
+          {suite.command}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "10rem",
+      cell: (suite) => (
+        <StatusBadge state={suiteState(suite.status)} label={suite.status} className="capitalize" />
+      ),
+    },
+    { key: "passed", header: "Passed", align: "right", cell: (s) => s.passed.toLocaleString() },
+    { key: "failed", header: "Failed", align: "right", cell: (s) => s.failed.toLocaleString() },
+    { key: "skipped", header: "Skipped", align: "right", cell: (s) => s.skipped.toLocaleString() },
+    { key: "errors", header: "Errors", align: "right", cell: (s) => s.errors.toLocaleString() },
+    {
+      key: "duration_seconds",
+      header: "Duration",
+      align: "right",
+      mono: true,
+      cell: (s) => formatDuration(s.duration_seconds),
+    },
+  ];
+
+  const artifactColumns: DataTableColumn<QAHealthArtifactRef>[] = [
+    { key: "label", header: "Artifact", width: "16rem" },
+    {
+      key: "type",
+      header: "Type",
+      width: "8rem",
+      cell: (artifact) => <span className="uppercase">{artifact.type}</span>,
+    },
+    { key: "path", header: "Path", mono: true },
+  ];
+
   if (!isHydrated) return <QAPageSkeleton />;
 
   if (!isSysadmin) {
     return (
-      <div className="min-h-screen bg-[var(--re-surface-base)]">
-        <PageContainer>
-          <Card>
-            <CardContent className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
-              <ShieldAlert className="h-8 w-8 text-re-warning" />
-              <div>
-                <h1 className="text-xl font-semibold">Sysadmin access required</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  QA Health contains internal release and test-run details.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </PageContainer>
-      </div>
+      <PageContainer>
+        <PageHeader
+          title="Sysadmin access required"
+          description="QA Health contains internal release and test-run details."
+        />
+      </PageContainer>
     );
   }
 
@@ -219,312 +266,192 @@ export default function QAHealthPage() {
 
   if (error && !data) {
     return (
-      <div className="min-h-screen bg-[var(--re-surface-base)]">
-        <PageContainer>
-          <Card>
-            <CardContent className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
-              <WifiOff className="h-8 w-8 text-re-danger" />
-              <div>
-                <h1 className="text-xl font-semibold">QA health request failed</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  The sysadmin QA endpoint did not return a dashboard summary.
-                </p>
-              </div>
-              <Button onClick={() => refetch()} variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        </PageContainer>
-      </div>
+      <PageContainer>
+        <PageHeader title="QA health request failed" />
+        <Callout
+          tone="danger"
+          role="alert"
+          action={
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />}
+            >
+              Retry
+            </Button>
+          }
+        >
+          The sysadmin QA endpoint did not return a dashboard summary.
+        </Callout>
+      </PageContainer>
     );
   }
 
   if (!data) return <QAPageSkeleton />;
 
   const config = overallConfig(data.overall.status);
-  const OverallIcon = config.icon;
 
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)]">
-      <PageContainer>
-        <div className="space-y-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-bold sm:text-3xl">QA Health</h1>
-                <Badge variant="outline" className={config.badge}>
-                  <OverallIcon className="mr-1 h-3.5 w-3.5" />
-                  {config.label}
-                </Badge>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Latest CI artifact: {formatDate(data.generated_at)}
-                {data.source.workflow ? ` - ${data.source.workflow}` : ""}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              className="min-h-[40px] w-full sm:w-auto"
-              onClick={() => refetch()}
-              disabled={isRefetching}
+    <PageContainer>
+      <PageHeader
+        title="QA Health"
+        description={`Latest CI artifact: ${formatDate(data.generated_at)}${data.source.workflow ? ` - ${data.source.workflow}` : ""}`}
+        meta={<StatusBadge state={config.state} label={config.label} />}
+        secondaryActions={
+          <Button
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            leadingIcon={
+              <RefreshCw
+                className={isRefetching ? "animate-spin motion-reduce:animate-none" : undefined}
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+            }
+          >
+            Refresh
+          </Button>
+        }
+      />
+
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {summarySuites.map((suite) => (
+            <StatTile
+              key={suite.id}
+              label={suite.label}
+              value={`${suite.passed.toLocaleString()} pass`}
+              status={<StatusBadge state={suiteState(suite.status)} label={suite.status} size="sm" className="capitalize" />}
             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {summarySuites.map((suite) => (
-              <Card key={suite.id}>
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">{suite.label}</p>
-                    <Badge variant="outline" className={`capitalize ${suiteTone(suite.status)}`}>
-                      {suite.status}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className={`text-2xl font-bold tabular-nums ${suiteTone(suite.status)}`}>
-                      {suite.passed.toLocaleString()} pass
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {suite.failed.toLocaleString()} fail / {suite.errors.toLocaleString()} errors
-                    </p>
-                  </div>
-                  <p className="truncate font-mono text-[11px] text-muted-foreground" title={suite.command}>
-                    {suite.command}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ClipboardList className="h-4 w-4 text-re-brand" />
-                  Failure clusters
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.clusters.length === 0 ? (
-                  <div className="flex min-h-[180px] items-center justify-center border border-[var(--re-surface-border)] text-sm text-muted-foreground">
-                    No failure clusters in the latest QA artifact.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table className="table-fixed">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[26%]">Cluster</TableHead>
-                        <TableHead className="w-[23%]">Impact</TableHead>
-                        <TableHead className="w-[13%]">Suites</TableHead>
-                        <TableHead className="w-[14%]">Owner</TableHead>
-                        <TableHead className="w-[24%]">Next action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.clusters.map((cluster) => (
-                        <TableRow key={cluster.title}>
-                          <TableCell className="align-top">
-                            <div className="space-y-1">
-                              <p className="break-words font-semibold">{cluster.title}</p>
-                              <Badge variant="outline" className={`capitalize ${severityBadge(cluster.severity)}`}>
-                                {cluster.severity}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="break-words align-top text-sm text-muted-foreground">
-                            {cluster.impact}
-                          </TableCell>
-                          <TableCell className="break-words align-top text-xs text-muted-foreground">
-                            {cluster.affected_suites.join(", ")}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap align-top text-sm">
-                            {formatOwnerLane(cluster.owner_lane)}
-                          </TableCell>
-                          <TableCell className="break-words align-top text-sm">{cluster.next_action}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Activity className="h-4 w-4 text-re-brand" />
-                  Release decision
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-3xl font-bold tabular-nums">
-                        {data.overall.ready_percent}%
-                      </p>
-                      <p className="text-xs text-muted-foreground">Ready to ship</p>
-                    </div>
-                    <div className="text-right text-xs text-muted-foreground">
-                      <p>{data.overall.blocking_count} blocking</p>
-                      <p>{data.overall.advisory_count} advisory</p>
-                    </div>
-                  </div>
-                  <div
-                    className="h-2 overflow-hidden rounded-sm bg-[var(--re-surface-elevated)]"
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={data.overall.ready_percent}
-                    aria-label="QA release readiness"
-                  >
-                    <div
-                      className="h-full bg-[var(--re-brand)] transition-all"
-                      style={{ width: `${data.overall.ready_percent}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {data.decision_checks.map((check) => {
-                    const Icon = decisionIcon(check.status);
-                    return (
-                      <div
-                        key={`${check.status}-${check.label}`}
-                        className="flex min-h-[48px] items-start gap-3 border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-3"
-                      >
-                        <Icon className={`mt-0.5 h-4 w-4 flex-shrink-0 ${decisionTone(check.status)}`} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">{check.label}</p>
-                          {check.detail && (
-                            <p className="mt-0.5 text-xs text-muted-foreground">{check.detail}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Tabs defaultValue="suites" className="space-y-3">
-            <TabsList className="h-10 rounded-md">
-              <TabsTrigger value="suites">Suites</TabsTrigger>
-              <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-              <TabsTrigger value="trends">Trends</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="suites">
-              <Card>
-                <CardContent className="overflow-x-auto p-0">
-                  <Table className="min-w-[760px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Suite</TableHead>
-                        <TableHead>Command</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Passed</TableHead>
-                        <TableHead>Failed</TableHead>
-                        <TableHead>Skipped</TableHead>
-                        <TableHead>Errors</TableHead>
-                        <TableHead>Duration</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.suites.map((suite) => (
-                        <TableRow key={suite.id}>
-                          <TableCell className="font-medium">{suite.label}</TableCell>
-                          <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground">
-                            {suite.command}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={`capitalize ${suiteTone(suite.status)}`}>
-                              {suite.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="tabular-nums">{suite.passed.toLocaleString()}</TableCell>
-                          <TableCell className="tabular-nums">{suite.failed.toLocaleString()}</TableCell>
-                          <TableCell className="tabular-nums">{suite.skipped.toLocaleString()}</TableCell>
-                          <TableCell className="tabular-nums">{suite.errors.toLocaleString()}</TableCell>
-                          <TableCell className="tabular-nums">{formatDuration(suite.duration_seconds)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="artifacts">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileJson className="h-4 w-4 text-re-brand" />
-                    Artifact references
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {data.artifact_refs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No artifact references were included.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table className="min-w-[640px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Artifact</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Path</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.artifact_refs.map((artifact) => (
-                          <TableRow key={artifact.id}>
-                            <TableCell className="font-medium">{artifact.label}</TableCell>
-                            <TableCell className="uppercase text-xs text-muted-foreground">
-                              {artifact.type}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {artifact.path}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="trends">
-              <Card>
-                <CardContent className="grid gap-4 p-4 md:grid-cols-3">
-                  <div>
-                    <p className="text-2xl font-bold tabular-nums">{data.overall.ready_percent}%</p>
-                    <p className="text-xs text-muted-foreground">Current readiness</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold tabular-nums">{data.suites.length}</p>
-                    <p className="text-xs text-muted-foreground">Suites reported</p>
-                  </div>
-                  <div>
-                    <p className="truncate text-2xl font-bold">{data.source.branch || "-"}</p>
-                    <p className="text-xs text-muted-foreground">Source branch</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+              <p className="text-small text-re-text-tertiary">
+                {suite.failed.toLocaleString()} fail / {suite.errors.toLocaleString()} errors
+              </p>
+              <p className="truncate font-mono text-label text-re-text-muted" title={suite.command}>
+                {suite.command}
+              </p>
+            </StatTile>
+          ))}
         </div>
-      </PageContainer>
-    </div>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Failure clusters</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <DataTable
+                caption="Failure clusters in the latest QA artifact, with owner and next action"
+                columns={clusterColumns}
+                data={data.clusters}
+                rowKey={(cluster) => cluster.title}
+                empty={{ title: "No failure clusters in the latest QA artifact." }}
+                minWidth="720px"
+                stickyFirstColumn
+                className="rounded-none border-0"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Release decision</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-title tabular-nums text-re-text-primary">
+                      {data.overall.ready_percent}%
+                    </p>
+                    <p className="text-small text-re-text-tertiary">Ready to ship</p>
+                  </div>
+                  <div className="text-right text-small text-re-text-tertiary">
+                    <p>{data.overall.blocking_count} blocking</p>
+                    <p>{data.overall.advisory_count} advisory</p>
+                  </div>
+                </div>
+                <div
+                  className="h-2 overflow-hidden rounded-sm bg-re-surface-inset"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={data.overall.ready_percent}
+                  aria-label="QA release readiness"
+                >
+                  <div
+                    className="h-full bg-re-brand transition-all duration-180 motion-reduce:transition-none"
+                    style={{ width: `${data.overall.ready_percent}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {data.decision_checks.map((check) => (
+                  <Callout
+                    key={`${check.status}-${check.label}`}
+                    tone={decisionTone(check.status)}
+                    icon={decisionIcon(check.status)}
+                    title={check.label}
+                  >
+                    {check.detail && (
+                      <p className="text-small text-re-text-tertiary">{check.detail}</p>
+                    )}
+                  </Callout>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="suites">
+          <TabsList>
+            <TabsTrigger value="suites">Suites</TabsTrigger>
+            <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
+            <TabsTrigger value="trends">Trends</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="suites">
+            <DataTable
+              caption="Every QA suite in the latest artifact with its counts and duration"
+              columns={suiteColumns}
+              data={data.suites}
+              rowKey={(suite) => suite.id}
+              empty={{ title: "No suites were reported." }}
+              minWidth="880px"
+              stickyFirstColumn
+            />
+          </TabsContent>
+
+          <TabsContent value="artifacts">
+            <Card>
+              <CardHeader>
+                <CardTitle>Artifact references</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <DataTable
+                  caption="Artifact references included with the latest QA run"
+                  columns={artifactColumns}
+                  data={data.artifact_refs}
+                  rowKey={(artifact) => artifact.id}
+                  empty={{ title: "No artifact references were included." }}
+                  minWidth="640px"
+                  stickyFirstColumn
+                  className="rounded-none border-0"
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="trends">
+            <div className="grid gap-4 md:grid-cols-3">
+              <StatTile label="Current readiness" value={`${data.overall.ready_percent}%`} />
+              <StatTile label="Suites reported" value={data.suites.length} />
+              <StatTile label="Source branch" value={data.source.branch || "-"} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </PageContainer>
   );
 }

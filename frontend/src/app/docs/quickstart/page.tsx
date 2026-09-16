@@ -11,113 +11,88 @@ export const metadata: Metadata = {
     type: 'website',
   },
 };
-import { ArrowLeft, Zap, Terminal, CheckCircle, Key, FileText, Code, ArrowRight } from 'lucide-react';
-import { T as _T } from '@/lib/design-tokens';
-
-const T = {
-  ..._T,
-  heading: 'var(--re-text-primary)',
-  text: 'var(--re-text-secondary)',
-  textMuted: 'var(--re-text-muted)',
-  textDim: 'var(--re-text-muted)',
-  surface: 'var(--re-surface-card)',
-  border: 'var(--re-surface-border)',
-};
+import { ArrowLeft, Key, FileText, Code, ArrowRight } from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { CodeBlock } from '@/components/ui/code-block';
+
+/** Inline identifier — SPEC §2.3: every identifier is mono at 0.8125rem, on the inset well. */
+const CODE =
+    'rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary';
+
+const NEXT_STEPS = [
+    { title: 'FSMA 204 Guide', desc: 'Learn about CTEs, KDEs, and FDA Request Mode', href: '/docs/fsma-204', icon: FileText },
+    { title: 'API Reference', desc: 'Explore all available endpoints', href: '/docs/api', icon: Code },
+    { title: 'Authentication', desc: 'Learn about API key management', href: '/docs/authentication', icon: Key },
+];
+
+/** A numbered step. The ordinal is a mono numeral, not a brand-filled disc (SPEC §1.6). */
+function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+    return (
+        <section className="border-t border-re-border-subtle pt-6">
+            <div className="flex items-baseline gap-3">
+                <span aria-hidden="true" className="font-mono text-label text-re-text-muted">
+                    {n}
+                </span>
+                <h2 className="text-heading text-re-text-primary">{title}</h2>
+            </div>
+            <div className="mt-3 space-y-4">{children}</div>
+        </section>
+    );
+}
 
 export default function QuickstartPage() {
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-            {/* Header */}
-            <div className="p-6" style={{ borderBottom: `1px solid ${T.border}` }}>
-                <div className="max-w-[800px] mx-auto">
+        <>
+            <PageHeader
+                breadcrumbs={
                     <Link
                         href="/docs"
-                        className="inline-flex items-center gap-2 text-sm no-underline mb-4"
-                        style={{ color: T.accent }}
+                        className="inline-flex items-center gap-2 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft aria-hidden="true" strokeWidth={1.75} className="h-4 w-4" />
                         Back to Docs
                     </Link>
+                }
+                eyebrow="5 min setup"
+                title="Quickstart"
+                description="Create your first traceability event with a chained SHA-256 hash in under 5 minutes"
+            />
 
-                    <div className="flex items-center gap-3 mb-3">
-                        <Zap className="w-7 h-7 text-re-brand" />
-                        <span className="bg-[rgba(16,185,129,0.2)] text-[11px] font-semibold px-2.5 py-1 rounded" style={{ color: T.accent }}>
-                            5 min setup
-                        </span>
-                    </div>
-
-                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
-                        Quickstart
-                    </h1>
-                    <p className="text-re-text-muted text-base">
-                        Create your first traceability event with a chained SHA-256 hash in under 5 minutes
+            <div className="space-y-8">
+                <Step n="1" title="Get your API key">
+                    <p className="text-body text-re-text-secondary">
+                        Sign up for a RegEngine account and generate an API key from your dashboard.
                     </p>
-                </div>
-            </div>
+                    <Button asChild variant="primary" size="lg">
+                        <Link href="/api-keys" className="no-underline">
+                            <Key aria-hidden="true" strokeWidth={1.75} />
+                            Get API Key
+                        </Link>
+                    </Button>
+                </Step>
 
-            {/* Content */}
-            <div className="max-w-[800px] mx-auto px-6 py-12">
-
-                {/* Step 1: Get API Key */}
-                <section className="mb-12">
-                    <div className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>1</div>
-                        <div className="flex-1">
-                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
-                                Get your API key
-                            </h2>
-                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                                Sign up for a RegEngine account and generate an API key from your dashboard.
-                            </p>
-                            <Link
-                                href="/api-keys"
-                                className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-md font-semibold text-sm no-underline"
-                                style={{ background: T.accent }}
-                            >
-                                <Key className="w-4 h-4" />
-                                Get API Key
-                            </Link>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Step 2: Set Environment */}
-                <section className="mb-12">
-                    <div className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>2</div>
-                        <div className="flex-1">
-                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
-                                Set your environment variable
-                            </h2>
-                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                                Store your API key securely. Never commit it to version control.
-                            </p>
-                            <CodeBlock
-                                code={`export REGENGINE_API_KEY="rge_your_key_here"
+                <Step n="2" title="Set your environment variable">
+                    <p className="text-body text-re-text-secondary">
+                        Store your API key securely. Never commit it to version control.
+                    </p>
+                    <CodeBlock
+                        code={`export REGENGINE_API_KEY="rge_your_key_here"
 export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
-                                language="bash"
-                            />
-                        </div>
-                    </div>
-                </section>
+                        language="bash"
+                    />
+                </Step>
 
-                {/* Step 3: Create Record */}
-                <section className="mb-12">
-                    <div className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>3</div>
-                        <div className="flex-1">
-                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
-                                Create your first compliance record
-                            </h2>
-                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                                Use the <code className="bg-black/30 px-1.5 py-0.5 rounded">/api/v1/webhooks/ingest</code> endpoint
-                                to create a compliant traceability event:
-                            </p>
+                <Step n="3" title="Create your first compliance record">
+                    <p className="text-body text-re-text-secondary">
+                        Use the <code className={CODE}>/api/v1/webhooks/ingest</code> endpoint
+                        to create a compliant traceability event:
+                    </p>
 
-                            <div className="mb-4">
-                                <CodeBlock
-                                    code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
+                    <div className="space-y-3">
+                        <CodeBlock
+                            code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
   -H "Idempotency-Key: $(uuidgen)" \\
@@ -143,21 +118,21 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
       }
     ]
   }'`}
-                                    language="curl"
-                                />
-                                <p className="text-[var(--re-text-secondary)] leading-[1.7] mt-3 text-sm">
-                                    <strong>Heads up:</strong> the <code className="bg-black/30 px-1.5 py-0.5 rounded">Idempotency-Key</code> header
-                                    is required on webhook ingest — successful (2xx) responses are cached for 24 hours per tenant
-                                    and replayed on retry. On other POST endpoints it is optional (max length 255). Generate a
-                                    fresh UUID per logical request. RECEIVING events require <code className="bg-black/30 px-1.5 py-0.5 rounded">immediate_previous_source</code>,{' '}
-                                    <code className="bg-black/30 px-1.5 py-0.5 rounded">reference_document</code>, and{' '}
-                                    <code className="bg-black/30 px-1.5 py-0.5 rounded">tlc_source_reference</code> per 21 CFR §1.1345(c).
-                                </p>
-                            </div>
+                            language="curl"
+                        />
+                        <p className="text-ui text-re-text-secondary">
+                            <strong className="font-medium text-re-text-primary">Heads up:</strong> the <code className={CODE}>Idempotency-Key</code> header
+                            is required on webhook ingest — successful (2xx) responses are cached for 24 hours per tenant
+                            and replayed on retry. On other POST endpoints it is optional (max length 255). Generate a
+                            fresh UUID per logical request. RECEIVING events require <code className={CODE}>immediate_previous_source</code>,{' '}
+                            <code className={CODE}>reference_document</code>, and{' '}
+                            <code className={CODE}>tlc_source_reference</code> per 21 CFR §1.1345(c).
+                        </p>
+                    </div>
 
-                            {/* Response */}
-                            <CodeBlock
-                                code={`{
+                    {/* Response */}
+                    <CodeBlock
+                        code={`{
   "accepted": 1,
   "rejected": 0,
   "total": 1,
@@ -172,102 +147,83 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
     }
   ]
 }`}
-                                language="json"
-                            />
+                        language="json"
+                    />
 
-                            <div className="mt-4">
-                                <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-3 text-sm">
-                                    When present on a 200 response, RegEngine exposes <code className="bg-black/30 px-1.5 py-0.5 rounded">X-RateLimit-Remaining</code> so
-                                    clients can back off before hitting a 429. Always guard for absence — coverage is rolling out per route. See{' '}
-                                    <Link href="/docs/rate-limits" className="underline" style={{ color: T.accent }}>Rate Limits</Link>{' '}
-                                    for the full header set.
-                                </p>
-                                <CodeBlock
-                                    code={`const resp = await fetch("https://regengine.co/api/v1/webhooks/ingest", requestOptions);
+                    <div className="space-y-3">
+                        <p className="text-ui text-re-text-secondary">
+                            When present on a 200 response, RegEngine exposes <code className={CODE}>X-RateLimit-Remaining</code> so
+                            clients can back off before hitting a 429. Always guard for absence — coverage is rolling out per route. See{' '}
+                            <Link
+                                href="/docs/rate-limits"
+                                className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                            >
+                                Rate Limits
+                            </Link>{' '}
+                            for the full header set.
+                        </p>
+                        <CodeBlock
+                            code={`const resp = await fetch("https://regengine.co/api/v1/webhooks/ingest", requestOptions);
 // When present on a 200 response, RegEngine exposes X-RateLimit-Remaining.
 // Always treat the header as optional; not every route emits it yet.
 const remaining = resp.headers.get("X-RateLimit-Remaining");
 console.log(\`Requests left in this window: \${remaining ?? "unknown"}\`);`}
-                                    language="javascript"
-                                />
-                            </div>
-                        </div>
+                            language="javascript"
+                        />
                     </div>
-                </section>
+                </Step>
 
-                {/* Step 4: Verify */}
-                <section className="mb-12">
-                    <div className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>4</div>
-                        <div className="flex-1">
-                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
-                                Verify your record
-                            </h2>
-                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                                Every ingested event is cryptographically hashed. Verify integrity independently from an export file:
-                            </p>
-
-                            <CodeBlock
-                                code={`python verify_chain.py --file export_2026_02.json --offline
+                <Step n="4" title="Verify your record">
+                    <p className="text-body text-re-text-secondary">
+                        Every ingested event is cryptographically hashed. Verify integrity independently from an export file:
+                    </p>
+                    <CodeBlock
+                        code={`python verify_chain.py --file export_2026_02.json --offline
 
 # Output:
 # ✓ Chain re-hashed; no mismatches detected
 # ✓ 1847 records re-hashed against export
 # Note: integrity check is offline and advisory; tampering before ingest is out of scope.`}
-                                language="bash"
-                            />
-                        </div>
-                    </div>
-                </section>
+                        language="bash"
+                    />
+                </Step>
 
-                {/* Success Box */}
-                <div style={{
-                    background: 'rgba(16,185,129,0.1)',
-                    border: `1px solid rgba(16,185,129,0.3)`,
-                    borderRadius: '8px',
-                    padding: '24px',
-                    marginBottom: '48px',
-                }}>
-                    <div className="flex items-start gap-4">
-                        <CheckCircle style={{ width: 24, height: 24, color: T.accent, flexShrink: 0 }} />
-                        <div>
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
-                                You&apos;re all set!
-                            </h3>
-                            <p className="text-re-text-secondary text-sm m-0">
-                                You&apos;ve created your first traceability event with a chained SHA-256 hash. The record is now
-                                part of an append-only chain you can re-hash offline against your export to confirm nothing changed in transit.
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                {/* Success */}
+                <Callout tone="success">
+                    <h3 className="text-subheading text-re-text-primary">You&apos;re all set!</h3>
+                    <p className="mt-1 text-ui text-re-text-secondary">
+                        You&apos;ve created your first traceability event with a chained SHA-256 hash. The record is now
+                        part of an append-only chain you can re-hash offline against your export to confirm nothing changed in transit.
+                    </p>
+                </Callout>
 
                 {/* Next Steps */}
-                <section>
-                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
-                        Next Steps
-                    </h2>
+                <section className="border-t border-re-border-subtle pt-6">
+                    <h2 className="text-heading text-re-text-primary">Next Steps</h2>
 
-                    <div className="grid gap-3">
-                        {[
-                            { title: 'FSMA 204 Guide', desc: 'Learn about CTEs, KDEs, and FDA Request Mode', href: '/docs/fsma-204', icon: FileText },
-                            { title: 'API Reference', desc: 'Explore all available endpoints', href: '/docs/api', icon: Code },
-                            { title: 'Authentication', desc: 'Learn about API key management', href: '/docs/authentication', icon: Key },
-                        ].map((item) => (
-                            <Link key={item.href} href={item.href} className="no-underline">
-                                <div className="px-5 py-4 rounded-lg flex items-center gap-4" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-                                    <item.icon className="w-5 h-5 text-re-brand" />
-                                    <div className="flex-1">
-                                        <div className="font-semibold text-[var(--re-text-primary)] mb-0.5">{item.title}</div>
-                                        <div className="text-[13px] text-re-text-muted">{item.desc}</div>
-                                    </div>
-                                    <ArrowRight className="w-4 h-4 text-re-text-muted" />
-                                </div>
-                            </Link>
+                    <ul className="mt-3 list-none border-t border-re-border-subtle p-0">
+                        {NEXT_STEPS.map((item) => (
+                            <li key={item.href}>
+                                <Link
+                                    href={item.href}
+                                    className="group flex items-center gap-4 border-b border-re-border-subtle px-1 py-4 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+                                >
+                                    <item.icon aria-hidden="true" strokeWidth={1.75} className="h-4 w-4 shrink-0 text-re-text-muted" />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block text-ui font-medium text-re-text-primary">{item.title}</span>
+                                        <span className="block text-small text-re-text-tertiary">{item.desc}</span>
+                                    </span>
+                                    <ArrowRight
+                                        aria-hidden="true"
+                                        strokeWidth={1.75}
+                                        className="h-4 w-4 shrink-0 text-re-text-muted transition-colors duration-120 group-hover:text-re-text-primary motion-reduce:transition-none"
+                                    />
+                                </Link>
+                            </li>
                         ))}
-                    </div>
+                    </ul>
                 </section>
             </div>
-        </div>
+        </>
     );
 }

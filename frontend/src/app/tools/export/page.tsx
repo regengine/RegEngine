@@ -2,12 +2,77 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Shield, FileCheck, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FileText, Shield, FileCheck, Upload, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { DataTable } from '@/components/ui/data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+type CsvRow = Record<string, string>;
+
+/** Callout takes an icon component, so the spinner is one. */
+function SpinningLoader({ className }: { className?: string }) {
+  return (
+    <Loader2
+      className={`${className ?? ''} animate-spin motion-reduce:animate-none`}
+      strokeWidth={1.75}
+      aria-hidden="true"
+    />
+  );
+}
+
+const CSV_PREVIEW_COLUMNS = [
+  { key: 'tlc', header: 'TLC', mono: true, width: '8.5rem', cell: (row: CsvRow) => row.tlc },
+  { key: 'product', header: 'Product', cell: (row: CsvRow) => row.product },
+  { key: 'quantity', header: 'Quantity', align: 'right' as const, cell: (row: CsvRow) => `${row.quantity} ${row.uom}` },
+  { key: 'event_type', header: 'Event Type', cell: (row: CsvRow) => row.event_type },
+  { key: 'event_date', header: 'Date', mono: true, width: '7rem', cell: (row: CsvRow) => row.event_date },
+  { key: 'sha256_hash', header: 'SHA-256 Hash', mono: true, cell: (row: CsvRow) => row.sha256_hash },
+  { key: 'chain_hash', header: 'Chain Hash', mono: true, cell: (row: CsvRow) => row.chain_hash },
+];
+
+const PACKAGE_PARTS = [
+  {
+    icon: FileText,
+    title: 'FDA Sortable Spreadsheet',
+    body: 'FDA-oriented sortable CSV organized around requested FSMA 204 records. Column mapping should be reviewed against the specific FDA request.',
+  },
+  {
+    icon: Shield,
+    title: 'Chain Verification',
+    body: 'SHA-256 hash chain proving record integrity. Each event cryptographically linked to its predecessor.',
+  },
+  {
+    icon: FileCheck,
+    title: 'Package Manifest',
+    body: 'Cryptographic manifest with file checksums. Independent verification without RegEngine.',
+  },
+];
+
+const HASH_STEPS = [
+  {
+    n: '1',
+    title: 'Hash Each Event',
+    body: 'Each CTE event (harvesting, initial packing, shipping, receiving, transformation) is converted to a deterministic SHA-256 hash. Same data always produces same hash.',
+    formula: 'event_data → SHA-256 → hash',
+  },
+  {
+    n: '2',
+    title: 'Form Chain Links',
+    body: 'Each new event includes the previous hash. This links every event to its history, so any alteration of an earlier record is detectable.',
+    formula: 'prev_hash + event → SHA-256 → chain_hash',
+  },
+  {
+    n: '3',
+    title: 'Detect Tampering',
+    body: 'If one hash changes, all subsequent hashes become invalid. Any tampering is immediately detectable without needing a central authority.',
+    formula: 'tampering → invalid chain ✗',
+  },
+];
 
 // Sample CTE data for demo
 const SAMPLE_RECORDS = [
@@ -275,359 +340,267 @@ export default function ExportPage() {
         subtitle="Generate a verifiable FSMA 204 records package to support 21 CFR 1.1455 record-availability workflows."
         relatedToolIds={['drill-simulator', 'cte-mapper', 'kde-checker']}
       >
-      {/* Section 1: Package Overview */}
-      <div className="mb-12">
-        <h2 className="text-2xl font-semibold mb-6">What's in Your Package</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="p-6 border border-re-border rounded-lg bg-gradient-to-br from-blue-50 to-transparent"
-          >
-            <div className="flex items-start gap-4">
-              <FileText className="w-6 h-6 text-re-info flex-shrink-0 mt-1" />
-              <div>
-                <h3 className="font-semibold mb-2">FDA Sortable Spreadsheet</h3>
-                <p className="text-sm text-re-text-disabled">
-                  FDA-oriented sortable CSV organized around requested FSMA 204 records. Column mapping should be reviewed against the specific FDA request.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="p-6 border border-re-border rounded-lg bg-gradient-to-br from-green-50 to-transparent"
-          >
-            <div className="flex items-start gap-4">
-              <Shield className="w-6 h-6 text-re-success flex-shrink-0 mt-1" />
-              <div>
-                <h3 className="font-semibold mb-2">Chain Verification</h3>
-                <p className="text-sm text-re-text-disabled">
-                  SHA-256 hash chain proving record integrity. Each event cryptographically linked to its predecessor.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="p-6 border border-re-border rounded-lg bg-gradient-to-br from-purple-50 to-transparent"
-          >
-            <div className="flex items-start gap-4">
-              <FileCheck className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
-              <div>
-                <h3 className="font-semibold mb-2">Package Manifest</h3>
-                <p className="text-sm text-re-text-disabled">
-                  Cryptographic manifest with file checksums. Independent verification without RegEngine.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Section 2: Interactive Demo */}
-      <div className="mb-12">
-        <h2 className="text-2xl font-semibold mb-6">Generate Your Package</h2>
-
-        <Tabs defaultValue="sample" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="sample">Try with Sample Data</TabsTrigger>
-            <TabsTrigger value="upload">Upload Your Records</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="sample" className="mt-6">
-            <div className="text-center py-8">
-              <p className="text-re-text-disabled mb-6">Generate a demo package using realistic food traceability data</p>
-              <Button
-                onClick={handleGenerateDemo}
-                disabled={isGenerating}
-                size="lg"
-                className="bg-re-info hover:bg-re-info"
-              >
-                {isGenerating ? 'Generating...' : 'Generate Demo Package'}
-              </Button>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="upload" className="mt-6">
-            <div className="border-2 border-dashed border-re-border rounded-lg p-8 text-center">
-              <Upload className="w-10 h-10 mx-auto text-re-text-tertiary mb-3" />
-              <p className="text-re-text-disabled mb-4">
-                Upload a CSV with columns: tlc, product, quantity, uom, event_date, event_type, location
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isGenerating}
-                variant="outline"
-              >
-                {isGenerating ? 'Processing...' : 'Choose CSV File'}
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* Generation Progress */}
-        <AnimatePresence>
-          {isGenerating && generationStep && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mt-6 p-4 bg-re-info-muted border border-blue-200 rounded-lg"
-            >
-              <div className="flex items-center gap-3">
+        {/* Section 1: Package Overview */}
+        <section>
+          <h2 className="mb-6 text-heading text-re-text-primary">What&apos;s in Your Package</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {PACKAGE_PARTS.map((part, i) => {
+              const Icon = part.icon;
+              return (
                 <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                  className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full"
-                />
-                <span className="text-re-info font-medium">{generationStep}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                  key={part.title}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 * (i + 1) }}
+                >
+                  <Card padding="spacious" className="h-full">
+                    <div className="flex items-start gap-4">
+                      <Icon className="mt-0.5 h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                      <div>
+                        <h3 className="mb-2 text-subheading text-re-text-primary">{part.title}</h3>
+                        <p className="text-ui text-re-text-secondary">{part.body}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
+        </section>
 
-      {/* Section 3: Package Preview */}
-      {generatedPackage && (
-        <div className="mb-12">
-          <h2 className="text-2xl font-semibold mb-6">Package Preview</h2>
+        {/* Section 2: Interactive Demo */}
+        <section>
+          <h2 className="mb-6 text-heading text-re-text-primary">Generate Your Package</h2>
 
-          <Tabs defaultValue="csv" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="csv">FDA CSV Preview</TabsTrigger>
-              <TabsTrigger value="chain">Chain Verification</TabsTrigger>
-              <TabsTrigger value="manifest">Manifest</TabsTrigger>
+          <Tabs defaultValue="sample" className="w-full">
+            <TabsList className="max-w-full overflow-x-auto">
+              <TabsTrigger value="sample">Try with Sample Data</TabsTrigger>
+              <TabsTrigger value="upload">Upload Your Records</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="csv" className="mt-6">
-              <div className="overflow-x-auto border border-re-border rounded-lg">
-                <table className="w-full text-sm">
-                  <thead className="bg-re-surface-card border-b border-re-border">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold">TLC</th>
-                      <th className="px-4 py-3 text-left font-semibold">Product</th>
-                      <th className="px-4 py-3 text-left font-semibold">Quantity</th>
-                      <th className="px-4 py-3 text-left font-semibold">Event Type</th>
-                      <th className="px-4 py-3 text-left font-semibold">Date</th>
-                      <th className="px-4 py-3 text-left font-semibold">SHA-256 Hash</th>
-                      <th className="px-4 py-3 text-left font-semibold">Chain Hash</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {generatedPackage.csv.slice(0, 10).map((row, idx) => (
-                      <tr key={idx} className="border-b border-re-border hover:bg-re-surface-card">
-                        <td className="px-4 py-3 font-mono text-xs">{row.tlc}</td>
-                        <td className="px-4 py-3">{row.product}</td>
-                        <td className="px-4 py-3">{row.quantity} {row.uom}</td>
-                        <td className="px-4 py-3">{row.event_type}</td>
-                        <td className="px-4 py-3 text-xs">{row.event_date}</td>
-                        <td className="px-4 py-3 font-mono text-xs bg-re-info-muted">{row.sha256_hash}</td>
-                        <td className="px-4 py-3 font-mono text-xs bg-re-success-muted">{row.chain_hash}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-sm text-re-text-disabled mt-4">
-                Showing first 10 of {generatedPackage.csv.length} records
-              </p>
-            </TabsContent>
-
-            <TabsContent value="chain" className="mt-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-re-success-muted border border-green-200 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-re-success flex-shrink-0" />
-                  <div>
-                    <p className="font-semibold text-re-success">Chain Valid</p>
-                    <p className="text-sm text-re-success">
-                      {generatedPackage.chainVerification.chain_length} records verified
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-re-surface-card border border-re-border rounded-lg p-4">
-                  <p className="text-sm font-mono text-re-text-primary whitespace-pre-wrap">
-                    {JSON.stringify(
-                      {
-                        chain_verification: {
-                          valid: generatedPackage.chainVerification.valid,
-                          chain_length: generatedPackage.chainVerification.chain_length,
-                          checked_at: generatedPackage.chainVerification.checked_at,
-                          errors: generatedPackage.chainVerification.errors,
-                        },
-                      },
-                      null,
-                      2
-                    )}
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  {generatedPackage.chainVerification.events.slice(0, 5).map((event, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="flex items-start gap-4 p-4 border border-re-border rounded-lg"
-                    >
-                      <div className="flex flex-col items-center">
-                        <div className="w-8 h-8 bg-re-info text-white rounded-full flex items-center justify-center text-xs font-semibold">
-                          {idx + 1}
-                        </div>
-                        {idx < 4 && <div className="h-6 w-0.5 bg-re-surface-elevated my-1" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{event.event_type}</p>
-                        <p className="text-xs text-re-text-disabled mt-1">TLC: {event.tlc}</p>
-                        <p className="text-xs text-re-text-disabled">Date: {event.timestamp}</p>
-                        <div className="mt-2 p-2 bg-re-surface-elevated rounded text-xs font-mono text-re-text-disabled">
-                          <div>event_hash: {event.event_hash.substring(0, 32)}...</div>
-                          <div className="mt-1">→ chain_hash: {event.chain_hash.substring(0, 32)}...</div>
-                        </div>
-                      </div>
-                      <CheckCircle2 className="w-5 h-5 text-re-success flex-shrink-0 mt-1" />
-                    </motion.div>
-                  ))}
-                </div>
+            <TabsContent value="sample">
+              <div className="py-8 text-center">
+                <p className="mb-6 text-ui text-re-text-secondary">Generate a demo package using realistic food traceability data</p>
+                <Button
+                  onClick={handleGenerateDemo}
+                  disabled={isGenerating}
+                  size="lg"
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Demo Package'}
+                </Button>
               </div>
             </TabsContent>
 
-            <TabsContent value="manifest" className="mt-6">
-              <div className="space-y-4">
-                <div className="bg-re-surface-card border border-re-border rounded-lg p-4 overflow-x-auto">
-                  <p className="text-sm font-mono text-re-text-primary whitespace-pre-wrap">
-                    {JSON.stringify(generatedPackage.manifest, null, 2)}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  {generatedPackage.manifest.files.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 border border-re-border rounded-lg">
-                      <div>
-                        <p className="font-semibold text-sm">{file.filename}</p>
-                        <p className="text-xs text-re-text-disabled mt-1 font-mono">{file.sha256.substring(0, 32)}...</p>
-                      </div>
-                      <CheckCircle2 className="w-5 h-5 text-re-success" />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-4 bg-re-info-muted border border-blue-200 rounded-lg">
-                  <p className="font-semibold text-sm text-re-info mb-2">How to Verify Independently</p>
-                  <ol className="text-xs text-re-info space-y-1 list-decimal list-inside">
-                    <li>Download all files from the package</li>
-                    <li>Compute SHA-256 hash of each file</li>
-                    <li>Compare hashes with manifest entries</li>
-                    <li>If all match, package integrity verified ✓</li>
-                  </ol>
-                </div>
+            <TabsContent value="upload">
+              <div className="rounded-lg border-2 border-dashed border-re-border p-8 text-center">
+                <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <p className="mb-4 text-ui text-re-text-secondary">
+                  Upload a CSV with columns: tlc, product, quantity, uom, event_date, event_type, location
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  aria-label="Upload Your Records"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isGenerating}
+                  variant="secondary"
+                >
+                  {isGenerating ? 'Processing...' : 'Choose CSV File'}
+                </Button>
               </div>
             </TabsContent>
           </Tabs>
 
-          {/* Download Button with LeadGate */}
-          <div className="mt-8">
-            <LeadGate
-              source="fda-export"
-              headline="Download Your FDA Package"
-              teaser={
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="p-4 bg-re-surface-card border border-re-border rounded-lg"
+          {/* Generation Progress */}
+          <AnimatePresence>
+            {isGenerating && generationStep && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mt-6"
+              >
+                <Callout tone="info" role="status" icon={SpinningLoader}>
+                  {generationStep}
+                </Callout>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        {/* Section 3: Package Preview */}
+        {generatedPackage && (
+          <section>
+            <h2 className="mb-6 text-heading text-re-text-primary">Package Preview</h2>
+
+            <Tabs defaultValue="csv" className="w-full">
+              <TabsList className="max-w-full overflow-x-auto">
+                <TabsTrigger value="csv">FDA CSV Preview</TabsTrigger>
+                <TabsTrigger value="chain">Chain Verification</TabsTrigger>
+                <TabsTrigger value="manifest">Manifest</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="csv">
+                <DataTable
+                  caption="FDA CSV Preview"
+                  columns={CSV_PREVIEW_COLUMNS}
+                  data={generatedPackage.csv.slice(0, 10)}
+                  minWidth="880px"
+                  stickyFirstColumn
+                />
+                <p className="mt-4 text-small text-re-text-tertiary">
+                  Showing first 10 of {generatedPackage.csv.length} records
+                </p>
+              </TabsContent>
+
+              <TabsContent value="chain">
+                <div className="space-y-4">
+                  <Callout tone="success" role="status" title="Chain Valid">
+                    {generatedPackage.chainVerification.chain_length} records verified
+                  </Callout>
+
+                  <Card variant="inset" padding="compact">
+                    <pre className="overflow-x-auto font-mono text-[0.8125rem] text-re-text-secondary">
+                      {JSON.stringify(
+                        {
+                          chain_verification: {
+                            valid: generatedPackage.chainVerification.valid,
+                            chain_length: generatedPackage.chainVerification.chain_length,
+                            checked_at: generatedPackage.chainVerification.checked_at,
+                            errors: generatedPackage.chainVerification.errors,
+                          },
+                        },
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </Card>
+
+                  <div className="space-y-3">
+                    {generatedPackage.chainVerification.events.slice(0, 5).map((event, idx) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.1 }}
+                        className="flex items-start gap-4 rounded-lg border border-re-border bg-re-surface-card p-4"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-re-border bg-re-surface-inset font-mono uppercase text-label text-re-text-secondary">
+                            {idx + 1}
+                          </span>
+                          {idx < 4 && <span className="my-1 h-6 w-px bg-re-border" aria-hidden="true" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-ui font-medium text-re-text-primary">{event.event_type}</p>
+                          <p className="mt-1 text-small text-re-text-tertiary">TLC: {event.tlc}</p>
+                          <p className="text-small text-re-text-tertiary">Date: {event.timestamp}</p>
+                          <div className="mt-2 overflow-x-auto rounded-md bg-re-surface-inset p-2 font-mono text-[0.8125rem] text-re-text-tertiary">
+                            <div>event_hash: {event.event_hash.substring(0, 32)}...</div>
+                            <div className="mt-1">→ chain_hash: {event.chain_hash.substring(0, 32)}...</div>
+                          </div>
+                        </div>
+                        <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="manifest">
+                <div className="space-y-4">
+                  <Card variant="inset" padding="compact">
+                    <pre className="overflow-x-auto font-mono text-[0.8125rem] text-re-text-secondary">
+                      {JSON.stringify(generatedPackage.manifest, null, 2)}
+                    </pre>
+                  </Card>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    {generatedPackage.manifest.files.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-3 rounded-lg border border-re-border bg-re-surface-card p-4">
+                        <div className="min-w-0">
+                          <p className="text-ui font-medium text-re-text-primary">{file.filename}</p>
+                          <p className="mt-1 truncate font-mono text-[0.8125rem] text-re-text-tertiary">{file.sha256.substring(0, 32)}...</p>
+                        </div>
+                        <CheckCircle2 className="h-5 w-5 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                      </div>
+                    ))}
+                  </div>
+
+                  <Callout tone="info" role="note" title="How to Verify Independently">
+                    <ol className="list-inside list-decimal space-y-1 text-small">
+                      <li>Download all files from the package</li>
+                      <li>Compute SHA-256 hash of each file</li>
+                      <li>Compare hashes with manifest entries</li>
+                      <li>If all match, package integrity verified ✓</li>
+                    </ol>
+                  </Callout>
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            {/* Download Button with LeadGate */}
+            <div className="mt-8">
+              <LeadGate
+                source="fda-export"
+                headline="Download Your FDA Package"
+                teaser={
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <Card padding="compact">
+                      <p className="text-ui font-medium text-re-text-primary">Preview Ready</p>
+                      <p className="mt-1 text-small text-re-text-tertiary">
+                        Your {generatedPackage.csv.length}-record package is ready to download with full chain verification.
+                      </p>
+                    </Card>
+                  </motion.div>
+                }
+              >
+                <Button
+                  onClick={downloadPackage}
+                  size="lg"
+                  className="w-full"
+                  leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
                 >
-                  <p className="text-sm font-semibold mb-2">Preview Ready</p>
-                  <p className="text-xs text-re-text-disabled">
-                    Your {generatedPackage.csv.length}-record package is ready to download with full chain verification.
-                  </p>
-                </motion.div>
-              }
-            >
-              <Button onClick={downloadPackage} size="lg" className="w-full bg-re-info hover:bg-re-info">
-                <Download className="w-4 h-4 mr-2" />
-                Download Package
-              </Button>
-            </LeadGate>
+                  Download Package
+                </Button>
+              </LeadGate>
+            </div>
+          </section>
+        )}
+
+        {/* Section 4: How It Works */}
+        <section className="border-t border-re-border-subtle pt-10">
+          <h2 className="mb-8 text-heading text-re-text-primary">How SHA-256 Chain Verification Works</h2>
+
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+            {HASH_STEPS.map((step, i) => (
+              <motion.div
+                key={step.n}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 * (i + 1) }}
+                className="space-y-4"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-re-border bg-re-surface-inset font-mono uppercase text-label text-re-text-secondary">
+                  {step.n}
+                </span>
+                <h3 className="text-subheading text-re-text-primary">{step.title}</h3>
+                <p className="text-ui text-re-text-secondary">{step.body}</p>
+                <div className="overflow-x-auto rounded-md bg-re-surface-inset p-3 font-mono text-[0.8125rem] text-re-text-tertiary">
+                  {step.formula}
+                </div>
+              </motion.div>
+            ))}
           </div>
-        </div>
-      )}
-
-      {/* Section 4: How It Works */}
-      <div className="border-t border-re-border pt-12">
-        <h2 className="text-2xl font-semibold mb-8">How SHA-256 Chain Verification Works</h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="space-y-4"
-          >
-            <div className="flex items-center justify-center w-12 h-12 bg-re-info-muted rounded-full">
-              <span className="text-xl font-bold text-re-info">1</span>
-            </div>
-            <h3 className="font-semibold">Hash Each Event</h3>
-            <p className="text-sm text-re-text-disabled">
-              Each CTE event (harvesting, initial packing, shipping, receiving, transformation) is converted to a deterministic SHA-256 hash. Same data always produces same hash.
-            </p>
-            <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
-              event_data → SHA-256 → hash
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-4"
-          >
-            <div className="flex items-center justify-center w-12 h-12 bg-re-success-muted rounded-full">
-              <span className="text-xl font-bold text-re-success">2</span>
-            </div>
-            <h3 className="font-semibold">Form Chain Links</h3>
-            <p className="text-sm text-re-text-disabled">
-              Each new event includes the previous hash. This links every event to its history, so any alteration of an earlier record is detectable.
-            </p>
-            <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
-              prev_hash + event → SHA-256 → chain_hash
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="space-y-4"
-          >
-            <div className="flex items-center justify-center w-12 h-12 bg-re-danger-muted rounded-full">
-              <span className="text-xl font-bold text-re-danger">3</span>
-            </div>
-            <h3 className="font-semibold">Detect Tampering</h3>
-            <p className="text-sm text-re-text-disabled">
-              If one hash changes, all subsequent hashes become invalid. Any tampering is immediately detectable without needing a central authority.
-            </p>
-            <div className="bg-re-danger-muted p-3 rounded text-xs font-mono text-re-danger">
-              tampering → invalid chain ✗
-            </div>
-          </motion.div>
-        </div>
-      </div>
+        </section>
       </FreeToolPageShell>
     </EmailGate>
   );

@@ -1,22 +1,25 @@
 'use client';
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import {
-    ShieldAlert, Play, CheckCircle2, XCircle, AlertTriangle, FileText,
-    ArrowRight, Clock, Loader2, Network, Upload, Download, BarChart3,
-    FileWarning, ChevronDown, ChevronRight, Timer, Shield, Zap,
-    TrendingUp, AlertCircle, FileCheck, RotateCcw,
+    Play, CheckCircle2, AlertTriangle, FileText,
+    ArrowRight, Clock, Loader2, Network, Upload, Download,
+    ChevronDown, ChevronRight, Timer, Shield, Zap,
+    TrendingUp, RotateCcw,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
     parseCSV, validateRecords, generateSampleCSV, getScoreColor,
-    type ValidationResult, type ValidationFinding, type TraceabilityGap,
+    getSeverityColor, getSeverityBadgeColor,
+    type ValidationResult,
 } from '../lib/record-validator';
+import { cn } from '@/lib/utils';
 
 type Phase = 'scenario' | 'upload' | 'analyzing' | 'results' | 'report';
 
@@ -318,75 +321,61 @@ STATUS: ${
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-4xl mx-auto"
+            className="w-full"
         >
-            <div className="text-center mb-12">
-                <h1 className="text-4xl font-bold mb-3" style={{ color: 'var(--re-text-primary)' }}>
+            <div className="mb-10 text-center">
+                <h2 className="text-heading text-re-text-primary">
                     Rehearse Your FSMA 204 Records-on-Request Workflow
-                </h1>
-                <p className="text-lg" style={{ color: 'var(--re-text-secondary)' }}>
+                </h2>
+                <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">
                     Upload your traceability records. The drill checks file shape and column-level completeness
                     against a subset of FSMA 204 dimensions — no data leaves your browser. This is a self-paced
                     rehearsal, not an FDA simulation or compliance determination.
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {scenarios.map((scenario) => (
-                    <motion.div
+                    <button
                         key={scenario.id}
-                        whileHover={{ y: -4 }}
+                        type="button"
                         onClick={() => handleScenarioSelect(scenario.id)}
+                        className="rounded-lg border border-re-border bg-re-surface-card p-5 text-left transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-base motion-reduce:transition-none"
                     >
-                        <Card
-                            className="cursor-pointer transition-all hover:shadow-lg"
-                            style={{ borderColor: 'var(--re-border-default)' }}
-                        >
-                            <CardContent className="pt-6">
-                                <div className="flex items-start justify-between mb-3">
-                                    <h3
-                                        className="font-semibold text-lg"
-                                        style={{ color: 'var(--re-text-primary)' }}
-                                    >
-                                        {scenario.title}
-                                    </h3>
-                                    <Badge variant="outline">{scenario.complexity}</Badge>
-                                </div>
-                                <p
-                                    className="text-sm mb-4"
-                                    style={{ color: 'var(--re-text-secondary)' }}
-                                >
-                                    {scenario.description}
-                                </p>
-                                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--re-text-muted)' }}>
-                                    <FileText size={14} />
-                                    {scenario.recordCount} records
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                            <h3 className="text-subheading text-re-text-primary">
+                                {scenario.title}
+                            </h3>
+                            <Badge tone="neutral" size="sm">{scenario.complexity}</Badge>
+                        </div>
+                        <p className="mb-4 text-ui text-re-text-secondary">
+                            {scenario.description}
+                        </p>
+                        <div className="flex items-center gap-2 text-small text-re-text-muted">
+                            <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
+                            {scenario.recordCount} records
+                        </div>
+                    </button>
                 ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-                <Button size="lg" className="bg-re-info hover:bg-re-info text-white">
-                    <Play size={18} className="mr-2" />
+            <div className="mb-8 flex flex-col justify-center gap-4 sm:flex-row">
+                <Button size="lg" leadingIcon={<Play size={18} strokeWidth={1.75} aria-hidden="true" />}>
                     Start Drill — Upload Your Records
                 </Button>
                 <Button
                     size="lg"
-                    variant="outline"
+                    variant="secondary"
                     onClick={handleDownloadSample}
-                    style={{ borderColor: 'var(--re-border-default)' }}
+                    leadingIcon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    <Download size={18} className="mr-2" />
                     Download Sample CSV
                 </Button>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-sm" style={{ color: 'var(--re-text-muted)' }}>
-                <Shield size={16} />
-                🔒 100% client-side • Your data never leaves your browser
+            <div className="flex items-center justify-center gap-2 text-small text-re-text-muted">
+                <Shield size={16} strokeWidth={1.75} aria-hidden="true" />
+                100% client-side • Your data never leaves your browser
             </div>
         </motion.div>
     );
@@ -396,39 +385,34 @@ STATUS: ${
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-2xl mx-auto"
+            className="mx-auto w-full max-w-2xl"
         >
-            <div className="mb-8 flex items-center justify-between">
-                <h2 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
+            <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-heading text-re-text-primary">
                     Upload Your Records
                 </h2>
-                <div className="flex items-center gap-2 text-lg font-mono" style={{ color: 'var(--re-brand)' }}>
-                    <Timer size={20} />
+                <div className="flex items-center gap-2 font-mono text-ui tabular-nums text-re-text-primary">
+                    <Timer size={20} strokeWidth={1.75} aria-hidden="true" />
                     {formatTime(timeRemaining)}
                 </div>
             </div>
 
-            <Card className="mb-6" style={{ borderColor: 'var(--re-border-default)' }}>
-                <CardContent className="pt-6">
-                    <h3 className="font-semibold mb-2" style={{ color: 'var(--re-text-primary)' }}>
-                        Scenario: {scenarios.find((s) => s.id === state.selectedScenario)?.title}
-                    </h3>
-                    <p className="text-sm" style={{ color: 'var(--re-text-secondary)' }}>
-                        {scenarios.find((s) => s.id === state.selectedScenario)?.description}
-                    </p>
-                </CardContent>
+            <Card className="mb-6" padding="compact">
+                <h3 className="text-subheading text-re-text-primary">
+                    Scenario: {scenarios.find((s) => s.id === state.selectedScenario)?.title}
+                </h3>
+                <p className="mt-1 text-ui text-re-text-secondary">
+                    {scenarios.find((s) => s.id === state.selectedScenario)?.description}
+                </p>
             </Card>
 
             <div
-                className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-all ${
+                className={cn(
+                    'cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors duration-120 motion-reduce:transition-none sm:p-12',
                     dragActive
-                        ? 'border-blue-500 bg-re-info-muted'
-                        : 'border-re-border hover:border-re-border'
-                }`}
-                style={{
-                    borderColor: dragActive ? 'var(--re-brand)' : 'var(--re-border-default)',
-                    backgroundColor: dragActive ? 'rgba(59, 130, 246, 0.05)' : 'transparent',
-                }}
+                        ? 'border-re-border-strong bg-re-surface-inset'
+                        : 'border-re-border hover:border-re-border-strong'
+                )}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
@@ -439,40 +423,42 @@ STATUS: ${
                     ref={fileInputRef}
                     type="file"
                     accept=".csv,.tsv,.xlsx"
+                    aria-label="Upload Your Records"
                     onChange={handleFileInput}
                     className="hidden"
                 />
                 <Upload
-                    size={48}
-                    className="mx-auto mb-4"
-                    style={{ color: 'var(--re-brand)' }}
+                    size={24}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                    className="mx-auto mb-4 text-re-text-tertiary"
                 />
-                <h3
-                    className="text-lg font-semibold mb-2"
-                    style={{ color: 'var(--re-text-primary)' }}
-                >
+                <h3 className="mb-2 text-subheading text-re-text-primary">
                     {state.uploadedFile ? state.uploadedFile.name : 'Drop your file here'}
                 </h3>
-                <p style={{ color: 'var(--re-text-secondary)' }}>
+                <p className="text-ui text-re-text-secondary">
                     {state.uploadedFile
                         ? `${(state.uploadedFile.size / 1024).toFixed(0)} KB`
                         : 'or click to browse'}
                 </p>
-                <p className="text-xs mt-2" style={{ color: 'var(--re-text-muted)' }}>
+                <p className="mt-2 text-small text-re-text-muted">
                     CSV, TSV, or XLSX • Max 10MB
                 </p>
             </div>
 
-            <div className="mt-6 mb-6">
-                <button className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--re-brand)' }}>
-                    <ChevronRight size={16} />
+            <div className="mb-6 mt-6">
+                <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-sm text-ui font-medium text-re-text-secondary transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+                >
+                    <ChevronRight size={16} strokeWidth={1.75} aria-hidden="true" />
                     What should my file contain?
                 </button>
-                <div className="mt-3 p-4 bg-re-surface-card rounded-lg text-sm" style={{ borderLeft: '4px solid var(--re-brand)' }}>
-                    <p className="font-mono text-xs mb-2" style={{ color: 'var(--re-text-muted)' }}>
+                <Callout tone="neutral" role="note" className="mt-3">
+                    <p className="mb-2 font-mono uppercase text-label text-re-text-muted">
                         Required columns:
                     </p>
-                    <ul className="space-y-1 text-xs" style={{ color: 'var(--re-text-secondary)' }}>
+                    <ul className="space-y-1 text-small text-re-text-secondary">
                         <li>• event_type (ship, receive, transform)</li>
                         <li>• event_date, event_time</li>
                         <li>• lot_code, product_name</li>
@@ -480,24 +466,23 @@ STATUS: ${
                         <li>• from_party, to_party</li>
                         <li>• location</li>
                     </ul>
-                </div>
+                </Callout>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row">
                 <Button
                     size="lg"
                     onClick={handleAnalyze}
                     disabled={!state.uploadedFile}
-                    className="flex-1 bg-re-info hover:bg-re-info text-white"
+                    className="flex-1"
+                    leadingIcon={<Zap size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    <Zap size={18} className="mr-2" />
                     Analyze My Records
                 </Button>
                 <Button
                     size="lg"
-                    variant="outline"
+                    variant="secondary"
                     onClick={handleLoadSampleData}
-                    style={{ borderColor: 'var(--re-border-default)' }}
                 >
                     Load Sample Data
                 </Button>
@@ -510,49 +495,47 @@ STATUS: ${
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-2xl mx-auto"
+            className="mx-auto w-full max-w-2xl"
         >
-            <div className="text-center mb-12">
-                <h2 className="text-2xl font-bold mb-8" style={{ color: 'var(--re-text-primary)' }}>
+            <div className="mb-12 text-center" aria-busy="true">
+                <h2 className="mb-8 text-heading text-re-text-primary">
                     Analyzing Your Records
                 </h2>
 
-                <div className="space-y-4">
+                <div className="space-y-4 text-left">
                     {analysisStages.map((stage, idx) => (
                         <div key={idx} className="flex items-center gap-4">
-                            <div className="w-8 h-8 flex items-center justify-center">
+                            <div className="flex h-8 w-8 items-center justify-center">
                                 {idx < currentStage ? (
                                     <CheckCircle2
-                                        size={24}
-                                        style={{ color: 'var(--re-brand)' }}
+                                        size={20}
+                                        strokeWidth={1.75}
+                                        aria-hidden="true"
+                                        className="text-re-text-tertiary"
                                     />
                                 ) : idx === currentStage ? (
                                     <Loader2
-                                        size={24}
-                                        style={{ color: 'var(--re-brand)' }}
-                                        className="animate-spin"
+                                        size={20}
+                                        strokeWidth={1.75}
+                                        aria-hidden="true"
+                                        className="animate-spin text-re-text-primary motion-reduce:animate-none"
                                     />
                                 ) : (
-                                    <div
-                                        className="w-6 h-6 rounded-full border-2"
-                                        style={{ borderColor: 'var(--re-border-default)' }}
+                                    <span
+                                        className="h-5 w-5 rounded-full border border-re-border"
+                                        aria-hidden="true"
                                     />
                                 )}
                             </div>
                             <span
-                                className={`text-lg font-medium ${
+                                className={cn(
+                                    'text-ui',
                                     idx < currentStage
-                                        ? ''
+                                        ? 'text-re-text-secondary'
                                         : idx === currentStage
-                                          ? 'font-bold'
-                                          : ''
-                                }`}
-                                style={{
-                                    color:
-                                        idx < currentStage
-                                            ? 'var(--re-text-secondary)'
-                                            : 'var(--re-text-primary)',
-                                }}
+                                            ? 'font-medium text-re-text-primary'
+                                            : 'text-re-text-primary'
+                                )}
                             >
                                 {stage.name}
                             </span>
@@ -571,60 +554,59 @@ STATUS: ${
             ? Math.round((state.uploadTime - (state.drillStartTime || 0)) / 1000)
             : 0;
 
+        const gapSummary =
+            result.findings.length === 0
+                ? 'No gaps indicated'
+                : `${result.findings.length} gap${result.findings.length === 1 ? '' : 's'} indicated`;
+
         const teaser: React.ReactNode = (
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="w-full max-w-4xl mx-auto"
+                className="w-full"
             >
-                <h2 className="text-2xl font-bold text-center mb-8" style={{ color: 'var(--re-text-primary)' }}>
+                <h2 className="mb-8 text-center text-heading text-re-text-primary">
                     Self-Check Summary
                 </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <Card style={{ borderColor: 'var(--re-border-default)' }}>
-                        <CardContent className="pt-6 text-center">
-                            <div className="flex justify-center mb-4">
+                <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <Card padding="compact">
+                        <div className="text-center">
+                            <div className="mb-4 flex justify-center">
                                 <ScoreCircle score={result.scores.overallScore} />
                             </div>
-                            <Badge
-                                className="text-white bg-re-info"
-                            >
-                                {result.findings.length === 0 ? 'No gaps indicated' : `${result.findings.length} gap${result.findings.length === 1 ? '' : 's'} indicated`}
-                            </Badge>
-                            <p className="text-xs mt-2" style={{ color: 'var(--re-text-tertiary)' }}>
+                            <Badge tone="info">{gapSummary}</Badge>
+                            <p className="mt-2 text-small text-re-text-tertiary">
                                 Self-check on synthetic drill data — not a compliance verdict.
                             </p>
-                        </CardContent>
+                        </div>
                     </Card>
 
-                    <Card style={{ borderColor: 'var(--re-border-default)' }}>
-                        <CardContent className="pt-6">
-                            <div className="space-y-3">
-                                <div>
-                                    <p className="text-sm font-medium" style={{ color: 'var(--re-text-secondary)' }}>
-                                        Records Analyzed
-                                    </p>
-                                    <p className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
-                                        {result.totalRecords}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium" style={{ color: 'var(--re-text-secondary)' }}>
-                                        Findings Identified
-                                    </p>
-                                    <p className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
-                                        {result.findings.length}
-                                    </p>
-                                </div>
+                    <Card padding="compact">
+                        <div className="space-y-3">
+                            <div>
+                                <p className="font-mono uppercase text-label text-re-text-muted">
+                                    Records Analyzed
+                                </p>
+                                <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                    {result.totalRecords}
+                                </p>
                             </div>
-                        </CardContent>
+                            <div>
+                                <p className="font-mono uppercase text-label text-re-text-muted">
+                                    Findings Identified
+                                </p>
+                                <p className="mt-1 text-title tabular-nums text-re-text-primary">
+                                    {result.findings.length}
+                                </p>
+                            </div>
+                        </div>
                     </Card>
                 </div>
 
-                <div className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-lg p-6 mb-8">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <Card variant="inset" padding="spacious" className="mb-8">
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                         {[
                             { label: 'CTE', score: result.scores.cteCompleteness },
                             { label: 'KDE', score: result.scores.kdeCompleteness },
@@ -633,24 +615,24 @@ STATUS: ${
                             { label: 'Quality', score: result.scores.dataQuality },
                         ].map((item) => (
                             <div key={item.label} className="text-center">
-                                <p className="text-xs font-medium mb-2" style={{ color: 'var(--re-text-secondary)' }}>
+                                <p className="mb-2 font-mono uppercase text-label text-re-text-muted">
                                     {item.label}
                                 </p>
-                                <div className="h-2 bg-re-surface-elevated rounded-full mb-1 opacity-40" />
-                                <p className="text-sm font-bold" style={{ color: getScoreColor(item.score) }}>
+                                <div className="mb-1 h-2 rounded-full bg-re-surface-card" />
+                                <p className="text-ui font-medium tabular-nums text-re-text-secondary">
                                     {item.score.toFixed(0)}%
                                 </p>
                             </div>
                         ))}
                     </div>
-                </div>
+                </Card>
 
                 <div className="text-center">
-                    <p className="text-sm mb-4" style={{ color: 'var(--re-text-secondary)' }}>
+                    <p className="mb-4 text-ui text-re-text-secondary">
                         Ready to see full analysis and recommendations?
                     </p>
-                    <Button size="lg" className="bg-re-info hover:bg-re-info text-white">
-                        Unlock Full Results <ArrowRight size={18} className="ml-2" />
+                    <Button size="lg" trailingIcon={<ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" />}>
+                        Unlock Full Results
                     </Button>
                 </div>
             </motion.div>
@@ -661,21 +643,19 @@ STATUS: ${
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="w-full max-w-4xl mx-auto space-y-8"
+                className="w-full space-y-8"
             >
                 {/* Score Overview */}
-                <Card style={{ borderColor: 'var(--re-border-default)' }}>
+                <Card>
                     <CardHeader>
                         <CardTitle>Score Overview</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                             <div className="flex flex-col items-center justify-center">
                                 <ScoreCircle score={result.scores.overallScore} />
-                                <Badge className="mt-3 text-white bg-re-info">
-                                    {result.findings.length === 0 ? 'No gaps indicated' : `${result.findings.length} gap${result.findings.length === 1 ? '' : 's'} indicated`}
-                                </Badge>
-                                <p className="text-xs mt-2 text-center" style={{ color: 'var(--re-text-tertiary)' }}>
+                                <Badge tone="info" className="mt-3">{gapSummary}</Badge>
+                                <p className="mt-2 text-center text-small text-re-text-tertiary">
                                     Self-check on synthetic drill data — not a compliance verdict.
                                 </p>
                             </div>
@@ -688,58 +668,43 @@ STATUS: ${
                                     { label: 'Data Quality', score: result.scores.dataQuality },
                                 ].map((item) => (
                                     <div key={item.label}>
-                                        <div className="flex justify-between mb-2">
-                                            <span
-                                                className="text-sm font-medium"
-                                                style={{ color: 'var(--re-text-primary)' }}
-                                            >
+                                        <div className="mb-2 flex justify-between gap-3">
+                                            <span className="text-ui font-medium text-re-text-primary">
                                                 {item.label}
                                             </span>
-                                            <span
-                                                className="text-sm font-bold"
-                                                style={{ color: getScoreColor(item.score) }}
-                                            >
+                                            <span className="text-ui font-medium tabular-nums text-re-text-secondary">
                                                 {item.score.toFixed(1)}%
                                             </span>
                                         </div>
-                                        <div className="h-2 bg-re-surface-elevated rounded-full overflow-hidden">
+                                        <div className="h-2 overflow-hidden rounded-full bg-re-surface-inset">
                                             <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${item.score}%` }}
                                                 transition={{ duration: 0.8, ease: 'easeOut' }}
-                                                className="h-full rounded-full"
-                                                style={{ backgroundColor: getScoreColor(item.score) }}
+                                                className="h-full rounded-full bg-re-text-tertiary"
                                             />
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
-                        <div className="mt-6 p-4 bg-re-info-muted rounded-lg flex items-start gap-3">
-                            <Clock size={18} style={{ color: 'var(--re-brand)' }} />
-                            <div>
-                                <p className="text-sm font-medium" style={{ color: 'var(--re-text-primary)' }}>
-                                    Response Time: {responseTime} seconds
-                                </p>
-                                <p className="text-xs" style={{ color: 'var(--re-text-secondary)' }}>
-                                    Time from drill start to upload
-                                </p>
-                            </div>
-                        </div>
+                        <Callout tone="info" icon={Clock} role="note" className="mt-6" title={`Response Time: ${responseTime} seconds`}>
+                            Time from drill start to upload
+                        </Callout>
                     </CardContent>
                 </Card>
 
                 {/* Findings */}
-                <Card style={{ borderColor: 'var(--re-border-default)' }}>
+                <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <AlertTriangle size={20} style={{ color: 'var(--re-brand)' }} />
+                            <AlertTriangle size={20} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" />
                             Findings ({result.findings.length})
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-3">
-                            {['critical', 'major', 'minor'].map((severity) => {
+                        <div className="space-y-4">
+                            {(['critical', 'major', 'minor'] as const).map((severity) => {
                                 const findings = result.findings.filter(
                                     (f) => f.severity === severity
                                 );
@@ -747,35 +712,22 @@ STATUS: ${
 
                                 return (
                                     <div key={severity}>
-                                        <h4
-                                            className="text-sm font-semibold mb-2 uppercase"
-                                            style={{
-                                                color:
-                                                    severity === 'critical'
-                                                        ? '#dc2626'
-                                                        : severity === 'major'
-                                                          ? '#ea580c'
-                                                          : '#f59e0b',
-                                            }}
-                                        >
+                                        <h4 className="mb-2 font-mono uppercase text-label text-re-text-muted">
                                             {severity} ({findings.length})
                                         </h4>
-                                        <div className="space-y-2 ml-4">
+                                        <div className="ml-4 space-y-2">
                                             {findings.map((finding, idx) => (
                                                 <div
                                                     key={idx}
-                                                    className="p-3 bg-re-surface-card rounded border-l-4"
-                                                    style={{
-                                                        borderLeftColor:
-                                                            severity === 'critical'
-                                                                ? '#dc2626'
-                                                                : severity === 'major'
-                                                                  ? '#ea580c'
-                                                                  : '#f59e0b',
-                                                    }}
+                                                    className={cn(
+                                                        'rounded-md border border-l-[3px] border-re-border bg-re-surface-card p-3',
+                                                        getSeverityColor(severity)
+                                                    )}
                                                 >
-                                                    <div
-                                                        className="text-sm font-medium cursor-pointer flex justify-between items-center"
+                                                    <button
+                                                        type="button"
+                                                        aria-expanded={expandedFinding === idx}
+                                                        className="flex w-full items-center justify-between gap-3 rounded-sm text-left text-ui font-medium text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
                                                         onClick={() =>
                                                             setExpandedFinding(
                                                                 expandedFinding === idx
@@ -787,44 +739,30 @@ STATUS: ${
                                                         <span>{finding.message}</span>
                                                         <ChevronDown
                                                             size={16}
-                                                            className={`transition-transform ${
-                                                                expandedFinding === idx
-                                                                    ? 'rotate-180'
-                                                                    : ''
-                                                            }`}
+                                                            strokeWidth={1.75}
+                                                            aria-hidden="true"
+                                                            className={cn(
+                                                                'shrink-0 transition-transform duration-120 motion-reduce:transition-none',
+                                                                expandedFinding === idx && 'rotate-180'
+                                                            )}
                                                         />
-                                                    </div>
+                                                    </button>
                                                     {expandedFinding === idx && (
-                                                        <div className="mt-2 pt-2 border-t space-y-1 text-xs">
+                                                        <div className="mt-2 space-y-1 border-t border-re-border-subtle pt-2 text-small text-re-text-secondary">
                                                             <p>
-                                                                <span
-                                                                    className="font-semibold"
-                                                                    style={{
-                                                                        color: 'var(--re-text-secondary)',
-                                                                    }}
-                                                                >
+                                                                <span className="font-medium text-re-text-primary">
                                                                     Citation:
                                                                 </span>{' '}
                                                                 {finding.citation}
                                                             </p>
                                                             <p>
-                                                                <span
-                                                                    className="font-semibold"
-                                                                    style={{
-                                                                        color: 'var(--re-text-secondary)',
-                                                                    }}
-                                                                >
+                                                                <span className="font-medium text-re-text-primary">
                                                                     Affected:
                                                                 </span>{' '}
                                                                 {finding.affectedRows.length} records
                                                             </p>
                                                             <p>
-                                                                <span
-                                                                    className="font-semibold"
-                                                                    style={{
-                                                                        color: 'var(--re-text-secondary)',
-                                                                    }}
-                                                                >
+                                                                <span className="font-medium text-re-text-primary">
                                                                     Recommendation:
                                                                 </span>{' '}
                                                                 {finding.recommendation}
@@ -843,10 +781,10 @@ STATUS: ${
 
                 {/* Gaps */}
                 {result.gaps.length > 0 && (
-                    <Card style={{ borderColor: 'var(--re-border-default)' }}>
+                    <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <Network size={20} style={{ color: 'var(--re-brand)' }} />
+                                <Network size={20} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" />
                                 Traceability Gaps ({result.gaps.length})
                             </CardTitle>
                         </CardHeader>
@@ -855,66 +793,33 @@ STATUS: ${
                                 {result.gaps.map((gap, idx) => (
                                     <div
                                         key={idx}
-                                        className="p-4 border rounded-lg"
-                                        style={{ borderColor: 'var(--re-border-default)' }}
+                                        className="rounded-lg border border-re-border p-4"
                                     >
-                                        <div className="flex items-start justify-between mb-2">
-                                            <h4
-                                                className="font-semibold"
-                                                style={{ color: 'var(--re-text-primary)' }}
-                                            >
+                                        <div className="mb-2 flex items-start justify-between gap-3">
+                                            <h4 className="text-subheading text-re-text-primary">
                                                 {gap.gapType}
                                             </h4>
-                                            <Badge
-                                                variant={
-                                                    gap.severity === 'critical'
-                                                        ? 'destructive'
-                                                        : gap.severity === 'major'
-                                                          ? 'secondary'
-                                                          : 'outline'
-                                                }
-                                            >
+                                            <Badge tone={getSeverityBadgeColor(gap.severity) as BadgeTone} size="sm">
                                                 {gap.severity}
                                             </Badge>
                                         </div>
-                                        <p
-                                            className="text-sm mb-3"
-                                            style={{ color: 'var(--re-text-secondary)' }}
-                                        >
+                                        <p className="mb-3 text-ui text-re-text-secondary">
                                             {gap.description}
                                         </p>
-                                        <div className="space-y-2 text-xs">
+                                        <div className="space-y-2 text-small">
                                             <div>
-                                                <p
-                                                    style={{
-                                                        color: 'var(--re-text-muted)',
-                                                    }}
-                                                >
+                                                <p className="font-mono uppercase text-label text-re-text-muted">
                                                     Details
                                                 </p>
-                                                <p
-                                                    className="font-semibold"
-                                                    style={{
-                                                        color: 'var(--re-text-primary)',
-                                                    }}
-                                                >
+                                                <p className="mt-0.5 font-medium text-re-text-primary">
                                                     {gap.details}
                                                 </p>
                                             </div>
                                             <div>
-                                                <p
-                                                    style={{
-                                                        color: 'var(--re-text-muted)',
-                                                    }}
-                                                >
+                                                <p className="font-mono uppercase text-label text-re-text-muted">
                                                     Citation
                                                 </p>
-                                                <p
-                                                    className="font-mono font-semibold"
-                                                    style={{
-                                                        color: 'var(--re-text-primary)',
-                                                    }}
-                                                >
+                                                <p className="mt-0.5 font-mono text-[0.8125rem] font-medium text-re-text-primary">
                                                     {gap.citation}
                                                 </p>
                                             </div>
@@ -927,62 +832,49 @@ STATUS: ${
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row">
                     <Button
                         size="lg"
-                        className="flex-1 bg-re-info hover:bg-re-info text-white"
+                        className="flex-1"
                         onClick={handleDownloadReport}
+                        leadingIcon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
                     >
-                        <Download size={18} className="mr-2" />
                         Download Full Report
                     </Button>
                     <Button
                         size="lg"
-                        variant="outline"
+                        variant="secondary"
                         onClick={handleReset}
-                        style={{ borderColor: 'var(--re-border-default)' }}
+                        leadingIcon={<RotateCcw size={18} strokeWidth={1.75} aria-hidden="true" />}
                     >
-                        <RotateCcw size={18} className="mr-2" />
                         Run Another Drill
                     </Button>
                 </div>
 
-                <Card
-                    className="bg-gradient-to-r from-blue-50 to-indigo-50"
-                    style={{ borderColor: 'var(--re-brand)' }}
-                >
-                    <CardContent className="pt-6">
-                        <div className="flex items-start gap-4">
-                            <TrendingUp
-                                size={24}
-                                style={{ color: 'var(--re-brand)' }}
-                            />
-                            <div>
-                                <h4
-                                    className="font-semibold mb-2"
-                                    style={{ color: 'var(--re-text-primary)' }}
-                                >
-                                    Ready to automate this?
-                                </h4>
-                                <p
-                                    className="text-sm mb-4"
-                                    style={{ color: 'var(--re-text-secondary)' }}
-                                >
-                                    Continuous compliance monitoring and automated remediation recommendations.
-                                </p>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    style={{
-                                        borderColor: 'var(--re-brand)',
-                                        color: 'var(--re-brand)',
-                                    }}
-                                >
-                                    See Pricing <ArrowRight size={14} className="ml-2" />
-                                </Button>
-                            </div>
+                <Card variant="inset" padding="spacious">
+                    <div className="flex items-start gap-4">
+                        <TrendingUp
+                            size={20}
+                            strokeWidth={1.75}
+                            aria-hidden="true"
+                            className="mt-0.5 shrink-0 text-re-text-tertiary"
+                        />
+                        <div>
+                            <h4 className="mb-2 text-subheading text-re-text-primary">
+                                Ready to automate this?
+                            </h4>
+                            <p className="mb-4 text-ui text-re-text-secondary">
+                                Continuous compliance monitoring and automated remediation recommendations.
+                            </p>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                trailingIcon={<ArrowRight size={14} strokeWidth={1.75} aria-hidden="true" />}
+                            >
+                                See Pricing
+                            </Button>
                         </div>
-                    </CardContent>
+                    </div>
                 </Card>
             </motion.div>
         );
@@ -1008,7 +900,7 @@ STATUS: ${
             subtitle="Self-paced rehearsal for your §1.1455(c) records-on-request workflow"
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
-            <div className="py-8">
+            <div className="py-2">
                 <AnimatePresence mode="wait">{renderPhase()}</AnimatePresence>
             </div>
         </FreeToolPageShell>
@@ -1020,43 +912,38 @@ function ScoreCircle({ score }: { score: number }): React.ReactNode {
     const circumference = 2 * Math.PI * radius;
     const offset = circumference * (1 - score / 100);
 
-    const getScoreColorHex = (s: number): string => {
-        if (s >= 80) return '#10b981'; // green-500
-        if (s >= 70) return '#3b82f6'; // blue-500
-        if (s >= 60) return '#f59e0b'; // amber-500
-        if (s >= 50) return '#ef4444'; // red-500
-        return '#dc2626'; // red-600
-    };
-
     return (
-        <svg width={160} height={160} className="transform -rotate-90">
-            <circle
-                cx={80}
-                cy={80}
-                r={radius}
-                fill="none"
-                stroke="var(--re-border-default)"
-                strokeWidth={8}
-            />
-            <motion.circle
-                cx={80}
-                cy={80}
-                r={radius}
-                fill="none"
-                stroke={getScoreColorHex(score)}
-                strokeWidth={8}
-                strokeDasharray={circumference}
-                initial={{ strokeDashoffset: circumference }}
-                animate={{ strokeDashoffset: offset }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                strokeLinecap="round"
-            />
+        <svg width={160} height={160} aria-hidden="true">
+            <g transform="rotate(-90 80 80)">
+                <circle
+                    cx={80}
+                    cy={80}
+                    r={radius}
+                    fill="none"
+                    stroke="var(--re-border-default)"
+                    strokeWidth={8}
+                />
+                <motion.circle
+                    cx={80}
+                    cy={80}
+                    r={radius}
+                    fill="none"
+                    stroke="currentColor"
+                    className={getScoreColor(score)}
+                    strokeWidth={8}
+                    strokeDasharray={circumference}
+                    initial={{ strokeDashoffset: circumference }}
+                    animate={{ strokeDashoffset: offset }}
+                    transition={{ duration: 1, ease: 'easeOut' }}
+                    strokeLinecap="round"
+                />
+            </g>
             <text
                 x={80}
                 y={92}
                 textAnchor="middle"
                 fontSize={32}
-                fontWeight="bold"
+                fontWeight="600"
                 fill="var(--re-text-primary)"
             >
                 {Math.round(score)}

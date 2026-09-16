@@ -5,6 +5,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Callout } from "@/components/ui/callout";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -13,20 +16,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { getServiceURL } from "@/lib/api-config";
-import { AlertTriangle, GitBranch, Network, Search } from "lucide-react";
+import { AlertTriangle, GitBranch, Search } from "lucide-react";
 
 // ── Utilities ──
 function mulberry32(seed: number) {
@@ -70,20 +64,32 @@ type TraceabilityTableRow = {
     eventType: string;
 };
 
-const NTS: Record<NodeType, { color: string; dim: string; icon: string; kde: string }> = {
-    Supplier: { color: "var(--re-info)", dim: "rgba(14, 165, 233, 0.15)", icon: "🏭", kde: "Source" },
-    Facility: { color: "var(--re-brand)", dim: "rgba(34, 197, 94, 0.15)", icon: "🏗️", kde: "Location" },
-    Product: { color: "var(--re-warning)", dim: "rgba(245, 158, 11, 0.15)", icon: "📦", kde: "Product" },
-    Lot: { color: "var(--re-purple)", dim: "rgba(168, 85, 247, 0.15)", icon: "🔖", kde: "Traceability Lot" },
-    CTE: { color: "var(--re-cyan)", dim: "rgba(6, 182, 212, 0.15)", icon: "📍", kde: "Critical Tracking Event" },
-    Location: { color: "var(--re-danger)", dim: "rgba(239, 68, 68, 0.15)", icon: "📌", kde: "Ship-to/Ship-from" },
+// Node and edge hues are CATEGORICAL, so they come from the `--re-cat-*` set
+// (SPEC §1.6.6) rather than the status palette: a "Location" node is a kind of
+// thing, not a failing one. Every value is a token, so the canvas repaints
+// correctly in both themes instead of assuming a dark ground.
+const NTS: Record<NodeType, { color: string; icon: string; kde: string }> = {
+    Supplier: { color: "var(--re-cat-1)", icon: "🏭", kde: "Source" },
+    Facility: { color: "var(--re-cat-3)", icon: "🏗️", kde: "Location" },
+    Product: { color: "var(--re-cat-2)", icon: "📦", kde: "Product" },
+    Lot: { color: "var(--re-cat-4)", icon: "🔖", kde: "Traceability Lot" },
+    CTE: { color: "var(--re-cat-5)", icon: "📍", kde: "Critical Tracking Event" },
+    Location: { color: "var(--re-cat-6)", icon: "📌", kde: "Ship-to/Ship-from" },
 };
 
 const ETS: Record<EdgeType, { color: string; dash: boolean }> = {
-    Supplies: { color: "var(--re-info)", dash: false }, Contains: { color: "var(--re-purple)", dash: false },
-    Transforms: { color: "var(--re-warning)", dash: false }, ShipsTo: { color: "var(--re-brand)", dash: false },
-    TracedFrom: { color: "var(--re-cyan)", dash: true }, LocatedAt: { color: "var(--re-danger)", dash: true },
+    Supplies: { color: "var(--re-cat-1)", dash: false }, Contains: { color: "var(--re-cat-4)", dash: false },
+    Transforms: { color: "var(--re-cat-2)", dash: false }, ShipsTo: { color: "var(--re-cat-3)", dash: false },
+    TracedFrom: { color: "var(--re-cat-5)", dash: true }, LocatedAt: { color: "var(--re-cat-6)", dash: true },
 };
+
+/** Canvas has no `color-mix`, so tints are built from a resolved token hex. */
+function hexToRgba(hex: string, a: number) {
+    const r = parseInt(hex.slice(1, 3), 16) || 0;
+    const g = parseInt(hex.slice(3, 5), 16) || 0;
+    const b = parseInt(hex.slice(5, 7), 16) || 0;
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
 
 function nodeR(t: NodeType) { return t === "Facility" ? 20 : t === "Supplier" || t === "Product" ? 18 : t === "Location" ? 14 : 16; }
 
@@ -138,23 +144,14 @@ function useAnimFrame(cb: () => void, on: boolean) {
     useEffect(() => { if (!on) return; const tick = () => { cb(); raf.current = requestAnimationFrame(tick); }; raf.current = requestAnimationFrame(tick); return () => { if (raf.current) cancelAnimationFrame(raf.current); }; }, [cb, on]);
 }
 
-function getConfidenceDescriptor(confidence: number) {
+function getConfidenceDescriptor(confidence: number): { label: string; tone: "neutral" | "warning" | "danger" } {
     if (confidence >= 0.85) {
-        return {
-            label: "high",
-            className: "bg-re-brand/20 text-re-brand-light border-re-brand/30",
-        };
+        return { label: "high", tone: "neutral" };
     }
     if (confidence >= 0.7) {
-        return {
-            label: "medium",
-            className: "bg-re-warning/20 text-re-warning border-re-warning/30",
-        };
+        return { label: "medium", tone: "warning" };
     }
-    return {
-        label: "low",
-        className: "bg-rose-500/20 text-rose-300 border-rose-500/30",
-    };
+    return { label: "low", tone: "danger" };
 }
 
 function toRow(candidate: Record<string, unknown>, fallbackTlc = ""): TraceabilityTableRow {
@@ -271,16 +268,22 @@ export function SupplyChainKnowledgeGraphBuilder() {
         const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, rect = canvas.getBoundingClientRect();
         const w = Math.floor(rect.width * dpr), h = Math.floor(rect.height * dpr);
 
-        // Helper to resolve CSS variables into actual hex/rgba strings for Canvas
+        // Resolve the design tokens once per frame — Canvas cannot read CSS
+        // variables, so the ink, rules and ground are pulled from the live
+        // computed style and therefore follow the light/dark switch.
         const rootStyles = getComputedStyle(document.documentElement);
         const resolveColor = (c: string) => c.startsWith('var(') ? rootStyles.getPropertyValue(c.slice(4, -1)).trim() : c;
+        const ink = resolveColor('var(--re-text-primary)');
+        const mutedInk = resolveColor('var(--re-text-tertiary)');
+        const rule = resolveColor('var(--re-border-subtle)');
+        const well = resolveColor('var(--re-surface-inset)');
 
         if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, rect.width, rect.height);
         ctx.save(); ctx.translate(vp.panX, vp.panY); ctx.scale(vp.scale, vp.scale);
 
         // Grid
-        ctx.strokeStyle = "rgba(148,163,184,0.08)"; ctx.lineWidth = 0.5;
+        ctx.strokeStyle = rule; ctx.lineWidth = 0.5;
         const gs = 40, sx = Math.floor(-vp.panX / vp.scale / gs) * gs - gs, sy = Math.floor(-vp.panY / vp.scale / gs) * gs - gs;
         for (let x = sx; x < sx + rect.width / vp.scale + gs * 3; x += gs) { ctx.beginPath(); ctx.moveTo(x, sy); ctx.lineTo(x, sy + rect.height / vp.scale + gs * 3); ctx.stroke(); }
         for (let y = sy; y < sy + rect.height / vp.scale + gs * 3; y += gs) { ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + rect.width / vp.scale + gs * 3, y); ctx.stroke(); }
@@ -292,20 +295,7 @@ export function SupplyChainKnowledgeGraphBuilder() {
             const bColor = resolveColor(es.color);
             ctx.lineWidth = sel ? 3 : hl ? 2.5 : 1.2;
 
-            // Reconstruct rgba strings for transparency handling
-            const [baseHex, alpha] = bColor.startsWith('#') && bColor.length === 9
-                ? [bColor.slice(0, 7), parseInt(bColor.slice(7), 16) / 255]
-                : [bColor, 1];
-
-            // A helper to create rgba strings from hex + custom opacity
-            const hexToRgba = (hex: string, a: number) => {
-                const r = parseInt(hex.slice(1, 3), 16) || 0;
-                const g = parseInt(hex.slice(3, 5), 16) || 0;
-                const b = parseInt(hex.slice(5, 7), 16) || 0;
-                return `rgba(${r}, ${g}, ${b}, ${a})`;
-            };
-
-            ctx.strokeStyle = sel ? "rgba(99,102,241,0.9)" : hl ? bColor : dim ? hexToRgba(baseHex, 0.2) : hexToRgba(baseHex, 0.4);
+            ctx.strokeStyle = sel ? ink : hl ? bColor : dim ? hexToRgba(bColor, 0.2) : hexToRgba(bColor, 0.45);
             if (es.dash) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
             ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
             const dx = b.x - a.x, dy = b.y - a.y, dist = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / dist, uy = dy / dist;
@@ -318,19 +308,11 @@ export function SupplyChainKnowledgeGraphBuilder() {
             const r = nodeR(n.type), sel2 = selNode === n.id, hl = trace?.nodes.has(n.id), dim = trace && trace.nodes.size > 0 && !hl && !sel2, s = NTS[n.type];
             const sColor = resolveColor(s.color);
 
-            // Reconstruct rgba for hex
-            const hexToRgba = (hex: string, a: number) => {
-                const r = parseInt(hex.slice(1, 3), 16) || 0;
-                const g = parseInt(hex.slice(3, 5), 16) || 0;
-                const b = parseInt(hex.slice(5, 7), 16) || 0;
-                return `rgba(${r}, ${g}, ${b}, ${a})`;
-            };
-
             if (sel2 || hl) { ctx.beginPath(); ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2); ctx.fillStyle = hexToRgba(sColor, 0.15); ctx.fill(); }
-            ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = dim ? "rgba(15,23,42,0.6)" : s.dim; ctx.fill();
-            ctx.lineWidth = sel2 ? 2.5 : 1.5; ctx.strokeStyle = dim ? "rgba(148,163,184,0.2)" : sel2 ? "#fff" : sColor; ctx.stroke();
-            ctx.font = "14px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = dim ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.9)"; ctx.fillText(s.icon, n.x, n.y);
-            ctx.font = "11px ui-sans-serif"; ctx.fillStyle = dim ? "rgba(148,163,184,0.3)" : "rgba(226,232,240,0.95)"; ctx.textBaseline = "top";
+            ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = dim ? hexToRgba(well, 0.75) : hexToRgba(sColor, 0.15); ctx.fill();
+            ctx.lineWidth = sel2 ? 2.5 : 1.5; ctx.strokeStyle = dim ? hexToRgba(mutedInk, 0.25) : sel2 ? ink : sColor; ctx.stroke();
+            ctx.font = "14px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = dim ? hexToRgba(mutedInk, 0.3) : ink; ctx.fillText(s.icon, n.x, n.y);
+            ctx.font = `11px ${rootStyles.getPropertyValue('--re-font-sans').trim() || 'ui-sans-serif'}`; ctx.fillStyle = dim ? hexToRgba(mutedInk, 0.35) : ink; ctx.textBaseline = "top";
             ctx.fillText(n.label, n.x, n.y + r + 5);
         }
         ctx.restore();
@@ -424,178 +406,192 @@ export function SupplyChainKnowledgeGraphBuilder() {
         }
     };
 
+    const queryColumns: DataTableColumn<TraceabilityTableRow>[] = [
+        { key: "tlc", header: "TLC", mono: true, cell: (row) => row.tlc || "—" },
+        { key: "product", header: "Product", cell: (row) => row.product || "—" },
+        { key: "facility", header: "Facility", cell: (row) => row.facility || "—" },
+        { key: "date", header: "Date", mono: true, cell: (row) => row.date || "—" },
+        { key: "eventType", header: "Event Type", cell: (row) => row.eventType || "—" },
+    ];
+
     return (
-        <div className="space-y-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-muted"><Network className="h-5 w-5" /></div>
-                    <div><div className="text-xl font-semibold">Knowledge Graph Builder</div><div className="text-sm text-muted-foreground">FSMA 204-native traceability graph.</div></div>
+        <div className="space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <div className="text-heading text-re-text-primary">Knowledge Graph Builder</div>
+                    <div className="mt-1 text-ui text-re-text-secondary">FSMA 204-native traceability graph.</div>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" className="rounded-2xl" onClick={fitView}>Fit View</Button>
-                    <Button variant="outline" className="rounded-2xl" onClick={() => setRelaxing(true)}><GitBranch className="mr-2 h-4 w-4" />Relax Layout</Button>
+                <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={fitView}>Fit View</Button>
+                    <Button
+                        variant="secondary"
+                        onClick={() => setRelaxing(true)}
+                        leadingIcon={<GitBranch aria-hidden="true" strokeWidth={1.75} />}
+                    >
+                        Relax Layout
+                    </Button>
                 </div>
             </div>
-            <Card className="rounded-3xl"><CardContent className="p-4 md:p-6">
-                <div className="grid gap-4 md:grid-cols-12">
-                    <div className="md:col-span-9">
-                        <form className="mb-4 rounded-2xl border p-3" onSubmit={runTraceabilityQuery}>
-                            <div className="flex flex-col gap-2 md:flex-row">
-                                <Input
-                                    className="rounded-2xl"
-                                    placeholder="Ask your traceability data… (e.g. Where did lot ABC-2025-001 come from?)"
-                                    value={traceabilityQuery}
-                                    onChange={(e) => setTraceabilityQuery(e.target.value)}
-                                />
-                                <Button
-                                    type="submit"
-                                    className="rounded-2xl"
-                                    disabled={queryLoading || !traceabilityQuery.trim()}
-                                >
-                                    {queryLoading ? (
-                                        <span className="inline-flex items-center gap-2">
-                                            <Spinner size="sm" className="h-4 w-4 border-2" />
-                                            Querying
-                                        </span>
-                                    ) : (
-                                        "Ask"
-                                    )}
-                                </Button>
-                            </div>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                                Try: “Where did lot ABC-2025-001 come from?” or “Show lettuce events from last 30 days”.
-                            </p>
-                        </form>
 
-                        {queryResponse && (
-                            <div className="mb-4 space-y-3">
-                                <div className="rounded-2xl border bg-background/70 p-3">
-                                    <div className="mb-1 flex items-center gap-2">
-                                        <div className="text-sm font-semibold">Answer</div>
-                                        {confidenceInfo && (
-                                            <Badge className={confidenceInfo.className}>
-                                                Confidence {confidenceInfo.label} ({Math.round(queryResponse.confidence * 100)}%)
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">{queryResponse.answer}</p>
-                                </div>
-
-                                {showWarningBanner && (
-                                    <div className="rounded-2xl border border-re-warning/40 bg-re-warning/10 p-3 text-re-warning">
-                                        <div className="mb-1 inline-flex items-center gap-2 text-sm font-medium">
-                                            <AlertTriangle className="h-4 w-4" />
-                                            Query warnings
-                                        </div>
-                                        <div className="text-xs leading-relaxed">
-                                            {queryResponse.warnings.length > 0
-                                                ? queryResponse.warnings.join(" ")
-                                                : "Interpretation confidence is below 70%; verify filters before acting."}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="rounded-2xl border p-3 overflow-x-auto">
-                                    <div className="mb-2 text-sm font-medium">Results ({queryRows.length})</div>
-                                    {queryRows.length > 0 ? (
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>TLC</TableHead>
-                                                    <TableHead>Product</TableHead>
-                                                    <TableHead>Facility</TableHead>
-                                                    <TableHead>Date</TableHead>
-                                                    <TableHead>Event Type</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {queryRows.map((row, idx) => (
-                                                    <TableRow key={`${row.tlc}-${row.eventType}-${row.date}-${idx}`}>
-                                                        <TableCell>{row.tlc || "—"}</TableCell>
-                                                        <TableCell>{row.product || "—"}</TableCell>
-                                                        <TableCell>{row.facility || "—"}</TableCell>
-                                                        <TableCell>{row.date || "—"}</TableCell>
-                                                        <TableCell>{row.eventType || "—"}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground">No rows returned for this query.</p>
-                                    )}
-                                </div>
-
-                                <details className="rounded-2xl border p-3">
-                                    <summary className="cursor-pointer text-sm font-medium">
-                                        Evidence ({queryResponse.evidence?.length || 0})
-                                    </summary>
-                                    <div className="mt-3 space-y-2">
-                                        {(queryResponse.evidence || []).map((item, idx) => (
-                                            <div key={`${item.endpoint}-${idx}`} className="rounded-xl border p-2 text-xs">
-                                                <div><span className="font-medium">Endpoint:</span> {item.endpoint}</div>
-                                                <div><span className="font-medium">Result count:</span> {item.result_count ?? 0}</div>
-                                                {item.next_cursor ? (
-                                                    <div><span className="font-medium">Next cursor:</span> {item.next_cursor}</div>
-                                                ) : null}
-                                                {item.params ? (
-                                                    <pre className="mt-2 overflow-auto rounded-lg bg-muted p-2 text-[11px]">
-                                                        {JSON.stringify(item.params, null, 2)}
-                                                    </pre>
-                                                ) : null}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </details>
-                            </div>
-                        )}
-
-                        <div className="flex flex-wrap items-center gap-2 mb-4">
-                            <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="w-[240px] rounded-2xl pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-                            <Select value={trMode} onValueChange={v => setTrMode(v as TraceMode)}><SelectTrigger className="w-[160px] rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="forward">→ Forward</SelectItem><SelectItem value="backward">← Backward</SelectItem><SelectItem value="bidirectional">↔ Both</SelectItem></SelectContent></Select>
-                        </div>
-                        <div ref={containerRef} className="h-[520px] w-full overflow-hidden rounded-3xl border bg-[var(--re-surface-base)] relative">
-                            <canvas
-                                ref={canvasRef}
-                                className="h-full w-full outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:ring-inset"
-                                style={{ cursor: dragId ? "grabbing" : "crosshair" }}
-                                onWheel={onWheel}
-                                onMouseDown={onDown}
-                                onMouseMove={onMove}
-                                onMouseUp={onUp}
-                                onMouseLeave={onUp}
-                                tabIndex={0}
-                                role="img"
-                                aria-label="Interactive visual representation of the Supply Chain Knowledge Graph. Use the mouse to pan, zoom, and explore nodes such as Suppliers and Critical Tracking Events."
-                            >
-                                <p className="p-4 text-sm text-[var(--re-text-muted)]">
-                                    Your browser does not support the HTML5 canvas element, or screen reader mode is active.
-                                    This widget allows visual exploration of {visNodes.length} supply chain nodes and {visEdges.length} tracking events connecting them.
-                                </p>
-                            </canvas>
-                        </div>
-                    </div>
-                    <div className="md:col-span-3 space-y-3">
-                        <div className="rounded-2xl border p-3">
-                            <div className="text-sm font-medium">Inspector</div>
-                            <div className="mt-2 text-xs text-muted-foreground">
-                                {selNodeObj ? (
-                                    <div className="space-y-1">
-                                        <div className="font-bold">{selNodeObj.label}</div>
-                                        <div>Type: {selNodeObj.type}</div>
-                                        <div>KDE: {NTS[selNodeObj.type]?.kde}</div>
-                                    </div>
-                                ) : "Select a node to view details."}
-                            </div>
-                        </div>
-                        <div className="rounded-2xl border p-3">
-                            <div className="text-sm font-medium">Insights</div>
-                            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                                Connect your physical supply chain nodes to cryptographic traceability lot codes (TLCs).
-                            </p>
-                        </div>
-                    </div>
+            <form className="rounded-md border border-re-border bg-re-surface-card p-4" onSubmit={runTraceabilityQuery}>
+                <div className="flex flex-col gap-2 md:flex-row">
+                    <label htmlFor="kg-traceability-query" className="sr-only">
+                        Ask your traceability data
+                    </label>
+                    <Input
+                        id="kg-traceability-query"
+                        placeholder="Ask your traceability data… (e.g. Where did lot ABC-2025-001 come from?)"
+                        value={traceabilityQuery}
+                        onChange={(e) => setTraceabilityQuery(e.target.value)}
+                    />
+                    <Button
+                        type="submit"
+                        loading={queryLoading}
+                        disabled={queryLoading || !traceabilityQuery.trim()}
+                    >
+                        {queryLoading ? "Querying" : "Ask"}
+                    </Button>
                 </div>
-            </CardContent></Card>
+                <p className="mt-2 text-small text-re-text-tertiary">
+                    Try: “Where did lot ABC-2025-001 come from?” or “Show lettuce events from last 30 days”.
+                </p>
+            </form>
+
+            {queryResponse && (
+                <div className="space-y-4">
+                    <Card>
+                        <CardContent className="p-4">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                                <div className="text-subheading text-re-text-primary">Answer</div>
+                                {confidenceInfo && (
+                                    <Badge tone={confidenceInfo.tone}>
+                                        Confidence {confidenceInfo.label} ({Math.round(queryResponse.confidence * 100)}%)
+                                    </Badge>
+                                )}
+                            </div>
+                            <p className="text-ui text-re-text-secondary">{queryResponse.answer}</p>
+                        </CardContent>
+                    </Card>
+
+                    {showWarningBanner && (
+                        <Callout tone="warning" role="status" title="Query warnings" icon={AlertTriangle}>
+                            {queryResponse.warnings.length > 0
+                                ? queryResponse.warnings.join(" ")
+                                : "Interpretation confidence is below 70%; verify filters before acting."}
+                        </Callout>
+                    )}
+
+                    <div>
+                        <div className="mb-2 text-label text-re-text-muted">Results ({queryRows.length})</div>
+                        <DataTable
+                            caption={`Traceability query results (${queryRows.length})`}
+                            columns={queryColumns}
+                            data={queryRows}
+                            rowKey={(row, idx) => `${row.tlc}-${row.eventType}-${row.date}-${idx}`}
+                            status={queryRows.length === 0 ? "empty" : "idle"}
+                            empty={{ title: "No rows returned for this query.", size: "sm" }}
+                        />
+                    </div>
+
+                    <details className="rounded-md border border-re-border bg-re-surface-card p-4">
+                        <summary className="cursor-pointer text-ui font-medium text-re-text-primary">
+                            Evidence ({queryResponse.evidence?.length || 0})
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                            {(queryResponse.evidence || []).map((item, idx) => (
+                                <div key={`${item.endpoint}-${idx}`} className="rounded-md border border-re-border-subtle p-3 text-small text-re-text-secondary">
+                                    <div><span className="font-medium text-re-text-primary">Endpoint:</span> <span className="font-mono text-[0.8125rem]">{item.endpoint}</span></div>
+                                    <div><span className="font-medium text-re-text-primary">Result count:</span> <span className="tabular-nums">{item.result_count ?? 0}</span></div>
+                                    {item.next_cursor ? (
+                                        <div><span className="font-medium text-re-text-primary">Next cursor:</span> <span className="font-mono text-[0.8125rem] break-all">{item.next_cursor}</span></div>
+                                    ) : null}
+                                    {item.params ? (
+                                        <pre className="mt-2 overflow-auto rounded-md bg-re-surface-inset p-2 font-mono text-[0.8125rem] text-re-text-secondary">
+                                            {JSON.stringify(item.params, null, 2)}
+                                        </pre>
+                                    ) : null}
+                                </div>
+                            ))}
+                        </div>
+                    </details>
+                </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="w-full sm:w-60">
+                    <label htmlFor="kg-node-search" className="sr-only">Search</label>
+                    <Input
+                        id="kg-node-search"
+                        placeholder="Search..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        leadingIcon={<Search aria-hidden="true" strokeWidth={1.75} />}
+                    />
+                </div>
+                <div>
+                    <label htmlFor="kg-trace-mode" className="sr-only">Trace direction</label>
+                    <Select value={trMode} onValueChange={v => setTrMode(v as TraceMode)}>
+                        <SelectTrigger id="kg-trace-mode" className="w-40"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="forward">→ Forward</SelectItem>
+                            <SelectItem value="backward">← Backward</SelectItem>
+                            <SelectItem value="bidirectional">↔ Both</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <div ref={containerRef} className="relative h-[360px] w-full overflow-hidden rounded-lg border border-re-border bg-re-surface-inset sm:h-[440px]">
+                <canvas
+                    ref={canvasRef}
+                    className="h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-inset"
+                    style={{ cursor: dragId ? "grabbing" : "crosshair" }}
+                    onWheel={onWheel}
+                    onMouseDown={onDown}
+                    onMouseMove={onMove}
+                    onMouseUp={onUp}
+                    onMouseLeave={onUp}
+                    tabIndex={0}
+                    role="img"
+                    aria-label="Interactive visual representation of the Supply Chain Knowledge Graph. Use the mouse to pan, zoom, and explore nodes such as Suppliers and Critical Tracking Events."
+                >
+                    <p className="p-4 text-ui text-re-text-muted">
+                        Your browser does not support the HTML5 canvas element, or screen reader mode is active.
+                        This widget allows visual exploration of {visNodes.length} supply chain nodes and {visEdges.length} tracking events connecting them.
+                    </p>
+                </canvas>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+                <Card>
+                    <CardContent className="p-4">
+                        <div className="text-subheading text-re-text-primary">Inspector</div>
+                        <div className="mt-2 text-ui text-re-text-secondary">
+                            {selNodeObj ? (
+                                <div className="space-y-1">
+                                    <div className="font-medium text-re-text-primary">{selNodeObj.label}</div>
+                                    <div>Type: {selNodeObj.type}</div>
+                                    <div>KDE: {NTS[selNodeObj.type]?.kde}</div>
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    bare
+                                    size="sm"
+                                    title="Select a node to view details."
+                                />
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4">
+                        <div className="text-subheading text-re-text-primary">Insights</div>
+                        <p className="mt-2 text-ui leading-relaxed text-re-text-secondary">
+                            Connect your physical supply chain nodes to cryptographic traceability lot codes (TLCs).
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

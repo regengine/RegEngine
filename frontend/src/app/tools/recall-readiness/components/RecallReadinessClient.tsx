@@ -3,9 +3,13 @@
 import { useState } from 'react';
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Shield, AlertCircle, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
@@ -126,6 +130,7 @@ const READINESS_TOOL_CONFIG: ToolConfig = {
 };
 
 export function RecallReadinessClient() {
+    const reduceMotion = useReducedMotion();
     const [leadSubmitted, setLeadSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
@@ -189,135 +194,165 @@ export function RecallReadinessClient() {
         if (answers.cte_coverage === 'no') gaps.push('Gap indicated: missing Critical Tracking Event recordkeeping for your role');
 
         const gapCount = gaps.length;
-        const indicatorColor = gapCount === 0 ? 'var(--re-brand)' : 'var(--re-warning)';
+        // Non-verdict indicator: it counts what the operator told us was missing.
+        // It is never a letter grade, a percentage or a pass/fail mark.
+        const indicatorRing = gapCount === 0
+            ? 'border-re-border-strong text-re-text-primary'
+            : 'border-re-warning text-re-warning';
 
         return (
             <div className="space-y-8">
-                <div className="text-center py-6">
+                <div className="py-6 text-center">
                     <motion.div
-                        initial={{ scale: 0.5, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="inline-flex items-center justify-center w-24 h-24 rounded-full border-4 mb-4"
-                        style={{ borderColor: indicatorColor, color: indicatorColor }}
+                        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className={cn(
+                            'mb-4 inline-flex h-24 w-24 items-center justify-center rounded-full border-2',
+                            indicatorRing
+                        )}
                     >
-                        <span className="text-3xl font-black leading-tight text-center px-2">
+                        <span className="px-2 text-center text-heading leading-tight">
                             {gapCount === 0 ? 'No gaps' : `${gapCount} gap${gapCount === 1 ? '' : 's'}`}
                         </span>
                     </motion.div>
-                    <h3 className="text-2xl font-bold">Self-Check Result</h3>
-                    <p className="text-[var(--re-text-tertiary)] mt-1">Based on your self-reported answers — not a compliance verdict.</p>
+                    <h3 className="text-heading text-re-text-primary">Self-Check Result</h3>
+                    <p className="mt-1 text-ui text-re-text-tertiary">Based on your self-reported answers — not a compliance verdict.</p>
                 </div>
 
                 {/* Lead capture form - gate detailed results */}
                 {!leadSubmitted && (
-                    <div className="p-6 rounded-2xl border-2 border-[var(--re-brand)] bg-[var(--re-brand-muted)]">
-                        <div className="text-center mb-5">
-                            <h3 className="text-lg font-bold text-[var(--re-text-primary)]">Get a follow-up from the RegEngine team</h3>
-                            <p className="text-sm text-[var(--re-text-tertiary)] mt-1">
-                                Share your details if you want a follow-up from the RegEngine team about your readiness results and next steps.
-                            </p>
-                        </div>
-                        <form onSubmit={handleLeadSubmit} className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <input name="name" required placeholder="Full Name" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
-                                <input name="email" type="email" required placeholder="Work Email" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
+                    <Card>
+                        <CardContent className="p-6">
+                            <div className="mb-5 text-center">
+                                <h3 className="text-subheading text-re-text-primary">Get a follow-up from the RegEngine team</h3>
+                                <p className="mt-1 text-small text-re-text-tertiary">
+                                    Share your details if you want a follow-up from the RegEngine team about your readiness results and next steps.
+                                </p>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <input name="company" required placeholder="Company Name" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
-                                <select name="role" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]">
-                                    <option value="">Your Role</option>
-                                    <option value="qa-food-safety">QA / Food Safety</option>
-                                    <option value="operations">Operations</option>
-                                    <option value="compliance">Compliance / Regulatory</option>
-                                    <option value="supply-chain">Supply Chain</option>
-                                    <option value="executive">Executive / Owner</option>
-                                    <option value="it">IT / Engineering</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <select name="facilityCount" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]">
-                                    <option value="">Number of Facilities</option>
-                                    <option value="1">1 facility</option>
-                                    <option value="2-5">2–5 facilities</option>
-                                    <option value="6-20">6–20 facilities</option>
-                                    <option value="20+">20+ facilities</option>
-                                </select>
-                                <input name="phone" type="tel" placeholder="Phone (optional)" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
-                            </div>
-                            {submitError && <p className="text-sm text-[var(--re-danger)] text-center">{submitError}</p>}
-                            <Button type="submit" disabled={submitting} className="w-full h-12 text-base bg-[var(--re-brand)] hover:brightness-110 mt-2">
-                                {submitting ? 'Submitting...' : 'Send Me My Self-Check Summary'} {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
-                            </Button>
-                            <p className="text-[10px] text-center text-[var(--re-text-muted)]">We&apos;ll only use your details to follow up on this self-check. See our Privacy Policy.</p>
-                        </form>
-                    </div>
+                            <form onSubmit={handleLeadSubmit} className="space-y-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label htmlFor="rr-name" className="sr-only">Full Name</label>
+                                        <Input id="rr-name" name="name" required placeholder="Full Name" size="lg" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="rr-email" className="sr-only">Work Email</label>
+                                        <Input id="rr-email" name="email" type="email" required placeholder="Work Email" size="lg" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label htmlFor="rr-company" className="sr-only">Company Name</label>
+                                        <Input id="rr-company" name="company" required placeholder="Company Name" size="lg" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="rr-role" className="sr-only">Your Role</label>
+                                        <select id="rr-role" name="role" className={cn(fieldControlClasses, 'h-11')}>
+                                            <option value="">Your Role</option>
+                                            <option value="qa-food-safety">QA / Food Safety</option>
+                                            <option value="operations">Operations</option>
+                                            <option value="compliance">Compliance / Regulatory</option>
+                                            <option value="supply-chain">Supply Chain</option>
+                                            <option value="executive">Executive / Owner</option>
+                                            <option value="it">IT / Engineering</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label htmlFor="rr-facility-count" className="sr-only">Number of Facilities</label>
+                                        <select id="rr-facility-count" name="facilityCount" className={cn(fieldControlClasses, 'h-11')}>
+                                            <option value="">Number of Facilities</option>
+                                            <option value="1">1 facility</option>
+                                            <option value="2-5">2–5 facilities</option>
+                                            <option value="6-20">6–20 facilities</option>
+                                            <option value="20+">20+ facilities</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="rr-phone" className="sr-only">Phone (optional)</label>
+                                        <Input id="rr-phone" name="phone" type="tel" placeholder="Phone (optional)" size="lg" />
+                                    </div>
+                                </div>
+                                {submitError && (
+                                    <Callout tone="danger" role="alert">{submitError}</Callout>
+                                )}
+                                <Button
+                                    type="submit"
+                                    size="lg"
+                                    loading={submitting}
+                                    trailingIcon={<ArrowRight aria-hidden="true" strokeWidth={1.75} />}
+                                    className="mt-2 w-full"
+                                >
+                                    {submitting ? 'Submitting...' : 'Send Me My Self-Check Summary'}
+                                </Button>
+                                <p className="text-center text-label tracking-normal text-re-text-muted">We&apos;ll only use your details to follow up on this self-check. See our Privacy Policy.</p>
+                            </form>
+                        </CardContent>
+                    </Card>
                 )}
 
                 {/* Detailed results - shown after lead capture */}
                 {leadSubmitted && (
                     <>
-                        <div className="p-4 rounded-xl bg-[var(--re-success-muted)] border border-[var(--re-success)] text-center">
-                            <p className="text-sm font-semibold text-[var(--re-text-primary)]">
-                                <CheckCircle2 className="inline h-4 w-4 mr-1 text-[var(--re-success)]" />
-                                Self-check submitted. We&apos;ll follow up with notes on your self-reported answers. This is not a compliance determination.
-                            </p>
-                        </div>
+                        <Callout tone="success" role="status" icon={CheckCircle2}>
+                            Self-check submitted. We&apos;ll follow up with notes on your self-reported answers. This is not a compliance determination.
+                        </Callout>
 
                         {gaps.length > 0 && (
                             <div className="space-y-4">
-                                <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">Self-Reported Gaps</h4>
+                                <h4 className="text-label text-re-text-muted">Self-Reported Gaps</h4>
                                 <div className="space-y-2">
                                     {gaps.map((gap, i) => (
-                                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--re-danger-muted)] border border-[var(--re-danger)]/20 text-sm">
-                                            <AlertCircle className="h-4 w-4 shrink-0 text-[var(--re-danger)]" />
-                                            <span className="text-[var(--re-text-primary)]">{gap}</span>
-                                        </div>
+                                        <Callout key={i} tone="warning" icon={AlertCircle}>
+                                            {gap}
+                                        </Callout>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="p-6 rounded-2xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
-                                <h4 className="font-bold mb-3 flex items-center gap-2">
-                                    <AlertTriangle className="h-4 w-4 text-[var(--re-warning)]" /> Regulatory Risks
-                                </h4>
-                                <ul className="text-xs space-y-3 text-[var(--re-text-tertiary)]">
-                                    <li>Potential citations for <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455" target="_blank" rel="noopener noreferrer" className="text-[var(--re-brand)] hover:underline">21 CFR §1.1455</a> violations</li>
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                            <Callout tone="warning" role="note" icon={AlertTriangle} title="Regulatory Risks">
+                                <ul className="space-y-3 text-small text-re-text-tertiary">
+                                    <li>Potential citations for <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455" target="_blank" rel="noopener noreferrer" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">21 CFR §1.1455</a> violations</li>
                                     <li>Delayed response times during active recalls</li>
                                     <li>Operational chaos during FDA audits</li>
                                 </ul>
-                            </div>
-                            <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
-                                <h4 className="font-bold mb-3 flex items-center gap-2">
-                                    <Shield className="h-4 w-4 text-[var(--re-brand)]" /> RegEngine Platform
-                                </h4>
-                                <p className="text-xs text-[var(--re-text-secondary)] leading-relaxed mb-4">
-                                    RegEngine helps teams organize KDEs and prepare sortable spreadsheet exports to support FSMA 204 records requests.
-                                </p>
-                                <Button asChild className="w-full bg-[var(--re-brand)] text-xs h-8">
-                                    <a
-                                        href="https://calendly.com/regengine/fsma-strategy-session"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        Book a strategy call
-                                    </a>
-                                </Button>
-                            </div>
+                            </Callout>
+                            <Card>
+                                <CardContent>
+                                    <h4 className="mb-3 text-subheading text-re-text-primary">RegEngine Platform</h4>
+                                    <p className="mb-4 text-small leading-relaxed text-re-text-secondary">
+                                        RegEngine helps teams organize KDEs and prepare sortable spreadsheet exports to support FSMA 204 records requests.
+                                    </p>
+                                    <Button asChild variant="secondary" size="sm" className="w-full">
+                                        <a
+                                            href="https://calendly.com/regengine/fsma-strategy-session"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            Book a strategy call
+                                        </a>
+                                    </Button>
+                                </CardContent>
+                            </Card>
                         </div>
 
                         <div className="flex flex-col items-center gap-3 pt-4">
-                            <div className="w-full p-4 rounded-xl border border-[var(--re-brand)] bg-[var(--re-brand-muted)] text-center">
-                                <p className="text-xs font-bold mb-2">Recommended Next Step:</p>
-                                <Link href="/tools/kde-checker">
-                                    <Button className="w-full bg-[var(--re-brand)] gap-2">
-                                        Generate Your KDE Checklist <ArrowRight className="h-4 w-4" />
+                            <Card className="w-full">
+                                <CardContent className="text-center">
+                                    <p className="mb-2 text-label text-re-text-muted">Recommended Next Step:</p>
+                                    <Button asChild variant="secondary" size="lg" className="w-full gap-2">
+                                        <Link href="/tools/kde-checker">
+                                            Generate Your KDE Checklist <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
+                                        </Link>
                                     </Button>
-                                </Link>
-                            </div>
-                            <Link href="/tools" className="text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] underline">
+                                </CardContent>
+                            </Card>
+                            <Link href="/tools" className="text-ui text-re-text-secondary underline underline-offset-[3px] decoration-re-border-strong hover:text-re-text-primary hover:decoration-re-brand">
                                 Back to Toolkit Hub
                             </Link>
                         </div>
@@ -328,17 +363,15 @@ export function RecallReadinessClient() {
     };
 
     return (
-        <div className="min-h-screen py-20 px-4" style={{ background: 'var(--re-surface-base)' }}>
+        <>
             <FSMAToolShell
                 config={READINESS_TOOL_CONFIG}
                 renderResults={evaluateResults}
             />
 
-            <div className="max-w-3xl mx-auto">
-                <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['tlc-validator', 'drill-simulator', 'roi-calculator'].includes(t.id))}
-                />
-            </div>
-        </div>
+            <RelatedTools
+                tools={FREE_TOOLS.filter(t => ['tlc-validator', 'drill-simulator', 'roi-calculator'].includes(t.id))}
+            />
+        </>
     );
 }

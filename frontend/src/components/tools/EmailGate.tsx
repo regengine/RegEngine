@@ -3,7 +3,11 @@
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mail, ArrowRight, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowRight, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 
 interface EmailGateProps {
     toolName: string;
@@ -224,22 +228,19 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
         <>
             {children}
             <section className="mx-auto my-10 w-full max-w-xl px-4">
-                <div className="w-full overflow-hidden rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-re-lg">
+                <Card className="w-full overflow-hidden">
                     {/* Header */}
-                    <div className="px-6 pt-8 pb-2 text-center">
-                        <div className="mx-auto mb-4 w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] flex items-center justify-center">
-                            <Mail className="h-6 w-6 text-[var(--re-brand)]" />
-                        </div>
-                        <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-1">
+                    <div className="px-6 pb-2 pt-8 text-center">
+                        <h2 className="mb-1 text-heading text-re-text-primary">
                             Save your {resultLabel}
                         </h2>
-                        <p className="text-sm text-[var(--re-text-tertiary)]">
+                        <p className="text-ui text-re-text-tertiary">
                             {step === 'email'
                                 ? 'Enter your work email to save results and receive a verification code. No account required, no credit card, no spam.'
                                 : (
                                     <>
                                         Check your inbox — we sent a 6-digit code to{' '}
-                                        <span className="text-[var(--re-text-primary)] font-medium">{email}</span>
+                                        <span className="font-medium text-re-text-primary">{email}</span>
                                     </>
                                 )}
                         </p>
@@ -249,9 +250,10 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                     <div className="px-6 py-5">
                         {step === 'email' ? (
                             <form onSubmit={handleEmailSubmit} className="space-y-4">
-                                <div>
-                                    <input
+                                <Field label="Work email" htmlFor="email-gate-email" error={error || undefined}>
+                                    <Input
                                         type="email"
+                                        size="lg"
                                         value={email}
                                         onChange={(e) => {
                                             setEmail(e.target.value);
@@ -260,32 +262,23 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                                         placeholder="you@company.com"
                                         required
                                         autoComplete="email"
-                                        className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
                                     />
-                                </div>
+                                </Field>
 
-                                {error && (
-                                    <p className="text-sm text-re-danger">{error}</p>
-                                )}
-
-                                <button
+                                <Button
                                     type="submit"
+                                    size="lg"
+                                    className="w-full"
                                     disabled={loading || !email.includes('@')}
-                                    className="w-full flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-5 py-3 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
+                                    loading={loading}
+                                    trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
                                 >
-                                    {loading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <>
-                                            Send verification code
-                                            <ArrowRight className="h-4 w-4" />
-                                        </>
-                                    )}
-                                </button>
+                                    Send verification code
+                                </Button>
                                 <div className="text-center">
                                     <Link
                                         href="/tools"
-                                        className="text-xs text-[var(--re-text-muted)] underline-offset-4 hover:text-[var(--re-text-secondary)] hover:underline"
+                                        className="text-small text-re-text-muted underline-offset-4 hover:text-re-text-secondary hover:underline"
                                     >
                                         Back to tools
                                     </Link>
@@ -293,52 +286,54 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                             </form>
                         ) : (
                             <div className="space-y-4">
-                                <div>
-                                    <input
+                                <Field label="Verification code" htmlFor="email-gate-code" error={error || undefined}>
+                                    <Input
                                         ref={codeInputRef}
                                         type="text"
+                                        size="lg"
                                         inputMode="numeric"
                                         value={code}
                                         onChange={(e) => handleCodeChange(e.target.value)}
                                         placeholder="000000"
                                         maxLength={6}
                                         autoComplete="one-time-code"
-                                        className="w-full px-4 py-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] text-center text-xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent transition-all"
+                                        className="text-center font-mono text-heading tracking-[0.5em]"
                                     />
-                                </div>
-
-                                {error && (
-                                    <p className="text-sm text-re-danger">{error}</p>
-                                )}
+                                </Field>
 
                                 {loading && (
                                     <div className="flex justify-center">
-                                        <Loader2 className="h-5 w-5 animate-spin text-[var(--re-brand)]" />
+                                        <Loader2
+                                            className="h-5 w-5 animate-spin text-re-text-tertiary motion-reduce:animate-none"
+                                            aria-hidden="true"
+                                        />
                                     </div>
                                 )}
 
-                                <div className="flex items-center justify-between text-xs">
-                                    <button
+                                <div className="flex items-center justify-between gap-2">
+                                    <Button
                                         type="button"
+                                        variant="ghost"
+                                        size="sm"
                                         onClick={() => {
                                             setStep('email');
                                             setCode('');
                                             setError('');
                                         }}
-                                        className="text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors"
                                     >
                                         Change email
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button
                                         type="button"
+                                        variant="link"
+                                        size="sm"
                                         onClick={handleResend}
                                         disabled={resendCountdown > 0}
-                                        className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] disabled:text-[var(--re-text-disabled)] disabled:cursor-not-allowed transition-colors"
                                     >
                                         {resendCountdown > 0
                                             ? `Resend in ${resendCountdown}s`
                                             : 'Resend code'}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         )}
@@ -348,25 +343,26 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                     <div className="px-6 pb-6">
                         <button
                             type="button"
+                            aria-expanded={whyExpanded}
                             onClick={() => setWhyExpanded(!whyExpanded)}
-                            className="flex items-center gap-1.5 text-xs text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] transition-colors"
+                            className="flex items-center gap-1.5 rounded-sm text-small text-re-text-muted transition-colors duration-120 hover:text-re-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
                         >
                             {whyExpanded ? (
-                                <ChevronUp className="h-3 w-3" />
+                                <ChevronUp className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                             ) : (
-                                <ChevronDown className="h-3 w-3" />
+                                <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                             )}
                             Why do we ask?
                         </button>
                         {whyExpanded && (
-                            <p className="mt-2 text-xs text-[var(--re-text-muted)] leading-relaxed">
+                            <p className="mt-2 text-small text-re-text-muted">
                                 We use your work email to verify you&apos;re a food industry professional.
                                 Your email is never sold or shared. You&apos;ll receive your verification
                                 code and nothing else.
                             </p>
                         )}
                     </div>
-                </div>
+                </Card>
             </section>
         </>
     );

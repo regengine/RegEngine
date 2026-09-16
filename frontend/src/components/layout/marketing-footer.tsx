@@ -36,7 +36,7 @@ const FOOTER_LINK =
 function FooterColumn({ heading, links }: { heading: string; links: MarketingNavLink[] }) {
     return (
         <div>
-            <h4 className={COLUMN_HEADING}>{heading}</h4>
+            <h2 className={COLUMN_HEADING}>{heading}</h2>
             {links.map((link) => (
                 <Link key={link.label} href={link.href} className={FOOTER_LINK}>
                     {link.label}
@@ -71,7 +71,7 @@ export function MarketingFooter() {
                 <FooterColumn heading="Product" links={MARKETING_FOOTER_PRODUCT_LINKS} />
 
                 <div>
-                    <h4 className={COLUMN_HEADING}>Free Tools</h4>
+                    <h2 className={COLUMN_HEADING}>Free Tools</h2>
                     {MARKETING_FREE_TOOLS.map((link) => (
                         <Link key={link.href} href={link.href} className={FOOTER_LINK}>
                             {link.label}

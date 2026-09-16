@@ -72,10 +72,24 @@ function actionRoute(action: string): string | null {
 
 /* ── Helpers ── */
 
+/** For SVG paint attributes, which take a value rather than a class. */
 function scoreColor(score: number) {
     if (score >= 80) return 'var(--re-brand)';
-    if (score >= 60) return '#f59e0b';
-    return '#ef4444';
+    if (score >= 60) return 'var(--re-warning)';
+    return 'var(--re-danger)';
+}
+
+/** For DOM nodes — a class keeps the colour out of an inline style (SPEC §4). */
+function scoreTextClass(score: number) {
+    if (score >= 80) return 'text-re-brand';
+    if (score >= 60) return 'text-re-warning';
+    return 'text-re-danger';
+}
+
+function scoreBgClass(score: number) {
+    if (score >= 80) return 'bg-re-brand';
+    if (score >= 60) return 'bg-re-warning';
+    return 'bg-re-danger';
 }
 
 function statusLevel(score: number): 'compliant' | 'at-risk' | 'critical' {
@@ -247,7 +261,8 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
 
 function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownItem }) {
     const meta = DIMENSION_META[dimKey] || { label: dimKey.replace(/_/g, ' '), weight: 0, icon: '📊' };
-    const color = scoreColor(item.score);
+    const toneText = scoreTextClass(item.score);
+    const toneBg = scoreBgClass(item.score);
     const isLow = item.score < 60;
 
     return (
@@ -261,17 +276,16 @@ function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownIt
                 <div className="flex items-center gap-2">
                     <span className="text-sm">{meta.icon}</span>
                     <span className="text-sm font-medium">{meta.label}</span>
-                    <span className="text-[10px] text-muted-foreground bg-[var(--re-surface-card)] px-1.5 py-0.5 rounded-full">{meta.weight}%</span>
+                    <span className="text-label text-muted-foreground bg-[var(--re-surface-card)] px-1.5 py-0.5 rounded-full">{meta.weight}%</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                     {isLow && <AlertTriangle className="h-3.5 w-3.5 text-re-danger" />}
-                    <span className="text-sm font-bold tabular-nums" style={{ color }}>{item.score}</span>
+                    <span className={`text-sm font-bold tabular-nums ${toneText}`}>{item.score}</span>
                 </div>
             </div>
             <div className="h-2 rounded-full bg-[var(--re-surface-card)] overflow-hidden">
                 <motion.div
-                    className="h-full rounded-full"
-                    style={{ backgroundColor: color }}
+                    className={`h-full rounded-full ${toneBg}`}
                     initial={{ width: 0 }}
                     animate={{ width: `${item.score}%` }}
                     transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
@@ -347,7 +361,7 @@ export default function ComplianceDashboardPage() {
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
-            <div className="mx-auto max-w-7xl space-y-6">
+            <div className="mx-auto max-w-[1440px] space-y-6">
                 <Breadcrumbs items={[
                     { label: 'Dashboard', href: '/dashboard' },
                     { label: 'Compliance' },
@@ -365,7 +379,7 @@ export default function ComplianceDashboardPage() {
                     </div>
                     <div className="flex items-center gap-2">
                         {lastFetched && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-label text-muted-foreground">
                                 Updated {lastFetched.toLocaleTimeString()}
                             </span>
                         )}
@@ -387,7 +401,7 @@ export default function ComplianceDashboardPage() {
 
                 {/* Auth gate */}
                 {!isLoggedIn && (
-                    <Card className="border-orange-300 dark:border-orange-700">
+                    <Card className="border-re-warning-border">
                         <CardContent className="py-6 text-center text-sm text-muted-foreground">
                             Sign in to view your compliance score.
                         </CardContent>
@@ -479,7 +493,7 @@ export default function ComplianceDashboardPage() {
                                     <div className="text-xs text-muted-foreground mt-0.5">{statusCfg.desc}</div>
                                 </div>
                                 {criticalDims > 0 && (
-                                    <Badge variant="secondary" className="text-[10px] bg-re-danger-muted0/10 text-re-danger border-re-danger/20">
+                                    <Badge variant="secondary" className="text-label bg-re-danger-muted text-re-danger border-re-danger/20">
                                         {criticalDims} gap{criticalDims !== 1 ? 's' : ''}
                                     </Badge>
                                 )}
@@ -499,7 +513,7 @@ export default function ComplianceDashboardPage() {
                                             Based on <span className="font-semibold text-foreground">{score.events_analyzed.toLocaleString()}</span> traceability events
                                         </p>
                                         {score.last_chain_hash && (
-                                            <p className="font-mono text-[10px] text-muted-foreground truncate px-4">
+                                            <p className="font-mono text-label text-muted-foreground truncate px-4">
                                                 Chain: {score.last_chain_hash.slice(0, 16)}...
                                             </p>
                                         )}
@@ -515,8 +529,7 @@ export default function ComplianceDashboardPage() {
                                     <div className="flex items-end justify-between gap-3">
                                         <div>
                                             <div
-                                                className="text-4xl font-bold tabular-nums"
-                                                style={{ color: workbenchSummary?.score != null ? scoreColor(workbenchSummary.score) : '#6b7280' }}
+                                                className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
                                             >
                                                 {workbenchSummary?.score ?? '—'}
                                             </div>
@@ -526,7 +539,7 @@ export default function ComplianceDashboardPage() {
                                         </div>
                                         <Badge
                                             variant="secondary"
-                                            className={`text-[10px] ${
+                                            className={`text-label ${
                                                 (workbenchSummary?.unresolved_fix_count ?? 0) > 0
                                                     ? 'bg-re-warning-muted0/10 text-re-warning'
                                                     : 'bg-re-brand-muted text-re-brand'
@@ -542,7 +555,7 @@ export default function ComplianceDashboardPage() {
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span>Latest run</span>
-                                            <span className="font-mono text-[10px] text-foreground">
+                                            <span className="font-mono text-label text-foreground">
                                                 {workbenchSummary?.run_id ? workbenchSummary.run_id.slice(0, 16) : 'none'}
                                             </span>
                                         </div>
@@ -562,7 +575,7 @@ export default function ComplianceDashboardPage() {
                                 <CardHeader className="pb-2">
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="text-base">Score Breakdown</CardTitle>
-                                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                        <span className="text-label text-muted-foreground flex items-center gap-1">
                                             <Info className="h-3 w-3" /> Weights shown as %
                                         </span>
                                     </div>
@@ -588,31 +601,31 @@ export default function ComplianceDashboardPage() {
                                 </CardHeader>
                                 <CardContent className="grid grid-cols-2 gap-2 sm:gap-3">
                                     <Link href="/dashboard/recall-drills">
-                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <Timer className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">Recall Drill</span>
-                                            <span className="text-[9px] text-muted-foreground">24-hr simulation</span>
+                                            <span className="text-label text-muted-foreground">24-hr simulation</span>
                                         </Button>
                                     </Link>
                                     <Link href="/ingest">
-                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <Upload className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">Import Data</span>
-                                            <span className="text-[9px] text-muted-foreground">CSV / spreadsheet</span>
+                                            <span className="text-label text-muted-foreground">CSV / spreadsheet</span>
                                         </Button>
                                     </Link>
                                     <Link href="/dashboard/export-jobs">
-                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <Download className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">FDA Report</span>
-                                            <span className="text-[9px] text-muted-foreground">24-hr response</span>
+                                            <span className="text-label text-muted-foreground">24-hr response</span>
                                         </Button>
                                     </Link>
                                     <Link href="/dashboard/export-jobs">
-                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <FileText className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">EPCIS Export</span>
-                                            <span className="text-[9px] text-muted-foreground">GS1 2.0 format</span>
+                                            <span className="text-label text-muted-foreground">GS1 2.0 format</span>
                                         </Button>
                                     </Link>
                                 </CardContent>
@@ -627,7 +640,7 @@ export default function ComplianceDashboardPage() {
                                                 <TrendingUp className="h-4 w-4 text-[var(--re-brand)]" />
                                                 Improve Your Score
                                             </CardTitle>
-                                            <Badge variant="secondary" className="text-[10px]">
+                                            <Badge variant="secondary" className="text-label">
                                                 {score.next_actions.length} item{score.next_actions.length !== 1 ? 's' : ''}
                                             </Badge>
                                         </div>
@@ -651,7 +664,7 @@ export default function ComplianceDashboardPage() {
                                                         </div>
                                                         <Badge
                                                             variant="secondary"
-                                                            className={`text-[9px] uppercase tracking-widest rounded-full flex-shrink-0 ${
+                                                            className={`text-label uppercase tracking-widest rounded-full flex-shrink-0 ${
                                                                 action.priority === 'HIGH' ? 'bg-re-danger-muted0/10 text-re-danger' :
                                                                 action.priority === 'MEDIUM' ? 'bg-re-warning-muted0/10 text-re-warning' :
                                                                 'bg-muted text-muted-foreground'
@@ -696,7 +709,7 @@ export default function ComplianceDashboardPage() {
                                         Traceability Summary
                                     </CardTitle>
                                     <Link href="/ingest">
-                                        <Button variant="ghost" size="sm" className="text-xs h-8 active:scale-[0.97]">
+                                        <Button variant="ghost" size="sm" className="text-xs h-8">
                                             Import More <ArrowRight className="ml-1 h-3 w-3" />
                                         </Button>
                                     </Link>
@@ -709,7 +722,7 @@ export default function ComplianceDashboardPage() {
                                         <div className="text-[11px] text-muted-foreground mt-1">Events Tracked</div>
                                     </div>
                                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-2xl sm:text-3xl font-bold" style={{ color: scoreColor(score.overall_score) }}>{score.grade}</div>
+                                        <div className={`text-2xl sm:text-3xl font-bold ${scoreTextClass(score.overall_score)}`}>{score.grade}</div>
                                         <div className="text-[11px] text-muted-foreground mt-1">Current Grade</div>
                                     </div>
                                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
@@ -754,7 +767,7 @@ export default function ComplianceDashboardPage() {
                                     <p className="text-xs text-muted-foreground mt-0.5">Scan labels or import data to improve this dimension.</p>
                                 </div>
                                 <Link href="/ingest">
-                                    <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white text-xs whitespace-nowrap">
+                                    <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-[var(--re-brand-foreground)] text-xs whitespace-nowrap">
                                         Import Data <ArrowRight className="ml-1 h-3 w-3" />
                                     </Button>
                                 </Link>

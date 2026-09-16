@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
-    Key,
     FileText,
     ChevronDown,
     ChevronRight,
@@ -15,8 +14,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 
-import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { CodeBlock } from '@/components/ui/code-block';
 
 interface Endpoint {
@@ -233,6 +240,9 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
     },
 ];
 
+/** Section label inside an endpoint panel — the only uppercase in the system (SPEC §2.2). */
+const PANEL_LABEL = 'font-mono text-label uppercase text-re-text-muted';
+
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
 
@@ -243,8 +253,18 @@ function CopyButton({ text }: { text: string }) {
     };
 
     return (
-        <Button size="sm" variant="ghost" onClick={handleCopy} className="h-6 w-6 p-0">
-            {copied ? <Check className="h-3 w-3 text-re-success" /> : <Copy className="h-3 w-3" />}
+        <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleCopy}
+            aria-label={copied ? 'Copied' : 'Copy'}
+            className="h-6 w-6 p-0"
+        >
+            {copied ? (
+                <Check aria-hidden="true" strokeWidth={1.75} className="h-3 w-3 text-re-success" />
+            ) : (
+                <Copy aria-hidden="true" strokeWidth={1.75} className="h-3 w-3" />
+            )}
         </Button>
     );
 }
@@ -252,45 +272,39 @@ function CopyButton({ text }: { text: string }) {
 function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
     const [expanded, setExpanded] = useState(false);
 
-    const methodColors: Record<string, string> = {
-        GET: 'bg-re-info',
-        POST: 'bg-re-success',
-        PUT: 'bg-re-warning',
-        DELETE: 'bg-re-danger',
-    };
-
     return (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-re-border">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex flex-wrap items-center gap-2 p-3 text-left hover:bg-muted/50 transition-colors sm:gap-3"
+                aria-expanded={expanded}
+                className="flex w-full flex-wrap items-center gap-2 p-3 text-left transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none sm:gap-3"
             >
                 {expanded ? (
-                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    <ChevronDown aria-hidden="true" strokeWidth={1.75} className="h-4 w-4 flex-shrink-0 text-re-text-muted" />
                 ) : (
-                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    <ChevronRight aria-hidden="true" strokeWidth={1.75} className="h-4 w-4 flex-shrink-0 text-re-text-muted" />
                 )}
-                <Badge className={`${methodColors[endpoint.method]} text-white font-mono text-xs`}>
+                <Badge tone="neutral" size="sm" mono>
                     {endpoint.method}
                 </Badge>
-                <code className="min-w-0 flex-[1_1_150px] break-all font-mono text-sm">{endpoint.path}</code>
+                <code className="min-w-0 flex-[1_1_150px] break-all font-mono text-[0.8125rem] text-re-text-primary">{endpoint.path}</code>
                 {endpoint.auth && (
-                    <Badge variant="outline" className="ml-6 text-xs sm:ml-0">
+                    <Badge tone="neutral" size="sm" className="ml-6 sm:ml-0">
                         Auth
                     </Badge>
                 )}
             </button>
 
             {expanded && (
-                <div className="border-t p-4 bg-muted/20 space-y-4">
-                    <p className="text-sm text-muted-foreground">{endpoint.description}</p>
+                <div className="space-y-4 border-t border-re-border-subtle p-4">
+                    <p className="text-ui text-re-text-secondary">{endpoint.description}</p>
 
                     {endpoint.headers && (
                         <div>
-                            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Headers</h4>
+                            <h4 className={`${PANEL_LABEL} mb-1`}>Headers</h4>
                             <div className="flex flex-wrap gap-1">
                                 {endpoint.headers.map((h) => (
-                                    <Badge key={h} variant="secondary" className="font-mono text-xs">
+                                    <Badge key={h} tone="neutral" size="sm" mono>
                                         {h}
                                     </Badge>
                                 ))}
@@ -300,10 +314,10 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 
                     {endpoint.params && (
                         <div>
-                            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Query Params</h4>
+                            <h4 className={`${PANEL_LABEL} mb-1`}>Query Params</h4>
                             <div className="flex flex-wrap gap-1">
                                 {endpoint.params.map((p) => (
-                                    <Badge key={p} variant="outline" className="font-mono text-xs">
+                                    <Badge key={p} tone="neutral" size="sm" mono>
                                         {p}
                                     </Badge>
                                 ))}
@@ -313,36 +327,42 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 
                     {endpoint.params_table && (
                         <div>
-                            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Parameters</h4>
-                            <div className="border rounded-lg overflow-x-auto">
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="bg-muted/50 border-b">
-                                            <th className="text-left p-2 font-semibold">Name</th>
-                                            <th className="text-left p-2 font-semibold">Type</th>
-                                            <th className="text-left p-2 font-semibold">Required</th>
-                                            <th className="text-left p-2 font-semibold">Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
+                            <h4 className={`${PANEL_LABEL} mb-2`}>Parameters</h4>
+                            <div className="overflow-hidden rounded-lg border border-re-border bg-re-surface-card">
+                                <Table className="min-w-[32rem] text-small">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[14rem]">Name</TableHead>
+                                            <TableHead className="w-[7rem]">Type</TableHead>
+                                            <TableHead className="w-[7rem]">Required</TableHead>
+                                            <TableHead>Description</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
                                         {endpoint.params_table.map((p) => (
-                                            <tr key={p.name} className="border-b last:border-b-0">
-                                                <td className="p-2 font-mono text-re-info dark:text-re-info">{p.name}</td>
-                                                <td className="p-2 font-mono text-muted-foreground">{p.type}</td>
-                                                <td className="p-2">{p.required ? <Badge variant="destructive" className="text-[10px] px-1.5 py-0">required</Badge> : <span className="text-muted-foreground">optional</span>}</td>
-                                                <td className="p-2 text-muted-foreground">{p.desc}</td>
-                                            </tr>
+                                            <TableRow key={p.name}>
+                                                <TableCell className="break-all font-mono text-[0.8125rem]">{p.name}</TableCell>
+                                                <TableCell className="font-mono text-[0.8125rem] text-re-text-tertiary">{p.type}</TableCell>
+                                                <TableCell>
+                                                    {p.required ? (
+                                                        <Badge tone="danger" size="sm">required</Badge>
+                                                    ) : (
+                                                        <span className="text-re-text-tertiary">optional</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-re-text-tertiary">{p.desc}</TableCell>
+                                            </TableRow>
                                         ))}
-                                    </tbody>
-                                </table>
+                                    </TableBody>
+                                </Table>
                             </div>
                         </div>
                     )}
 
                     {endpoint.body && (
                         <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Request Body</h4>
+                            <div className="mb-1 flex items-center justify-between">
+                                <h4 className={PANEL_LABEL}>Request Body</h4>
                                 <CopyButton text={endpoint.body} />
                             </div>
                             <CodeBlock code={endpoint.body} language="json" />
@@ -350,8 +370,8 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
                     )}
 
                     <div>
-                        <div className="flex items-center justify-between mb-1">
-                            <h4 className="text-xs font-semibold uppercase text-muted-foreground">Response</h4>
+                        <div className="mb-1 flex items-center justify-between">
+                            <h4 className={PANEL_LABEL}>Response</h4>
                             <CopyButton text={endpoint.response} />
                         </div>
                         <CodeBlock code={endpoint.response} language="json" />
@@ -362,245 +382,233 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
     );
 }
 
+const ERROR_CODES = [
+    { code: '400', desc: 'Bad Request - Invalid parameters' },
+    { code: '401', desc: 'Unauthorized - Missing or invalid API key' },
+    { code: '403', desc: 'Forbidden - Insufficient permissions' },
+    { code: '404', desc: "Not Found - Resource doesn't exist" },
+    { code: '429', desc: 'Too Many Requests - Rate limited' },
+    { code: '500', desc: 'Internal Error - Contact support' },
+];
+
+const RATE_LIMIT_HEADERS = [
+    { header: 'X-RateLimit-Limit', desc: 'Max requests per window' },
+    { header: 'X-RateLimit-Remaining', desc: 'Requests left in window' },
+    { header: 'X-RateLimit-Reset', desc: 'When limit resets (epoch)' },
+];
+
+/** A key/value well — one surface step below the card it sits on (SPEC §5.1). */
+const WELL = 'rounded-md border border-re-border-subtle bg-re-surface-inset p-3';
+
 export function ApiReferenceClient() {
     const [selectedService, setSelectedService] = useState(0);
+    const reduceMotion = useReducedMotion();
+
+    // SPEC §5.2: framer-motion is capped at opacity + ≤8px translate / 180ms
+    // and is switched off entirely under prefers-reduced-motion.
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-            <PageContainer>
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-8"
-                >
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
+        <>
+            <PageHeader
+                title="API Reference"
+                description="Complete documentation for all RegEngine API endpoints"
+                meta={<Badge tone="neutral" size="sm" mono>v1.0.0</Badge>}
+            />
+
+            <motion.div
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+                className="space-y-6"
+            >
+                {/* Authentication Info */}
+                <Card>
+                    <CardHeader>
                         <div>
-                            <h1 className="text-3xl font-bold">API Reference</h1>
-                            <p className="text-muted-foreground mt-1">
-                                Complete documentation for all RegEngine API endpoints
-                            </p>
+                            <CardTitle>Authentication</CardTitle>
                         </div>
-                        <div className="flex gap-2">
-                            <Badge variant="outline">v1.0.0</Badge>
-                        </div>
-                    </div>
-
-                    {/* Authentication Info */}
-                    <Card className="border-re-warning bg-re-warning-muted dark:bg-re-warning/20 dark:border-re-warning">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Key className="h-5 w-5 text-re-warning" />
-                                Authentication
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <p className="text-sm">
-                                All authenticated endpoints require one of the following headers:
-                            </p>
-                            <div >
-                                <div className="bg-white dark:bg-re-surface-base rounded p-3">
-                                    <code className="text-xs font-mono text-re-warning dark:text-re-warning">
-                                        X-RegEngine-API-Key: rge_your_api_key
-                                    </code>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Standard API access (tenant-scoped)
-                                    </p>
-                                </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <p className="text-ui text-re-text-secondary">
+                            All authenticated endpoints require one of the following headers:
+                        </p>
+                        <div>
+                            <div className={WELL}>
+                                <code className="font-mono text-[0.8125rem] text-re-text-primary">
+                                    X-RegEngine-API-Key: rge_your_api_key
+                                </code>
+                                <p className="mt-1 text-small text-re-text-tertiary">
+                                    Standard API access (tenant-scoped)
+                                </p>
                             </div>
-                            <p className="text-sm">
-                                Optional tenant assertion: <code className="bg-white dark:bg-re-surface-base px-1 rounded text-xs">X-Tenant-ID: tenant_uuid</code>. If supplied, it must match the API key&apos;s tenant; it does not authenticate the request.
-                            </p>
-                        </CardContent>
-                    </Card>
+                        </div>
+                        <p className="text-ui text-re-text-secondary">
+                            Optional tenant assertion: <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">X-Tenant-ID: tenant_uuid</code>. If supplied, it must match the API key&apos;s tenant; it does not authenticate the request.
+                        </p>
+                    </CardContent>
+                </Card>
 
-                    {/* Service Navigation */}
-                    <div className="flex flex-wrap gap-2">
-                        {API_SERVICES.map((service, i) => {
-                            const Icon = service.icon;
-                            return (
-                                <Button
-                                    key={service.name}
-                                    variant={selectedService === i ? 'default' : 'outline'}
-                                    onClick={() => setSelectedService(i)}
-                                    className="gap-2"
-                                >
-                                    <Icon className="h-4 w-4" />
-                                    {service.name}
-                                    <Badge variant="secondary" className="ml-1 text-xs">
-                                        {service.endpoints.length} endpoint{service.endpoints.length !== 1 ? 's' : ''}
-                                    </Badge>
-                                </Button>
-                            );
-                        })}
-                    </div>
+                {/* Service Navigation */}
+                <div className="flex flex-wrap gap-2">
+                    {API_SERVICES.map((service, i) => {
+                        const Icon = service.icon;
+                        const isSelected = selectedService === i;
+                        return (
+                            <Button
+                                key={service.name}
+                                variant={isSelected ? 'secondary' : 'ghost'}
+                                aria-pressed={isSelected}
+                                onClick={() => setSelectedService(i)}
+                                className="gap-2"
+                            >
+                                <Icon aria-hidden="true" className="h-4 w-4" />
+                                {service.name}
+                                <Badge tone="neutral" size="sm" className="ml-1">
+                                    {service.endpoints.length} endpoint{service.endpoints.length !== 1 ? 's' : ''}
+                                </Badge>
+                            </Button>
+                        );
+                    })}
+                </div>
 
-                    {/* Selected Service Details */}
-                    <motion.div
-                        key={selectedService}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                    >
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    {(() => {
-                                        const Icon = API_SERVICES[selectedService].icon;
-                                        return <Icon className="h-6 w-6 text-primary" />;
-                                    })()}
-                                    <div>
-                                        <CardTitle>{API_SERVICES[selectedService].name}</CardTitle>
-                                        <CardDescription>
-                                            {API_SERVICES[selectedService].description}
-                                        </CardDescription>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <Badge variant="outline" className="font-mono">
+                {/* Selected Service Details */}
+                <motion.div
+                    key={selectedService}
+                    initial={reduceMotion ? false : { opacity: 0, x: 8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+                >
+                    <Card>
+                        <CardHeader>
+                            <div className="min-w-0">
+                                <CardTitle>{API_SERVICES[selectedService].name}</CardTitle>
+                                <CardDescription>
+                                    {API_SERVICES[selectedService].description}
+                                </CardDescription>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <Badge tone="neutral" size="sm" mono>
                                         Base URL: {API_SERVICES[selectedService].baseUrl}
                                     </Badge>
-                                    <Badge variant="outline" className="font-mono">
+                                    <Badge tone="neutral" size="sm" mono>
                                         {API_SERVICES[selectedService].provisioned ? 'provisioned endpoint' : 'regengine.co'}
                                     </Badge>
                                 </div>
                                 {API_SERVICES[selectedService].provisioned && (
-                                    <p className="text-xs text-muted-foreground mt-2">
+                                    <p className="mt-2 text-small text-re-text-tertiary">
                                         Available on contracted workspaces. These endpoints are served from your
                                         workspace&apos;s provisioned endpoint URL (supplied during onboarding), not the
                                         public regengine.co base URL. Webhook Ingestion, Records, and FDA
                                         Trace &amp; Export above are the publicly reachable surface.
                                     </p>
                                 )}
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {API_SERVICES[selectedService].endpoints.map((endpoint, i) => (
-                                    <EndpointCard key={i} endpoint={endpoint} />
-                                ))}
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* Pagination Info */}
-                    <Card className="border-blue-200 bg-re-info-muted dark:bg-re-info/20 dark:border-blue-800">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Pagination</CardTitle>
+                            </div>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-muted-foreground">
-                                List endpoints support cursor-based pagination for efficient traversal of large datasets.
-                            </p>
-                            <div className="space-y-3">
-                                <div>
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Request Parameters</h4>
-                                    <div className="grid md:grid-cols-2 gap-3">
-                                        <div className="bg-white dark:bg-re-surface-base rounded p-3">
-                                            <code className="text-xs font-mono">limit</code>
-                                            <span className="text-xs text-muted-foreground ml-2">(default: 50, max: 500)</span>
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                Number of items to return per page
-                                            </p>
-                                        </div>
-                                        <div className="bg-white dark:bg-re-surface-base rounded p-3">
-                                            <code className="text-xs font-mono">cursor</code>
-                                            <span className="text-xs text-muted-foreground ml-2">(optional)</span>
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                Opaque cursor from previous response's <code>next_cursor</code>
-                                            </p>
-                                        </div>
+                        <CardContent className="space-y-3">
+                            {API_SERVICES[selectedService].endpoints.map((endpoint, i) => (
+                                <EndpointCard key={i} endpoint={endpoint} />
+                            ))}
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+                {/* Pagination Info */}
+                <Card>
+                    <CardHeader>
+                        <div>
+                            <CardTitle>Pagination</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <p className="text-ui text-re-text-secondary">
+                            List endpoints support cursor-based pagination for efficient traversal of large datasets.
+                        </p>
+                        <div className="space-y-4">
+                            <div>
+                                <h4 className={`${PANEL_LABEL} mb-2`}>Request Parameters</h4>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div className={WELL}>
+                                        <code className="font-mono text-[0.8125rem] text-re-text-primary">limit</code>
+                                        <span className="ml-2 text-small text-re-text-tertiary">(default: 50, max: 500)</span>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            Number of items to return per page
+                                        </p>
+                                    </div>
+                                    <div className={WELL}>
+                                        <code className="font-mono text-[0.8125rem] text-re-text-primary">cursor</code>
+                                        <span className="ml-2 text-small text-re-text-tertiary">(optional)</span>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            Opaque cursor from previous response's <code className="font-mono">next_cursor</code>
+                                        </p>
                                     </div>
                                 </div>
-                                <div>
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Response Format</h4>
-                                    <CodeBlock code={`{
+                            </div>
+                            <div>
+                                <h4 className={`${PANEL_LABEL} mb-2`}>Response Format</h4>
+                                <CodeBlock code={`{
   "items": [...],        // Array of results
   "next_cursor": "abc",  // Use this for next page (null if no more)
   "has_more": true       // Boolean indicating more pages exist
 }`} language="json" />
-                                </div>
-                                <div className="bg-white dark:bg-re-surface-base rounded p-3">
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Records</h4>
-                                    <CodeBlock code={`# First page
+                            </div>
+                            <div>
+                                <h4 className={`${PANEL_LABEL} mb-2`}>Example: Paginating Records</h4>
+                                <CodeBlock code={`# First page
 GET /api/v1/records?limit=20
 
 # Next page (Records uses limit/offset)
 GET /api/v1/records?limit=20&offset=20`} language="http" />
-                                </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                    {/* Rate Limiting Info */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Rate Limiting</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <p className="text-sm text-muted-foreground">
-                                API requests are rate-limited per API key. Check response headers:
-                            </p>
-                            <div className="grid md:grid-cols-3 gap-4">
-                                <div className="bg-muted rounded p-3">
-                                    <code className="text-xs font-mono">X-RateLimit-Limit</code>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Max requests per window
+                {/* Rate Limiting Info */}
+                <Card>
+                    <CardHeader>
+                        <div>
+                            <CardTitle>Rate Limiting</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <p className="text-ui text-re-text-secondary">
+                            API requests are rate-limited per API key. Check response headers:
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-3">
+                            {RATE_LIMIT_HEADERS.map((item) => (
+                                <div key={item.header} className={WELL}>
+                                    <code className="font-mono text-[0.8125rem] text-re-text-primary">{item.header}</code>
+                                    <p className="mt-1 text-small text-re-text-tertiary">
+                                        {item.desc}
                                     </p>
                                 </div>
-                                <div className="bg-muted rounded p-3">
-                                    <code className="text-xs font-mono">X-RateLimit-Remaining</code>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Requests left in window
-                                    </p>
-                                </div>
-                                <div className="bg-muted rounded p-3">
-                                    <code className="text-xs font-mono">X-RateLimit-Reset</code>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        When limit resets (epoch)
-                                    </p>
-                                </div>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-3">
-                                Limits are enforced per API key; your current window is reported in the headers above.
-                                See <a href="/docs/rate-limits" className="underline">Rate Limits</a> for details.
-                            </p>
-                        </CardContent>
-                    </Card>
+                            ))}
+                        </div>
+                        <p className="mt-3 text-small text-re-text-tertiary">
+                            Limits are enforced per API key; your current window is reported in the headers above.
+                            See <a href="/docs/rate-limits" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">Rate Limits</a> for details.
+                        </p>
+                    </CardContent>
+                </Card>
 
-                    {/* Error Codes */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Error Codes</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid md:grid-cols-2 gap-4 text-sm">
-                                <div className="flex items-start gap-3">
-                                    <Badge variant="destructive">400</Badge>
-                                    <span className="text-muted-foreground">Bad Request - Invalid parameters</span>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <Badge variant="destructive">401</Badge>
-                                    <span className="text-muted-foreground">Unauthorized - Missing or invalid API key</span>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <Badge variant="destructive">403</Badge>
-                                    <span className="text-muted-foreground">Forbidden - Insufficient permissions</span>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <Badge variant="destructive">404</Badge>
-                                    <span className="text-muted-foreground">Not Found - Resource doesn't exist</span>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <Badge variant="destructive">429</Badge>
-                                    <span className="text-muted-foreground">Too Many Requests - Rate limited</span>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <Badge variant="destructive">500</Badge>
-                                    <span className="text-muted-foreground">Internal Error - Contact support</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            </PageContainer>
-        </div>
+                {/* Error Codes */}
+                <Card>
+                    <CardHeader>
+                        <div>
+                            <CardTitle>Error Codes</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <ul className="grid list-none gap-3 text-ui md:grid-cols-2">
+                            {ERROR_CODES.map((item) => (
+                                <li key={item.code} className="flex items-start gap-3">
+                                    <Badge tone="danger" size="sm" mono>{item.code}</Badge>
+                                    <span className="min-w-0 text-re-text-secondary">{item.desc}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </CardContent>
+                </Card>
+            </motion.div>
+        </>
     );
 }

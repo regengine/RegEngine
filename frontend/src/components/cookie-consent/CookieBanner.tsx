@@ -141,7 +141,7 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
               <div className="grid grid-cols-2 gap-2 sm:w-[230px] sm:flex-shrink-0">
                 <button
                   onClick={handleAccept}
-                  className="inline-flex min-h-8 items-center justify-center rounded-md bg-[var(--re-brand)] px-2 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
+                  className="inline-flex min-h-8 items-center justify-center rounded-md bg-[var(--re-brand)] px-2 py-1.5 text-xs font-semibold text-[var(--re-brand-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
                 >
                   <span className="sm:hidden">Accept</span>
                   <span className="hidden sm:inline">Accept analytics</span>

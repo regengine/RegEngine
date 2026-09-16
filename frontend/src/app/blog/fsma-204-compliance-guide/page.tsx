@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, CheckCircle2, AlertCircle, Leaf } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Leaf } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
@@ -18,68 +23,59 @@ export const metadata: Metadata = {
 
 export default function FSMA204ComplianceGuide() {
   return (
-    <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+    <div className="bg-re-surface-base">
       <JSONLD data={blogPostingJsonLd('fsma-204-compliance-guide', 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.')} />
-      {/* Hero */}
-      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-8 sm:pb-12">
-        <div className="mb-8">
-          <Link
-            href="/blog"
-            className="inline-flex items-center gap-2 text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors duration-200 text-sm font-medium mb-6"
-          >
-            ← Back to Blog
-          </Link>
-          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-            FSMA 204 Regulations
-          </p>
-          <h1 className="font-serif text-[clamp(2rem,5vw,3rem)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-6">
-            FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)
-          </h1>
-          <p className="text-[1.1rem] text-[var(--re-text-secondary)] leading-relaxed mb-4">
-            What you need to know about FDA food traceability rules, deadlines, and how to prepare your business.
-          </p>
-          <div className="flex gap-6 text-sm text-[var(--re-text-muted)] pt-4 border-t border-[var(--re-surface-border)]">
-            <span>April 2026</span>
-            <span>8 min read</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Content */}
-      <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-        <article className="prose max-w-none prose-headings:text-[var(--re-text-primary)] prose-p:text-[var(--re-text-secondary)] prose-strong:text-[var(--re-text-primary)] prose-li:text-[var(--re-text-secondary)] prose-a:text-[var(--re-brand)]">
+      <Container as="article" width="prose" className="py-12 sm:py-16">
+        <Link
+          href="/blog"
+          className="mb-8 inline-flex items-center gap-2 text-ui text-re-text-secondary transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+        >
+          ← Back to Blog
+        </Link>
+        <PageHeader
+          eyebrow="FSMA 204 Regulations"
+          title="FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)"
+          description="What you need to know about FDA food traceability rules, deadlines, and how to prepare your business."
+          meta={
+            <>
+              <span>April 2026</span>
+              <span>8 min read</span>
+            </>
+          }
+        />
+        <div>
           {/* Introduction */}
           <div className="mb-10">
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
+            <p className="text-body text-re-text-secondary mb-6">
               FDA's Food Safety Modernization Act (FSMA) 204 rule requires covered food businesses across the supply chain, from farms and manufacturers to distributors and retailers, to provide traceability records within 24 hours of an FDA request. The original compliance date was January 20, 2026; FDA has proposed a 30-month extension, and Congress directed FDA not to enforce before July 20, 2028.
             </p>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               This is not optional. Non-compliance can result in FDA enforcement action, product recalls, and loss of retailer partnerships. The good news: understanding FSMA 204 requirements is straightforward, and with the right approach, compliance is achievable.
             </p>
           </div>
 
           {/* What is FSMA 204 */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6 mt-12">
+            <h2 className="text-heading text-re-text-primary mb-6 mt-12">
               What Is FSMA 204?
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
+            <p className="text-body text-re-text-secondary mb-6">
               FSMA 204 is the FDA's Food Traceability Rule. It requires covered food businesses to keep records identifying the immediate previous sources and immediate recipients of their products. When the FDA needs your traceability data—due to a foodborne illness outbreak, contamination, or suspected intentional adulteration—you have 24 hours to provide it.
             </p>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
+            <p className="text-body text-re-text-secondary mb-6">
               The rule applies to foods specifically listed on the FDA's Food Traceability List (FTL), including leafy greens, berry crops, bivalve mollusks, soft cheeses, and more. If your business handles an FTL product, FSMA 204 traceability obligations may apply.
             </p>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               The FDA designed FSMA 204 around two core concepts: Critical Tracking Events (CTEs) and Key Data Elements (KDEs). These are the data points your business must capture and retain for 2 years.
             </p>
           </div>
 
           {/* The 7 CTEs */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               The 7 Critical Tracking Events (CTEs)
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               CTEs are the moments in the food supply chain where you must capture traceability data. Every covered food business must track all applicable CTEs for their product flow:
             </p>
             <div className="space-y-5 mb-8">
@@ -92,128 +88,119 @@ export default function FSMA204ComplianceGuide() {
                 { name: 'Receiving', desc: 'When your business receives product from a supplier' },
                 { name: 'First Land-Based Receiving', desc: 'When aquaculture or bivalve products are brought to the first land-based facility' },
               ].map((cte, idx) => (
-                <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
+                <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">
-                    <Leaf className="w-5 h-5 text-[var(--re-brand)] mt-0.5" />
+                    <Leaf className="h-4 w-4 text-re-text-tertiary mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h4 className="text-subheading text-re-text-primary mb-1">
                       {cte.name}
                     </h4>
-                    <p className="text-sm text-[var(--re-text-secondary)]">
+                    <p className="text-ui text-re-text-secondary">
                       {cte.desc}
                     </p>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               Not every CTE applies to every business. A produce distributor tracks Receiving, Shipping, and First Land-Based Receiving. A manufacturer tracks Initial Packing and Transformation. Understanding which CTEs apply to your operation is the first step toward compliance.
             </p>
           </div>
 
           {/* Key Data Elements */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Key Data Elements (KDEs): What You Must Record
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               For each CTE, you must record specific Key Data Elements. These identify the product, when the event occurred, and who was involved:
             </p>
-            <ul className="space-y-3 mb-8 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <ul className="space-y-3 mb-8 text-body text-re-text-secondary">
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span><strong>Traceability Lot Code (TLC)</strong> — A unique identifier that links the product through the supply chain</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span><strong>Product Description</strong> — Name, variety, and any identifying information</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span><strong>Quantity and Unit of Measure</strong> — How much product, in what units</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span><strong>Location Information</strong> — Farm name, facility address, or geographic location</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span><strong>Date/Time of CTE</strong> — When the event occurred</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span><strong>Immediate Previous Source or Recipient</strong> — Who you received from or sent to</span>
               </li>
             </ul>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability across the supply chain. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
             </p>
           </div>
 
           {/* The 24-Hour Rule */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               The 24-Hour Response Requirement
             </h2>
-            <div className="p-6 rounded-lg bg-[var(--re-brand)]/5 border border-[var(--re-brand)]/20 mb-8">
-              <div className="flex gap-4">
-                <AlertCircle className="w-6 h-6 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-[var(--re-text-primary)] mb-2">
-                    The Core Deadline
-                  </h4>
-                  <p className="text-[var(--re-text-secondary)]">
-                    When the FDA requests your traceability records, you have 24 hours to provide a complete list of the immediate previous sources and immediate recipients of the product in question. Failure to respond in time can result in enforcement action.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
+            <Callout tone="info" className="mb-8">
+              <h4 className="text-subheading text-re-text-primary">The Core Deadline</h4>
+              <p className="mt-1">When the FDA requests your traceability records, you have 24 hours to provide a complete list of the immediate previous sources and immediate recipients of the product in question. Failure to respond in time can result in enforcement action.</p>
+            </Callout>
+            <p className="text-body text-re-text-secondary mb-6">
               This is why your traceability system cannot rely on manual processes or spreadsheets. When the FDA calls, you need to generate a complete, review-ready report in minutes, not days.
             </p>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               You must also retain all traceability records for 2 years from the date you created or obtained them under 21 CFR §1.1455(d), unless another provision of subpart S specifies otherwise. This means your system needs robust backup, archival, and retrieval capabilities to ensure data integrity over time.
             </p>
           </div>
 
           {/* Who Is Covered */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Who Is Covered by FSMA 204?
             </h2>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            <p className="text-body text-re-text-secondary mb-8">
               FSMA 204 applies to covered businesses that handle foods specifically listed on the FDA's Food Traceability List, including:
             </p>
-            <ul className="space-y-2 mb-8 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <ul className="space-y-2 mb-8 text-body text-re-text-secondary">
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Produce (leafy greens, berries, melons, and more)</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Seafood (bivalve mollusks, certain finfish)</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Certain cheeses and dairy products</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Spices and dried fruits</span>
               </li>
             </ul>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
+            <p className="text-body text-re-text-secondary mb-6">
               This includes farms, packers, manufacturers, distributors, retailers, and importers. If your business is part of the food supply chain for an FTL product, you are covered.
             </p>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              Want to check if your specific products are on the FTL? Use RegEngine's free <Link href="/tools/ftl-checker" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] underline transition-colors duration-200">FTL Coverage Checker</Link>.
+            <p className="text-body text-re-text-secondary">
+              Want to check if your specific products are on the FTL? Use RegEngine's free <Link href="/tools/ftl-checker" className="text-re-brand hover:text-re-brand underline transition-colors duration-120">FTL Coverage Checker</Link>.
             </p>
           </div>
 
           {/* Compliance Timeline */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               FSMA 204 Compliance Timeline
             </h2>
             <div className="space-y-4 mb-8">
@@ -222,133 +209,128 @@ export default function FSMA204ComplianceGuide() {
               ].map((item, idx) => (
                 <div key={idx} className="flex gap-4">
                   <div className="flex-shrink-0">
-                    <div className="w-3 h-3 rounded-full bg-[var(--re-brand)] mt-2" />
+                    <div aria-hidden="true" className="mt-2 h-2 w-2 rounded-full bg-re-text-tertiary" />
                   </div>
                   <div>
-                    <p className="font-semibold text-[var(--re-text-primary)]">
+                    <p className="text-subheading text-re-text-primary">
                       {item.year}
                     </p>
-                    <p className="text-[var(--re-text-secondary)]">
+                    <p className="text-re-text-secondary">
                       {item.desc}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <p className="text-body text-re-text-secondary">
               The current public posture points to July 20, 2028 as the earliest enforcement date under congressional direction, with FDA also proposing a 30-month extension. That may sound far away, but implementation typically takes 3-6 months depending on your current systems and supply chain complexity. Starting early gives you time to test, train, and refine your processes before enforcement resumes.
             </p>
           </div>
 
           {/* How to Prepare */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               How to Prepare for FSMA 204 Compliance
             </h2>
             <div className="space-y-6 mb-8">
-              <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
-                <h4 className="font-semibold text-[var(--re-text-primary)] mb-3">
+              <Card variant="inset" padding="spacious">
+                <h4 className="text-subheading text-re-text-primary mb-3">
                   1. Audit Your Current Data Collection
                 </h4>
-                <p className="text-[var(--re-text-secondary)]">
+                <p className="text-re-text-secondary">
                   Map out all the data you currently collect at each step of your supply chain. Identify gaps where CTEs or KDEs are missing. Do you have timestamps? Traceability lot codes? Supplier information?
                 </p>
-              </div>
+              </Card>
 
-              <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
-                <h4 className="font-semibold text-[var(--re-text-primary)] mb-3">
+              <Card variant="inset" padding="spacious">
+                <h4 className="text-subheading text-re-text-primary mb-3">
                   2. Standardize Your Traceability Lot Code
                 </h4>
-                <p className="text-[var(--re-text-secondary)]">
+                <p className="text-re-text-secondary">
                   Implement a consistent, unique TLC format across your supply chain. This doesn't need to be complex—it just needs to identify the product, lot, and date. Work with your suppliers and customers to ensure compatibility.
                 </p>
-              </div>
+              </Card>
 
-              <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
-                <h4 className="font-semibold text-[var(--re-text-primary)] mb-3">
+              <Card variant="inset" padding="spacious">
+                <h4 className="text-subheading text-re-text-primary mb-3">
                   3. Choose a Traceability System
                 </h4>
-                <p className="text-[var(--re-text-secondary)]">
+                <p className="text-re-text-secondary">
                   Options range from improved spreadsheets to specialized FSMA 204 software. Consider integration with your ERP, supplier connectivity, electronic sortable spreadsheet support, EPCIS 2.0 interoperability for trading partners, and your budget. A dedicated platform is typically faster and more reliable than manual processes.
                 </p>
-              </div>
+              </Card>
 
-              <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
-                <h4 className="font-semibold text-[var(--re-text-primary)] mb-3">
+              <Card variant="inset" padding="spacious">
+                <h4 className="text-subheading text-re-text-primary mb-3">
                   4. Test Your 24-Hour Response
                 </h4>
-                <p className="text-[var(--re-text-secondary)]">
+                <p className="text-re-text-secondary">
                   Run a mock FDA records request. Pick a product and TLC, and practice generating a complete traceability report from your system. Can you do it in under 24 hours? Under 1 hour? Document your process.
                 </p>
-              </div>
+              </Card>
 
-              <div className="p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
-                <h4 className="font-semibold text-[var(--re-text-primary)] mb-3">
+              <Card variant="inset" padding="spacious">
+                <h4 className="text-subheading text-re-text-primary mb-3">
                   5. Train Your Team
                 </h4>
-                <p className="text-[var(--re-text-secondary)]">
+                <p className="text-re-text-secondary">
                   Your warehouse, production, and logistics teams need to understand CTEs and KDEs. Make sure they know what data to capture and why it matters. Good training prevents compliance gaps.
                 </p>
-              </div>
+              </Card>
             </div>
           </div>
 
           {/* Key Takeaways */}
           <div className="mb-12">
-            <h2 className="font-serif text-2xl font-bold text-[var(--re-text-primary)] mb-6">
+            <h2 className="text-heading text-re-text-primary mb-6">
               Key Takeaways
             </h2>
-            <ul className="space-y-3 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
+            <ul className="space-y-3 text-body text-re-text-secondary">
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>FSMA 204 is mandatory for all food businesses handling foods on the FDA's Food Traceability List.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>§1.1455(c) requires you to provide a sortable electronic spreadsheet to FDA as soon as possible, and not later than 24 hours after a request.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Identify which Critical Tracking Events occur at your operation (§§1.1325–1.1350) and capture the KDEs the rule requires for each one — not every CTE applies to every business.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>Retain all traceability records for 2 years.</span>
               </li>
               <li className="flex gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>The original compliance date was January 20, 2026; FDA has proposed a 30-month extension and Congress directed FDA not to enforce before July 20, 2028. Start planning and implementation now.</span>
               </li>
             </ul>
           </div>
 
           {/* CTA */}
-          <div className="p-8 sm:p-12 rounded-xl border border-[var(--re-brand)]/20 bg-gradient-to-br from-[var(--re-brand)]/5 to-cyan-600/5">
-            <h3 className="font-serif text-xl font-bold text-[var(--re-text-primary)] mb-4">
+          <Card padding="spacious">
+            <h3 className="text-heading text-re-text-primary">
               Ready to implement FSMA 204 compliance?
             </h3>
-            <p className="text-[var(--re-text-secondary)] mb-8">
+            <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
               RegEngine helps prepare CTE/KDE evidence, hash-chained ingestion records, and FDA-oriented sortable export packages aligned to 21 CFR 1.1455 where applicable. Run a free self-check to see where you stand.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href="/retailer-readiness"
-                className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px] max-w-fit"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Get Your Readiness Score</span>
-                <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
-              </Link>
-              <Link
-                href="/blog"
-                className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
-              >
-                Back to Blog
-              </Link>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link href="/retailer-readiness">
+                  Get Your Readiness Score
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/blog">Back to Blog</Link>
+              </Button>
             </div>
-          </div>
-        </article>
-      </section>
+          </Card>
+        </div>
+      </Container>
     </div>
   );
 }

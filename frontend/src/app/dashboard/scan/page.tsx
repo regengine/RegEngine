@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { useTenant } from '@/lib/tenant-context';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
     Copy,
     Check,
@@ -12,7 +18,6 @@ import {
     QrCode,
     Scan,
     Smartphone,
-    Loader2,
     Camera,
 } from 'lucide-react';
 
@@ -76,11 +81,41 @@ function useIsMobile() {
     );
 }
 
+const HOW_IT_WORKS = [
+    {
+        step: '1',
+        title: 'Operator scans QR code',
+        detail: 'Opens the capture tool in their phone browser. No app download, no login required for scanning.',
+    },
+    {
+        step: '2',
+        title: 'Select event type & scan item',
+        detail: 'Choose what you\'re doing: Receiving, Shipping, or Transforming. Point your camera at the barcode — product number, lot code, expiry, and serial are extracted automatically.',
+    },
+    {
+        step: '3',
+        title: 'Event ingests into pipeline',
+        detail: 'Scanned data flows into your compliance pipeline as a traceability event. If offline, it queues locally and syncs when connection returns.',
+    },
+    {
+        step: '4',
+        title: 'Appears in your dashboard',
+        detail: 'Events show up in Heartbeat, contribute to compliance scoring, and are included in recall traces and exports.',
+    },
+] as const;
+
+const BARCODE_FORMATS = [
+    'QR Code (GS1 Digital Link)',
+    'GS1-128',
+    'DataMatrix',
+    'EAN-13',
+    'UPC-A',
+    'Code 128',
+] as const;
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
-const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-sm';
-
 export default function ScanPage() {
     if (!experimentalFeaturesEnabled()) {
         return (
@@ -115,160 +150,142 @@ function ScanPageContent() {
     }, [captureURL]);
 
     return (
-        <div className="p-4 sm:p-6 max-w-[980px] mx-auto space-y-6">
-            {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-[var(--re-text-primary)]">Field Capture</h1>
-                <p className="text-sm text-[var(--re-text-muted)] mt-1 max-w-[640px]">
-                    Scan barcodes and capture photos from the factory floor. Events flow directly into your compliance pipeline with offline support.
-                </p>
-                <p className="text-xs text-[var(--re-text-disabled)] mt-2">
+        <PageContainer>
+            <PageHeader
+                title="Field Capture"
+                description="Scan barcodes and capture photos from the factory floor. Events flow directly into your compliance pipeline with offline support."
+            />
+
+            <div className="space-y-6">
+                <p className="text-small text-re-text-tertiary">
                     {safeTenantId
                         ? `Shared capture links stay scoped to workspace ${safeTenantId}.`
                         : 'Shared capture links use the active dashboard workspace once a session is established.'}
                 </p>
-            </div>
 
-            {isMobile ? (
-                /* ---- Mobile: direct link to scanner ---- */
-                <div className={`${card} p-6`}>
-                    <div className="flex flex-col items-center text-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-[var(--re-brand)]/10 flex items-center justify-center">
-                            <Scan className="h-7 w-7 text-[var(--re-brand)]" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-[var(--re-text-primary)]">Open Scanner</h2>
-                            <p className="text-sm text-[var(--re-text-muted)] mt-1">
-                                Scan barcodes or capture evidence photos. Works offline.
-                            </p>
-                        </div>
-                        <Link
-                            href={capturePath}
-                            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--re-brand)] text-white font-medium text-sm hover:opacity-90 transition-opacity"
-                        >
-                            <Camera className="h-4 w-4" />
-                            Launch Scanner
-                        </Link>
-                    </div>
-                </div>
-            ) : (
-                /* ---- Desktop: QR share card + instructions ---- */
-                <div className="grid gap-6 md:grid-cols-2">
-                    {/* QR Code card */}
-                    <div className={`${card} p-6`}>
-                        <div className="flex items-center gap-2.5 mb-4">
-                            <QrCode className="h-5 w-5 text-[var(--re-brand)]" />
-                            <h2 className="text-base font-semibold text-[var(--re-text-primary)]">Share with floor staff</h2>
-                        </div>
-                        <p className="text-sm text-[var(--re-text-muted)] mb-5">
-                            Display this QR code on a tablet or print it. Floor operators scan it with their phone to open the capture tool — no app install required.
-                        </p>
-
-                        {/* QR Code */}
-                        <div className="flex justify-center mb-5">
-                            <div className="w-[240px] h-[240px] rounded-xl border border-[var(--re-surface-border)] bg-white/5 flex items-center justify-center p-4">
-                                {qrSvgDataUrl ? (
-                                    <img
-                                        src={qrSvgDataUrl}
-                                        alt="Field capture QR code"
-                                        className="h-full w-full"
-                                    />
-                                ) : (
-                                    <Loader2 className="h-6 w-6 text-[var(--re-text-disabled)] animate-spin" />
-                                )}
+                {isMobile ? (
+                    /* ---- Mobile: direct link to scanner ---- */
+                    <Card>
+                        <CardContent className="flex flex-col items-center gap-4 text-center">
+                            <Scan className="h-6 w-6 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                            <div>
+                                <h2 className="text-subheading text-re-text-primary">Open Scanner</h2>
+                                <p className="mt-1 text-ui text-re-text-secondary">
+                                    Scan barcodes or capture evidence photos. Works offline.
+                                </p>
                             </div>
-                        </div>
+                            <Button asChild size="lg">
+                                <Link href={capturePath}>
+                                    <Camera className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                    Launch Scanner
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    /* ---- Desktop: QR share card + instructions ---- */
+                    <div className="grid gap-6 md:grid-cols-2">
+                        {/* QR Code card */}
+                        <Card>
+                            <CardHeader>
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                    <QrCode className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                    <h2 className="text-subheading text-re-text-primary">Share with floor staff</h2>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-ui text-re-text-secondary">
+                                    Display this QR code on a tablet or print it. Floor operators scan it with their phone to open the capture tool — no app install required.
+                                </p>
 
-                        {/* Copy link */}
-                        <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)]">
-                            <code className="text-xs text-[var(--re-text-muted)] truncate flex-1">{captureURL}</code>                            <button
-                                onClick={handleCopy}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-[var(--re-brand)]/10 text-[var(--re-brand)] hover:bg-[var(--re-brand)]/20 transition-colors flex-shrink-0"
-                            >
-                                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                {copied ? 'Copied' : 'Copy'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* How it works card */}
-                    <div className={`${card} p-6`}>
-                        <div className="flex items-center gap-2.5 mb-4">
-                            <Smartphone className="h-5 w-5 text-[var(--re-brand)]" />
-                            <h2 className="text-base font-semibold text-[var(--re-text-primary)]">How it works</h2>
-                        </div>
-
-                        <div className="space-y-4">
-                            {[
-                                {
-                                    step: '1',
-                                    title: 'Operator scans QR code',
-                                    detail: 'Opens the capture tool in their phone browser. No app download, no login required for scanning.',
-                                },
-                                {
-                                    step: '2',
-                                    title: 'Select event type & scan item',
-                                    detail: 'Choose what you\'re doing: Receiving, Shipping, or Transforming. Point your camera at the barcode — product number, lot code, expiry, and serial are extracted automatically.',
-                                },                                {
-                                    step: '3',
-                                    title: 'Event ingests into pipeline',
-                                    detail: 'Scanned data flows into your compliance pipeline as a traceability event. If offline, it queues locally and syncs when connection returns.',
-                                },
-                                {
-                                    step: '4',
-                                    title: 'Appears in your dashboard',
-                                    detail: 'Events show up in Heartbeat, contribute to compliance scoring, and are included in recall traces and exports.',
-                                },
-                            ].map((item) => (
-                                <div key={item.step} className="flex gap-3">
-                                    <div className="w-7 h-7 rounded-lg bg-[var(--re-brand)]/10 flex items-center justify-center text-xs font-bold text-[var(--re-brand)] flex-shrink-0 mt-0.5">
-                                        {item.step}
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-medium text-[var(--re-text-primary)]">{item.title}</div>
-                                        <p className="text-xs text-[var(--re-text-muted)] mt-0.5 leading-relaxed">{item.detail}</p>
+                                {/* QR Code */}
+                                <div className="mt-5 flex justify-center">
+                                    <div className="flex aspect-square w-full max-w-[240px] items-center justify-center rounded-lg border border-re-border bg-re-surface-card p-4">
+                                        {qrSvgDataUrl ? (
+                                            <img
+                                                src={qrSvgDataUrl}
+                                                alt="Field capture QR code"
+                                                className="h-full w-full"
+                                            />
+                                        ) : (
+                                            <Skeleton className="h-full w-full" />
+                                        )}
                                     </div>
                                 </div>
+
+                                {/* Copy link */}
+                                <div className="mt-5 flex items-center gap-2 rounded-md border border-re-border-subtle bg-re-surface-inset p-2 pl-3">
+                                    <code className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-re-text-secondary">{captureURL}</code>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleCopy}
+                                        className="shrink-0"
+                                    >
+                                        {copied
+                                            ? <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                            : <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                                        {copied ? 'Copied' : 'Copy'}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* How it works card */}
+                        <Card>
+                            <CardHeader>
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                    <Smartphone className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                    <h2 className="text-subheading text-re-text-primary">How it works</h2>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <ol className="divide-y divide-re-border-subtle">
+                                    {HOW_IT_WORKS.map((item) => (
+                                        <li key={item.step} className="flex gap-3 px-5 py-4">
+                                            <span className="shrink-0 font-mono text-label text-re-text-muted">
+                                                {item.step}
+                                            </span>
+                                            <div className="min-w-0">
+                                                <div className="text-ui font-medium text-re-text-primary">{item.title}</div>
+                                                <p className="mt-0.5 text-small text-re-text-tertiary">{item.detail}</p>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ol>
+
+                                {/* Try it yourself */}
+                                <div className="border-t border-re-border-subtle px-5 py-4">
+                                    <Link
+                                        href={capturePath}
+                                        target="_blank"
+                                        className="inline-flex items-center gap-1.5 text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                                    >
+                                        Open scanner in new tab <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                                    </Link>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Supported formats */}
+                <Card>
+                    <CardContent>
+                        <h3 className="text-subheading text-re-text-primary">Supported barcode formats</h3>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {BARCODE_FORMATS.map((fmt) => (
+                                <Badge key={fmt} mono>
+                                    {fmt}
+                                </Badge>
                             ))}
                         </div>
-
-                        {/* Try it yourself */}
-                        <div className="mt-5 pt-4 border-t border-[var(--re-surface-border)]">
-                            <Link
-                                href={capturePath}
-                                target="_blank"
-                                className="inline-flex items-center gap-1.5 text-sm text-[var(--re-brand)] hover:opacity-80 transition-opacity"
-                            >
-                                Open scanner in new tab <ExternalLink className="h-3.5 w-3.5" />                            </Link>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Supported formats */}
-            <div className={`${card} p-5`}>
-                <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-3">Supported barcode formats</h3>
-                <div className="flex flex-wrap gap-2">
-                    {[
-                        'QR Code (GS1 Digital Link)',
-                        'GS1-128',
-                        'DataMatrix',
-                        'EAN-13',
-                        'UPC-A',
-                        'Code 128',
-                    ].map((fmt) => (
-                        <span
-                            key={fmt}
-                            className="px-2.5 py-1 rounded-md bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-xs text-[var(--re-text-muted)]"
-                        >
-                            {fmt}
-                        </span>
-                    ))}
-                </div>
-                <p className="text-xs text-[var(--re-text-disabled)] mt-3">
-                    Barcodes are parsed automatically — product number, lot code, serial, expiry, and pack date are extracted and mapped to the required data fields.
-                </p>
+                        <p className="mt-3 text-small text-re-text-tertiary">
+                            Barcodes are parsed automatically — product number, lot code, serial, expiry, and pack date are extracted and mapped to the required data fields.
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
-        </div>
+        </PageContainer>
     );
 }

@@ -5,9 +5,14 @@ import { useParams } from 'next/navigation';
 import { AnalysisSummary } from '@/types/api';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
-import { CheckCircle, Clock, Shield, Database, Lock, Search } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Shield, Database, Lock, Search } from 'lucide-react';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Card, CardDescription, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AnalysisResultClient() {
     const params = useParams();
@@ -24,8 +29,31 @@ export default function AnalysisResultClient() {
             .finally(() => setLoading(false));
     }, [params.id, apiKey]);
 
-    if (loading) return <div className="p-8">Loading Chain of Trust...</div>;
-    if (!data) return <div className="p-8">Document Not Found</div>;
+    if (loading) {
+        return (
+            <PageContainer>
+                <div className="space-y-6" aria-busy="true">
+                    <div className="space-y-3 border-b border-re-border-subtle pb-5">
+                        <Skeleton className="h-8 w-80" />
+                        <Skeleton className="h-4 w-64" />
+                    </div>
+                    <p className="text-ui text-re-text-tertiary">Loading Chain of Trust...</p>
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <Skeleton className="h-80 w-full" />
+                        <Skeleton className="h-48 w-full" />
+                    </div>
+                </div>
+            </PageContainer>
+        );
+    }
+
+    if (!data) {
+        return (
+            <PageContainer>
+                <EmptyState icon={Search} title="Document Not Found" />
+            </PageContainer>
+        );
+    }
 
     const steps = [
         {
@@ -59,68 +87,80 @@ export default function AnalysisResultClient() {
     ];
 
     return (
-        <div className="container mx-auto py-8 space-y-8">
-            <div className="flex items-center justify-between print:hidden">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Chain of Trust Evidence</h1>
-                    <p className="text-muted-foreground">Document ID: <code className="bg-muted p-1 rounded">{data.document_id}</code></p>
-                </div>
-                <div className="flex gap-2">
-                    <Badge variant={data.risk_score > 50 ? 'destructive' : 'default'} className="text-lg px-4 py-2">
+        <PageContainer>
+            <PageHeader
+                className="print:hidden"
+                title="Chain of Trust Evidence"
+                description={
+                    <>Document ID: <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem]">{data.document_id}</code></>
+                }
+                meta={
+                    <Badge variant={data.risk_score > 50 ? 'destructive' : 'default'}>
                         Risk Score: {data.risk_score}/100
                     </Badge>
-                </div>
-            </div>
+                }
+            />
 
             <div className="grid gap-6 md:grid-cols-2 print:grid-cols-1">
-                <Card className="print:shadow-none print:border-green-500 print:border-2">
+                <Card className="print:border-2 print:border-re-border-strong">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-re-info" />
-                            Cryptographic Timeline
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                            Simulated example — not a verification record
-                        </p>
+                        <div className="min-w-0">
+                            <CardTitle>Cryptographic Timeline</CardTitle>
+                            <CardDescription className="mt-1">
+                                Simulated example — not a verification record
+                            </CardDescription>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="relative border-l-2 border-muted ml-3 space-y-8 py-2">
-                            {steps.map((step, i) => (
-                                <div key={i} className="pl-8 relative">
-                                    <div className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full ${step.status === 'complete' ? 'bg-re-success' : 'bg-re-surface-elevated'}`} />
-                                    <div className="flex items-center justify-between mb-1">
-                                        <h3 className="font-semibold">{step.title}</h3>
-                                        <span className="text-xs text-muted-foreground font-mono">{step.time}</span>
-                                    </div>
-                                    <div className="text-xs font-mono bg-slate-50 p-2 rounded border flex items-center gap-2">
-                                        <Lock className="h-3 w-3 text-muted-foreground" />
-                                        {step.hash}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        <ol className="space-y-6">
+                            {steps.map((step, i) => {
+                                const StepIcon = step.icon;
+                                const isComplete = step.status === 'complete';
+                                return (
+                                    <li key={i} className="flex items-start gap-3">
+                                        <span
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${isComplete
+                                                ? 'border-re-text-primary bg-re-text-primary text-re-surface-card'
+                                                : 'border-re-border text-re-text-tertiary'
+                                                }`}
+                                        >
+                                            <StepIcon className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-1 flex items-center justify-between gap-3">
+                                                <h3 className="text-subheading text-re-text-primary">{step.title}</h3>
+                                                <span className="shrink-0 font-mono text-small text-re-text-tertiary">{step.time}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 rounded-md border border-re-border-subtle bg-re-surface-inset px-2 py-1.5 font-mono text-[0.8125rem] text-re-text-secondary">
+                                                <Lock className="h-3.5 w-3.5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                                {step.hash}
+                                            </div>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ol>
                     </CardContent>
                 </Card>
 
                 <div className="space-y-6">
                     <Card>
                         <CardHeader><CardTitle>Risk Details</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="space-y-3">
                             {data.critical_risks.map(risk => (
-                                <div key={risk.id} className="p-4 border rounded-lg bg-re-danger-muted text-re-danger border-re-danger">
-                                    <div className="font-bold text-sm mb-1">{risk.severity} • {risk.id}</div>
-                                    <div>{risk.description}</div>
-                                </div>
+                                <Callout key={risk.id} tone="danger" title={<>{risk.severity} • {risk.id}</>}>
+                                    {risk.description}
+                                </Callout>
                             ))}
                             {data.critical_risks.length === 0 && (
-                                <div className="text-re-success flex items-center gap-2">
-                                    <CheckCircle className="h-4 w-4" /> No Critical Risks Detected
-                                </div>
+                                <Callout tone="success">
+                                    No Critical Risks Detected
+                                </Callout>
                             )}
                         </CardContent>
                     </Card>
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

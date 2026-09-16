@@ -24,10 +24,10 @@ export default function OnboardingPage() {
   }, [user, isHydrated, router]);
 
   return (
-    <main className="min-h-[80vh] flex items-center justify-center">
+    <div className="min-h-[80vh] flex items-center justify-center">
       <div className="animate-pulse text-[var(--re-text-muted)] text-sm">
         Loading...
       </div>
-    </main>
+    </div>
   );
 }

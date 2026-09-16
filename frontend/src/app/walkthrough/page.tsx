@@ -4,7 +4,12 @@ import {
   ArrowRight, AlertTriangle, CheckCircle2, Clock, FileText,
   Package, Search, Shield, ShieldAlert, Upload, XCircle,
 } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
   title: '24-Hour FDA Response Walkthrough | RegEngine',
@@ -107,123 +112,119 @@ const TIMELINE = [
 
 export default function WalkthroughPage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+    <div className="min-h-screen bg-re-surface-base">
       {/* Hero */}
-      <section className="relative z-[2] max-w-[800px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-8 sm:pb-12">
-        <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
+      <Container as="section" width="marketing" className="pt-12 sm:pt-16">
+        <Badge className="mb-5">
           Product Walkthrough
         </Badge>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
-          The FDA gives you 24&nbsp;hours.<br />
-          <span className="text-re-brand">Here&apos;s how you respond in&nbsp;2.</span>
-        </h1>
-        <p className="text-lg text-re-text-muted max-w-xl leading-relaxed mb-8">
-          A step-by-step walkthrough of an illustrative FDA records-request scenario — from messy supplier data to a hash-manifested response package anyone can re-check.
-        </p>
-        <div className="flex items-center gap-4 text-sm text-re-text-disabled">
-          <span className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4" /> 24-hour deadline
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Package className="w-4 h-4" /> 47 records
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Shield className="w-4 h-4" /> 3 blocking defects
-          </span>
-        </div>
-      </section>
+        <PageHeader
+          size="hero"
+          title={
+            <>
+              The FDA gives you 24&nbsp;hours.<br />
+              <span>Here&apos;s how you respond in&nbsp;2.</span>
+            </>
+          }
+          description="A step-by-step walkthrough of an illustrative FDA records-request scenario — from messy supplier data to a hash-manifested response package anyone can re-check."
+          className="border-b-0 pb-0"
+        />
+        <ul className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <li className="flex items-center gap-1.5 font-mono text-label uppercase text-re-text-muted">
+            <Clock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> 24-hour deadline
+          </li>
+          <li className="flex items-center gap-1.5 font-mono text-label uppercase text-re-text-muted">
+            <Package className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> 47 records
+          </li>
+          <li className="flex items-center gap-1.5 font-mono text-label uppercase text-re-text-muted">
+            <Shield className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> 3 blocking defects
+          </li>
+        </ul>
+      </Container>
 
       {/* Timeline */}
-      <section className="relative z-[2] max-w-[800px] mx-auto px-4 sm:px-6 pb-12 sm:pb-20">
-        <div className="relative">
+      <Container as="section" width="marketing" className="pb-12 pt-12 sm:pb-20">
+        <ol className="relative space-y-6 sm:space-y-8">
           {/* Vertical line */}
-          <div className="absolute left-[23px] sm:left-[27px] top-0 bottom-0 w-px bg-[var(--re-surface-border)]" />
+          <div
+            aria-hidden="true"
+            className="absolute bottom-0 left-[19px] top-0 w-px bg-re-border-subtle sm:left-[23px]"
+          />
 
-          <div className="space-y-6 sm:space-y-8">
-            {TIMELINE.map((step, i) => {
-              const StepIcon = step.icon;
-              const colorMap: Record<string, string> = {
-                red: 'border-re-danger/30 bg-re-danger/10 text-re-danger',
-                amber: 'border-re-warning/30 bg-re-warning/10 text-re-warning',
-                blue: 'border-re-info/30 bg-re-info/10 text-re-info',
-                emerald: 'border-re-brand/30 bg-re-brand-muted text-re-brand',
-                brand: 'border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 text-[var(--re-brand)]',
-              };
-              const iconColor = colorMap[step.color] || colorMap.brand;
+          {TIMELINE.map((step, i) => {
+            const StepIcon = step.icon;
 
-              return (
-                <div key={i} className="relative flex gap-4 sm:gap-5">
-                  {/* Icon */}
-                  <div className={`w-[48px] h-[48px] sm:w-[56px] sm:h-[56px] rounded-xl border flex items-center justify-center flex-shrink-0 z-10 ${iconColor}`}>
-                    <StepIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </div>
+            return (
+              <li key={i} className="relative flex gap-4 sm:gap-5">
+                {/* Icon */}
+                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-re-border bg-re-surface-card text-re-text-tertiary sm:h-12 sm:w-12">
+                  <StepIcon className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 pb-2">
-                    {step.time && (
-                      <span className="font-mono text-[0.7rem] font-medium text-re-text-disabled tracking-wider">
-                        {step.time}
-                      </span>
-                    )}
-                    <h3 className="text-lg sm:text-xl font-bold text-re-text-primary mt-1 mb-2">
-                      {step.title}
-                    </h3>
-                    {step.description && (
-                      <p className="text-[0.9rem] text-re-text-muted leading-relaxed mb-3">
-                        {step.description}
-                      </p>
-                    )}
-                    {step.detail && (
-                      <p className="text-[0.8rem] text-re-text-disabled leading-relaxed mb-3 italic">
-                        {step.detail}
-                      </p>
-                    )}
+                {/* Content */}
+                <div className="min-w-0 flex-1 pb-2">
+                  {step.time && (
+                    <span className="font-mono text-label tabular-nums uppercase text-re-text-muted">
+                      {step.time}
+                    </span>
+                  )}
+                  <h3 className="mb-2 mt-1 text-heading text-re-text-primary">
+                    {step.title}
+                  </h3>
+                  {step.description && (
+                    <p className="mb-3 max-w-[68ch] text-ui text-re-text-secondary">
+                      {step.description}
+                    </p>
+                  )}
+                  {step.detail && (
+                    <p className="mb-3 max-w-[68ch] text-small text-re-text-tertiary">
+                      {step.detail}
+                    </p>
+                  )}
 
-                    {/* Blocking defects list */}
-                    {step.defects && (
-                      <div className="rounded-xl border-2 border-re-danger/20 bg-re-danger/5 p-4 space-y-2">
+                  {/* Blocking defects list */}
+                  {step.defects && (
+                    <Callout tone="danger" className="max-w-[68ch]">
+                      <div className="space-y-2">
                         {step.defects.map((d, j) => (
                           <div key={j} className="flex items-start gap-2">
-                            <XCircle className="w-4 h-4 text-re-danger mt-0.5 flex-shrink-0" />
-                            <div>
-                              <span className="font-mono text-[0.75rem] font-medium text-re-danger">{d.lot}</span>
-                              <span className="text-[0.8rem] text-re-text-muted ml-2">{d.issue}</span>
-                            </div>
+                            <span className="font-mono text-[0.8125rem] text-re-text-primary">{d.lot}</span>
+                            <span className="text-ui text-re-text-secondary">{d.issue}</span>
                           </div>
                         ))}
-                        <p className="text-[0.75rem] text-re-danger font-semibold mt-3 pt-2 border-t border-re-danger/20">
+                        <p className="mt-3 border-t border-re-border-subtle pt-2 text-ui font-medium text-re-text-primary">
                           Export build is blocked until defects are resolved or waived
                         </p>
                       </div>
-                    )}
+                    </Callout>
+                  )}
 
-                    {/* Package details */}
-                    {step.packageDetails && (
-                      <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 p-4 space-y-2">
-                        {step.packageDetails.map((d) => (
-                          <div key={d.label} className="flex items-center justify-between text-[0.8rem]">
-                            <span className="text-re-text-muted">{d.label}</span>
-                            <span className="font-mono font-medium text-[var(--re-brand)]">{d.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Package details */}
+                  {step.packageDetails && (
+                    <Card variant="inset" padding="compact" className="max-w-[68ch] space-y-2">
+                      {step.packageDetails.map((d) => (
+                        <div key={d.label} className="flex items-center justify-between gap-4 text-ui">
+                          <span className="text-re-text-secondary">{d.label}</span>
+                          <span className="font-mono text-[0.8125rem] text-re-text-primary">{d.value}</span>
+                        </div>
+                      ))}
+                    </Card>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+              </li>
+            );
+          })}
+        </ol>
+      </Container>
 
       {/* What if blockers aren't resolved */}
-      <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[800px] mx-auto py-12 sm:py-16 px-4 sm:px-6">
-          <h2 className="text-2xl font-bold text-re-text-primary mb-3">You cannot submit if:</h2>
-          <p className="text-sm text-re-text-muted mb-6">
+      <section className="border-t border-re-border-subtle bg-re-surface-inset py-12 sm:py-16">
+        <Container width="marketing">
+          <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">You cannot submit if:</h2>
+          <p className="mb-6 max-w-[68ch] text-ui text-re-text-secondary">
             RegEngine surfaces these checks at package assembly time. Rule enforcement is configurable per workflow — in production today, rule failures are recorded as exceptions and surfaced in the dashboard rather than blocking ingest.
           </p>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {[
               { rule: 'Required KDEs are missing', example: 'cooling_date, reference_document, tlc_source_reference' },
               { rule: 'Identity conflicts are unresolved', example: 'Supplier name matches >=85% but not confirmed' },
@@ -232,53 +233,48 @@ export default function WalkthroughPage() {
               { rule: 'Evaluations are stale', example: 'Event amended after last rule evaluation' },
               { rule: 'Deadline has been breached', example: 'Response window expired (24 hours from request)' },
             ].map((item) => (
-              <div key={item.rule} className="rounded-xl border border-re-danger/20 bg-re-danger/5 p-4">
-                <div className="flex items-start gap-2 mb-1">
-                  <ShieldAlert className="w-4 h-4 text-re-danger mt-0.5 flex-shrink-0" />
-                  <span className="text-[0.85rem] font-medium text-re-text-primary">{item.rule}</span>
+              <Card key={item.rule} padding="compact">
+                <div className="mb-1 flex items-start gap-2">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                  <span className="text-subheading text-re-text-primary">{item.rule}</span>
                 </div>
-                <p className="text-[0.75rem] text-re-text-disabled ml-6">{item.example}</p>
-              </div>
+                <p className="ml-6 text-ui text-re-text-tertiary">{item.example}</p>
+              </Card>
             ))}
           </div>
-          <div className="mt-6 rounded-xl border border-re-brand/20 bg-re-brand/5 p-4">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-re-brand mt-0.5 flex-shrink-0" />
-              <div>
-                <span className="text-[0.85rem] font-medium text-re-text-primary">You can proceed if:</span>
-                <p className="text-[0.8rem] text-re-text-muted mt-1">
-                  Non-critical warnings remain, issues have been waived with documented reason and approver, or all blocking defects are resolved.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+          <Callout tone="success" className="mt-6">
+            <p className="font-medium text-re-text-primary">You can proceed if:</p>
+            <p className="mt-1">
+              Non-critical warnings remain, issues have been waived with documented reason and approver, or all blocking defects are resolved.
+            </p>
+          </Callout>
+        </Container>
       </section>
 
       {/* CTA */}
-      <section className="relative z-[2] max-w-[700px] mx-auto px-6 py-12 sm:py-16 text-center">
-        <h2 className="text-2xl font-bold text-re-text-primary mb-3">This is what RegEngine does.</h2>
-        <p className="text-[0.95rem] text-re-text-muted mb-6 max-w-lg mx-auto">
-          It takes messy, inconsistent supplier data and turns it into an FDA-oriented sortable records-on-request workflow for operator review. Nothing more. Nothing less.
-        </p>
-        <div className="flex gap-3 justify-center flex-wrap">
-          <Link href="/pricing">
-            <button className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.9rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)] hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)]">
-              Become a Founding Design Partner
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </Link>
-          <Link href="/security">
-            <button className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-re-text-secondary px-6 py-3 rounded-xl text-[0.9rem] font-medium transition-all hover:border-[var(--re-brand)]/30">
-              See Security Details
-            </button>
-          </Link>
+      <Container as="section" width="marketing" className="py-12 sm:py-16">
+        <div className="mx-auto max-w-[640px] text-center">
+          <h2 className="font-display text-heading-lg text-re-text-primary">This is what RegEngine does.</h2>
+          <p className="mx-auto mt-4 max-w-[48ch] text-body text-re-text-secondary">
+            It takes messy, inconsistent supplier data and turns it into an FDA-oriented sortable records-on-request workflow for operator review. Nothing more. Nothing less.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg">
+              <Link href="/pricing">
+                Become a Founding Design Partner
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/security">See Security Details</Link>
+            </Button>
+          </div>
+          <p className="mt-6 text-ui text-re-text-secondary">
+            See the underlying transformation step by step at{' '}
+            <Link href="/proof/transformation" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/proof/transformation</Link>.
+          </p>
         </div>
-        <p className="text-[0.85rem] text-re-text-muted mt-6">
-          See the underlying transformation step by step at{' '}
-          <Link href="/proof/transformation" className="text-[var(--re-brand)] hover:opacity-80 underline">/proof/transformation</Link>.
-        </p>
-      </section>
+      </Container>
     </div>
   );
 }

@@ -1,14 +1,20 @@
+/* Scan & Ingest — CSS-module layer for the GS1 scanner.
+   Every colour, radius, spacing step and type size below resolves through the
+   `--re-*` tokens, so this module follows the light/dark switch and the
+   accessibility font scaling exactly like the Tailwind side of the app.
+   Class names are load-bearing: page.tsx keys off each one. */
+
 .container {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-top: 2rem;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
 }
 
 @media (max-width: 768px) {
   .container {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: 1rem;
   }
 }
 
@@ -17,76 +23,95 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
 }
 
-/* Sections */
+/* Sections — the Card recipe (SPEC §4): border + surface step, never a shadow. */
 .section {
-  padding: 1.5rem;
+  padding: 1.25rem;
   background: var(--re-surface-card);
   border: 1px solid var(--re-border-default);
-  border-radius: 0.5rem;
+  border-radius: var(--re-radius-lg);
+  min-width: 0;
 }
 
 .sectionTitle {
   margin: 0 0 1rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--re-text-primary);
+  font-family: var(--re-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--re-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 /* Scanner Container */
 .scannerContainer {
   width: 100%;
   height: 300px;
-  border: 2px solid var(--re-border-default);
-  border-radius: 0.5rem;
-  background: var(--re-surface-elevated);
+  border: 1px solid var(--re-border-default);
+  border-radius: var(--re-radius-md);
+  background: var(--re-surface-inset);
   margin-bottom: 1rem;
   overflow: hidden;
 }
 
 .scannerContainer > video {
-  width: 100% !important;
-  height: 100% !important;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-/* Error Banner */
+/* Error Banner — the Callout recipe: card surface, 3px tone rail. */
 .errorBanner {
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border-left: 4px solid rgb(239, 68, 68);
-  border-radius: 0.375rem;
+  background: var(--re-danger-bg);
+  border: 1px solid var(--re-border-default);
+  border-left: 3px solid var(--re-danger);
+  border-radius: var(--re-radius-md);
 }
 
 .errorText {
   margin: 0 0 0.5rem 0;
   font-size: 0.875rem;
+  line-height: 1.25rem;
   font-weight: 500;
-  color: rgb(220, 38, 38);
+  color: var(--re-text-primary);
 }
 
 .errorHint {
   margin: 0;
   font-size: 0.75rem;
-  color: rgb(180, 24, 24);
+  line-height: 1rem;
+  color: var(--re-text-secondary);
 }
 
-/* Buttons */
+/* Buttons — the Button recipe (SPEC §4). */
 .button {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--re-radius-md);
+  font-family: inherit;
   font-size: 0.875rem;
-  font-weight: 600;
+  line-height: 1.25rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
   text-decoration: none;
-  display: inline-block;
   text-align: center;
+  transition: background-color var(--re-transition-fast), border-color var(--re-transition-fast), color var(--re-transition-fast);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--re-focus-ring);
+  outline-offset: 2px;
 }
 
 .button:disabled {
@@ -96,46 +121,46 @@
 
 .buttonPrimary {
   background: var(--re-brand);
-  color: white;
+  color: var(--re-brand-foreground);
 }
 
-.buttonPrimary:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.buttonPrimary:hover:not(:disabled),
+.buttonPrimary:active:not(:disabled) {
+  background: var(--re-brand-dark);
 }
 
 .buttonSecondary {
-  background: var(--re-surface-elevated);
+  background: var(--re-surface-card);
   color: var(--re-text-primary);
-  border: 1px solid var(--re-border-default);
+  border-color: var(--re-border-strong);
 }
 
-.buttonSecondary:hover:not(:disabled) {
-  background: var(--re-border-default);
+.buttonSecondary:hover:not(:disabled),
+.buttonSecondary:active:not(:disabled) {
+  background: var(--re-surface-inset);
 }
 
 .buttonIngest {
   background: var(--re-brand);
-  color: white;
+  color: var(--re-brand-foreground);
   width: 100%;
-  padding: 1rem;
-  font-size: 1rem;
   margin-bottom: 0.5rem;
 }
 
-.buttonIngest:hover:not(:disabled) {
-  opacity: 0.9;
+.buttonIngest:hover:not(:disabled),
+.buttonIngest:active:not(:disabled) {
+  background: var(--re-brand-dark);
 }
 
 .ingestNote {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--re-text-secondary);
+  line-height: 1rem;
+  color: var(--re-text-tertiary);
   text-align: center;
 }
 
-/* Format Badges */
+/* Format Badges — the Badge pill recipe. */
 .formatBadges {
   display: flex;
   flex-wrap: wrap;
@@ -144,15 +169,19 @@
 }
 
 .badge {
-  padding: 0.375rem 0.75rem;
-  background: var(--re-surface-elevated);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  height: 1.25rem;
+  background: var(--re-surface-inset);
   border: 1px solid var(--re-border-default);
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
+  border-radius: var(--re-radius-pill);
+  font-family: var(--re-font-mono);
+  font-size: 0.6875rem;
+  line-height: 1rem;
   font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--re-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 /* Input Group */
@@ -163,46 +192,60 @@
 
 .inputGroup input {
   flex: 1;
+  min-width: 0;
 }
 
 .inputGroup button {
   flex-shrink: 0;
 }
 
-/* Input Field */
+/* Input Field — the Input recipe (SPEC §4). */
 .input {
+  display: flex;
   width: 100%;
-  padding: 0.75rem;
+  height: 2.75rem;
+  padding: 0 0.75rem;
   border: 1px solid var(--re-border-default);
-  border-radius: 0.375rem;
-  background: var(--re-surface-elevated);
+  border-radius: var(--re-radius-md);
+  background: var(--re-surface-card);
   color: var(--re-text-primary);
   font-size: 0.875rem;
+  line-height: 1.25rem;
   font-family: inherit;
-  transition: border-color 0.2s ease;
+  transition: border-color var(--re-transition-fast), box-shadow var(--re-transition-fast);
 }
 
-.input:focus {
+.input::placeholder {
+  color: var(--re-text-muted);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--re-border-strong);
+}
+
+.input:focus-visible {
   outline: none;
   border-color: var(--re-brand);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 2px var(--re-brand-muted);
 }
 
 .input:disabled {
-  background: var(--re-surface-card);
-  color: var(--re-text-muted);
+  background: var(--re-surface-inset);
+  color: var(--re-text-disabled);
   cursor: not-allowed;
 }
 
 /* Form Group */
 .formGroup {
   margin-bottom: 1rem;
+  min-width: 0;
 }
 
 .label {
   display: block;
   margin-bottom: 0.5rem;
   font-size: 0.875rem;
+  line-height: 1.25rem;
   font-weight: 500;
   color: var(--re-text-primary);
 }
@@ -235,65 +278,77 @@
 
 .historyButton {
   width: 100%;
-  padding: 0.75rem;
-  background: var(--re-surface-elevated);
+  padding: 0.5rem 0.75rem;
+  background: var(--re-surface-card);
   border: 1px solid var(--re-border-default);
-  border-radius: 0.375rem;
+  border-radius: var(--re-radius-md);
   color: var(--re-text-secondary);
-  font-size: 0.75rem;
-  font-family: monospace;
+  font-family: var(--re-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color var(--re-transition-fast), color var(--re-transition-fast), border-color var(--re-transition-fast);
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
 }
 
 .historyButton:hover {
-  background: var(--re-border-default);
+  background: var(--re-surface-inset);
+  border-color: var(--re-border-strong);
   color: var(--re-text-primary);
 }
 
-/* Status Badges */
+.historyButton:focus-visible {
+  outline: 2px solid var(--re-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Status Badges — pills, tone tint + tone border + tone foreground. */
 .badgeRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
 .statusBadge {
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: var(--re-radius-pill);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  white-space: normal;
 }
 
 .badgeSuccess {
-  background: rgba(34, 197, 94, 0.1);
-  color: rgb(22, 163, 74);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: var(--re-success-bg);
+  color: var(--re-success);
+  border-color: var(--re-success-border);
 }
 
 .badgeWarning {
-  background: rgba(251, 146, 60, 0.1);
-  color: rgb(234, 88, 12);
-  border: 1px solid rgba(251, 146, 60, 0.3);
+  background: var(--re-warning-bg);
+  color: var(--re-warning);
+  border-color: var(--re-warning-border);
 }
 
 .badgeError {
-  background: rgba(239, 68, 68, 0.1);
-  color: rgb(220, 38, 38);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--re-danger-bg);
+  color: var(--re-danger);
+  border-color: var(--re-danger-border);
 }
 
 /* Fields Grid */
 .fieldsGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 @media (min-width: 768px) {
@@ -304,79 +359,101 @@
 
 .field {
   padding: 0.75rem;
-  background: var(--re-surface-elevated);
-  border: 1px solid var(--re-border-default);
-  border-radius: 0.375rem;
+  background: var(--re-surface-inset);
+  border: 1px solid var(--re-border-subtle);
+  border-radius: var(--re-radius-md);
+  min-width: 0;
 }
 
 .fieldLabel {
   display: block;
   margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--re-text-secondary);
+  font-family: var(--re-font-mono);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--re-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 .fieldValue {
-  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--re-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
   color: var(--re-text-primary);
-  font-family: monospace;
   word-break: break-word;
 }
 
 .validIndicator {
-  color: rgb(34, 197, 94);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  color: var(--re-success);
 }
 
 .invalidIndicator {
-  color: rgb(239, 68, 68);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  color: var(--re-danger);
 }
 
 /* Code Block */
 .codeBlock {
   margin: 0;
-  padding: 1rem;
-  background: var(--re-surface-elevated);
-  border: 1px solid var(--re-border-default);
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  font-family: monospace;
+  padding: 0.75rem;
+  background: var(--re-surface-inset);
+  border: 1px solid var(--re-border-subtle);
+  border-radius: var(--re-radius-md);
+  font-family: var(--re-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
   color: var(--re-text-secondary);
   overflow-x: auto;
   max-height: 200px;
   overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
-/* Placeholder */
+/* Placeholder — the EmptyState recipe: dashed hairline, no illustration. */
 .placeholder {
-  padding: 3rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3.5rem 1.5rem;
   text-align: center;
-  background: var(--re-surface-elevated);
-  border: 2px dashed var(--re-border-default);
-  border-radius: 0.5rem;
+  background: var(--re-surface-card);
+  border: 1px dashed var(--re-border-default);
+  border-radius: var(--re-radius-lg);
 }
 
 .placeholderText {
   margin: 0;
-  color: var(--re-text-muted);
+  color: var(--re-text-tertiary);
   font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
-/* Privacy Note */
+/* Privacy Note — the Callout recipe on the card surface. */
 .privacyNote {
-  margin-top: 3rem;
-  padding: 1rem;
-  background: rgba(34, 197, 94, 0.05);
-  border-left: 4px solid rgba(34, 197, 94, 0.5);
-  border-radius: 0.375rem;
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding: 0.75rem 1rem;
+  background: var(--re-surface-card);
+  border: 1px solid var(--re-border-default);
+  border-left: 3px solid var(--re-border-strong);
+  border-radius: var(--re-radius-md);
 }
 
 .privacyText {
   margin: 0;
   font-size: 0.875rem;
+  line-height: 1.25rem;
   color: var(--re-text-secondary);
 }

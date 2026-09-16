@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import {
     ShieldCheck,
     Terminal,
@@ -14,27 +13,19 @@ import {
     Check,
     Upload,
     XCircle,
-    Loader2,
     FileArchive,
 } from 'lucide-react';
 
-/* ─────────────────────────────────────────────────────────────
-   DESIGN TOKENS (matches FTL Checker dark theme)
-   ───────────────────────────────────────────────────────────── */
-const T = {
-    bg: 'var(--re-surface-base)',
-    surface: 'rgba(255,255,255,0.02)',
-    elevated: 'rgba(255,255,255,0.05)',
-    border: 'rgba(255,255,255,0.06)',
-    borderHover: 'rgba(255,255,255,0.12)',
-    text: 'var(--re-text-primary)',
-    textDim: 'var(--re-text-tertiary)',
-    textMuted: 'var(--re-text-muted)',
-    accent: 'var(--re-success)',
-    accentDim: 'rgba(34,197,94,0.12)',
-    mono: "'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
-    brand: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-};
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardHeader } from '@/components/ui/card';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { cn } from '@/lib/utils';
 
 const PROOF_VERIFY_ENDPOINT = '/api/ingestion/api/v1/proof/verify';
 
@@ -83,6 +74,62 @@ const INSTALL_STEPS = [
     },
 ];
 
+const TRUST_MODEL = [
+    {
+        Icon: Lock,
+        title: 'Deterministic File Hashing',
+        desc: 'Every evidence file in the bundle is hashed with SHA-256 and compared with the manifest. Same bytes always produce the same hash.',
+    },
+    {
+        Icon: FileCode,
+        title: 'Open Source',
+        desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
+    },
+    {
+        Icon: ShieldCheck,
+        title: 'Offline Capable',
+        desc: 'Download the ZIP and verify it entirely offline. No API calls, no network, no RegEngine account required.',
+    },
+];
+
+const BUNDLE_CHECK_STEPS = [
+    { step: '1', label: 'Read Manifest', detail: 'Load manifest.json from the audit bundle ZIP' },
+    { step: '2', label: 'Hash Files', detail: 'Recompute SHA-256 for each declared evidence file' },
+    { step: '3', label: 'Rebuild Merkle Root', detail: 'Use the file hashes as leaves with the published tree algorithm' },
+    { step: '4', label: 'Compare', detail: 'If every file hash and the root match the manifest inside the bundle, the bundle is self-consistent. The check does not authenticate who produced it.' },
+];
+
+type ManifestField = { field: string; meaning: string; example: string };
+
+const MANIFEST_FIELDS: ManifestField[] = [
+    { field: 'files[].path', meaning: 'Evidence file inside the ZIP', example: 'fsma-204-sample.csv' },
+    { field: 'files[].sha256', meaning: 'Declared SHA-256 digest for that file', example: 'ab250df1f9ed...' },
+    { field: 'files[].size', meaning: 'Declared byte length', example: '1524' },
+    { field: 'merkle.leaves[]', meaning: 'Ordered file hashes used as tree leaves', example: 'ab250df1f9ed...' },
+    { field: 'merkle.root', meaning: 'Declared root of the evidence tree', example: 'a320428f4057...' },
+    { field: 'build.commit', meaning: 'Code revision that produced the sample bundle', example: '64542033f908...' },
+];
+
+const MANIFEST_COLUMNS: DataTableColumn<ManifestField>[] = [
+    { key: 'field', header: 'Field', mono: true, width: '14rem' },
+    { key: 'meaning', header: 'Meaning' },
+    { key: 'example', header: 'Example', mono: true },
+];
+
+const PROSE_LINK =
+    'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
+
+/** Terminal transcript colouring — the word on the line always carries the meaning too. */
+function transcriptLineClass(line: string): string {
+    if (line.startsWith('✓ VALID')) return 'text-re-success';
+    if (line.startsWith('✗ INVALID')) return 'text-re-danger';
+    if (line.startsWith('$')) return 'text-re-text-primary';
+    if (line.startsWith('===') || line.startsWith('---')) return 'text-re-text-disabled';
+    if (line.includes('SUMMARY')) return 'text-re-info';
+    if (line.includes('REGENGINE')) return 'text-re-info';
+    return 'text-re-text-secondary';
+}
+
 /* ─────────────────────────────────────────────────────────────
    VerifyWidget — drop-and-verify export bundle
    ───────────────────────────────────────────────────────────── */
@@ -113,7 +160,7 @@ function VerifyWidget() {
     }, []);
 
     const onDrop = useCallback(
-        (e: React.DragEvent<HTMLDivElement>) => {
+        (e: React.DragEvent<HTMLLabelElement>) => {
             e.preventDefault();
             setDragOver(false);
             const f = e.dataTransfer.files?.[0] ?? null;
@@ -170,709 +217,451 @@ function VerifyWidget() {
     }, []);
 
     return (
-        <div
-            className="rounded-2xl p-6 sm:p-8"
-            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-        >
+        <Card className="p-6 sm:p-8">
             {/* ─── Drop zone ─────────────────────────────────────── */}
             {state.kind !== 'success' && (
-                <div
+                <label
+                    htmlFor="verify-bundle-file"
                     onDragOver={(e) => {
                         e.preventDefault();
                         setDragOver(true);
                     }}
                     onDragLeave={() => setDragOver(false)}
                     onDrop={onDrop}
-                    onClick={() => inputRef.current?.click()}
-                    className="rounded-xl px-6 py-10 text-center cursor-pointer transition-colors"
-                    style={{
-                        background: dragOver ? T.elevated : 'transparent',
-                        border: `2px dashed ${dragOver ? T.accent : T.border}`,
-                    }}
+                    className="block cursor-pointer"
                 >
                     <input
+                        id="verify-bundle-file"
                         ref={inputRef}
                         type="file"
                         accept=".zip,.json,application/zip,application/json"
-                        className="hidden"
+                        className="sr-only"
                         onChange={(e) =>
                             handleFile(e.target.files?.[0] ?? null)
                         }
                     />
-                    <div className="flex flex-col items-center gap-3">
-                        {file ? (
-                            <FileArchive size={32} style={{ color: T.accent }} />
-                        ) : (
-                            <Upload size={32} style={{ color: T.textDim }} />
-                        )}
-                        <div className="text-[15px] font-semibold">
-                            {file
-                                ? file.name
-                                : 'Drop your export bundle here'}
-                        </div>
-                        <div className="text-[13px]" style={{ color: T.textDim }}>
-                            {file
+                    <EmptyState
+                        icon={file ? FileArchive : Upload}
+                        title={file ? file.name : 'Drop your export bundle here'}
+                        description={
+                            file
                                 ? `${(file.size / 1024).toFixed(1)} KB — click to choose a different file`
-                                : 'or click to browse — accepts .zip or .json'}
-                        </div>
-                    </div>
-                </div>
+                                : 'or click to browse — accepts .zip or .json'
+                        }
+                        className={cn(
+                            'transition-colors duration-120 motion-reduce:transition-none',
+                            dragOver && 'border-re-brand bg-re-surface-inset',
+                        )}
+                    />
+                </label>
             )}
 
             {/* ─── Action row ────────────────────────────────────── */}
             {state.kind !== 'success' && (
-                <div className="flex flex-wrap gap-3 mt-5 items-center">
-                    <button
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <Button
+                        size="lg"
                         onClick={onSubmit}
-                        disabled={!file || state.kind === 'loading'}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[14px] font-semibold text-black disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ background: T.accent, border: 'none' }}
+                        disabled={!file}
+                        loading={state.kind === 'loading'}
+                        leadingIcon={<ShieldCheck strokeWidth={1.75} aria-hidden="true" />}
                     >
-                        {state.kind === 'loading' ? (
-                            <>
-                                <Loader2
-                                    size={14}
-                                    className="animate-spin"
-                                />
-                                Verifying…
-                            </>
-                        ) : (
-                            <>
-                                <ShieldCheck size={14} />
-                                Verify bundle
-                            </>
-                        )}
-                    </button>
+                        {state.kind === 'loading' ? 'Verifying…' : 'Verify bundle'}
+                    </Button>
                     {file && state.kind !== 'loading' && (
-                        <button
-                            onClick={reset}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-medium"
-                            style={{
-                                background: 'transparent',
-                                border: `1px solid ${T.border}`,
-                                color: T.textDim,
-                            }}
-                        >
+                        <Button variant="secondary" size="lg" onClick={reset}>
                             Clear
-                        </button>
-                    )}
-                    {state.kind === 'error' && (
-                        <span
-                            className="text-[13px] ml-1"
-                            style={{ color: 'var(--re-danger)' }}
-                        >
-                            {state.message}
-                        </span>
+                        </Button>
                     )}
                 </div>
+            )}
+
+            {state.kind === 'error' && (
+                <Callout tone="danger" role="alert" className="mt-4">
+                    {state.message}
+                </Callout>
             )}
 
             {/* ─── Results ───────────────────────────────────────── */}
             {state.kind === 'success' && (
                 <div className="flex flex-col gap-5">
-                    <div className="flex items-center gap-3">
-                        {state.data.verified ? (
-                            <CheckCircle2
-                                size={48}
-                                style={{ color: T.accent }}
-                            />
-                        ) : (
-                            <XCircle
-                                size={48}
-                                style={{ color: 'var(--re-danger)' }}
-                            />
-                        )}
-                        <div>
-                            <div
-                                className="text-2xl font-bold"
-                                style={{
-                                    color: state.data.verified
-                                        ? T.accent
-                                        : 'var(--re-danger)',
-                                }}
-                            >
-                                {state.data.verified ? 'Self-consistent' : 'Failed'}
-                            </div>
-                            <div
-                                className="text-[13px]"
-                                style={{ color: T.textDim }}
-                            >
-                                {state.data.checks.filter((c) => c.passed).length}{' '}
-                                of {state.data.checks.length} checks passed
-                            </div>
-                        </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <StatusBadge
+                            state={state.data.verified ? 'compliant' : 'non-compliant'}
+                            label={state.data.verified ? 'Self-consistent' : 'Failed'}
+                        />
+                        <p className="text-ui text-re-text-secondary">
+                            {state.data.checks.filter((c) => c.passed).length}{' '}
+                            of {state.data.checks.length} checks passed
+                        </p>
                     </div>
 
-                    <p
-                        className="text-[13px] leading-relaxed m-0"
-                        style={{ color: T.textDim }}
-                    >
+                    <p className="m-0 text-ui text-re-text-secondary">
                         {state.data.verified
                             ? 'The files in this bundle match the manifest packaged alongside them. This does not authenticate who produced the bundle: the manifest and Merkle root come from the upload itself, so a bundle with replaced files and a regenerated manifest passes the same checks.'
                             : 'At least one file or the Merkle root does not match the manifest packaged inside the bundle.'}
                     </p>
 
-                    <div
-                        className="rounded-xl overflow-hidden"
-                        style={{ border: `1px solid ${T.border}` }}
-                    >
+                    <Card variant="outline" className="overflow-hidden">
                         {state.data.checks.map((c, i) => (
                             <div
                                 key={i}
-                                className="flex items-start gap-3 px-4 py-3"
-                                style={{
-                                    borderBottom:
-                                        i < state.data.checks.length - 1
-                                            ? `1px solid ${T.border}`
-                                            : 'none',
-                                    background:
-                                        i % 2 === 0 ? 'transparent' : T.surface,
-                                }}
+                                className="flex items-start gap-3 border-b border-re-border-subtle px-4 py-3 last:border-0"
                             >
                                 <div className="mt-0.5 shrink-0">
                                     {c.passed ? (
                                         <CheckCircle2
-                                            size={16}
-                                            style={{ color: T.accent }}
+                                            className="h-4 w-4 text-re-success"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
                                         />
                                     ) : (
                                         <XCircle
-                                            size={16}
-                                            style={{ color: 'var(--re-danger)' }}
+                                            className="h-4 w-4 text-re-danger"
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
                                         />
                                     )}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-[14px] font-medium">
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-ui font-medium text-re-text-primary">
                                         {c.name}
                                     </div>
                                     {c.detail && (
-                                        <div
-                                            className="text-[12.5px] mt-0.5 break-all"
-                                            style={{
-                                                color: T.textDim,
-                                                fontFamily: T.mono,
-                                            }}
-                                        >
+                                        <div className="mt-0.5 break-all font-mono text-[0.8125rem] text-re-text-tertiary">
                                             {c.detail}
                                         </div>
                                     )}
                                 </div>
                             </div>
                         ))}
-                    </div>
+                    </Card>
 
-                    <div
-                        className="rounded-lg p-4 text-[12.5px]"
-                        style={{
-                            background: T.bg,
-                            border: `1px solid ${T.border}`,
-                            fontFamily: T.mono,
-                            color: T.textDim,
-                        }}
-                    >
+                    <Card variant="inset" className="p-4 font-mono text-[0.8125rem] text-re-text-tertiary">
                         <div className="break-all">
-                            <span style={{ color: T.textMuted }}>
+                            <span className="text-re-text-muted">
                                 merkle_root_recomputed:{' '}
                             </span>
-                            <span style={{ color: T.text }}>
+                            <span className="text-re-text-primary">
                                 {state.data.merkle_root_recomputed}
                             </span>
                         </div>
-                        <div className="mt-1">
-                            <span style={{ color: T.textMuted }}>
+                        <div className="mt-1 break-all">
+                            <span className="text-re-text-muted">
                                 timestamp:{' '}
                             </span>
-                            <span style={{ color: T.text }}>
+                            <span className="text-re-text-primary">
                                 {state.data.timestamp}
                             </span>
                         </div>
-                    </div>
+                    </Card>
 
                     <div>
-                        <button
-                            onClick={reset}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium"
-                            style={{
-                                background: 'transparent',
-                                border: `1px solid ${T.border}`,
-                                color: T.text,
-                            }}
-                        >
+                        <Button variant="secondary" size="lg" onClick={reset}>
                             Verify another bundle
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
-        </div>
+        </Card>
     );
 }
 
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
     return (
-        <button
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => {
                 navigator.clipboard.writeText(text);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             }}
-            className="bg-transparent border-none cursor-pointer p-1"
-            style={{ color: copied ? T.accent : T.textDim }}
             title="Copy to clipboard"
+            aria-label="Copy to clipboard"
         >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-        </button>
+            {copied ? (
+                <Check className="text-re-success" strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+                <Copy strokeWidth={1.75} aria-hidden="true" />
+            )}
+        </Button>
     );
 }
 
 export default function VerifyPage() {
     return (
-        <div className="min-h-screen" style={{ background: T.bg, color: T.text }}>
+        <div className="re-page min-h-screen">
             {/* ─── Hero ──────────────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto text-center px-6 pt-20 pb-[60px]">
+            <Container className="pb-[60px] pt-20">
+                <PageHeader
+                    size="hero"
+                    eyebrow={
+                        <Badge tone="brand">
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                            Open Source • Apache 2.0 License
+                        </Badge>
+                    }
+                    title="Verify, Don't Trust"
+                    className="mb-0 border-b-0 pb-0"
+                />
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                >
-                    <div
-                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-[20px] text-[13px] font-medium mb-6"
-                        style={{ background: T.accentDim, color: T.accent }}
-                    >
-                        <ShieldCheck size={14} />
-                        Open Source • Apache 2.0 License
-                    </div>
+                <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
+                    Every public RegEngine proof bundle carries a{' '}
+                    <strong className="font-medium text-re-text-primary">SHA-256 manifest and Merkle root</strong>.
+                    Our open-source verification script lets you independently check that
+                    the bundle is consistent with its own manifest — without relying on our servers.
+                    It does not authenticate who published the bundle.
+                </p>
 
-                    <h1
-                        className="text-[clamp(32px,5vw,56px)] font-bold leading-[1.1] mb-4"
-                        style={{ fontFamily: T.brand }}
-                    >
-                        Verify, Don&apos;t Trust
-                    </h1>
-
-                    <p
-                        className="text-lg max-w-[640px] mx-auto mb-8 leading-relaxed"
-                        style={{ color: T.textDim }}
-                    >
-                        Every public RegEngine proof bundle carries a{' '}
-                        <strong className="text-re-text-secondary">SHA-256 manifest and Merkle root</strong>.
-                        Our open-source verification script lets you independently check that
-                        the bundle is consistent with its own manifest — without relying on our servers.
-                        It does not authenticate who published the bundle.
-                    </p>
-
-                    <div className="flex gap-3 justify-center flex-wrap">
-                        <a
-                            href="/sdk/verify_chain.py"
-                            download
-                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold no-underline text-black"
-                            style={{ background: T.accent }}
-                        >
-                            <Download size={16} />
+                <div className="mt-8 flex flex-wrap gap-3">
+                    <Button asChild size="lg">
+                        <a href="/sdk/verify_chain.py" download>
+                            <Download strokeWidth={1.75} aria-hidden="true" />
                             Download verify_chain.py
                         </a>
-                        <a
-                            href="#how-it-works"
-                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-medium no-underline"
-                            style={{ background: T.elevated, border: `1px solid ${T.border}`, color: T.text }}
-                        >
-                            <Terminal size={16} />
+                    </Button>
+                    <Button asChild variant="secondary" size="lg">
+                        <a href="#how-it-works">
+                            <Terminal strokeWidth={1.75} aria-hidden="true" />
                             See How It Works
                         </a>
-                    </div>
-                </motion.div>
-            </section>
+                    </Button>
+                </div>
+            </Container>
 
             {/* ─── Upload widget ─────────────────────────────────────── */}
-            <section
+            <Container
+                as="section"
                 id="verify-widget"
-                className="max-w-[760px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]"
+                className="pb-10 sm:pb-[60px]"
             >
                 <div className="mb-6 flex flex-col gap-3">
-                    <h2 className="text-2xl font-semibold">
+                    <h2 className="text-heading text-re-text-primary">
                         Verify an export bundle
                     </h2>
-                    <p
-                        className="text-[14.5px] leading-relaxed m-0"
-                        style={{ color: T.textDim }}
-                    >
-                        Drop in a RegEngine export bundle (the <code style={{ fontFamily: T.mono, color: T.text }}>.zip</code> or{' '}
-                        <code style={{ fontFamily: T.mono, color: T.text }}>.json</code> you downloaded
+                    <p className="m-0 text-ui text-re-text-secondary">
+                        Drop in a RegEngine export bundle (the <code className="font-mono text-[0.8125rem] text-re-text-primary">.zip</code> or{' '}
+                        <code className="font-mono text-[0.8125rem] text-re-text-primary">.json</code> you downloaded
                         from the proof page) and we&apos;ll re-run the same self-consistency checks the public
                         verifier runs: file SHA-256 checks, Merkle root match against the bundle&apos;s own
                         manifest, and manifest consistency.
                     </p>
-                    <p
-                        className="text-[14.5px] leading-relaxed m-0"
-                        style={{ color: T.textDim }}
-                    >
+                    <p className="m-0 text-ui text-re-text-secondary">
                         Your file is sent to a public verifier endpoint that runs the same algorithm
                         as the export pipeline — no auth, no email capture. Want to verify entirely
                         offline?{' '}
-                        <a
-                            href="/sdk/verify_chain.py"
-                            download
-                            className="underline"
-                            style={{ color: T.accent }}
-                        >
+                        <a href="/sdk/verify_chain.py" download className={PROSE_LINK}>
                             Download verify_chain.py
                         </a>{' '}
                         and run it locally — same algorithm, zero network.
                     </p>
-                    <div
-                        className="rounded-lg px-4 py-3 text-[13.5px] leading-relaxed"
-                        style={{
-                            background: T.surface,
-                            border: `1px solid ${T.border}`,
-                            color: T.textDim,
-                        }}
-                    >
-                        <strong className="text-re-text-secondary">What this does not prove.</strong>{' '}
+                    <Callout tone="warning">
+                        <strong className="font-medium text-re-text-primary">What this does not prove.</strong>{' '}
                         The manifest and Merkle root are read from the uploaded bundle and are treated as
                         untrusted input. A passing result means the bundle is internally self-consistent.
                         It does not verify a signature, compare against a digest RegEngine published
                         separately, or establish that RegEngine produced the bundle. Anyone can replace every
                         file, regenerate the manifest and root, and pass these checks. Do not treat a passing
                         result as proof of publisher identity or provenance.
-                    </div>
+                    </Callout>
                 </div>
 
                 <VerifyWidget />
 
-                <div
-                    className="mt-5 rounded-lg px-4 py-3 text-[13px] flex items-center gap-2 flex-wrap"
-                    style={{
-                        background: T.surface,
-                        border: `1px solid ${T.border}`,
-                        color: T.textDim,
-                    }}
-                >
-                    <span>Don&apos;t have a bundle yet?</span>
-                    <a
-                        href="/proof"
-                        className="inline-flex items-center gap-1 underline"
-                        style={{ color: T.accent }}
-                    >
-                        Grab a sample on the proof page
-                        <ExternalLink size={12} />
-                    </a>
-                    <span>and feed it back in here.</span>
-                </div>
-            </section>
+                <Callout tone="neutral" className="mt-5 flex-wrap items-center">
+                    <span className="flex flex-wrap items-center gap-1">
+                        <span>Don&apos;t have a bundle yet?</span>
+                        <a href="/proof" className={cn('inline-flex items-center gap-1', PROSE_LINK)}>
+                            Grab a sample on the proof page
+                            <ExternalLink className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+                        </a>
+                        <span>and feed it back in here.</span>
+                    </span>
+                </Callout>
+            </Container>
 
             {/* ─── Trust Model ───────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+            <Container as="section" className="pb-10 sm:pb-[60px]">
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
-
-                    {[
-                        {
-                            icon: <Lock size={20} />,
-                            title: 'Deterministic File Hashing',
-                            desc: 'Every evidence file in the bundle is hashed with SHA-256 and compared with the manifest. Same bytes always produce the same hash.',
-                        },
-                        {
-                            icon: <FileCode size={20} />,
-                            title: 'Open Source',
-                            desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
-                        },
-                        {
-                            icon: <ShieldCheck size={20} />,
-                            title: 'Offline Capable',
-                            desc: 'Download the ZIP and verify it entirely offline. No API calls, no network, no RegEngine account required.',
-                        },
-                    ].map((card, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.1 + 0.3 }}
-                            className="rounded-xl p-6"
-                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                        >
-                            <div className="mb-3" style={{ color: T.accent }}>{card.icon}</div>
-                            <h3 className="text-base font-semibold mb-2">
+                    {TRUST_MODEL.map((card) => (
+                        <Card key={card.title} className="p-6">
+                            <card.Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                            <h3 className="mb-2 text-subheading text-re-text-primary">
                                 {card.title}
                             </h3>
-                            <p className="text-sm leading-normal m-0" style={{ color: T.textDim }}>
+                            <p className="m-0 text-ui text-re-text-secondary">
                                 {card.desc}
                             </p>
-                        </motion.div>
+                        </Card>
                     ))}
                 </div>
-            </section>
+            </Container>
 
             {/* ─── Terminal Output ───────────────────────────────────── */}
-            <section
-                id="how-it-works"
-                className="max-w-[960px] mx-auto px-6 pb-[60px]"
-            >
-                <h2 className="text-[28px] font-semibold mb-2 text-center">
-
+            <Container as="section" id="how-it-works" className="pb-[60px]">
+                <h2 className="mb-2 text-heading text-re-text-primary">
                     What It Looks Like
                 </h2>
-                <p
-                    className="text-center text-[15px] mb-8"
-                    style={{ color: T.textDim }}
-                >
+                <p className="mb-8 max-w-[68ch] text-ui text-re-text-secondary">
                     Run the script against an audit ZIP. Every evidence file is re-hashed and the
                     Merkle root is rebuilt.
                 </p>
 
-                <div
-                    className="rounded-xl overflow-hidden bg-[var(--re-surface-base)]"
-                    style={{ border: `1px solid ${T.border}` }}
-                >
-                    {/* Terminal header bar */}
-                    <div
-                        className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03]"
-                        style={{ borderBottom: `1px solid ${T.border}` }}
-                    >
-                        <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                        <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                        <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                        <span
-                            className="ml-3 text-xs"
-                            style={{ color: T.textMuted, fontFamily: T.mono }}
-                        >
+                <Card className="overflow-hidden">
+                    <CardHeader className="items-center py-2.5">
+                        <span className="font-mono text-label uppercase text-re-text-muted">
                             verify_chain.py — bash
                         </span>
-                    </div>
-
-                    {/* Terminal content */}
-                    <pre
-                        className="m-0 p-5 text-xs leading-relaxed overflow-auto max-h-[480px] text-[var(--re-text-secondary)]"
-                        style={{ fontFamily: T.mono }}
-                    >
-                        {TERMINAL_OUTPUT.split('\n').map((line, i) => {
-                            let color = 'var(--re-text-secondary)';
-                            if (line.startsWith('✓ VALID')) color = 'var(--re-success)';
-                            if (line.startsWith('✗ INVALID')) color = 'var(--re-danger)';
-                            if (line.startsWith('$')) color = 'var(--re-success)';
-                            if (line.startsWith('===') || line.startsWith('---')) color = 'var(--re-text-disabled)';
-                            if (line.includes('SUMMARY')) color = 'var(--re-info)';
-                            if (line.includes('REGENGINE')) color = 'var(--re-info)';
-                            return (
-                                <span key={i} style={{ color }}>
-                                    {line}
-                                    {'\n'}
-                                </span>
-                            );
-                        })}
+                    </CardHeader>
+                    <pre className="m-0 max-h-[480px] overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
+                        {TERMINAL_OUTPUT.split('\n').map((line, i) => (
+                            <span key={i} className={transcriptLineClass(line)}>
+                                {line}
+                                {'\n'}
+                            </span>
+                        ))}
                     </pre>
-                </div>
-            </section>
+                </Card>
+            </Container>
 
             {/* ─── Installation ──────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
-                <h2 className="text-[28px] font-semibold mb-8 text-center">
-
+            <Container as="section" className="pb-10 sm:pb-[60px]">
+                <h2 className="mb-8 text-heading text-re-text-primary">
                     Get Started in 30 Seconds
                 </h2>
 
                 <div className="flex flex-col gap-4">
                     {INSTALL_STEPS.map((step, i) => (
-                        <div
-                            key={i}
-                            className="rounded-xl p-5 flex items-start gap-4"
-                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                        >
-                            <div
-                                className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                                style={{ background: T.accentDim, color: T.accent }}
-                            >
+                        <Card key={i} className="flex items-start gap-4 p-5">
+                            <span className="mt-0.5 w-5 shrink-0 font-mono text-label tabular-nums text-re-text-muted">
                                 {i + 1}
-                            </div>
-                            <div className="flex-1">
-                                <div className="text-[15px] font-semibold mb-1.5">
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <div className="mb-1.5 text-subheading text-re-text-primary">
                                     {step.title}
                                 </div>
-                                <div className="flex items-center gap-2 bg-[var(--re-surface-base)] rounded-md px-3 py-2 mb-1.5">
-                                    <code
-                                        className="text-[13px] text-[var(--re-success)] flex-1"
-                                        style={{ fontFamily: T.mono }}
-                                    >
+                                <Card variant="inset" className="mb-1.5 flex items-center gap-2 py-1 pl-3 pr-1">
+                                    <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary">
                                         {step.code}
                                     </code>
                                     <CopyButton text={step.code} />
-                                </div>
-                                <p className="text-[13px] m-0" style={{ color: T.textDim }}>{step.desc}</p>
+                                </Card>
+                                <p className="m-0 text-ui text-re-text-secondary">{step.desc}</p>
                             </div>
-                        </div>
+                        </Card>
                     ))}
                 </div>
-            </section>
+            </Container>
 
             {/* ─── Code Sample ──────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
-                <h2 className="text-[28px] font-semibold mb-2 text-center">
+            <Container as="section" className="pb-10 sm:pb-[60px]">
+                <h2 className="mb-2 text-heading text-re-text-primary">
                     Usage Examples
                 </h2>
-                <p
-                    className="text-center text-[15px] mb-8"
-                    style={{ color: T.textDim }}
-                >
+                <p className="mb-8 max-w-[68ch] text-ui text-re-text-secondary">
                     Offline bundle verification with a non-zero exit code if anything has drifted.
                 </p>
 
-                <div
-                    className="rounded-xl overflow-hidden bg-[var(--re-surface-base)]"
-                    style={{ border: `1px solid ${T.border}` }}
-                >
-                    <div
-                        className="flex items-center justify-between px-4 py-2.5 bg-white/[0.03]"
-                        style={{ borderBottom: `1px solid ${T.border}` }}
-                    >
-                        <span className="text-xs" style={{ color: T.textMuted, fontFamily: T.mono }}>
+                <Card className="overflow-hidden">
+                    <CardHeader className="items-center py-2.5">
+                        <span className="font-mono text-label uppercase text-re-text-muted">
                             example_usage.py
                         </span>
                         <CopyButton text={CODE_SAMPLE} />
-                    </div>
-                    <pre
-                        className="m-0 p-5 text-[12.5px] leading-relaxed text-[var(--re-text-secondary)] overflow-auto"
-                        style={{ fontFamily: T.mono }}
-                    >
-                        {CODE_SAMPLE.split('\n').map((line, i) => {
-                            let color = 'var(--re-text-secondary)';
-                            if (line.startsWith('#') || line.startsWith('"""')) color = 'var(--re-text-tertiary)';
-                            if (line.startsWith('from ') || line.startsWith('import ')) color = '#ff7b72';
-                            if (line.includes('print(')) color = 'var(--re-accent-purple)';
-                            if (line.includes('"') || line.includes("'")) {
-                                // Strings
-                                if (!line.startsWith('#') && !line.startsWith('from') && !line.startsWith('import'))
-                                    color = 'var(--re-info)';
-                            }
-                            if (line.includes('# →')) color = 'var(--re-success)';
-                            return (
-                                <span key={i} style={{ color }}>
-                                    {line}
-                                    {'\n'}
-                                </span>
-                            );
-                        })}
+                    </CardHeader>
+                    <pre className="m-0 overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
+                        {CODE_SAMPLE.split('\n').map((line, i) => (
+                            <span
+                                key={i}
+                                className={
+                                    line.startsWith('#') || line.startsWith('"""')
+                                        ? 'text-re-text-tertiary'
+                                        : 'text-re-text-secondary'
+                                }
+                            >
+                                {line}
+                                {'\n'}
+                            </span>
+                        ))}
                     </pre>
-                </div>
-            </section>
+                </Card>
+            </Container>
 
             {/* ─── Hash Algorithm ────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
-                <h2 className="text-[28px] font-semibold mb-8 text-center">
+            <Container as="section" className="pb-10 sm:pb-[60px]">
+                <h2 className="mb-8 text-heading text-re-text-primary">
                     How the Bundle Check Works
                 </h2>
 
-                <div
-                    className="rounded-xl p-8"
-                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                >
-                    <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6 text-center">
-
-                        {[
-                            { step: '1', label: 'Read Manifest', detail: 'Load manifest.json from the audit bundle ZIP' },
-                            { step: '2', label: 'Hash Files', detail: 'Recompute SHA-256 for each declared evidence file' },
-                            { step: '3', label: 'Rebuild Merkle Root', detail: 'Use the file hashes as leaves with the published tree algorithm' },
-                            { step: '4', label: 'Compare', detail: 'If every file hash and the root match the manifest inside the bundle, the bundle is self-consistent. The check does not authenticate who produced it.' },
-                        ].map((s, i) => (
-                            <div key={i}>
-                                <div
-                                    className="w-9 h-9 rounded-full flex items-center justify-center text-base font-bold mx-auto mb-3"
-                                    style={{ background: T.accentDim, color: T.accent }}
-                                >
+                <Card className="overflow-hidden">
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                        {BUNDLE_CHECK_STEPS.map((s) => (
+                            <div
+                                key={s.step}
+                                className="border-b border-re-border-subtle p-6 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0"
+                            >
+                                <div className="mb-3 font-mono text-label tabular-nums text-re-text-muted">
                                     {s.step}
                                 </div>
-                                <div className="text-[15px] font-semibold mb-1.5">{s.label}</div>
-                                <div className="text-[13px] leading-snug" style={{ color: T.textDim }}>{s.detail}</div>
+                                <div className="mb-1.5 text-subheading text-re-text-primary">{s.label}</div>
+                                <div className="text-ui text-re-text-secondary">{s.detail}</div>
                             </div>
                         ))}
                     </div>
-                </div>
-            </section>
+                </Card>
+            </Container>
 
             {/* ─── Canonical Fields Table ────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
-                <h2 className="text-2xl font-semibold mb-5 text-center">
+            <Container as="section" className="pb-10 sm:pb-[60px]">
+                <h2 className="mb-5 text-heading text-re-text-primary">
                     Manifest Fields (Hash Inputs)
                 </h2>
 
-                <div
-                    className="rounded-xl overflow-hidden"
-                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                >
-                    <table className="w-full border-collapse text-sm">
-
-                        <thead>
-                            <tr style={{ background: T.elevated }}>
-                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Field</th>
-                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Meaning</th>
-                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Example</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {[
-                                ['files[].path', 'Evidence file inside the ZIP', 'fsma-204-sample.csv'],
-                                ['files[].sha256', 'Declared SHA-256 digest for that file', 'ab250df1f9ed...'],
-                                ['files[].size', 'Declared byte length', '1524'],
-                                ['merkle.leaves[]', 'Ordered file hashes used as tree leaves', 'ab250df1f9ed...'],
-                                ['merkle.root', 'Declared root of the evidence tree', 'a320428f4057...'],
-                                ['build.commit', 'Code revision that produced the sample bundle', '64542033f908...'],
-                            ].map(([field, source, example], i) => (
-                                <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
-                                    <td className="px-4 py-2.5 text-[13px]" style={{ fontFamily: T.mono, color: T.accent }}>{field}</td>
-                                    <td className="px-4 py-2.5" style={{ color: T.textDim }}>{source}</td>
-                                    <td className="px-4 py-2.5 text-xs" style={{ fontFamily: T.mono, color: T.textMuted }}>{example}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                <DataTable
+                    columns={MANIFEST_COLUMNS}
+                    data={MANIFEST_FIELDS}
+                    caption="Manifest Fields (Hash Inputs)"
+                    rowKey={(row) => row.field}
+                />
+            </Container>
 
             {/* ─── CTA Footer ────────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto px-6 pb-20 text-center">
-                <div
-                    className="rounded-2xl px-8 py-12"
-                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                >
-                    <ShieldCheck size={40} className="mb-4" style={{ color: T.accent }} />
-                    <h2 className="text-[28px] font-semibold mb-3">
+            <Container as="section" className="pb-20">
+                <Card className="px-8 py-12">
+                    <h2 className="mb-3 text-heading text-re-text-primary">
                         Math Trust &gt; Process Trust
                     </h2>
-                    <p
-                        className="text-[15px] max-w-[560px] mx-auto mb-7 leading-relaxed"
-                        style={{ color: T.textDim }}
-                    >
+                    <p className="mb-7 max-w-[68ch] text-ui text-re-text-secondary">
                         RegEngine adds hash-based consistency checks on top of standard compliance controls.
                         SHA-256 hashing lets you confirm a bundle matches its own manifest independently —
                         whether or not you require a SOC 2 report. It is not a signature and does not
                         authenticate the publisher.
                     </p>
 
-                    <div className="flex gap-3 justify-center flex-wrap">
-                        <a
-                            href="/sdk/verify_chain.py"
-                            download
-                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold no-underline text-black"
-                            style={{ background: T.accent }}
-                        >
-                            <Download size={16} />
-                            Download Script
-                        </a>
-                        <a
-                            href="/tools/ftl-checker"
-                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-medium no-underline"
-                            style={{ background: T.elevated, border: `1px solid ${T.border}`, color: T.text }}
-                        >
-                            Check Your FTL Coverage
-                            <ExternalLink size={14} />
-                        </a>
+                    <div className="flex flex-wrap gap-3">
+                        <Button asChild variant="secondary" size="lg">
+                            <a href="/sdk/verify_chain.py" download>
+                                <Download strokeWidth={1.75} aria-hidden="true" />
+                                Download Script
+                            </a>
+                        </Button>
+                        <Button asChild variant="ghost" size="lg">
+                            <a href="/tools/ftl-checker">
+                                Check Your FTL Coverage
+                                <ExternalLink strokeWidth={1.75} aria-hidden="true" />
+                            </a>
+                        </Button>
                     </div>
-                </div>
+                </Card>
 
                 {/* Fine print */}
-                <p className="mt-6 text-xs" style={{ color: T.textMuted }}>
+                <p className="mt-6 text-small text-re-text-tertiary">
                     verify_chain.py v1.0.0 • Apache 2.0 License • Python 3.8+ • Zero dependencies for offline mode
                 </p>
-            </section>
+            </Container>
         </div>
     );
 }

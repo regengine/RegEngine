@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { sandboxCta } from "@/lib/sandbox-cta";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Container } from "@/components/layout/container";
+import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -38,90 +42,118 @@ const WHY_SWITCH = [
   { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
 ];
 
+
+/**
+ * One comparison cell. The icon carries the claim; the claim wording on this
+ * page is legally reviewed, so no text alternative is invented here.
+ */
+function Mark({ value }: { value: string }) {
+  if (value === "check") return <CheckCircle className="h-5 w-5 text-re-success" strokeWidth={1.75} />;
+  if (value === "x") return <XCircle className="h-5 w-5 text-re-danger" strokeWidth={1.75} />;
+  return <Minus className="h-5 w-5 text-re-warning" strokeWidth={1.75} />;
+}
+
 export default function FoodLogiQCompare() {
   return (
-    <div className="min-h-screen bg-[#0f1117] text-white">
-      <div className="max-w-4xl mx-auto px-4 py-16">
-        {/* Hero */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand)]/10 text-[var(--re-brand)] text-xs font-medium mb-4">
-            <Shield className="w-3.5 h-3.5" />
+    <Container width="marketing" as="main" className="py-16">
+      <PageHeader
+        size="hero"
+        className="mb-12"
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
             Comparison
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">
-            RegEngine vs FoodLogiQ <span className="text-[var(--re-text-muted)]">(Aptean)</span>
-          </h1>
-          <p className="text-[var(--re-text-muted)] text-lg max-w-2xl mx-auto">
+          </span>
+        }
+        title={
+          <>
+            RegEngine vs FoodLogiQ <span className="text-re-text-tertiary">(Aptean)</span>
+          </>
+        }
+        description={
+          <>
             FoodLogiQ was built for enterprise recall management. RegEngine was built for FSMA 204 compliance from day one.
             FoodLogiQ was acquired by Aptean in 2023; check their roadmap for current direction.
-          </p>
-        </div>
+          </>
+        }
+      />
 
-        {/* Comparison table */}
-        <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden mb-12">
-          <div className="grid grid-cols-3 px-4 py-3 bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)] text-xs font-semibold">
-            <span className="text-[var(--re-text-muted)]">Feature</span>
-            <span className="text-center text-[var(--re-brand)]">RegEngine</span>
-            <span className="text-center text-[var(--re-text-muted)]">FoodLogiQ</span>
-          </div>
-          {FEATURES.map((f, i) => (
-            <div key={i} className="grid grid-cols-3 px-4 py-3 border-b border-[var(--re-surface-border)] last:border-0 items-center">
-              <div>
-                <div className="text-sm text-[var(--re-text-primary)]">{f.feature}</div>
-                <div className="text-[0.65rem] text-[var(--re-text-disabled)]">{f.note}</div>
-              </div>
-              <div className="flex justify-center">
-                {f.regengine === "check" && <CheckCircle className="w-5 h-5 text-green-400" />}
-                {f.regengine === "x" && <XCircle className="w-5 h-5 text-red-400" />}
-                {f.regengine === "partial" && <Minus className="w-5 h-5 text-amber-400" />}
-              </div>
-              <div className="flex justify-center">
-                {f.competitor === "check" && <CheckCircle className="w-5 h-5 text-green-400" />}
-                {f.competitor === "x" && <XCircle className="w-5 h-5 text-red-400" />}
-                {f.competitor === "partial" && <Minus className="w-5 h-5 text-amber-400" />}
-              </div>
+      {/* Comparison table */}
+      <div className="mb-12 overflow-x-auto rounded-lg border border-re-border bg-re-surface-card">
+        <table className="w-full min-w-[560px] text-ui">
+          <thead>
+            <tr className="border-b border-re-border-subtle bg-re-surface-inset">
+              <th scope="col" className="px-4 py-3 text-left text-label text-re-text-tertiary">Feature</th>
+              <th scope="col" className="px-4 py-3 text-center text-label text-re-text-primary">RegEngine</th>
+              <th scope="col" className="px-4 py-3 text-center text-label text-re-text-tertiary">FoodLogiQ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FEATURES.map((f, i) => (
+              <tr key={i} className="border-b border-re-border-subtle last:border-0">
+                <th scope="row" className="px-4 py-3 text-left align-middle font-normal">
+                  <span className="block text-ui text-re-text-primary">{f.feature}</span>
+                  <span className="block text-small text-re-text-tertiary">{f.note}</span>
+                </th>
+                <td className="px-4 py-3 align-middle">
+                  <span className="flex justify-center">
+                    <Mark value={f.regengine} />
+                  </span>
+                </td>
+                <td className="px-4 py-3 align-middle">
+                  <span className="flex justify-center">
+                    <Mark value={f.competitor} />
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Why choose RegEngine */}
+      <h2 className="mb-6 text-heading text-re-text-primary">Why you might choose RegEngine over FoodLogiQ</h2>
+      <div className="mb-12 grid grid-cols-1 gap-4 md:grid-cols-2">
+        {WHY_SWITCH.map((item, i) => (
+          <Card key={i} padding="default" className="p-5">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="shrink-0 text-re-text-tertiary [&_svg]:h-4 [&_svg]:w-4">
+                {[<Clock key="c" strokeWidth={1.75} aria-hidden="true" />, <Zap key="z" strokeWidth={1.75} aria-hidden="true" />, <Code key="cd" strokeWidth={1.75} aria-hidden="true" />, <Shield key="s" strokeWidth={1.75} aria-hidden="true" />][i]}
+              </span>
+              <h3 className="text-subheading text-re-text-primary">{item.title}</h3>
             </div>
-          ))}
-        </div>
+            <p className="text-small leading-relaxed text-re-text-secondary">{item.desc}</p>
+          </Card>
+        ))}
+      </div>
 
-        {/* Why choose RegEngine */}
-        <h2 className="text-xl font-bold mb-6">Why you might choose RegEngine over FoodLogiQ</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-          {WHY_SWITCH.map((item, i) => (
-            <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-2">
-                {[<Clock key="c" />, <Zap key="z" />, <Code key="cd" />, <Shield key="s" />][i]}
-                <h3 className="text-sm font-semibold">{item.title}</h3>
-              </div>
-              <p className="text-[0.75rem] text-[var(--re-text-muted)] leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div className="bg-gradient-to-r from-[var(--re-brand)]/10 to-purple-500/10 border border-[var(--re-brand)]/20 rounded-xl p-8 text-center">
-          <h2 className="text-xl font-bold mb-2">See the difference yourself</h2>
-          {/* #2757 — copy and destination resolve together so the blurb can never
-              promise a CSV sandbox that this deployment does not serve. */}
-          <p className="text-[var(--re-text-muted)] text-sm mb-6">
-            {sandboxCta().blurb}
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <Link href={sandboxCta().href} className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
-              {sandboxCta().label} <ArrowRight className="w-4 h-4" />
+      {/* CTA */}
+      <Card padding="spacious" className="text-center">
+        <h2 className="mb-2 text-heading text-re-text-primary">See the difference yourself</h2>
+        {/* #2757 — copy and destination resolve together so the blurb can never
+            promise a CSV sandbox that this deployment does not serve. */}
+        <p className="mx-auto mb-6 max-w-[68ch] text-ui text-re-text-secondary">
+          {sandboxCta().blurb}
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button asChild size="lg">
+            <Link href={sandboxCta().href} className="no-underline">
+              {sandboxCta().label} <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             </Link>
-            <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">
+          </Button>
+          <Button asChild variant="secondary" size="lg">
+            <Link href="/pricing" className="no-underline">
               See Pricing
             </Link>
-          </div>
+          </Button>
         </div>
+      </Card>
 
-        <p className="mt-10 text-[0.65rem] text-[var(--re-text-disabled)] leading-relaxed">
-          FoodLogiQ and Aptean are trademarks of their respective owners. Comparison reflects publicly
-          available information and RegEngine&apos;s interpretation; verify current capabilities and pricing
-          directly with the vendor.
-        </p>
-      </div>
-    </div>
+      <p className="mt-10 text-small leading-relaxed text-re-text-tertiary">
+        FoodLogiQ and Aptean are trademarks of their respective owners. Comparison reflects publicly
+        available information and RegEngine&apos;s interpretation; verify current capabilities and pricing
+        directly with the vendor.
+      </p>
+    </Container>
   );
 }

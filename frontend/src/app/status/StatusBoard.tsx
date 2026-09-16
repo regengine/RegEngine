@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Circle } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 
 interface ServiceCheck {
   name: string;
@@ -52,18 +57,19 @@ export function StatusBoard() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-5">
+    <Card padding="spacious">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <OverallBadge state={state} />
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => void load()}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/40 transition-colors"
           aria-label="Refresh status"
+          leadingIcon={<RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />}
         >
-          <RefreshCw className="h-3.5 w-3.5" />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {state.kind === 'ok' && (
@@ -75,71 +81,58 @@ export function StatusBoard() {
       )}
 
       {state.kind === 'loading' && (
-        <div className="text-sm text-[var(--re-text-muted)] py-4">Checking service health…</div>
-      )}
-
-      {state.kind === 'error' && (
-        <div className="text-sm text-[var(--re-danger)] py-4">
-          Could not reach /api/health: {state.message}
+        <div className="space-y-2" aria-busy="true">
+          <p className="py-1 text-ui text-re-text-tertiary">Checking service health…</p>
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
         </div>
       )}
 
+      {state.kind === 'error' && (
+        <Callout tone="danger" role="alert">
+          Could not reach /api/health: {state.message}
+        </Callout>
+      )}
+
       {(state.kind === 'ok' || state.kind === 'error') && (
-        <p className="text-xs text-[var(--re-text-disabled)] mt-5 pt-4 border-t border-[var(--re-surface-border)]">
+        <p className="mt-5 border-t border-re-border-subtle pt-4 font-mono text-label text-re-text-muted">
           Last checked {state.fetchedAt.toLocaleString()} · Auto-refreshes every 30 seconds
         </p>
       )}
-    </div>
+    </Card>
   );
 }
 
 function OverallBadge({ state }: { state: FetchState }) {
   if (state.kind === 'loading') {
-    return (
-      <div className="flex items-center gap-2">
-        <Circle className="h-5 w-5 text-[var(--re-text-disabled)]" />
-        <span className="font-display text-xl font-semibold text-[var(--re-text-primary)]">
-          Checking…
-        </span>
-      </div>
-    );
+    return <StatusBadge state="pending" label="Checking…" />;
   }
   if (state.kind === 'error') {
-    return (
-      <div className="flex items-center gap-2">
-        <XCircle className="h-5 w-5 text-[var(--re-danger)]" />
-        <span className="font-display text-xl font-semibold text-[var(--re-text-primary)]">
-          Status unavailable
-        </span>
-      </div>
-    );
+    return <StatusBadge state="non-compliant" label="Status unavailable" />;
   }
   const healthy = state.data.status === 'healthy';
   return (
-    <div className="flex items-center gap-2">
-      {healthy ? (
-        <CheckCircle2 className="h-5 w-5 text-[var(--re-success)]" />
-      ) : (
-        <AlertTriangle className="h-5 w-5 text-[var(--re-warning)]" />
-      )}
-      <span className="font-display text-xl font-semibold text-[var(--re-text-primary)]">
-        {healthy ? 'All systems operational' : 'Degraded service'}
-      </span>
-      <span className="ml-2 text-sm text-[var(--re-text-muted)]">
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusBadge
+        state={healthy ? 'compliant' : 'at-risk'}
+        label={healthy ? 'All systems operational' : 'Degraded service'}
+      />
+      <span className="text-ui text-re-text-tertiary">
         {state.data.summary.healthy} / {state.data.summary.total} healthy
       </span>
     </div>
   );
 }
 
-function ServiceRow({ svc }: { svc: ServiceCheck }) {
-  const tone =
-    svc.status === 'healthy'
-      ? 'border-l-[var(--re-success)]'
-      : svc.status === 'not_configured'
-        ? 'border-l-[var(--re-text-disabled)]'
-        : 'border-l-[var(--re-danger)]';
+const SERVICE_STATE: Record<ServiceCheck['status'], ComplianceState> = {
+  healthy: 'compliant',
+  unhealthy: 'non-compliant',
+  unreachable: 'non-compliant',
+  not_configured: 'unknown',
+};
 
+function ServiceRow({ svc }: { svc: ServiceCheck }) {
   const label =
     svc.status === 'healthy'
       ? 'Operational'
@@ -150,20 +143,20 @@ function ServiceRow({ svc }: { svc: ServiceCheck }) {
           : 'Not configured';
 
   return (
-    <div
-      className={`flex items-center justify-between rounded-lg border border-[var(--re-surface-border)] border-l-4 ${tone} bg-[var(--re-surface-elevated)] px-4 py-3`}
+    <Card
+      variant="inset"
+      padding="compact"
+      className="flex flex-wrap items-center justify-between gap-3"
     >
-      <div>
-        <div className="text-sm font-medium text-[var(--re-text-primary)] capitalize">
-          {svc.name}
-        </div>
-        <div className="text-xs text-[var(--re-text-muted)] mt-0.5">{label}</div>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-subheading capitalize text-re-text-primary">{svc.name}</span>
+        <StatusBadge state={SERVICE_STATE[svc.status]} label={label} size="sm" />
       </div>
       {svc.latencyMs !== undefined && svc.status !== 'not_configured' && (
-        <div className="text-xs font-mono text-[var(--re-text-disabled)]">
+        <span className="font-mono text-[0.8125rem] tabular-nums text-re-text-tertiary">
           {svc.latencyMs}ms
-        </div>
+        </span>
       )}
-    </div>
+    </Card>
   );
 }

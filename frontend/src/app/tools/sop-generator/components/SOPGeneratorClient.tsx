@@ -246,7 +246,7 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                                                 key={r}
                                                 onClick={() => setRetailers(retailers.includes(r) ? retailers.filter(x => x !== r) : [...retailers, r])}
                                                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${retailers.includes(r)
-                                                        ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
+                                                        ? 'bg-[var(--re-brand)] text-[var(--re-brand-foreground)] border-[var(--re-brand)]'
                                                         : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
                                                     }`}
                                             >
@@ -261,7 +261,7 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                         <Button
                             onClick={handleGenerate}
                             disabled={!isValid}
-                            className="w-full bg-[var(--re-brand)] hover:brightness-110 text-white h-12 rounded-xl font-bold text-base"
+                            className="w-full bg-[var(--re-brand)] hover:brightness-110 text-[var(--re-brand-foreground)] h-12 rounded-xl font-bold text-base"
                         >
                             <FileText className="mr-2 h-5 w-5" />
                             Generate Draft Template

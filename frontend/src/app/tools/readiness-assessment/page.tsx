@@ -4,6 +4,9 @@ import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { Container } from "@/components/layout/container";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Readiness Self-Check | Free Gap Indicator | RegEngine",
@@ -46,33 +49,33 @@ const relatedTools = [
 export default function ReadinessAssessmentPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
-                <div className="max-w-2xl mx-auto text-center">
-                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">FSMA 204 Readiness Self-Check</h1>
-                    <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-8 leading-relaxed">A self-paced readiness self-check based on your answers. Covers product coverage on the Food Traceability List, Critical Tracking Event mapping, Key Data Element completeness, and system integration. Educational; not an FDA audit, certification, or compliance determination.</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left mb-8">
-                        <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-re-brand mb-1">Product Coverage</h3>
-                            <p className="text-xs text-[var(--re-text-muted)]">Do your products appear on the FDA Food Traceability List? Which categories apply?</p>
-                        </div>
-                        <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-re-brand mb-1">CTE Readiness</h3>
-                            <p className="text-xs text-[var(--re-text-muted)]">Can you capture records for all 7 Critical Tracking Events in your supply chain?</p>
-                        </div>
-                        <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-re-brand mb-1">KDE Completeness</h3>
-                            <p className="text-xs text-[var(--re-text-muted)]">Are you collecting the required Key Data Elements for each event type?</p>
-                        </div>
-                        <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-4">
-                            <h3 className="text-sm font-semibold text-re-brand mb-1">System Capabilities</h3>
-                            <p className="text-xs text-[var(--re-text-muted)]">Can your current systems produce a sortable spreadsheet for an FDA records request within 24 hours (per §1.1455(c))?</p>
-                        </div>
+            <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
+                <Container width="tool">
+                    <div className="border-b border-re-border-subtle pb-5">
+                        <h1 className="text-title text-re-text-primary">FSMA 204 Readiness Self-Check</h1>
+                        <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">A self-paced readiness self-check based on your answers. Covers product coverage on the Food Traceability List, Critical Tracking Event mapping, Key Data Element completeness, and system integration. Educational; not an FDA audit, certification, or compliance determination.</p>
                     </div>
-                    <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
-                        <div className="w-3 h-3 rounded-full border-2 border-re-brand border-t-transparent animate-spin" />
-                        Loading assessment…
+                    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {[
+                            { title: "Product Coverage", body: "Do your products appear on the FDA Food Traceability List? Which categories apply?" },
+                            { title: "CTE Readiness", body: "Can you capture records for all 7 Critical Tracking Events in your supply chain?" },
+                            { title: "KDE Completeness", body: "Are you collecting the required Key Data Elements for each event type?" },
+                            { title: "System Capabilities", body: "Can your current systems produce a sortable spreadsheet for an FDA records request within 24 hours (per §1.1455(c))?" },
+                        ].map((tile) => (
+                            <Card key={tile.title} variant="inset">
+                                <CardContent className="p-4">
+                                    <h3 className="text-subheading text-re-text-primary">{tile.title}</h3>
+                                    <p className="mt-1 text-small text-re-text-tertiary">{tile.body}</p>
+                                </CardContent>
+                            </Card>
+                        ))}
                     </div>
-                </div>
+                    <div className="mt-6 space-y-3" role="status" aria-live="polite">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-4/5" />
+                        <p className="pt-2 text-small text-re-text-muted">Loading assessment…</p>
+                    </div>
+                </Container>
             </div>
         }>
             <JSONLD data={jsonLd} />

@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { StatTile } from '@/components/ui/stat-tile';
 import { HelpTooltip } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowStepper } from '@/components/layout/workflow-stepper';
@@ -21,15 +23,11 @@ import type { IngestCSVResponse } from '@/types/api';
 import { useIngestURL, useIngestFile } from '@/hooks/use-api';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 import {
-  Database,
   CheckCircle,
-  AlertCircle,
-  AlertTriangle,
   Link2,
   Upload,
   ArrowRight,
   Key,
-  FileText,
   ClipboardCheck,
   FlaskConical,
   Globe,
@@ -59,6 +57,38 @@ const STATUS_PROGRESS: Record<string, number> = {
   extracting: 70,
   completed: 100,
 };
+
+const SOURCE_BADGES = [
+  { label: 'eCFR', icon: Scale },
+  { label: 'Federal Register', icon: Landmark },
+  { label: 'FDA.gov', icon: Globe },
+];
+
+const CAPABILITIES = [
+  {
+    title: 'OCR Processing',
+    body: 'Automatic optical character recognition for scanned documents',
+  },
+  {
+    title: 'NLP Extraction',
+    body: 'Extract regulatory entities, obligations, and thresholds using ML',
+  },
+  {
+    title: 'Graph Storage',
+    body: 'Store in a graph database with bitemporal modeling for compliance tracking',
+  },
+];
+
+const SUPPORTED_FORMATS = ['PDF', 'HTML', 'JSON', 'XML', 'CSV', 'Excel (.xlsx)', 'Word (.docx)', 'Plain Text'];
+
+/**
+ * Zero-padded, matching the WorkflowStepper. A bare numeral here would collide
+ * with the "Events detected: 3" figure in the sandbox-handoff panel, which
+ * src/__tests__/pages/ingest-handoff.test.tsx queries by exact text.
+ */
+function stepNumeral(index: number) {
+  return String(index + 1).padStart(2, '0');
+}
 
 export default function IngestPage() {
   const searchParams = useSearchParams();
@@ -192,523 +222,405 @@ export default function IngestPage() {
     }
   };
 
-  const handleExampleClick = (exampleUrl: string) => {
-    setUrl(exampleUrl);
-  };
-
   const activeStepIndex = Math.max(
     STATUS_STEPS.findIndex((step) => step.id === jobStatus),
     0
   );
   const progressValue = STATUS_PROGRESS[jobStatus] ?? 0;
 
+  const csvTitle = csvResult
+    ? csvResult.accepted === 0
+      ? 'No rows accepted'
+      : csvResult.rejected > 0
+        ? 'CSV partially accepted'
+        : 'CSV processed'
+    : '';
+  const csvTone = csvResult
+    ? csvResult.accepted === 0
+      ? 'danger'
+      : csvResult.rejected > 0
+        ? 'warning'
+        : 'success'
+    : 'neutral';
+
+  const demoBanner = (
+    <Callout tone="warning">
+      Simulated walkthrough — sample output
+    </Callout>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <PageContainer>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-4xl mx-auto"
-        >
-          {/* Workflow Progress */}
-          <div className="mb-8">
-            <WorkflowStepper currentStep="ingest" completedSteps={storedApiKey ? ['setup'] : []} />
-          </div>
+    <PageContainer>
+      <div className="mb-6">
+        <WorkflowStepper currentStep="ingest" completedSteps={storedApiKey ? ['setup'] : []} />
+      </div>
 
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
-                <Database className="h-7 w-7 sm:h-8 sm:w-8 text-re-info dark:text-re-info" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-4xl font-bold">Document Ingestion</h1>
-                <p className="text-muted-foreground mt-1">
-                  Submit regulatory document URLs for processing
-                </p>
-              </div>
-            </div>
-            {experimentalFeaturesEnabled() && (
+      <PageHeader
+        title="Document Ingestion"
+        description="Submit regulatory document URLs for processing"
+        secondaryActions={
+          experimentalFeaturesEnabled() ? (
+            <Button variant="secondary" asChild>
               <Link href="/ingest/curation">
-                <Button variant="outline">
-                  <ClipboardCheck className="h-4 w-4 mr-2" />
-                  Open Curation Queue
-                </Button>
+                <ClipboardCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Open Curation Queue
               </Link>
-            )}
-          </div>
+            </Button>
+          ) : undefined
+        }
+      />
 
-          <Card className="mb-8 border-re-info/30 bg-re-info-muted/40 dark:bg-re-info/10">
-            <CardContent className="pt-5 pb-5">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="flex items-center gap-2 font-semibold text-sm">
-                    <Upload className="h-4 w-4 text-re-info" />
-                    Normal import
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Use URL ingestion for public documents, or File Upload for CSV traceability events.
-                  </p>
-                </div>
-                {experimentalFeaturesEnabled() && (
-                  <div>
-                    <div className="flex items-center gap-2 font-semibold text-sm">
-                      <FlaskConical className="h-4 w-4 text-re-brand" />
-                      Inflow Lab
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Use the lab for FSMA event simulation and webhook replay so test traffic stays tagged.
-                    </p>
-                    <Link href="/dashboard/inflow-lab">
-                      <Button size="sm" variant="outline" className="mt-3">
-                        Open Inflow Lab
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
-                  </div>
-                )}
-                <div>
-                  <div className="flex items-center gap-2 font-semibold text-sm">
-                    <ClipboardCheck className="h-4 w-4 text-re-warning" />
-                    Review before export
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Send normalized records through curation before using FDA export or recall response workflows.
-                  </p>
-                </div>
+      <div className="space-y-6">
+        {fromSandboxHandoff && (
+          <Card>
+            <CardHeader className="flex-col items-stretch sm:flex-row sm:items-start">
+              <div className="min-w-0">
+                <CardTitle>Sandbox import mapping handoff</CardTitle>
+                <CardDescription className="mt-1.5">
+                  This is a saved test-run diagnosis. Map and correct it here before any authenticated feed or evidence workflow uses the data.
+                </CardDescription>
               </div>
+              <Badge className="w-fit shrink-0">Test run only</Badge>
+            </CardHeader>
+            <CardContent>
+              {sandboxHandoffResult?.ok ? (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <StatTile label="Events detected" value={sandboxHandoffResult.view.totalEvents} />
+                    <StatTile label="Passed checks" value={sandboxHandoffResult.view.passedChecks} />
+                    <StatTile label="Needs work" value={sandboxHandoffResult.view.needsWork} />
+                    <StatTile label="Blockers" value={sandboxHandoffResult.view.blockerCount} />
+                  </div>
+
+                  <div>
+                    <div className="text-ui font-medium text-re-text-primary">Detected columns</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {sandboxHandoffResult.view.detectedColumns.length > 0 ? (
+                        sandboxHandoffResult.view.detectedColumns.map((column) => (
+                          <Badge key={column} size="sm" mono>
+                            {column}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-ui text-re-text-tertiary">
+                          No headers were carried in the handoff. Confirm the source file before mapping.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <Callout
+                    tone={sandboxHandoffResult.view.blockerCount > 0 ? 'warning' : 'success'}
+                    title="Next mapping action"
+                  >
+                    <p>{sandboxHandoffResult.view.nextMappingAction}</p>
+                    {sandboxHandoffResult.view.blockers.length > 0 && (
+                      <ul className="mt-3 list-inside list-disc space-y-1">
+                        {sandboxHandoffResult.view.blockers.slice(0, 3).map((blocker) => (
+                          <li key={blocker}>{blocker}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </Callout>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    {experimentalFeaturesEnabled() && (
+                      <Button variant="secondary" asChild>
+                        <Link href="/ingest/curation">
+                          <ClipboardCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                          Open Curation Queue
+                        </Link>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setActiveTab('file')}
+                      trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
+                    >
+                      Continue File Mapping
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Callout tone="warning" title="Sandbox handoff unavailable">
+                  {sandboxHandoffResult?.error ?? 'Return to the free sandbox and save a test run before opening import mapping.'}
+                </Callout>
+              )}
             </CardContent>
           </Card>
+        )}
 
-          {fromSandboxHandoff && (
-            <Card className="mb-8 border-re-brand/40 bg-re-brand-muted/40 dark:bg-re-brand/10">
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <FileText className="h-5 w-5 text-re-brand" />
-                      Sandbox import mapping handoff
-                    </CardTitle>
-                    <CardDescription className="mt-1.5">
-                      This is a saved test-run diagnosis. Map and correct it here before any authenticated feed or evidence workflow uses the data.
-                    </CardDescription>
-                  </div>
-                  <Badge variant="outline" className="w-fit bg-white/70 dark:bg-re-surface-card/70">
-                    Test run only
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {sandboxHandoffResult?.ok ? (
-                  <div className="space-y-5">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="rounded-lg border bg-background/70 p-3">
-                        <div className="text-xs text-muted-foreground">Events detected</div>
-                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.totalEvents}</div>
-                      </div>
-                      <div className="rounded-lg border bg-background/70 p-3">
-                        <div className="text-xs text-muted-foreground">Passed checks</div>
-                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.passedChecks}</div>
-                      </div>
-                      <div className="rounded-lg border bg-background/70 p-3">
-                        <div className="text-xs text-muted-foreground">Needs work</div>
-                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.needsWork}</div>
-                      </div>
-                      <div className="rounded-lg border bg-background/70 p-3">
-                        <div className="text-xs text-muted-foreground">Blockers</div>
-                        <div className="text-2xl font-bold mt-1">{sandboxHandoffResult.view.blockerCount}</div>
-                      </div>
-                    </div>
+        {!storedApiKey && (
+          <Callout
+            tone="warning"
+            icon={Key}
+            title="API Key Required"
+            action={
+              <Button size="sm" variant="secondary" asChild>
+                <Link href="/developer/portal/keys">
+                  Generate Sandbox Key
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </Button>
+            }
+          >
+            You need an API key to ingest documents. Generate a sandbox key in the developer portal to continue with dev and test ingestion.
+          </Callout>
+        )}
 
-                    <div>
-                      <div className="text-sm font-semibold">Detected columns</div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {sandboxHandoffResult.view.detectedColumns.length > 0 ? (
-                          sandboxHandoffResult.view.detectedColumns.map((column) => (
-                            <Badge key={column} variant="secondary" className="font-mono text-[11px]">
-                              {column}
-                            </Badge>
-                          ))
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            No headers were carried in the handoff. Confirm the source file before mapping.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border bg-background/70 p-4">
-                      <div className="flex items-start gap-3">
-                        {sandboxHandoffResult.view.blockerCount > 0 ? (
-                          <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
-                        ) : (
-                          <CheckCircle className="h-5 w-5 text-re-brand mt-0.5" />
-                        )}
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold">Next mapping action</div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {sandboxHandoffResult.view.nextMappingAction}
-                          </p>
-                          {sandboxHandoffResult.view.blockers.length > 0 && (
-                            <ul className="text-sm text-muted-foreground mt-3 list-disc list-inside space-y-1">
-                              {sandboxHandoffResult.view.blockers.slice(0, 3).map((blocker) => (
-                                <li key={blocker}>{blocker}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      {experimentalFeaturesEnabled() && (
-                        <Link href="/ingest/curation">
-                          <Button variant="outline">
-                            <ClipboardCheck className="h-4 w-4 mr-2" />
-                            Open Curation Queue
-                          </Button>
-                        </Link>
-                      )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setActiveTab('file')}
-                      >
-                        Continue File Mapping
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-3 rounded-lg border bg-background/70 p-4">
-                    <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
-                    <div>
-                      <div className="text-sm font-semibold">Sandbox handoff unavailable</div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {sandboxHandoffResult?.error ?? 'Return to the free sandbox and save a test run before opening import mapping.'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* No API Key Warning */}
-          {!storedApiKey && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6"
-            >
-              <Card className="border-re-warning dark:border-re-warning bg-re-warning-muted dark:bg-re-warning/20">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-3">
-                    <Key className="h-5 w-5 text-re-warning dark:text-re-warning mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-medium text-re-warning dark:text-re-warning">
-                        API Key Required
-                      </p>
-                      <p className="text-sm text-re-warning dark:text-re-warning mt-1">
-                        You need an API key to ingest documents. Generate a sandbox key in the developer portal to continue with dev and test ingestion.
-                      </p>
-                      <Link href="/developer/portal/keys">
-                        <Button size="sm" variant="outline" className="mt-3">
-                          Generate Sandbox Key
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* Quick Start / Demo Ingestion */}
-          {/* Ingestion Form */}
-          {jobStatus !== 'completed' ? (
-            <Card className="mb-8">
-              <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+          <div className="space-y-6">
+            {jobStatus !== 'completed' ? (
+              <Card>
+                <CardHeader className="flex-col items-stretch sm:flex-row sm:items-start">
+                  <div className="min-w-0">
                     <CardTitle>Ingest New Document</CardTitle>
-                    <CardDescription className="mt-1.5 max-w-[500px]">
+                    <CardDescription className="mt-1.5 max-w-[70ch]">
                       Provide a URL to a regulatory document. Our system will fetch, normalize, and extract regulatory entities with SHA-256 provenance manifests for every extraction.
                     </CardDescription>
                   </div>
-                  <div className="flex gap-3 pt-1">
-                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400">
-                      <Scale className="h-3 w-3" />
-                      eCFR
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-re-warning-muted dark:bg-re-warning/10 text-re-warning dark:text-re-warning border-re-warning dark:border-re-warning/50">
-                      <Landmark className="h-3 w-3" />
-                      Federal Register
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 bg-re-info-muted dark:bg-re-info/10 text-re-info dark:text-re-info border-blue-200 dark:border-blue-900/50">
-                      <Globe className="h-3 w-3" />
-                      FDA.gov
-                    </Badge>
+                  <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                    {SOURCE_BADGES.map(({ label, icon: Icon }) => (
+                      <Badge key={label} size="sm">
+                        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                        {label}
+                      </Badge>
+                    ))}
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      <span className="inline-flex items-center gap-1">
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-5">
+                    <div className="flex flex-col gap-1.5">
+                      <label
+                        htmlFor="ingest-api-key"
+                        className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
+                      >
                         <span>API Key</span>
                         <HelpTooltip content="Your RegEngine API key starting with 'rge_'. Get one from the Admin page or setup wizard." />
-                      </span>
-                    </label>
-                    <Input
-                      type="password"
-                      placeholder="rge_..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      disabled={isPending}
-                    />
-                    {storedApiKey && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Using your saved API key
-                      </p>
-                    )}
-                  </div>
+                      </label>
+                      <Input
+                        id="ingest-api-key"
+                        type="password"
+                        placeholder="rge_..."
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        disabled={isPending}
+                        mono
+                      />
+                      {storedApiKey && (
+                        <p className="text-small text-re-text-tertiary">
+                          Using your saved API key
+                        </p>
+                      )}
+                    </div>
 
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="url">URL Ingestion</TabsTrigger>
-                      <TabsTrigger value="file">File Upload</TabsTrigger>
-                    </TabsList>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                      <TabsList className="w-full">
+                        <TabsTrigger value="url">URL Ingestion</TabsTrigger>
+                        <TabsTrigger value="file">File Upload</TabsTrigger>
+                      </TabsList>
 
-                    <TabsContent value="url" className="space-y-4 pt-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          <span className="inline-flex items-center gap-1">
+                      <TabsContent value="url" className="space-y-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            htmlFor="ingest-url"
+                            className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
+                          >
                             <span>Document URL</span>
                             <HelpTooltip content="Publicly accessible URL to a PDF, HTML, or JSON document." />
-                          </span>
-                        </label>
-                        <div className="relative">
-                          <Link2 className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          </label>
                           <Input
+                            id="ingest-url"
                             type="url"
                             placeholder="https://example.com/regulatory-document.pdf"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
-                            className="pl-10"
                             disabled={isPending}
+                            leadingIcon={<Link2 strokeWidth={1.75} />}
                           />
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-small text-re-text-tertiary">Try an example:</span>
+                            {EXAMPLE_URLS.map((example) => (
+                              <Button
+                                key={example.label}
+                                variant="link"
+                                size="sm"
+                                type="button"
+                                onClick={() => {
+                                  setUrl(example.url);
+                                  setActiveTab('url');
+                                }}
+                              >
+                                {example.label}
+                              </Button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          <span className="text-xs text-muted-foreground">Try an example:</span>
-                          {EXAMPLE_URLS.map((example) => (
-                            <Button
-                              key={example.label}
-                              variant="link"
-                              size="sm"
-                              type="button"
-                              onClick={() => {
-                                setUrl(example.url);
-                                setActiveTab('url');
-                              }}
-                              className="text-xs h-auto p-0 text-primary hover:underline"
-                            >
-                              {example.label}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    </TabsContent>
+                      </TabsContent>
 
-                    <TabsContent value="file" className="space-y-4 pt-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          <span className="inline-flex items-center gap-1">
+                      <TabsContent value="file" className="space-y-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            htmlFor="file-upload"
+                            className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
+                          >
                             <span>Select CSV</span>
                             <HelpTooltip content="Upload traceability events as CSV with a cte_type or event_type column." />
-                          </span>
-                        </label>
-                        <div className="border-2 border-dashed rounded-lg p-8 text-center hover:bg-muted/50 transition-colors">
-                          <Input
-                            type="file"
-                            onChange={handleFileChange}
-                            disabled={isPending}
-                            className="hidden"
-                            id="file-upload"
-                            accept=".csv,text/csv"
-                          />
-                          <label htmlFor="file-upload" className="cursor-pointer block">
-                            <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                            <div className="text-sm font-medium">
-                              {file ? file.name : 'Click to select or drag file here'}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-2">
-                              CSV files up to 5MB
-                            </div>
                           </label>
+                          <div className="rounded-lg border border-dashed border-re-border bg-re-surface-card p-8 text-center transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset motion-reduce:transition-none">
+                            <Input
+                              type="file"
+                              onChange={handleFileChange}
+                              disabled={isPending}
+                              className="hidden"
+                              id="file-upload"
+                              accept=".csv,text/csv"
+                            />
+                            <label htmlFor="file-upload" className="block cursor-pointer">
+                              <Upload
+                                className="mx-auto mb-4 h-6 w-6 text-re-text-muted"
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                              />
+                              <div className="text-ui font-medium text-re-text-primary">
+                                {file ? file.name : 'Click to select or drag file here'}
+                              </div>
+                              <div className="mt-2 text-small text-re-text-tertiary">
+                                CSV files up to 5MB
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      size="lg"
+                      disabled={!apiKey || (activeTab === 'url' ? !url : !file) || isPending}
+                    >
+                      {isPending ? (
+                        <>
+                          <Spinner size="sm" />
+                          Processing...
+                        </>
+                      ) : (
+                        activeTab === 'url' ? 'Ingest Document' : 'Upload & Process'
+                      )}
+                    </Button>
+                  </form>
+
+                  {activeTab === 'file' && csvResult && (
+                    <Callout role="status" tone={csvTone} className="mt-6">
+                      <h3 className="font-medium text-re-text-primary">{csvTitle}</h3>
+                      <p className="mt-1">{csvResult.accepted} of {csvResult.total} rows accepted; {csvResult.rejected} rejected.</p>
+                      {csvResult.events.filter(event => event.status === 'rejected').flatMap(event => event.errors).map((error, index) => (
+                        <p key={index} className="mt-2">{error}</p>
+                      ))}
+                      {csvResult.kde_warnings?.map((warning, index) => (
+                        <p key={index} className="mt-2">{warning}</p>
+                      ))}
+                    </Callout>
+                  )}
+
+                  {jobId && (
+                    <div className="mt-6 space-y-4 rounded-lg border border-re-border-subtle bg-re-surface-inset p-4">
+                      {jobId === 'demo-job-123' && demoBanner}
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-ui font-medium text-re-text-primary">Ingestion Progress</p>
+                        <Badge size="sm" mono>Job {jobId}</Badge>
+                      </div>
+                      <ol className="flex items-start">
+                        {STATUS_STEPS.map((step, index) => {
+                          const isComplete = index < activeStepIndex;
+                          const isActive = index === activeStepIndex;
+                          return (
+                            <li key={step.id} className="flex flex-1 flex-col items-center gap-2 text-center">
+                              <span
+                                className={`flex h-8 w-8 items-center justify-center rounded-full border font-mono text-label ${isComplete
+                                  ? 'border-re-text-primary bg-re-text-primary text-re-surface-card'
+                                  : isActive
+                                    ? 'border-re-text-primary text-re-text-primary'
+                                    : 'border-re-border text-re-text-tertiary'
+                                  }`}
+                              >
+                                {isComplete ? (
+                                  <CheckCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                ) : isActive ? (
+                                  <Spinner size="sm" />
+                                ) : (
+                                  stepNumeral(index)
+                                )}
+                              </span>
+                              <span
+                                className={`text-small ${isComplete || isActive ? 'text-re-text-primary' : 'text-re-text-tertiary'}`}
+                              >
+                                {step.label}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-small text-re-text-tertiary">
+                          <span>Status: {jobStatus.toUpperCase()}</span>
+                          <span className="tabular-nums">{progressValue}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-re-border-subtle">
+                          <div
+                            className="h-full bg-re-text-primary transition-all duration-240 motion-reduce:transition-none"
+                            style={{ width: `${progressValue}%` }}
+                          />
                         </div>
                       </div>
-                    </TabsContent>
-                  </Tabs>
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={!apiKey || (activeTab === 'url' ? !url : !file) || isPending}
-                  >
-                    {isPending ? (
-                      <>
-                        <Spinner size="sm" className="mr-2" />
-                        Processing...
-                      </>
-                    ) : (
-                      activeTab === 'url' ? 'Ingest Document' : 'Upload & Process'
-                    )}
-                  </Button>
-                </form>
-
-                {activeTab === 'file' && csvResult && (
-                  <div role="status" className="mt-6 p-4 rounded-lg border bg-muted/40">
-                    <h3 className="font-semibold">
-                      {csvResult.accepted === 0 ? 'No rows accepted' : csvResult.rejected > 0 ? 'CSV partially accepted' : 'CSV processed'}
-                    </h3>
-                    <p className="text-sm mt-1">{csvResult.accepted} of {csvResult.total} rows accepted; {csvResult.rejected} rejected.</p>
-                    {csvResult.events.filter(event => event.status === 'rejected').flatMap(event => event.errors).map((error, index) => (
-                      <p key={index} className="text-sm text-re-danger mt-2">{error}</p>
-                    ))}
-                    {csvResult.kde_warnings?.map((warning, index) => (
-                      <p key={index} className="text-sm text-re-warning mt-2">{warning}</p>
-                    ))}
-                  </div>
-                )}
-                {jobId && (
-                  <div className="mt-6 p-4 rounded-lg border bg-muted/40">
-                    {jobId === 'demo-job-123' && (
-                      <div className="mb-4 flex items-center gap-2 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 px-3 py-2">
-                        <AlertTriangle className="h-4 w-4 text-re-warning dark:text-re-warning" />
-                        <p className="text-sm font-medium text-re-warning dark:text-re-warning">
-                          Simulated walkthrough — sample output
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-sm font-semibold">Ingestion Progress</p>
-                      <Badge variant="secondary">Job {jobId}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {STATUS_STEPS.map((step, index) => {
-                        const isComplete = index < activeStepIndex;
-                        const isActive = index === activeStepIndex;
-                        return (
-                          <div key={step.id} className="flex-1 flex flex-col items-center">
-                            <div
-                              className={`h-10 w-10 rounded-full flex items-center justify-center ${isComplete
-                                ? 'bg-primary text-primary-foreground'
-                                : isActive
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-muted text-muted-foreground'
-                                }`}
-                            >
-                              {isComplete ? (
-                                <CheckCircle className="h-5 w-5" />
-                              ) : isActive ? (
-                                <Spinner size="sm" />
-                              ) : (
-                                index + 1
-                              )}
-                            </div>
-                            <span className={`text-xs mt-2 ${isComplete || isActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                              {step.label}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                        <span>Status: {jobStatus.toUpperCase()}</span>
-                        <span>{progressValue}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-2 bg-primary transition-all duration-500"
-                          style={{ width: `${progressValue}%` }}
-                        />
-                      </div>
-                    </div>
-                    {statusError && (
-                      <p className="text-xs text-destructive mt-3">{statusError}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Error Message */}
-                {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError)) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-4 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger"
-                  >
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-re-danger dark:text-re-danger mt-0.5" />
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-re-danger dark:text-re-danger">
-                          Ingestion Failed
-                        </h4>
-                        <p className="text-sm text-re-danger dark:text-re-danger mt-1">
-                          {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
-                        </p>
-                        <p className="text-sm text-re-danger dark:text-re-danger mt-2">
-                          Common issues:
-                        </p>
-                        <ul className="text-sm text-re-danger dark:text-re-danger list-disc list-inside">
-                          <li>Invalid or expired API key</li>
-                          {activeTab === 'file' ? (
-                            <>
-                              <li>CSV must include a cte_type or event_type column</li>
-                              <li>Upload a CSV file up to 5MB</li>
-                            </>
-                          ) : (
-                            <>
-                              <li>URL is not publicly accessible</li>
-                              <li>Document format not supported (see the Supported Document Formats list below)</li>
-                            </>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="mb-8">
-              <CardContent className="pt-6">
-                {/* Success Viewer */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {jobId === 'demo-job-123' && (
-                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 px-3 py-2">
-                      <AlertTriangle className="h-4 w-4 text-re-warning dark:text-re-warning" />
-                      <p className="text-sm font-medium text-re-warning dark:text-re-warning">
-                        Simulated walkthrough — sample output
-                      </p>
+                      {statusError && (
+                        <p className="text-small text-re-text-tertiary">{statusError}</p>
+                      )}
                     </div>
                   )}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-re-brand" />
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                        Ingestion request completed
-                      </h3>
-                    </div>
+
+                  {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError)) && (
+                    <Callout tone="danger" role="alert" className="mt-4">
+                      <h4 className="font-medium text-re-text-primary">
+                        Ingestion Failed
+                      </h4>
+                      <p className="mt-1">
+                        {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
+                      </p>
+                      <p className="mt-2">
+                        Common issues:
+                      </p>
+                      <ul className="list-inside list-disc">
+                        <li>Invalid or expired API key</li>
+                        {activeTab === 'file' ? (
+                          <>
+                            <li>CSV must include a cte_type or event_type column</li>
+                            <li>Upload a CSV file up to 5MB</li>
+                          </>
+                        ) : (
+                          <>
+                            <li>URL is not publicly accessible</li>
+                            <li>Document format not supported (see the Supported Document Formats list below)</li>
+                          </>
+                        )}
+                      </ul>
+                    </Callout>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="space-y-4">
+                  {jobId === 'demo-job-123' && demoBanner}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-subheading text-re-text-primary">
+                      Ingestion request completed
+                    </h3>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => {
                         setUrl('');
                         setFile(null);
@@ -725,63 +637,82 @@ export default function IngestPage() {
                   <NormalizedDocumentViewer
                     documentId={ingestMutation.data?.document_id || 'DEMO-DOC-ID'}
                   />
-                </motion.div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Features */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <h3 className="font-semibold mb-2">OCR Processing</h3>
-                <p className="text-sm text-muted-foreground">
-                  Automatic optical character recognition for scanned documents
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <h3 className="font-semibold mb-2">NLP Extraction</h3>
-                <p className="text-sm text-muted-foreground">
-                  Extract regulatory entities, obligations, and thresholds using ML
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <h3 className="font-semibold mb-2">Graph Storage</h3>
-                <p className="text-sm text-muted-foreground">
-                  Store in a graph database with bitemporal modeling for compliance tracking
-                </p>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Supported Formats */}
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="text-lg">Supported Document Formats</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">PDF</Badge>
-                <Badge variant="secondary">HTML</Badge>
-                <Badge variant="secondary">JSON</Badge>
-                <Badge variant="secondary">XML</Badge>
-                <Badge variant="secondary">CSV</Badge>
-                <Badge variant="secondary">Excel (.xlsx)</Badge>
-                <Badge variant="secondary">Word (.docx)</Badge>
-                <Badge variant="secondary">Plain Text</Badge>
-                <Badge variant="outline">EDI (X12/EDIFACT)</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-3">
-                URL ingestion requires the document to be publicly accessible. For private documents, use the File Upload tab above.
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </PageContainer>
-    </div>
+          <aside className="space-y-6">
+            <Card>
+              <CardContent className="space-y-5">
+                <div>
+                  <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
+                    <Upload className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                    Normal import
+                  </div>
+                  <p className="mt-2 text-ui text-re-text-secondary">
+                    Use URL ingestion for public documents, or File Upload for CSV traceability events.
+                  </p>
+                </div>
+                {experimentalFeaturesEnabled() && (
+                  <div className="border-t border-re-border-subtle pt-5">
+                    <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
+                      <FlaskConical className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                      Inflow Lab
+                    </div>
+                    <p className="mt-2 text-ui text-re-text-secondary">
+                      Use the lab for FSMA event simulation and webhook replay so test traffic stays tagged.
+                    </p>
+                    <Button size="sm" variant="secondary" className="mt-3" asChild>
+                      <Link href="/dashboard/inflow-lab">
+                        Open Inflow Lab
+                        <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+                <div className="border-t border-re-border-subtle pt-5">
+                  <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
+                    <ClipboardCheck className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                    Review before export
+                  </div>
+                  <p className="mt-2 text-ui text-re-text-secondary">
+                    Send normalized records through curation before using FDA export or recall response workflows.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="divide-y divide-re-border-subtle p-0">
+                {CAPABILITIES.map((capability) => (
+                  <div key={capability.title} className="px-5 py-4">
+                    <h3 className="text-subheading text-re-text-primary">{capability.title}</h3>
+                    <p className="mt-1 text-ui text-re-text-secondary">{capability.body}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Supported Document Formats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {SUPPORTED_FORMATS.map((format) => (
+                    <Badge key={format} size="sm">{format}</Badge>
+                  ))}
+                  <Badge size="sm">EDI (X12/EDIFACT)</Badge>
+                </div>
+                <p className="mt-3 text-ui text-re-text-secondary">
+                  URL ingestion requires the document to be publicly accessible. For private documents, use the File Upload tab above.
+                </p>
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
+    </PageContainer>
   );
 }
