@@ -7,6 +7,12 @@ export const metadata: Metadata = {
     title: 'Changelog | RegEngine',
     description:
         'Latest RegEngine product updates, API improvements, and FSMA 204 compliance workflow releases.',
+    openGraph: {
+      title: 'Changelog',
+      description: 'Latest RegEngine product updates, API improvements, and FSMA 204 compliance workflow releases.',
+      url: 'https://regengine.co/docs/changelog',
+      type: 'website',
+    },
 };
 
 const T = {

@@ -38,6 +38,25 @@ export default function robots(): MetadataRoute.Robots {
                     '/portal/',
                     '/tools/notice-validator',
                     '/tools/obligation-scanner',
+                    // Restored from the deleted static robots.txt (#2789 kept
+                    // this route's list, which never had them):
+                    '/records',
+                    '/developer/',
+                    // Authenticated app screens and internal pages that ship
+                    // no metadata of their own — nothing here should rank:
+                    '/audit',
+                    '/auth/',
+                    '/api-keys',
+                    '/controls',
+                    '/exceptions',
+                    '/identity',
+                    '/remediation',
+                    '/requests',
+                    '/rules',
+                    '/trace',
+                    '/design-system',
+                    // Client redirect into robots-blocked /signup:
+                    '/alpha',
                 ],
             },
         ],

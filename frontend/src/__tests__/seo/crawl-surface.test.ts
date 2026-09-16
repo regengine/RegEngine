@@ -110,7 +110,7 @@ describe('robots', () => {
     });
 
     it('keeps authenticated and transactional surfaces out of the index', () => {
-        for (const prefix of ['/api/', '/admin/', '/dashboard/', '/settings/', '/login', '/signup', '/checkout', '/onboarding/']) {
+        for (const prefix of ['/api/', '/admin/', '/dashboard/', '/settings/', '/login', '/signup', '/checkout', '/onboarding/', '/records', '/developer/', '/auth/', '/design-system']) {
             expect(disallow).toContain(prefix);
         }
     });

@@ -4,6 +4,12 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Error Codes | RegEngine',
   description: 'HTTP status codes and API-specific error responses for the RegEngine API, with fixes and retry strategies.',
+  openGraph: {
+    title: 'Error Codes',
+    description: 'HTTP status codes and API-specific error responses for the RegEngine API, with fixes and retry strategies.',
+    url: 'https://regengine.co/docs/errors',
+    type: 'website',
+  },
 };
 import { ArrowLeft, AlertCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';

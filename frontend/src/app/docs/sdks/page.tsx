@@ -4,6 +4,12 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'SDKs & Libraries | RegEngine',
   description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
+  openGraph: {
+    title: 'SDKs & Libraries',
+    description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
+    url: 'https://regengine.co/docs/sdks',
+    type: 'website',
+  },
 };
 import { ArrowLeft, Package, Mail, GitBranch, FileText } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';
