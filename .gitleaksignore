@@ -1,0 +1,102 @@
+# gitleaks fingerprint allowlist — the historical-findings triage from #3080.
+#
+# Every fingerprint below was individually reviewed (2026-09-16): all are
+# documentation placeholders (YOUR_API_KEY, rge_your_api_key, demo-key-123,
+# your-admin-master-key, test-bypass-key, your-key-here), illustrative keys in
+# guides (rge_1234567890abcdef, the sk_live_abc123 roadmap example), or
+# generic-api-key false positives (FSMA_204_* env-var NAMES, a /v1/labels
+# URL path). A fingerprint pins commit:file:rule:line, so nothing new is
+# exempted by these lines.
+#
+# Deliberately ABSENT: the three .env.production findings at a130816b
+# (ADMIN_MASTER_KEY, AUTH_SECRET_KEY, REDIS_PASSWORD). Those are generated
+# values, not placeholders — per #3080 they need rotation, not an ignore
+# line. Add their fingerprints only once rotation (or never-used status)
+# is confirmed.
+4b44d0bb27d6196ba7e4de913f8772ab67c0028b:frontend/src/app/api-keys/page.tsx:curl-auth-header:245
+55716a3134ebeff7d4b6ec0e46790cb6bef04bd9:.agent/CONSTITUTION.md:curl-auth-header:264
+899f6ceda8821437831f0db99d00a29327e57a89:frontend/src/app/tools/data-import/components/DataImportClient.tsx:curl-auth-header:31
+a130816b2c95f51e253b311dd73a9597eb2f88c4:AUTHENTICATION.md:curl-auth-header:53
+a130816b2c95f51e253b311dd73a9597eb2f88c4:AUTHENTICATION.md:curl-auth-header:83
+a130816b2c95f51e253b311dd73a9597eb2f88c4:AUTHENTICATION.md:curl-auth-header:90
+a130816b2c95f51e253b311dd73a9597eb2f88c4:LOCAL_SETUP_GUIDE.md:generic-api-key:228
+a130816b2c95f51e253b311dd73a9597eb2f88c4:PRODUCT_ROADMAP.md:generic-api-key:599
+a130816b2c95f51e253b311dd73a9597eb2f88c4:RECENT_CHANGES_AND_FIXES.md:curl-auth-header:151
+a130816b2c95f51e253b311dd73a9597eb2f88c4:URL_INGESTION_FIX.md:curl-auth-header:104
+a130816b2c95f51e253b311dd73a9597eb2f88c4:URL_INGESTION_FIX.md:curl-auth-header:113
+a130816b2c95f51e253b311dd73a9597eb2f88c4:URL_INGESTION_FIX.md:curl-auth-header:218
+a130816b2c95f51e253b311dd73a9597eb2f88c4:URL_INGESTION_FIX.md:curl-auth-header:95
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/admin/api-console/page.tsx:curl-auth-header:385
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/aerospace/data.ts:curl-auth-header:155
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/automotive/data.ts:curl-auth-header:155
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/construction/data.ts:curl-auth-header:158
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/energy/data.ts:curl-auth-header:157
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/finance/data.ts:curl-auth-header:130
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/gaming/data.ts:curl-auth-header:130
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/manufacturing/data.ts:curl-auth-header:155
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/nuclear/data.ts:curl-auth-header:152
+a130816b2c95f51e253b311dd73a9597eb2f88c4:frontend/src/app/verticals/technology/data.ts:curl-auth-header:123
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:110
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:120
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:21
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:33
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:51
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:55
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:69
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:88
+a130816b2c95f51e253b311dd73a9597eb2f88c4:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:97
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/admin/app/system_routes.py:generic-api-key:30
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/aerospace/README.md:curl-auth-header:130
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/aerospace/README.md:curl-auth-header:164
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/aerospace/README.md:curl-auth-header:192
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/automotive/README.md:curl-auth-header:131
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/automotive/README.md:curl-auth-header:161
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/automotive/README.md:curl-auth-header:169
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/compliance/worker/main.py:generic-api-key:170
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/compliance/worker/main.py:generic-api-key:177
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/compliance/worker/main.py:generic-api-key:184
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/gaming/README.md:curl-auth-header:162
+a130816b2c95f51e253b311dd73a9597eb2f88c4:services/gaming/README.md:curl-auth-header:178
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:AUTHENTICATION.md:curl-auth-header:53
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:AUTHENTICATION.md:curl-auth-header:83
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:AUTHENTICATION.md:curl-auth-header:90
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:LOCAL_SETUP_GUIDE.md:generic-api-key:228
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:PRODUCT_ROADMAP.md:generic-api-key:599
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:RECENT_CHANGES_AND_FIXES.md:curl-auth-header:151
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:URL_INGESTION_FIX.md:curl-auth-header:104
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:URL_INGESTION_FIX.md:curl-auth-header:113
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:URL_INGESTION_FIX.md:curl-auth-header:218
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:URL_INGESTION_FIX.md:curl-auth-header:95
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/admin/api-console/page.tsx:curl-auth-header:385
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/aerospace/data.ts:curl-auth-header:155
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/automotive/data.ts:curl-auth-header:155
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/construction/data.ts:curl-auth-header:158
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/energy/data.ts:curl-auth-header:157
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/finance/data.ts:curl-auth-header:130
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/gaming/data.ts:curl-auth-header:130
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/manufacturing/data.ts:curl-auth-header:155
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/nuclear/data.ts:curl-auth-header:152
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:frontend/src/app/verticals/technology/data.ts:curl-auth-header:123
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:110
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:120
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:21
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:33
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:51
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:55
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:69
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:88
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:97
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/admin/app/system_routes.py:generic-api-key:30
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/aerospace/README.md:curl-auth-header:130
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/aerospace/README.md:curl-auth-header:164
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/aerospace/README.md:curl-auth-header:192
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/automotive/README.md:curl-auth-header:131
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/automotive/README.md:curl-auth-header:161
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/automotive/README.md:curl-auth-header:169
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/compliance/worker/main.py:generic-api-key:170
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/compliance/worker/main.py:generic-api-key:177
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/compliance/worker/main.py:generic-api-key:184
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/gaming/README.md:curl-auth-header:162
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/gaming/README.md:curl-auth-header:178
+debc14c4816c51f1a600b0f9130fe447a305284b:frontend/src/app/tools/data-import/components/DataImportClient.tsx:curl-auth-header:31
+f6c2537615ab730e34c95a57e65f06a9bf94eb07:.agent/CONSTITUTION.md:curl-auth-header:264
