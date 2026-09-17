@@ -133,7 +133,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
 
     ce_mod = ModuleType("shared.canonical_event")
 
-    def _normalize(event, tenant_id):
+    def _normalize(event, tenant_id, ingestion_run_id=None):
         if canonical_raises is not None:
             raise canonical_raises
         return SimpleNamespace(
