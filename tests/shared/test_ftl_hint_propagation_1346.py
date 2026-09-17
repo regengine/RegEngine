@@ -141,12 +141,16 @@ def test_normalize_csv_row_propagates_hint():
         "Product": "Romaine Hearts 24ct",
         "TLC": "LOT-ROM-2026-001",
         "Qty": "10",
+        "UOM": "cases",
+        "Date": "2026-03-25",
     }
     mapping = {
         "Event Type": "event_type",
         "Product": "product_description",
         "TLC": "traceability_lot_code",
         "Qty": "quantity",
+        "UOM": "unit_of_measure",
+        "Date": "event_timestamp",
     }
     ev = normalize_csv_row(row, str(uuid4()), mapping)
     assert ev.kdes["ftl_category"] == "Leafy Greens"
@@ -161,11 +165,15 @@ def test_normalize_csv_row_unmapped_description_still_classifies():
         "product_description": "Fresh Atlantic Salmon",
         "TLC": "LOT-SAL-2026-001",
         "Qty": "5",
+        "UOM": "cases",
+        "Date": "2026-03-25",
     }
     mapping = {
         "Event Type": "event_type",
         "TLC": "traceability_lot_code",
         "Qty": "quantity",
+        "UOM": "unit_of_measure",
+        "Date": "event_timestamp",
     }
     ev = normalize_csv_row(row, str(uuid4()), mapping)
     assert ev.kdes["ftl_category"] == "Finfish"

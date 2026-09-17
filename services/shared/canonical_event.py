@@ -1134,6 +1134,47 @@ def normalize_epcis_event(
     return canonical.prepare_for_persistence()
 
 
+class CSVRowNormalizationError(ValueError):
+    """A CSV row lacks a required KDE or names an unrecognised event type.
+
+    The canonical normalizer never invents a value for a missing field. A
+    fabricated timestamp, lot code, quantity, unit, or event type would enter
+    the hash chain as evidence, so the row is rejected and the caller reports
+    ``missing`` / ``invalid`` back to the uploader (row-level, not file-level).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        row_number: Optional[int] = None,
+        missing: Optional[List[str]] = None,
+        invalid: Optional[List[str]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.row_number = row_number
+        self.missing = list(missing or [])
+        self.invalid = list(invalid or [])
+
+
+_CSV_CTE_TYPE_MAP: Dict[str, str] = {
+    "harvest": "harvesting",
+    "harvesting": "harvesting",
+    "cool": "cooling",
+    "cooling": "cooling",
+    "pack": "initial_packing",
+    "initial_packing": "initial_packing",
+    "initial packing": "initial_packing",
+    "first_land_based_receiving": "first_land_based_receiving",
+    "ship": "shipping",
+    "shipping": "shipping",
+    "receive": "receiving",
+    "receiving": "receiving",
+    "transform": "transformation",
+    "transformation": "transformation",
+}
+
+
 def normalize_csv_row(
     row: Dict[str, Any],
     tenant_id: str,
@@ -1147,6 +1188,13 @@ def normalize_csv_row(
 
     column_mapping maps source column names to canonical field names.
     Unmapped columns are stored in kdes.
+
+    Required after mapping: ``event_type`` (a recognised CTE), ``event_timestamp``
+    (or ``timestamp``), ``traceability_lot_code`` (or ``tlc``), a numeric
+    ``quantity``, and ``unit_of_measure``. A blank or unrecognised required
+    field raises :class:`CSVRowNormalizationError`; nothing is defaulted.
+    Earlier versions silently substituted ``now()``, ``"UNKNOWN"``, ``1``,
+    ``"each"`` and ``receiving`` for those fields.
     """
     # Apply column mapping
     mapped: Dict[str, Any] = {}
@@ -1159,41 +1207,70 @@ def normalize_csv_row(
             if value is not None and str(value).strip():
                 kdes[src_col] = value
 
-    # Required fields with fallbacks
-    event_type_raw = str(mapped.get("event_type", "receiving")).lower().strip()
-    cte_type_map = {
-        "harvest": "harvesting",
-        "harvesting": "harvesting",
-        "cool": "cooling",
-        "cooling": "cooling",
-        "pack": "initial_packing",
-        "initial_packing": "initial_packing",
-        "initial packing": "initial_packing",
-        "first_land_based_receiving": "first_land_based_receiving",
-        "ship": "shipping",
-        "shipping": "shipping",
-        "receive": "receiving",
-        "receiving": "receiving",
-        "transform": "transformation",
-        "transformation": "transformation",
-    }
-    event_type = cte_type_map.get(event_type_raw, "receiving")
+    def _first(*names: str) -> Optional[Any]:
+        for name in names:
+            value = mapped.get(name)
+            if value is not None and str(value).strip():
+                return value
+        return None
 
-    rules_applied = ["csv_column_mapping"]
-    confidence = 1.0
+    missing: List[str] = []
+    invalid: List[str] = []
 
-    # Detect if event type was inferred
-    if event_type_raw not in cte_type_map:
-        rules_applied.append("event_type_inference")
-        confidence = 0.7
+    event_type: Optional[str] = None
+    event_type_raw = _first("event_type")
+    if event_type_raw is None:
+        missing.append("event_type")
+    else:
+        event_type = _CSV_CTE_TYPE_MAP.get(str(event_type_raw).lower().strip())
+        if event_type is None:
+            accepted = sorted(set(_CSV_CTE_TYPE_MAP.values()))
+            invalid.append(f"event_type={str(event_type_raw).strip()!r} (accepted: {', '.join(accepted)})")
+
+    timestamp_raw = _first("event_timestamp", "timestamp")
+    if timestamp_raw is None:
+        missing.append("event_timestamp")
+
+    tlc_raw = _first("traceability_lot_code", "tlc")
+    if tlc_raw is None:
+        missing.append("traceability_lot_code")
+
+    quantity: Optional[float] = None
+    quantity_raw = _first("quantity")
+    if quantity_raw is None:
+        missing.append("quantity")
+    else:
+        try:
+            quantity = float(str(quantity_raw).strip())
+        except ValueError:
+            invalid.append(f"quantity={str(quantity_raw).strip()!r} (not a number)")
+
+    uom_raw = _first("unit_of_measure")
+    if uom_raw is None:
+        missing.append("unit_of_measure")
+
+    if missing or invalid:
+        where = f"row {row_number}" if row_number is not None else "row"
+        parts = []
+        if missing:
+            parts.append("missing " + ", ".join(missing))
+        if invalid:
+            parts.append("invalid " + "; ".join(invalid))
+        raise CSVRowNormalizationError(
+            f"CSV {where} cannot be normalized: " + " | ".join(parts),
+            row_number=row_number,
+            missing=missing,
+            invalid=invalid,
+        )
+    assert event_type is not None and quantity is not None  # narrowed above
 
     provenance = ProvenanceMetadata(
         source_file_name=source_file_name,
         mapper_name="csv_normalizer",
-        mapper_version="1.0.0",
+        mapper_version="1.1.0",
         original_format="csv",
-        normalization_rules_applied=rules_applied,
-        extraction_confidence=confidence,
+        normalization_rules_applied=["csv_column_mapping"],
+        extraction_confidence=1.0,
     )
 
     canonical = TraceabilityEvent(
@@ -1202,12 +1279,12 @@ def normalize_csv_row(
         source_record_id=str(row_number) if row_number is not None else None,
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
         event_type=CTEType(event_type),
-        event_timestamp=mapped.get("event_timestamp", mapped.get("timestamp", datetime.now(timezone.utc).isoformat())),
+        event_timestamp=timestamp_raw,
         product_reference=mapped.get("product_description", mapped.get("product_reference", "")),
-        lot_reference=mapped.get("lot_reference", mapped.get("traceability_lot_code", "")),
-        traceability_lot_code=mapped.get("traceability_lot_code", mapped.get("tlc", "UNKNOWN")),
-        quantity=float(mapped.get("quantity", 1)),
-        unit_of_measure=str(mapped.get("unit_of_measure", "each")).lower(),
+        lot_reference=_first("lot_reference") or str(tlc_raw).strip(),
+        traceability_lot_code=str(tlc_raw).strip(),
+        quantity=quantity,
+        unit_of_measure=str(uom_raw).strip().lower(),
         from_facility_reference=mapped.get(
             "from_facility_reference", mapped.get("ship_from_location", mapped.get("location_gln"))
         ),
@@ -1218,7 +1295,7 @@ def normalize_csv_row(
         kdes=kdes,
         raw_payload=row,
         provenance_metadata=provenance,
-        confidence_score=confidence,
+        confidence_score=1.0,
     )
 
     return canonical.prepare_for_persistence()
