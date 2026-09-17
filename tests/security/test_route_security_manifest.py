@@ -76,11 +76,13 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # for dev/test surface parity but deliberately not yet in
         # PRODUCTION_ENABLED_ROUTERS, so they land in the omitted/disabled
         # inventory pending an explicit production-allowlist decision.
-        # 182/165 adds agent_org:POST:/agent-org/onboard (draft agent-org
-        # work): present in the development route table, not in the
-        # production allowlist, so it probes as an exact 404.
-        "disabled_operation_count": 182,
-        "disabled_unique_path_count": 165,
+        # 183/166 adds agent_org:POST:/agent-org/onboard. The router was
+        # listed as experimental but never in VALID_ROUTER_NAMES, so it
+        # never actually mounted (the earlier "182 includes agent_org"
+        # note was wrong). It now mounts on the development route table,
+        # stays out of the production allowlist, and probes as an exact 404.
+        "disabled_operation_count": 183,
+        "disabled_unique_path_count": 166,
         "enabled_by_classification": {
             "global-sysadmin": 15,
             "public": 29,
@@ -248,9 +250,9 @@ def test_checkout_manifest_adapter_rejects_broad_auth_failure_downgrade(inventor
 
 
 def test_every_omitted_router_path_returns_exact_404(production_route_app, manifest):
-    # 182 includes the 3 inbound_email operations plus agent_org onboard —
+    # 183 includes the 3 inbound_email operations plus agent_org onboard —
     # see the comment on disabled_operation_count above.
-    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 182
+    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 183
 
 
 def test_representative_auth_negative_contracts_are_not_vacuous(production_route_app):
