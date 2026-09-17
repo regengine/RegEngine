@@ -729,9 +729,21 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         if not process_type and event.event_type.value == "initial_packing":
             process_type = "initial_packing"
 
+        # Per-input quantity and unit (21 CFR 1.1350(a)(1)(iii)) arrive as
+        # kdes.inputs = [{traceability_lot_code, quantity, unit_of_measure}]
+        # from the CSV template and the EPCIS inputQuantityList. Absent
+        # entries leave the link's input_quantity NULL: never inferred.
+        inputs_by_tlc: Dict[str, Dict[str, Any]] = {}
+        for entry in event.kdes.get("inputs") or []:
+            if isinstance(entry, dict) and isinstance(entry.get("traceability_lot_code"), str):
+                inputs_by_tlc[entry["traceability_lot_code"].strip()] = entry
+
         for input_tlc in input_lot_codes:
             if not input_tlc or not isinstance(input_tlc, str):
                 continue
+            detail = inputs_by_tlc.get(input_tlc.strip(), {})
+            input_quantity = detail.get("quantity")
+            input_unit = detail.get("unit_of_measure")
             try:
                 input_event_row = self.session.execute(
                     text("""
@@ -749,12 +761,14 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                         INSERT INTO fsma.transformation_links (
                             tenant_id, transformation_event_id,
                             input_tlc, input_event_id,
+                            input_quantity, input_unit,
                             output_tlc, output_event_id,
                             output_quantity, output_unit,
                             process_type, confidence_score, link_source
                         ) VALUES (
                             :tenant_id, :transformation_event_id,
                             :input_tlc, :input_event_id,
+                            :input_quantity, :input_unit,
                             :output_tlc, :output_event_id,
                             :output_quantity, :output_unit,
                             :process_type, :confidence, :link_source
@@ -767,6 +781,8 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                         "transformation_event_id": event_id,
                         "input_tlc": input_tlc.strip(),
                         "input_event_id": input_event_id,
+                        "input_quantity": float(input_quantity) if input_quantity is not None else None,
+                        "input_unit": input_unit,
                         "output_tlc": output_tlc,
                         "output_event_id": event_id,
                         "output_quantity": event.quantity,
