@@ -409,15 +409,15 @@ class TestWebhookSignatureVerification:
 
 
 class TestVerifiedWebhookRateLimit:
-    """#2989 verified budget: keyed on the envelope's account, never a header."""
+    """#2989 verified budget: keyed on the signed envelope's account and mode, never a header."""
 
     def test_admits_when_under_limit(self):
         with patch(
             "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
             return_value=0,
         ) as mock_check:
-            _check_verified_stripe_webhook_rate_limit({"account": "acct_1"})
-        assert mock_check.call_args[0][0] == "verified:acct_1"
+            _check_verified_stripe_webhook_rate_limit({"account": "acct_1", "livemode": True})
+        assert mock_check.call_args[0][0] == "verified:acct_1:True"
 
     def test_over_limit_raises_429_with_retry_after(self):
         with patch(
@@ -429,21 +429,13 @@ class TestVerifiedWebhookRateLimit:
         assert exc_info.value.status_code == 429
         assert exc_info.value.headers["Retry-After"] == "30"
 
-    def test_missing_account_uses_default_bucket(self):
+    def test_missing_account_uses_the_platform_bucket(self):
         with patch(
             "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
             return_value=0,
         ) as mock_check:
             _check_verified_stripe_webhook_rate_limit({"type": "invoice.paid"})
-        assert mock_check.call_args[0][0] == "verified:default"
-
-    def test_none_event_uses_default_bucket(self):
-        with patch(
-            "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
-            return_value=0,
-        ) as mock_check:
-            _check_verified_stripe_webhook_rate_limit(None)
-        assert mock_check.call_args[0][0] == "verified:default"
+        assert mock_check.call_args[0][0] == "verified:platform:False"
 
 
 # ── Webhook Event: checkout.session.completed ────────────────────
