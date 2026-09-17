@@ -24,6 +24,9 @@ from services.ingestion.app.stripe_billing import (
     _process_stripe_webhook,
     _resolve_price_id,
 )
+from services.ingestion.app.stripe_billing.rate_limiting import (
+    _check_verified_stripe_webhook_rate_limit,
+)
 
 # ── Plan Definition Tests ────────────────────────────────────────
 
@@ -291,8 +294,13 @@ class TestWebhookSignatureVerification:
         mock_event = {"type": "checkout.session.completed", "data": {"object": {}}}
         mock_stripe.Webhook.construct_event.return_value = mock_event
 
-        mock_request = AsyncMock()
-        mock_request.body.return_value = b'{"type": "checkout.session.completed"}'
+        mock_request = MagicMock()
+        mock_request.body = AsyncMock(return_value=b'{"type": "checkout.session.completed"}')
+        # Only ``body()`` is async on a real Request; the #2929 rate-limit
+        # path reads headers/method/client synchronously.
+        mock_request.method = "POST"
+        mock_request.client = None
+        mock_request.headers = {}
 
         result = await _process_stripe_webhook(mock_request, "t=123,v1=sig")
 
@@ -320,8 +328,13 @@ class TestWebhookSignatureVerification:
         )
         mock_stripe.error = real_stripe.error
 
-        mock_request = AsyncMock()
-        mock_request.body.return_value = b'{"type": "test"}'
+        mock_request = MagicMock()
+        mock_request.body = AsyncMock(return_value=b'{"type": "test"}')
+        # Only ``body()`` is async on a real Request; the #2929 rate-limit
+        # path reads headers/method/client synchronously.
+        mock_request.method = "POST"
+        mock_request.client = None
+        mock_request.headers = {}
 
         with pytest.raises(HTTPException) as exc_info:
             await _process_stripe_webhook(mock_request, "t=123,v1=bad")
@@ -340,8 +353,13 @@ class TestWebhookSignatureVerification:
         """A malformed payload should raise HTTPException 400."""
         mock_stripe.Webhook.construct_event.side_effect = ValueError("bad json")
 
-        mock_request = AsyncMock()
-        mock_request.body.return_value = b"not-json"
+        mock_request = MagicMock()
+        mock_request.body = AsyncMock(return_value=b"not-json")
+        # Only ``body()`` is async on a real Request; the #2929 rate-limit
+        # path reads headers/method/client synchronously.
+        mock_request.method = "POST"
+        mock_request.client = None
+        mock_request.headers = {}
 
         with pytest.raises(HTTPException) as exc_info:
             await _process_stripe_webhook(mock_request, "t=123,v1=sig")
@@ -355,8 +373,13 @@ class TestWebhookSignatureVerification:
 
         os.environ.pop("STRIPE_WEBHOOK_SECRET", None)
 
-        mock_request = AsyncMock()
-        mock_request.body.return_value = b"{}"
+        mock_request = MagicMock()
+        mock_request.body = AsyncMock(return_value=b"{}")
+        # Only ``body()`` is async on a real Request; the #2929 rate-limit
+        # path reads headers/method/client synchronously.
+        mock_request.method = "POST"
+        mock_request.client = None
+        mock_request.headers = {}
 
         with pytest.raises(HTTPException) as exc_info:
             await _process_stripe_webhook(mock_request, "t=123,v1=sig")
@@ -372,12 +395,55 @@ class TestWebhookSignatureVerification:
     )
     async def test_missing_signature_header_raises_400(self):
         """Missing Stripe-Signature header should raise 400."""
-        mock_request = AsyncMock()
-        mock_request.body.return_value = b"{}"
+        mock_request = MagicMock()
+        mock_request.body = AsyncMock(return_value=b"{}")
+        # Only ``body()`` is async on a real Request; the #2929 rate-limit
+        # path reads headers/method/client synchronously.
+        mock_request.method = "POST"
+        mock_request.client = None
+        mock_request.headers = {}
 
         with pytest.raises(HTTPException) as exc_info:
             await _process_stripe_webhook(mock_request, None)
         assert exc_info.value.status_code == 400
+
+
+class TestVerifiedWebhookRateLimit:
+    """#2989 verified budget: keyed on the envelope's account, never a header."""
+
+    def test_admits_when_under_limit(self):
+        with patch(
+            "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
+            return_value=0,
+        ) as mock_check:
+            _check_verified_stripe_webhook_rate_limit({"account": "acct_1"})
+        assert mock_check.call_args[0][0] == "verified:acct_1"
+
+    def test_over_limit_raises_429_with_retry_after(self):
+        with patch(
+            "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
+            return_value=30,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                _check_verified_stripe_webhook_rate_limit({"account": "acct_1"})
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.headers["Retry-After"] == "30"
+
+    def test_missing_account_uses_default_bucket(self):
+        with patch(
+            "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
+            return_value=0,
+        ) as mock_check:
+            _check_verified_stripe_webhook_rate_limit({"type": "invoice.paid"})
+        assert mock_check.call_args[0][0] == "verified:default"
+
+    def test_none_event_uses_default_bucket(self):
+        with patch(
+            "services.ingestion.app.stripe_billing.rate_limiting._check_redis",
+            return_value=0,
+        ) as mock_check:
+            _check_verified_stripe_webhook_rate_limit(None)
+        assert mock_check.call_args[0][0] == "verified:default"
 
 
 # ── Webhook Event: checkout.session.completed ────────────────────
