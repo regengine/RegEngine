@@ -24,7 +24,7 @@ from .authz import IngestionPrincipal, require_permission
 from .config import get_settings
 from .shared.tenant_resolution import resolve_principal_tenant_id
 from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
-from .webhook_compat import ingest_events
+from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
     CsvIngestResponse,
@@ -692,10 +692,22 @@ async def ingest_csv(
         raise HTTPException(status_code=400, detail="CSV contained no data rows")
 
     payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
+    # Receipt: the upload is retained verbatim as an ingestion run (file name,
+    # SHA-256, size, every row counted) and each accepted event carries the
+    # run id, so an export can point at the exact source file for any row.
+    receipt = SourceFileReceipt(
+        filename=file.filename or "upload.csv",
+        raw_bytes=content,
+        content_type=file.content_type,
+        initiated_by=getattr(principal, "key_id", None),
+        record_count=len(events) + len(parse_errors),
+        parse_errors=list(parse_errors),
+    )
     response = await ingest_events(
         payload,
         principal_tenant_id=tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        source_file=receipt,
     )
 
     if parse_errors:

@@ -223,8 +223,9 @@ def _install_stubs(
     monkeypatch.setitem(sys.modules, "shared.cte_persistence", cp_mod)
 
     # Canonical / rules / exception queue shims
-    def _normalize(event, tenant_id):
+    def _normalize(event, tenant_id, ingestion_run_id=None):
         captured["normalize_calls"].append((event, tenant_id))
+        captured.setdefault("normalize_run_ids", []).append(ingestion_run_id)
         if canonical_raises is not None and canonical_raises.__class__.__name__ == "_NormalizeRaises":
             raise canonical_raises
         return SimpleNamespace(
@@ -677,3 +678,149 @@ class TestTopLevelExceptionAndCleanup:
         payload = _make_payload([_make_event()], tenant_id="t")
         asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k"))
         assert cap["gen_cleanup"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Ingestion run receipt for file uploads (source_file)
+# ---------------------------------------------------------------------------
+
+
+class TestSourceFileReceipt:
+    def _receipt(self):
+        return wc.SourceFileReceipt(
+            filename="lots.csv",
+            raw_bytes=b"traceability_lot_code,quantity\nTLC-1,10\n",
+            content_type="text/csv",
+            initiated_by="key-9",
+            record_count=3,
+            parse_errors=["Row 3: No CTE type", "Row 4: quantity 'x' is not a number"],
+        )
+
+    def test_run_is_opened_first_stamped_on_events_and_closed_with_every_row_counted(self, monkeypatch):
+        sess, persist, cap = _install_stubs(monkeypatch)
+        calls: dict = {}
+
+        def _open(db_session, tenant_id, source, receipt):
+            calls["open"] = (db_session, tenant_id, source, receipt)
+            return "run-123"
+
+        def _close(db_session, run_id, tenant_id, **kwargs):
+            calls["close"] = (db_session, run_id, tenant_id, kwargs)
+
+        monkeypatch.setattr(wc, "_open_ingestion_run", _open)
+        monkeypatch.setattr(wc, "_close_ingestion_run", _close)
+
+        receipt = self._receipt()
+        payload = _make_payload([_make_event(tlc="TLC-1")], tenant_id="t", source="csv_upload")
+        resp = asyncio.run(
+            wc.ingest_events(payload=payload, principal_tenant_id="t", x_regengine_api_key="k", source_file=receipt)
+        )
+
+        assert calls["open"] == (sess, "t", "csv_upload", receipt)
+        assert cap["normalize_run_ids"] == ["run-123"]  # every canonical event carries the run
+        db_session, run_id, tenant_id, kwargs = calls["close"]
+        assert (db_session, run_id, tenant_id) == (sess, "run-123", "t")
+        assert kwargs["accepted"] == 1 and kwargs["rejected"] == 0 and kwargs["receipt"] is receipt
+        assert resp.ingestion_run_id == "run-123"
+        assert sess.commit_count == 1  # run, blob and events share one committed transaction
+
+    def test_without_a_source_file_nothing_changes(self, monkeypatch):
+        sess, persist, cap = _install_stubs(monkeypatch)
+        monkeypatch.setattr(wc, "_open_ingestion_run", lambda *a, **k: pytest.fail("no receipt expected"))
+        payload = _make_payload([_make_event(tlc="TLC-1")], tenant_id="t")
+        resp = asyncio.run(wc.ingest_events(payload=payload, principal_tenant_id="t", x_regengine_api_key="k"))
+        assert resp.ingestion_run_id is None
+        assert cap["normalize_run_ids"] == [None]
+
+
+class TestOpenAndCloseIngestionRun:
+    def test_open_records_file_hash_size_rows_and_retains_bytes(self, monkeypatch):
+        import hashlib
+        from types import ModuleType
+        from unittest.mock import MagicMock
+
+        created: dict = {}
+
+        class _Store:
+            def __init__(self, db_session, dual_write):
+                created["store_session"] = db_session
+
+            def create_ingestion_run(self, run):
+                created["run"] = run
+                return str(run.id)
+
+        cps_mod = ModuleType("shared.canonical_persistence")
+        cps_mod.CanonicalEventStore = _Store
+        monkeypatch.setitem(sys.modules, "shared.canonical_persistence", cps_mod)
+        # Real IngestionRun / IngestionSource models; the earlier stubs only
+        # replaced normalize_webhook_event for this module's other tests.
+        for name in ("shared.canonical_event",):
+            sys.modules.pop(name, None)
+
+        session = MagicMock()
+        tenant = "00000000-0000-4000-8000-000000000001"
+        raw = b"traceability_lot_code,quantity\nTLC-1,10\nTLC-2,x\n"
+        receipt = wc.SourceFileReceipt(
+            filename="lots.csv",
+            raw_bytes=raw,
+            content_type="text/csv",
+            initiated_by="key-9",
+            record_count=2,
+            parse_errors=["Row 3: quantity 'x' is not a number"],
+        )
+
+        run_id = wc._open_ingestion_run(session, tenant, "csv_upload", receipt)
+
+        run = created["run"]
+        assert run_id == str(run.id)
+        assert str(run.tenant_id) == tenant
+        assert run.source_system.value == "csv_upload"
+        assert run.source_file_name == "lots.csv"
+        assert run.source_file_hash == hashlib.sha256(raw).hexdigest()
+        assert run.source_file_size == len(raw)
+        assert run.record_count == 2
+        assert run.initiated_by == "key-9"
+        # The verbatim bytes are retained next to the run.
+        insert = next(c for c in session.execute.call_args_list if "fsma.manifest_blobs" in str(c.args[0]))
+        params = insert.args[1]
+        assert params["raw_bytes"] == raw and params["sha256"] == receipt.sha256
+        assert params["run_id"] == run_id and params["tenant_id"] == tenant
+        assert params["filename"] == "lots.csv" and params["uploaded_by"] == "key-9"
+
+    def test_close_counts_parse_rejections_and_persist_rejections(self, monkeypatch):
+        from types import ModuleType
+        from unittest.mock import MagicMock
+
+        closed: dict = {}
+
+        class _Store:
+            def __init__(self, db_session, dual_write):
+                pass
+
+            def complete_ingestion_run(self, run_id, tenant_id, *, accepted, rejected, errors):
+                closed.update(run_id=run_id, tenant_id=tenant_id, accepted=accepted, rejected=rejected, errors=errors)
+
+        cps_mod = ModuleType("shared.canonical_persistence")
+        cps_mod.CanonicalEventStore = _Store
+        monkeypatch.setitem(sys.modules, "shared.canonical_persistence", cps_mod)
+
+        from app.webhook_models import EventResult
+
+        results = [
+            EventResult(traceability_lot_code="TLC-1", cte_type="harvesting", status="accepted"),
+            EventResult(
+                traceability_lot_code="TLC-2", cte_type="harvesting", status="rejected", errors=["Missing KDE"]
+            ),
+        ]
+        receipt = wc.SourceFileReceipt(
+            filename="lots.csv", raw_bytes=b"x", record_count=3, parse_errors=["Row 4: No CTE type"]
+        )
+        wc._close_ingestion_run(MagicMock(), "run-1", "t", accepted=1, rejected=1, results=results, receipt=receipt)
+
+        assert closed["run_id"] == "run-1" and closed["tenant_id"] == "t"
+        assert closed["accepted"] == 1
+        assert closed["rejected"] == 2  # one persist rejection + one parse rejection
+        assert closed["errors"] == [
+            {"stage": "parse", "error": "Row 4: No CTE type"},
+            {"stage": "persist", "traceability_lot_code": "TLC-2", "errors": ["Missing KDE"]},
+        ]
