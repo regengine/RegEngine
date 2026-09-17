@@ -91,3 +91,31 @@ def test_packing_row_without_input_lots_creates_no_links():
     writer, session = _make_writer()
     writer._create_transformation_links(_make_event("initial_packing", {}))
     assert _inserts(session) == []
+
+
+def test_input_quantities_from_kdes_inputs_are_written_on_the_link():
+    writer, session = _make_writer()
+    writer._create_transformation_links(
+        _make_event(
+            "transformation",
+            {
+                "input_lot_codes": ["TLC-IN-001", "TLC-IN-002", "TLC-IN-003"],
+                "inputs": [
+                    {"traceability_lot_code": "TLC-IN-001", "quantity": 600, "unit_of_measure": "cases"},
+                    {"traceability_lot_code": "TLC-IN-002", "quantity": 400.5, "unit_of_measure": "lbs"},
+                    # TLC-IN-003 has no recorded quantity: the link stays NULL, never inferred.
+                ],
+            },
+        )
+    )
+    rows = _inserts(session)
+    assert [(r["input_tlc"], r["input_quantity"], r["input_unit"]) for r in rows] == [
+        ("TLC-IN-001", 600.0, "cases"),
+        ("TLC-IN-002", 400.5, "lbs"),
+        ("TLC-IN-003", None, None),
+    ]
+    assert all(
+        "input_quantity" in str(c.args[0])
+        for c in session.execute.call_args_list
+        if "INSERT INTO fsma.transformation_links" in str(c.args[0])
+    )

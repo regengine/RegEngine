@@ -88,6 +88,12 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Valley Fresh Packhouse", "Packing facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001", "Source lot code(s), comma-separated if multiple"),
+        (
+            "input_quantities",
+            "200",
+            "Quantity of EACH source lot used, comma-separated in the same order as input_lot_codes",
+        ),
+        ("input_units_of_measure", "cases", "Unit for each source lot, comma-separated (one value applies to all)"),
         ("reference_document", "PACK-2026-0226-007", "Packing record or reference document number"),
         ("harvester_business_name", "Valley Fresh Farms LLC", "Business name of the harvester"),
         ("harvester_business_phone", "+1-202-555-0100", "Phone number of the harvester; sample number only"),
@@ -140,6 +146,16 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Metro Processing Plant", "Transformation facility"),
         ("location_gln", "0614141000036", "Facility GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001,LET-0226-A2-003", "ALL input lot codes, comma-separated"),
+        (
+            "input_quantities",
+            "600,400",
+            "Quantity of EACH input lot used, comma-separated in the same order as input_lot_codes (21 CFR 1.1350(a)(1)(iii))",
+        ),
+        (
+            "input_units_of_measure",
+            "cases,cases",
+            "Unit for each input lot, comma-separated (one value applies to all)",
+        ),
         ("reference_document", "PROD-2026-0228-003", "Production record or reference document number"),
     ],
     "first_land_based_receiving": [
@@ -518,6 +534,64 @@ def _check_lot_code_integrity(lot_code: str) -> list[str]:
     return warnings
 
 
+def _parse_input_quantities(
+    row: dict, input_lot_codes: list[str], row_cte: str
+) -> tuple[list[dict], Optional[str], Optional[str]]:
+    """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
+
+    Returns ``(inputs, error, warning)``. ``inputs`` is a list of
+    ``{"traceability_lot_code", "quantity", "unit_of_measure"}`` aligned with
+    ``input_lot_codes``. ``error`` rejects the row (misaligned or non-numeric
+    values); ``warning`` is advisory (a transformation row that names input
+    lots without their quantities).
+    """
+    quantities_raw = (row.get("input_quantities") or "").strip()
+    units_raw = (row.get("input_units_of_measure") or "").strip()
+    if not quantities_raw and not units_raw:
+        if input_lot_codes and row_cte == "transformation":
+            return (
+                [],
+                None,
+                "input_quantities missing: 21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of "
+                "measure of each input lot (add input_quantities and input_units_of_measure)",
+            )
+        return [], None, None
+    if not input_lot_codes:
+        return [], "input_quantities given without input_lot_codes", None
+    quantities = [q.strip() for q in quantities_raw.split(",")] if quantities_raw else []
+    units = [u.strip() for u in units_raw.split(",")] if units_raw else []
+    if len(quantities) != len(input_lot_codes):
+        return (
+            [],
+            f"input_quantities lists {len(quantities)} value(s) for {len(input_lot_codes)} input lot(s); "
+            "give one quantity per input lot in the same order as input_lot_codes",
+            None,
+        )
+    if len(units) == 1 and len(input_lot_codes) > 1:
+        units = units * len(input_lot_codes)
+    if len(units) != len(input_lot_codes):
+        return (
+            [],
+            f"input_units_of_measure lists {len(units)} value(s) for {len(input_lot_codes)} input lot(s); "
+            "give one unit per input lot, or a single unit that applies to all",
+            None,
+        )
+    inputs: list[dict] = []
+    for lot, quantity_text, unit_text in zip(input_lot_codes, quantities, units):
+        try:
+            quantity = float(quantity_text)
+        except ValueError:
+            return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+        if quantity < 0:
+            return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
+        if not unit_text:
+            return [], f"input unit of measure for input lot {lot} is blank", None
+        inputs.append(
+            {"traceability_lot_code": lot, "quantity": quantity, "unit_of_measure": _normalize_uom(unit_text)}
+        )
+    return inputs, None, None
+
+
 def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[IngestEvent], list[str], list[str]]:
     """Parse CSV text into ``IngestEvent`` objects.
 
@@ -601,6 +675,8 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
                 "type",
                 "cte",
                 "input_lot_codes",
+                "input_quantities",
+                "input_units_of_measure",
                 "event_time",
             }
             for key, val in row.items():
@@ -613,11 +689,26 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
                 kdes["_date_parse_status"] = "INVALID_FORMAT"
 
             # Parse input_lot_codes (comma-separated) if present
+            input_lot_codes: list[str] = []
             input_lot_codes_raw = row.get("input_lot_codes")
             if input_lot_codes_raw:
                 input_lot_codes = [c.strip() for c in input_lot_codes_raw.split(",") if c.strip()]
                 if input_lot_codes:
                     kdes["input_lot_codes"] = input_lot_codes
+
+            # Per-input quantity and unit (21 CFR 1.1350(a)(1)(iii)), aligned with
+            # input_lot_codes. A list that cannot be attributed to its lots rejects
+            # the row: guessing which quantity belongs to which lot would fabricate
+            # a KDE. Rows without the columns still ingest (older templates) with a
+            # warning for transformations.
+            inputs, input_error, input_warning = _parse_input_quantities(row, input_lot_codes, row_cte)
+            if input_error:
+                parse_errors.append(f"Row {row_num}: {input_error}")
+                continue
+            if inputs:
+                kdes["inputs"] = inputs
+            if input_warning:
+                kde_warnings.append(f"Row {row_num}: {input_warning}")
 
             # Auto-inject CTE-specific required KDEs from generic CSV columns
             _inject_required_kdes(kdes, row_cte, row, loc_name, raw_date)
