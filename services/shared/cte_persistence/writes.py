@@ -212,7 +212,12 @@ class WritePathMixin:
         # already-locked event record.
         _core._assert_not_exists(sha256_hash, tenant_id, self.session)
 
-        # Get the current chain head for this tenant
+        # Get the current chain head for this tenant.
+        # No FOR UPDATE: _acquire_chain_lock already serializes chain
+        # growth per tenant (and covers the zero-row genesis case, which
+        # FOR UPDATE never did). FOR UPDATE also requires UPDATE privilege
+        # on fsma.hash_chain, which the v111 append-only grant inventory
+        # deliberately withholds from the runtime role.
         chain_head = self.session.execute(
             text("""
                 SELECT chain_hash, sequence_num
