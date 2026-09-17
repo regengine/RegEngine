@@ -28,7 +28,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -1032,6 +1032,123 @@ def _resolve_bizstep_to_cte_type(biz_step: Any) -> CTEType:
     )
 
 
+def _epc_last_segment(epc: Any) -> Optional[str]:
+    """Lot (LGTIN) or serial (SGTIN) segment of a GS1 EPC URI; None for other schemes."""
+    text = str(epc or "").strip()
+    lowered = text.lower()
+    if "lgtin" not in lowered and "sgtin" not in lowered:
+        return None
+    parts = text.rsplit(".", 1)
+    if len(parts) == 2 and parts[1]:
+        return parts[1]
+    return None
+
+
+def _epc_gtin(epc: Any) -> Optional[str]:
+    """GTIN component of an SGTIN/LGTIN URI (``...:<company>.<item>.<lot>``)."""
+    text = str(epc or "").strip()
+    if not _epc_last_segment(text):
+        return None
+    prefix = text.rsplit(".", 1)[0]
+    gtin_part = prefix.rsplit(":", 1)
+    return gtin_part[-1] if gtin_part and gtin_part[-1] else None
+
+
+def _epcis_list(epcis_data: Dict[str, Any], key: str) -> List[Any]:
+    value = epcis_data.get(key)
+    return list(value) if isinstance(value, list) else []
+
+
+def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """Resolve ``(traceability_lot_code, gtin)`` for an EPCIS event.
+
+    Precedence: ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` (the
+    same order as ``epcis/extraction._extract_lot_data``), then the lot of an
+    LGTIN among the event's own EPCs or class-level quantities (output side for
+    a transformation), then an SGTIN serial, then the flattened top-level keys.
+    Raises ``ValueError`` when nothing identifies the lot: the previous
+    ``"UNKNOWN"`` placeholder fabricated a lot code.
+    """
+    ilmd = epcis_data.get("ilmd")
+    if not isinstance(ilmd, dict):
+        ilmd = {}
+    epcs = _epcis_list(epcis_data, "epcList") + _epcis_list(epcis_data, "outputEPCList")
+    extension = epcis_data.get("extension")
+    extension = extension if isinstance(extension, dict) else {}
+    classes = [
+        q.get("epcClass")
+        for q in (
+            _epcis_list(epcis_data, "outputQuantityList")
+            + _epcis_list(epcis_data, "quantityList")
+            + (list(extension.get("quantityList") or []) if isinstance(extension.get("quantityList"), list) else [])
+        )
+        if isinstance(q, dict) and q.get("epcClass")
+    ]
+    gtin = next((g for g in (_epc_gtin(e) for e in epcs + classes) if g), None)
+
+    for key in ("fsma:traceabilityLotCode", "traceabilityLotCode", "cbvmda:lotNumber", "lotNumber"):
+        value = ilmd.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip(), gtin
+    for epc in epcs + classes:
+        if "lgtin" in str(epc).lower():
+            segment = _epc_last_segment(epc)
+            if segment:
+                return segment, gtin
+    for epc in epcs:
+        if "sgtin" in str(epc).lower():
+            segment = _epc_last_segment(epc)
+            if segment:
+                return segment, gtin
+    for key in ("traceability_lot_code", "lotNumber"):
+        value = epcis_data.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip(), gtin
+    raise ValueError(
+        "EPCIS event carries no lot identifier (ILMD traceabilityLotCode or lotNumber, an LGTIN or SGTIN "
+        "EPC, or traceability_lot_code); refusing to fabricate one"
+    )
+
+
+def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Per-input lot, quantity and unit for a TransformationEvent.
+
+    ``inputQuantityList`` carries class-level (LGTIN) inputs with an explicit
+    quantity; a quantityElement without ``uom`` is a count of instances in
+    EPCIS, recorded as ``each``. ``inputEPCList`` carries instance EPCs, each
+    of which is exactly one item. Lots are not merged or summed.
+    """
+    inputs: List[Dict[str, Any]] = []
+    seen: set = set()
+    for element in _epcis_list(epcis_data, "inputQuantityList"):
+        if not isinstance(element, dict):
+            continue
+        lot = _epc_last_segment(element.get("epcClass"))
+        if not lot or lot in seen:
+            continue
+        raw_quantity = element.get("quantity")
+        try:
+            quantity = float(raw_quantity) if raw_quantity is not None else None
+        except (TypeError, ValueError):
+            quantity = None
+        inputs.append(
+            {
+                "traceability_lot_code": lot,
+                "quantity": quantity,
+                "unit_of_measure": (element.get("uom") or "each") if quantity is not None else None,
+                "epc_class": element.get("epcClass"),
+            }
+        )
+        seen.add(lot)
+    for epc in _epcis_list(epcis_data, "inputEPCList"):
+        segment = _epc_last_segment(epc)
+        if not segment or segment in seen:
+            continue
+        inputs.append({"traceability_lot_code": segment, "quantity": 1.0, "unit_of_measure": "each", "epc": str(epc)})
+        seen.add(segment)
+    return inputs
+
+
 def normalize_epcis_event(
     epcis_data: Dict[str, Any],
     tenant_id: str,
@@ -1069,30 +1186,35 @@ def normalize_epcis_event(
     biz_step = epcis_data.get("bizStep", "")
     cte_type = _resolve_bizstep_to_cte_type(biz_step)
 
-    # Extract identifiers
-    epc_list = epcis_data.get("epcList", [])
-    tlc = ""
-    gtin = None
-    for epc in epc_list:
-        if "sgtin" in epc.lower() or "lgtin" in epc.lower():
-            # Extract GTIN and serial/lot from EPC URI
-            parts = epc.rsplit(".", 1)
-            if len(parts) == 2:
-                tlc = parts[-1]
-                gtin_part = parts[0].rsplit(":", 1)
-                if gtin_part:
-                    gtin = gtin_part[-1]
-    if not tlc:
-        tlc = epcis_data.get("traceability_lot_code", epcis_data.get("lotNumber", "UNKNOWN"))
+    # Extract identifiers. The lot code follows the same precedence as the
+    # legacy path (epcis/extraction._extract_lot_data): ILMD first. The old
+    # code read only epcList, so a TransformationEvent (which carries
+    # input/output lists instead) or any event naming its lot in ILMD was
+    # stored as "UNKNOWN" -- a fabricated lot code on the system of record.
+    tlc, gtin = _epcis_traceability_lot_code(epcis_data)
+
+    event_time = epcis_data.get("eventTime")
+    if not event_time:
+        raise ValueError("EPCIS event has no eventTime; refusing to stamp the current time as the event time")
 
     # Build KDEs from EPCIS extensions
     kdes: Dict[str, Any] = {}
     if gtin:
         kdes["gtin"] = gtin
-    extensions = epcis_data.get("ilmd", {})
-    extensions.update(epcis_data.get("extension", {}))
+    extensions = dict(epcis_data.get("ilmd") or {})
+    extensions.update(epcis_data.get("extension") or {})
     for k, v in extensions.items():
         kdes[k] = v
+
+    # Transformation inputs (21 CFR 1.1350(a)(1)): each input lot with its
+    # quantity and unit from inputQuantityList, plus instance EPCs from
+    # inputEPCList. Feeds fsma.transformation_links via kdes.inputs and the
+    # lot-linkage rule via kdes.input_lot_codes.
+    if cte_type == CTEType.TRANSFORMATION:
+        inputs = _epcis_transformation_inputs(epcis_data)
+        if inputs:
+            kdes["inputs"] = inputs
+            kdes.setdefault("input_lot_codes", [entry["traceability_lot_code"] for entry in inputs])
 
     provenance = ProvenanceMetadata(
         mapper_name="epcis_normalizer",
@@ -1107,7 +1229,7 @@ def normalize_epcis_event(
         source_record_id=epcis_data.get("eventID"),
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
         event_type=cte_type,
-        event_timestamp=epcis_data.get("eventTime", datetime.now(timezone.utc).isoformat()),
+        event_timestamp=event_time,
         event_timezone=epcis_data.get("eventTimeZoneOffset", "UTC"),
         product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
         lot_reference=tlc,

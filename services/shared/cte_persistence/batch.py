@@ -127,6 +127,8 @@ class BatchWritePathMixin:
                 existing_map[row[0]] = (str(row[1]), row[2], row[3])
 
         # --- Step 3: Get chain head once ---
+        # No FOR UPDATE — see writes.store_event: the advisory lock
+        # serializes appends and the v111 grant inventory is append-only.
         chain_head = self.session.execute(
             text("""
                 SELECT chain_hash, sequence_num

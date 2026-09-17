@@ -58,7 +58,8 @@ def _canonical_chain(n: int):
       (sequence_num, event_hash, previous_chain_hash, chain_hash,
        cte_event_id, matched_event_id, event_type, tlc, product_reference,
        quantity, unit_of_measure, from_facility, to_facility,
-       event_timestamp, kdes, matched_legacy_id)
+       event_timestamp, kdes, matched_legacy_id, hashed_timestamp,
+       canonical_sha256)
     """
     rows = []
     events = []
@@ -85,6 +86,8 @@ def _canonical_chain(n: int):
                 ev.event_timestamp,
                 ev.kdes,
                 None,  # matched_legacy_id — canonical-only fake rows
+                None,  # hashed_timestamp (normalized_payload->>'event_timestamp'); no hint
+                sha,  # canonical_sha256 (te.sha256_hash) — writer sets it equal to event_hash
             )
         )
         events.append(ev)
@@ -194,6 +197,42 @@ class TestCanonicalTamperDetection_Issue2506:
         result = store.verify_chain_canonical("22222222-2222-2222-2222-222222222222")
         assert result.valid is False
         assert 2 in result.tamper_rows
+
+    def test_chain_row_event_hash_reseal_is_caught(self):
+        """CodeRabbit follow-up to the prod-grade run fix: rewrite a
+        canonical-only row's event_hash AND a CONSISTENT chain_hash —
+        linkage and chain_hash recompute both pass, and the content
+        recompute never reads the chain row. The strict
+        ``hc.event_hash == te.sha256_hash`` check must flag it."""
+        rows, _ = _canonical_chain(2)
+        r = list(rows[1])
+        fake_event_hash = "e" * 64
+        r[1] = fake_event_hash
+        r[3] = compute_chain_hash(fake_event_hash, r[2])  # consistent re-seal
+        rows[1] = tuple(r)
+        store = CanonicalEventStore(_CanonicalSession(rows, event_count=2), dual_write=False)
+        result = store.verify_chain_canonical("22222222-2222-2222-2222-222222222222")
+        assert result.valid is False
+        assert 2 in result.tamper_rows
+        assert any("Chain-row tamper at seq=2" in e for e in result.errors)
+
+    def test_legacy_matched_row_with_legacy_digest_is_not_flagged(self):
+        """Webhook dual-write topology (2026-09-02 prod-grade run): the
+        chain row is legacy-written, so hc.event_hash is the LEGACY digest
+        — different from te.sha256_hash by design. Rows that also match
+        the legacy store must be exempt from the strict equality check,
+        otherwise every webhook-ingested event reads as tampered."""
+        rows, _ = _canonical_chain(2)
+        r = list(rows[1])
+        legacy_digest = "a" * 64  # legacy formula output ≠ canonical sha
+        r[1] = legacy_digest
+        r[3] = compute_chain_hash(legacy_digest, r[2])  # legacy-written chain is internally sound
+        r[15] = r[4]  # matched_legacy_id — row exists in fsma.cte_events too
+        rows[1] = tuple(r)
+        store = CanonicalEventStore(_CanonicalSession(rows, event_count=2), dual_write=False)
+        result = store.verify_chain_canonical("22222222-2222-2222-2222-222222222222")
+        assert result.valid is True, result.errors
+        assert result.tamper_rows == []
 
 
 # ---------------------------------------------------------------------------

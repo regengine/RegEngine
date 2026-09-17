@@ -152,6 +152,9 @@ export default function WalkthroughPage() {
       "timestamp": "2026-05-13T14:00:00Z",
       "kdes": {
         "input_lot_codes": ["00012345678901-LOT-2026-001"],
+        "inputs": [
+          { "traceability_lot_code": "00012345678901-LOT-2026-001", "quantity": 480, "unit_of_measure": "cases" }
+        ],
         "transformation_type": "wash_and_bag",
         "process_start": "2026-05-13T09:30:00Z",
         "process_end": "2026-05-13T13:45:00Z"
