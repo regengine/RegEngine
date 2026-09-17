@@ -17,6 +17,7 @@ from uuid import UUID, uuid4
 import pytest
 from shared.canonical_event import (
     SCHEMA_VERSION,
+    CSVRowNormalizationError,
     CTEType,
     EventStatus,
     IngestionSource,
@@ -364,9 +365,9 @@ class TestCSVNormalization:
         assert canonical.kdes["Carrier"] == "FedEx Freight"
         assert "BOL Number" in canonical.kdes
 
-    def test_csv_event_type_inference(self):
+    def test_csv_unknown_event_type_is_rejected_not_inferred(self):
         row = {
-            "Type": "recv",  # non-standard, will be inferred
+            "Type": "recv",  # not a recognised CTE
             "TLC": "TLC-CSV-003",
             "Qty": "50",
             "UOM": "kg",
@@ -379,15 +380,28 @@ class TestCSVNormalization:
             "UOM": "unit_of_measure",
             "Date": "event_timestamp",
         }
-        canonical = normalize_csv_row(row, TENANT_ID, column_mapping)
+        with pytest.raises(CSVRowNormalizationError) as excinfo:
+            normalize_csv_row(row, TENANT_ID, column_mapping, row_number=7)
 
-        # Unknown type defaults to "receiving" with lower confidence
-        assert canonical.event_type == CTEType.RECEIVING
-        assert canonical.confidence_score < 1.0
+        # The event type is a KDE; an unrecognised value is rejected, never guessed.
+        assert excinfo.value.row_number == 7
+        assert excinfo.value.invalid and excinfo.value.invalid[0].startswith("event_type='recv'")
+        assert "receiving" in excinfo.value.invalid[0]  # accepted values are listed
+
+    def test_csv_missing_required_fields_are_named_not_defaulted(self):
+        row = {"Type": "receiving", "TLC": "", "Qty": "ten"}
+        column_mapping = {"Type": "event_type", "TLC": "traceability_lot_code", "Qty": "quantity"}
+        with pytest.raises(CSVRowNormalizationError) as excinfo:
+            normalize_csv_row(row, TENANT_ID, column_mapping, row_number=3)
+        err = excinfo.value
+        assert err.missing == ["event_timestamp", "traceability_lot_code", "unit_of_measure"]
+        assert err.invalid == ["quantity='ten' (not a number)"]
+        assert "row 3" in str(err)
 
     def test_csv_provenance_tracks_source_file(self):
-        row = {"TLC": "TLC-004", "Qty": "10", "UOM": "cases", "Date": "2026-03-25"}
+        row = {"Type": "receiving", "TLC": "TLC-004", "Qty": "10", "UOM": "cases", "Date": "2026-03-25"}
         column_mapping = {
+            "Type": "event_type",
             "TLC": "traceability_lot_code",
             "Qty": "quantity",
             "UOM": "unit_of_measure",

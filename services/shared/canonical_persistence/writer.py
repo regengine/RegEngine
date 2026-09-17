@@ -699,8 +699,14 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
     # ------------------------------------------------------------------
 
     def _create_transformation_links(self, event: TraceabilityEvent) -> None:
-        """Create adjacency rows in fsma.transformation_links for transformation events."""
-        if event.event_type.value != "transformation":
+        """Create adjacency rows in fsma.transformation_links for events that name input lots.
+
+        Transformation events (\u00a71.1350) and initial packing events (\u00a71.1330) both
+        carry ``kdes.input_lot_codes`` from the CSV templates; both are lineage.
+        Packing rows used to be skipped here, which dropped the link from a
+        packed TLC back to its source lots.
+        """
+        if event.event_type.value not in ("transformation", "initial_packing"):
             return
 
         input_lot_codes = event.kdes.get("input_lot_codes", [])
@@ -711,6 +717,8 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         output_tlc = event.traceability_lot_code
         event_id = str(event.event_id)
         process_type = event.kdes.get("process_type")
+        if not process_type and event.event_type.value == "initial_packing":
+            process_type = "initial_packing"
 
         for input_tlc in input_lot_codes:
             if not input_tlc or not isinstance(input_tlc, str):
