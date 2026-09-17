@@ -1,0 +1,71 @@
+# Recall Fixture Audit — 2026-09-16
+
+Scope: which parts of RegEngine already satisfy the seven requirements for a
+small recall-reconstruction demonstration (one manufacturer → one DC → one 3PL →
+two destinations; two lots; six pallets; run with complete records, with one
+3PL pallet-content record withheld, and with the ERP unavailable). Every row
+below was verified by reading the cited code, not from documentation claims.
+
+The companion implementation is `services/shared/recall_reconstruction/`,
+`scripts/run_recall_fixture.py`, and `sample_data/recall_fixture/`.
+
+## Summary
+
+| Requirement | Working | Missing (before this change) | Now covered by the fixture engine |
+|---|---|---|---|
+| 1. Worksheet with tri-state labels | tri-state precedent (`EvaluationSummary.compliant`) | any `linked / no_link_established / unresolved` vocabulary; pallet column; last-location and destination derivation | yes (DB-free) |
+| 2. Controlled scenario + answer key | DB-free runner pattern (`scripts/run_full_fsma_simulation.py`) | answer key; multi-case runs; `sample_data` wired to anything | yes |
+| 3. lot → pallet contents → shipment → receipt → movement | lot-keyed events with raw payload + hash chain; transformation links; SSCC/GLN validators | pallet/container entity; shipment line items; receipt↔shipment link; evidence pointer on every link | yes (in-memory) |
+| 4. Splits, mixed pallets, repack, identifier change | split expressible as N transformation rows | mixed pallet; identifier succession; quantity reconciliation across a transformation | yes |
+| 5. Expose uncertainty | mass balance per TLC; KDE coverage 409 gate; identity ambiguity blocker | missing-handoff detection; conflicting contents; unmatched identifiers; per-shipment quantity delta | yes |
+| 6. ERP independence | export path is Postgres-only; raw retention on the remediation path | persisted last-successful-sync per source; sync time in any export; any ERP-unavailable path | yes (sync manifest + retained snapshot) |
+| 7. Practitioner package | FDA ZIP + request package manifest (event-centric) | a lot-level scope worksheet a reviewer can read unaided | yes |
+
+## Working (verified)
+
+- Tri-state "no verdict ≠ negative verdict" — `services/shared/rules/types.py:96-114`.
+- Package manifest with hash, scope, gap analysis — `services/shared/request_workflow/assembly.py:211-261`.
+- DB-free deterministic runner with pass/fail summary — `scripts/run_full_fsma_simulation.py:326-401`; test `tests/scripts/test_run_full_fsma_simulation.py`.
+- Canonical event with verbatim `raw_payload`, provenance, hash chain — `services/shared/canonical_event.py:293-389`; `alembic/sql/V043__canonical_traceability_events.sql:110`.
+- Lot → lot lineage table — `fsma.transformation_links`; writer `services/shared/canonical_persistence/writer.py:701-762`.
+- SSCC-18 / GLN-13 / GTIN-14 validators — `services/shared/fsma_validation.py`.
+- Mass balance per TLC that refuses a verdict on mixed UOM — `services/shared/rules/evaluators/relational.py:356-545`.
+- KDE coverage gate (409 below 80% unless `allow_incomplete`) — `services/ingestion/app/fda_export/coverage.py:16-58`.
+- Trace CSV never borrows values across events — `services/graph/app/exporters/trace_csv.py:24-28`.
+- Identity ambiguity queue + submission blocker — `services/shared/identity_resolution/review.py:31-194`; `assembly.py:588-626`.
+- FDA export reads Postgres only, no network — `services/ingestion/app/fda_export/queries.py`.
+- Raw file bytes + SHA-256 + per-row `raw_row` + `field_provenance` on the remediation manifest path — `fsma.manifest_blobs`, `fsma.manifest_records` (`alembic/versions/20260716_c7a1e5f2b9d4_v095_supplier_remediation_slice.py:88-125`).
+- Attested correction primitive (author, role, reason, attestation, evidence_ref) — `services/ingestion/app/remediation/schemas.py:92-99`, `corrections.py`.
+
+## Missing (verified absent)
+
+- Pallet / container / logistic-unit entity with contents. `transport_reference` is one free-text scalar (`V043:104`). EPCIS `childEPCs`/`parentID` are parsed (`epcis/xml_parser.py:256,264`) then dropped (`epcis/normalization.py:108-124`).
+- Shipment header with line items; EDI 856 collapses to one event (`edi_ingestion/routes.py:596-606`).
+- Receiving ↔ shipping link record. `immediate_previous_source` / `tlc_source_reference` are KDE strings nothing traverses.
+- Evidence pointer on every link. `transformation_links.input_event_id` is a "latest event with that TLC" guess (`writer.py:718-727`).
+- Mixed pallet (one event = one TLC + one quantity). Identifier succession for lots/units.
+- Missing-handoff detection (`sandbox/tracer.py:36` states the intent; not implemented).
+- Conflicting pallet contents, unmatched-identifier report, per-shipment shipped-vs-received delta.
+- Persisted last-successful-sync per tenant per source (`external_connectors/base.py:146,267` is an instance attribute; `registry.py:23` is a process-global dict). No sync/freshness field in any export manifest (`fda_export_service.py:764-815`). No ERP-unavailable code path or test.
+- Any answer-key concept or multi-variant scenario run.
+
+## Broken (confirmed bugs, out of scope for the fixture change)
+
+- `/api/v1/ingest/csv` creates no `ingestion_runs` receipt and retains neither the file nor the verbatim row (`services/ingestion/app/csv_templates.py:663`; the only caller of `create_ingestion_run` is `remediation/service.py:101`).
+- CSV normalizer silently defaults a missing quantity to 1, a missing TLC to `UNKNOWN`, and an unknown event type to `receiving` (`services/shared/canonical_event.py:1180,1208-1209`).
+- Three conflicting input-lot key conventions: rule reads `kdes.input_traceability_lot_codes` (`rules/seeds.py:460`), CSV parser writes `kdes.input_lot_codes` (`csv_templates.py:620`), sandbox writes `input_traceability_lot_codes` (`sandbox/csv_parser.py:222-227`). CSV-ingested transformations fail "Input TLCs Required" even when inputs are present.
+- `transformation_links.input_quantity` / `input_unit` are never written (`writer.py:738-760`) but `trace_backward` selects them (`writer.py:905`), so backward-trace quantity is always `None`.
+- `initial_packing` rows with `input_lot_codes` create no links (`writer.py:703`).
+- `RecallResult.orphans_found` is never populated; `gaps` = facilities with no lots (`services/graph/app/fsma_recall/engine.py:277-278`).
+- Recall-contacts CSV hardcodes `Date Received` / `Quantity Received` empty and `Contact Status="PENDING"` (`services/graph/app/routers/fsma/compliance.py:558-561`).
+- Default settings fabricate `sensitech last_sync=now()` when no tenant row exists (`services/ingestion/app/settings.py:70-84`).
+
+## Unverified (needs Postgres or live services; not runnable in the audit environment)
+
+- `CanonicalEventStore.trace_forward/backward` on real data (`writer.py:794,876`).
+- Whether `fsma.evidence_attachments` is ever populated in production (no writer found).
+- Neo4j tracer paths (`services/graph/app/fsma/tracer.py`); sync is off by default with no deployed consumer (`webhook_router_v2/graph_sync.py:113-130`).
+
+## What the fixture engine does not do
+
+It is in-memory and reads CSVs from a directory. It does not persist to Postgres, does not expose an API route, and does not touch tenant isolation. Those are the next step after practitioner review of the worksheet format.

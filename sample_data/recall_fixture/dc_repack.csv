@@ -1,0 +1,4 @@
+record_id,process_type,input_pallet_id,output_pallet_id,lot_code,quantity,unit_of_measure,performed_at,location_gln,location_name,reference_document
+REPK-DC-001,split,008610001100000034,008610001100000072,HLF-215A,40,cases,2026-08-05T09:00:00Z,0861000220009,Northgate Distribution Center,WO-DC-0805-001
+REPK-DC-001,split,008610001100000034,008610001100000089,HLF-215B,20,cases,2026-08-05T09:00:00Z,0861000220009,Northgate Distribution Center,WO-DC-0805-001
+REPK-DC-002,relabel,008610001100000065,008610001100000096,HLF-215A,30,cases,2026-08-05T09:30:00Z,0861000220009,Northgate Distribution Center,WO-DC-0805-002

@@ -1,0 +1,2 @@
+correction_id,target_file,target_record_id,field,value,author,reason,evidence_ref,asserted_at
+COR-001,dc_receiving.csv,RCV-DC-004,shipment_ref,BOL-MFG-001,J. Alvarez (recall coordinator),DC receipt RCV-DC-004 was keyed without a BOL reference; the signed BOL scan lists pallet 008610001100000041 on BOL-MFG-001 and the receipt time matches the other five pallets on that BOL,BOL-MFG-001.pdf page 1 line 4,2026-08-20T17:10:00Z

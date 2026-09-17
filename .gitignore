@@ -172,6 +172,10 @@ sample_data/*
 !sample_data/*.csv
 !sample_data/*.md
 !sample_data/README.md
+# The recall reconstruction fixture (synthetic, see its README.md) is tracked in full,
+# including the retained ERP snapshot and the answer key.
+!sample_data/recall_fixture/
+!sample_data/recall_fixture/**
 
 # Non-code artifacts — public synthetic exports are tracked
 # (see demo_exports/SYNTHETIC.md). Local pilot/sales output stays ignored.

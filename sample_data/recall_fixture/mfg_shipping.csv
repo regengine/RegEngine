@@ -1,0 +1,7 @@
+shipment_id,pallet_id,ship_from_gln,ship_from_name,ship_to_gln,ship_to_name,shipped_at,reference_document
+BOL-MFG-001,008610001100000010,0861000110003,Harborline Foods Plant,0861000220009,Northgate Distribution Center,2026-08-04T08:00:00Z,BOL-MFG-001.pdf
+BOL-MFG-001,008610001100000027,0861000110003,Harborline Foods Plant,0861000220009,Northgate Distribution Center,2026-08-04T08:00:00Z,BOL-MFG-001.pdf
+BOL-MFG-001,008610001100000034,0861000110003,Harborline Foods Plant,0861000220009,Northgate Distribution Center,2026-08-04T08:00:00Z,BOL-MFG-001.pdf
+BOL-MFG-001,008610001100000041,0861000110003,Harborline Foods Plant,0861000220009,Northgate Distribution Center,2026-08-04T08:00:00Z,BOL-MFG-001.pdf
+BOL-MFG-001,008610001100000058,0861000110003,Harborline Foods Plant,0861000220009,Northgate Distribution Center,2026-08-04T08:00:00Z,BOL-MFG-001.pdf
+BOL-MFG-001,008610001100000065,0861000110003,Harborline Foods Plant,0861000220009,Northgate Distribution Center,2026-08-04T08:00:00Z,BOL-MFG-001.pdf
