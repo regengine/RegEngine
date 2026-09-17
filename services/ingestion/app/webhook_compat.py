@@ -16,9 +16,11 @@ using the same internal helpers and persistence layer.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
-from typing import Optional, Union
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
@@ -70,11 +72,123 @@ async def require_tenant_context(
     return ctx
 
 
+@dataclass
+class SourceFileReceipt:
+    """The uploaded file an ingestion run retains verbatim (fsma.manifest_blobs).
+
+    ``record_count`` counts the file's data rows including ones the parser
+    rejected; ``parse_errors`` are those rejections, recorded on the run so
+    the receipt accounts for every row, not only the ones that became events.
+    """
+
+    filename: str
+    raw_bytes: bytes
+    content_type: Optional[str] = None
+    initiated_by: Optional[str] = None
+    record_count: int = 0
+    parse_errors: List[str] = field(default_factory=list)
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.raw_bytes).hexdigest()
+
+
+def _run_source_system(source: str):
+    from shared.canonical_event import IngestionSource
+
+    try:
+        return IngestionSource(source)
+    except ValueError:
+        return IngestionSource.CSV_UPLOAD
+
+
+def _open_ingestion_run(db_session, tenant_id: str, source: str, receipt: SourceFileReceipt) -> str:
+    """Record the upload before any row is processed.
+
+    Writes the fsma.ingestion_runs row (file name, SHA-256, size, row count)
+    and the verbatim bytes to fsma.manifest_blobs, the same retention the
+    supplier-remediation path uses. Runs in the caller's transaction: if the
+    receipt cannot be written the upload fails, because events without a
+    retained source are exactly what the receipt exists to prevent.
+    """
+    from shared.canonical_event import IngestionRun
+    from shared.canonical_persistence import CanonicalEventStore
+    from sqlalchemy import text
+
+    store = CanonicalEventStore(db_session, dual_write=False)
+    run = IngestionRun(
+        tenant_id=tenant_id,
+        source_system=_run_source_system(source),
+        source_file_name=receipt.filename,
+        source_file_hash=receipt.sha256,
+        source_file_size=len(receipt.raw_bytes),
+        record_count=receipt.record_count,
+        initiated_by=receipt.initiated_by,
+    )
+    run_id = store.create_ingestion_run(run)
+    db_session.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            INSERT INTO fsma.manifest_blobs
+                (ingestion_run_id, tenant_id, raw_bytes, sha256,
+                 original_filename, content_type, uploaded_by)
+            VALUES
+                (CAST(:run_id AS uuid), CAST(:tenant_id AS uuid), :raw_bytes,
+                 :sha256, :filename, :content_type, :uploaded_by)
+            """
+        ),
+        {
+            "run_id": run_id,
+            "tenant_id": tenant_id,
+            "raw_bytes": receipt.raw_bytes,
+            "sha256": receipt.sha256,
+            "filename": receipt.filename,
+            "content_type": receipt.content_type,
+            "uploaded_by": receipt.initiated_by,
+        },
+    )
+    return run_id
+
+
+def _close_ingestion_run(
+    db_session,
+    run_id: str,
+    tenant_id: str,
+    *,
+    accepted: int,
+    rejected: int,
+    results: List[EventResult],
+    receipt: SourceFileReceipt,
+) -> None:
+    """Close the run with counts that cover every row of the file."""
+    from shared.canonical_persistence import CanonicalEventStore
+
+    errors: List[Dict[str, Any]] = [{"stage": "parse", "error": err} for err in receipt.parse_errors]
+    for result in results:
+        if result.status == "rejected":
+            errors.append(
+                {
+                    "stage": "persist",
+                    "traceability_lot_code": result.traceability_lot_code,
+                    "errors": list(result.errors or []),
+                }
+            )
+    CanonicalEventStore(db_session, dual_write=False).complete_ingestion_run(
+        run_id,
+        tenant_id,
+        accepted=accepted,
+        rejected=rejected + len(receipt.parse_errors),
+        errors=errors,
+    )
+
+
 async def ingest_events(
     payload: WebhookPayload,
     *,
     principal_tenant_id: str,
     x_regengine_api_key: Optional[str] = None,
+    source_file: Optional[SourceFileReceipt] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -89,6 +203,11 @@ async def ingest_events(
     The helper rejects calls where the payload-supplied tenant is
     absent or disagrees with the authenticated principal, so a caller
     cannot forge cross-tenant writes even by accident.
+
+    ``source_file`` (file uploads) opens an ingestion run before the first
+    row is processed, retains the file verbatim, stamps ``ingestion_run_id``
+    on every canonical event, and closes the run with counts covering every
+    row of the file. The run id is returned on the response.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
@@ -116,6 +235,7 @@ async def ingest_events(
     if db_session is None:
         raise RuntimeError("Database unavailable — cannot accept events.")
 
+    run_id: Optional[str] = None
     try:
         from shared.cte_persistence import CTEPersistence
 
@@ -131,6 +251,10 @@ async def ingest_events(
     seen_in_batch: set[str] = set()
 
     try:
+        if source_file is not None:
+            # The receipt is written first so a run exists even if every row
+            # is rejected; the same transaction carries run, blob and events.
+            run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
         for event in payload.events:
             dedup_key = (
                 f"{event.cte_type.value}|{event.traceability_lot_code}"
@@ -197,7 +321,7 @@ async def ingest_events(
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
 
-                    canonical = normalize_webhook_event(event, tenant_id)
+                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
                     canonical_store.persist_event(canonical)
                     from shared.rules_engine import RulesEngine
@@ -341,6 +465,16 @@ async def ingest_events(
                 )
                 rejected += 1
 
+        if run_id is not None and source_file is not None:
+            _close_ingestion_run(
+                db_session,
+                run_id,
+                tenant_id,
+                accepted=accepted,
+                rejected=rejected,
+                results=results,
+                receipt=source_file,
+            )
         if db_session:
             db_session.commit()
     except Exception:
@@ -356,4 +490,5 @@ async def ingest_events(
         rejected=rejected,
         total=len(payload.events),
         events=results,
+        ingestion_run_id=run_id,
     )

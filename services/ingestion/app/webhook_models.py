@@ -319,6 +319,13 @@ class IngestResponse(BaseModel):
     total: int = 0
     events: List[EventResult] = Field(default_factory=list)
     ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    ingestion_run_id: Optional[str] = Field(
+        None,
+        description=(
+            "fsma.ingestion_runs id when the upload was retained as an ingestion run (file uploads): "
+            "the receipt that ties every accepted event back to the verbatim source file and its SHA-256."
+        ),
+    )
 
 
 class CsvIngestResponse(IngestResponse):
