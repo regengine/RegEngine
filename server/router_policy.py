@@ -72,6 +72,7 @@ VALID_ROUTER_NAMES = frozenset(
         "proof_verify",
         "proof_recall",
         "email_ingest",
+        "agent_org",
     }
 )
 
