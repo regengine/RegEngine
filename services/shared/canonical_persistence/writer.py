@@ -284,6 +284,13 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # The advisory lock above serializes every writer, including genesis.
         # A row lock would unnecessarily require UPDATE on this append-only table.
         # --- Get chain head ---
+        # No FOR UPDATE: the advisory lock above already serializes chain
+        # growth per tenant (and, unlike FOR UPDATE, also covers the
+        # zero-row genesis case). FOR UPDATE additionally requires UPDATE
+        # privilege, which the v111 append-only grant inventory
+        # (SELECT, INSERT on fsma.hash_chain) deliberately withholds from
+        # the runtime role — with it, every canonical append fails with
+        # InsufficientPrivilege.
         chain_head = self.session.execute(
             text("""
                 SELECT chain_hash, sequence_num
@@ -509,6 +516,8 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
 
         # The tenant advisory lock protects this append-only read as well.
         # --- Get chain head ---
+        # No FOR UPDATE — see persist_event: the advisory lock serializes
+        # appends and the v111 grant inventory is append-only.
         chain_head = self.session.execute(
             text("""
                 SELECT chain_hash, sequence_num

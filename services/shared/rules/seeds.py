@@ -457,8 +457,20 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "citation_reference": "21 CFR §1.1350(a)(1)(i)",
         "evaluation_logic": {
             "type": "multi_field_presence",
-            "field": "kdes.input_traceability_lot_codes",
-            "params": {"fields": ["kdes.input_traceability_lot_codes", "kdes.input_tlcs"]},
+            # kdes.input_lot_codes is the field the canonical webhook
+            # normalizer actually writes (normalize_webhook_event promotes
+            # the top-level input_traceability_lot_codes into it). The
+            # original two names existed in no production payload, so every
+            # compliant transformation event false-failed this critical
+            # rule (caught by the 2026-09-02 production-grade data run).
+            "field": "kdes.input_lot_codes",
+            "params": {
+                "fields": [
+                    "kdes.input_lot_codes",
+                    "kdes.input_traceability_lot_codes",
+                    "kdes.input_tlcs",
+                ]
+            },
         },
         "failure_reason_template": "Transformation event missing input TLCs ({citation}) \u2014 cannot link new lot to source lots",
         "remediation_suggestion": "List all input traceability lot codes that were combined or transformed into this new lot",

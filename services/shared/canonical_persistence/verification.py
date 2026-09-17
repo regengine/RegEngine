@@ -182,7 +182,8 @@ class CanonicalChainVerificationMixin:
                        te.from_facility_reference, te.to_facility_reference,
                        te.event_timestamp, te.kdes,
                        ce.id AS matched_legacy_id,
-                       te.normalized_payload->>'event_timestamp' AS hashed_timestamp
+                       te.normalized_payload->>'event_timestamp' AS hashed_timestamp,
+                       te.sha256_hash AS canonical_sha256
                 FROM fsma.hash_chain hc
                 LEFT JOIN fsma.traceability_events te
                     ON te.event_id = hc.cte_event_id
@@ -278,7 +279,35 @@ class CanonicalChainVerificationMixin:
                 continue
 
             # Event-hash recompute from canonical content — catches a field
-            # mutation that did NOT also rewrite sha256_hash/event_hash.
+            # mutation that did NOT also rewrite sha256_hash.
+            #
+            # Compared against te.sha256_hash, NOT hc.event_hash: in the
+            # webhook ingest topology the chain row is written by the
+            # legacy store (CTEPersistence.store_events_batch), so
+            # hc.event_hash is the LEGACY digest — a different formula
+            # over different fields. Comparing the canonical recompute to
+            # it flagged every webhook-ingested event as tampered (found
+            # by the 2026-09-02 production-grade data run). For
+            # canonical-written chains the two columns are equal, so this
+            # comparison covers both topologies.
+            canonical_sha = row[17]
+
+            # Chain-row digest check (CodeRabbit review of the prod-grade
+            # run fix): a row matching ONLY the canonical store was written
+            # by CanonicalEventStore, which sets hc.event_hash =
+            # te.sha256_hash by construction — any deviation is chain-row
+            # tampering. Rows that ALSO match the legacy store may carry
+            # the legacy digest (webhook dual-write topology), so they are
+            # exempt here and covered by the recompute below.
+            if matched_legacy_id is None and event_hash != canonical_sha:
+                if int(seq) not in tamper_rows:
+                    tamper_rows.append(int(seq))
+                errors.append(
+                    f"Chain-row tamper at seq={seq}: chain event_hash "
+                    f"{str(event_hash)[:16]}... != canonical sha256_hash "
+                    f"{str(canonical_sha)[:16]}..."
+                )
+
             recomputed_event = _recompute_event_sha256(
                 event_id=cte_event_id,
                 event_type=row[6],
@@ -292,12 +321,12 @@ class CanonicalChainVerificationMixin:
                 kdes=row[14] if isinstance(row[14], dict) else json.loads(row[14] or "{}"),
                 timestamp_hint=row[16] if len(row) > 16 else None,
             )
-            if recomputed_event != event_hash:
+            if recomputed_event != canonical_sha:
                 if int(seq) not in tamper_rows:
                     tamper_rows.append(int(seq))
                 errors.append(
                     f"Event tamper at seq={seq}: recomputed event_hash "
-                    f"{recomputed_event[:16]}... != stored {str(event_hash)[:16]}..."
+                    f"{recomputed_event[:16]}... != stored {str(canonical_sha)[:16]}..."
                 )
 
         # EPCIS / skip_chain_write events legitimately have no chain row, so

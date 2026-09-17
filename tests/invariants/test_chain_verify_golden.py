@@ -189,3 +189,110 @@ class TestChainVerifyGolden:
             )
         finally:
             session.rollback()
+
+    def test_chain_row_reseal_detected_on_canonical_only_rows(self, migrated_db):
+        """CodeRabbit follow-up to the prod-grade run fix: after the event-hash
+        recompute moved its comparison target from ``hc.event_hash`` to
+        ``te.sha256_hash`` (to stop false tamper flags on webhook dual-write
+        rows), the chain row's OWN digest went unchecked. A "re-seal" attack —
+        rewrite ``event_hash`` AND ``chain_hash`` consistently on the tail row
+        — passes linkage and chain_hash recompute, and the content recompute
+        never looks at the chain row. For canonical-only rows (no legacy
+        match) the writer guarantees ``hc.event_hash == te.sha256_hash``, so
+        the verifier must flag any deviation."""
+        from shared.canonical_event import (
+            CTEType,
+            EventStatus,
+            IngestionSource,
+            ProvenanceMetadata,
+            TraceabilityEvent,
+        )
+        from shared.canonical_persistence.writer import CanonicalEventStore
+        from shared.cte_persistence import compute_chain_hash
+
+        database_url, _ = migrated_db
+        engine = create_engine(database_url, future=True)
+        tenant_id = uuid4()
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO tenants (id, name, slug, status) "
+                    "VALUES (:id, :name, :slug, 'active') ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "id": str(tenant_id),
+                    "name": f"reseal-{tenant_id.hex[:8]}",
+                    "slug": f"reseal-{tenant_id.hex[:8]}",
+                },
+            )
+        session = sessionmaker(bind=engine, future=True)()
+        try:
+            session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+
+            base = datetime(2026, 7, 1, 9, 0, 0, tzinfo=timezone.utc)
+            # dual_write=False → chain rows match ONLY the canonical store,
+            # which is the topology the strict event_hash check covers.
+            store = CanonicalEventStore(session, dual_write=False)
+            for index in range(2):
+                store.persist_event(
+                    TraceabilityEvent(
+                        event_id=uuid4(),
+                        tenant_id=tenant_id,
+                        source_system=IngestionSource.WEBHOOK_API,
+                        source_record_id=f"reseal-rec-{index}",
+                        event_type=CTEType.SHIPPING,
+                        event_timestamp=base + timedelta(hours=index),
+                        event_timezone="UTC",
+                        product_reference="urn:gs1:01:09506000134352",
+                        lot_reference=f"LOT-R{index}",
+                        traceability_lot_code=f"TLC-RESEAL-{index:03d}",
+                        quantity=5.0 + index,
+                        unit_of_measure="kg",
+                        from_entity_reference="urn:gs1:417:0614141000005",
+                        to_entity_reference="urn:gs1:417:0614141000012",
+                        from_facility_reference="urn:gs1:414:0614141000005",
+                        to_facility_reference="urn:gs1:414:0614141000012",
+                        kdes={"gtin": "09506000134352"},
+                        status=EventStatus.ACTIVE,
+                        provenance=ProvenanceMetadata(),
+                    )
+                )
+            session.commit()
+            session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+
+            clean = store.verify_chain_canonical(str(tenant_id))
+            assert clean.valid is True, f"precondition: clean canonical-only chain failed: {clean.errors}"
+
+            # Re-seal the tail row: fake event_hash + CONSISTENT chain_hash,
+            # so linkage and chain_hash-recompute checks both still pass.
+            tail = session.execute(
+                text(
+                    "SELECT sequence_num, previous_chain_hash FROM fsma.hash_chain "
+                    "WHERE tenant_id = :tid ORDER BY sequence_num DESC LIMIT 1"
+                ),
+                {"tid": str(tenant_id)},
+            ).fetchone()
+            fake_event_hash = "f" * 64
+            fake_chain_hash = compute_chain_hash(fake_event_hash, tail[1])
+            # The append-only trigger's authorized-corrections bypass is the
+            # realistic insider tamper vector.
+            session.execute(text("SET fsma.allow_mutation = 'true'"))
+            session.execute(
+                text(
+                    "UPDATE fsma.hash_chain SET event_hash = :eh, chain_hash = :ch "
+                    "WHERE tenant_id = :tid AND sequence_num = :seq"
+                ),
+                {"eh": fake_event_hash, "ch": fake_chain_hash, "tid": str(tenant_id), "seq": tail[0]},
+            )
+            session.execute(text("SET fsma.allow_mutation = 'false'"))
+
+            resealed = store.verify_chain_canonical(str(tenant_id))
+            assert resealed.valid is False, (
+                "re-sealed chain row (event_hash + consistent chain_hash rewrite) "
+                "must fail canonical verification — hc.event_hash is unchecked otherwise"
+            )
+            assert any("Chain-row tamper" in e for e in resealed.errors), resealed.errors
+        finally:
+            session.rollback()
+            session.close()
+            engine.dispose()
