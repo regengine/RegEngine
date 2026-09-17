@@ -325,6 +325,37 @@ def _extract_subscription_period_end(subscription: Any) -> Optional[str]:
     return None
 
 
+def _extract_subscription_price_ids(subscription: Any) -> list[str]:
+    """Resolve the Stripe price IDs on a subscription's items.
+
+    Companion to ``_extract_subscription_period_end`` (#2951): under the
+    negotiated API version each item carries its ``price`` object at
+    ``subscription.items.data[].price.id``; older payloads reference a
+    string ``plan`` id at ``items.data[].plan.id`` (pre-``Price`` API).
+    Both shapes are read, items in order. Accepts plain dicts and SDK
+    ``StripeObject``/``ListObject`` values alike.
+
+    Returns ``[]`` when the payload carries no resolvable item prices —
+    callers must treat that as *unverifiable*, never as "no plan".
+    """
+    price_ids: list[str] = []
+    items = _stripe_get(subscription, "items", None)
+    data = _stripe_get(items, "data", None) if items is not None else None
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            price_id: Any = None
+            price = _stripe_get(item, "price", None)
+            if price is not None:
+                price_id = _stripe_get(price, "id", None)
+            if not price_id:
+                # Legacy shape: items referenced a ``plan`` directly.
+                plan = _stripe_get(item, "plan", None)
+                price_id = _stripe_get(plan, "id", plan) if plan is not None else None
+            if isinstance(price_id, str) and price_id:
+                price_ids.append(price_id)
+    return price_ids
+
+
 def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
     status_transitions = invoice_payload.get("status_transitions") or {}
     paid_at = _coerce_optional_int(status_transitions.get("paid_at"))
