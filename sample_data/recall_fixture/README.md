@@ -66,4 +66,6 @@ Each row is one (pallet, lot) at its last recorded location, with exactly one la
 
 Flags `co_palletized_with_implicated_lot` and `lineage_includes_implicated_lot` mark rows a practitioner will want to look at even when the label is `no_link_established`.
 
+`quantity_asserted` is this lot's share of the pallet. `pallet_quantity_asserted` and `pallet_quantity_counted_at_last_receipt` are whole-pallet figures, because a receiver counts cases on a pallet, not per lot. On a mixed pallet the lot figure is therefore smaller than the pallet count; that is not a discrepancy. A `quantity_discrepancy` finding compares the two pallet columns.
+
 Excluding product from a recall is a practitioner decision. The engine never makes it.

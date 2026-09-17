@@ -28,7 +28,11 @@ class WorksheetRow:
     gtin: Optional[str]
     quantity_asserted: Optional[float]
     unit_of_measure: Optional[str]
-    quantity_counted_at_last_receipt: Optional[float]
+    # Whole-pallet figures. A receiver counts cases on a pallet, not per lot, so on a
+    # mixed pallet these exceed the row's per-lot ``quantity_asserted``. The
+    # quantity_discrepancy finding compares these two, never the per-lot figure.
+    pallet_quantity_asserted: Optional[float]
+    pallet_quantity_counted_at_last_receipt: Optional[float]
     last_record_type: Optional[str]
     last_recorded_at: Optional[str]
     last_recorded_location: Optional[str]
@@ -52,7 +56,8 @@ class WorksheetRow:
             "gtin": self.gtin,
             "quantity_asserted": self.quantity_asserted,
             "unit_of_measure": self.unit_of_measure,
-            "quantity_counted_at_last_receipt": self.quantity_counted_at_last_receipt,
+            "pallet_quantity_asserted": self.pallet_quantity_asserted,
+            "pallet_quantity_counted_at_last_receipt": self.pallet_quantity_counted_at_last_receipt,
             "last_record_type": self.last_record_type,
             "last_recorded_at": self.last_recorded_at,
             "last_recorded_location": self.last_recorded_location,
@@ -79,7 +84,8 @@ CSV_COLUMNS = [
     "gtin",
     "quantity_asserted",
     "unit_of_measure",
-    "quantity_counted_at_last_receipt",
+    "pallet_quantity_asserted",
+    "pallet_quantity_counted_at_last_receipt",
     "last_record_type",
     "last_recorded_at",
     "last_recorded_location",
@@ -242,7 +248,8 @@ def build_worksheet(rs: RecordSet, custody: CustodyModel, implicated_lot: str) -
             finding_ids=[f.finding_id for f in all_findings],
             unresolved_questions=questions,
             notes=notes,
-            quantity_counted_at_last_receipt=last_receipt_count,
+            pallet_quantity_asserted=group.total if group is not None else None,
+            pallet_quantity_counted_at_last_receipt=last_receipt_count,
         )
 
         if group is None:

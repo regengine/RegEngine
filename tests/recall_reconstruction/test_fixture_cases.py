@@ -70,7 +70,13 @@ def test_complete_case_reconstructs_answer_key():
     # Quantity discrepancy on P2 is reported and does not block the link.
     p2 = rows[(PALLET[2], LOT_A)]
     assert p2.label is LinkLabel.LINKED
-    assert p2.quantity_asserted == 60 and p2.quantity_counted_at_last_receipt == 58
+    assert p2.quantity_asserted == 60 and p2.pallet_quantity_counted_at_last_receipt == 58
+    assert p2.pallet_quantity_asserted == 60
+    # Mixed pallet: the per-lot figure is smaller than the whole-pallet count, and that is not a discrepancy.
+    lot_a_on_p10 = rows[(PALLET[10], LOT_A)]
+    assert lot_a_on_p10.quantity_asserted == 40
+    assert lot_a_on_p10.pallet_quantity_asserted == 60 and lot_a_on_p10.pallet_quantity_counted_at_last_receipt == 60
+    assert not lot_a_on_p10.finding_ids
     assert any("delta -2" in n for n in p2.notes)
     # Only one finding type in the complete case.
     assert {f.type for f in custody.findings} == {FindingType.QUANTITY_DISCREPANCY}
@@ -97,7 +103,8 @@ def test_missing_3pl_contents_is_unresolved_never_excluded():
     assert rs.files["3pl_repack.csv"].available is False
     p10 = rows[(PALLET[10], None)]
     assert p10.label is LinkLabel.UNRESOLVED
-    assert p10.quantity_asserted is None and p10.quantity_counted_at_last_receipt == 60
+    assert p10.quantity_asserted is None and p10.pallet_quantity_asserted is None
+    assert p10.pallet_quantity_counted_at_last_receipt == 60
     assert p10.destination_gln == DEST_B
     # The precise record needed is named: type, custodian, GLN, window, candidate inputs.
     question = p10.unresolved_questions[0]
@@ -154,6 +161,24 @@ def test_erp_unavailable_states_cutoff_and_reproduces_retained_evidence():
         assert [(g.record_id, g.lots, g.derived_from) for g in retained] == [
             (g.record_id, g.lots, g.derived_from) for g in complete
         ]
+
+
+def test_pre_cutoff_canonical_events_are_identical_across_cases(tmp_path):
+    """A retained snapshot reproduces the live evidence exactly: same ids, hashes, and chain."""
+    cutoff = "2026-08-05T12:00:00"
+    run_case(FIXTURE, "complete", tmp_path / "complete")
+    run_case(FIXTURE, "erp_unavailable", tmp_path / "erp_unavailable")
+    events = {
+        case: json.loads((tmp_path / case / "canonical_events.json").read_text())["events"]
+        for case in ("complete", "erp_unavailable")
+    }
+    pre = {case: [e for e in evs if e["event_timestamp"] < cutoff] for case, evs in events.items()}
+    assert len(pre["complete"]) == 17
+    assert pre["complete"] == pre["erp_unavailable"]
+    # The chain diverges only where the evidence does: after the cutoff.
+    assert len(events["complete"]) > len(events["erp_unavailable"])
+    retained_ids = {e["event_id"] for e in events["erp_unavailable"]}
+    assert retained_ids <= {e["event_id"] for e in events["complete"]}
 
 
 def test_package_manifest_carries_sync_times_and_hashes(tmp_path):

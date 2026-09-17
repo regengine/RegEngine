@@ -61,7 +61,10 @@ def _canonical_events(rs: RecordSet, custody: CustodyModel) -> Dict[str, Any]:
         product = products.get(lot)
         events.append(
             TraceabilityEvent(
-                event_id=uuid.uuid5(_EVENT_NAMESPACE, f"{rs.case}|{ref.short()}|{lot}|{event_type.value}"),
+                # Content-addressed: the same source row yields the same event id in every
+                # case and every run, so evidence captured before a sync cutoff reproduces
+                # byte-for-byte (ids, hashes, chain) from the retained snapshot.
+                event_id=uuid.uuid5(_EVENT_NAMESPACE, f"{ref.file_sha256}|{ref.short()}|{lot}|{event_type.value}"),
                 tenant_id=TENANT_ID,
                 source_system=IngestionSource.CSV_UPLOAD,
                 source_record_id=ref.short(),
