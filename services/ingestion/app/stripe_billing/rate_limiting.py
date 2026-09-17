@@ -222,3 +222,29 @@ def _check_stripe_webhook_rate_limit(request) -> None:
             detail="Rate limit exceeded. Try again shortly.",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+def _check_verified_stripe_webhook_rate_limit(event: dict) -> None:
+    """Charge the verified-delivery budget after ``construct_event`` succeeds.
+
+    #2929/#2989: the unverified per-IP budget is charged only once a request
+    is shown NOT to be Stripe. This bucket is the complement: only deliveries
+    Stripe actually signed reach it, and the key is ``verified:{event.account}``
+    — derived solely from the verified envelope, never from a client-supplied
+    header, so it cannot be forged: reaching this bucket requires an HMAC
+    over the exact body under STRIPE_WEBHOOK_SECRET. Events with no account
+    id share the ``verified:default`` bucket. The ``verified:`` in-key marker
+    keeps the two budgets disjoint (a canonical IP literal can never equal
+    ``verified:...``, and the Redis/in-memory key namespace is shared).
+    """
+    account_id = str((event or {}).get("account") or "default")
+    now = datetime.now(timezone.utc).timestamp()
+    retry_after = _check_redis(f"verified:{account_id}", now)
+
+    if retry_after > 0:
+        logger.warning("stripe_verified_webhook_rate_limit_exceeded account=%s", account_id)
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again shortly.",
+            headers={"Retry-After": str(retry_after)},
+        )
