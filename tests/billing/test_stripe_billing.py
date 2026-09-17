@@ -387,6 +387,7 @@ class TestHandleCheckoutCompleted:
     """Tests for checkout.session.completed webhook event handling."""
 
     @pytest.mark.asyncio
+    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
     @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._redis_client")
     @patch("services.ingestion.app.stripe_billing.stripe")
@@ -400,6 +401,7 @@ class TestHandleCheckoutCompleted:
         mock_stripe.Subscription.retrieve.return_value = {
             "status": "active",
             "current_period_end": 1700000000,
+            "items": {"data": [{"price": {"id": "price_growth_m"}}]},
         }
 
         session = {
@@ -462,6 +464,85 @@ class TestHandleCheckoutCompleted:
         mock_create_tenant.assert_called_once()
         tenant_name_arg = mock_create_tenant.call_args[0][0]
         assert "new" in tenant_name_arg.lower()  # Derived from email
+
+    @pytest.mark.asyncio
+    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
+    @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
+    @patch("services.ingestion.app.stripe_billing._redis_client")
+    @patch("services.ingestion.app.stripe_billing.stripe")
+    async def test_checkout_plan_mismatch_fails_closed_to_stripe_truth(
+        self, mock_stripe, mock_redis_client, mock_store
+    ):
+        """H2: metadata claiming a richer plan than the paid price must not
+        stick — the Stripe-verified plan is stored instead of the claim."""
+        mock_client = MagicMock()
+        mock_client.get.side_effect = ["tenant-abc", None]
+        mock_client.getdel.return_value = None
+        mock_redis_client.return_value = mock_client
+
+        mock_stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": 1700000000,
+            "items": {"data": [{"price": {"id": "price_growth_m"}}]},
+        }
+
+        session = {
+            "id": "cs_test_123",
+            "subscription": "sub_test_456",
+            "customer": "cus_test_789",
+            "payment_status": "paid",
+            "customer_details": {"email": "user@example.com"},
+            "metadata": {
+                "tenant_id": "tenant-abc",
+                "plan_id": "scale",  # claim richer than what was paid
+                "billing_period": "monthly",
+            },
+        }
+
+        await _handle_checkout_completed(session)
+
+        mock_store.assert_called_once()
+        payload = mock_store.call_args[0][1]
+        assert payload["plan_id"] == "growth"  # Stripe truth, not the claim
+        assert payload["status"] == "active"
+
+    @pytest.mark.asyncio
+    @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
+    @patch("services.ingestion.app.stripe_billing._redis_client")
+    @patch("services.ingestion.app.stripe_billing.stripe")
+    async def test_checkout_plan_unverifiable_fails_closed(self, mock_stripe, mock_redis_client, mock_store):
+        """H2: a Stripe price outside the catalog must grant nothing."""
+        mock_client = MagicMock()
+        mock_client.get.side_effect = ["tenant-abc", None]
+        mock_client.getdel.return_value = None
+        mock_redis_client.return_value = mock_client
+
+        mock_stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": 1700000000,
+            "items": {"data": [{"price": {"id": "price_unknown_m"}}]},
+        }
+
+        session = {
+            "id": "cs_test_123",
+            "subscription": "sub_test_456",
+            "customer": "cus_test_789",
+            "payment_status": "paid",
+            "customer_details": {"email": "user@example.com"},
+            "metadata": {
+                "tenant_id": "tenant-abc",
+                "plan_id": "growth",
+                "billing_period": "monthly",
+            },
+        }
+
+        with patch.dict("os.environ", {}, clear=True):
+            await _handle_checkout_completed(session)
+
+        mock_store.assert_called_once()
+        payload = mock_store.call_args[0][1]
+        assert payload["plan_id"] == ""
+        assert payload["status"] == "incomplete"  # gate denies; alert fired
 
 
 # ── Webhook Event: customer.subscription.deleted ─────────────────

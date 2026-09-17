@@ -167,6 +167,50 @@ async def _handle_checkout_completed(
         # subscription — so the first mapping write no longer stores "".
         current_period_end = _helpers_mod._extract_subscription_period_end(subscription)
 
+        # H2: ``metadata.plan_id`` is a client-supplied claim. The plan that
+        # gets persisted — and that plan-feature gates later read — must be
+        # the one the subscription's actual Stripe price maps to, never the
+        # claim. Catalog gaps and multi-plan ambiguity fail closed exactly
+        # like an unsettled payment: the mapping write proceeds so lookups
+        # and retries stay consistent, but the status written is one the
+        # entitlement gate denies, and the operator gets a loud alert.
+        price_ids = _helpers_mod._extract_subscription_price_ids(subscription)
+        stripe_plan: Optional[str] = None
+        stripe_period: Optional[str] = None
+        plan_ambiguous = False
+        for price_id in price_ids:
+            match = _plans_mod._plan_for_stripe_price(price_id)
+            if match is None:
+                continue
+            if stripe_plan is not None and match != (stripe_plan, stripe_period):
+                plan_ambiguous = True
+                break
+            stripe_plan, stripe_period = match
+        if price_ids and (plan_ambiguous or stripe_plan is None):
+            logger.error(
+                "stripe_plan_unverifiable",
+                tenant_id=tenant_id,
+                subscription_id=subscription_id,
+                price_ids=price_ids,
+                claimed_plan=plan_id,
+                claimed_billing_period=billing_period,
+                ambiguous=plan_ambiguous,
+            )
+            subscription_status = "incomplete"
+            plan_id = ""
+        elif stripe_plan is not None and stripe_plan != plan_id:
+            logger.error(
+                "stripe_plan_metadata_mismatch",
+                tenant_id=tenant_id,
+                subscription_id=subscription_id,
+                claimed_plan=plan_id,
+                stripe_plan=stripe_plan,
+                claimed_billing_period=billing_period,
+                stripe_period=stripe_period,
+            )
+            plan_id = stripe_plan
+            billing_period = stripe_period or billing_period
+
     # #2930: ``checkout.session.completed`` also fires for payments that have
     # not settled. Until the money lands the tenant is entitled to nothing,
     # whatever the subscription object says — ``async_payment_succeeded``
