@@ -57,18 +57,43 @@ def _remember_real_shared_modules() -> dict[str, object]:
 _REAL_SHARED_MODULES = _remember_real_shared_modules()
 
 
+def _is_real_shared_module(mod: object) -> bool:
+    """True when ``mod`` is the on-disk package under ``services/shared``.
+
+    Synthetic stubs installed by tests have no ``__file__`` or point
+    elsewhere. Real modules must NEVER be evicted: test modules bind
+    ``shared.*`` objects at import time and monkeypatch them at run time:
+    evicting a real module between those two moments splits module identity
+    (patch lands on the test's binding, the handler lazy-imports a fresh
+    unpatched object — the 1342-family 404s on the exp branch).
+    """
+    mod_file = str(getattr(mod, "__file__", "") or "")
+    return bool(mod_file) and str(_SHARED_DIR) in mod_file
+
+
 def _purge_synthetic_shared_modules() -> None:
-    """Evict ``shared.*`` entries that are not the real cached modules."""
-    stale = [
-        name
-        for name in list(sys.modules)
-        if (name == "shared" or name.startswith("shared."))
-        and name not in _REAL_SHARED_MODULES
-    ]
-    for name in stale:
-        sys.modules.pop(name, None)
+    """Evict synthetic ``shared.*`` stubs; keep every real module's identity.
+
+    Real-ness is anchored to the on-disk path, not startup-snapshot
+    membership: a real module imported after the snapshot (e.g. at test-module
+    import) is still real and must survive, or monkeypatch-by-object breaks.
+    """
+    for name in list(sys.modules):
+        if name == "shared" or name.startswith("shared."):
+            mod = sys.modules.get(name)
+            if mod is None:
+                continue
+            if _is_real_shared_module(mod):
+                continue
+            if name in _REAL_SHARED_MODULES and _REAL_SHARED_MODULES[name] is mod:
+                continue
+            sys.modules.pop(name, None)
     for name, mod in _REAL_SHARED_MODULES.items():
-        sys.modules[name] = mod  # type: ignore[assignment]
+        current = sys.modules.get(name)
+        if current is mod:
+            continue
+        if current is None or not _is_real_shared_module(current):
+            sys.modules[name] = mod  # type: ignore[assignment]
 
 
 def _ensure_default_event_loop() -> None:
