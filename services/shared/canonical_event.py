@@ -825,6 +825,43 @@ def normalize_webhook_event(
     return canonical.prepare_for_persistence()
 
 
+def _epcis_quantity_element(epcis_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The first ``QuantityElement`` an EPCIS event carries, or ``None``.
+
+    Precedence (kept in sync with ``epcis/normalization.py``): the EPCIS 1.x
+    ``extension.quantityList`` wrapper, the EPCIS 2.0 top-level
+    ``quantityList``, then a TransformationEvent's output and input lists.
+    """
+    quantity_list = (
+        epcis_data.get("extension", {}).get("quantityList")
+        or epcis_data.get("quantityList")
+        or epcis_data.get("outputQuantityList")
+        or epcis_data.get("inputQuantityList")
+        or []
+    )
+    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
+        return quantity_list[0]
+    return None
+
+
+def _epcis_unit_of_measure(epcis_data: Dict[str, Any]) -> str:
+    """Unit for the quantity :func:`_require_epcis_quantity` returns.
+
+    EPCIS CBV defines a ``QuantityElement`` without ``uom`` as a count of
+    instances, so ``each`` is the standard's own meaning for that case, not a
+    substitute for a missing value. The flattened legacy shape
+    (``quantity.value``) has no such rule: a missing unit there raises rather
+    than being guessed.
+    """
+    element = _epcis_quantity_element(epcis_data)
+    if element is not None and element.get("quantity") is not None:
+        return str(element.get("uom") or "each")
+    flat = epcis_data.get("quantity")
+    if isinstance(flat, dict) and flat.get("uom"):
+        return str(flat["uom"])
+    raise ValueError("EPCIS event carries a quantity but no unit of measure (quantity.uom); refusing to assume one")
+
+
 def _extract_epcis_quantity(
     epcis_data: Dict[str, Any],
 ) -> tuple[Optional[float], Optional[str]]:
@@ -855,16 +892,10 @@ def _extract_epcis_quantity(
     # mirrors ``epcis/normalization.py`` exactly — that module's comment
     # already claims the two agree on every event, and this is what makes
     # that true.
-    quantity_list = (
-        epcis_data.get("extension", {}).get("quantityList")
-        or epcis_data.get("quantityList")
-        or epcis_data.get("outputQuantityList")
-        or epcis_data.get("inputQuantityList")
-        or []
-    )
-    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
-        raw = quantity_list[0].get("quantity")
-        uom = quantity_list[0].get("uom")
+    element = _epcis_quantity_element(epcis_data)
+    if element is not None:
+        raw = element.get("quantity")
+        uom = element.get("uom")
         if raw is not None:
             try:
                 return float(raw), uom
@@ -1192,6 +1223,11 @@ def normalize_epcis_event(
     # input/output lists instead) or any event naming its lot in ILMD was
     # stored as "UNKNOWN" -- a fabricated lot code on the system of record.
     tlc, gtin = _epcis_traceability_lot_code(epcis_data)
+    if len(tlc) < 3:
+        # The old code stored ``EPCIS-<tlc>`` here, which rewrote the lot
+        # identifier the partner sent. The canonical model requires three
+        # characters; a shorter one is rejected, never renamed.
+        raise ValueError(f"EPCIS lot identifier {tlc!r} is shorter than 3 characters; refusing to rewrite it")
 
     event_time = epcis_data.get("eventTime")
     if not event_time:
@@ -1233,12 +1269,12 @@ def normalize_epcis_event(
         event_timezone=epcis_data.get("eventTimeZoneOffset", "UTC"),
         product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
         lot_reference=tlc,
-        traceability_lot_code=tlc if len(tlc) >= 3 else f"EPCIS-{tlc or 'UNKNOWN'}",
+        traceability_lot_code=tlc,
         # #1249: extract from real EPCIS shape; do NOT fabricate on missing.
         # Raising here forces ingestion code to surface the problem rather
         # than silently producing a 1.0-quantity canonical row.
         quantity=_require_epcis_quantity(epcis_data),
-        unit_of_measure=_extract_epcis_quantity(epcis_data)[1] or "each",
+        unit_of_measure=_epcis_unit_of_measure(epcis_data),
         from_facility_reference=epcis_data.get("readPoint", {}).get("id")
         if isinstance(epcis_data.get("readPoint"), dict)
         else epcis_data.get("readPoint"),

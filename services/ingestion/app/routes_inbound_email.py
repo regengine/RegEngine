@@ -23,7 +23,11 @@ Two concerns, two auth mechanisms:
 
 CSV extraction reuses ``csv_templates.parse_csv_rows`` — the exact function
 the ``/ingest/csv`` upload route uses — so an emailed attachment produces
-identical ``IngestEvent``s to the same CSV uploaded directly.
+identical ``IngestEvent``s to the same CSV uploaded directly. The attachment
+is also retained the same way: ``ingest_events`` receives a
+``SourceFileReceipt`` and opens an ingestion run (file name, SHA-256, size,
+every row counted) with the verbatim bytes in ``fsma.manifest_blobs``, so an
+event from an emailed CSV points back at the exact file it came from.
 
 A malformed or unrecognized email must never crash the webhook or silently
 disappear: parsing/validation failures are recorded via
@@ -56,7 +60,7 @@ from .csv_templates import parse_csv_rows
 from .inbound_email_rejection_log import list_inbound_email_rejections, record_inbound_email_rejection
 from .shared.tenant_resolution import resolve_principal_tenant_id
 from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES
-from .webhook_compat import ingest_events
+from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import WebhookPayload
 
 logger = logging.getLogger("inbound-email-webhook")
@@ -398,8 +402,20 @@ async def receive_inbound_email(
     # condition (e.g. DB unavailable) clears, rather than swallowing them
     # into the quarantine log where they would silently look identical to a
     # permanently-unparseable email.
+    # Receipt: the attachment is retained verbatim as an ingestion run, the same
+    # retention /ingest/csv gives a direct upload. ``initiated_by`` is the same
+    # label the email_ingest path uses for its principal, not the sender address,
+    # which stays on the inbound-email audit row rather than fsma.ingestion_runs.
+    receipt = SourceFileReceipt(
+        filename=str(csv_attachment.get("Name") or "attachment.csv"),
+        raw_bytes=raw_content,
+        content_type=str(csv_attachment.get("ContentType") or "") or None,
+        initiated_by="email-ingest",
+        record_count=len(events) + len(parse_errors),
+        parse_errors=list(parse_errors),
+    )
     with tenant_scope(tenant_id):
-        result = await ingest_events(payload_obj, principal_tenant_id=tenant_id)
+        result = await ingest_events(payload_obj, principal_tenant_id=tenant_id, source_file=receipt)
 
     if parse_errors:
         logger.warning(
@@ -419,6 +435,7 @@ async def receive_inbound_email(
     return {
         "status": "accepted",
         "tenant_id": tenant_id,
+        "ingestion_run_id": result.ingestion_run_id,
         "accepted": result.accepted,
         "rejected": result.rejected,
         "parse_errors": parse_errors[:20],
