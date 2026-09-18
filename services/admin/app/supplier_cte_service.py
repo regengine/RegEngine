@@ -124,6 +124,34 @@ def _bridge_to_canonical(
 
         facility_gln = getattr(facility, "gln", None) or str(facility.id)
 
+        # Quantity and unit come from the supplier's KDEs or not at all. The
+        # bridge used to substitute ``1.0`` and ``"each"``, which put a
+        # quantity the supplier never reported into the canonical store and
+        # every FDA export built from it.
+        raw_quantity = kde_data.get("quantity")
+        quantity: float | None
+        try:
+            quantity = float(raw_quantity) if raw_quantity not in (None, "") else None
+        except (TypeError, ValueError):
+            quantity = None
+        unit_of_measure = kde_data.get("unit_of_measure")
+        unit_of_measure = str(unit_of_measure).strip() if unit_of_measure is not None else ""
+        missing = [
+            name
+            for name, present in (("quantity", quantity is not None), ("unit_of_measure", bool(unit_of_measure)))
+            if not present
+        ]
+        if missing:
+            _logger.warning(
+                "supplier_canonical_bridge_skipped",
+                extra={
+                    "supplier_event_id": str(event.id),
+                    "tenant_id": str(tenant_id),
+                    "reason": "missing " + ", ".join(missing),
+                },
+            )
+            return
+
         canonical_event = TraceabilityEvent(
             tenant_id=tenant_id,
             source_system=IngestionSource.SUPPLIER_PORTAL,
@@ -133,8 +161,8 @@ def _bridge_to_canonical(
             traceability_lot_code=tlc_code,
             product_reference=kde_data.get("product_description", ""),
             lot_reference=tlc_code,
-            quantity=float(kde_data.get("quantity", 1.0)),
-            unit_of_measure=str(kde_data.get("unit_of_measure", "each")),
+            quantity=quantity,
+            unit_of_measure=unit_of_measure,
             from_facility_reference=facility_gln,
             kdes=kde_data,
             raw_payload={
