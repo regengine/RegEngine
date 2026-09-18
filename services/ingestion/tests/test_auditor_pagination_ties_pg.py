@@ -10,12 +10,13 @@ set that reports itself complete.
 
 Ties are the normal case here, not a corner:
 
-* ``csv_templates._parse_date_flexible`` (:449) stamps every empty or
+* ``csv_templates._parse_date_flexible`` used to stamp every empty or
   unparseable date with the epoch sentinel ``1970-01-01T00:00:00Z`` so the
-  row can still be ingested and flagged. One malformed import collapses
-  every bad row onto one identical timestamp — and under ``DESC`` those
-  sort onto the *final* pages, exactly where someone reading to the end
-  arrives.
+  row could still be ingested and flagged (it now rejects the row). Rows
+  ingested before that change still carry the sentinel: one malformed
+  import collapsed every bad row onto one identical timestamp — and under
+  ``DESC`` those sort onto the *final* pages, exactly where someone reading
+  to the end arrives.
 * ``supplier_portal`` (:539) stamps ``{ship_date}T00:00:00Z``: every
   submission sharing a ship date ties.
 * ``sensitech_parser`` (:160) normalises date-only values to midnight.

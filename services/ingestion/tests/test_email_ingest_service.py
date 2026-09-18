@@ -502,8 +502,8 @@ class TestIngestAttachmentCsv:
         monkeypatch.setattr(csv_templates_mod, "ingest_events", fake_ingest_events)
 
         csv_bytes = (
-            b"cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name\n"
-            b"harvesting,LOT-001,Kale,10,lbs,Farm A\n"
+            b"cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,harvest_date\n"
+            b"harvesting,LOT-001,Kale,10,lbs,Farm A,2026-04-17\n"
         )
         result = await _ingest_attachment_csv("11111111-1111-1111-1111-111111111111", "data.csv", csv_bytes)
         assert result.status == "accepted"

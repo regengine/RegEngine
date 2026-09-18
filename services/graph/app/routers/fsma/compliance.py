@@ -36,7 +36,15 @@ from shared.fsma_plan_builder import (
 from shared.middleware import get_current_tenant_id
 from shared.rate_limit import limiter
 
-from ...exporters import TRACE_CSV_HEADER, build_trace_csv_rows, csv_safe, header_filename, xml_escape
+from ...exporters import (
+    RECALL_CONTACTS_HEADER,
+    TRACE_CSV_HEADER,
+    build_recall_contacts_rows,
+    build_trace_csv_rows,
+    csv_safe,
+    header_filename,
+    xml_escape,
+)
 from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
 
@@ -511,16 +519,13 @@ async def export_recall_contacts(
     """
     Generate Recall Contact List CSV for FDA notification.
 
-    Lists all downstream facilities that received the lot, suitable for
-    direct notification during a recall event.
-
-    Columns:
-    - Facility Name
-    - GLN
-    - Address
-    - Facility Type
-    - Date Received
-    - Quantity Received
+    Lists all downstream facilities that took custody of the lot, suitable
+    for direct notification during a recall event. One row per receiving
+    event the graph records (facility, lot, date received, quantity and
+    unit); a facility reached without a receiving event on record is listed
+    with those cells blank. Contact Status is blank on every row: the
+    system records no notification outcomes, so the column is the recall
+    coordinator's to fill in. See ``exporters.recall_contacts_csv``.
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
 
@@ -535,32 +540,10 @@ async def export_recall_contacts(
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
-
-        writer.writerow(
-            [
-                "Facility Name",
-                "Global Location Number (GLN)",
-                "Address",
-                "Facility Type",
-                "Date Received",
-                "Quantity Received",
-                "Contact Status",
-            ]
-        )
-
-        for facility in result.facilities:
-            # RE-SEC-002: csv_safe() on tenant-stored cells.
-            writer.writerow(
-                [
-                    csv_safe(facility.get("name", "")),
-                    csv_safe(facility.get("gln", "")),
-                    csv_safe(facility.get("address", "")),
-                    csv_safe(facility.get("facility_type", "")),
-                    "",  # Date received (from event)
-                    "",  # Quantity received
-                    "PENDING",  # Contact status placeholder
-                ]
-            )
+        writer.writerow(RECALL_CONTACTS_HEADER)
+        # RE-SEC-002: every cell is csv_safe()-wrapped inside the builder.
+        data_rows = build_recall_contacts_rows(result)
+        writer.writerows(data_rows)
 
         csv_content = csv_buffer.getvalue()
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -570,6 +553,7 @@ async def export_recall_contacts(
             "recall_contacts_export",
             tlc=tlc,
             facility_count=len(result.facilities),
+            rows=len(data_rows),
         )
 
         return StreamingResponse(

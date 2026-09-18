@@ -17,7 +17,6 @@ from app import csv_templates as ct
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.csv_templates import (
     _CTE_TYPE_ALIASES,
-    _SENTINEL_TS,
     CTE_COLUMNS,
     _check_lot_code_integrity,
     _detect_row_cte_type,
@@ -200,10 +199,12 @@ class TestInjectRequiredKdes:
         _inject_required_kdes(kdes, "shipping", {"destination": "Metro"}, "Farm A", "2026-04-17")
         assert kdes["ship_to_location"] == "Metro"
 
-    def test_shipping_default_ship_to_when_missing(self):
+    def test_shipping_missing_ship_to_is_left_absent(self):
+        # No "See receiver" placeholder: a ship-to the uploader did not record
+        # stays missing so the completeness check and the ship-to rule see it.
         kdes: dict = {}
         _inject_required_kdes(kdes, "shipping", {}, "Farm A", "2026-04-17")
-        assert kdes["ship_to_location"] == "See receiver"
+        assert "ship_to_location" not in kdes
 
     def test_receiving_populates_receiving_location(self):
         kdes: dict = {}
@@ -361,14 +362,14 @@ class TestNormalizeLocation:
 
 
 class TestParseDateFlexible:
-    def test_empty_returns_sentinel_with_warning(self):
+    def test_empty_returns_no_timestamp_with_warning(self):
         ts, warn = _parse_date_flexible("")
-        assert ts == _SENTINEL_TS
+        assert ts is None
         assert warn is not None
 
-    def test_whitespace_returns_sentinel(self):
+    def test_whitespace_returns_no_timestamp(self):
         ts, warn = _parse_date_flexible("   ")
-        assert ts == _SENTINEL_TS
+        assert ts is None
         assert warn is not None
 
     def test_iso_with_z(self):
@@ -408,17 +409,17 @@ class TestParseDateFlexible:
         assert warn is None
         assert "2026-04-17" in ts
 
-    def test_unparseable_returns_sentinel(self):
+    def test_unparseable_returns_no_timestamp(self):
         ts, warn = _parse_date_flexible("totally bogus gibberish xyzzy")
         # dateutil's fuzzy parser may succeed on some inputs; if so, not an error.
         # Test with a clearly-unparseable string containing no date hints
         ts, warn = _parse_date_flexible("")
-        assert ts == _SENTINEL_TS
+        assert ts is None
 
-    def test_very_long_string_parsed_or_sentinel(self):
-        # Just confirm it doesn't crash on weird input
+    def test_invalid_calendar_date_is_not_a_timestamp(self):
+        # Never the old 1970-01-01 placeholder: an unreadable date yields nothing.
         ts, warn = _parse_date_flexible("2026-99-99")
-        assert ts == _SENTINEL_TS
+        assert ts is None
         assert "INVALID_FORMAT" in warn
 
 
@@ -695,11 +696,14 @@ class TestIngestCsv:
         )
         assert resp.status_code == 200
 
-    def test_unparseable_date_flagged(self):
+    def test_unparseable_date_rejects_the_row(self):
+        # An unreadable date used to ingest with a 1970-01-01 placeholder and a
+        # warning. The row is now rejected with the reason; nothing is stamped.
         csv_text = (
             "traceability_lot_code,product_description,quantity,unit_of_measure,"
             "harvest_date,location_name,reference_document\n"
             "TLC1,Kale,10,lbs,not-a-date,Farm A,REF\n"
+            "TLC2,Kale,10,lbs,2026-04-17,Farm A,REF\n"
         )
         client = TestClient(_build_app())
         resp = client.post(
@@ -709,7 +713,11 @@ class TestIngestCsv:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert "kde_warnings" in body
+        assert body["accepted"] == 1
+        assert body["rejected"] == 1
+        rejected = [e for e in body["events"] if e["status"] == "rejected"]
+        assert len(rejected) == 1
+        assert any("not-a-date" in err for err in rejected[0]["errors"])
 
     def test_max_rows_limit_enforced(self):
         # Build 502 rows (MAX_CSV_ROWS = 500)
@@ -1072,3 +1080,58 @@ class TestRouterSurface:
         }
         for c in canonical:
             assert any(v == c for v in _CTE_TYPE_ALIASES.values()), c
+
+
+# ---------------------------------------------------------------------------
+# parse_csv_rows — no silent defaults for required KDEs
+# ---------------------------------------------------------------------------
+
+
+class TestParseCsvRowsRequiredFields:
+    """A missing timestamp, unit or quantity rejects the row with the reason.
+
+    Earlier versions stamped ``1970-01-01T00:00:00Z``, ``"units"`` and ``0``
+    in their place; every one of those would have entered the hash chain as
+    evidence the uploader never supplied.
+    """
+
+    _HEADER = "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name\n"
+
+    def _parse(self, row: str):
+        from app.csv_templates import parse_csv_rows
+
+        return parse_csv_rows(self._HEADER + row + "\n", fallback_cte="harvesting")
+
+    def test_missing_date_rejects_row(self):
+        events, errors, _ = self._parse("TLC1,Kale,10,lbs,,Farm A")
+        assert events == []
+        assert errors == ["Row 2: date field was empty"]
+
+    def test_unparseable_date_rejects_row(self):
+        events, errors, _ = self._parse("TLC1,Kale,10,lbs,2026-99-99,Farm A")
+        assert events == []
+        assert len(errors) == 1
+        assert "could not parse date '2026-99-99'" in errors[0]
+
+    def test_missing_unit_rejects_row(self):
+        events, errors, _ = self._parse("TLC1,Kale,10,,2026-04-17,Farm A")
+        assert events == []
+        assert errors == ["Row 2: unit_of_measure is required"]
+
+    def test_missing_quantity_rejects_row(self):
+        events, errors, _ = self._parse("TLC1,Kale,,lbs,2026-04-17,Farm A")
+        assert events == []
+        assert errors == ["Row 2: quantity is required"]
+
+    def test_non_numeric_quantity_rejects_row(self):
+        events, errors, _ = self._parse("TLC1,Kale,ten,lbs,2026-04-17,Farm A")
+        assert events == []
+        assert errors == ["Row 2: quantity 'ten' is not a number"]
+
+    def test_complete_row_still_ingests(self):
+        events, errors, _ = self._parse("TLC1,Kale,10,lbs,2026-04-17,Farm A")
+        assert errors == []
+        assert len(events) == 1
+        assert events[0].quantity == 10.0
+        assert events[0].unit_of_measure == "lbs"
+        assert events[0].timestamp.startswith("2026-04-17")
