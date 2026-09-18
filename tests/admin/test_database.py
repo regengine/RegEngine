@@ -222,25 +222,23 @@ class TestGetTenantSession:
             except StopIteration:
                 pass
 
-    def test_skips_set_when_tenant_id_null(self):
-        """Verify SET is not called when tenant_id is empty."""
+    @pytest.mark.parametrize("empty_tenant", ["", None])
+    def test_raises_when_tenant_id_empty(self, empty_tenant):
+        """Falsy tenant_id must fail loudly (#2696).
+
+        Silently yielding a session with no ``app.tenant_id`` GUC would rely
+        solely on the RLS fail-closed predicate and hide the caller's bug —
+        the old contract (skip the SET) was removed by the #2696 hardening.
+        """
         from services.admin.app.database import get_tenant_session
 
-        with patch("services.admin.app.database.SessionLocal") as mock_session_class:
-            mock_session = MagicMock()
-            mock_session_class.return_value = mock_session
-
-            gen = get_tenant_session("")
-            session = next(gen)
-
-            # Should not have executed SET when tenant_id is empty
-            # (falsy check in the code)
-            mock_session.execute.assert_not_called()
-
-            try:
-                next(gen)
-            except StopIteration:
-                pass
+        with (
+            patch("services.admin.app.database.SessionLocal") as mock_session_class,
+            pytest.raises(ValueError, match="non-empty tenant_id"),
+        ):
+            mock_session_class.return_value = MagicMock()
+            gen = get_tenant_session(empty_tenant)
+            next(gen)
 
     def test_closes_session_after_use(self):
         """Verify tenant session is closed."""
