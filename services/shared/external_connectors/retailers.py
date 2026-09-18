@@ -80,6 +80,26 @@ class WalmartGDSNConnector(IntegrationConnector):
             logger.debug("walmart_skip_non_shipping cte_type=%s", event.cte_type)
             return True  # only shipping events relevant to Walmart
 
+        # An ASN line needs the shipped quantity and its unit. The source
+        # connectors no longer substitute ``1.0`` / ``"units"`` for a missing
+        # one, so an event without them is refused here rather than sent to
+        # the retailer with a blank or invented line.
+        missing = [
+            name
+            for name, present in (
+                ("quantity", event.quantity is not None),
+                ("unit_of_measure", bool(event.unit_of_measure)),
+            )
+            if not present
+        ]
+        if missing:
+            logger.warning(
+                "walmart_push_refused_missing_kde tlc=%s missing=%s",
+                event.traceability_lot_code,
+                ",".join(missing),
+            )
+            return False
+
         # Build Walmart ASN payload
         asn_payload = {
             "shipmentHeader": {

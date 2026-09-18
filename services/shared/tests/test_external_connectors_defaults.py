@@ -112,3 +112,47 @@ class TestSafetyCulture:
         event = c.normalize_event({"audit_id": "a1", "template_id": "t", "audit_data": {"name": "Receiving"}})
         assert event.quantity == 18.0
         assert event.unit_of_measure == "cases"
+
+
+class TestWalmartPush:
+    """The Walmart ASN push read ``event.unit_of_measure.upper()`` with no
+    guard; with the connector defaults gone, a shipping event without a unit
+    or quantity is refused (``False``, logged) instead of raising or sending
+    a blank line."""
+
+    def _event(self, **overrides) -> NormalizedCTEEvent:
+        base = dict(
+            cte_type="shipping",
+            traceability_lot_code="LOT-1",
+            product_description="Kale",
+            quantity=40.0,
+            unit_of_measure="cases",
+            timestamp="2026-04-17T00:00:00Z",
+            source_event_id="ship-1",
+        )
+        base.update(overrides)
+        return NormalizedCTEEvent(**base)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "overrides,missing",
+        [({"unit_of_measure": None}, "unit_of_measure"), ({"quantity": None}, "quantity")],
+    )
+    async def test_missing_quantity_or_unit_is_refused(self, caplog, overrides, missing):
+        from services.shared.external_connectors.retailers import WalmartGDSNConnector
+
+        connector = WalmartGDSNConnector(_config())
+        with caplog.at_level("WARNING", logger="connector-retailers"):
+            pushed = await connector.push_event(self._event(**overrides))
+        assert pushed is False
+        assert any("walmart_push_refused_missing_kde" in r.message and missing in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_complete_shipping_event_is_prepared(self, caplog):
+        from services.shared.external_connectors.retailers import WalmartGDSNConnector
+
+        connector = WalmartGDSNConnector(_config())
+        with caplog.at_level("INFO", logger="connector-retailers"):
+            pushed = await connector.push_event(self._event())
+        assert pushed is True
+        assert any("walmart_asn_prepared" in r.message and "ship-1" in r.message for r in caplog.records)
