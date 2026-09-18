@@ -182,6 +182,27 @@ class TestEvaluateFieldPresence:
         result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "pass"
 
+    def test_empty_list_fails(self):
+        # ``kdes.input_lot_codes == []`` names no lots; the link writer treats
+        # it as no links, so the presence rule must not pass it.
+        rule = _make_rule(evaluation_logic={"type": "field_presence", "field": "kdes.input_lot_codes"})
+        event = _make_event(kdes={"input_lot_codes": []})
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
+        assert result.result == "fail"
+        assert result.evidence_fields_inspected[0]["actual_present"] is False
+
+    def test_empty_dict_fails(self):
+        rule = _make_rule(evaluation_logic={"type": "field_presence", "field": "kdes.inputs"})
+        event = _make_event(kdes={"inputs": {}})
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
+        assert result.result == "fail"
+
+    def test_non_empty_list_passes(self):
+        rule = _make_rule(evaluation_logic={"type": "field_presence", "field": "kdes.input_lot_codes"})
+        event = _make_event(kdes={"input_lot_codes": ["LOT-1"]})
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
+        assert result.result == "pass"
+
     def test_evidence_fields_populated(self):
         rule = _make_rule()
         event = _make_event()
@@ -332,6 +353,35 @@ class TestEvaluateMultiFieldPresence:
         assert len(result.evidence_fields_inspected) == 2
         assert result.evidence_fields_inspected[0]["present"] is True
         assert result.evidence_fields_inspected[1]["present"] is False
+
+    @pytest.mark.parametrize("require", ["any", "all"])
+    def test_empty_list_is_missing(self, require):
+        # A CSV transformation with an empty ``input_lot_codes`` list used to
+        # pass "Input TLCs Required" while the link writer wrote no links.
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "multi_field_presence",
+                "field": "kdes.input_lot_codes",
+                "params": {"fields": ["kdes.input_lot_codes", "kdes.inputs"], "require": require},
+            },
+        )
+        event = _make_event(kdes={"input_lot_codes": []})
+        result = _evaluate_multi_field_presence(event, rule.evaluation_logic, rule)
+        assert result.result == "fail"
+        assert result.evidence_fields_inspected[0]["present"] is False
+        assert "input lot codes" in result.why_failed
+
+    def test_empty_field_list_fails_in_require_all_mode(self):
+        # ``all([])`` is True; a rule naming no fields must not pass.
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "multi_field_presence",
+                "field": "kdes",
+                "params": {"fields": [], "require": "all"},
+            },
+        )
+        result = _evaluate_multi_field_presence(_make_event(), rule.evaluation_logic, rule)
+        assert result.result == "fail"
 
 
 # ---------------------------------------------------------------------------

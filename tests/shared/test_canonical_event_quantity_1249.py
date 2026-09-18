@@ -291,3 +291,40 @@ def test_normalize_prefers_real_shape_over_flat():
     canonical = normalize_epcis_event(event, TENANT_ID)
     assert canonical.quantity == 100.0
     assert canonical.unit_of_measure == "CS"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Unit of measure — count semantics vs. a missing unit
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_quantity_list_element_without_uom_is_a_count_in_each():
+    """EPCIS CBV: a QuantityElement with no ``uom`` is a count of instances.
+    ``each`` is the standard's own meaning for that element, not a stand-in."""
+    event = dict(_REAL_EPCIS_SHIPPING_EVENT)
+    event["quantityList"] = [{"epcClass": "urn:epc:idpat:sgtin:0614141.107346.*", "quantity": 200}]
+
+    canonical = normalize_epcis_event(event, TENANT_ID)
+    assert canonical.quantity == 200.0
+    assert canonical.unit_of_measure == "each"
+
+
+def test_flat_shape_without_uom_raises_instead_of_assuming_each():
+    """The flattened legacy ``quantity.value`` shape has no count semantics.
+    A missing ``uom`` there used to become ``each``; it is now rejected."""
+    event = dict(_REAL_EPCIS_SHIPPING_EVENT)
+    event["quantity"] = {"value": 12}
+
+    with pytest.raises(ValueError, match="no unit of measure"):
+        normalize_epcis_event(event, TENANT_ID)
+
+
+def test_short_epcis_lot_identifier_is_rejected_not_renamed():
+    """A lot identifier under three characters used to be stored as
+    ``EPCIS-<id>``, rewriting the partner's identifier. It is rejected."""
+    event = dict(_REAL_EPCIS_SHIPPING_EVENT)
+    event["ilmd"] = {"fsma:traceabilityLotCode": "A7"}
+    event["quantity"] = {"value": 1, "uom": "CS"}
+
+    with pytest.raises(ValueError, match="shorter than 3 characters"):
+        normalize_epcis_event(event, TENANT_ID)
