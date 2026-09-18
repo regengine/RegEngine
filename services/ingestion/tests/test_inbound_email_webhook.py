@@ -207,6 +207,57 @@ class TestCsvParity:
         # email path runs through the identical validation, not a laxer copy.
         assert direct_warnings == ["Row 2: Missing KDEs for shipping: reference_document, tlc_source_reference"]
 
+    def test_email_attachment_is_retained_as_an_ingestion_run_like_a_direct_upload(self, monkeypatch):
+        """The attachment must reach ingest_events with the same SourceFileReceipt
+        /ingest/csv builds for a direct upload (#3122): verbatim bytes, SHA-256,
+        name, content type, and a record count that covers rows the parser
+        rejected, so the run receipt accounts for every row of the file."""
+        import hashlib
+
+        csv_with_one_bad_row = (
+            VALID_CSV + "shipping,,Organic Kale,500,lbs,Sunrise Farm,0614141000012,08:00:00,2026-04-01\n"
+        )
+        direct_events, direct_errors, _ = parse_csv_rows(csv_with_one_bad_row, fallback_cte=None)
+        assert len(direct_events) == 1 and len(direct_errors) == 1  # the blank lot code is a parser rejection
+
+        monkeypatch.setattr(m, "_db_get_tenant_by_inbound_address", lambda addr: "tenant-acme")
+        captured: dict = {}
+
+        async def _fake_ingest(payload, **kwargs):
+            captured["kwargs"] = kwargs
+            response = _make_ingest_response(accepted=len(payload.events))
+            response.ingestion_run_id = "run-email-1"
+            return response
+
+        monkeypatch.setattr(m, "ingest_events", _fake_ingest)
+
+        raw = csv_with_one_bad_row.encode("utf-8")
+        client = TestClient(_build_app())
+        resp = client.post(
+            "/api/v1/webhooks/inbound-email",
+            json=_postmark_payload(
+                attachments=[{"Name": "week-14.csv", "Content": _b64(csv_with_one_bad_row), "ContentType": "text/csv"}]
+            ),
+            headers=_basic_auth_header(),
+        )
+        assert resp.status_code == 200, resp.text
+
+        receipt = captured["kwargs"]["source_file"]
+        assert receipt.filename == "week-14.csv"
+        assert receipt.raw_bytes == raw
+        assert receipt.sha256 == hashlib.sha256(raw).hexdigest()
+        assert receipt.content_type == "text/csv"
+        # The run is attributed to the email-ingest identity, never to the
+        # sender address: that stays on the inbound-email audit row.
+        assert receipt.initiated_by == "email-ingest"
+        assert "shipper@example.com" not in (receipt.initiated_by or "")
+        assert receipt.record_count == 2 and receipt.parse_errors == direct_errors
+
+        body = resp.json()
+        assert body["status"] == "accepted"
+        assert body["ingestion_run_id"] == "run-email-1"
+        assert body["accepted"] == 1
+
 
 # ---------------------------------------------------------------------------
 # Tenant resolution
