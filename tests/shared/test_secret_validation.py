@@ -28,6 +28,10 @@ def base_env(**overrides):
         "SCHEDULER_API_KEY": "scheduler-key-with-enough-entropy",  # pragma: allowlist secret
         "OBJECT_STORAGE_ACCESS_KEY_ID": "prod-access-key",  # pragma: allowlist secret
         "OBJECT_STORAGE_SECRET_ACCESS_KEY": "prod-secret-key-with-enough-entropy",  # pragma: allowlist secret
+        "TOOL_ACCESS_SECRET": "tool-access-secret-with-enough-entropy",  # pragma: allowlist secret
+        "AUTH_OTP_HMAC_SECRET": "auth-otp-hmac-secret-with-enough-entropy",  # pragma: allowlist secret
+        "RESEND_API_KEY": "resend-api-key-with-enough-entropy",  # pragma: allowlist secret
+        "STRIPE_WEBHOOK_SECRET": "stripe-webhook-secret-with-enough-entropy",  # pragma: allowlist secret
     }
     env.update(overrides)
     return env
