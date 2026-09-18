@@ -2260,7 +2260,7 @@
    "status": "open",
    "owner": "gate",
    "evidence": ".git checkout leaks real commit hash; expects None",
-   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+   "baseline_msg": "AssertionError: assert '60751572...' is None"
   },
   {
    "nodeid": "services/shared/tests/test_build_info.py::test_non_sha_env_value_is_discarded_rather_than_reported",
@@ -2270,7 +2270,7 @@
    "status": "open",
    "owner": "gate",
    "evidence": ".git checkout leaks real commit hash; expects None",
-   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+   "baseline_msg": "AssertionError: assert '60751572...' is None"
   },
   {
    "nodeid": "services/shared/tests/test_build_info.py::test_missing_identity_is_null_everywhere_and_never_raises",
@@ -2280,7 +2280,7 @@
    "status": "open",
    "owner": "gate",
    "evidence": ".git checkout leaks real commit hash; expects None",
-   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+   "baseline_msg": "AssertionError: assert '60751572...' is None"
   },
   {
    "nodeid": "services/shared/tests/test_build_info.py::test_unreadable_stamp_file_degrades_to_absent",
@@ -2290,7 +2290,7 @@
    "status": "open",
    "owner": "gate",
    "evidence": ".git checkout leaks real commit hash; expects None",
-   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+   "baseline_msg": "AssertionError: assert '60751572...' is None"
   },
   {
    "nodeid": "services/shared/tests/test_change_scopes.py::test_change_scopes_emits_audit_event_with_diff",
