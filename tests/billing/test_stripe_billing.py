@@ -279,6 +279,19 @@ class TestCheckoutCreation:
 class TestWebhookSignatureVerification:
     """Tests for webhook signature verification in _process_stripe_webhook."""
 
+    @pytest.fixture(autouse=True)
+    def _stub_ip_rate_limit(self, monkeypatch):
+        """#2929 failure branches charge unverified traffic to an IP budget.
+
+        The rate-limit check resolves the client IP from the request, which is
+        an AsyncMock here; stub the check so these tests exercise signature
+        handling only.
+        """
+        monkeypatch.setattr(
+            "services.ingestion.app.stripe_billing.rate_limiting._check_stripe_webhook_rate_limit",
+            lambda request: None,
+        )
+
     @pytest.mark.asyncio
     @patch.dict(
         "os.environ",
