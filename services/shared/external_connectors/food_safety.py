@@ -18,6 +18,7 @@ from .base import (
     ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
+    _optional_float,
 )
 
 logger = logging.getLogger("connector-food-safety")
@@ -119,8 +120,8 @@ class FoodReadyConnector(IntegrationConnector):
             cte_type=cte_type,
             traceability_lot_code=raw_event.get("lot_code", f"FR-{raw_event.get('id', '')}"),
             product_description=raw_event.get("product", "FoodReady Record"),
-            quantity=float(raw_event.get("quantity", 1)),
-            unit_of_measure=raw_event.get("unit", "units"),
+            quantity=_optional_float(raw_event.get("quantity")),
+            unit_of_measure=raw_event.get("unit") or None,
             timestamp=raw_event.get("created_at", datetime.now(timezone.utc).isoformat()),
             location_name=raw_event.get("location"),
             kdes=kdes,
@@ -224,8 +225,8 @@ class FoodDocsConnector(IntegrationConnector):
             cte_type=cte_map.get(task_type, "receiving"),
             traceability_lot_code=raw_event.get("lot_code", f"FD-{raw_event.get('id', '')}"),
             product_description=raw_event.get("product_name", "FoodDocs Record"),
-            quantity=float(raw_event.get("quantity", 1)),
-            unit_of_measure=raw_event.get("unit", "units"),
+            quantity=_optional_float(raw_event.get("quantity")),
+            unit_of_measure=raw_event.get("unit") or None,
             timestamp=raw_event.get("completed_at", datetime.now(timezone.utc).isoformat()),
             location_name=raw_event.get("location"),
             kdes=kdes,
