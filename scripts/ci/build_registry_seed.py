@@ -10,8 +10,17 @@ emitted with class "unclassified" so the gate surfaces it rather than hiding it.
 Output: artifacts/classification_registry.seed.json
 """
 import json
+import re
 import sys
 from pathlib import Path
+
+_LONG_HEX = re.compile(r"[0-9a-fA-F]{32,64}")
+
+
+def _short_hex(s: str) -> str:
+    """Shorten long hex runs (git SHAs, content hashes) copied verbatim from
+    assertion messages — keeps the seed clear of secrets-scanner findings."""
+    return _LONG_HEX.sub(lambda m: m.group(0)[:8] + "...", s)
 
 VECTOR_WS = Path("/Users/sellers/.openclaw-agents/vector/workspace")
 GATE_WS = Path("/Users/sellers/.openclaw-agents/gate/workspace")
@@ -108,7 +117,7 @@ def main():
             entries.append({
                 "nodeid": it["nodeid"], "file": file, "class": cls, "rc_id": rc,
                 "status": status, "owner": owner, "evidence": evidence,
-                "baseline_msg": it.get("msg", "")[:200],
+                "baseline_msg": _short_hex(it.get("msg", ""))[:200],
             })
     out = GATE_WS / "artifacts/classification_registry.seed.json"
     out.write_text(json.dumps({"baseline": "5dca9b8a", "source": "vector residual_digest.json",

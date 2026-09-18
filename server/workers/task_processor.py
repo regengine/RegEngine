@@ -29,7 +29,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 import structlog
@@ -79,10 +79,28 @@ TASK_TIMEOUTS_SECONDS: Dict[str, int] = {
 # Fallback for task types not present in TASK_TIMEOUTS_SECONDS.
 DEFAULT_TIMEOUT_SECONDS = 120
 
-# How often the heartbeat thread should extend a running task's lock (#1172).
-# Chosen so that even if the heartbeat is slightly late, the next tick
-# still lands comfortably inside the visibility window.
+# Legacy join/fallback horizon for ``stop_task_worker``: how long a shutdown
+# waits for the in-flight handler before releasing the row's lock (#1225).
+# The per-claim heartbeat cadence itself is derived per task via
+# ``_heartbeat_interval_for`` (#2918) — a 60s heartbeat inside a 30s
+# visibility window would guarantee a mid-run steal.
 HEARTBEAT_INTERVAL_SECONDS = 60
+
+
+def _heartbeat_interval_for(timeout_seconds: int) -> int:
+    """Derive the heartbeat cadence from the task's own visibility window (#2918).
+
+    The lock must be refreshed strictly more than twice per window, so the
+    interval is a quarter of the timeout (``0 < interval < timeout / 2``).
+    A non-positive timeout is a configuration error and fails loudly rather
+    than silently producing an unsafe cadence (#2918 proposed fix 3).
+    """
+    timeout = int(timeout_seconds)
+    if timeout <= 0:
+        raise ValueError(
+            f"visibility timeout must be a positive number of seconds, got {timeout_seconds!r}"
+        )
+    return max(1, timeout // 4)
 
 # How long ``stop_task_worker`` waits for the in-flight handler to return
 # before emitting an "abandoned" log and releasing the row's lock so another
@@ -439,16 +457,15 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
         raised ``NameError`` under the outer try/except and no task
         was ever claimed in production.
       * ``row[5]`` read a sixth column that RETURNING never projected.
-        Added ``visibility_timeout_seconds`` to RETURNING with a
-        COALESCE default so ``row[5]`` is always a non-null int.
+        RETURNING now projects ``visibility_timeout_seconds`` raw (no
+        COALESCE) so the in-memory per-type fallback stays reachable.
+
+    #2918: the persisted ``locked_until`` deadline is computed inside
+    the claim statement itself from the row's own visibility timeout —
+    see :func:`_execute_claim`.
     """
     now = datetime.now(timezone.utc)
     default_timeout_seconds = DEFAULT_TIMEOUT_SECONDS
-    # `lock_until` is the visibility deadline for this claim — after
-    # this instant another worker may steal the row if we haven't
-    # completed or heartbeated. Kept in minutes for ops ergonomics
-    # (LOCK_TIMEOUT_MINUTES env).
-    lock_until = now + timedelta(minutes=LOCK_TIMEOUT_MINUTES)
 
     # Only claim tasks whose task_type has a registered handler.  This
     # prevents us from fighting with recall_drill rows (which are owned
@@ -458,7 +475,7 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     # Cross-tenant queue mechanics run on the canonical admin session.  RLS
     # requires the exact regengine_sysadmin role; no caller-controlled GUC is
     # an authorization input.
-    row = _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds)
+    row = _execute_claim(db, handler_types, now, default_timeout_seconds)
 
     if row:
         task_type = row[1]
@@ -479,8 +496,19 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
-    """Run the claim UPDATE...SKIP LOCKED and commit when a row was won."""
+def _execute_claim(db, handler_types, now, default_timeout_seconds):
+    """Run the claim UPDATE...SKIP LOCKED and commit when a row was won.
+
+    #2918: ``locked_until`` is resolved inside the claim statement as
+    ``NOW() + make_interval(secs => COALESCE(row override,
+    TASK_TIMEOUTS_SECONDS map, DEFAULT_TIMEOUT_SECONDS))``. Computing the
+    deadline in Python before the task type is known pinned every task to
+    the 15-minute global constant; binding the per-type map into the SQL
+    makes the persisted deadline the same number the heartbeat extends
+    against. RETURNING projects the raw ``visibility_timeout_seconds``
+    (no COALESCE) so the in-memory ``row[5] or TASK_TIMEOUTS_SECONDS…``
+    fallback stays reachable.
+    """
     from sqlalchemy import text
 
     from services.admin.app.database import arm_global_admin_context
@@ -492,7 +520,20 @@ def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
             SET status = 'processing',
                 started_at = :now,
                 locked_by = :worker,
-                locked_until = :lock_until,
+                locked_until = NOW() + make_interval(
+                    secs => COALESCE(
+                        visibility_timeout_seconds,
+                        (
+                            SELECT m.secs
+                            FROM unnest(
+                                CAST(:timeout_types AS text[]),
+                                CAST(:timeout_secs AS int[])
+                            ) AS m(task_type, secs)
+                            WHERE m.task_type = fsma.task_queue.task_type
+                        ),
+                        :default_timeout
+                    )
+                ),
                 attempts = attempts + 1
             WHERE id = (
                 SELECT id FROM fsma.task_queue
@@ -506,14 +547,15 @@ def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
                 FOR UPDATE SKIP LOCKED
             )
             RETURNING id, task_type, payload, attempts, max_attempts,
-                      COALESCE(visibility_timeout_seconds, :default_timeout),
+                      visibility_timeout_seconds,
                       tenant_id
         """),
         {
             "now": now,
             "worker": WORKER_ID,
-            "lock_until": lock_until,
             "handler_types": handler_types,
+            "timeout_types": list(TASK_TIMEOUTS_SECONDS.keys()),
+            "timeout_secs": list(TASK_TIMEOUTS_SECONDS.values()),
             "default_timeout": default_timeout_seconds,
         },
     ).fetchone()
@@ -587,8 +629,9 @@ def _run_handler_with_heartbeat(
 ) -> None:
     """Execute ``handler`` while a background thread extends the task lock.
 
-    The heartbeat thread runs every :data:`HEARTBEAT_INTERVAL_SECONDS` and
-    bumps ``locked_until`` by ``timeout_seconds``. If the heartbeat UPDATE
+    The heartbeat thread wakes on a cadence derived from the task's own
+    visibility window (:func:`_heartbeat_interval_for`, #2918) and bumps
+    ``locked_until`` by ``timeout_seconds``. If the heartbeat UPDATE
     affects zero rows (we lost the lock — another worker stole the task
     after visibility expired), the heartbeat thread exits quietly; the
     handler continues to run but its results will be ignored by
@@ -601,7 +644,7 @@ def _run_handler_with_heartbeat(
     stop = stop_event or threading.Event()
 
     def _heartbeat_loop() -> None:
-        while not stop.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
+        while not stop.wait(timeout=_heartbeat_interval_for(timeout_seconds)):
             hb_db = None
             try:
                 hb_db = db_factory()
