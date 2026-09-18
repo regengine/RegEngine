@@ -51,14 +51,29 @@ The companion implementation is `services/shared/recall_reconstruction/`,
 
 ## Broken (confirmed bugs, out of scope for the fixture change)
 
-- `/api/v1/ingest/csv` creates no `ingestion_runs` receipt and retains neither the file nor the verbatim row (`services/ingestion/app/csv_templates.py:663`; the only caller of `create_ingestion_run` is `remediation/service.py:101`).
-- CSV normalizer silently defaults a missing quantity to 1, a missing TLC to `UNKNOWN`, and an unknown event type to `receiving` (`services/shared/canonical_event.py:1180,1208-1209`).
-- Three conflicting input-lot key conventions: rule reads `kdes.input_traceability_lot_codes` (`rules/seeds.py:460`), CSV parser writes `kdes.input_lot_codes` (`csv_templates.py:620`), sandbox writes `input_traceability_lot_codes` (`sandbox/csv_parser.py:222-227`). CSV-ingested transformations fail "Input TLCs Required" even when inputs are present.
-- `transformation_links.input_quantity` / `input_unit` are never written (`writer.py:738-760`) but `trace_backward` selects them (`writer.py:905`), so backward-trace quantity is always `None`.
-- `initial_packing` rows with `input_lot_codes` create no links (`writer.py:703`).
-- `RecallResult.orphans_found` is never populated; `gaps` = facilities with no lots (`services/graph/app/fsma_recall/engine.py:277-278`).
-- Recall-contacts CSV hardcodes `Date Received` / `Quantity Received` empty and `Contact Status="PENDING"` (`services/graph/app/routers/fsma/compliance.py:558-561`).
-- Default settings fabricate `sensitech last_sync=now()` when no tenant row exists (`services/ingestion/app/settings.py:70-84`).
+Status as of 2026-09-18. Line numbers are from the audit date.
+
+- **Fixed (#3122, #3125).** `/api/v1/ingest/csv` creates no `ingestion_runs` receipt and retains neither the file nor the verbatim row (`services/ingestion/app/csv_templates.py:663`; the only caller of `create_ingestion_run` is `remediation/service.py:101`). Every upload, and every emailed attachment on the inbound-email route, now opens a run and stores the verbatim file before the first row is processed.
+- **Fixed (#3119).** CSV normalizer silently defaults a missing quantity to 1, a missing TLC to `UNKNOWN`, and an unknown event type to `receiving` (`services/shared/canonical_event.py:1180,1208-1209`). `normalize_csv_row` raises `CSVRowNormalizationError` per row instead.
+- **Fixed (#3120).** Three conflicting input-lot key conventions: rule reads `kdes.input_traceability_lot_codes` (`rules/seeds.py:460`), CSV parser writes `kdes.input_lot_codes` (`csv_templates.py:620`), sandbox writes `input_traceability_lot_codes` (`sandbox/csv_parser.py:222-227`). CSV-ingested transformations fail "Input TLCs Required" even when inputs are present. The rule now reads `kdes.input_lot_codes` first and `kdes.input_traceability_lot_codes` second (migration v124); the sandbox still writes the second key.
+- **Fixed (#3121).** `transformation_links.input_quantity` / `input_unit` are never written (`writer.py:738-760`) but `trace_backward` selects them (`writer.py:905`), so backward-trace quantity is always `None`. CSV and EPCIS transformations now carry per-input quantity and unit in `kdes.inputs`, and the writer stores them.
+- **Fixed (#3119).** `initial_packing` rows with `input_lot_codes` create no links (`writer.py:703`).
+- **Open.** `RecallResult.orphans_found` is never populated; `gaps` = facilities with no lots (`services/graph/app/fsma_recall/engine.py:277-278`).
+- **Fixed (this PR).** Recall-contacts CSV hardcodes `Date Received` / `Quantity Received` empty and `Contact Status="PENDING"` (`services/graph/app/routers/fsma/compliance.py:558-561`). Rows now come from the trace's recorded receiving events (`exporters/recall_contacts_csv.py`); a facility with no receiving event keeps those cells blank, and Contact Status is blank because nothing records a notification outcome.
+- **Fixed (#3119).** Default settings fabricate `sensitech last_sync=now()` when no tenant row exists (`services/ingestion/app/settings.py:70-84`).
+
+Found while confirming the above, fixed in the same PR as the recall-contacts CSV:
+
+- `evaluate_field_presence` / `evaluate_multi_field_presence` counted an empty list as present, so `kdes.input_lot_codes == []` passed "Input TLCs Required" while the link writer wrote no links (`services/shared/rules/evaluators/stateless.py`).
+- `parse_csv_rows` stamped an unreadable date with `1970-01-01T00:00:00Z`, a missing unit with `"units"`, a missing quantity with `0`, and a missing ship-to with `"See receiver"` (`services/ingestion/app/csv_templates.py`). Each now rejects the row with the reason.
+- `normalize_epcis_event` stored a lot identifier under 3 characters as `EPCIS-<id>` and a flat-shape quantity with no unit as `each`; `_validate_as_fsma_event` validated unmapped event types as RECEIVING and stamped `"UNKNOWN"` / `now()` on a missing lot code or event time (`services/shared/canonical_event.py`, `services/ingestion/app/epcis/validation.py`).
+- The supplier-portal and mobile-capture canonical bridges wrote `quantity=1.0` / `"each"` when the source had neither (`services/admin/app/supplier_cte_service.py`, `services/graph/app/routers/fsma/traceability.py`).
+
+Leftovers of the same kind, not yet changed:
+
+- EPCIS `product_description` is synthesized as `EPCIS Product <id>` / `EPCIS Traceability Event` and stored (`services/ingestion/app/epcis/validation.py:96`, `epcis/persistence.py:848`); the legacy EPCIS row stores `"units"` for a missing unit (`epcis/persistence.py:850`) while the canonical row stores `each`.
+- Connector mappers default a missing unit to `"units"` (`services/shared/external_connectors/csv_sftp.py:346,361`, `food_safety.py:123,228`, `safetyculture.py:237`).
+- The sandbox parser still writes `input_traceability_lot_codes` (`services/ingestion/app/sandbox/csv_parser.py:222`); the rule tolerates it, the link writer does not.
 
 ## Unverified (needs Postgres or live services; not runnable in the audit environment)
 
