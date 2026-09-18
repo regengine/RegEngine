@@ -243,7 +243,7 @@ def _check_stripe_webhook_rate_limit(request) -> None:
         )
 
 
-def _check_verified_stripe_webhook_rate_limit(event: dict) -> None:
+def _check_verified_stripe_webhook_rate_limit_REMOVED(event: dict) -> None:
     """Only call after signature verification; unsigned traffic has another budget.
 
     The signed account and mode identify the bucket. Peer IP and forwarded
