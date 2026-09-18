@@ -1,0 +1,2432 @@
+{
+ "baseline": "5dca9b8a",
+ "source": "vector residual_digest.json",
+ "entries": [
+  {
+   "nodeid": "tests/billing/test_stripe_billing.py::TestWebhookSignatureVerification::test_invalid_signature_raises_401",
+   "file": "tests/billing/test_stripe_billing.py",
+   "class": "harness-bug",
+   "rc_id": "RC-108",
+   "status": "fixed",
+   "owner": "vector",
+   "evidence": "FIXED 091af550 autouse fixture stubs rate-limit check; deterministic standalone",
+   "baseline_msg": "stripe._error.SignatureVerificationError: Invalid signature | AttributeError: 'coroutine' object has no attribute 'strip'"
+  },
+  {
+   "nodeid": "tests/billing/test_stripe_billing.py::TestWebhookSignatureVerification::test_invalid_payload_raises_400",
+   "file": "tests/billing/test_stripe_billing.py",
+   "class": "harness-bug",
+   "rc_id": "RC-108",
+   "status": "fixed",
+   "owner": "vector",
+   "evidence": "FIXED 091af550 autouse fixture stubs rate-limit check; deterministic standalone",
+   "baseline_msg": "ValueError: bad json | AttributeError: 'coroutine' object has no attribute 'strip'"
+  },
+  {
+   "nodeid": "tests/billing/test_stripe_billing.py::TestWebhookSignatureVerification::test_missing_signature_header_raises_400",
+   "file": "tests/billing/test_stripe_billing.py",
+   "class": "harness-bug",
+   "rc_id": "RC-108",
+   "status": "fixed",
+   "owner": "vector",
+   "evidence": "FIXED 091af550 autouse fixture stubs rate-limit check; deterministic standalone",
+   "baseline_msg": "AttributeError: 'coroutine' object has no attribute 'strip'"
+  },
+  {
+   "nodeid": "tests/contract/test_error_envelope_contract_2863.py::test_spec_declares_error_responses",
+   "file": "tests/contract/test_error_envelope_contract_2863.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "FileNotFoundError: [Errno 2] No such file or directory: '/Users/sellers/Projects/RegEngine/repo/frontend/public/openapi.json'"
+  },
+  {
+   "nodeid": "tests/contract/test_error_envelope_contract_2863.py::test_no_operation_advertises_a_top_level_detail",
+   "file": "tests/contract/test_error_envelope_contract_2863.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "FileNotFoundError: [Errno 2] No such file or directory: '/Users/sellers/Projects/RegEngine/repo/frontend/public/openapi.json'"
+  },
+  {
+   "nodeid": "tests/contract/test_error_envelope_contract_2863.py::test_every_error_response_uses_the_shared_envelope",
+   "file": "tests/contract/test_error_envelope_contract_2863.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "FileNotFoundError: [Errno 2] No such file or directory: '/Users/sellers/Projects/RegEngine/repo/frontend/public/openapi.json'"
+  },
+  {
+   "nodeid": "tests/contract/test_error_envelope_contract_2863.py::test_envelope_schema_requires_type_and_message",
+   "file": "tests/contract/test_error_envelope_contract_2863.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "FileNotFoundError: [Errno 2] No such file or directory: '/Users/sellers/Projects/RegEngine/repo/frontend/public/openapi.json'"
+  },
+  {
+   "nodeid": "tests/contract/test_openapi_production_surface_2861.py::test_production_route_table_is_non_trivial",
+   "file": "tests/contract/test_openapi_production_surface_2861.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "Failed: Could not enumerate the production route table."
+  },
+  {
+   "nodeid": "tests/contract/test_openapi_production_surface_2861.py::test_published_spec_is_non_empty",
+   "file": "tests/contract/test_openapi_production_surface_2861.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "FileNotFoundError: [Errno 2] No such file or directory: '/Users/sellers/Projects/RegEngine/repo/frontend/public/openapi.json'"
+  },
+  {
+   "nodeid": "tests/contract/test_openapi_production_surface_2861.py::test_every_published_path_is_mounted_in_production",
+   "file": "tests/contract/test_openapi_production_surface_2861.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "FileNotFoundError: [Errno 2] No such file or directory: '/Users/sellers/Projects/RegEngine/repo/frontend/public/openapi.json'"
+  },
+  {
+   "nodeid": "tests/contract/test_openapi_production_surface_2861.py::TestGeneratorIsEnvironmentIndependent::test_router_overrides_do_not_change_the_published_spec[ENABLE_EXPERIMENTAL_ROUTERS-1]",
+   "file": "tests/contract/test_openapi_production_surface_2861.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "AssertionError: With ENABLE_EXPERIMENTAL_ROUTERS='1' exported, the generator produces a spec that no longer matches the committed file. The published contract must be the default production posture re"
+  },
+  {
+   "nodeid": "tests/contract/test_openapi_production_surface_2861.py::TestGeneratorIsEnvironmentIndependent::test_router_overrides_do_not_change_the_published_spec[DISABLED_ROUTERS-fda_export,csv]",
+   "file": "tests/contract/test_openapi_production_surface_2861.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "AssertionError: With DISABLED_ROUTERS='fda_export,csv' exported, the generator produces a spec that no longer matches the committed file. The published contract must be the default production posture "
+  },
+  {
+   "nodeid": "tests/contract/test_openapi_production_surface_2861.py::TestGeneratorIsEnvironmentIndependent::test_router_overrides_do_not_change_the_published_spec[ENV-staging]",
+   "file": "tests/contract/test_openapi_production_surface_2861.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "env-provided",
+   "owner": "prism",
+   "evidence": "blocked on frontend/public/openapi.json artifact",
+   "baseline_msg": "AssertionError: With ENV='staging' exported, the generator produces a spec that no longer matches the committed file. The published contract must be the default production posture regardless of per-de"
+  },
+  {
+   "nodeid": "tests/migrations/test_destructive_downgrade_documented_2827.py::test_destructive_downgrade_has_an_acknowledgement_guard[?]",
+   "file": "tests/migrations/test_destructive_downgrade_documented_2827.py",
+   "class": "real-defect",
+   "rc_id": "RC-015",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "v116 destroys rows without acknowledgement guard",
+   "baseline_msg": "AssertionError: 20260902_e4a7c2d91b06_v116_rule_seeds_enforcement_integrity.py (?) destroys pre-existing rows in its downgrade:"
+  },
+  {
+   "nodeid": "tests/migrations/test_migration_fresh_db.py::test_task_queue_policy_fail_closed",
+   "file": "tests/migrations/test_migration_fresh_db.py",
+   "class": "real-defect",
+   "rc_id": "RC-016",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "policy resolver gap",
+   "baseline_msg": "AssertionError: Policy task_queue_runtime_insert doesn't use a fail-hard resolver:"
+  },
+  {
+   "nodeid": "tests/scripts/test_export_env_bundle_no_disk_secrets.py::test_script_is_named_for_what_it_does",
+   "file": "tests/scripts/test_export_env_bundle_no_disk_secrets.py",
+   "class": "real-defect",
+   "rc_id": "RC-018",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "script named for what it doesn't do; rename",
+   "baseline_msg": "AssertionError: a script named rotate_secrets_to_aws.py must not exist: it neither rotates nor contacts AWS"
+  },
+  {
+   "nodeid": "tests/scripts/test_regenerate_public_samples_gate.py::TestWorkflowInstallsTheLockfile::test_job_installs_requirements_lock",
+   "file": "tests/scripts/test_regenerate_public_samples_gate.py",
+   "class": "real-defect",
+   "rc_id": "RC-017",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "workflow yaml drift after lock policy change",
+   "baseline_msg": "assert 'requirements.lock' in '\\n    name: Regenerate public samples\\n    runs-on: ubuntu-latest\\n    timeout-minutes: 5\\n    steps:\\n      - uses: ...erated output. Re-run scripts/regenerate_public_s"
+  },
+  {
+   "nodeid": "tests/scripts/test_regenerate_public_samples_gate.py::TestWorkflowInstallsTheLockfile::test_job_no_longer_installs_three_hand_picked_packages",
+   "file": "tests/scripts/test_regenerate_public_samples_gate.py",
+   "class": "real-defect",
+   "rc_id": "RC-017",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "workflow yaml drift after lock policy change",
+   "baseline_msg": "AssertionError: assert 'pip install...i sqlalchemy' not in '\\n    name:...        fi\\n'"
+  },
+  {
+   "nodeid": "tests/sdk/test_route_contract.py::test_experimental_declaration_matches_production_route_table",
+   "file": "tests/sdk/test_route_contract.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": "needs ENABLED_ROUTERS scaffolding",
+   "baseline_msg": "AssertionError: server.main import failed under posture:"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[RegEngine_Investor_Outreach_Memo.docx]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'RegEngine_Investor_Outreach_Memo.docx', which is neither tracked by git nor present on disk. If it was removed, delete the entry."
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[RegEngine_Investor_Outreach_Memo_Inflow_Workbench_Update.docx]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'RegEngine_Investor_Outreach_Memo_Inflow_Workbench_Update.docx', which is neither tracked by git nor present on disk. If it was removed, del"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[docs/archive/REGENGINE_EVALUATION_2026-03-27.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'docs/archive/REGENGINE_EVALUATION_2026-03-27.md', which is neither tracked by git nor present on disk. If it was removed, delete the entry."
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[docs/archive/RegEngine_PRD_Investor_Sprint.docx]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'docs/archive/RegEngine_PRD_Investor_Sprint.docx', which is neither tracked by git nor present on disk. If it was removed, delete the entry."
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[docs/product/DATA_ROOM_INDEX.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'docs/product/DATA_ROOM_INDEX.md', which is neither tracked by git nor present on disk. If it was removed, delete the entry."
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[docs/product/HONEST_VALUATION_UPDATE_2026-04-30.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'docs/product/HONEST_VALUATION_UPDATE_2026-04-30.md', which is neither tracked by git nor present on disk. If it was removed, delete the ent"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[docs/product/Honest_Valuation_Update_2026-04-30.pdf]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'docs/product/Honest_Valuation_Update_2026-04-30.pdf', which is neither tracked by git nor present on disk. If it was removed, delete the en"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/investors/DATA_ROOM_STRUCTURE.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/investors/DATA_ROOM_STRUCTURE.md', which is neither tracked by git nor present on disk. If it was removed, delete the e"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/investors/FUNDRAISING_CHECKLIST.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/investors/FUNDRAISING_CHECKLIST.md', which is neither tracked by git nor present on disk. If it was removed, delete the"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/investors/INVESTOR_FAQ.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/investors/INVESTOR_FAQ.md', which is neither tracked by git nor present on disk. If it was removed, delete the entry."
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/investors/INVESTOR_OUTREACH_SEQUENCE.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/investors/INVESTOR_OUTREACH_SEQUENCE.md', which is neither tracked by git nor present on disk. If it was removed, delet"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/investors/investor_feedback_action_plan.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/investors/investor_feedback_action_plan.md', which is neither tracked by git nor present on disk. If it was removed, de"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/investors/investor_memo.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/investors/investor_memo.md', which is neither tracked by git nor present on disk. If it was removed, delete the entry."
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[launch_orchestrator/sales/fsma_investor_brief.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'launch_orchestrator/sales/fsma_investor_brief.md', which is neither tracked by git nor present on disk. If it was removed, delete the entry"
+  },
+  {
+   "nodeid": "tests/security/test_repo_visibility_claims_2811.py::test_checklist_entries_are_real_paths[production_bundle/documentation/Investor_Whitepaper_v1.0.md]",
+   "file": "tests/security/test_repo_visibility_claims_2811.py",
+   "class": "real-defect",
+   "rc_id": "RC-010",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "PRE_PUBLIC_CHECKLIST.md lists 15 nonexistent paths; docs fix",
+   "baseline_msg": "AssertionError: docs/security/PRE_PUBLIC_CHECKLIST.md lists 'production_bundle/documentation/Investor_Whitepaper_v1.0.md', which is neither tracked by git nor present on disk. If it was removed, delet"
+  },
+  {
+   "nodeid": "tests/security/test_route_ownership_streaming.py::test_materialized_route_keeps_stream_item_state",
+   "file": "tests/security/test_route_ownership_streaming.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "AssertionError: materialized copy lost stream_item_type \u2014 JSONL/SSE item validation and schema silently disabled"
+  },
+  {
+   "nodeid": "tests/security/test_route_security_manifest.py::test_checked_in_manifest_matches_live_route_and_dependency_graph",
+   "file": "tests/security/test_route_security_manifest.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "AssertionError: assert {'always_moun...n', ...], ...} == {'always_moun...n', ...], ...}"
+  },
+  {
+   "nodeid": "tests/security/test_route_security_manifest.py::test_every_omitted_router_path_returns_exact_404",
+   "file": "tests/security/test_route_security_manifest.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "AssertionError: assert 177 == 178"
+  },
+  {
+   "nodeid": "tests/shared/test_merkle_no_chain_evidence_2698.py::test_merkle_root_handler_forwards_no_chain_evidence",
+   "file": "tests/shared/test_merkle_no_chain_evidence_2698.py",
+   "class": "harness-bug",
+   "rc_id": "RC-106",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "stale import app.fda_export post-reorg",
+   "baseline_msg": "ModuleNotFoundError: No module named 'app.fda_export'"
+  },
+  {
+   "nodeid": "tests/shared/test_secret_validation.py::TestEnvValidation::test_passes_with_valid_production_secrets",
+   "file": "tests/shared/test_secret_validation.py",
+   "class": "harness-bug",
+   "rc_id": "RC-109",
+   "status": "fixed",
+   "owner": "vector",
+   "evidence": "FIXED 398ec903 base_env gains 4 prod-required vars added under #2911/#2912",
+   "baseline_msg": "AssertionError: assert False"
+  },
+  {
+   "nodeid": "tests/shared/test_tenant_log_context_2859.py::test_resolved_tenant_reaches_the_log_line",
+   "file": "tests/shared/test_tenant_log_context_2859.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture fixture stopped capturing",
+   "baseline_msg": "AssertionError: handler log line was not captured \u2014 capture setup is broken"
+  },
+  {
+   "nodeid": "tests/shared/test_tenant_log_context_2859.py::test_tenant_is_not_carried_into_a_later_request",
+   "file": "tests/shared/test_tenant_log_context_2859.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture fixture stopped capturing",
+   "baseline_msg": "AssertionError: expected one line per request, captured 0"
+  },
+  {
+   "nodeid": "tests/shared/test_tenant_log_context_2859.py::test_audit_field_present_as_unknown_when_no_tenant_resolves",
+   "file": "tests/shared/test_tenant_log_context_2859.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture fixture stopped capturing",
+   "baseline_msg": "AssertionError: handler log line was not captured"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestPersistedLockedUntil::test_locked_until_is_computed_in_sql_not_from_the_global_constant",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "AssertionError: locked_until must be derived from the row's visibility_timeout_seconds inside the claim SQL \u2014 computing it in Python before the task type is known is what pinned every task to the 15-m"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestPersistedLockedUntil::test_claim_no_longer_binds_a_precomputed_lock_until",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "AssertionError: the claim still binds a Python-computed lock_until \u2014 that value is LOCK_TIMEOUT_MINUTES (15) and is independent of task type"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestPersistedLockedUntil::test_per_task_type_map_is_bound_into_the_claim",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "AssertionError: TASK_TIMEOUTS_SECONDS must be bound into the claim so the persisted locked_until honours it; bound params: ['default_timeout', 'handler_types', 'lock_until', 'now', 'worker']"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestPersistedLockedUntil::test_coalesce_arms_are_ordered_most_specific_first",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "AssertionError: arm 2 (the per-task-type TASK_TIMEOUTS_SECONDS map) is missing \u2014 that is exactly what #2918 reports as dead."
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestHeartbeatCadence::test_heartbeat_interval_helper_exists",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "AssertionError: #2918: the heartbeat cadence must be derived from the task's timeout, not hardcoded at 60s \u2014 a 30s timeout with a 60s heartbeat guarantees the lock is stolen mid-run"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestLegacyGlobalConstant::test_lock_timeout_minutes_no_longer_governs_claims",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "AssertionError: _claim_task must not compute the visibility deadline from the 15-minute global constant"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[None-nlp_extraction]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[None-graph_update]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[None-review_item]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[None-unmapped_type]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[45-nlp_extraction]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[45-graph_update]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[45-review_item]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_resolutions_match[45-unmapped_type]",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "KeyError: 'timeout_types'"
+  },
+  {
+   "nodeid": "tests/shared/test_visibility_timeout_2918.py::TestSqlAndMemoryAgree::test_sql_compiles_against_the_postgres_dialect",
+   "file": "tests/shared/test_visibility_timeout_2918.py",
+   "class": "real-defect",
+   "rc_id": "RC-004",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2918 implementation missing on 5dca9b8a; tests merged ahead",
+   "baseline_msg": "assert 'make_interval' in \"\\n            UPDATE fsma.task_queue\\n            SET status = 'processing',\\n                started_at = %(now)s,\\n...                 COALESCE(visibility_timeout_seconds,"
+  },
+  {
+   "nodeid": "services/admin/tests/test_erasure_no_false_success_2900.py::test_erasure_fails_closed_when_nothing_was_soft_deleted",
+   "file": "services/admin/tests/test_erasure_no_false_success_2900.py",
+   "class": "harness-bug",
+   "rc_id": "RC-103",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "Depends() object misused as session",
+   "baseline_msg": "assert False"
+  },
+  {
+   "nodeid": "services/admin/tests/test_erasure_no_false_success_2900.py::test_failed_erasure_does_not_enqueue_a_graph_deletion",
+   "file": "services/admin/tests/test_erasure_no_false_success_2900.py",
+   "class": "harness-bug",
+   "rc_id": "RC-103",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "Depends() object misused as session",
+   "baseline_msg": "AssertionError: Expected 'rollback' to have been called once. Called 0 times. | AssertionError: Expected 'rollback' to have been called once. Called 0 times."
+  },
+  {
+   "nodeid": "services/admin/tests/test_erasure_no_false_success_2900.py::test_successful_erasure_still_returns_the_accepted_response",
+   "file": "services/admin/tests/test_erasure_no_false_success_2900.py",
+   "class": "harness-bug",
+   "rc_id": "RC-103",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "Depends() object misused as session",
+   "baseline_msg": "AssertionError: the happy path must not raise, got AttributeError(\"'Depends' object has no attribute 'rollback'\")"
+  },
+  {
+   "nodeid": "services/admin/tests/test_hallucination_tracker.py::test_record_hallucination_tracks_state",
+   "file": "services/admin/tests/test_hallucination_tracker.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: same prometheus_client root",
+   "baseline_msg": "AttributeError: 'Gauge' object has no attribute '_metrics'"
+  },
+  {
+   "nodeid": "services/admin/tests/test_hallucination_tracker.py::test_resolve_hallucination_updates_metrics",
+   "file": "services/admin/tests/test_hallucination_tracker.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: same prometheus_client root",
+   "baseline_msg": "AttributeError: 'Gauge' object has no attribute '_metrics'"
+  },
+  {
+   "nodeid": "services/admin/tests/test_hallucination_tracker.py::test_resolve_hallucination_missing_item",
+   "file": "services/admin/tests/test_hallucination_tracker.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: same prometheus_client root",
+   "baseline_msg": "AttributeError: 'Gauge' object has no attribute '_metrics'"
+  },
+  {
+   "nodeid": "services/admin/tests/test_hallucination_tracker.py::test_record_hallucinations_batch",
+   "file": "services/admin/tests/test_hallucination_tracker.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: same prometheus_client root",
+   "baseline_msg": "AttributeError: 'Gauge' object has no attribute '_metrics'"
+  },
+  {
+   "nodeid": "services/admin/tests/test_hallucination_tracker.py::test_list_hallucinations_pagination_format",
+   "file": "services/admin/tests/test_hallucination_tracker.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: same prometheus_client root",
+   "baseline_msg": "AttributeError: 'Gauge' object has no attribute '_metrics'"
+  },
+  {
+   "nodeid": "services/admin/tests/test_no_login_role_credentials_2920.py::test_no_sql_file_creates_a_login_role_with_a_literal_password",
+   "file": "services/admin/tests/test_no_login_role_credentials_2920.py",
+   "class": "real-defect",
+   "rc_id": "RC-002",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "hardcoded login-role password; RLS outside Alembic chain; High; Anvil E2 in flight",
+   "baseline_msg": "AssertionError: SQL files mint a role with a hardcoded password (#2920): ['.claude/worktrees/order-dep-leaks/services/admin/migrations/setup_app_user.sql', '.claude/worktrees/charming-herschel-567603/"
+  },
+  {
+   "nodeid": "services/admin/tests/test_no_login_role_credentials_2920.py::test_secrets_baseline_has_no_entry_for_the_deleted_script",
+   "file": "services/admin/tests/test_no_login_role_credentials_2920.py",
+   "class": "real-defect",
+   "rc_id": "RC-002",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "hardcoded login-role password; RLS outside Alembic chain; High; Anvil E2 in flight",
+   "baseline_msg": "AssertionError: assert 'services/admin/migrations/setup_app_user.sql' not in {'.github/workflows/backend-ci.yml': [{'filename': '.github/workflows/backend-ci.yml', 'hashed_secret': 'afc848c316af1....p"
+  },
+  {
+   "nodeid": "services/admin/tests/test_no_login_role_credentials_2920.py::test_review_items_rls_is_owned_only_by_the_alembic_chain",
+   "file": "services/admin/tests/test_no_login_role_credentials_2920.py",
+   "class": "real-defect",
+   "rc_id": "RC-002",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "hardcoded login-role password; RLS outside Alembic chain; High; Anvil E2 in flight",
+   "baseline_msg": "AssertionError: review_items RLS is declared outside the Alembic chain (#2920): ['.claude/worktrees/order-dep-leaks/services/admin/migrations/setup_app_user.sql', '.claude/worktrees/charming-herschel-"
+  },
+  {
+   "nodeid": "services/admin/tests/test_pool_checkout_guc_reset.py::TestCheckoutGucReset::test_reset_clears_the_per_user_identity_guc",
+   "file": "services/admin/tests/test_pool_checkout_guc_reset.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": "live-DB checkout idle-reset assertion",
+   "baseline_msg": "RuntimeError: PostgreSQL connection was not idle before checkout GUC reset | sqlalchemy.exc.DisconnectionError: tenant GUC reset failed on pool checkout; discarding connection"
+  },
+  {
+   "nodeid": "services/admin/tests/test_pool_checkout_guc_reset.py::TestIdentityGucIsTransactionScoped::test_identity_guc_write_is_transaction_scoped",
+   "file": "services/admin/tests/test_pool_checkout_guc_reset.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": "live-DB checkout idle-reset assertion",
+   "baseline_msg": "AssertionError: no regengine.user_id write found \u2014 did the GUC move?"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestTraceQueryMetrics::test_record_trace_query_success",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestTraceQueryMetrics::test_record_trace_query_error",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestTraceQueryMetrics::test_record_trace_query_both_directions",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == 2"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestRecallSLAMetrics::test_record_recall_export_csv",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestRecallSLAMetrics::test_record_recall_export_full_package",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestRecallSLAMetrics::test_record_recall_sla_helper",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestDataQualityMetrics::test_update_gap_metrics",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == 5"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestDataQualityMetrics::test_update_orphan_metrics",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == 10"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestDataQualityMetrics::test_record_gap_detection",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == 7"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestDataQualityMetrics::test_record_orphan_detection",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == 5"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestKDECompletenessMetrics::test_update_completeness_metrics",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "assert 0.0 == 0.92 \u00b1 9.2e-07"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestKDECompletenessMetrics::test_update_data_quality_score",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "assert 0.0 == 0.95 \u00b1 9.5e-07"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestKDECompletenessMetrics::test_record_extraction_confidence_high",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "assert 0.0 == 0.92 \u00b1 9.2e-07"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestKDECompletenessMetrics::test_record_extraction_confidence_low",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "assert 0.0 == 0.5 \u00b1 5.0e-07"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestAPIMetrics::test_record_api_call",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestValidationMetrics::test_record_tlc_validation_valid",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestValidationMetrics::test_record_tlc_validation_invalid",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestValidationMetrics::test_record_gtin_validation",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_metrics.py::TestValidationMetrics::test_record_gln_validation",
+   "file": "services/graph/tests/test_fsma_metrics.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "VERIFIED: prometheus_client 0.25.0 vs lock 0.26.0; lock-sync clears",
+   "baseline_msg": "AssertionError: assert 0.0 == (0.0 + 1)"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_physics.py::TestMassBalanceEndpointReturns501::test_mass_balance_lot_returns_501",
+   "file": "services/graph/tests/test_fsma_physics.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "assert 401 == 501"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_physics.py::TestMassBalanceEndpointReturns501::test_mass_balance_event_returns_501",
+   "file": "services/graph/tests/test_fsma_physics.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "assert 401 == 501"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_physics.py::TestTraceForwardWithPhysicsEngine::test_trace_forward_includes_risk_flags",
+   "file": "services/graph/tests/test_fsma_physics.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_physics.py::TestTraceForwardWithPhysicsEngine::test_trace_forward_includes_time_violations",
+   "file": "services/graph/tests/test_fsma_physics.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_physics.py::TestTraceForwardWithPhysicsEngine::test_trace_forward_accepts_enforce_time_arrow_param",
+   "file": "services/graph/tests/test_fsma_physics.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestTraceForwardEndpoint::test_trace_forward_success",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestTraceForwardEndpoint::test_trace_forward_with_max_depth",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestTraceBackwardEndpoint::test_trace_backward_success",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestTimelineEndpoint::test_timeline_success",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestExportEndpoints::test_export_trace_csv",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestExportEndpoints::test_export_trace_csv_is_not_a_cartesian_product",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestExportEndpoints::test_export_recall_contacts",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestGapAnalysisEndpoints::test_get_gaps",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_fsma_routes.py::TestGapAnalysisEndpoints::test_export_gaps_csv",
+   "file": "services/graph/tests/test_fsma_routes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture: no auth context seeded",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/graph/tests/test_mobile_ingestion.py::test_log_traceability_event_success",
+   "file": "services/graph/tests/test_mobile_ingestion.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "AssertionError: Expected 200, got 401: {'detail': 'Tenant ID not found in authentication context'}"
+  },
+  {
+   "nodeid": "services/graph/tests/test_mobile_ingestion.py::test_log_traceability_event_missing_responsible_party_contact",
+   "file": "services/graph/tests/test_mobile_ingestion.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "AssertionError: Expected 422, got 401: {'detail': 'Tenant ID not found in authentication context'}"
+  },
+  {
+   "nodeid": "services/graph/tests/test_mobile_ingestion.py::test_log_traceability_event_invalid_tlc",
+   "file": "services/graph/tests/test_mobile_ingestion.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "AssertionError: Expected 400, got 401: {'detail': 'Tenant ID not found in authentication context'}"
+  },
+  {
+   "nodeid": "services/graph/tests/test_mobile_ingestion.py::test_mobile_capture_binds_every_parameter_its_cypher_declares",
+   "file": "services/graph/tests/test_mobile_ingestion.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "AssertionError: Expected 200, got 401: {\"detail\":\"Tenant ID not found in authentication context\"}"
+  },
+  {
+   "nodeid": "services/graph/tests/test_mobile_ingestion.py::test_mobile_capture_binds_authenticated_tenant_to_merge_templates",
+   "file": "services/graph/tests/test_mobile_ingestion.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster",
+   "baseline_msg": "AssertionError: {\"detail\":\"Tenant ID not found in authentication context\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/security/test_fetch_fallback.py::test_wrapped_ssrf_value_error_does_not_trigger_fallback",
+   "file": "services/ingestion/tests/security/test_fetch_fallback.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://104.20.23.154/foo' | AssertionError: browser must not run"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_config_1342.py::TestModuleSurface::test_settings_inherits_mixins",
+   "file": "services/ingestion/tests/test_config_1342.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "AssertionError: assert False"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_audit_logging.py::test_1205_export_captures_user_id_in_log_export_call",
+   "file": "services/ingestion/tests/test_fda_export_audit_logging.py",
+   "class": "real-defect",
+   "rc_id": "RC-007",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; coverage-bypass unreachable",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for TLC 'TLC-2026-001'\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_audit_logging.py::test_1205_emits_structured_audit_log_line",
+   "file": "services/ingestion/tests/test_fda_export_audit_logging.py",
+   "class": "real-defect",
+   "rc_id": "RC-007",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; coverage-bypass unreachable",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_audit_logging.py::test_1222_coverage_below_threshold_returns_409_without_bypass",
+   "file": "services/ingestion/tests/test_fda_export_audit_logging.py",
+   "class": "real-defect",
+   "rc_id": "RC-007",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; coverage-bypass unreachable",
+   "baseline_msg": "assert 404 == 409"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_audit_logging.py::test_1222_coverage_bypass_allowed_with_explicit_flag",
+   "file": "services/ingestion/tests/test_fda_export_audit_logging.py",
+   "class": "real-defect",
+   "rc_id": "RC-007",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; coverage-bypass unreachable",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_perf_2515_2516.py::test_export_all_uses_single_batch_call_regardless_of_tlc_count",
+   "file": "services/ingestion/tests/test_fda_export_perf_2515_2516.py",
+   "class": "real-defect",
+   "rc_id": "RC-008",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_perf_2515_2516.py::test_export_handler_runs_off_the_event_loop",
+   "file": "services/ingestion/tests/test_fda_export_perf_2515_2516.py",
+   "class": "real-defect",
+   "rc_id": "RC-008",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_endpoint_default_csv_redacts_pii",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for TLC 'TLC-ROMAINE-001'\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_endpoint_include_pii_with_permission_returns_full_values",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for TLC 'TLC-ROMAINE-001'\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_endpoint_include_pii_with_wildcard_scope_allowed",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_endpoint_include_pii_with_fda_namespace_wildcard_allowed",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_endpoint_audit_log_captures_pii_included_false",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_endpoint_audit_log_captures_pii_included_true",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_package_manifest_pii_redacted_default_true",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_package_manifest_pii_redacted_false_when_included",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_pii_redaction.py::test_package_csv_body_redacted_by_default",
+   "file": "services/ingestion/tests/test_fda_export_pii_redaction.py",
+   "class": "real-defect",
+   "rc_id": "RC-005",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeded fixtures not visible to export query",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router.py::test_export_default_returns_verifiable_zip_package",
+   "file": "services/ingestion/tests/test_fda_export_router.py",
+   "class": "real-defect",
+   "rc_id": "RC-009",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; str>int type bug",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router.py::test_export_csv_format_still_supported",
+   "file": "services/ingestion/tests/test_fda_export_router.py",
+   "class": "real-defect",
+   "rc_id": "RC-009",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; str>int type bug",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router.py::test_verify_export_recomputes_hash_for_full_export",
+   "file": "services/ingestion/tests/test_fda_export_router.py",
+   "class": "real-defect",
+   "rc_id": "RC-009",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split; str>int type bug",
+   "baseline_msg": "TypeError: '>' not supported between instances of 'str' and 'int'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestAuthorizePIIAccess::test_include_pii_with_permission_succeeds",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestEnforceKDECoverageGate::test_coverage_above_threshold_passes_silently",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportFDASpreadsheetMissingBranches::test_no_events_returns_404",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportFDASpreadsheetMissingBranches::test_audit_log_write_failure_returns_503",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 503"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportFDASpreadsheetMissingBranches::test_pdf_format_returns_pdf_stream",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_csv_format_happy_path",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_package_format_returns_zip",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_pdf_format_returns_pdf",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_audit_log_write_failure_returns_503",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 503"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_kde_coverage_below_threshold_without_ack_returns_409",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 409"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_over_limit_export_is_refused_with_413",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 413"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_kde_coverage_below_threshold_with_ack_emits_warning_header",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_router_1342.py::TestExportAllEvents::test_batch_fetch_over_50_tlcs_hits_second_loop_pass",
+   "file": "services/ingestion/tests/test_fda_export_router_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-003",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "error branches raise unhandled instead of status mapping",
+   "baseline_msg": "assert 500 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestIncludePiiIsRecorded::test_export_all_records_the_pii_flag[True]",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestIncludePiiIsRecorded::test_export_all_records_the_pii_flag[False]",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestIncludePiiIsRecorded::test_single_tlc_export_records_the_pii_flag",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for TLC 'TLC-0001'\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestIncludePiiIsRecorded::test_export_all_records_the_event_type_filter",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestSharedReconstruction::test_full_export_verification_uses_the_batch_query",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "TypeError: '>' not supported between instances of 'str' and 'int'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestSharedReconstruction::test_exporter_and_verifier_share_one_helper",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestExportVerifyRoundTrip::test_export_all_round_trip_verifies[True]",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestExportVerifyRoundTrip::test_export_all_round_trip_verifies[False]",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for the requested window. Widen the date range or verify tenant_id.\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestExportVerifyRoundTrip::test_single_tlc_round_trip_with_pii_verifies",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "AssertionError: {\"detail\":\"No traceability records found for TLC 'TLC-0001'\"}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py::TestExportVerifyRoundTrip::test_tampered_export_still_reports_mismatch",
+   "file": "services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py",
+   "class": "real-defect",
+   "rc_id": "RC-006",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "seeding split + str/int coverage compare",
+   "baseline_msg": "TypeError: '>' not supported between instances of 'str' and 'int'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fsma_readiness_compat_2893.py::TestOperatorGate::test_router_has_a_name_operators_can_reference",
+   "file": "services/ingestion/tests/test_fsma_readiness_compat_2893.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": "production-posture subprocess requires ENABLED_ROUTERS/DISABLED_ROUTERS",
+   "baseline_msg": "AssertionError: Traceback (most recent call last):"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fsma_readiness_compat_2893.py::TestOperatorGate::test_mounted_by_default_in_production",
+   "file": "services/ingestion/tests/test_fsma_readiness_compat_2893.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": "production-posture subprocess requires ENABLED_ROUTERS/DISABLED_ROUTERS",
+   "baseline_msg": "AssertionError: Traceback (most recent call last):"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_fsma_readiness_compat_2893.py::TestOperatorGate::test_disabled_routers_removes_the_stubs",
+   "file": "services/ingestion/tests/test_fsma_readiness_compat_2893.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": "production-posture subprocess requires ENABLED_ROUTERS/DISABLED_ROUTERS",
+   "baseline_msg": "AssertionError: Traceback (most recent call last):"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_inflow_workbench.py::test_complete_romaine_fixture_is_export_ready_for_workbench",
+   "file": "services/ingestion/tests/test_inflow_workbench.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "assert 4 == 5"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestListAvailable::test_returns_integrations_from_registry",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "AssertionError: assert {'integrations': []} == {'integration...AP S/4HANA'}]}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestGetStatuses::test_returns_statuses_for_tenant",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-107",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "mock-shape KeyError; file itself retracted as real-defect",
+   "baseline_msg": "KeyError: 'tid'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestConfigureConnector::test_happy_path_creates_connector",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestConfigureConnector::test_public_slug_alias_configures_canonical_connector",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestConfigureConnector::test_category_falls_back_to_class_name_on_introspection_failure",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestConnection::test_configured_connector_returns_connection_state",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestConnection::test_public_slug_alias_reaches_configured_connector",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestConnection::test_connection_test_failure_still_returns_200",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestTriggerSync::test_happy_path_returns_sync_result",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestTriggerSync::test_since_iso_parsed_with_z_suffix",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestTriggerSync::test_since_none_passes_none",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-107",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "mock-shape KeyError; file itself retracted as real-defect",
+   "baseline_msg": "KeyError: 'since'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestInboundWebhook::test_happy_path_returns_accepted_events",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestInboundWebhook::test_unsupported_webhook_returns_501",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 501"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestInboundWebhook::test_signature_failure_returns_401",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "assert 404 == 401"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestInboundWebhook::test_webhook_payload_passed_as_raw_bytes",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-107",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "mock-shape KeyError; file itself retracted as real-defect",
+   "baseline_msg": "KeyError: 'payload'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_integration_router_1342.py::TestDisconnect::test_disconnect_calls_registry_and_returns_flag",
+   "file": "services/ingestion/tests/test_integration_router_1342.py",
+   "class": "excluded",
+   "rc_id": null,
+   "status": "retracted",
+   "owner": "vector",
+   "evidence": "RETRACTED 2026-09-17 P3 re-screen: passes 39/39 standalone; suite-context pollution",
+   "baseline_msg": "AssertionError: assert {} == {'connector_i...nant-integ-1'}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_discovery_task_queue.py::TestRegisterDiscoveryHandlers::test_registers_discovery_scrape",
+   "file": "services/ingestion/tests/test_routes_discovery_task_queue.py",
+   "class": "real-defect",
+   "rc_id": "RC-012",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "task type never registered",
+   "baseline_msg": "AssertionError: assert 'discovery_scrape' in {}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_regulation_task_queue.py::TestRegisterRegulationHandlers::test_registers_regulation_ingest",
+   "file": "services/ingestion/tests/test_routes_regulation_task_queue.py",
+   "class": "real-defect",
+   "rc_id": "RC-012",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "task type never registered",
+   "baseline_msg": "AssertionError: assert 'regulation_ingest' in {}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_scraping_task_queue.py::TestRegisterScrapingHandlers::test_registers_both_task_types",
+   "file": "services/ingestion/tests/test_routes_scraping_task_queue.py",
+   "class": "real-defect",
+   "rc_id": "RC-012",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "task types never registered",
+   "baseline_msg": "AssertionError: assert 'state_scrape' in {}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_scraping_task_queue.py::TestRegisterScrapingHandlers::test_handlers_are_distinct",
+   "file": "services/ingestion/tests/test_routes_scraping_task_queue.py",
+   "class": "real-defect",
+   "rc_id": "RC-012",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "task types never registered",
+   "baseline_msg": "KeyError: 'state_scrape'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_sources_task_queue.py::TestRegisterSourceHandlers::test_registers_all_three_task_types",
+   "file": "services/ingestion/tests/test_routes_sources_task_queue.py",
+   "class": "real-defect",
+   "rc_id": "RC-012",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "task types never registered",
+   "baseline_msg": "AssertionError: assert 'federal_register_ingest' in {}"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_sources_task_queue.py::TestRegisterSourceHandlers::test_handlers_are_distinct_callables",
+   "file": "services/ingestion/tests/test_routes_sources_task_queue.py",
+   "class": "real-defect",
+   "rc_id": "RC-012",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "task types never registered",
+   "baseline_msg": "KeyError: 'federal_register_ingest'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetIngestionStatus::test_404_when_job_missing",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetIngestionStatus::test_running_status_no_result_fetch",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetIngestionStatus::test_completed_with_result",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetIngestionStatus::test_completed_without_result_still_ok",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetIngestionStatus::test_404_when_owned_by_other_tenant",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetIngestionStatus::test_404_when_owner_key_absent",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetDocumentAnalysis::test_404_when_document_missing",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetDocumentAnalysis::test_analysis_with_result_fills_obligations_count",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetDocumentAnalysis::test_analysis_without_result_defaults_to_zero",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetDocumentAnalysis::test_404_when_owned_by_other_tenant",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobStatus::test_503_when_no_db_manager",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 503"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobStatus::test_404_when_job_missing",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobStatus::test_happy_path_returns_job_dict",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobStatus::test_cross_tenant_job_is_404",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobLogs::test_503_when_no_db_manager",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 503"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobLogs::test_happy_path_returns_entries_and_closes",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobLogs::test_default_limit_is_100",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "AssertionError: Expected 'get_audit_log' to be called once. Called 0 times. | AssertionError: Expected 'get_audit_log' to be called once. Called 0 times."
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestGetJobLogs::test_cross_tenant_logs_are_empty",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestListDocuments::test_503_when_no_db_manager",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 503"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestListDocuments::test_happy_path_with_filters",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestListDocuments::test_default_paging",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "AssertionError: Expected 'search_documents' to be called once. Called 0 times. | AssertionError: Expected 'search_documents' to be called once. Called 0 times."
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestVerifyDocument::test_503_when_no_db_manager",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 503"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestVerifyDocument::test_404_when_document_missing",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 404"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_routes_status_1342.py::TestVerifyDocument::test_happy_path_returns_all_hashes",
+   "file": "services/ingestion/tests/test_routes_status_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-101",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "auth-fixture cluster (incl. 2 mock-assertion downstream)",
+   "baseline_msg": "assert 401 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_billing_router.py::test_create_checkout_uses_stripe_and_normalizes_plan",
+   "file": "services/ingestion/tests/test_stripe_billing_router.py",
+   "class": "harness-bug",
+   "rc_id": "RC-103",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "mock call-args KeyError tenant_id",
+   "baseline_msg": "KeyError: 'tenant_id'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_billing_router.py::test_invoice_paid_updates_period_end_and_payment_metadata",
+   "file": "services/ingestion/tests/test_stripe_billing_router.py",
+   "class": "harness-bug",
+   "rc_id": "RC-103",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "mock call-args KeyError tenant_id",
+   "baseline_msg": "KeyError: 'tenant_id'"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_routes_1342.py::TestCreateCheckoutErrorBranches::test_client_tenant_mismatch_is_logged_and_ignored",
+   "file": "services/ingestion/tests/test_stripe_routes_1342.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "mismatch-log capture",
+   "baseline_msg": "AssertionError: expected mismatch log; got []"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py::TestTrialWillEnd_Issue1189::test_warn_log_emitted_for_operator_visibility",
+   "file": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "AssertionError: Expected exactly one WARN stripe_trial_will_end log, got 0"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py::TestTrialWillEnd_Issue1189::test_unknown_tenant_does_not_crash",
+   "file": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "AssertionError: Missing-tenant branch must log for operator visibility"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py::TestDisputeCreated_Issue1189::test_error_level_log_for_oncall_paging",
+   "file": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "AssertionError: Expected exactly one ERROR stripe_dispute_opened log for oncall paging, got 0"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py::TestDisputeCreated_Issue1189::test_unknown_customer_logs_error_does_not_crash",
+   "file": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "assert False"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py::TestCustomerDeleted_Issue1189::test_unknown_customer_still_clears_lookup_defensively",
+   "file": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "AssertionError: Unknown-customer branch must log tenant_not_found for operator visibility"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py::TestCustomerDeleted_Issue1189::test_missing_id_does_not_crash",
+   "file": "services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "assert False"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_stripe_webhooks_1342.py::TestHandleStripeEventDispatcher::test_invoice_paid_emits_funnel_event",
+   "file": "services/ingestion/tests/test_stripe_webhooks_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-013",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "invoice.paid funnel emission dropped in refactor",
+   "baseline_msg": "assert 0 == 1"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_supplier_portal_1342.py::TestPortalAbuseControls::test_preflight_rate_limited_per_link",
+   "file": "services/ingestion/tests/test_supplier_portal_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-014",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "per-link rate limiting not enforced",
+   "baseline_msg": "assert 429 == 200"
+  },
+  {
+   "nodeid": "services/ingestion/tests/test_supplier_portal_1342.py::TestPortalAbuseControls::test_submit_rate_limited_does_not_ingest_past_cap",
+   "file": "services/ingestion/tests/test_supplier_portal_1342.py",
+   "class": "real-defect",
+   "rc_id": "RC-014",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "per-link rate limiting not enforced",
+   "baseline_msg": "assert 429 == 200"
+  },
+  {
+   "nodeid": "services/nlp/tests/test_consumer_tenant_scoping_1122.py::TestKafkaMessageKeyIncludesTenantId::test_route_extraction_high_confidence_uses_tenant_scoped_key",
+   "file": "services/nlp/tests/test_consumer_tenant_scoping_1122.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "pydantic_core._pydantic_core.ValidationError: 1 validation error for GraphEvent"
+  },
+  {
+   "nodeid": "services/nlp/tests/test_pipeline_hardening.py::TestThreeTierRouting::test_high_confidence_routes_to_graph",
+   "file": "services/nlp/tests/test_pipeline_hardening.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "pydantic_core._pydantic_core.ValidationError: 1 validation error for GraphEvent"
+  },
+  {
+   "nodeid": "services/nlp/tests/test_retrieval_tenant_scope.py::TestTenantIdPropagation::test_tenant_id_in_graph_event_high_confidence",
+   "file": "services/nlp/tests/test_retrieval_tenant_scope.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "pydantic_core._pydantic_core.ValidationError: 1 validation error for GraphEvent"
+  },
+  {
+   "nodeid": "services/scheduler/tests/test_deadline_monitor_2908.py::TestOverdueAlertIsDeduped::test_alert_state_is_bounded",
+   "file": "services/scheduler/tests/test_deadline_monitor_2908.py",
+   "class": "real-defect",
+   "rc_id": "RC-019",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2908 hardening constants/registration not on tree",
+   "baseline_msg": "AttributeError: 'SchedulerService' object has no attribute 'DEADLINE_ALERT_STATE_MAX'"
+  },
+  {
+   "nodeid": "services/scheduler/tests/test_deadline_monitor_2908.py::TestQueryFanOut::test_deadline_monitor_registered_with_max_instances_one",
+   "file": "services/scheduler/tests/test_deadline_monitor_2908.py",
+   "class": "real-defect",
+   "rc_id": "RC-019",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "#2908 hardening constants/registration not on tree",
+   "baseline_msg": "AssertionError: without max_instances=1 a tick that overruns the 5-minute interval stacks up to 3 concurrent passes, each holding connections from the API's pool"
+  },
+  {
+   "nodeid": "services/scheduler/tests/test_task_queue_retention_2903.py::TestSingleSourceOfTruth::test_task_processor_reuses_the_shared_denylist",
+   "file": "services/scheduler/tests/test_task_queue_retention_2903.py",
+   "class": "unclassified",
+   "rc_id": null,
+   "status": "open",
+   "owner": "vector",
+   "evidence": "not itemized in classification tables; needs Vector triage",
+   "baseline_msg": "AssertionError: server/workers/task_processor.py must import NON_WORKER_TASK_TYPES from shared.task_types rather than redefining it \u2014 the duplicate definition is what let the purge and the worker drif"
+  },
+  {
+   "nodeid": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py::test_reset_at_rolls_over_correctly[2026-04-22T20:59:30+00:00-2026-04-22T21:00:00+00:00]",
+   "file": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py",
+   "class": "harness-bug",
+   "rc_id": "RC-104",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "clock not frozen; no clock seam (product improvement noted)",
+   "baseline_msg": "AssertionError: at 2026-04-22T20:59:30+00:00, reset_at should be 2026-04-22T21:00:00+00:00, got 2026-09-17 08:27:00+00:00"
+  },
+  {
+   "nodeid": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py::test_reset_at_rolls_over_correctly[2026-04-22T23:59:15+00:00-2026-04-23T00:00:00+00:00]",
+   "file": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py",
+   "class": "harness-bug",
+   "rc_id": "RC-104",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "clock not frozen; no clock seam (product improvement noted)",
+   "baseline_msg": "AssertionError: at 2026-04-22T23:59:15+00:00, reset_at should be 2026-04-23T00:00:00+00:00, got 2026-09-17 08:27:00+00:00"
+  },
+  {
+   "nodeid": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py::test_reset_at_rolls_over_correctly[2026-04-30T23:59:59+00:00-2026-05-01T00:00:00+00:00]",
+   "file": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py",
+   "class": "harness-bug",
+   "rc_id": "RC-104",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "clock not frozen; no clock seam (product improvement noted)",
+   "baseline_msg": "AssertionError: at 2026-04-30T23:59:59+00:00, reset_at should be 2026-05-01T00:00:00+00:00, got 2026-09-17 08:27:00+00:00"
+  },
+  {
+   "nodeid": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py::test_reset_at_rolls_over_correctly[2026-12-31T23:59:45+00:00-2027-01-01T00:00:00+00:00]",
+   "file": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py",
+   "class": "harness-bug",
+   "rc_id": "RC-104",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "clock not frozen; no clock seam (product improvement noted)",
+   "baseline_msg": "AssertionError: at 2026-12-31T23:59:45+00:00, reset_at should be 2027-01-01T00:00:00+00:00, got 2026-09-17 08:27:00+00:00"
+  },
+  {
+   "nodeid": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py::test_reset_at_rolls_over_correctly[2026-04-22T14:27:11+00:00-2026-04-22T14:28:00+00:00]",
+   "file": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py",
+   "class": "harness-bug",
+   "rc_id": "RC-104",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "clock not frozen; no clock seam (product improvement noted)",
+   "baseline_msg": "AssertionError: at 2026-04-22T14:27:11+00:00, reset_at should be 2026-04-22T14:28:00+00:00, got 2026-09-17 08:27:00+00:00"
+  },
+  {
+   "nodeid": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py::test_reset_at_rolls_over_correctly[2026-04-22T14:00:03+00:00-2026-04-22T14:01:00+00:00]",
+   "file": "services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py",
+   "class": "harness-bug",
+   "rc_id": "RC-104",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "clock not frozen; no clock seam (product improvement noted)",
+   "baseline_msg": "AssertionError: at 2026-04-22T14:00:03+00:00, reset_at should be 2026-04-22T14:01:00+00:00, got 2026-09-17 08:27:00+00:00"
+  },
+  {
+   "nodeid": "services/shared/tests/test_build_info.py::test_placeholder_stamp_reads_as_absent_not_as_a_commit",
+   "file": "services/shared/tests/test_build_info.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": ".git checkout leaks real commit hash; expects None",
+   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_build_info.py::test_non_sha_env_value_is_discarded_rather_than_reported",
+   "file": "services/shared/tests/test_build_info.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": ".git checkout leaks real commit hash; expects None",
+   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_build_info.py::test_missing_identity_is_null_everywhere_and_never_raises",
+   "file": "services/shared/tests/test_build_info.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": ".git checkout leaks real commit hash; expects None",
+   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_build_info.py::test_unreadable_stamp_file_degrades_to_absent",
+   "file": "services/shared/tests/test_build_info.py",
+   "class": "env-mark",
+   "rc_id": null,
+   "status": "open",
+   "owner": "gate",
+   "evidence": ".git checkout leaks real commit hash; expects None",
+   "baseline_msg": "AssertionError: assert '60751572b5e67238f1be82e7f3ef476cfd91bcdf' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_change_scopes.py::test_change_scopes_emits_audit_event_with_diff",
+   "file": "services/shared/tests/test_change_scopes.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "AssertionError: missing audit event in: []"
+  },
+  {
+   "nodeid": "services/shared/tests/test_rules_deadletter_2709.py::TestDeadletterWriter::test_deadletter_write_failure_is_critical_not_fatal",
+   "file": "services/shared/tests/test_rules_deadletter_2709.py",
+   "class": "harness-bug",
+   "rc_id": "RC-102",
+   "status": "open",
+   "owner": "vector",
+   "evidence": "log/audit capture cluster",
+   "baseline_msg": "assert 0 == 1"
+  },
+  {
+   "nodeid": "services/shared/tests/test_secrets_fail_closed.py::TestStartupWiring::test_server_main_calls_both_secret_checks",
+   "file": "services/shared/tests/test_secrets_fail_closed.py",
+   "class": "real-defect",
+   "rc_id": "RC-001",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "fail-closed secret checks lost in server/main.py refactor; High",
+   "baseline_msg": "assert 'from shared.secrets_manager import' in '\"\"\"RegEngine Consolidated API \u2014 single FastAPI monolith.\\n\\nReplaces 6 microservices (ingestion, admin, graph, nlp, c...     \"status\": \"ready\" if all_ok"
+  },
+  {
+   "nodeid": "services/shared/tests/test_secrets_fail_closed.py::TestStartupWiring::test_server_main_offers_a_fatal_mode",
+   "file": "services/shared/tests/test_secrets_fail_closed.py",
+   "class": "real-defect",
+   "rc_id": "RC-001",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "fail-closed secret checks lost in server/main.py refactor; High",
+   "baseline_msg": "assert 'REGENGINE_REQUIRE_SECURE_SECRETS' in '\"\"\"RegEngine Consolidated API \u2014 single FastAPI monolith.\\n\\nReplaces 6 microservices (ingestion, admin, graph, nlp, c...     \"status\": \"ready\" if all_ok e"
+  },
+  {
+   "nodeid": "services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_insecure_default_is_rejected_in_production[ADMIN_MASTER_KEY-dev-admin-key]",
+   "file": "services/shared/tests/test_secrets_fail_closed.py",
+   "class": "real-defect",
+   "rc_id": "RC-001",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "fail-closed secret checks lost in server/main.py refactor; High",
+   "baseline_msg": "AssertionError: ADMIN_MASTER_KEY=dev-admin-key booted without a failure"
+  },
+  {
+   "nodeid": "services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_insecure_default_is_rejected_in_production[ADMIN_MASTER_KEY-change-in-production]",
+   "file": "services/shared/tests/test_secrets_fail_closed.py",
+   "class": "real-defect",
+   "rc_id": "RC-001",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "fail-closed secret checks lost in server/main.py refactor; High",
+   "baseline_msg": "AssertionError: ADMIN_MASTER_KEY=change-in-production booted without a failure"
+  },
+  {
+   "nodeid": "services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_unset_secrets_fail_in_production",
+   "file": "services/shared/tests/test_secrets_fail_closed.py",
+   "class": "real-defect",
+   "rc_id": "RC-001",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "fail-closed secret checks lost in server/main.py refactor; High",
+   "baseline_msg": "AssertionError: assert 'ADMIN_MASTER_KEY is not set' in '2026-09-17 01:26:35 [info     ] validating_production_secrets  environment=production\\n2026-09-17 01:26:35 [error    ...ment variables\\n  2. Ma"
+  },
+  {
+   "nodeid": "services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_default_is_none",
+   "file": "services/shared/tests/test_tenant_guc_hook.py",
+   "class": "real-defect",
+   "rc_id": "RC-011",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "GUC seeded with 'explicit' sentinel instead of row tenant_id",
+   "baseline_msg": "AssertionError: assert 'explicit' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_set_str_coerces_uuid_instances",
+   "file": "services/shared/tests/test_tenant_guc_hook.py",
+   "class": "real-defect",
+   "rc_id": "RC-011",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "GUC seeded with 'explicit' sentinel instead of row tenant_id",
+   "baseline_msg": "AssertionError: assert 'explicit' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_tenant_scope_sets_and_resets",
+   "file": "services/shared/tests/test_tenant_guc_hook.py",
+   "class": "real-defect",
+   "rc_id": "RC-011",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "GUC seeded with 'explicit' sentinel instead of row tenant_id",
+   "baseline_msg": "AssertionError: assert 'explicit' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_tenant_scope_resets_on_exception",
+   "file": "services/shared/tests/test_tenant_guc_hook.py",
+   "class": "real-defect",
+   "rc_id": "RC-011",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "GUC seeded with 'explicit' sentinel instead of row tenant_id",
+   "baseline_msg": "AssertionError: assert 'explicit' is None"
+  },
+  {
+   "nodeid": "services/shared/tests/test_tenant_guc_hook.py::TestTaskWorkerDispatchSeeding::test_dispatch_seeds_tenant_from_row",
+   "file": "services/shared/tests/test_tenant_guc_hook.py",
+   "class": "real-defect",
+   "rc_id": "RC-011",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "GUC seeded with 'explicit' sentinel instead of row tenant_id",
+   "baseline_msg": "AssertionError: assert 'explicit' == '11111111-111...-111111111111'"
+  },
+  {
+   "nodeid": "services/shared/tests/test_tenant_guc_hook.py::TestTaskWorkerDispatchSeeding::test_dispatch_without_tenant_runs_unseeded",
+   "file": "services/shared/tests/test_tenant_guc_hook.py",
+   "class": "real-defect",
+   "rc_id": "RC-011",
+   "status": "open",
+   "owner": "anvil",
+   "evidence": "GUC seeded with 'explicit' sentinel instead of row tenant_id",
+   "baseline_msg": "AssertionError: assert 'explicit' is None"
+  }
+ ],
+ "excluded": [
+  {
+   "nodeid": "tests/migrations/test_rls_predicate_hardening_v090.py::test_guard_passes_on_clean_tree",
+   "why": "RC-105 verdict: no defect (stale-tree scan state; standalone/direct guard scans 108, exit 0)"
+  }
+ ]
+}
