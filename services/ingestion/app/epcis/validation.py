@@ -93,11 +93,24 @@ def _audit_log_validation_failure(
         logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
 
 
-def _default_product_description(normalized: dict) -> str:
-    product_id = normalized.get("product_id")
-    if product_id:
-        return f"EPCIS Product {product_id}"
-    return "EPCIS Traceability Event"
+def _epcis_product_description(event: dict, kde_map: dict | None = None) -> str:
+    """The product description the EPCIS payload carries, or ``""``.
+
+    Precedence matches the canonical normalizer: a top-level
+    ``productDescription``, then the ILMD ``productDescription`` that
+    ``_extract_kdes`` copies into the KDE map. An empty string is stored when
+    neither exists: the column is NOT NULL, and an empty cell is a true
+    statement about a missing record, where the old ``EPCIS Product <epc>`` /
+    ``EPCIS Traceability Event`` prose read as a description the partner
+    never sent.
+    """
+    for value in (
+        event.get("productDescription"),
+        (kde_map or {}).get("productDescription"),
+    ):
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
 
 
 def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> dict | None:
@@ -147,10 +160,16 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
         # validation below. The old ``"UNKNOWN"`` and ``now()`` stand-ins
         # made the gate pass on a lot code and an event time that the
         # partner never sent.
+        # The gate discards the dump after pass/fail, so FSMAEvent's own
+        # model default stands in for a missing description here; nothing
+        # synthesized in this function is stored.
+        optional_fields: dict[str, Any] = {}
+        if normalized.get("product_description"):
+            optional_fields["product_description"] = normalized["product_description"]
+
         fsma_event = FSMAEvent(
             event_type=fsma_type,
             tlc=normalized.get("tlc"),
-            product_description=normalized.get("product_description") or _default_product_description(normalized),
             quantity=normalized.get("quantity"),
             unit_of_measure=normalized.get("unit_of_measure"),
             location_gln=normalized.get("location_id"),
@@ -160,6 +179,7 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
             reference_document_type="EPCIS",
             reference_document_number=None,
             tenant_id=tenant_id,
+            **optional_fields,
         )
         return fsma_event.model_dump()
     except ValidationError as exc:
