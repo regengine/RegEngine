@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, Request
 
-from .csv_parser import _parse_csv_to_events
+from .csv_parser import _parse_csv_to_events, input_lot_codes
 from .models import (
     SandboxTraceRequest,
     TraceEdge,
@@ -32,7 +32,7 @@ def _trace_in_memory(
 
     Links are formed by:
     1. Same TLC across events (harvest -> ship -> receive chain)
-    2. input_traceability_lot_codes on transformation events (LOT-A,LOT-B -> LOT-MEGA)
+    2. input_lot_codes on transformation events (LOT-A,LOT-B -> LOT-MEGA)
     3. Facility handoffs: shipping.ship_to == receiving.location within same TLC
 
     Returns a graph of nodes (events) and edges (linkages).
@@ -57,11 +57,7 @@ def _trace_in_memory(
             if tlc:
                 produces_tlc[tlc].append(i)
             # It consumes input TLCs
-            kdes = ev.get("kdes", {})
-            input_tlcs = kdes.get("input_traceability_lot_codes", [])
-            if isinstance(input_tlcs, str):
-                input_tlcs = [t.strip() for t in input_tlcs.split(",") if t.strip()]
-            for input_tlc in input_tlcs:
+            for input_tlc in input_lot_codes(ev.get("kdes")):
                 consumes_tlc[input_tlc].append(i)
 
     # BFS
@@ -188,10 +184,7 @@ def _trace_in_memory(
         # C. Upstream: if this is a transformation, follow input TLCs backward
         if direction in ("both", "upstream"):
             if cte == "transformation":
-                input_tlcs = kdes.get("input_traceability_lot_codes", [])
-                if isinstance(input_tlcs, str):
-                    input_tlcs = [t.strip() for t in input_tlcs.split(",") if t.strip()]
-                for input_tlc in input_tlcs:
+                for input_tlc in input_lot_codes(kdes):
                     for inp_idx in by_tlc.get(input_tlc, []):
                         if inp_idx not in visited:
                             queue.append((inp_idx, depth + 1, evt_idx, "transformation_input"))

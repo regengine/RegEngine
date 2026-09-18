@@ -42,8 +42,8 @@ from .normalization import (
     _normalize_epcis_to_cte,
 )
 from .validation import (
-    _default_product_description,
     _enforce_mandatory_gln_check_digits,
+    _epcis_product_description,
     _validate_as_fsma_event,
     _validate_epcis,
     _validate_epcis_glns,
@@ -684,7 +684,18 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
             },
         )
 
-    event_time = normalized.get("event_time") or datetime.now(timezone.utc).isoformat()
+    # No ``now()`` stand-in: an event time the partner never sent is not
+    # evidence of when the event happened. ``_validate_epcis`` rejects a
+    # missing ``eventTime`` earlier; this guards the advisory-mode path.
+    event_time = normalized.get("event_time")
+    if not event_time:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "missing_event_time",
+                "message": "EPCIS eventTime is required; the ingestion time is not substituted for it.",
+            },
+        )
     return {
         "event": event,
         "idempotency_key": idempotency_key,
@@ -845,9 +856,14 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
         tenant_id=tenant_id,
         event_type=normalized["event_type"],
         traceability_lot_code=normalized["tlc"],
-        product_description=_default_product_description(normalized),
+        product_description=_epcis_product_description(event, kde_map),
         quantity=prepared["quantity_value"],
-        unit_of_measure=normalized.get("unit_of_measure") or "units",
+        # ``quantity`` comes only from a quantityList element here, and EPCIS
+        # CBV defines such an element without ``uom`` as a count of
+        # instances: ``each`` is the standard's meaning, and it is what the
+        # canonical row stores for the same event (the old ``"units"`` made
+        # the two rows disagree).
+        unit_of_measure=normalized.get("unit_of_measure") or "each",
         event_timestamp=prepared["event_time"],
         source="epcis",
         source_event_id=str(event.get("eventID") or prepared["idempotency_key"]),

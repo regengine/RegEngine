@@ -100,6 +100,35 @@ _CSV_COLUMN_MAP = {
 
 # Fields that go into kdes dict rather than top-level.
 # Includes aliases — multiple header names map to the same KDE key.
+
+INPUT_LOT_CODES_KDE = "input_lot_codes"
+# Older sandbox events and hand-built test fixtures still carry this key.
+_LEGACY_INPUT_LOT_CODES_KDE = "input_traceability_lot_codes"
+
+
+def _split_lot_codes(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [t.strip() for t in value.split(",") if t.strip()]
+    if isinstance(value, (list, tuple, set)):
+        return [str(t).strip() for t in value if str(t).strip()]
+    return []
+
+
+def input_lot_codes(kdes: dict | None) -> list[str]:
+    """The transformation input lot codes an event's KDEs name, as a list.
+
+    Reads ``input_lot_codes`` first (the durable key), then the legacy
+    sandbox spelling. A comma-separated string is split; anything else is
+    ``[]``.
+    """
+    if not kdes:
+        return []
+    for key in (INPUT_LOT_CODES_KDE, _LEGACY_INPUT_LOT_CODES_KDE):
+        if kdes.get(key) not in (None, "", []):
+            return _split_lot_codes(kdes[key])
+    return []
+
+
 _KDE_FIELD_ALIASES = {
     # Harvest
     "harvest_date": "harvest_date",
@@ -218,13 +247,18 @@ _KDE_FIELD_ALIASES = {
     "prev_source": "immediate_previous_source",
     "ips": "immediate_previous_source",
     "source": "immediate_previous_source",
-    # Input TLCs (transformation)
-    "input_traceability_lot_codes": "input_traceability_lot_codes",
-    "input_tlcs": "input_traceability_lot_codes",
-    "input_lots": "input_traceability_lot_codes",
-    "input_lot_codes": "input_traceability_lot_codes",
-    "source_lots": "input_traceability_lot_codes",
-    "source_tlcs": "input_traceability_lot_codes",
+    # Input TLCs (transformation). Canonical name is ``input_lot_codes``: the
+    # key the real CSV ingest writes and the canonical link writer
+    # (``canonical_persistence/writer.py``) reads. The sandbox used to rename
+    # every spelling, including ``input_lot_codes`` itself, to a
+    # sandbox-only ``input_traceability_lot_codes`` that nothing durable
+    # understood.
+    "input_lot_codes": INPUT_LOT_CODES_KDE,
+    "input_traceability_lot_codes": INPUT_LOT_CODES_KDE,
+    "input_tlcs": INPUT_LOT_CODES_KDE,
+    "input_lots": INPUT_LOT_CODES_KDE,
+    "source_lots": INPUT_LOT_CODES_KDE,
+    "source_tlcs": INPUT_LOT_CODES_KDE,
     # Other
     "temperature": "temperature",
     "temp": "temperature",
@@ -478,9 +512,10 @@ def _parse_csv_to_events(
             kde_canonical = _KDE_FIELD_ALIASES.get(col_lower)
             if kde_canonical:
                 val = value.strip()
-                # Parse comma-separated input TLCs into a list
-                if kde_canonical == "input_traceability_lot_codes" and "," in val:
-                    val = [t.strip() for t in val.split(",") if t.strip()]
+                # Input TLCs are always a list, one lot or several: the link
+                # writer ignores a bare string.
+                if kde_canonical == INPUT_LOT_CODES_KDE:
+                    val = _split_lot_codes(val)
                 event["kdes"][kde_canonical] = val
 
                 # Track KDE alias (once per unique alias)

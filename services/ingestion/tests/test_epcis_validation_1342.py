@@ -43,7 +43,7 @@ pytest.importorskip("fastapi")
 from app.epcis import validation as mod  # noqa: E402
 from app.epcis.validation import (  # noqa: E402
     _audit_log_validation_failure,
-    _default_product_description,
+    _epcis_product_description,
     _validate_as_fsma_event,
     _validate_epcis,
     _validate_gln_format,
@@ -57,27 +57,27 @@ _GOOD_TLC = "00012345678901-L2025-1105-A"
 
 
 # ---------------------------------------------------------------------------
-# _default_product_description
+# _epcis_product_description
 # ---------------------------------------------------------------------------
 
 
-class TestDefaultProductDescription:
-    def test_with_product_id_returns_formatted_string(self):
+class TestEpcisProductDescription:
+    """Only what the payload carries; ``""`` otherwise. The old helper
+    synthesized ``EPCIS Product <epc>`` / ``EPCIS Traceability Event`` and
+    stored it as the product description of every EPCIS event."""
+
+    def test_top_level_product_description_wins(self):
         assert (
-            _default_product_description({"product_id": "urn:epc:id:gtin:123"}) == "EPCIS Product urn:epc:id:gtin:123"
+            _epcis_product_description({"productDescription": " Romaine Hearts "}, {"productDescription": "ILMD"})
+            == "Romaine Hearts"
         )
 
-    def test_without_product_id_returns_generic_fallback(self):
-        assert _default_product_description({}) == "EPCIS Traceability Event"
+    def test_ilmd_product_description_is_used_when_top_level_absent(self):
+        assert _epcis_product_description({}, {"productDescription": "Romaine Hearts"}) == "Romaine Hearts"
 
-    def test_with_none_product_id_returns_generic_fallback(self):
-        # ``if product_id`` — None is falsy, fall to generic.
-        assert _default_product_description({"product_id": None}) == "EPCIS Traceability Event"
-
-    def test_with_empty_product_id_returns_generic_fallback(self):
-        # Defensive: EPCIS producers sometimes emit empty strings for
-        # "field known but blank" — must not produce "EPCIS Product ".
-        assert _default_product_description({"product_id": ""}) == "EPCIS Traceability Event"
+    def test_nothing_recorded_is_an_empty_cell(self):
+        assert _epcis_product_description({"epcList": ["urn:epc:id:gtin:123"]}, {}) == ""
+        assert _epcis_product_description({"productDescription": "   "}, None) == ""
 
 
 # ---------------------------------------------------------------------------
@@ -293,20 +293,14 @@ class TestValidateAsFsmaEvent:
         n["event_type"] = None
         assert _validate_as_fsma_event(n) is None
 
-    def test_missing_product_description_synthesizes_default(self):
+    def test_missing_product_description_still_passes_the_gate(self):
+        # The gate only reports pass/fail; nothing synthesized here is stored.
         n = self._good_normalized()
         n.pop("product_description")
         n["product_id"] = "urn:epc:id:gtin:42"
         result = _validate_as_fsma_event(n)
         assert result is not None
-        assert result["product_description"] == "EPCIS Product urn:epc:id:gtin:42"
-
-    def test_missing_product_description_and_product_id(self):
-        n = self._good_normalized()
-        n.pop("product_description")
-        result = _validate_as_fsma_event(n)
-        assert result is not None
-        assert result["product_description"] == "EPCIS Traceability Event"
+        assert "EPCIS Product" not in result["product_description"]
 
     def test_missing_event_time_fails_validation(self):
         # The gate used to stamp ``now()`` on a missing event_time, so an

@@ -22,6 +22,7 @@ from shared.rules_engine import (
     RuleEvaluationResult,
 )
 
+from .csv_parser import input_lot_codes
 from .rule_loader import _SANDBOX_RULES, _get_applicable_rules
 
 # Relational evaluation types handled by _evaluate_relational_in_memory
@@ -452,9 +453,7 @@ def _evaluate_relational_in_memory(
             if evt.get("event_type") != "transformation":
                 continue
 
-            input_tlcs = evt.get("kdes", {}).get("input_traceability_lot_codes", [])
-            if isinstance(input_tlcs, str):
-                input_tlcs = [t.strip() for t in input_tlcs.split(",") if t.strip()]
+            input_tlcs = input_lot_codes(evt.get("kdes"))
             if not input_tlcs:
                 continue
 

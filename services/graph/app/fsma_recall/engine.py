@@ -35,6 +35,85 @@ from .persistence import (
 # than the zeroes the real path used to record.
 SIMULATED_TRACE_WARNING = "trace unavailable: missing target lot or graph backend; no trace evidence generated"
 
+# Appended when the tracer returned facilities but no lot-event associations
+# (``TraceResult.trace_rows is None``): the per-facility lots, the quantities
+# and the orphan count cannot be measured, and the record says so rather
+# than reporting zeroes.
+NO_ASSOCIATIONS_WARNING = (
+    "trace supplied no lot-event associations; per-facility lots, quantities and orphans were not computed"
+)
+
+# Event types that record a lot moving on from the facility that held it.
+_ONWARD_EVENT_TYPES = frozenset({"SHIPPING", "TRANSFORMATION"})
+
+
+def _facility_key(facility: Dict[str, Any]) -> Any:
+    gln = facility.get("gln")
+    if gln:
+        return ("gln", str(gln))
+    return ("name", facility.get("name"), facility.get("address"))
+
+
+def _sum_lot_quantities(lots: List[Dict[str, Any]]) -> tuple[Optional[float], Optional[str]]:
+    """Sum the lots' quantities when every lot has a numeric one in a single
+    unit; otherwise ``(None, None)``. A partial sum would be presented as the
+    facility's affected quantity, so none is offered."""
+    if not lots:
+        return None, None
+    total = 0.0
+    units: set = set()
+    for lot in lots:
+        quantity = lot.get("quantity")
+        if quantity is None:
+            return None, None
+        try:
+            total += float(quantity)
+        except (TypeError, ValueError):
+            return None, None
+        units.add(str(lot.get("unit_of_measure") or "").strip().lower())
+    if len(units) != 1 or "" in units:
+        return None, None
+    return total, units.pop()
+
+
+def _count_orphans(trace_result: Any) -> Optional[int]:
+    """Lots the forward trace reached that nothing moved on.
+
+    Uses the lot-event associations (``trace_rows``): a lot counts when it
+    has at least one recorded event and none of them is a SHIPPING or
+    TRANSFORMATION event. The association does not carry the relationship
+    direction, so a lot a transformation *produced* and nothing shipped is
+    not counted (it has a TRANSFORMATION association); the count can be low,
+    never high. ``None`` when the tracer supplied no associations.
+    """
+    trace_rows = _trace_field(trace_result, "trace_rows", None, required=False)
+    if trace_rows is None:
+        return None
+    seen: set = set()
+    moved_on: set = set()
+    for association in trace_rows:
+        lot_code = (association.get("lot") or {}).get("tlc")
+        if not lot_code:
+            continue
+        seen.add(lot_code)
+        event_type = str((association.get("event") or {}).get("type") or "").upper()
+        if event_type in _ONWARD_EVENT_TYPES:
+            moved_on.add(lot_code)
+    lots = _trace_field(trace_result, "lots", [], required=False) or []
+    return sum(1 for lot in lots if lot.get("tlc") in seen and lot.get("tlc") not in moved_on)
+
+
+def _total_affected_quantity(facilities: List[AffectedFacility]) -> tuple[Optional[float], Optional[str]]:
+    """Sum of the facilities' known quantities when all of them share one unit
+    and none is unknown; otherwise ``(None, None)``."""
+    with_lots = [f for f in facilities if f.lots_affected]
+    if not with_lots or any(f.quantity_affected is None for f in with_lots):
+        return None, None
+    units = {str(f.unit_of_measure or "").lower() for f in with_lots}
+    if len(units) != 1 or "" in units:
+        return None, None
+    return sum(float(f.quantity_affected) for f in with_lots), units.pop()
+
 
 def _trace_field(trace_result: Any, name: str, default: Any, required: bool = True) -> Any:
     """Read ``name`` off a trace result that may be an object or a mapping.
@@ -192,6 +271,8 @@ class MockRecallEngine:
         facilities: List[AffectedFacility] = []
         max_forward = 0
         max_backward = 0
+        orphans: Optional[int] = None
+        associations_missing = False
         trace_time = 0.0
         # Set when the requested trace cannot be measured.
         simulated = False
@@ -213,7 +294,10 @@ class MockRecallEngine:
                         # `max_depth` keys that silently yielded 0.
                         lots_traced += len(_trace_field(result, "lots", []) or [])
                         max_forward = _trace_field(result, "hop_count", 0) or 0
-                        facilities.extend(self._extract_facilities(result, "downstream"))
+                        extracted, has_associations = self._extract_facilities(result, "downstream")
+                        facilities.extend(extracted)
+                        associations_missing |= not has_associations
+                        orphans = _count_orphans(result)
                 else:
                     # Missing trace inputs/backends cannot create trace evidence.
                     simulated = True
@@ -229,7 +313,9 @@ class MockRecallEngine:
                         # #2943: see the forward branch above.
                         lots_traced += len(_trace_field(result, "lots", []) or [])
                         max_backward = _trace_field(result, "hop_count", 0) or 0
-                        facilities.extend(self._extract_facilities(result, "upstream"))
+                        extracted, has_associations = self._extract_facilities(result, "upstream")
+                        facilities.extend(extracted)
+                        associations_missing |= not has_associations
                 else:
                     # Missing trace inputs/backends cannot create trace evidence.
                     simulated = True
@@ -243,6 +329,8 @@ class MockRecallEngine:
 
             if simulated:
                 warnings.append(SIMULATED_TRACE_WARNING)
+            if associations_missing:
+                warnings.append(NO_ASSOCIATIONS_WARNING)
 
             # Generate exports if export function available
             export_time = 0.0
@@ -272,8 +360,10 @@ class MockRecallEngine:
             # Determine SLA compliance
             sla_compliant = not simulated and lots_traced > 0 and total_time < self.SLA_LIMIT_SECONDS
 
-            # Calculate data completeness
-            total_quantity = sum(f.quantity_affected for f in facilities)
+            # Data completeness: facilities the trace reached with no lot
+            # attributed to them. Total quantity only when every facility
+            # with lots has a known quantity in one shared unit.
+            total_quantity, total_unit = _total_affected_quantity(facilities)
             gaps = len([f for f in facilities if not f.lots_affected])
             completeness = 0.0 if not facilities else (((len(facilities) - gaps) / len(facilities)) * 100)
 
@@ -284,6 +374,7 @@ class MockRecallEngine:
                 lots_traced=lots_traced,
                 facilities_identified=len(facilities),
                 total_quantity_affected=total_quantity,
+                unit_of_measure=total_unit,
                 max_depth_forward=max_forward,
                 max_depth_backward=max_backward,
                 trace_time_seconds=trace_time,
@@ -291,6 +382,7 @@ class MockRecallEngine:
                 total_time_seconds=total_time,
                 sla_compliant=sla_compliant,
                 gaps_found=gaps,
+                orphans_found=orphans,
                 data_completeness_pct=completeness,
                 affected_facilities=facilities,
                 csv_export_path=csv_path,
@@ -335,29 +427,50 @@ class MockRecallEngine:
         self,
         trace_result: Any,
         direction: str,
-    ) -> List[AffectedFacility]:
-        """Extract facility info from trace results.
+    ) -> tuple[List[AffectedFacility], bool]:
+        """Facilities the trace reached, with the lots the graph attributes to each.
 
         #2943: accepts a ``TraceResult`` or a mapping — the router no longer
         flattens the dataclass through ``__dict__``.
-        """
-        facilities = []
 
+        The tracer's facility dicts carry ``gln``, ``name``, ``address`` and
+        ``facility_type`` only. Lots and quantities come from the lot-event
+        associations (``trace_rows``); the old code read ``lots``/``quantity``
+        keys the tracer never emits, so every production drill recorded no
+        lots per facility, 0% completeness, ``"unknown"`` GLNs, the trace
+        direction as the facility type and ``"cases"`` as the unit.
+
+        Returns ``(facilities, has_associations)``; when ``has_associations``
+        is False the per-facility lots and quantities are unknown, not empty.
+        """
         raw_facilities = _trace_field(trace_result, "facilities", [], required=False) or []
+        trace_rows = _trace_field(trace_result, "trace_rows", None, required=False)
+
+        lots_by_facility: Dict[Any, Dict[str, Dict[str, Any]]] = {}
+        for association in trace_rows or []:
+            facility = association.get("facility")
+            lot = association.get("lot") or {}
+            if not facility or not lot.get("tlc"):
+                continue
+            lots_by_facility.setdefault(_facility_key(facility), {})[str(lot["tlc"])] = lot
+
+        facilities: List[AffectedFacility] = []
         for f in raw_facilities:
+            lots = lots_by_facility.get(_facility_key(f), {})
+            quantity, unit = _sum_lot_quantities(list(lots.values()))
             facilities.append(
                 AffectedFacility(
-                    gln=f.get("gln", "unknown"),
-                    name=f.get("name", "Unknown Facility"),
-                    facility_type=f.get("type", direction),
-                    lots_affected=f.get("lots", []),
-                    quantity_affected=f.get("quantity", 0.0),
-                    unit_of_measure=f.get("unit", "cases"),
+                    gln=str(f.get("gln") or ""),
+                    name=str(f.get("name") or ""),
+                    facility_type=str(f.get("facility_type") or f.get("type") or ""),
+                    lots_affected=sorted(lots),
+                    quantity_affected=quantity,
+                    unit_of_measure=unit,
                     contact_info=f.get("contact"),
                 )
             )
 
-        return facilities
+        return facilities, trace_rows is not None
 
     def _update_sla_metrics(self, tenant_id: str, result: RecallResult) -> None:
         """Update SLA metrics cache for measured traces only."""
