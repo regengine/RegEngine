@@ -494,7 +494,7 @@ class TestIngestAttachmentCsv:
         import app.csv_templates as csv_templates_mod
         from app.webhook_models import IngestResponse
 
-        async def fake_ingest_events(payload, *, principal_tenant_id, x_regengine_api_key=None):
+        async def fake_ingest_events(payload, *, principal_tenant_id, x_regengine_api_key=None, source_file=None):
             if not x_regengine_api_key:
                 raise HTTPException(status_code=401, detail="Invalid or missing API key")
             return IngestResponse(accepted=1, rejected=0, total=1, events=[])
