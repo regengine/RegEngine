@@ -205,7 +205,11 @@ class TestCsvParity:
         assert not direct_errors
         # Same non-blocking KDE-completeness warning either way — proves the
         # email path runs through the identical validation, not a laxer copy.
-        assert direct_warnings == ["Row 2: Missing KDEs for shipping: reference_document, tlc_source_reference"]
+        # ``ship_to_location`` is genuinely absent from VALID_CSV; it used to be
+        # papered over with a "See receiver" placeholder.
+        assert direct_warnings == [
+            "Row 2: Missing KDEs for shipping: ship_to_location, reference_document, tlc_source_reference"
+        ]
 
     def test_email_attachment_is_retained_as_an_ingestion_run_like_a_direct_upload(self, monkeypatch):
         """The attachment must reach ingest_events with the same SourceFileReceipt
