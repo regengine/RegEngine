@@ -11,7 +11,7 @@ _services_dir = _ingestion_dir.parent
 if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
-from app.disclaimers import (
+from services.ingestion.app.disclaimers import (
     DEMO_DATA_DISCLAIMER,
     SAMPLE_EXPORT_DISCLAIMER,
     SIMULATION_DISCLAIMER,

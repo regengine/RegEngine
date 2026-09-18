@@ -19,7 +19,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.epcis.validation import (  # noqa: E402
+from services.ingestion.app.epcis.validation import (  # noqa: E402
     _enforce_mandatory_gln_check_digits,
     _validate_epcis_glns,
     _validate_gln_format,

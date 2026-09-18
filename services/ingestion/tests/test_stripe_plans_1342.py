@@ -38,8 +38,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 
-from app.stripe_billing import plans as mod  # noqa: E402
-from app.stripe_billing.plans import (  # noqa: E402
+from services.ingestion.app.stripe_billing import plans as mod  # noqa: E402
+from services.ingestion.app.stripe_billing.plans import (  # noqa: E402
     PLAN_ALIASES,
     PLANS,
     _normalize_billing_period,

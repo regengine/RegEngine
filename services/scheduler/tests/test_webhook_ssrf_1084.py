@@ -38,8 +38,8 @@ from shared.paths import ensure_shared_importable  # noqa: E402
 ensure_shared_importable()
 
 import pytest  # noqa: E402
-from app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
-from app.notifications import (  # noqa: E402
+from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
+from services.scheduler.app.notifications import (  # noqa: E402
     _RESPONSE_BODY_MAX_BYTES,
     OutboxEntry,
     WebhookNotifier,

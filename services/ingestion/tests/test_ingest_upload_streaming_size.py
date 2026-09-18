@@ -17,7 +17,7 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-from app import routes_ingest
+from services.ingestion.app import routes_ingest
 from fastapi import HTTPException
 
 

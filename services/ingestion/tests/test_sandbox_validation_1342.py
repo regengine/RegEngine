@@ -27,14 +27,14 @@ from __future__ import annotations
 import string
 
 import pytest
-from app.sandbox.validation import (
+from services.ingestion.app.sandbox.validation import (
     _detect_duplicate_lots,
     _detect_entity_mismatches,
     _is_entity_field,
     _normalize_entity_name,
     _validate_kdes,
 )
-from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from services.ingestion.app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 
 # ---------------------------------------------------------------------------
 # Helpers

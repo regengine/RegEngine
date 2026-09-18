@@ -55,8 +55,8 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import fda_export_service as svc  # noqa: E402
-from app.webhook_models import WebhookCTEType  # noqa: E402
+from services.ingestion.app import fda_export_service as svc  # noqa: E402
+from services.ingestion.app.webhook_models import WebhookCTEType  # noqa: E402
 
 # ── _redact_location_value ──────────────────────────────────────────────────
 
@@ -240,7 +240,7 @@ class TestGeneratePdf:
     def test_truncation_when_over_cap(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Patch the private cap to 1 so a 3-event payload triggers the
         # truncation warning footer branch.
-        import app.fda_export_service as mod
+        import services.ingestion.app.fda_export_service as mod
 
         events = [_CORE_EVENT, _CORE_EVENT, _CORE_EVENT]
         # The cap is a local inside _generate_pdf; overriding isn't
@@ -352,7 +352,7 @@ class TestBuildCompletenessSummary:
     def test_fully_covered_event_reports_full_coverage(self) -> None:
         # Use SHIPPING which is in REQUIRED_KDES_BY_CTE; fill every
         # required field so coverage is 100%.
-        from app.webhook_models import REQUIRED_KDES_BY_CTE
+        from services.ingestion.app.webhook_models import REQUIRED_KDES_BY_CTE
 
         cte = WebhookCTEType.SHIPPING
         required = REQUIRED_KDES_BY_CTE[cte]

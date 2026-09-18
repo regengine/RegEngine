@@ -26,9 +26,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from app import compliance_score as cs
-from app.compliance_score import _compute_scores, _query_scoring_data
-from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from services.ingestion.app import compliance_score as cs
+from services.ingestion.app.compliance_score import _compute_scores, _query_scoring_data
+from services.ingestion.app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 from sqlalchemy.exc import ProgrammingError
 
 from services.ingestion.tests.test_compliance_score_1342 import _RouteSession, _row

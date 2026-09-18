@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from app.fsma_readiness_compat import router as fsma_readiness_compat_router
+from services.ingestion.app.fsma_readiness_compat import router as fsma_readiness_compat_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

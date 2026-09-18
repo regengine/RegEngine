@@ -62,8 +62,8 @@ for _p in (_SERVICE_DIR, _SERVICES_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-import app.supplier_cte_service as cte_service  # noqa: E402
-from app.supplier_cte_service import (  # noqa: E402
+import services.admin.app.supplier_cte_service as cte_service  # noqa: E402
+from services.admin.app.supplier_cte_service import (  # noqa: E402
     _acquire_tenant_merkle_lock,
     _as_utc,
     _bridge_to_canonical,

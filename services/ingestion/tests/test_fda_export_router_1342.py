@@ -41,18 +41,18 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 
 # Import the router.py module directly so monkeypatch can reach the
 # helper-function bindings (``build_v2_where_clause``, ``fetch_v2_events``
 # ...). ``from app.fda_export import router`` returns the APIRouter object
 # because __init__ re-exports it; importlib avoids that package attribute.
-router_module = importlib.import_module("app.fda_export.router")
-recall_module = importlib.import_module("app.fda_export.recall")
+router_module = importlib.import_module("services.ingestion.app.fda_export.router")
+recall_module = importlib.import_module("services.ingestion.app.fda_export.recall")
 import shared.cte_persistence as shared_cte_persistence
-from app.fda_export.router import router as fda_router
-from app.fda_export_service import _generate_csv
-from app.subscription_gate import require_active_subscription
+from services.ingestion.app.fda_export.router import router as fda_router
+from services.ingestion.app.fda_export_service import _generate_csv
+from services.ingestion.app.subscription_gate import require_active_subscription
 
 # ---------------------------------------------------------------------------
 # Fakes

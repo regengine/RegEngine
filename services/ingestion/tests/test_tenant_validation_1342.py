@@ -11,7 +11,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from app.tenant_validation import (
+from services.ingestion.app.tenant_validation import (
     _TENANT_ID_PATTERN,
     ValidTenantId,
     resolve_tenant,
@@ -240,7 +240,7 @@ class TestModuleSurface:
     """Lock the public surface area."""
 
     def test_exports_exist(self):
-        import app.tenant_validation as mod
+        import services.ingestion.app.tenant_validation as mod
 
         assert callable(mod.validate_tenant_id)
         assert callable(mod.resolve_tenant)

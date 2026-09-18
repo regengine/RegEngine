@@ -73,21 +73,21 @@ def _fake_get_settings():
     return _fake_settings
 
 
-_config_stub = ModuleType("app.config")
+_config_stub = ModuleType("services.ingestion.app.config")
 _config_stub.get_settings = _fake_get_settings
 _config_stub.__file__ = str(service_dir / "app" / "config.py")
-_REAL_APP_CONFIG = sys.modules.get("app.config")
-sys.modules["app.config"] = _config_stub
+_REAL_APP_CONFIG = sys.modules.get("services.ingestion.app.config")
+sys.modules["services.ingestion.app.config"] = _config_stub
 
-import app as _app_pkg  # noqa: E402
+import services.ingestion.app as _app_pkg  # noqa: E402
 
 _REAL_APP_CONFIG_ATTR = getattr(_app_pkg, "config", None)
 _app_pkg.config = _config_stub
 
 
-from app import routes_health_metrics as rhm  # noqa: E402
-from app.routes_health_metrics import health, router  # noqa: E402
-from app.webhook_models import INFLOW_CONTRACT_VERSION  # noqa: E402
+from services.ingestion.app import routes_health_metrics as rhm  # noqa: E402
+from services.ingestion.app.routes_health_metrics import health, router  # noqa: E402
+from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION  # noqa: E402
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -112,9 +112,9 @@ def _restore_modules_on_module_teardown():
         delattr(_shared_pkg, "kafka_consumer_base")
 
     if _REAL_APP_CONFIG is not None:
-        sys.modules["app.config"] = _REAL_APP_CONFIG
+        sys.modules["services.ingestion.app.config"] = _REAL_APP_CONFIG
     else:
-        sys.modules.pop("app.config", None)
+        sys.modules.pop("services.ingestion.app.config", None)
     if _REAL_APP_CONFIG_ATTR is not None:
         _app_pkg.config = _REAL_APP_CONFIG_ATTR
     elif hasattr(_app_pkg, "config"):
@@ -130,7 +130,7 @@ def _restore_modules_on_module_teardown():
 def _reset_state(monkeypatch):
     """Re-install stubs evicted by the root conftest + reset mutable state."""
     sys.modules["shared.kafka_consumer_base"] = _kafka_mod
-    sys.modules["app.config"] = _config_stub
+    sys.modules["services.ingestion.app.config"] = _config_stub
 
     # Re-pin into the route module in case a reload swapped it.
     monkeypatch.setattr(rhm, "kafka_health_check", _fake_kafka_health_check, raising=False)

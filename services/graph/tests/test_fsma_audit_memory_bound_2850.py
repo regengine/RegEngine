@@ -27,8 +27,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import app.fsma_audit as fsma_audit  # noqa: E402
-from app.fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, FSMAAuditLog  # noqa: E402
+import services.graph.app.fsma_audit as fsma_audit  # noqa: E402
+from services.graph.app.fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, FSMAAuditLog  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

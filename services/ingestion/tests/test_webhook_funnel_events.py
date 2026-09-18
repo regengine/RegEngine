@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.webhook_router_v2 as webhook_router_v2  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.webhook_router_v2 import _get_db_session, _verify_api_key  # noqa: E402
+import services.ingestion.app.webhook_router_v2 as webhook_router_v2  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.webhook_router_v2 import _get_db_session, _verify_api_key  # noqa: E402
 
 
 class _FakeDBSession:

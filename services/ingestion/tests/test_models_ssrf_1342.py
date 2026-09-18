@@ -38,7 +38,7 @@ from pydantic import ValidationError
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.models import (  # noqa: E402
+from services.ingestion.app.models import (  # noqa: E402
     IngestRequest,
     NormalizedDocument,
     _reject_private_host,
@@ -65,7 +65,7 @@ def _patch_resolver(monkeypatch: pytest.MonkeyPatch, ips: list[str]) -> None:
     def _fake(host, port, *args, **kwargs):
         return [_addrinfo(ip, socket.AF_INET6 if ":" in ip else socket.AF_INET) for ip in ips]
 
-    monkeypatch.setattr("app.models.socket.getaddrinfo", _fake)
+    monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _fake)
 
 
 # --------------------------------------------------------------------------- #
@@ -105,7 +105,7 @@ class TestRejectPrivateHost:
         def _boom(*_a, **_kw):
             pytest.fail("DNS resolver must not be called for blocked hostnames")
 
-        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _boom)
         with pytest.raises(ValidationError) as exc:
             IngestRequest(url=url, source_system="src")
         assert "metadata endpoint" in str(exc.value)
@@ -127,7 +127,7 @@ class TestRejectPrivateHost:
         def _boom(*_a, **_kw):
             pytest.fail("DNS resolver must not be called for literal IP URLs")
 
-        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _boom)
         with pytest.raises(ValidationError) as exc:
             IngestRequest(url="https://[fd12:3456::1]/x", source_system="src")
         assert "private or reserved" in str(exc.value)
@@ -138,7 +138,7 @@ class TestRejectPrivateHost:
         def _boom(*_a, **_kw):
             pytest.fail("DNS resolver must not be called for literal IP URLs")
 
-        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _boom)
         with pytest.raises(ValidationError) as exc:
             IngestRequest(url="https://10.1.2.3/x", source_system="src")
         assert "private or reserved" in str(exc.value)
@@ -149,7 +149,7 @@ class TestRejectPrivateHost:
         def _boom(*_a, **_kw):
             pytest.fail("DNS resolver must not be called for literal IP URLs")
 
-        monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
+        monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _boom)
         req = IngestRequest(url="https://8.8.8.8/x", source_system="src")
         assert str(req.url).startswith("https://8.8.8.8")
 
@@ -171,7 +171,7 @@ class TestRejectPrivateHost:
     def test_blocked_hostname_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Uppercase metadata host must still hit the blocklist branch.
         monkeypatch.setattr(
-            "app.models.socket.getaddrinfo",
+            "services.ingestion.app.models.socket.getaddrinfo",
             lambda *_a, **_kw: pytest.fail("resolver should not be called"),
         )
         with pytest.raises(ValidationError):
@@ -185,7 +185,7 @@ class TestRejectPrivateHost:
         def _fail(*_a, **_kw):
             raise socket.gaierror("nxdomain")
 
-        monkeypatch.setattr("app.models.socket.getaddrinfo", _fail)
+        monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _fail)
         with pytest.raises(ValidationError) as exc:
             IngestRequest(url="https://nx.example.invalid/x", source_system="src")
         assert "Unable to resolve" in str(exc.value)
@@ -229,7 +229,7 @@ class TestRejectPrivateHost:
                 _addrinfo("8.8.8.8"),
             ]
 
-        monkeypatch.setattr("app.models.socket.getaddrinfo", _fake)
+        monkeypatch.setattr("services.ingestion.app.models.socket.getaddrinfo", _fake)
         # Should not raise — the public IP is still valid.
         IngestRequest(url="https://weird.example.com/x", source_system="src")
 
@@ -275,7 +275,7 @@ class TestRejectPrivateHost:
                 return True
             return original_contains(self, item)
 
-        monkeypatch.setattr("app.models.ipaddress.ip_address", lambda _s: sneaky)
+        monkeypatch.setattr("services.ingestion.app.models.ipaddress.ip_address", lambda _s: sneaky)
         monkeypatch.setattr(ipaddress.IPv4Network, "__contains__", _patched_contains)
         _patch_resolver(monkeypatch, ["10.99.99.99"])
 

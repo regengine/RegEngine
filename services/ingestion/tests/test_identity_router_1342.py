@@ -25,10 +25,10 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz  # noqa: E402
-from app import identity_router  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.identity_router import _get_service  # noqa: E402
+import services.ingestion.app.authz as authz  # noqa: E402
+from services.ingestion.app import identity_router  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.identity_router import _get_service  # noqa: E402
 
 TENANT = "tenant-id-1342"
 

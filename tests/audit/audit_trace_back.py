@@ -213,8 +213,8 @@ def audit_engine_correctness(report: AuditReport):
 
     # Import the trace engine
     try:
-        from app.sandbox.csv_parser import _parse_csv_to_events
-        from app.sandbox.tracer import _trace_in_memory
+        from services.ingestion.app.sandbox.csv_parser import _parse_csv_to_events
+        from services.ingestion.app.sandbox.tracer import _trace_in_memory
 
         imported = True
     except Exception as e:
@@ -408,7 +408,7 @@ def audit_api_contract(report: AuditReport):
 
     # --- B1: Pydantic models exist (4 pts) ---
     try:
-        from app.sandbox.models import (
+        from services.ingestion.app.sandbox.models import (
             SandboxTraceRequest,
             TraceEdge,
             TraceGraphResponse,

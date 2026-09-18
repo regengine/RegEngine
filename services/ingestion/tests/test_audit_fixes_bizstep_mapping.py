@@ -47,7 +47,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.epcis.normalization import _EVENT_TYPE_MAP  # noqa: E402
+from services.ingestion.app.epcis.normalization import _EVENT_TYPE_MAP  # noqa: E402
 from shared.canonical_event import (  # noqa: E402
     BIZSTEP_TO_CTE_TYPE,
     CTEType,
@@ -103,7 +103,7 @@ def test_canonical_map_covers_exactly_the_authoritative_key_set() -> None:
     """
     assert set(BIZSTEP_TO_CTE_TYPE) == set(_EVENT_TYPE_MAP), (
         "bizStep map drift between shared.canonical_event and "
-        "app.epcis.normalization: "
+        "services.ingestion.app.epcis.normalization: "
         f"only-canonical={sorted(set(BIZSTEP_TO_CTE_TYPE) - set(_EVENT_TYPE_MAP))} "
         f"only-normalization={sorted(set(_EVENT_TYPE_MAP) - set(BIZSTEP_TO_CTE_TYPE))}"
     )

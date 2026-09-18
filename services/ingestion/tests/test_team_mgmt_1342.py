@@ -12,8 +12,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from app import team_mgmt as tm
-from app.team_mgmt import (
+from services.ingestion.app import team_mgmt as tm
+from services.ingestion.app.team_mgmt import (
     ROLE_PERMISSIONS,
     InviteRequest,
     TeamMember,
@@ -23,7 +23,7 @@ from app.team_mgmt import (
     _team_store,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

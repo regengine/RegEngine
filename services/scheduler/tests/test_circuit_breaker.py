@@ -8,7 +8,7 @@ protect decorator, and the circuit breaker registry.
 import time
 
 import pytest
-from app.circuit_breaker import (
+from services.scheduler.app.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerRegistry,
     CircuitOpenError,

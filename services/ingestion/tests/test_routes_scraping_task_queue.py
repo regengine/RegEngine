@@ -14,7 +14,7 @@ import hashlib
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
-import app.routes_scraping as routes_scraping
+import services.ingestion.app.routes_scraping as routes_scraping
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.auth import APIKey, require_api_key
@@ -170,7 +170,7 @@ class TestIngestAllRegulations:
 
 class TestRegisterScrapingHandlers:
     def test_registers_both_task_types(self):
-        from app.task_handlers_scraping import register_scraping_handlers
+        from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
         from shared.task_queue import TASK_HANDLERS
 
         for key in ("state_scrape", "generic_scrape"):
@@ -182,7 +182,7 @@ class TestRegisterScrapingHandlers:
         assert "generic_scrape" in TASK_HANDLERS
 
     def test_handlers_are_distinct(self):
-        from app.task_handlers_scraping import register_scraping_handlers
+        from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
         from shared.task_queue import TASK_HANDLERS
 
         register_scraping_handlers()

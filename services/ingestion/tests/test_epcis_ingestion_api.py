@@ -12,9 +12,9 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.epcis.persistence import _epcis_idempotency_index, _epcis_store
-from app.epcis.router import router as epcis_ingestion_router
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.epcis.persistence import _epcis_idempotency_index, _epcis_store
+from services.ingestion.app.epcis.router import router as epcis_ingestion_router
+from services.ingestion.app.webhook_compat import _verify_api_key
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 

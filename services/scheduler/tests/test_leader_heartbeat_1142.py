@@ -37,7 +37,7 @@ from typing import List
 from unittest.mock import MagicMock
 
 import pytest
-from app.distributed import (
+from services.scheduler.app.distributed import (
     SCHEDULER_LEADER_LOCK_ID,
     DistributedContext,
 )

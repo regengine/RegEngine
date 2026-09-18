@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from app.webhook_models import IngestEvent
-from app.webhook_router_v2 import _validate_event_kdes
+from services.ingestion.app.webhook_models import IngestEvent
+from services.ingestion.app.webhook_router_v2 import _validate_event_kdes
 
 
 def _timestamp() -> str:

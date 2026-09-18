@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 import pytest
-from app.sandbox.csv_parser import (
+from services.ingestion.app.sandbox.csv_parser import (
     _collect_value_normalizations,
     _normalize_for_rules,
     _parse_csv_to_events,
@@ -401,7 +401,7 @@ class TestParseCsvCteTypeNormalization:
         """#2819 end-to-end intent: because the row is now emitted, the
         downstream sandbox validator produces a real, blocking error for it
         instead of the row being invisible."""
-        from app.sandbox.validation import _validate_kdes
+        from services.ingestion.app.sandbox.validation import _validate_kdes
 
         csv = "cte_type,tlc\nharvesting,LOT-1\n,LOT-2\n"
         events = _parse_csv_to_events(csv)

@@ -41,7 +41,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("sqlalchemy")
 
-from app.models import TenantContext  # noqa: E402
+from services.admin.app.models import TenantContext  # noqa: E402
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000042")
 
@@ -195,7 +195,7 @@ class TestClearTenantContext:
         args, _ = session.execute.call_args
         sql = str(args[0])
         assert "set_config" in sql
-        assert "app.tenant_id" in sql
+        assert "services.admin.app.tenant_id" in sql
         # FALSE means 'apply beyond this transaction' — the explicit
         # FALSE is the critical bit, so pin it
         assert "FALSE" in sql or "false" in sql

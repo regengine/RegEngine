@@ -23,8 +23,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import audit_export_log as ael
-from app.audit_export_log import (
+from services.ingestion.app import audit_export_log as ael
+from services.ingestion.app.audit_export_log import (
     ActivityEntry,
     ActivityFeedResponse,
     ExportAuditResponse,
@@ -61,7 +61,7 @@ def _app():
     """Build a FastAPI with the router mounted and auth bypassed."""
     app = FastAPI()
     app.include_router(router)
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
@@ -350,7 +350,7 @@ class TestVerificationFallback:
             },
             _verification_lock=threading.Lock(),
         )
-        monkeypatch.setitem(sys.modules, "app.chain_verification_job", fake_job_module)
+        monkeypatch.setitem(sys.modules, "services.ingestion.app.chain_verification_job", fake_job_module)
         result = _get_verification_fallback("t", 10)
         assert len(result) == 1
         assert result[0]["id"] == "j1"
@@ -360,7 +360,7 @@ class TestVerificationFallback:
         import sys
 
         # Cause ImportError by setting module to None (Python sees as unavailable)
-        monkeypatch.setitem(sys.modules, "app.chain_verification_job", None)
+        monkeypatch.setitem(sys.modules, "services.ingestion.app.chain_verification_job", None)
         ael._verification_store["v1"] = {"id": "v1", "tenant_id": "t", "completed_at": "2026-01-01"}
         result = _get_verification_fallback("t", 10)
         assert result[0]["id"] == "v1"

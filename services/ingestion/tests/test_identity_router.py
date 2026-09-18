@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz
-from app import identity_router
-from app.authz import IngestionPrincipal, get_ingestion_principal
+import services.ingestion.app.authz as authz
+from services.ingestion.app import identity_router
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 
 # ---------------------------------------------------------------------------
 # Helpers

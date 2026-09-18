@@ -8,7 +8,7 @@ default shapes of the two response models.
 from __future__ import annotations
 
 import pytest
-from app.email_ingest.schemas import (
+from services.ingestion.app.email_ingest.schemas import (
     AttachmentResult,
     InboundEmailResult,
     PostmarkAttachment,

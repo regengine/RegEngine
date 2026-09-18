@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import base64
 
-import app.email_ingest.router as router_mod
+import services.ingestion.app.email_ingest.router as router_mod
 import pytest
-from app.email_ingest.router import router
-from app.email_ingest.schemas import InboundEmailResult
+from services.ingestion.app.email_ingest.router import router
+from services.ingestion.app.email_ingest.schemas import InboundEmailResult
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.database import get_db_session

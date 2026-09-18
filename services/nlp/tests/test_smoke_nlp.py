@@ -4,7 +4,7 @@ from pathlib import Path
 # Add service directory to path for imports to work
 service_dir = Path(__file__).parent.parent
 # Clear conflicting 'app' and 'main' modules from other services
-_to_remove = [key for key in sys.modules if key == "app" or key.startswith("app.") or key == "main"]
+_to_remove = [key for key in sys.modules if key == "app" or key.startswith("services.nlp.app.") or key == "main"]
 for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(service_dir))
@@ -17,7 +17,7 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
 try:
-    from main import app
+    from services.nlp.main import app
 except Exception as _import_err:
     pytestmark = pytest.mark.skip(reason=f"NLP app import failed: {_import_err}")
     app = None

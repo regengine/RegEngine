@@ -27,8 +27,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-import app.subscription_gate as gate
-from app.subscription_gate import require_active_subscription
+import services.ingestion.app.subscription_gate as gate
+from services.ingestion.app.subscription_gate import require_active_subscription
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -97,7 +97,7 @@ async def test_redis_hget_runs_off_the_event_loop(client):
     mock_redis = MagicMock()
     mock_redis.hget.side_effect = _hget
 
-    with patch("app.subscription_gate.os.getenv", return_value=REDIS_URL):
+    with patch("services.ingestion.app.subscription_gate.os.getenv", return_value=REDIS_URL):
         with patch("redis.from_url", return_value=mock_redis):
             resp = await client.get("/paid", headers={"X-Tenant-ID": "t1"})
 
@@ -135,7 +135,7 @@ async def test_slow_redis_does_not_stall_concurrent_tasks(client):
         await asyncio.sleep(tick_interval * 2)  # let the ticker get going
         ticks_before = ticks
 
-        with patch("app.subscription_gate.os.getenv", return_value=REDIS_URL):
+        with patch("services.ingestion.app.subscription_gate.os.getenv", return_value=REDIS_URL):
             with patch("redis.from_url", return_value=mock_redis):
                 resp = await client.get("/paid", headers={"X-Tenant-ID": "t1"})
     finally:
@@ -163,7 +163,7 @@ async def test_redis_client_is_built_once_and_reused(client):
         built.append((args, kwargs))
         return mock_redis
 
-    with patch("app.subscription_gate.os.getenv", return_value=REDIS_URL):
+    with patch("services.ingestion.app.subscription_gate.os.getenv", return_value=REDIS_URL):
         with patch("redis.from_url", side_effect=_from_url):
             for _ in range(5):
                 resp = await client.get("/paid", headers={"X-Tenant-ID": "t1"})
@@ -189,7 +189,7 @@ async def test_cached_client_uses_bounded_timeouts(client):
         built.append(kwargs)
         return mock_redis
 
-    with patch("app.subscription_gate.os.getenv", return_value=REDIS_URL):
+    with patch("services.ingestion.app.subscription_gate.os.getenv", return_value=REDIS_URL):
         with patch("redis.from_url", side_effect=_from_url):
             resp = await client.get("/paid", headers={"X-Tenant-ID": "t1"})
 
@@ -212,9 +212,9 @@ async def test_changed_redis_url_rebuilds_the_client(client):
         return first if url == REDIS_URL else second
 
     with patch("redis.from_url", side_effect=_from_url):
-        with patch("app.subscription_gate.os.getenv", return_value=REDIS_URL):
+        with patch("services.ingestion.app.subscription_gate.os.getenv", return_value=REDIS_URL):
             assert (await client.get("/paid", headers={"X-Tenant-ID": "t1"})).status_code == 200
-        with patch("app.subscription_gate.os.getenv", return_value="redis://rotated:6379"):
+        with patch("services.ingestion.app.subscription_gate.os.getenv", return_value="redis://rotated:6379"):
             assert (await client.get("/paid", headers={"X-Tenant-ID": "t1"})).status_code == 200
 
     assert urls == [REDIS_URL, "redis://rotated:6379"]

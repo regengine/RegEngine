@@ -17,7 +17,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -83,8 +83,8 @@ def db_session() -> Session:
 
 
 def _build_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID):
-    import app.supplier_funnel_routes as funnel_routes
-    from app.dependencies import PermissionChecker
+    import services.admin.app.supplier_funnel_routes as funnel_routes
+    from services.admin.app.dependencies import PermissionChecker
 
     app = FastAPI()
     app.include_router(funnel_routes.router, prefix="/v1")

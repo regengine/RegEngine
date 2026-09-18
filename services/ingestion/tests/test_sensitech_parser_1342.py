@@ -37,10 +37,10 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-import app.sensitech_parser as sensitech_parser_module
-from app.sensitech_parser import router as sensitech_router
-from app.webhook_compat import _verify_api_key
-from app.webhook_models import EventResult, IngestResponse
+import services.ingestion.app.sensitech_parser as sensitech_parser_module
+from services.ingestion.app.sensitech_parser import router as sensitech_router
+from services.ingestion.app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_models import EventResult, IngestResponse
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000001342"
 
@@ -173,7 +173,7 @@ def test_empty_timestamp_produces_400(client: TestClient) -> None:
 # Coverage sweep — remaining uncovered lines of app/sensitech_parser.py
 # ---------------------------------------------------------------------------
 
-from app.sensitech_parser import (  # noqa: E402
+from services.ingestion.app.sensitech_parser import (  # noqa: E402
     TemperatureReading,
     _detect_excursions,
     _normalize_iso_timestamp_or_400,

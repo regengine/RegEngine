@@ -19,7 +19,7 @@ from fastapi import HTTPException
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.exception_router import _get_service  # noqa: E402
+from services.ingestion.app.exception_router import _get_service  # noqa: E402
 
 
 class TestGetService:

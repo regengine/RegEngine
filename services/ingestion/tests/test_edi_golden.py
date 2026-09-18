@@ -58,16 +58,16 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.edi_ingestion import router as edi_router  # noqa: E402
-from app.edi_ingestion.extractors import _extract_fields_for_set  # noqa: E402
-from app.edi_ingestion.parser import (  # noqa: E402
+import services.ingestion.app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.edi_ingestion import router as edi_router  # noqa: E402
+from services.ingestion.app.edi_ingestion.extractors import _extract_fields_for_set  # noqa: E402
+from services.ingestion.app.edi_ingestion.parser import (  # noqa: E402
     _detect_transaction_set,
     _parse_x12_segments,
     _split_transaction_sets,
 )
-from app.webhook_models import EventResult, IngestResponse  # noqa: E402
+from services.ingestion.app.webhook_models import EventResult, IngestResponse  # noqa: E402
 
 _CORPUS_DIR = Path(__file__).parent / "fixtures" / "edi_corpus"
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"

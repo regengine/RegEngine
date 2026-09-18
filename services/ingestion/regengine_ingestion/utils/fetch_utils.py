@@ -90,7 +90,7 @@ def _fetch_with_browser_sync(url: str) -> Dict[str, Any]:
         raise ValueError(f"URL validation failed: {str(e)}") from e
 
     try:
-        from app.browser_utils import run_browser_fetch
+        from services.ingestion.app.browser_utils import run_browser_fetch
 
         return run_browser_fetch(url)
     except ImportError:

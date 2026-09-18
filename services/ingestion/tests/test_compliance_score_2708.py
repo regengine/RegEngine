@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.compliance_score import _query_scoring_data
+from services.ingestion.app.compliance_score import _query_scoring_data
 from sqlalchemy.exc import OperationalError
 
 from services.ingestion.tests.test_compliance_score_1342 import _RouteSession, _row
@@ -142,7 +142,7 @@ class TestExportReadinessChainVerificationFailed:
         return data
 
     def test_failed_verification_earns_no_export_credit(self):
-        from app.compliance_score import _compute_scores
+        from services.ingestion.app.compliance_score import _compute_scores
 
         scores = _compute_scores(self._tampered_data())
         score, detail = scores["export_readiness"]
@@ -152,7 +152,7 @@ class TestExportReadinessChainVerificationFailed:
         assert "FDA export ready" not in detail
 
     def test_issue_text_distinguishes_failed_from_not_performed(self):
-        from app.compliance_score import _compute_scores
+        from services.ingestion.app.compliance_score import _compute_scores
 
         _, detail = _compute_scores(self._tampered_data())["export_readiness"]
 
@@ -166,7 +166,7 @@ class TestExportReadinessChainVerificationFailed:
         verification that could not RUN still reports 'unavailable', not
         'FAILED'.
         """
-        from app.compliance_score import _compute_scores
+        from services.ingestion.app.compliance_score import _compute_scores
 
         data = self._tampered_data(chain_verified=None)
         data["chain_verification_error"] = "connection refused"
@@ -177,7 +177,7 @@ class TestExportReadinessChainVerificationFailed:
 
     def test_intact_verified_chain_is_unaffected(self):
         """Regression guard: the happy path still reaches FDA-export-ready."""
-        from app.compliance_score import _compute_scores
+        from services.ingestion.app.compliance_score import _compute_scores
 
         from services.ingestion.tests.test_compliance_score_1342 import _base_data
 
@@ -189,7 +189,7 @@ class TestExportReadinessChainVerificationFailed:
         """The same response must keep saying TAMPER DETECTED — this fix
         changes the export dimension only.
         """
-        from app.compliance_score import _compute_scores
+        from services.ingestion.app.compliance_score import _compute_scores
 
         chain_score, chain_detail = _compute_scores(self._tampered_data())["chain_integrity"]
         assert "TAMPER DETECTED" in chain_detail

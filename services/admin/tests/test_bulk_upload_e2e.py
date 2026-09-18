@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -151,8 +151,8 @@ def db_session() -> Session:
 
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    import app.bulk_upload.routes as bulk_routes
-    import app.bulk_upload.transaction_manager as tx_manager
+    import services.admin.app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.transaction_manager as tx_manager
 
     test_app = FastAPI()
     test_app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
@@ -185,7 +185,7 @@ def test_bulk_upload_parse_validate_commit_happy_path(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    import app.supplier_cte_service as cte_service
+    import services.admin.app.supplier_cte_service as cte_service
 
     lock_calls = {"count": 0}
 
@@ -284,7 +284,7 @@ def test_bulk_upload_commit_succeeds_when_graph_sync_fails(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    import app.bulk_upload.transaction_manager as tx_manager
+    import services.admin.app.bulk_upload.transaction_manager as tx_manager
 
     def _raise_graph_sync(**_kwargs):
         raise RuntimeError("neo4j unavailable")
@@ -327,7 +327,7 @@ event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z
 @pytest.mark.parametrize("event_type", ["unknown_event", "", "x"])
 @pytest.mark.parametrize("stale_validated", [False, True])
 def test_invalid_event_type_cannot_commit_receiving(client, db_session, event_type, stale_validated):
-    import app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.routes as bulk_routes
 
     csv_payload = f"""record_type,name,street,city,state,postal_code,roles,facility_name,tlc_code,cte_type,event_time
 facility,Test Facility,100 Main St,Salinas,CA,93901,Packer,,,,
@@ -362,7 +362,7 @@ event,,,,,,,Test Facility,LOT-100,{event_type},2026-09-10T12:00:00Z
 
 
 def test_commit_rejects_legacy_session_without_original_data(client, db_session):
-    import app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.routes as bulk_routes
 
     session_id = "legacy-session"
     bulk_routes.session_store._store[f"{TEST_TENANT_ID}:{TEST_USER_ID}:{session_id}"] = {

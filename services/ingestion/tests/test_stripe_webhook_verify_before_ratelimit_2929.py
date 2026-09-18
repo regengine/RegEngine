@@ -44,8 +44,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.stripe_billing.rate_limiting as rl  # noqa: E402
-from app.stripe_billing import (  # noqa: E402
+import services.ingestion.app.stripe_billing.rate_limiting as rl  # noqa: E402
+from services.ingestion.app.stripe_billing import (  # noqa: E402
     helpers as helpers_mod,
     routes as routes_mod,
     state as state_mod,

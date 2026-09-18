@@ -33,9 +33,9 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.webhook_models import IngestEvent  # noqa: E402
+import services.ingestion.app.webhook_router_v2 as wr  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.webhook_models import IngestEvent  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -246,9 +246,9 @@ def _install_shared_stubs(
     fake_exc.ExceptionQueueService = _FakeExceptionQueue
     monkeypatch.setitem(sys.modules, "shared.exception_queue", fake_exc)
 
-    fake_catalog = types.ModuleType("app.product_catalog")
+    fake_catalog = types.ModuleType("services.ingestion.app.product_catalog")
     fake_catalog.learn_from_event = lambda **_kw: None
-    monkeypatch.setitem(sys.modules, "app.product_catalog", fake_catalog)
+    monkeypatch.setitem(sys.modules, "services.ingestion.app.product_catalog", fake_catalog)
 
     # The router looks up ``normalize_webhook_event`` via the already-imported
     # module reference, so patching ``wr.normalize_webhook_event`` is enough.
@@ -287,7 +287,7 @@ def _build_app() -> FastAPI:
         tenant_id="tenant-a",
         auth_mode="test",
     )
-    from app.subscription_gate import require_active_subscription
+    from services.ingestion.app.subscription_gate import require_active_subscription
 
     app.dependency_overrides[require_active_subscription] = lambda: None
     return app
@@ -302,7 +302,7 @@ def _client(
     session, persistence = _install_shared_stubs(monkeypatch, session=session, persistence=persistence)
     # Defang rate limiting everywhere it matters.
     monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-    monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+    monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
     # Route-level API-key presence is covered separately; these route tests
     # focus on ingest behavior once auth has resolved a principal.
     monkeypatch.delenv("API_KEY", raising=False)
@@ -1409,7 +1409,7 @@ class TestIngestEndpoint:
         """FastAPI yields ``None`` for db_session when DB is down → 503."""
         session, persistence = _install_shared_stubs(monkeypatch)
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1433,7 +1433,7 @@ class TestIngestEndpoint:
         # Clobber the import so the next ``from shared.cte_persistence`` raises.
         monkeypatch.setitem(sys.modules, "shared.cte_persistence", None)
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1520,7 +1520,7 @@ class TestIngestEndpoint:
         """
         from unittest.mock import MagicMock
 
-        from app.webhook_router_v2 import routes as wr_routes
+        from services.ingestion.app.webhook_router_v2 import routes as wr_routes
 
         session = _FakeSession()
         persistence = _FakePersistence(session)  # batch succeeds by default
@@ -1624,7 +1624,7 @@ class TestIngestEndpoint:
         sys.modules["shared.exception_queue"].ExceptionQueueService = _ExcQueue
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1655,7 +1655,7 @@ class TestIngestEndpoint:
         sys.modules["shared.canonical_persistence"].CanonicalEventStore = _BrokenCanonical
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1704,7 +1704,7 @@ class TestIngestEndpoint:
         sys.modules["shared.exception_queue"].ExceptionQueueService = _ExcQueue
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1738,7 +1738,7 @@ class TestIngestEndpoint:
         sys.modules["shared.canonical_persistence"].CanonicalEventStore = _BrokenCanonical
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1766,10 +1766,10 @@ class TestIngestEndpoint:
         def _learn_bang(**_kw):
             raise ValueError("catalog learn broke")
 
-        sys.modules["app.product_catalog"].learn_from_event = _learn_bang
+        sys.modules["services.ingestion.app.product_catalog"].learn_from_event = _learn_bang
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 
@@ -1793,10 +1793,10 @@ class TestIngestEndpoint:
         def _learn_bang(**_kw):
             raise RuntimeError("catalog broke")
 
-        sys.modules["app.product_catalog"].learn_from_event = _learn_bang
+        sys.modules["services.ingestion.app.product_catalog"].learn_from_event = _learn_bang
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         app = _build_app()
 

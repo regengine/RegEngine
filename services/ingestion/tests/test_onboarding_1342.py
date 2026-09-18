@@ -12,8 +12,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from app import onboarding as ob
-from app.onboarding import (
+from services.ingestion.app import onboarding as ob
+from services.ingestion.app.onboarding import (
     ONBOARDING_STEPS,
     OnboardingCTE,
     OnboardingFacility,
@@ -26,7 +26,7 @@ from app.onboarding import (
     _seed_obligations_if_needed,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

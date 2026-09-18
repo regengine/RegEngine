@@ -27,7 +27,7 @@ from prometheus_client import REGISTRY
 # Add service path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.fsma_metrics import (  # Metrics; Functions; Decorators
+from services.graph.app.fsma_metrics import (  # Metrics; Functions; Decorators
     EXTRACTION_CONFIDENCE_AVG,
     FSMA_API_CALLS,
     GAPS_TOTAL,

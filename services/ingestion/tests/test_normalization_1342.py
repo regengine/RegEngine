@@ -22,9 +22,9 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
-from app import normalization as norm
-from app.models import PositionMapEntry, TextExtractionMetadata
-from app.normalization import (
+from services.ingestion.app import normalization as norm
+from services.ingestion.app.models import PositionMapEntry, TextExtractionMetadata
+from services.ingestion.app.normalization import (
     _content_hash,
     _derive_document_id,
     _extract_from_pdf,
@@ -240,7 +240,7 @@ class TestExtractText:
             called["html"] = b
             return ("HTML", _stub_meta(), _stub_position())
 
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "extract_from_html", _html)
         text, meta, pmap = _extract_text(None, b"<html/>", "text/html")
@@ -248,7 +248,7 @@ class TestExtractText:
         assert called["html"] == b"<html/>"
 
     def test_xml_by_content_type(self, monkeypatch):
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "extract_from_xml", lambda b: ("XML", _stub_meta(), _stub_position()))
         # HTML token absent → xml branch
@@ -257,21 +257,21 @@ class TestExtractText:
 
     def test_xml_not_html(self, monkeypatch):
         """xml-in-html path falls to html (xml branch requires NOT html)."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "extract_from_html", lambda b: ("HTML", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"<x/>", "application/xhtml+xml")
         assert text == "HTML"
 
     def test_csv_by_content_type(self, monkeypatch):
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "extract_from_csv", lambda b: ("CSV", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"a,b,c", "text/csv")
         assert text == "CSV"
 
     def test_csv_by_comma_separated(self, monkeypatch):
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "extract_from_csv", lambda b: ("CSV", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"a,b", "text/comma-separated-values")
@@ -279,7 +279,7 @@ class TestExtractText:
 
     def test_excel_by_detected_format(self, monkeypatch):
         """detect_format returns 'excel' → excel branch."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "excel")
         monkeypatch.setattr(fe, "extract_from_excel", lambda b: ("XLSX", _stub_meta(), _stub_position()))
@@ -288,7 +288,7 @@ class TestExtractText:
 
     def test_excel_by_ct_substring(self, monkeypatch):
         """content_type contains 'excel' → excel branch (unique, no xml conflict)."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "extract_from_excel", lambda b: ("XLSX", _stub_meta(), _stub_position()))
@@ -296,7 +296,7 @@ class TestExtractText:
         assert text == "XLSX"
 
     def test_docx_by_detected_format(self, monkeypatch):
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "docx")
         monkeypatch.setattr(fe, "extract_from_docx", lambda b: ("DOCX", _stub_meta(), _stub_position()))
@@ -305,7 +305,7 @@ class TestExtractText:
 
     def test_docx_by_msword_ct(self, monkeypatch):
         """application/msword → docx branch."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "extract_from_docx", lambda b: ("DOCX", _stub_meta(), _stub_position()))
@@ -313,7 +313,7 @@ class TestExtractText:
         assert text == "DOCX"
 
     def test_edi_by_content_type(self, monkeypatch):
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "extract_from_edi", lambda b: ("EDI", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"ISA*00...", "application/edi-x12")
@@ -321,7 +321,7 @@ class TestExtractText:
 
     def test_edi_by_is_edi_detection(self, monkeypatch):
         """No matching content-type but is_edi_content() returns True."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: True)
@@ -341,7 +341,7 @@ class TestExtractText:
 
     def test_fallback_bytes_utf8(self, monkeypatch):
         """Unknown format with non-empty bytes → utf-8 decode fallback."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: False)
@@ -351,7 +351,7 @@ class TestExtractText:
         assert pmap[0].source_end == len(b"hello bytes")
 
     def test_fallback_empty_bytes(self, monkeypatch):
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: False)
@@ -364,7 +364,7 @@ class TestExtractText:
 
     def test_detected_format_html(self, monkeypatch):
         """detect_format returns 'html' even when content_type doesn't say html."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "html")
         monkeypatch.setattr(fe, "extract_from_html", lambda b: ("H!", _stub_meta(), _stub_position()))
@@ -373,7 +373,7 @@ class TestExtractText:
 
     def test_empty_payload_dict_falls_through_to_format(self, monkeypatch):
         """raw_payload = {} is falsy for the first branch."""
-        import app.format_extractors as fe
+        import services.ingestion.app.format_extractors as fe
 
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: False)

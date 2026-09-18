@@ -18,8 +18,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from app import recall_report as rr
-from app.recall_report import (
+from services.ingestion.app import recall_report as rr
+from services.ingestion.app.recall_report import (
     RecallDimension,
     RecallReport,
     _grade,
@@ -38,7 +38,7 @@ from fastapi.testclient import TestClient
 def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 

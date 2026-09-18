@@ -39,7 +39,7 @@ sys.modules.setdefault("playwright.async_api", _fake_async_api)
 import asyncio  # noqa: E402
 
 import pytest  # noqa: E402
-from app import browser_utils as bu  # noqa: E402
+from services.ingestion.app import browser_utils as bu  # noqa: E402
 from shared.url_validation import SSRFError  # noqa: E402
 
 # ---------------------------------------------------------------------------

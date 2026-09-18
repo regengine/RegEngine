@@ -171,7 +171,7 @@ def test_clear_tenant_context_called_before_user_set_on_postgres(monkeypatch):
     assert "app.tenant_id" in rendered or "set_config" in rendered
     # And the CLEAR should happen before the user_id set.
     clear_idx = next(
-        (i for i, r in enumerate(db._executed) if "app.tenant_id" in str(r[0]) and "''" in str(r[0])),
+        (i for i, r in enumerate(db._executed) if "services.admin.app.tenant_id" in str(r[0]) and "''" in str(r[0])),
         None,
     )
     set_user_idx = next(
@@ -205,4 +205,4 @@ def test_sqlite_fallback_skips_tenant_setters_but_still_returns_user(monkeypatch
     assert result is user
     # No app.tenant_id related SQL should have run on sqlite.
     for stmt, _ in db._executed:
-        assert "app.tenant_id" not in str(stmt)
+        assert "services.admin.app.tenant_id" not in str(stmt)

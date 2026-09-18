@@ -53,12 +53,12 @@ class _FakeDiscovery:
         return None
 
 
-_discovery_pkg = ModuleType("app.discovery")
+_discovery_pkg = ModuleType("services.ingestion.app.discovery")
 _discovery_pkg.__file__ = str(service_dir / "app" / "discovery.py")
 _discovery_pkg.discovery = _FakeDiscovery
 
-_REAL_APP_DISCOVERY = sys.modules.get("app.discovery")
-sys.modules["app.discovery"] = _discovery_pkg
+_REAL_APP_DISCOVERY = sys.modules.get("services.ingestion.app.discovery")
+sys.modules["services.ingestion.app.discovery"] = _discovery_pkg
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -73,13 +73,13 @@ def _restore_modules_on_module_teardown():
     """
     yield
     if _REAL_APP_DISCOVERY is not None:
-        sys.modules["app.discovery"] = _REAL_APP_DISCOVERY
+        sys.modules["services.ingestion.app.discovery"] = _REAL_APP_DISCOVERY
     else:
-        sys.modules.pop("app.discovery", None)
+        sys.modules.pop("services.ingestion.app.discovery", None)
 
 
-from app import task_handlers_discovery as thd  # noqa: E402
-from app.task_handlers_discovery import (  # noqa: E402
+from services.ingestion.app import task_handlers_discovery as thd  # noqa: E402
+from services.ingestion.app.task_handlers_discovery import (  # noqa: E402
     _handle_discovery_scrape,
     register_discovery_handlers,
 )
@@ -92,7 +92,7 @@ from app.task_handlers_discovery import (  # noqa: E402
 @pytest.fixture(autouse=True)
 def _reset_state(monkeypatch):
     """Re-install the app.discovery stub and clear capture state."""
-    sys.modules["app.discovery"] = _discovery_pkg
+    sys.modules["services.ingestion.app.discovery"] = _discovery_pkg
 
     # The handler imports ``discovery`` at module load:
     #     from .discovery import discovery

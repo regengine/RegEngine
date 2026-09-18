@@ -267,7 +267,7 @@ def test_runtime_tenant_and_input_boundaries(workflow):
 
 
 def test_canonical_single_and_batch_writers_need_no_chain_update_privilege(workflow):
-    from app.webhook_models import IngestEvent
+    from services.ingestion.app.webhook_models import IngestEvent
     from shared.canonical_event import normalize_webhook_event
     from shared.canonical_persistence import CanonicalEventStore
     from shared.database import SessionLocal

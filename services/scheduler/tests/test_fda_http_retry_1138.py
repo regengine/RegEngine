@@ -22,7 +22,7 @@ from typing import List, Optional
 
 import httpx
 import pytest
-from app.scrapers.base import (
+from services.scheduler.app.scrapers.base import (
     _compute_backoff,
     _parse_retry_after,
     fetch_with_retry,
@@ -371,7 +371,7 @@ class TestFDARecallsScraperE2E_Issue1138:
     verify the scrape succeeds after retry."""
 
     def test_scraper_survives_single_503(self, monkeypatch):
-        from app.scrapers.fda_recalls import FDARecallsScraper
+        from services.scheduler.app.scrapers.fda_recalls import FDARecallsScraper
 
         scraper = FDARecallsScraper(limit=5)
         # Replace the httpx client with a scripted one.
@@ -394,7 +394,7 @@ class TestFDARecallsScraperE2E_Issue1138:
         # actually wait. The scraper calls fetch_with_retry without an
         # explicit sleep kwarg, so it uses the default time.sleep.
         monkeypatch.setattr(
-            "app.scrapers.base.time.sleep",
+            "services.scheduler.app.scrapers.base.time.sleep",
             lambda s: None,
         )
 

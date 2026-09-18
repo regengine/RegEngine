@@ -55,7 +55,7 @@ async def test_erasure_reads_id_email_via_attribute_not_dict():
     narrowed) except clause as a real test failure rather than a
     swallowed 500.
     """
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
 
     body = m.ErasureRequest(confirm=True, reason="testing")
     user = _make_user_model()
@@ -93,7 +93,7 @@ async def test_erasure_starts_runtime_cleanup_immediately_after_commit_without_d
     starts a new transaction and can fail after the erasure is durable but
     before runtime credentials are revoked.
     """
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
 
     events: list[str] = []
     db = MagicMock()
@@ -128,7 +128,7 @@ async def test_erasure_starts_runtime_cleanup_immediately_after_commit_without_d
 @pytest.mark.asyncio
 async def test_erasure_rolls_back_armed_transaction_before_mapping_db_failure():
     """A failure before durable commit must clear transaction-local authority."""
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
     from fastapi import HTTPException
     from sqlalchemy.exc import SQLAlchemyError
 
@@ -163,7 +163,7 @@ async def test_erasure_rolls_back_armed_transaction_before_mapping_db_failure():
 @pytest.mark.asyncio
 async def test_erasure_requires_confirm_true():
     """``confirm=false`` returns 400 before any DB / tenant access."""
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
     from fastapi import HTTPException
 
     body = m.ErasureRequest(confirm=False)

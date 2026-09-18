@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 def test_health(monkeypatch) -> None:
     try:
-        from main import app
+        from services.ingestion.main import app
     except ModuleNotFoundError as exc:
         pytest.skip(
             f"ingestion smoke tests require optional dependency '{exc.name}'",

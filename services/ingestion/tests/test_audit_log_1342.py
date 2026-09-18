@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import audit_log as al
-from app.audit_log import (
+from services.ingestion.app import audit_log as al
+from services.ingestion.app.audit_log import (
     AuditEntry,
     AuditLogResponse,
     _normalize_audit_event_type,
@@ -28,7 +28,7 @@ from app.audit_log import (
     _to_iso,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

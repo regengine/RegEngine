@@ -27,13 +27,13 @@ def _make_response(content: bytes = b"<html></html>", content_type: str = "text/
 
 
 def test_cppa_scraper_uses_safe_http():
-    from app.scrapers.state_adaptors.base import Source
-    from app.scrapers.state_adaptors.cppa import CPPAScraper
+    from services.ingestion.app.scrapers.state_adaptors.base import Source
+    from services.ingestion.app.scrapers.state_adaptors.cppa import CPPAScraper
 
     scraper = CPPAScraper()
     src = Source(url="https://cppa.ca.gov/regulations/", title="t", jurisdiction_code="US-CA")
 
-    with patch("app.scrapers.state_adaptors.cppa.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.cppa.safe_httpx_get_sync") as m:
         m.return_value = _make_response(b"<html>cppa</html>")
         item = scraper.fetch(src)
 
@@ -43,13 +43,13 @@ def test_cppa_scraper_uses_safe_http():
 
 
 def test_fl_rss_scraper_uses_safe_http():
-    from app.scrapers.state_adaptors.base import Source
-    from app.scrapers.state_adaptors.fl_rss import FloridaRSSScraper
+    from services.ingestion.app.scrapers.state_adaptors.base import Source
+    from services.ingestion.app.scrapers.state_adaptors.fl_rss import FloridaRSSScraper
 
     scraper = FloridaRSSScraper()
     src = Source(url="https://www.flsenate.gov/PublishedContent/Session/", title="t", jurisdiction_code="US-FL")
 
-    with patch("app.scrapers.state_adaptors.fl_rss.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.fl_rss.safe_httpx_get_sync") as m:
         m.return_value = _make_response(b"<rss/>", content_type="application/rss+xml")
         item = scraper.fetch(src)
 
@@ -58,13 +58,13 @@ def test_fl_rss_scraper_uses_safe_http():
 
 
 def test_generic_rss_scraper_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors.base import Source
-    from app.scrapers.state_adaptors.generic import GenericRSSScraper
+    from services.ingestion.app.scrapers.state_adaptors.base import Source
+    from services.ingestion.app.scrapers.state_adaptors.generic import GenericRSSScraper
 
     scraper = GenericRSSScraper(feed_url="https://example.com/feed", jurisdiction="US-XX", title_prefix="X")
     src = Source(url="https://example.com/doc", title="t", jurisdiction_code="US-XX")
 
-    with patch("app.scrapers.state_adaptors.generic.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.generic.safe_httpx_get_sync") as m:
         m.return_value = _make_response(b"hi")
         item = scraper.fetch(src)
 
@@ -74,7 +74,7 @@ def test_generic_rss_scraper_fetch_uses_safe_http():
 
 
 def test_generic_list_scraper_uses_safe_http():
-    from app.scrapers.state_adaptors.generic import GenericListScraper
+    from services.ingestion.app.scrapers.state_adaptors.generic import GenericListScraper
 
     scraper = GenericListScraper(
         list_url="https://example.com/list",
@@ -82,7 +82,7 @@ def test_generic_list_scraper_uses_safe_http():
         title_prefix="X",
     )
 
-    with patch("app.scrapers.state_adaptors.generic.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.generic.safe_httpx_get_sync") as m:
         m.return_value = _make_response(b"<html><a href='/d'>d</a></html>")
         # Drain the generator
         list(scraper.list_sources())
@@ -92,7 +92,7 @@ def test_generic_list_scraper_uses_safe_http():
 
 
 def test_google_discovery_list_uses_safe_http(monkeypatch):
-    from app.scrapers.state_adaptors import google_discovery as gd
+    from services.ingestion.app.scrapers.state_adaptors import google_discovery as gd
 
     # Stub settings so list_sources runs through.
     settings = MagicMock()
@@ -106,7 +106,7 @@ def test_google_discovery_list_uses_safe_http(monkeypatch):
     resp = _make_response(b"{}")
     resp.json = MagicMock(return_value={"items": []})
 
-    with patch("app.scrapers.state_adaptors.google_discovery.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.google_discovery.safe_httpx_get_sync") as m:
         m.return_value = resp
         list(scraper.list_sources() or [])
 
@@ -118,8 +118,8 @@ def test_google_discovery_list_uses_safe_http(monkeypatch):
 
 
 def test_google_discovery_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors import google_discovery as gd
-    from app.scrapers.state_adaptors.base import Source
+    from services.ingestion.app.scrapers.state_adaptors import google_discovery as gd
+    from services.ingestion.app.scrapers.state_adaptors.base import Source
 
     settings = MagicMock()
     settings.google_api_key = "k"
@@ -128,7 +128,7 @@ def test_google_discovery_fetch_uses_safe_http():
         scraper = gd.GoogleDiscoveryScraper()
 
     src = Source(url="https://example.gov/doc.pdf", title="t", jurisdiction_code="US")
-    with patch("app.scrapers.state_adaptors.google_discovery.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.google_discovery.safe_httpx_get_sync") as m:
         m.return_value = _make_response(b"%PDF-", content_type="application/pdf")
         item = scraper.fetch(src)
 
@@ -138,14 +138,14 @@ def test_google_discovery_fetch_uses_safe_http():
 
 
 def test_fda_enforcement_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors.base import Source
-    from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
+    from services.ingestion.app.scrapers.state_adaptors.base import Source
+    from services.ingestion.app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
     scraper = FDAEnforcementScraper()
     src = Source(url="https://www.fda.gov/warning-letter/abc", title="t", jurisdiction_code="US-FDA")
 
     # Landing-page response with no PDF link — single safe call expected.
-    with patch("app.scrapers.state_adaptors.fda_enforcement.safe_httpx_get_sync") as m:
+    with patch("services.ingestion.app.scrapers.state_adaptors.fda_enforcement.safe_httpx_get_sync") as m:
         m.return_value = _make_response(b"<html>no pdf here</html>")
         item = scraper.fetch(src)
 
@@ -154,8 +154,8 @@ def test_fda_enforcement_fetch_uses_safe_http():
 
 
 def test_fda_enforcement_pdf_deep_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors.base import Source
-    from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
+    from services.ingestion.app.scrapers.state_adaptors.base import Source
+    from services.ingestion.app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
     scraper = FDAEnforcementScraper()
     src = Source(url="https://www.fda.gov/warning-letter/abc", title="t", jurisdiction_code="US-FDA")
@@ -164,7 +164,7 @@ def test_fda_enforcement_pdf_deep_fetch_uses_safe_http():
     pdf = _make_response(b"%PDF-", content_type="application/pdf")
 
     with patch(
-        "app.scrapers.state_adaptors.fda_enforcement.safe_httpx_get_sync",
+        "services.ingestion.app.scrapers.state_adaptors.fda_enforcement.safe_httpx_get_sync",
         side_effect=[landing, pdf],
     ) as m:
         item = scraper.fetch(src)

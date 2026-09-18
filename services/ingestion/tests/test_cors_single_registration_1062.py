@@ -40,7 +40,7 @@ def test_cors_registered_exactly_once() -> None:
     from starlette.middleware.cors import CORSMiddleware
 
     try:
-        from main import app
+        from services.ingestion.main import app
     except ImportError as exc:  # pragma: no cover - optional deps
         pytest.skip(
             f"ingestion guardrail requires optional import stack: {exc}",

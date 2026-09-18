@@ -26,7 +26,7 @@ from pydantic import ValidationError
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.webhook_models import IngestEvent, WebhookCTEType  # noqa: E402
+from services.ingestion.app.webhook_models import IngestEvent, WebhookCTEType  # noqa: E402
 
 # A valid 13-digit GLN with correct mod-10 check digit. ``0614141000005``
 # is the GS1 demo prefix body ``061414100000`` with its correct check

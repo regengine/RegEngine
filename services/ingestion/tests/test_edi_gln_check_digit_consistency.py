@@ -29,8 +29,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.edi_ingestion.utils import _valid_gln_or_none  # noqa: E402
-from app.webhook_models import validate_gln as webhook_validate_gln  # noqa: E402
+from services.ingestion.app.edi_ingestion.utils import _valid_gln_or_none  # noqa: E402
+from services.ingestion.app.webhook_models import validate_gln as webhook_validate_gln  # noqa: E402
 from shared.fsma_validation import (  # noqa: E402
     calculate_gs1_check_digit,
     validate_gln as shared_validate_gln,

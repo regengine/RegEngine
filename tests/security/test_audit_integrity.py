@@ -26,8 +26,8 @@ sys.path.insert(0, str(_admin_dir))
 # Also add shared for transitive imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
 
-from app.audit import compute_integrity_hash
-from app.audit_integrity import verify_chain
+from services.admin.app.audit import compute_integrity_hash
+from services.admin.app.audit_integrity import verify_chain
 
 
 class TestComputeIntegrityHash:

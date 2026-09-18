@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from app.fda_export import verification as v
+from services.ingestion.app.fda_export import verification as v
 from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------

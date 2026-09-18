@@ -30,8 +30,8 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.fda_export import queries as q  # noqa: E402
-from app.fda_export.queries import (  # noqa: E402
+from services.ingestion.app.fda_export import queries as q  # noqa: E402
+from services.ingestion.app.fda_export.queries import (  # noqa: E402
     AuditLogWriteError,
     _end_bound_utc,
     build_recall_where_clause,

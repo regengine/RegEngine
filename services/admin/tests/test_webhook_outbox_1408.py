@@ -32,13 +32,13 @@ from typing import Tuple
 from uuid import uuid4
 
 import pytest
-from app.metrics import (
+from services.admin.app.metrics import (
     SIGNATURE_HEADER,
     HallucinationTracker,
     WebhookTargetError,
     _validate_webhook_url,
 )
-from app.webhook_outbox import (
+from services.admin.app.webhook_outbox import (
     WebhookOutboxDrainer,
     enqueue_webhook,
     reconcile_webhook_outbox,
@@ -849,7 +849,7 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
     """Delivery failure → a webhook_outbox row is written."""
     monkeypatch.delenv("HALLUCINATION_WEBHOOK_URL", raising=False)
     monkeypatch.delenv("HALLUCINATION_WEBHOOK_SECRET", raising=False)
-    import app.metrics as metrics_mod
+    import services.admin.app.metrics as metrics_mod
 
     # Build a real in-memory DB so the enqueue actually persists.
     engine = create_engine(

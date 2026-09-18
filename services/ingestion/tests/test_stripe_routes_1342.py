@@ -32,8 +32,8 @@ import structlog
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.authz import IngestionPrincipal  # noqa: E402
-from app.stripe_billing import (  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal  # noqa: E402
+from services.ingestion.app.stripe_billing import (  # noqa: E402
     customers as customers_mod,
     helpers as helpers_mod,
     plans as plans_mod,
@@ -41,7 +41,7 @@ from app.stripe_billing import (  # noqa: E402
     routes as routes_mod,
     state as state_mod,
 )
-from app.stripe_billing.models import (  # noqa: E402
+from services.ingestion.app.stripe_billing.models import (  # noqa: E402
     BillingPortalRequest,
     CheckoutRequest,
 )

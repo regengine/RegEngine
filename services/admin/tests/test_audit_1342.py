@@ -32,7 +32,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("sqlalchemy")
 
-from app.audit import AuditLogger  # noqa: E402
+from services.admin.app.audit import AuditLogger  # noqa: E402
 
 TENANT = UUID("00000000-0000-0000-0000-000000000099")
 ACTOR = UUID("00000000-0000-0000-0000-000000000001")

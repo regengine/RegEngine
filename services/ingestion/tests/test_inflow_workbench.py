@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import importlib
 
-import app.authz as authz
-import app.inflow_workbench as workbench
+import services.ingestion.app.authz as authz
+import services.ingestion.app.inflow_workbench as workbench
 import pytest
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.inflow_workbench import router
-from app.sandbox.router import router as sandbox_router
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.inflow_workbench import router
+from services.ingestion.app.sandbox.router import router as sandbox_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-sandbox_router_module = importlib.import_module("app.sandbox.router")
+sandbox_router_module = importlib.import_module("services.ingestion.app.sandbox.router")
 
 
 def _principal(

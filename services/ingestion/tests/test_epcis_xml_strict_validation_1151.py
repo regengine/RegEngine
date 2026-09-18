@@ -44,8 +44,8 @@ def client() -> TestClient:
     """Same pattern as the other EPCIS test modules: mount the router on a
     fresh FastAPI app and short-circuit the api-key dependency so the
     tests can focus on validation behaviour."""
-    from app.epcis.router import router
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.epcis.router import router
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
@@ -164,7 +164,7 @@ def test_all_valid_events_still_accepted(client, monkeypatch):
     # (no Postgres needed). We stub the atomic batch orchestrator to
     # return a plain success envelope, which is what it would return
     # for a valid event once persistence commits.
-    import app.epcis.router as router_mod
+    import services.ingestion.app.epcis.router as router_mod
 
     def _fake_batch(tenant_id, events):
         return [
@@ -214,7 +214,7 @@ def test_lenient_mode_still_persists_with_warning(client, monkeypatch, caplog):
     # Stub the persistence layer so we don't need a real DB. In lenient
     # mode the batch orchestrator is still invoked on the extracted
     # events; we assert the parse did NOT raise 422.
-    import app.epcis.router as router_mod
+    import services.ingestion.app.epcis.router as router_mod
 
     captured_events: list[dict] = []
 
@@ -276,7 +276,7 @@ def test_persistence_refuses_unvalidated_in_strict_mode(monkeypatch):
     returns ``None`` and strict mode is on (or unset → default strict).
     This is the last-line defence against a caller that bypasses the
     parse gate but still hits the DB path."""
-    import app.epcis.persistence as persistence_mod
+    import services.ingestion.app.epcis.persistence as persistence_mod
 
     # Ensure strict mode is on (default when both env vars unset).
     monkeypatch.delenv("STRICT_FSMA_VALIDATION", raising=False)
@@ -316,7 +316,7 @@ def test_persistence_refuses_unvalidated_also_with_strict_validation_env(
 ):
     """Dual-alias coverage: the new ``STRICT_FSMA_VALIDATION`` env var
     alone (without ``FSMA_STRICT_MODE``) must also enable the guard."""
-    import app.epcis.persistence as persistence_mod
+    import services.ingestion.app.epcis.persistence as persistence_mod
 
     monkeypatch.setenv("STRICT_FSMA_VALIDATION", "true")
     monkeypatch.delenv("FSMA_STRICT_MODE", raising=False)

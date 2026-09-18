@@ -78,10 +78,10 @@ def routes():
     refactor; see the NOTE block at the top of ``app/routes.py``). These
     boundary tests must patch attributes on the module that actually
     defines them, otherwise ``patch.object(routes.socket, ...)`` raises
-    ``AttributeError: module 'app.routes' has no attribute 'socket'``.
+    ``AttributeError: module 'services.ingestion.app.routes' has no attribute 'socket'``.
     """
     # Patch get_settings to avoid the api_key attribute error
-    from app import config as cfg
+    from services.ingestion.app import config as cfg
 
     class _TestSettings(cfg.Settings):
         api_key: str = "test-key"
@@ -89,7 +89,7 @@ def routes():
     _cached = _TestSettings()
     with patch.object(cfg, "get_settings", return_value=_cached):
         cfg.get_settings.cache_clear()
-        import app.routes_ingest as r
+        import services.ingestion.app.routes_ingest as r
 
         yield r
 

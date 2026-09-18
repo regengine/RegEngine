@@ -79,10 +79,10 @@ sys.modules.setdefault("pyzbar.pyzbar", _fake_pyzbar_sub)
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz  # noqa: E402
-import app.qr_decoder as qr_decoder  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.qr_decoder import (  # noqa: E402
+import services.ingestion.app.authz as authz  # noqa: E402
+import services.ingestion.app.qr_decoder as qr_decoder  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.qr_decoder import (  # noqa: E402
     _find_next_field_boundary,
     _is_valid_gtin_check_digit,
     _looks_like_ai_at,

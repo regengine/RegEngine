@@ -26,7 +26,7 @@ class TestRecordJobRun:
     """Unit tests for StateManager.record_job_run."""
 
     def test_record_job_run_persists_success(self):
-        from app.state import StateManager
+        from services.scheduler.app.state import StateManager
 
         sm = StateManager.__new__(StateManager)
         sm._initialized = True
@@ -44,7 +44,7 @@ class TestRecordJobRun:
         session.close.assert_called_once()
 
     def test_record_job_run_persists_error(self):
-        from app.state import StateManager
+        from services.scheduler.app.state import StateManager
 
         sm = StateManager.__new__(StateManager)
         sm._initialized = True
@@ -60,7 +60,7 @@ class TestRecordJobRun:
 
     def test_record_job_run_survives_db_error(self):
         """A logging path must never crash the scheduler."""
-        from app.state import StateManager
+        from services.scheduler.app.state import StateManager
 
         sm = StateManager.__new__(StateManager)
         sm._initialized = True

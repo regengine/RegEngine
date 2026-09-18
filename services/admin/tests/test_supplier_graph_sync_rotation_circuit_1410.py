@@ -28,8 +28,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from app import supplier_graph_sync as sgs_module
-from app.supplier_graph_sync import SupplierGraphSync
+from services.admin.app import supplier_graph_sync as sgs_module
+from services.admin.app.supplier_graph_sync import SupplierGraphSync
 
 CircuitOpenError = sgs_module.CircuitOpenError
 neo4j_circuit = sgs_module.neo4j_circuit

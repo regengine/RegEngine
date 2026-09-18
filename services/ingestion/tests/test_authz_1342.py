@@ -20,8 +20,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import authz
-from app.authz import (
+from services.ingestion.app import authz
+from services.ingestion.app.authz import (
     IngestionPrincipal,
     _check_auth_rate_limit,
     _is_dev_env,

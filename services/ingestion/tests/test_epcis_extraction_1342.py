@@ -28,7 +28,7 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 
-from app.epcis.extraction import (  # noqa: E402
+from services.ingestion.app.epcis.extraction import (  # noqa: E402
     _extract_location_id,
     _extract_lot_data,
     _extract_party_id,

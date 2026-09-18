@@ -14,7 +14,7 @@ from pathlib import Path
 from uuid import uuid4
 
 service_dir = Path(__file__).parent.parent
-_to_remove = [key for key in sys.modules if key == "app" or key.startswith("app.") or key == "main"]
+_to_remove = [key for key in sys.modules if key == "app" or key.startswith("services.compliance.app.") or key == "main"]
 for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(service_dir))
@@ -26,7 +26,7 @@ os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-industries")
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app
+from services.compliance.main import app
 
 client = TestClient(app)
 

@@ -13,7 +13,7 @@ import pytest
 # Add service path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.fsma_audit import (  # Enums; Data classes; Manager class; Global functions; Convenience functions; Decorator
+from services.graph.app.fsma_audit import (  # Enums; Data classes; Manager class; Global functions; Convenience functions; Decorator
     FSMAAuditAction,
     FSMAAuditActorType,
     FSMAAuditDiff,
@@ -612,7 +612,7 @@ class TestReadAccessAudit:
         log = FSMAAuditLog()
 
         # Patch _query_audit_trail to raise to simulate DB failure
-        with mock.patch("app.fsma_audit._query_audit_trail", side_effect=RuntimeError("DB down")):
+        with mock.patch("services.graph.app.fsma_audit._query_audit_trail", side_effect=RuntimeError("DB down")):
             with pytest.raises(RuntimeError, match="DB down"):
                 # The READ entry is logged synchronously before _query_audit_trail
                 # is called, so we can't test this at the FSMAAuditLog level

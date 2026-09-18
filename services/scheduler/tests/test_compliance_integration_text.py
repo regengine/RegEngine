@@ -55,7 +55,7 @@ def sqlite_session():
 
 def _make_item():
     """Construct a minimal EnforcementItem-like object."""
-    from app.models import EnforcementItem, EnforcementSeverity, SourceType
+    from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 
     return EnforcementItem(
         source_type=SourceType.FDA_RECALL,
@@ -79,7 +79,7 @@ def test_find_matching_tenants_executes_against_real_session(sqlite_session, mon
     """
     # Avoid touching the singleton — instantiate ComplianceIntegration with
     # a fake settings.database_url and then swap in our SQLite session.
-    from app import compliance_integration as ci_module
+    from services.scheduler.app import compliance_integration as ci_module
 
     fake_settings = MagicMock()
     fake_settings.database_url = "sqlite:///:memory:"
@@ -107,7 +107,7 @@ def test_find_matching_tenants_tier1_query_uses_text(sqlite_session, monkeypatch
     by patching ``session.execute`` to verify the first call passes a
     ``TextClause``, not a ``str``.
     """
-    from app import compliance_integration as ci_module
+    from services.scheduler.app import compliance_integration as ci_module
     from sqlalchemy.sql.elements import TextClause
 
     fake_settings = MagicMock()

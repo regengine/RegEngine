@@ -35,17 +35,17 @@ _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 for _name in list(sys.modules):
-    if _name == "app" or _name.startswith("app."):
+    if _name == "app" or _name.startswith("services.scheduler.app."):
         sys.modules.pop(_name, None)
 
 from shared.paths import ensure_shared_importable  # noqa: E402
 
 ensure_shared_importable()
 
-import app.notifications as notifications_mod  # noqa: E402
+import services.scheduler.app.notifications as notifications_mod  # noqa: E402
 import httpx  # noqa: E402
 import pytest  # noqa: E402
-from app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
+from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
 
 OutboxEntry = notifications_mod.OutboxEntry
 WebhookNotifier = notifications_mod.WebhookNotifier

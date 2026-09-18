@@ -13,10 +13,10 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz
-import app.qr_decoder as qr_decoder
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.qr_decoder import router as qr_router
+import services.ingestion.app.authz as authz
+import services.ingestion.app.qr_decoder as qr_decoder
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.qr_decoder import router as qr_router
 
 
 def _tiny_png_bytes() -> bytes:

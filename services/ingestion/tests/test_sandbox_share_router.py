@@ -26,7 +26,7 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.database as shared_db
-from app.sandbox.router import router as sandbox_router
+from services.ingestion.app.sandbox.router import router as sandbox_router
 
 
 @pytest.fixture()

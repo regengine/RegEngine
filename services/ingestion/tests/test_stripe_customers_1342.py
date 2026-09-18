@@ -44,7 +44,7 @@ pytest.importorskip("fastapi")
 pytest.importorskip("stripe")
 
 import structlog  # noqa: E402
-from app.stripe_billing import customers as mod  # noqa: E402
+from services.ingestion.app.stripe_billing import customers as mod  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
 # ---------------------------------------------------------------------------

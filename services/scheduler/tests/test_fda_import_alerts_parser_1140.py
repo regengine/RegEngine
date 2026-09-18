@@ -32,7 +32,7 @@ These tests exercise the BeautifulSoup-based parser via the public
 
 from __future__ import annotations
 
-from app.scrapers.fda_import_alerts import (
+from services.scheduler.app.scrapers.fda_import_alerts import (
     FDA_IMPORT_ALERTS_URL,
     FDAImportAlertsScraper,
 )

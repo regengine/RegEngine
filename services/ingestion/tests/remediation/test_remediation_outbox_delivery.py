@@ -56,7 +56,7 @@ def _case_with_link(client, supplier_email: str = SUPPLIER_EMAIL):
 
 
 def _drain(db, tenant_id, sender):
-    from app.remediation.delivery import NotificationOutboxDrainer
+    from services.ingestion.app.remediation.delivery import NotificationOutboxDrainer
     from shared.tenant_context import set_tenant_guc, tenant_scope
 
     drainer = NotificationOutboxDrainer(db, email_sender=sender)
@@ -255,7 +255,7 @@ def test_transient_failure_reschedules_then_delivers(client, admin_engine, drain
 
 
 def test_max_attempts_flips_failed(client, admin_engine, drain_session):
-    from app.remediation.delivery import MAX_ATTEMPTS
+    from services.ingestion.app.remediation.delivery import MAX_ATTEMPTS
 
     case_id, _link = _case_with_link(client)
     with admin_engine.begin() as conn:
@@ -274,7 +274,7 @@ def test_max_attempts_flips_failed(client, admin_engine, drain_session):
 
 def test_buyer_notification_without_recipient_stays_preview(client, admin_engine, drain_session):
     """recipient=None entries (buyer in-app previews) are never queued."""
-    from app.remediation import outbox
+    from services.ingestion.app.remediation import outbox
     from shared.tenant_context import set_tenant_guc, tenant_scope
 
     tid = client.tenant_a
@@ -308,7 +308,7 @@ def test_buyer_notification_without_recipient_stays_preview(client, admin_engine
 
 def test_drain_all_tenants_iterates_and_delivers(client, admin_engine, drain_session):
     """The scheduler entry point discovers tenants and drains under RLS."""
-    from app.remediation.delivery import drain_all_tenants
+    from services.ingestion.app.remediation.delivery import drain_all_tenants
 
     case_id, _link = _case_with_link(client)
     sender = StubSender()

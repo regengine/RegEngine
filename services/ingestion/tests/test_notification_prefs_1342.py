@@ -10,8 +10,8 @@ Issue: #1342
 from __future__ import annotations
 
 import pytest
-from app import notification_prefs as np_mod
-from app.notification_prefs import (
+from services.ingestion.app import notification_prefs as np_mod
+from services.ingestion.app.notification_prefs import (
     AlertPreference,
     EscalationRule,
     NotificationChannel,
@@ -23,7 +23,7 @@ from app.notification_prefs import (
     _prefs_store,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

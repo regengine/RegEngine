@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from app.epcis import persistence as persist_mod
+from services.ingestion.app.epcis import persistence as persist_mod
 from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------

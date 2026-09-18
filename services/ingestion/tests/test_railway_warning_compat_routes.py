@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from app.fsma_readiness_compat import router as fsma_readiness_compat_router
-from app.routes_health_metrics import router as health_metrics_router
-from app.stripe_billing.routes import list_plans
+from services.ingestion.app.fsma_readiness_compat import router as fsma_readiness_compat_router
+from services.ingestion.app.routes_health_metrics import router as health_metrics_router
+from services.ingestion.app.stripe_billing.routes import list_plans
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

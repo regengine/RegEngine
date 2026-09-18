@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import app.webhook_compat as webhook_compat
-from app import epcis_export, team_mgmt
+import services.ingestion.app.webhook_compat as webhook_compat
+from services.ingestion.app import epcis_export, team_mgmt
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

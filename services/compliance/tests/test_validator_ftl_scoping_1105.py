@@ -39,7 +39,7 @@ from pathlib import Path
 # on sys.path so ``from main import app`` resolves, and clear any cached
 # ``app`` module from a sibling service that may have been imported first.
 _SERVICE_DIR = Path(__file__).resolve().parent.parent
-_to_remove = [k for k in sys.modules if k == "app" or k.startswith("app.") or k == "main"]
+_to_remove = [k for k in sys.modules if k == "app" or k.startswith("services.compliance.app.") or k == "main"]
 for _k in _to_remove:
     del sys.modules[_k]
 if str(_SERVICE_DIR) not in sys.path:
@@ -47,7 +47,7 @@ if str(_SERVICE_DIR) not in sys.path:
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app  # noqa: E402 — path must be set first
+from services.compliance.main import app  # noqa: E402 — path must be set first
 
 client = TestClient(app)
 

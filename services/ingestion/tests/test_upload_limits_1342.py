@@ -28,8 +28,8 @@ import zipfile
 from typing import Optional
 
 import pytest
-from app.shared import upload_limits
-from app.shared.upload_limits import (
+from services.ingestion.app.shared import upload_limits
+from services.ingestion.app.shared.upload_limits import (
     MAX_CSV_FILE_SIZE_BYTES,
     MAX_EDI_FILE_SIZE_BYTES,
     MAX_FILE_SIZE_BYTES,

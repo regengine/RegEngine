@@ -77,7 +77,7 @@ async def _invoke(module, *, process_result, db):
 async def test_erasure_fails_closed_when_nothing_was_soft_deleted():
     """The #2900 regression: 200 + "has been marked for deletion" for a
     deletion that never happened."""
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
     from fastapi import HTTPException
 
     db = _fake_db()
@@ -106,7 +106,7 @@ async def test_erasure_fails_closed_when_nothing_was_soft_deleted():
 async def test_failed_erasure_does_not_enqueue_a_graph_deletion():
     """Deleting the Neo4j half while Postgres keeps the user would leave the
     two stores permanently inconsistent — with no record that it happened."""
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
 
     db = _fake_db()
     _response, _exc, enqueue_mock, neo4j_mock = await _invoke(
@@ -124,7 +124,7 @@ async def test_failed_erasure_does_not_enqueue_a_graph_deletion():
 @pytest.mark.asyncio
 async def test_successful_erasure_still_returns_the_accepted_response():
     """Guard against over-correction: the happy path is unchanged."""
-    from app import erasure_routes as m
+    from services.admin.app import erasure_routes as m
 
     db = _fake_db()
     response, exc, enqueue_mock, _neo4j = await _invoke(

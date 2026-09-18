@@ -73,7 +73,7 @@ class TestCheckoutGucReset:
         admin_database._reset_tenant_guc_on_checkout(dbapi_connection, MagicMock(), MagicMock())
 
         executed = " ".join(str(c.args[0]) for c in cursor.execute.call_args_list)
-        assert "app.tenant_id" in executed
+        assert "services.admin.app.tenant_id" in executed
         assert "regengine.is_sysadmin" in executed
         cursor.close.assert_called_once()
         dbapi_connection.commit.assert_called_once_with()

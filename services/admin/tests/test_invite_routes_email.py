@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import invite_routes
+from services.admin.app import invite_routes
 
 
 class _DummyEmails:

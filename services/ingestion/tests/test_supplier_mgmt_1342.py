@@ -9,8 +9,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from app import supplier_mgmt as sm
-from app.supplier_mgmt import (
+from services.ingestion.app import supplier_mgmt as sm
+from services.ingestion.app.supplier_mgmt import (
     CreateSupplierRequest,
     SupplierDashboard,
     SupplierRecord,
@@ -19,7 +19,7 @@ from app.supplier_mgmt import (
     _suppliers_store,
     router,
 )
-from app.webhook_compat import _verify_api_key, require_tenant_context
+from services.ingestion.app.webhook_compat import _verify_api_key, require_tenant_context
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext

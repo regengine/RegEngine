@@ -19,7 +19,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.stripe_billing.usage import (  # noqa: E402
+from services.ingestion.app.stripe_billing.usage import (  # noqa: E402
     _current_billing_period,
     increment_usage_for_event,
 )
@@ -85,7 +85,7 @@ class TestCurrentBillingPeriod:
             def now(cls, tz=None):
                 return fixed_now
 
-        monkeypatch.setattr("app.stripe_billing.usage.datetime", _FixedDatetime)
+        monkeypatch.setattr("services.ingestion.app.stripe_billing.usage.datetime", _FixedDatetime)
         start, end = _current_billing_period()
         assert start == date(2026, 6, 1)
         assert end == date(2026, 7, 1)

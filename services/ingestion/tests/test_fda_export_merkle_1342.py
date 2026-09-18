@@ -22,7 +22,7 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from app.fda_export import merkle as merkle_mod
+from services.ingestion.app.fda_export import merkle as merkle_mod
 from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------

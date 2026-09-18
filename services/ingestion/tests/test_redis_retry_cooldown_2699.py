@@ -17,8 +17,8 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.sandbox import rate_limiting as sandbox_rl  # noqa: E402
-from app.stripe_billing import rate_limiting as stripe_rl  # noqa: E402
+from services.ingestion.app.sandbox import rate_limiting as sandbox_rl  # noqa: E402
+from services.ingestion.app.stripe_billing import rate_limiting as stripe_rl  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -44,11 +44,11 @@ class TestRedisRetryCooldown:
             redis_url = "redis://127.0.0.1:1/0"
 
         if mod is stripe_rl:
-            import app.config as cfg
+            import services.ingestion.app.config as cfg
 
             monkeypatch.setattr(cfg, "get_settings", lambda: _S())
         else:
-            import app.config as cfg
+            import services.ingestion.app.config as cfg
 
             monkeypatch.setattr(cfg, "get_settings", lambda: _S())
 
@@ -70,7 +70,7 @@ class TestRedisRetryCooldown:
         class _S:
             redis_url = "redis://127.0.0.1:1/0"
 
-        import app.config as cfg
+        import services.ingestion.app.config as cfg
 
         def _get_settings():
             attempted["n"] += 1

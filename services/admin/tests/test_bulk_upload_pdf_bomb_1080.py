@@ -17,8 +17,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from app.bulk_upload import parsers
-from app.bulk_upload.parsers import (
+from services.admin.app.bulk_upload import parsers
+from services.admin.app.bulk_upload.parsers import (
     DEFAULT_MAX_PDF_PAGES,
     _max_pdf_pages,
     _parse_pdf_bytes,

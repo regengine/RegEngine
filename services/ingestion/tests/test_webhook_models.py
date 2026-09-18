@@ -14,7 +14,7 @@ if str(_services_dir) not in sys.path:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from app.webhook_models import IngestEvent, WebhookCTEType, validate_gln
+from services.ingestion.app.webhook_models import IngestEvent, WebhookCTEType, validate_gln
 from pydantic import ValidationError
 
 

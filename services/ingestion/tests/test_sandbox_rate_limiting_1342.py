@@ -25,8 +25,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app.sandbox import rate_limiting
-from app.sandbox.rate_limiting import (
+from services.ingestion.app.sandbox import rate_limiting
+from services.ingestion.app.sandbox.rate_limiting import (
     _SANDBOX_RATE_LIMIT,
     _SANDBOX_WINDOW,
     _check_in_memory,
@@ -168,7 +168,7 @@ class TestGetRedis:
         def fake_get_settings():
             return SimpleNamespace(redis_url="redis://test-host:6379/0")
 
-        monkeypatch.setattr("app.config.get_settings", fake_get_settings, raising=False)
+        monkeypatch.setattr("services.ingestion.app.config.get_settings", fake_get_settings, raising=False)
         # ``import redis as redis_lib`` happens inside the function;
         # monkeypatch sys.modules so that import resolves to our fake.
         monkeypatch.setitem(__import__("sys").modules, "redis", FakeRedisModule)
@@ -198,7 +198,7 @@ class TestGetRedis:
         def fake_get_settings():
             return SimpleNamespace(redis_url="redis://broken:6379/0")
 
-        monkeypatch.setattr("app.config.get_settings", fake_get_settings, raising=False)
+        monkeypatch.setattr("services.ingestion.app.config.get_settings", fake_get_settings, raising=False)
         monkeypatch.setitem(__import__("sys").modules, "redis", FakeRedisModule)
 
         assert _get_redis() is None
@@ -214,7 +214,7 @@ class TestGetRedis:
         def fake_get_settings():
             return SimpleNamespace(redis_url="redis://x/0")
 
-        monkeypatch.setattr("app.config.get_settings", fake_get_settings, raising=False)
+        monkeypatch.setattr("services.ingestion.app.config.get_settings", fake_get_settings, raising=False)
         # Force import failure by dropping ``redis`` from sys.modules
         # and replacing with a module that raises on attribute access.
         import sys

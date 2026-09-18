@@ -27,8 +27,8 @@ Tracks GitHub issue #1342.
 
 from datetime import datetime, timezone
 
-from app import supplier_graph_sync as module
-from app.supplier_graph_sync import SupplierGraphSync, _to_utc_iso
+from services.admin.app import supplier_graph_sync as module
+from services.admin.app.supplier_graph_sync import SupplierGraphSync, _to_utc_iso
 
 
 class _FakeResult:

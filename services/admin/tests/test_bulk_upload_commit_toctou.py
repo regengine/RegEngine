@@ -27,8 +27,8 @@ from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
-from app.bulk_upload.session_store import BulkUploadSessionStore
-from app.sqlalchemy_models import (
+from services.admin.app.bulk_upload.session_store import BulkUploadSessionStore
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -243,8 +243,8 @@ def test_concurrent_commits_route_level_only_one_succeeds(
     invariant: duplicated CTE events would produce duplicate
     ``sequence_number`` rows and Merkle-hash divergence.
     """
-    import app.bulk_upload.routes as bulk_routes
-    import app.bulk_upload.transaction_manager as tx_manager
+    import services.admin.app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.transaction_manager as tx_manager
 
     # Use the real BulkUploadSessionStore (in-memory fallback path)
     # — that's the code under test. The e2e helper store is a simpler
@@ -357,7 +357,7 @@ def test_commit_after_completed_is_idempotent_not_409(
     would reject a retry and a successfully-completed export would look
     like an error to a client that re-POSTs after a network flap.
     """
-    import app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.routes as bulk_routes
 
     real_store = BulkUploadSessionStore()
     real_store._redis_available = False  # type: ignore[attr-defined]
@@ -414,7 +414,7 @@ def test_commit_when_session_is_parsed_returns_400(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """A commit without a prior successful validate must be rejected with 400."""
-    import app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.routes as bulk_routes
 
     real_store = BulkUploadSessionStore()
     real_store._redis_available = False  # type: ignore[attr-defined]

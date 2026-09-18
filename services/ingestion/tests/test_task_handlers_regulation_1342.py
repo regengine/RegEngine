@@ -69,13 +69,13 @@ class _FakeRegulationLoader:
 # the ``_install_loader_stub`` fixture below — installing here too just
 # lets ``from app import task_handlers_regulation`` succeed at module
 # load time.
-_loader_mod = ModuleType("app.regulation_loader")
+_loader_mod = ModuleType("services.ingestion.app.regulation_loader")
 _loader_mod.RegulationLoader = _FakeRegulationLoader
 _loader_mod.__file__ = str(service_dir / "app" / "regulation_loader.py")
-_REAL_APP_REGULATION_LOADER = sys.modules.get("app.regulation_loader")
-sys.modules["app.regulation_loader"] = _loader_mod
+_REAL_APP_REGULATION_LOADER = sys.modules.get("services.ingestion.app.regulation_loader")
+sys.modules["services.ingestion.app.regulation_loader"] = _loader_mod
 
-import app as _app_pkg  # noqa: E402
+import services.ingestion.app as _app_pkg  # noqa: E402
 
 _REAL_APP_REGULATION_LOADER_ATTR = getattr(_app_pkg, "regulation_loader", None)
 _app_pkg.regulation_loader = _loader_mod
@@ -95,17 +95,17 @@ def _restore_modules_on_module_teardown():
     """
     yield
     if _REAL_APP_REGULATION_LOADER is not None:
-        sys.modules["app.regulation_loader"] = _REAL_APP_REGULATION_LOADER
+        sys.modules["services.ingestion.app.regulation_loader"] = _REAL_APP_REGULATION_LOADER
     else:
-        sys.modules.pop("app.regulation_loader", None)
+        sys.modules.pop("services.ingestion.app.regulation_loader", None)
     if _REAL_APP_REGULATION_LOADER_ATTR is not None:
         _app_pkg.regulation_loader = _REAL_APP_REGULATION_LOADER_ATTR
     elif hasattr(_app_pkg, "regulation_loader"):
         delattr(_app_pkg, "regulation_loader")
 
 
-from app import task_handlers_regulation as thr  # noqa: E402
-from app.task_handlers_regulation import (  # noqa: E402
+from services.ingestion.app import task_handlers_regulation as thr  # noqa: E402
+from services.ingestion.app.task_handlers_regulation import (  # noqa: E402
     INGEST_STAGING_DIR,
     _handle_regulation_ingest,
     _process_regulation_from_file,
@@ -164,8 +164,8 @@ def _reset_fakes():
     # evicts ``app.regulation_loader`` between collection and run because
     # the stub's ``__file__`` is synthetic. Restoring it here keeps the
     # lazy ``from .regulation_loader`` inside the handler resolvable.
-    sys.modules["app.regulation_loader"] = _loader_mod
-    import app as _app_pkg
+    sys.modules["services.ingestion.app.regulation_loader"] = _loader_mod
+    import services.ingestion.app as _app_pkg
 
     _app_pkg.regulation_loader = _loader_mod
 
@@ -198,9 +198,9 @@ def fake_settings(monkeypatch):
         neo4j_password="pw",
     )
 
-    config_mod = ModuleType("app.config")
+    config_mod = ModuleType("services.ingestion.app.config")
     config_mod.get_settings = lambda: settings
-    monkeypatch.setitem(sys.modules, "app.config", config_mod)
+    monkeypatch.setitem(sys.modules, "services.ingestion.app.config", config_mod)
     return settings
 
 
@@ -539,7 +539,7 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
+        monkeypatch.setattr(sys.modules["services.ingestion.app.regulation_loader"], "RegulationLoader", _BadLoader)
 
         asyncio.run(
             _process_regulation_from_file(
@@ -568,7 +568,7 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
+        monkeypatch.setattr(sys.modules["services.ingestion.app.regulation_loader"], "RegulationLoader", _BadLoader)
 
         asyncio.run(
             _process_regulation_from_file(
@@ -596,7 +596,7 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
+        monkeypatch.setattr(sys.modules["services.ingestion.app.regulation_loader"], "RegulationLoader", _BadLoader)
 
         asyncio.run(
             _process_regulation_from_file(
@@ -628,7 +628,7 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
+        monkeypatch.setattr(sys.modules["services.ingestion.app.regulation_loader"], "RegulationLoader", _BadLoader)
 
         import httpx
 
@@ -659,7 +659,7 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
+        monkeypatch.setattr(sys.modules["services.ingestion.app.regulation_loader"], "RegulationLoader", _BadLoader)
 
         fake_httpx["factory"] = lambda: _FakeAsyncClient(raise_on_post=OSError("connection refused"))
 

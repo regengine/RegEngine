@@ -18,7 +18,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.edi_ingestion.rejection_log import (
+from services.ingestion.app.edi_ingestion.rejection_log import (
     list_edi_rejections,
     record_edi_rejection,
     reset_edi_rejections,

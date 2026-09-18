@@ -38,8 +38,8 @@ import pytest
 service_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import text_sanitize  # noqa: E402
-from app.text_sanitize import (  # noqa: E402
+from services.admin.app import text_sanitize  # noqa: E402
+from services.admin.app.text_sanitize import (  # noqa: E402
     sanitize_source_text_for_response,
     sanitize_source_text_for_store,
 )

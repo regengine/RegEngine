@@ -25,12 +25,12 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pytest
-from app.sandbox import tracer
-from app.sandbox.models import (
+from services.ingestion.app.sandbox import tracer
+from services.ingestion.app.sandbox.models import (
     SandboxTraceRequest,
     TraceGraphResponse,
 )
-from app.sandbox.tracer import _trace_in_memory, sandbox_trace
+from services.ingestion.app.sandbox.tracer import _trace_in_memory, sandbox_trace
 from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------

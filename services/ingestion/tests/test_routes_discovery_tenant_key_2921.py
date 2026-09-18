@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import app.routes_discovery as routes_discovery
+import services.ingestion.app.routes_discovery as routes_discovery
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

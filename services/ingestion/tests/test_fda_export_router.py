@@ -22,9 +22,9 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.cte_persistence as shared_cte_persistence
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.fda_export.router import router as fda_router
-from app.fda_export_service import _generate_csv
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.fda_export.router import router as fda_router
+from services.ingestion.app.fda_export_service import _generate_csv
 
 from services.ingestion.tests.authz_overrides import (
     install_active_subscription_override,

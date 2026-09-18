@@ -48,8 +48,8 @@ from shared.rate_limit import add_rate_limiting
 logger = setup_logging()
 
 # Local imports (using absolute-style imports from 'app' package inside graph service)
-from app.config import settings
-from app.routes import router as graph_router
+from .config import settings
+from .routes import router as graph_router
 from shared.env import is_production
 
 _is_prod = is_production()

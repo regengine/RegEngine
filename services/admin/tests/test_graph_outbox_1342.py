@@ -60,7 +60,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app.graph_outbox import (
+from services.admin.app.graph_outbox import (
     GraphOutboxDrainer,
     GraphOutboxDrainer as _Drainer,  # alias for _parse_params
     _json_default,

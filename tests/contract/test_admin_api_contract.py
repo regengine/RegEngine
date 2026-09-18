@@ -51,7 +51,7 @@ def client():
     sys.path.insert(0, admin_service_dir)
 
     for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
+        if module_name == "app" or module_name.startswith("services.admin.app."):
             sys.modules.pop(module_name, None)
 
     for module_name in (

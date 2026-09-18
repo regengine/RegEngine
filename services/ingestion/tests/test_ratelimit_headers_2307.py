@@ -25,7 +25,7 @@ if str(service_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from app.middleware import RateLimitHeadersMiddleware
+from services.ingestion.app.middleware import RateLimitHeadersMiddleware
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 

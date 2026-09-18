@@ -26,7 +26,7 @@ import pytest
 
 service_dir = Path(__file__).parent.parent
 for key in list(sys.modules):
-    if key == "app" or key.startswith("app.") or key == "main":
+    if key == "app" or key.startswith("services.compliance.app.") or key == "main":
         del sys.modules[key]
 sys.path.insert(0, str(service_dir))
 
@@ -40,9 +40,9 @@ TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
 
 def _fresh_routes():
-    if "app.routes" in sys.modules:
-        return sys.modules["app.routes"]
-    return importlib.import_module("app.routes")
+    if "services.compliance.app.routes" in sys.modules:
+        return sys.modules["services.compliance.app.routes"]
+    return importlib.import_module("services.compliance.app.routes")
 
 
 class _StubPrincipal:

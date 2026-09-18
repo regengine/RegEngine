@@ -28,9 +28,9 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.subscription_gate import require_active_subscription  # noqa: E402
+import services.ingestion.app.webhook_router_v2 as wr  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.subscription_gate import require_active_subscription  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
 
 TENANT_A = "00000000-0000-0000-0000-0000000000aa"

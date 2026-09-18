@@ -30,7 +30,7 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from app import label_vision as lv
+from services.ingestion.app import label_vision as lv
 from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------

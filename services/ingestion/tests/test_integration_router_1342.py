@@ -40,8 +40,8 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import integration_router  # noqa: E402
-from app.webhook_compat import _verify_api_key, require_tenant_context  # noqa: E402
+from services.ingestion.app import integration_router  # noqa: E402
+from services.ingestion.app.webhook_compat import _verify_api_key, require_tenant_context  # noqa: E402
 from shared.external_connectors import registry as registry_mod  # noqa: E402
 from shared.external_connectors.base import ConnectionStatus, ConnectorConfig  # noqa: E402
 from shared.tenant_context import TenantContext  # noqa: E402

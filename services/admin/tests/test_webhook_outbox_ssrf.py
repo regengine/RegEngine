@@ -30,7 +30,7 @@ pytest.importorskip("httpx")
 # Import directly from the package so we get the same module identity
 # that ``shared.safe_http`` imports — avoids drift if a sibling test
 # stuffed something into ``sys.modules['shared.url_validation']``.
-import app.webhook_outbox as wo  # noqa: E402
+import services.admin.app.webhook_outbox as wo  # noqa: E402
 from shared.url_validation import SSRFError  # noqa: E402
 
 

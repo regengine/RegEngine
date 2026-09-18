@@ -32,7 +32,7 @@ _ingestion_dir = Path(__file__).resolve().parent.parent
 # Replicate the cache-clearing dance the existing test file uses so that
 # test ordering doesn't lead to a stale ``app`` module being resolved
 # against another service's ``app``.
-_stale = [k for k in sys.modules if k == "app" or k.startswith("app.")]
+_stale = [k for k in sys.modules if k == "app" or k.startswith("services.ingestion.app.")]
 for _key in _stale:
     del sys.modules[_key]
 if str(_ingestion_dir) not in sys.path:
@@ -40,8 +40,8 @@ if str(_ingestion_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from app import format_extractors as fe
-from app.format_extractors import (
+from services.ingestion.app import format_extractors as fe
+from services.ingestion.app.format_extractors import (
     _fallback_extraction,
     detect_format,
     extract_from_csv,

@@ -36,7 +36,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.fda_export.queries import (  # noqa: E402
+from services.ingestion.app.fda_export.queries import (  # noqa: E402
     build_recall_where_clause,
     build_recall_where_clause_canonical,
     build_v2_where_clause,

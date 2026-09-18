@@ -34,13 +34,13 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.edi_ingestion import router as edi_router  # noqa: E402
-from app.edi_ingestion.extractors import _extract_fields_for_set  # noqa: E402
-from app.edi_ingestion.parser import _parse_x12_segments  # noqa: E402
-from app.edi_ingestion.utils import _normalize_unit  # noqa: E402
-from app.webhook_models import EventResult, IngestResponse  # noqa: E402
+import services.ingestion.app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.edi_ingestion import router as edi_router  # noqa: E402
+from services.ingestion.app.edi_ingestion.extractors import _extract_fields_for_set  # noqa: E402
+from services.ingestion.app.edi_ingestion.parser import _parse_x12_segments  # noqa: E402
+from services.ingestion.app.edi_ingestion.utils import _normalize_unit  # noqa: E402
+from services.ingestion.app.webhook_models import EventResult, IngestResponse  # noqa: E402
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 # TLC matching the FSMA 204 GTIN-14 + lot-suffix pattern enforced by
@@ -493,7 +493,7 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
     document lives in the canonical stream OR the rejection log, never
     both, has to hold per interchange and not just per event.
     """
-    from app.edi_ingestion.rejection_log import list_edi_rejections, reset_edi_rejections
+    from services.ingestion.app.edi_ingestion.rejection_log import list_edi_rejections, reset_edi_rejections
 
     reset_edi_rejections()
     captured_payload.clear()
@@ -542,9 +542,9 @@ def test_sn1_equivalent_unit_codes_are_not_falsely_rejected():
     422. This PR is what added CS to the map, so raw comparison would have
     created the false rejection it is now guarded against.
     """
-    from app.edi_ingestion.extractors import _extract_856_fields
-    from app.edi_ingestion.parser import _parse_x12_segments
-    from app.edi_ingestion.utils import _resolve_unit_code
+    from services.ingestion.app.edi_ingestion.extractors import _extract_856_fields
+    from services.ingestion.app.edi_ingestion.parser import _parse_x12_segments
+    from services.ingestion.app.edi_ingestion.utils import _resolve_unit_code
 
     segments = _parse_x12_segments(_interchange_856_two_sn1_units("CA", "CS").decode())
     data = _extract_856_fields(segments)
@@ -562,8 +562,8 @@ def test_sn1_genuinely_different_units_are_still_rejected():
     still not 200 of anything."""
     from fastapi import HTTPException
 
-    from app.edi_ingestion.extractors import _extract_856_fields
-    from app.edi_ingestion.parser import _parse_x12_segments
+    from services.ingestion.app.edi_ingestion.extractors import _extract_856_fields
+    from services.ingestion.app.edi_ingestion.parser import _parse_x12_segments
 
     segments = _parse_x12_segments(_interchange_856_two_sn1_units("CA", "LB").decode())
     with pytest.raises(HTTPException) as exc:
@@ -576,8 +576,8 @@ def test_two_unmappable_but_different_codes_still_refuse():
     unmappable codes must not silently collapse into one unit."""
     from fastapi import HTTPException
 
-    from app.edi_ingestion.extractors import _extract_856_fields
-    from app.edi_ingestion.parser import _parse_x12_segments
+    from services.ingestion.app.edi_ingestion.extractors import _extract_856_fields
+    from services.ingestion.app.edi_ingestion.parser import _parse_x12_segments
 
     segments = _parse_x12_segments(_interchange_856_two_sn1_units("QQ", "ZZ").decode())
     with pytest.raises(HTTPException) as exc:

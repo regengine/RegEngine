@@ -29,7 +29,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr  # noqa: E402
+import services.ingestion.app.webhook_router_v2 as wr  # noqa: E402
 
 
 class _FakeRequest:
@@ -73,7 +73,7 @@ class TestF3StorageErrorOpaque:
 
     def test_webhook_compat_does_not_leak_sqlalchemy_str(self):
         """Same opaqueness invariant for the parallel webhook_compat path."""
-        import app.webhook_compat as wc  # noqa: F401
+        import services.ingestion.app.webhook_compat as wc  # noqa: F401
 
         # Importing the module should succeed and the symbol set is preserved.
         assert hasattr(wc, "ingest_events")
@@ -191,7 +191,7 @@ class TestF5HmacSkipObservability:
     def test_health_exposes_webhook_hmac_configured(self, monkeypatch):
         """/health reports webhook_hmac_configured: false when env unset."""
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
-        from app.routes_health_metrics import health
+        from services.ingestion.app.routes_health_metrics import health
 
         body = health()
         assert "webhook_hmac_configured" in body
@@ -223,7 +223,7 @@ class TestF5HmacSkipObservability:
 
 class TestF6IntegrationWebhookStub:
     def test_endpoint_raises_not_implemented(self):
-        from app.integration_webhook import WebhookPayload, receive_webhook
+        from services.ingestion.app.integration_webhook import WebhookPayload, receive_webhook
 
         async def _run():
             return await receive_webhook(

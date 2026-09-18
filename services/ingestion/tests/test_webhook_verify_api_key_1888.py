@@ -4,7 +4,7 @@ The gate never reads a generic environment key. A presented credential is
 validated by the database-backed principal dependency later in the chain.
 """
 
-import app.webhook_router_v2 as wr
+import services.ingestion.app.webhook_router_v2 as wr
 import pytest
 from fastapi import HTTPException
 

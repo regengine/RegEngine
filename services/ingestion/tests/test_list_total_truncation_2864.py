@@ -31,14 +31,14 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.authz as authz  # noqa: E402
-from app import (
+import services.ingestion.app.authz as authz  # noqa: E402
+from services.ingestion.app import (
     audit_log as al,  # noqa: E402
     identity_router,  # noqa: E402
 )
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.canonical_router import _get_db_session, router as canonical_router  # noqa: E402
-from app.webhook_compat import _verify_api_key  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.canonical_router import _get_db_session, router as canonical_router  # noqa: E402
+from services.ingestion.app.webhook_compat import _verify_api_key  # noqa: E402
 
 from services.ingestion.tests.tenant_context_overrides import (  # noqa: E402
     install_tenant_context_override,

@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
-from app.graph_outbox import (
+from services.admin.app.graph_outbox import (
     GraphOutboxDrainer,
     OutboxHealth,
     OutboxStatus,

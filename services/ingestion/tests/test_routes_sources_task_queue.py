@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock
 
-import app.routes_sources as routes_sources
+import services.ingestion.app.routes_sources as routes_sources
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.auth import APIKey, require_api_key
@@ -225,7 +225,7 @@ class TestIngestFDA:
 
 class TestRegisterSourceHandlers:
     def test_registers_all_three_task_types(self):
-        from app.task_handlers_sources import register_source_handlers
+        from services.ingestion.app.task_handlers_sources import register_source_handlers
         from shared.task_queue import TASK_HANDLERS
 
         for key in ("federal_register_ingest", "ecfr_ingest", "fda_ingest"):
@@ -238,7 +238,7 @@ class TestRegisterSourceHandlers:
         assert "fda_ingest" in TASK_HANDLERS
 
     def test_handlers_are_distinct_callables(self):
-        from app.task_handlers_sources import register_source_handlers
+        from services.ingestion.app.task_handlers_sources import register_source_handlers
         from shared.task_queue import TASK_HANDLERS
 
         register_source_handlers()

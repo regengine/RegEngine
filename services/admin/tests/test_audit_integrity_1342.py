@@ -37,7 +37,7 @@ import pytest
 service_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.audit_integrity import verify_chain  # noqa: E402
+from services.admin.app.audit_integrity import verify_chain  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # helpers — build v1 and v2 hash bodies the same way audit.py does

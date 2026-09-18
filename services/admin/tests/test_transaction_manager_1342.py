@@ -42,13 +42,13 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("fastapi")
 
-from app.bulk_upload.transaction_manager import (  # noqa: E402
+from services.admin.app.bulk_upload.transaction_manager import (  # noqa: E402
     _iso_utc,
     _parse_optional_datetime,
     build_validation_preview,
     execute_bulk_commit,
 )
-from app.sqlalchemy_models import (  # noqa: E402
+from services.admin.app.sqlalchemy_models import (  # noqa: E402
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -341,7 +341,7 @@ class TestExecuteBulkCommit:
         """Return a context-manager that stubs out all graph sync calls
         so tests don't need a live Neo4j or graph service."""
         return patch(
-            "app.bulk_upload.transaction_manager.supplier_graph_sync",
+            "services.admin.app.bulk_upload.transaction_manager.supplier_graph_sync",
             MagicMock(),
         )
 
@@ -651,7 +651,7 @@ class TestBuildValidationPreviewAdditional:
 class TestExecuteBulkCommitAdditional:
     def _patch_graph(self):
         return patch(
-            "app.bulk_upload.transaction_manager.supplier_graph_sync",
+            "services.admin.app.bulk_upload.transaction_manager.supplier_graph_sync",
             MagicMock(),
         )
 

@@ -28,10 +28,10 @@ from shared.paths import ensure_shared_importable
 
 ensure_shared_importable()
 
-import app.notifications as notifications_mod
+import services.scheduler.app.notifications as notifications_mod
 import httpx
 import pytest
-from app.models import EnforcementItem, EnforcementSeverity, SourceType
+from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 WebhookNotifier = notifications_mod.WebhookNotifier
 DeliveryResult = notifications_mod.DeliveryResult

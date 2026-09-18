@@ -1,8 +1,8 @@
 """Legacy distribution aliases must retain shipping semantics through validation."""
 
 import pytest
-from app.bulk_upload.validators import normalize_cte_type, validate_and_normalize_payload
-from app.supplier_cte_service import SUPPORTED_CTE_TYPES
+from services.admin.app.bulk_upload.validators import normalize_cte_type, validate_and_normalize_payload
+from services.admin.app.supplier_cte_service import SUPPORTED_CTE_TYPES
 
 
 @pytest.mark.parametrize("alias", ["D", "d", " depletion ", "distribution", "distribute", "di"])

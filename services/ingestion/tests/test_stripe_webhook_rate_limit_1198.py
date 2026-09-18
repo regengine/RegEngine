@@ -17,7 +17,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.stripe_billing.rate_limiting as rl
+import services.ingestion.app.stripe_billing.rate_limiting as rl
 from fastapi import HTTPException
 
 

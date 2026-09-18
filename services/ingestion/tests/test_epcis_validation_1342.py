@@ -40,8 +40,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.epcis import validation as mod  # noqa: E402
-from app.epcis.validation import (  # noqa: E402
+from services.ingestion.app.epcis import validation as mod  # noqa: E402
+from services.ingestion.app.epcis.validation import (  # noqa: E402
     _audit_log_validation_failure,
     _default_product_description,
     _validate_as_fsma_event,

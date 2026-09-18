@@ -23,7 +23,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr  # noqa: E402
+import services.ingestion.app.webhook_router_v2 as wr  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fake Request stub — the real starlette.Request needs an ASGI scope and we

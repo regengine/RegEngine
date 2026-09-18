@@ -103,7 +103,7 @@ async def ingest_events(
 
     tenant_id = principal_tenant_id
 
-    from app.tenant_validation import validate_tenant_id
+    from .tenant_validation import validate_tenant_id
 
     validate_tenant_id(tenant_id)
 

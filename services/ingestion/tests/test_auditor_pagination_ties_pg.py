@@ -149,8 +149,8 @@ def _paginate(engine, tenant_id: str) -> list[str]:
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import sessionmaker
 
-    from app import auditor_router
-    from app.authz import IngestionPrincipal, get_ingestion_principal
+    from services.ingestion.app import auditor_router
+    from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
     from shared.database import get_db_session
 
     principal = IngestionPrincipal(

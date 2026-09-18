@@ -16,10 +16,10 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import app.email_ingest.service as service_mod
+import services.ingestion.app.email_ingest.service as service_mod
 import pytest
-from app.email_ingest.schemas import AttachmentResult, PostmarkAttachment, PostmarkInboundPayload
-from app.email_ingest.service import (
+from services.ingestion.app.email_ingest.schemas import AttachmentResult, PostmarkAttachment, PostmarkInboundPayload
+from services.ingestion.app.email_ingest.service import (
     _first_recipient,
     _ingest_attachment_csv,
     _process_one_attachment,
@@ -491,8 +491,8 @@ class TestIngestAttachmentCsv:
         X-RegEngine-API-Key. Regression test for the x_regengine_api_key=None
         bug: before the fix this raised HTTPException(401) for every
         attachment, before CTEPersistence ever ran."""
-        import app.csv_templates as csv_templates_mod
-        from app.webhook_models import IngestResponse
+        import services.ingestion.app.csv_templates as csv_templates_mod
+        from services.ingestion.app.webhook_models import IngestResponse
 
         async def fake_ingest_events(payload, *, principal_tenant_id, x_regengine_api_key=None):
             if not x_regengine_api_key:

@@ -29,7 +29,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import pytest
-from app import s3_utils
+from services.ingestion.app import s3_utils
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import HTTPException
 

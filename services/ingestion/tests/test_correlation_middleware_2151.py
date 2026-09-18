@@ -63,7 +63,7 @@ def _load_ingestion_app():
     os.environ["AUTH_TEST_BYPASS_TOKEN"] = "test-bypass-token"
     os.environ["REGENGINE_ENV"] = "test"
     sys.modules.pop("main", None)
-    from main import app  # type: ignore[import-not-found]
+    from services.ingestion.main import app  # type: ignore[import-not-found]
 
     return app
 

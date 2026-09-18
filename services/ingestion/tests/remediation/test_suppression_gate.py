@@ -26,7 +26,7 @@ import pytest
 service_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.remediation.delivery import NotificationOutboxDrainer  # noqa: E402
+from services.ingestion.app.remediation.delivery import NotificationOutboxDrainer  # noqa: E402
 
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
 

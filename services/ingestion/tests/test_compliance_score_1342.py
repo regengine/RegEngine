@@ -32,8 +32,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import compliance_score as cs
-from app.compliance_score import (
+from services.ingestion.app import compliance_score as cs
+from services.ingestion.app.compliance_score import (
     ComplianceScoreResponse,
     NextAction,
     ScoreBreakdown,
@@ -56,7 +56,7 @@ def _app() -> FastAPI:
     """Minimal app with auth bypassed."""
     app = FastAPI()
     app.include_router(router)
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
