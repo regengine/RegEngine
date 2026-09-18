@@ -53,10 +53,14 @@ class AffectedFacility:
 
     gln: str
     name: str
-    facility_type: str  # grower, processor, distributor, retailer
+    facility_type: str  # grower, processor, distributor, retailer; "" when the graph records none
     lots_affected: List[str]
-    quantity_affected: float
-    unit_of_measure: str = "cases"
+    # ``None`` when the trace could not attribute a quantity to this facility
+    # (no lot-event associations, a lot without a numeric quantity, or lots
+    # in more than one unit). A number here is always a sum the graph
+    # supports; ``0.0`` and ``"cases"`` used to stand in for "unknown".
+    quantity_affected: Optional[float]
+    unit_of_measure: Optional[str] = None
     contact_info: Optional[Dict[str, str]] = None
     notification_status: str = "pending"  # pending, notified, acknowledged
 
@@ -164,8 +168,10 @@ class RecallResult:
     # Trace metrics
     lots_traced: int = 0
     facilities_identified: int = 0
-    total_quantity_affected: float = 0.0
-    unit_of_measure: str = "cases"
+    # ``None`` when no facility quantity is known or the known ones are in
+    # different units; never a partial sum presented as the total.
+    total_quantity_affected: Optional[float] = None
+    unit_of_measure: Optional[str] = None
 
     # Trace depth
     max_depth_forward: int = 0
@@ -177,9 +183,14 @@ class RecallResult:
     total_time_seconds: float = 0.0
     sla_compliant: bool = True
 
-    # Data quality
+    # Data quality. ``gaps_found`` counts facilities the trace reached with no
+    # lot attributed to them. ``orphans_found`` counts lots the forward trace
+    # reached that have a recorded event and no recorded shipping or
+    # transformation after it; ``None`` until a forward trace with lot-event
+    # associations has been measured (a backward-only drill, an unwired
+    # engine, or a tracer that supplied no associations leaves it unknown).
     gaps_found: int = 0
-    orphans_found: int = 0
+    orphans_found: Optional[int] = None
     data_completeness_pct: float = 100.0
 
     # Affected facilities

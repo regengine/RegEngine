@@ -885,7 +885,8 @@ class TestAffectedFacility:
             quantity_affected=0.0,
         )
 
-        assert facility.unit_of_measure == "cases"
+        # No "cases" stand-in: a unit the graph did not record is unknown.
+        assert facility.unit_of_measure is None
         assert facility.contact_info is None
         assert facility.notification_status == "pending"
 

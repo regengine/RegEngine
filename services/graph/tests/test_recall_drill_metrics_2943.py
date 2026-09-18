@@ -232,3 +232,139 @@ def test_engine_no_longer_reads_lots_count_or_max_depth_keys():
         f"#2943: engine.py still reads TraceResult keys that do not exist: {offenders}. "
         "The real fields are 'lots' and 'hop_count'."
     )
+
+
+# ---------------------------------------------------------------------------
+# Orphans, per-facility lots and quantities come from the trace's recorded
+# lot-event associations; unknown stays unknown
+# ---------------------------------------------------------------------------
+
+_FAC_PACK = {"gln": "0614141000005", "name": "Packhouse", "address": "1 Grower Way", "facility_type": "PACKER"}
+_FAC_DC = {"gln": "0614141000029", "name": "Regional DC", "address": "9 Dock St", "facility_type": "DISTRIBUTOR"}
+_LOT_A = {"tlc": "LOT-A", "product_description": "Romaine", "quantity": 40, "unit_of_measure": "cases"}
+_LOT_B = {"tlc": "LOT-B", "product_description": "Spinach", "quantity": 18, "unit_of_measure": "cases"}
+_EVT_PACK = {"event_id": "evt-1", "type": "INITIAL_PACKING", "event_date": "2026-03-01"}
+_EVT_SHIP = {"event_id": "evt-2", "type": "SHIPPING", "event_date": "2026-03-04"}
+_EVT_RECV_A = {"event_id": "evt-3", "type": "RECEIVING", "event_date": "2026-03-06"}
+_EVT_RECV_B = {"event_id": "evt-4", "type": "RECEIVING", "event_date": "2026-03-07"}
+
+
+def _associated_forward_result(trace_rows) -> TraceResult:
+    return TraceResult(
+        lot_id="LOT-A",
+        direction="forward",
+        facilities=[_FAC_PACK, _FAC_DC],
+        events=[_EVT_PACK, _EVT_SHIP, _EVT_RECV_A, _EVT_RECV_B],
+        lots=[_LOT_A, _LOT_B],
+        total_quantity=58.0,
+        query_time_ms=1.0,
+        hop_count=3,
+        trace_rows=trace_rows,
+    )
+
+
+_ASSOCIATIONS = [
+    # LOT-A: packed and shipped from the packhouse, received at the DC.
+    {"lot": _LOT_A, "event": _EVT_PACK, "facility": _FAC_PACK},
+    {"lot": _LOT_A, "event": _EVT_SHIP, "facility": _FAC_PACK},
+    {"lot": _LOT_A, "event": _EVT_RECV_A, "facility": _FAC_DC},
+    # LOT-B: received at the DC and never moved on.
+    {"lot": _LOT_B, "event": _EVT_RECV_B, "facility": _FAC_DC},
+]
+
+
+async def _run_forward(result: TraceResult):
+    engine = _engine_with(forward=result)
+    drill = engine.create_drill(tenant_id=TENANT, drill_type=RecallType.FORWARD_TRACE, target_lot="LOT-A")
+    return await engine.execute_drill(drill)
+
+
+@pytest.mark.asyncio
+async def test_orphans_are_lots_the_trace_reached_that_nothing_moved_on():
+    result = await _run_forward(_associated_forward_result(_ASSOCIATIONS))
+
+    assert result.orphans_found == 1, "LOT-B was received and never shipped or transformed"
+    assert result.to_dict()["orphans_found"] == 1
+
+
+@pytest.mark.asyncio
+async def test_per_facility_lots_and_quantities_come_from_associations():
+    result = await _run_forward(_associated_forward_result(_ASSOCIATIONS))
+
+    by_gln = {f.gln: f for f in result.affected_facilities}
+    assert by_gln["0614141000005"].lots_affected == ["LOT-A"]
+    assert by_gln["0614141000005"].quantity_affected == 40.0
+    assert by_gln["0614141000005"].unit_of_measure == "cases"
+    assert by_gln["0614141000005"].facility_type == "PACKER"
+    assert by_gln["0614141000029"].lots_affected == ["LOT-A", "LOT-B"]
+    assert by_gln["0614141000029"].quantity_affected == 58.0
+    assert result.gaps_found == 0
+    assert result.data_completeness_pct == 100.0
+    assert result.total_quantity_affected == 98.0
+    assert result.unit_of_measure == "cases"
+
+
+@pytest.mark.asyncio
+async def test_mixed_units_do_not_produce_a_sum():
+    lot_b_lbs = {**_LOT_B, "unit_of_measure": "lbs"}
+    associations = [
+        {"lot": _LOT_A, "event": _EVT_RECV_A, "facility": _FAC_DC},
+        {"lot": lot_b_lbs, "event": _EVT_RECV_B, "facility": _FAC_DC},
+    ]
+    result = await _run_forward(_associated_forward_result(associations))
+
+    dc = next(f for f in result.affected_facilities if f.gln == "0614141000029")
+    assert dc.lots_affected == ["LOT-A", "LOT-B"]
+    assert dc.quantity_affected is None
+    assert dc.unit_of_measure is None
+    assert result.total_quantity_affected is None
+
+
+@pytest.mark.asyncio
+async def test_without_associations_nothing_is_reported_as_known():
+    """``trace_rows=None`` means the tracer supplied no associations. The
+    old code recorded 0 lots per facility, 0% completeness, ``"cases"`` and
+    the trace direction as the facility type; now the record says unknown."""
+    result = await _run_forward(_associated_forward_result(None))
+
+    assert result.orphans_found is None
+    assert any("no lot-event associations" in w for w in result.warnings)
+    for facility in result.affected_facilities:
+        assert facility.lots_affected == []
+        assert facility.quantity_affected is None
+        assert facility.unit_of_measure is None
+        assert facility.facility_type in {"PACKER", "DISTRIBUTOR"}
+    assert result.total_quantity_affected is None
+
+
+@pytest.mark.asyncio
+async def test_unwired_drill_leaves_orphans_unknown():
+    engine = MockRecallEngine()
+    drill = engine.create_drill(tenant_id=TENANT, drill_type=RecallType.FORWARD_TRACE, target_lot="LOT-A")
+
+    result = await engine.execute_drill(drill)
+
+    assert result.simulated is True
+    assert result.orphans_found is None
+
+
+def test_facility_without_gln_or_type_is_not_given_placeholders():
+    engine = MockRecallEngine()
+    facilities, has_associations = engine._extract_facilities(
+        TraceResult(
+            lot_id="LOT-A",
+            direction="forward",
+            facilities=[{"name": None}],
+            events=[],
+            lots=[],
+            total_quantity=None,
+            query_time_ms=0.0,
+            hop_count=0,
+            trace_rows=[],
+        ),
+        "downstream",
+    )
+    assert has_associations is True
+    assert facilities[0].gln == ""
+    assert facilities[0].name == ""
+    assert facilities[0].facility_type == ""
