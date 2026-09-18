@@ -758,8 +758,11 @@ async def log_traceability_event(
                 traceability_lot_code=payload.tlc,
                 product_reference=payload.product_description or "",
                 lot_reference=payload.tlc,
-                quantity=payload.quantity or 1.0,
-                unit_of_measure=payload.uom or "each",
+                # No stand-ins: a capture without quantity or unit does not
+                # reach the canonical store (the ValidationError is caught
+                # below and logged), and the Neo4j lot already holds None.
+                quantity=payload.quantity,
+                unit_of_measure=payload.uom,
                 from_facility_reference=payload.location_identifier,
                 kdes=kdes,
                 raw_payload={

@@ -323,8 +323,13 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
     if row_cte == "shipping":
         if "ship_from_location" not in kdes and loc_name:
             kdes["ship_from_location"] = loc_name
+        # No default when the ship-to is absent: the completeness check
+        # reports it missing and the ship-to rule fails on the event, which
+        # is the true state of the record.
         if "ship_to_location" not in kdes:
-            kdes["ship_to_location"] = row.get("ship_to_location") or row.get("destination") or "See receiver"
+            ship_to = row.get("ship_to_location") or row.get("destination")
+            if ship_to:
+                kdes["ship_to_location"] = ship_to
     elif row_cte in ("receiving", "first_land_based_receiving"):
         if "receiving_location" not in kdes and loc_name:
             kdes["receiving_location"] = loc_name
@@ -463,10 +468,9 @@ def _normalize_location(raw: str) -> str:
 
 
 # ── Flexible date parsing ────────────────────────────────────────────────────
-_SENTINEL_TS = "1970-01-01T00:00:00Z"  # placeholder when date is unreadable
 
 
-def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str, str | None]:
+def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, str | None]:
     """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
 
     Handles YYYY-MM-DD, M/D/YY, April 2nd 2026, 04-01-2026, and more.
@@ -474,10 +478,12 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str, str | Non
     Returns:
         (iso_ts, warning)  — warning is None on success, or a human-readable
         message describing why the date could not be parsed.  In that case
-        iso_ts is _SENTINEL_TS so the row can still be ingested and flagged.
+        iso_ts is None: an unreadable date yields no timestamp. Rows ingested
+        before this change may carry the old ``1970-01-01T00:00:00Z``
+        placeholder.
     """
     if not raw or not raw.strip():
-        return _SENTINEL_TS, "date field was empty"
+        return None, "date field was empty"
 
     raw = raw.strip()
 
@@ -506,7 +512,7 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str, str | Non
     except (_DateParserError, ValueError, OverflowError):
         pass
 
-    return _SENTINEL_TS, f"INVALID_FORMAT: could not parse date '{raw}'"
+    return None, f"INVALID_FORMAT: could not parse date '{raw}'"
 
 
 # ── Lot-code integrity checks ────────────────────────────────────────────────
@@ -626,13 +632,16 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
                 parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
                 continue
 
-            # ── Phase 1: Ingestion — flexible, never crashes on bad data ──────
-            # Date: accept any human format; sentinel + warning on total failure
+            # ── Phase 1: Ingestion — flexible on format, strict on presence ──
+            # Date: accept any human format. An unreadable or empty date
+            # rejects the row; a placeholder timestamp would enter the hash
+            # chain as evidence of when the event happened.
             raw_date = next((row[f] for f in _DATE_FIELDS if row.get(f)), "")
             event_time_raw = (row.get("event_time") or "").strip()
             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
-            if date_warning:
-                kde_warnings.append(f"Row {row_num}: {date_warning}")
+            if ts is None:
+                parse_errors.append(f"Row {row_num}: {date_warning}")
+                continue
 
             # Location: strip whitespace and expand abbreviations
             loc_gln = (
@@ -653,9 +662,25 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
             )
             loc_name = _normalize_location(_loc_raw) if _loc_raw else None
 
-            # Unit of measure: map abbreviations before Pydantic sees them
-            uom_raw = row.get("unit_of_measure") or row.get("uom") or "units"
+            # Unit of measure: map abbreviations before Pydantic sees them.
+            # No default: a unit the uploader did not record is not "units".
+            uom_raw = row.get("unit_of_measure") or row.get("uom")
+            if not uom_raw:
+                parse_errors.append(f"Row {row_num}: unit_of_measure is required")
+                continue
             uom = _normalize_uom(uom_raw)
+
+            # Quantity: required and numeric. The generic exception handler
+            # below would reject the row too, but with an opaque message.
+            quantity_raw = row.get("quantity") or row.get("qty")
+            if not quantity_raw:
+                parse_errors.append(f"Row {row_num}: quantity is required")
+                continue
+            try:
+                quantity = float(quantity_raw)
+            except ValueError:
+                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
+                continue
 
             # Lot code: extract and run integrity checks
             lot_code = row.get("traceability_lot_code") or row.get("tlc") or row.get("lot_code") or ""
@@ -682,11 +707,6 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
             for key, val in row.items():
                 if key and val and key not in skip_fields:
                     kdes[key] = val
-
-            # Store original date string for audit trail when it was unparseable
-            if date_warning:
-                kdes["_original_date_value"] = raw_date
-                kdes["_date_parse_status"] = "INVALID_FORMAT"
 
             # Parse input_lot_codes (comma-separated) if present
             input_lot_codes: list[str] = []
@@ -719,7 +739,7 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
                 product_description=(
                     row.get("product_description") or row.get("product") or row.get("description") or ""
                 ),
-                quantity=float(row.get("quantity") or row.get("qty") or 0),
+                quantity=quantity,
                 unit_of_measure=uom,
                 location_gln=loc_gln,
                 location_name=loc_name,
