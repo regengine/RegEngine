@@ -523,6 +523,64 @@ class TestExportEndpoints:
         assert "Facility Name" in content
         assert "Global Location Number" in content
 
+    def test_export_recall_contacts_reports_real_receipts_and_no_pending_status(self, mock_neo4j_client):
+        """Date Received / Quantity Received come from the receiving event the
+        graph records; a facility with no receiving event stays listed with
+        those cells blank; Contact Status is never asserted as ``PENDING``."""
+        import csv as csv_mod
+        import io
+        import uuid
+
+        from fastapi import FastAPI
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+
+        from services.graph.app.fsma_utils import TraceResult
+
+        fac_pack = {"gln": "0614141000005", "name": "Packhouse", "address": "1 Grower Way", "facility_type": "PACKER"}
+        fac_dc = {"gln": "0614141000029", "name": "Regional DC", "address": "9 Dock St", "facility_type": "DISTRIBUTOR"}
+        lot_b = {"tlc": "LOT-B", "product_description": "Spinach", "quantity": 18, "unit_of_measure": "cases"}
+        evt_ship = {"event_id": "evt-2", "type": "SHIPPING", "event_date": "2026-03-04"}
+        evt_recv = {"event_id": "evt-3", "type": "RECEIVING", "event_date": "2026-03-06"}
+        result = TraceResult(
+            lot_id="LOT-A",
+            direction="forward",
+            facilities=[fac_pack, fac_dc],
+            events=[evt_ship, evt_recv],
+            lots=[lot_b],
+            total_quantity=18.0,
+            query_time_ms=2.0,
+            hop_count=2,
+            trace_rows=[
+                {"lot": lot_b, "event": evt_ship, "facility": {k: fac_pack[k] for k in ("gln", "name", "address")}},
+                {"lot": lot_b, "event": evt_recv, "facility": {k: fac_dc[k] for k in ("gln", "name", "address")}},
+            ],
+        )
+
+        with patch(
+            "services.graph.app.routers.fsma.compliance.trace_forward",
+            new_callable=AsyncMock,
+            return_value=result,
+        ):
+            app = FastAPI()
+            app.include_router(_build_fsma_router())
+            app.dependency_overrides[require_api_key] = lambda: {"tenant_id": "test-tenant", "key_id": "test-key"}
+            app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+            client = TestClient(app)
+            response = client.get("/v1/fsma/export/recall-contacts/LOT-A", headers=_AUTH_HEADERS)
+
+        assert response.status_code == 200
+        reader = csv_mod.DictReader(io.StringIO(response.content.decode("utf-8-sig")))
+        rows = {row["Global Location Number (GLN)"]: row for row in reader}
+        assert rows["0614141000029"]["Date Received"] == "2026-03-06"
+        assert rows["0614141000029"]["Quantity Received"] == "18"
+        assert rows["0614141000029"]["Unit of Measure"] == "cases"
+        assert rows["0614141000029"]["Traceability Lot Code"] == "LOT-B"
+        assert rows["0614141000005"]["Date Received"] == ""
+        assert rows["0614141000005"]["Quantity Received"] == ""
+        assert all(row["Contact Status"] == "" for row in rows.values())
+        assert "PENDING" not in response.content.decode("utf-8-sig")
+
 
 class TestGapAnalysisEndpoints:
     """Tests for gap analysis endpoints."""
