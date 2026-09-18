@@ -58,7 +58,7 @@ Status as of 2026-09-18. Line numbers are from the audit date.
 - **Fixed (#3120).** Three conflicting input-lot key conventions: rule reads `kdes.input_traceability_lot_codes` (`rules/seeds.py:460`), CSV parser writes `kdes.input_lot_codes` (`csv_templates.py:620`), sandbox writes `input_traceability_lot_codes` (`sandbox/csv_parser.py:222-227`). CSV-ingested transformations fail "Input TLCs Required" even when inputs are present. The rule now reads `kdes.input_lot_codes` first and `kdes.input_traceability_lot_codes` second (migration v124); the sandbox still writes the second key.
 - **Fixed (#3121).** `transformation_links.input_quantity` / `input_unit` are never written (`writer.py:738-760`) but `trace_backward` selects them (`writer.py:905`), so backward-trace quantity is always `None`. CSV and EPCIS transformations now carry per-input quantity and unit in `kdes.inputs`, and the writer stores them.
 - **Fixed (#3119).** `initial_packing` rows with `input_lot_codes` create no links (`writer.py:703`).
-- **Open.** `RecallResult.orphans_found` is never populated; `gaps` = facilities with no lots (`services/graph/app/fsma_recall/engine.py:277-278`).
+- **Fixed (leftovers PR).** `RecallResult.orphans_found` is never populated; `gaps` = facilities with no lots (`services/graph/app/fsma_recall/engine.py:277-278`). Orphans and per-facility lots and quantities now come from the trace's lot-event associations; `orphans_found` is `None` until a forward trace with associations is measured. The same change removed the `"unknown"` / `"Unknown Facility"` / `"cases"` / trace-direction placeholders `_extract_facilities` wrote, and the `lots` / `quantity` keys it read that the tracer never emits (every production drill had recorded 0% completeness).
 - **Fixed (this PR).** Recall-contacts CSV hardcodes `Date Received` / `Quantity Received` empty and `Contact Status="PENDING"` (`services/graph/app/routers/fsma/compliance.py:558-561`). Rows now come from the trace's recorded receiving events (`exporters/recall_contacts_csv.py`); a facility with no receiving event keeps those cells blank, and Contact Status is blank because nothing records a notification outcome.
 - **Fixed (#3119).** Default settings fabricate `sensitech last_sync=now()` when no tenant row exists (`services/ingestion/app/settings.py:70-84`).
 
@@ -69,11 +69,21 @@ Found while confirming the above, fixed in the same PR as the recall-contacts CS
 - `normalize_epcis_event` stored a lot identifier under 3 characters as `EPCIS-<id>` and a flat-shape quantity with no unit as `each`; `_validate_as_fsma_event` validated unmapped event types as RECEIVING and stamped `"UNKNOWN"` / `now()` on a missing lot code or event time (`services/shared/canonical_event.py`, `services/ingestion/app/epcis/validation.py`).
 - The supplier-portal and mobile-capture canonical bridges wrote `quantity=1.0` / `"each"` when the source had neither (`services/admin/app/supplier_cte_service.py`, `services/graph/app/routers/fsma/traceability.py`).
 
-Leftovers of the same kind, not yet changed:
+Leftovers of the same kind, fixed in the follow-up PR after #3125:
 
-- EPCIS `product_description` is synthesized as `EPCIS Product <id>` / `EPCIS Traceability Event` and stored (`services/ingestion/app/epcis/validation.py:96`, `epcis/persistence.py:848`); the legacy EPCIS row stores `"units"` for a missing unit (`epcis/persistence.py:850`) while the canonical row stores `each`.
-- Connector mappers default a missing unit to `"units"` (`services/shared/external_connectors/csv_sftp.py:346,361`, `food_safety.py:123,228`, `safetyculture.py:237`).
-- The sandbox parser still writes `input_traceability_lot_codes` (`services/ingestion/app/sandbox/csv_parser.py:222`); the rule tolerates it, the link writer does not.
+- EPCIS `product_description` was synthesized as `EPCIS Product <id>` / `EPCIS Traceability Event` and stored (`services/ingestion/app/epcis/validation.py:96`, `epcis/persistence.py:848`); the legacy EPCIS row stored `"units"` for a missing unit (`epcis/persistence.py:850`) while the canonical row stored `each`. The row now stores the payload's `productDescription` (top-level or ILMD) or an empty cell, and `each` for a CBV count element; a missing `eventTime` is a 422 instead of `now()`.
+- Connector mappers defaulted a missing unit to `"units"` and a missing quantity to `1.0` (`services/shared/external_connectors/csv_sftp.py`, `food_safety.py` FoodReady/FoodDocs, `safetyculture.py`). `NormalizedCTEEvent.quantity` / `.unit_of_measure` are now Optional and the ingest schema rejects the event.
+- The sandbox parser wrote `input_traceability_lot_codes` (`services/ingestion/app/sandbox/csv_parser.py:222`), a bare string for a single lot, and renamed the writer-compatible `input_lot_codes` column away. It now writes `kdes.input_lot_codes` as a list; tracer, evaluators and the frontend diagnosis alias list read it.
+
+Still open, found while fixing the above:
+
+- Tive (`food_safety.py` `_shipment_to_ctes`, `"cases"` at `:402`), `retailers.py` (`"cases"`, `quantity` / `qty` default `1`) and `inflow_lab.py:74-75` (`"each"`, quantity `0`) keep unit and quantity defaults; connector timestamps fall back to `now()` (`csv_sftp.py`, `food_safety.py`, `safetyculture.py`).
+- Connector lot codes are synthesized from the source record id (`FR-<id>`, `FD-<id>`, `SC-<audit_id>`) when the record names none.
+- EDI: `_safe_float(value, fallback=1.0)` and `_normalize_unit` → `"units"` (`services/ingestion/app/edi_ingestion/utils.py:80-105`); `edi_ingestion/validation.py:72-75` synthesizes `EDI <set> Item` as the product description.
+- NLP tabular extraction stores `Unknown Product` for a missing description (`services/nlp/app/extractors/fsma_extractor/tabular.py:99`).
+- `fsma.cte_events` still carries `CHECK (quantity > 0)` (`alembic/sql/V002__fsma_cte_persistence.sql`), contradicting the #1249 comment that zero quantities persist.
+- Recall-drill orphan counting cannot see the relationship direction in `trace_rows`, so a lot a transformation produced and nothing shipped is not counted; the count can be low, never high. Returning `type(r)` from the tracer's association query (and teaching `services/graph/tests/_fsma_graph_double.py` to project it) would close that.
+- `fsma_recall/__init__.py:62-67` builds a `MockRecallEngine()` with no trace functions wired, so `create_mock_recall` / `get_recall_readiness` always produce `simulated` drills.
 
 ## Unverified (needs Postgres or live services; not runnable in the audit environment)
 
