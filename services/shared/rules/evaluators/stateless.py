@@ -14,6 +14,23 @@ from shared.rules.uom import resolve_temperature_reading
 from shared.rules.utils import get_nested_value
 
 
+def _value_is_present(value: Any) -> bool:
+    """True when ``value`` carries data an auditor could read.
+
+    ``None`` and blank strings are absent. So is an empty collection: a
+    transformation whose ``kdes.input_lot_codes`` is ``[]`` names no input
+    lots, and the link writer treats it as no links, so the presence rule
+    must not pass it. Numeric zero and ``False`` are real values and pass.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    if isinstance(value, (list, tuple, set, frozenset, dict)):
+        return len(value) > 0
+    return True
+
+
 def evaluate_field_presence(
     event_data: Dict[str, Any],
     logic: Dict[str, Any],
@@ -23,7 +40,7 @@ def evaluate_field_presence(
     field_path = logic.get("field", "")
     value = get_nested_value(event_data, field_path)
 
-    is_present = value is not None and (not isinstance(value, str) or value.strip() != "")
+    is_present = _value_is_present(value)
 
     evidence = [
         {
@@ -154,7 +171,7 @@ def evaluate_multi_field_presence(
 
     for fp in fields:
         value = get_nested_value(event_data, fp)
-        is_present = value is not None and (not isinstance(value, str) or value.strip() != "")
+        is_present = _value_is_present(value)
         evidence.append(
             {
                 "field": fp,
@@ -166,7 +183,12 @@ def evaluate_multi_field_presence(
         if not is_present:
             missing_fields.append(fp)
 
-    passed = all(present_flags) if require_all else any(present_flags)
+    # A rule that names no fields checks nothing; ``all([])`` is True, which
+    # would let a misconfigured require-all rule pass every event.
+    if not fields:
+        passed = False
+    else:
+        passed = all(present_flags) if require_all else any(present_flags)
 
     if passed:
         return RuleEvaluationResult(

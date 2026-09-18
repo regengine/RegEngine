@@ -353,24 +353,28 @@ normalize_epcis_event(
 
 **Normalization steps:**
 
-1. Maps EPCIS `bizStep` to `CTEType` via keyword matching (default: `RECEIVING`)
-2. Extracts TLC and GTIN from EPC URIs in `epcList` (supports SGTIN and LGTIN formats)
-3. Builds KDEs from EPCIS `ilmd` and `extension` fields
-4. Maps `readPoint` to `from_facility_reference`, `bizLocation` to `to_facility_reference`
-5. Preserves EPCIS interop fields (`epcis_event_type`, `epcis_action`, `epcis_biz_step`)
-6. Sets provenance: mapper=`epcis_normalizer`, rules=`[epcis_bizstep_mapping, epc_uri_parsing]`
-7. Calls `prepare_for_persistence()`
+1. Resolves EPCIS `bizStep` to `CTEType` by exact lookup against `BIZSTEP_TO_CTE_TYPE` (full CBV/FSMA URI, or the bare last segment). Anything unmapped, including a missing `bizStep`, raises `UnmappedBizStepError`; nothing defaults to `RECEIVING` (#2815)
+2. Extracts the lot identifier in this order: ILMD `fsma:traceabilityLotCode` / `cbvmda:lotNumber`, an LGTIN or SGTIN EPC in `epcList`, then a top-level `traceability_lot_code`. No lot identifier raises; an identifier under 3 characters raises rather than being rewritten (#3121)
+3. Requires `eventTime`; a missing one raises rather than stamping the current time
+4. Requires a numeric quantity from `extension.quantityList`, `quantityList`, a transformation's output/input quantity list, or the flattened `quantity.value` shape; a missing or non-numeric quantity raises (#1249). A `quantityList` element without `uom` is recorded as `each`, which EPCIS CBV defines as a count of instances; the flattened shape with no `uom` raises
+5. Builds KDEs from EPCIS `ilmd` and `extension` fields; a `TransformationEvent` also gets `kdes.inputs` (per-input lot, quantity, unit) and `kdes.input_lot_codes` from its input lists
+6. Maps `readPoint` to `from_facility_reference`, `bizLocation` to `to_facility_reference`
+7. Preserves EPCIS interop fields (`epcis_event_type`, `epcis_action`, `epcis_biz_step`)
+8. Sets provenance: mapper=`epcis_normalizer`, rules=`[epcis_bizstep_mapping, epc_uri_parsing]`
+9. Calls `prepare_for_persistence()`
 
-**bizStep to CTEType mapping:**
+**bizStep to CTEType mapping** (`BIZSTEP_TO_CTE_TYPE`, exact match on the URI or its last segment):
 
-| bizStep keyword | CTEType |
+| bizStep URI | CTEType |
 |---|---|
-| `shipping` | `SHIPPING` |
-| `receiving` | `RECEIVING` |
-| `commissioning` | `INITIAL_PACKING` |
-| `transforming` | `TRANSFORMATION` |
-| `harvesting` | `HARVESTING` |
-| `cooling` | `COOLING` |
+| `urn:epcglobal:cbv:bizstep:receiving`, `urn:fsma:traceability:receiving` | `RECEIVING` |
+| `urn:epcglobal:cbv:bizstep:shipping`, `urn:fsma:traceability:shipping` | `SHIPPING` |
+| `urn:epcglobal:cbv:bizstep:transforming`, `urn:fsma:traceability:transformation` | `TRANSFORMATION` |
+| `urn:epcglobal:cbv:bizstep:commissioning`, `urn:epcglobal:cbv:bizstep:packing`, `urn:fsma:traceability:initial_packing` | `INITIAL_PACKING` |
+| `urn:epcglobal:cbv:bizstep:harvesting`, `urn:fsma:traceability:harvesting` | `HARVESTING` |
+| `urn:epcglobal:cbv:bizstep:storing`, `urn:fsma:traceability:cooling` | `COOLING` |
+| `urn:epcglobal:cbv:bizstep:landing`, `urn:fsma:traceability:first_land_based_receiving` | `FIRST_LAND_BASED_RECEIVING` |
+| `urn:epcglobal:cbv:bizstep:planting`, `urn:fsma:traceability:growing` | rejected: growing is not a canonical CTE |
 
 ### `normalize_csv_row()`
 
@@ -389,12 +393,11 @@ normalize_csv_row(
 
 1. Applies `column_mapping` to translate source columns to canonical fields
 2. Unmapped columns with non-empty values are stored as KDEs
-3. Maps event type strings to `CTEType` using a flexible alias map (e.g., `"harvest"` -> `HARVESTING`, `"ship"` -> `SHIPPING`)
-4. Reduces `confidence_score` to 0.7 if event type required inference
-5. Sets provenance: mapper=`csv_normalizer`, format=`csv`, rules=`[csv_column_mapping]` (plus `event_type_inference` if applicable)
-6. Calls `prepare_for_persistence()`
+3. Requires, after mapping: `event_type` (an alias from the table below), `event_timestamp` (or `timestamp`), `traceability_lot_code` (or `tlc`), a numeric `quantity`, and `unit_of_measure`. A blank or unrecognised required field raises `CSVRowNormalizationError` carrying `row_number`, `missing` and `invalid`; the caller reports it per row. Nothing is defaulted: earlier versions substituted `now()`, `"UNKNOWN"`, `1`, `"each"` and `receiving` (#3119)
+4. Sets provenance: mapper=`csv_normalizer` version `1.1.0`, format=`csv`, rules=`[csv_column_mapping]`, `extraction_confidence=1.0`; there is no inference step and `confidence_score` stays `1.0`
+5. Calls `prepare_for_persistence()`
 
-**Event type alias map:**
+**Event type alias map** (`_CSV_CTE_TYPE_MAP`, matched case-insensitively):
 
 | Input alias(es) | Canonical CTEType |
 |---|---|
