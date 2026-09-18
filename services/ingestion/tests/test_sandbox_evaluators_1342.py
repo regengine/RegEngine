@@ -31,8 +31,8 @@ from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import pytest
-from app.sandbox import evaluators as evaluators_mod
-from app.sandbox.evaluators import (
+from services.ingestion.app.sandbox import evaluators as evaluators_mod
+from services.ingestion.app.sandbox.evaluators import (
     _evaluate_event_stateless,
     _evaluate_relational_in_memory,
     _get_relational_rules,

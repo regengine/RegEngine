@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from app import authz
-from app.stripe_billing import rate_limiting as rate_limiting_mod, routes as routes_mod
+from services.ingestion.app import authz
+from services.ingestion.app.stripe_billing import rate_limiting as rate_limiting_mod, routes as routes_mod
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from shared.rate_limit import BruteForceLimiter

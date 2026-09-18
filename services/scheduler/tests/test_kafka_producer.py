@@ -31,7 +31,7 @@ ensure_shared_importable()
 from unittest.mock import ANY
 
 import pytest
-from app.models import EnforcementItem, EnforcementSeverity, SourceType
+from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 
 def _coerce_enum(enum_cls, value):
@@ -41,7 +41,7 @@ def _coerce_enum(enum_cls, value):
 
 
 def _active_model_types():
-    from app import kafka_producer as kafka_producer_mod
+    from services.scheduler.app import kafka_producer as kafka_producer_mod
 
     model_mod = sys.modules[kafka_producer_mod.EnforcementItem.__module__]
     return (
@@ -68,7 +68,7 @@ def _make_item(severity=None, source_type=None, **kw) -> EnforcementItem:
 @pytest.fixture
 def mock_kafka():
     """Patch KafkaProducerLib to avoid real Kafka connections."""
-    with patch("app.kafka_producer.KafkaProducerLib") as MockKafka:
+    with patch("services.scheduler.app.kafka_producer.KafkaProducerLib") as MockKafka:
         mock_instance = MagicMock()
         mock_instance.send.return_value = MagicMock()  # Future
         mock_instance.bootstrap_connected.return_value = True
@@ -79,7 +79,7 @@ def mock_kafka():
 @pytest.fixture
 def producer(mock_kafka):
     """Create a KafkaEventProducer with mocked Kafka."""
-    from app.kafka_producer import KafkaEventProducer
+    from services.scheduler.app.kafka_producer import KafkaEventProducer
 
     p = KafkaEventProducer(bootstrap_servers="localhost:9092")
     return p
@@ -140,7 +140,7 @@ class TestEmitEnforcementChange:
     def test_emit_enforcement_change_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
         """Strict-mode posture: fail closed, do not publish unsigned."""
         monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
-        from app.kafka_producer import KafkaEventProducer
+        from services.scheduler.app.kafka_producer import KafkaEventProducer
 
         p = KafkaEventProducer(bootstrap_servers="localhost:9092")
         mock_instance, _ = mock_kafka
@@ -191,7 +191,7 @@ class TestEmitHighPriorityAlert:
     def test_emit_high_priority_alert_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
         """Strict-mode posture: fail closed, do not publish unsigned."""
         monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
-        from app.kafka_producer import KafkaEventProducer
+        from services.scheduler.app.kafka_producer import KafkaEventProducer
 
         p = KafkaEventProducer(bootstrap_servers="localhost:9092")
         mock_instance, _ = mock_kafka
@@ -294,7 +294,7 @@ class TestEmitFSMAEvent:
     def test_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
         """Strict-mode posture: fail closed, do not publish unsigned."""
         monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
-        from app.kafka_producer import KafkaEventProducer
+        from services.scheduler.app.kafka_producer import KafkaEventProducer
 
         p = KafkaEventProducer(bootstrap_servers="localhost:9092")
         mock_instance, _ = mock_kafka

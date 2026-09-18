@@ -42,7 +42,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("sqlalchemy")
 
-from app.sqlalchemy_models import GUID, JSONType  # noqa: E402
+from services.admin.app.sqlalchemy_models import GUID, JSONType  # noqa: E402
 
 
 def _mk_dialect(name: str):

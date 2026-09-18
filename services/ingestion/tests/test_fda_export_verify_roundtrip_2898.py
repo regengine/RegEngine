@@ -42,9 +42,9 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.cte_persistence as shared_cte_persistence  # noqa: E402
-from app.authz import IngestionPrincipal  # noqa: E402
-from app.fda_export import verification as v  # noqa: E402
-from app.fda_export.router import router as fda_router  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal  # noqa: E402
+from services.ingestion.app.fda_export import verification as v  # noqa: E402
+from services.ingestion.app.fda_export.router import router as fda_router  # noqa: E402
 
 from services.ingestion.tests.authz_overrides import (  # noqa: E402
     install_active_subscription_override,
@@ -364,7 +364,7 @@ class TestSharedReconstruction:
     def test_exporter_and_verifier_share_one_helper(self, monkeypatch):
         """Both legs must go through the same reconstruction function, so the
         two can never drift apart again."""
-        from app.fda_export import queries as q
+        from services.ingestion.app.fda_export import queries as q
 
         assert hasattr(q, "reconstruct_full_export_events")
 
@@ -375,7 +375,7 @@ class TestSharedReconstruction:
             calls.append(kwargs)
             return real(persistence, **kwargs)
 
-        import app.fda_export.router as router_mod
+        import services.ingestion.app.fda_export.router as router_mod
 
         monkeypatch.setattr(router_mod, "reconstruct_full_export_events", _spy)
         monkeypatch.setattr(v, "reconstruct_full_export_events", _spy)

@@ -42,8 +42,8 @@ TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 def client() -> TestClient:
     """Same pattern as ``test_epcis_ingestion_api.py`` -- override the
     api-key dep so the tests focus on XML + validation behavior."""
-    from app.epcis.router import router
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.epcis.router import router
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
@@ -355,7 +355,7 @@ class TestParseXmlUnit_Issue1151:
     def test_parse_returns_empty_on_malformed_xml(self):
         """The parser's own contract: return [] rather than raise. The
         router is responsible for turning [] into a 422."""
-        from app.epcis.xml_parser import _parse_epcis_xml
+        from services.ingestion.app.epcis.xml_parser import _parse_epcis_xml
 
         events = _parse_epcis_xml(_malformed_xml())
         assert events == []
@@ -363,7 +363,7 @@ class TestParseXmlUnit_Issue1151:
     def test_parse_valid_xml_extracts_biz_step(self):
         """Round-trip check: a valid ObjectEvent comes out with bizStep
         populated so ``_normalize_epcis_to_cte`` can map it to a CTE."""
-        from app.epcis.xml_parser import _parse_epcis_xml
+        from services.ingestion.app.epcis.xml_parser import _parse_epcis_xml
 
         events = _parse_epcis_xml(_valid_epcis_xml())
         assert len(events) == 1
@@ -372,7 +372,7 @@ class TestParseXmlUnit_Issue1151:
         assert events[0].get("action") == "OBSERVE"
 
     def test_parse_empty_document_returns_empty_list(self):
-        from app.epcis.xml_parser import _parse_epcis_xml
+        from services.ingestion.app.epcis.xml_parser import _parse_epcis_xml
 
         events = _parse_epcis_xml(_empty_xml_document())
         assert events == []

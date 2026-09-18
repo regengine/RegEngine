@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from app.supplier_graph_sync import (
+from services.admin.app.supplier_graph_sync import (
     CTE_EVENT_QUERY,
     FACILITY_FTL_SCOPING_QUERY,
     FACILITY_REQUIRED_CTES_QUERY,
@@ -240,7 +240,7 @@ def test_every_query_with_satisfies_edge_has_tenant_scoped_cte():
     Obligation nodes are a shared catalog and cannot enforce tenant isolation
     themselves; the guarantee is maintained on the cte side.
     """
-    from app import supplier_graph_sync as module
+    from services.admin.app import supplier_graph_sync as module
 
     for attr_name in dir(module):
         if not attr_name.endswith("_QUERY"):

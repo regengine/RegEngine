@@ -82,9 +82,9 @@ def _restore_shared_database_on_module_teardown():
 # the APIRouter instance. So we can't `import app.sandbox.router as mod`
 # reliably — instead pull the *module* directly out of sys.modules after the
 # import side-effect has populated it.
-from app.sandbox.router import router as sandbox_router  # noqa: E402
+from services.ingestion.app.sandbox.router import router as sandbox_router  # noqa: E402
 
-sandbox_router_mod = sys.modules["app.sandbox.router"]
+sandbox_router_mod = sys.modules["services.ingestion.app.sandbox.router"]
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +550,7 @@ class TestEvaluateDuplicateLotKdeInjection:
 
 class TestTraceDelegate:
     def test_trace_delegates_to_tracer_impl(self, client, monkeypatch):
-        from app.sandbox.models import TraceGraphResponse
+        from services.ingestion.app.sandbox.models import TraceGraphResponse
 
         captured = {}
 

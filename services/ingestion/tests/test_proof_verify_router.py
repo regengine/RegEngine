@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from app.fda_export_service import _build_fda_package
-from app.proof_verify_router import (
+from services.ingestion.app.fda_export_service import _build_fda_package
+from services.ingestion.app.proof_verify_router import (
     MAX_BUNDLE_BYTES,
     router as proof_verify_router,
 )
@@ -138,7 +138,7 @@ class TestTenantIsolation:
         actual import statements (docstring / comment mentions are
         permitted because they describe the constraint).
         """
-        from app import proof_verify_router as mod
+        from services.ingestion.app import proof_verify_router as mod
 
         src = open(mod.__file__).read()
         # Only inspect lines that are real imports.

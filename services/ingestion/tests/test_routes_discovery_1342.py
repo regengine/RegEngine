@@ -29,7 +29,7 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from app.routes_discovery import router as discovery_router
+from services.ingestion.app.routes_discovery import router as discovery_router
 from shared.auth import APIKey, require_api_key
 
 
@@ -42,7 +42,7 @@ def _api_key(tenant_id: str = "tenant-disco") -> APIKey:
 
 def _build(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, MagicMock]:
     fake_redis = MagicMock()
-    monkeypatch.setattr("app.routes_discovery.redis.from_url", lambda *a, **kw: fake_redis)
+    monkeypatch.setattr("services.ingestion.app.routes_discovery.redis.from_url", lambda *a, **kw: fake_redis)
     app = FastAPI()
     app.include_router(discovery_router)
     app.dependency_overrides[require_api_key] = lambda: _api_key()

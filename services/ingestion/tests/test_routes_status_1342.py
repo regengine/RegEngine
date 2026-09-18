@@ -24,8 +24,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from app import routes_status as rs
-from app.routes_status import router
+from services.ingestion.app import routes_status as rs
+from services.ingestion.app.routes_status import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

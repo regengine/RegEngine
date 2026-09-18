@@ -13,8 +13,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from app import supplier_validation as sv
-from app.supplier_validation import (
+from services.ingestion.app import supplier_validation as sv
+from services.ingestion.app.supplier_validation import (
     _EMAIL_RE,
     _REQUIRED_CTE_TYPES,
     SupplierValidationResult,
@@ -27,7 +27,7 @@ from app.supplier_validation import (
     _validate_supplier,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

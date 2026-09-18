@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 
 import httpx
-from app.models import EnforcementItem, EnforcementSeverity, SourceType
-from app.scrapers.fda_recalls import FDARecallsScraper
-from app.scrapers.fda_warning_letters import FDAWarningLettersScraper
+from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
+from services.scheduler.app.scrapers.fda_recalls import FDARecallsScraper
+from services.scheduler.app.scrapers.fda_warning_letters import FDAWarningLettersScraper
 
 
 class _FakeResponse:
@@ -109,7 +109,7 @@ class TestFDARecallsParser_Issue1154:
                 }
             )
 
-        monkeypatch.setattr("app.scrapers.fda_recalls.fetch_with_retry", _fake_fetch)
+        monkeypatch.setattr("services.scheduler.app.scrapers.fda_recalls.fetch_with_retry", _fake_fetch)
 
         items = scraper._fetch_recalls()
 
@@ -122,7 +122,7 @@ class TestFDARecallsParser_Issue1154:
         original_parse = scraper._parse_recall
 
         monkeypatch.setattr(
-            "app.scrapers.fda_recalls.fetch_with_retry",
+            "services.scheduler.app.scrapers.fda_recalls.fetch_with_retry",
             lambda *_args, **_kwargs: _FakeResponse(
                 json_payload={"results": [{"recall_number": "X"}, {"recall_number": "Y"}]}
             ),
@@ -230,7 +230,7 @@ class TestFDAWarningLettersParser_Issue1154:
     def test_scrape_rss_404_returns_empty_for_api_fallback(self, monkeypatch):
         scraper = FDAWarningLettersScraper()
         monkeypatch.setattr(
-            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            "services.scheduler.app.scrapers.fda_warning_letters.fetch_with_retry",
             lambda *_args, **_kwargs: _FakeResponse(status_code=404),
         )
 
@@ -252,7 +252,7 @@ class TestFDAWarningLettersParser_Issue1154:
 """
 
         monkeypatch.setattr(
-            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            "services.scheduler.app.scrapers.fda_warning_letters.fetch_with_retry",
             lambda *_args, **_kwargs: _FakeResponse(content=rss),
         )
 
@@ -277,7 +277,7 @@ class TestFDAWarningLettersParser_Issue1154:
 </rss>
 """
         monkeypatch.setattr(
-            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            "services.scheduler.app.scrapers.fda_warning_letters.fetch_with_retry",
             lambda *_args, **_kwargs: _FakeResponse(content=rss),
         )
 
@@ -287,7 +287,7 @@ class TestFDAWarningLettersParser_Issue1154:
         scraper = FDAWarningLettersScraper()
 
         monkeypatch.setattr(
-            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            "services.scheduler.app.scrapers.fda_warning_letters.fetch_with_retry",
             lambda *_args, **_kwargs: _FakeResponse(
                 json_payload={
                     "results": [
@@ -320,7 +320,7 @@ class TestFDAWarningLettersParser_Issue1154:
     def test_scrape_api_keeps_class_ii_high_not_critical(self, monkeypatch):
         scraper = FDAWarningLettersScraper()
         monkeypatch.setattr(
-            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            "services.scheduler.app.scrapers.fda_warning_letters.fetch_with_retry",
             lambda *_args, **_kwargs: _FakeResponse(
                 json_payload={
                     "results": [

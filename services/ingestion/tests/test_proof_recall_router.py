@@ -20,7 +20,7 @@ import os
 import sys
 from itertools import count
 
-import app.proof_recall_router as proof_recall_module
+import services.ingestion.app.proof_recall_router as proof_recall_module
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -116,7 +116,7 @@ class TestTenantIsolation:
         to actual import statements (docstring / comment mentions are
         permitted because they describe the constraint).
         """
-        from app import proof_recall_router as mod
+        from services.ingestion.app import proof_recall_router as mod
 
         src = open(mod.__file__).read()
         import_lines = [ln for ln in src.splitlines() if ln.lstrip().startswith(("import ", "from "))]

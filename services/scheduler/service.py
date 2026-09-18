@@ -1053,7 +1053,7 @@ class SchedulerService:
 
                 # #2461: tenant discovery must NOT scan the RLS-forced
                 # fsma.request_cases cross-tenant (that query raises
-                # 'app.tenant_id not set' under the least-privilege role
+                # 'services.scheduler.app.tenant_id not set' under the least-privilege role
                 # before any per-tenant GUC is set, killing the whole
                 # tick). Iterate public.tenants instead (infra table,
                 # permissive policy per v092) and let per-tenant

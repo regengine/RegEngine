@@ -38,8 +38,8 @@ sys.path.insert(0, str(service_dir))
 # module itself, so import the submodule explicitly via importlib.
 import importlib  # noqa: E402
 
-router_mod = importlib.import_module("app.epcis.router")
-from app.webhook_compat import _verify_api_key  # noqa: E402
+router_mod = importlib.import_module("services.ingestion.app.epcis.router")
+from services.ingestion.app.webhook_compat import _verify_api_key  # noqa: E402
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 

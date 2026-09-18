@@ -13,10 +13,10 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.edi_ingestion import router as edi_router  # noqa: E402
-from app.webhook_models import EventResult, IngestResponse, WebhookCTEType  # noqa: E402
+import services.ingestion.app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.edi_ingestion import router as edi_router  # noqa: E402
+from services.ingestion.app.webhook_models import EventResult, IngestResponse, WebhookCTEType  # noqa: E402
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 
@@ -199,7 +199,7 @@ def test_legacy_856_rejects_missing_kdes_without_placeholder_persistence(
     """#2072: legacy 856 must reject missing KDEs instead of synthesizing
     quantity=1.0, Unknown locations, generic products, or current dates.
     """
-    from app.edi_ingestion.rejection_log import (
+    from services.ingestion.app.edi_ingestion.rejection_log import (
         list_edi_rejections,
         reset_edi_rejections,
     )
@@ -309,7 +309,7 @@ def test_legacy_856_rejects_invalid_unit_before_units_placeholder_persistence(
     client: TestClient, captured_payload: dict
 ) -> None:
     """#2072: invalid nonblank SN1 units must not normalize to ``units``."""
-    from app.edi_ingestion.rejection_log import reset_edi_rejections
+    from services.ingestion.app.edi_ingestion.rejection_log import reset_edi_rejections
 
     reset_edi_rejections()
     captured_payload.clear()
@@ -344,7 +344,7 @@ def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient, capture
     see the attempt. Prior behavior persisted with
     fsma_validation_status=failed, polluting the FSMA 204 graph.
     """
-    from app.edi_ingestion.rejection_log import (
+    from services.ingestion.app.edi_ingestion.rejection_log import (
         list_edi_rejections,
         reset_edi_rejections,
     )
@@ -383,7 +383,7 @@ def test_document_ingest_strict_false_query_advisory(client: TestClient, capture
     FSMA audit trail, which polluted downstream readers (FDA export,
     recall simulator, traceability graph).
     """
-    from app.edi_ingestion.rejection_log import (
+    from services.ingestion.app.edi_ingestion.rejection_log import (
         list_edi_rejections,
         reset_edi_rejections,
     )

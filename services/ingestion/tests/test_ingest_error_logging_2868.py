@@ -35,7 +35,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as wr  # noqa: E402
+import services.ingestion.app.webhook_router_v2 as wr  # noqa: E402
 
 from services.ingestion.tests.test_webhook_router_v2_1342 import (  # noqa: E402
     _FakePersistence,
@@ -242,7 +242,7 @@ class TestChainVerifyFailureLogging:
         monkeypatch.setitem(sys.modules, "shared.cte_persistence", fake_cte)
 
         monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
-        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("services.ingestion.app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
         monkeypatch.delenv("API_KEY", raising=False)
         monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
 

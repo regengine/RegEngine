@@ -34,12 +34,12 @@ def _build_secret_lookup():
     every tenant's settings. Each row is dispatched with the row's
     own tenant_id in the HMAC header.
     """
-    from app.database import SessionLocal
-    from app.metrics import (
+    from services.admin.app.database import SessionLocal
+    from services.admin.app.metrics import (
         _TENANT_SETTINGS_WEBHOOK_SECRET_KEY,
         _TENANT_SETTINGS_WEBHOOK_URL_KEY,
     )
-    from app.sqlalchemy_models import TenantModel
+    from services.admin.app.sqlalchemy_models import TenantModel
 
     def lookup(tenant_id: str) -> Tuple[Optional[str], Optional[str]]:
         session = SessionLocal()
@@ -67,8 +67,8 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
 
-    from app.database import SessionLocal
-    from app.webhook_outbox import WebhookOutboxDrainer
+    from services.admin.app.database import SessionLocal
+    from services.admin.app.webhook_outbox import WebhookOutboxDrainer
 
     secret_lookup = _build_secret_lookup()
 

@@ -13,7 +13,7 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.email_ingest.tenant_lookup import lookup_tenant_by_inbound_address
+from services.ingestion.app.email_ingest.tenant_lookup import lookup_tenant_by_inbound_address
 
 
 def _session_returning(row):

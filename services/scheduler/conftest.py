@@ -46,7 +46,7 @@ def _module_loaded_outside_scheduler(name: str) -> bool:
 if _module_loaded_outside_scheduler("main"):
     sys.modules.pop("main", None)
 if _module_loaded_outside_scheduler("app"):
-    for _name in [name for name in sys.modules if name == "app" or name.startswith("app.")]:
+    for _name in [name for name in sys.modules if name == "app" or name.startswith("services.scheduler.app.")]:
         sys.modules.pop(_name, None)
 
 
@@ -56,7 +56,7 @@ def _evict_cross_service_aliases() -> None:
     if _module_loaded_outside_scheduler("main"):
         sys.modules.pop("main", None)
     if _module_loaded_outside_scheduler("app"):
-        for name in [name for name in sys.modules if name == "app" or name.startswith("app.")]:
+        for name in [name for name in sys.modules if name == "app" or name.startswith("services.scheduler.app.")]:
             sys.modules.pop(name, None)
 
 

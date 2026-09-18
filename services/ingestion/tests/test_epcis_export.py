@@ -12,7 +12,7 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import pytest
-from app.epcis_export import _CTE_TO_BIZSTEP, _validate_epcis_document
+from services.ingestion.app.epcis_export import _CTE_TO_BIZSTEP, _validate_epcis_document
 
 EXPECTED_CTE_TYPES = {
     "receiving",

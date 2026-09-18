@@ -20,7 +20,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     AuditLogModel,
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -89,9 +89,9 @@ def _install_app(
     *,
     permit: bool = True,
 ) -> FastAPI:
-    import app.supplier_funnel_routes as funnel_routes
-    from app.database import get_session
-    from app.dependencies import PermissionChecker, get_current_user
+    import services.admin.app.supplier_funnel_routes as funnel_routes
+    from services.admin.app.database import get_session
+    from services.admin.app.dependencies import PermissionChecker, get_current_user
 
     test_app = FastAPI()
     test_app.include_router(funnel_routes.router, prefix="/v1")
@@ -274,7 +274,7 @@ def test_audit_failure_aborts_delete(monkeypatch: pytest.MonkeyPatch):
 
     try:
         app = _install_app(session, monkeypatch, permit=True)
-        import app.supplier_funnel_routes as funnel_routes
+        import services.admin.app.supplier_funnel_routes as funnel_routes
 
         # Force audit logging to signal failure.
         monkeypatch.setattr(funnel_routes.AuditLogger, "log_event", staticmethod(lambda *a, **k: None))

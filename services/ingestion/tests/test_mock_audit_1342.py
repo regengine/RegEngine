@@ -21,8 +21,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import mock_audit as ma
-from app.mock_audit import (
+from services.ingestion.app import mock_audit as ma
+from services.ingestion.app.mock_audit import (
     FDA_SCENARIOS,
     DrillGrade,
     DrillResponse,
@@ -53,7 +53,7 @@ def _clear_drills(monkeypatch):
 def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 

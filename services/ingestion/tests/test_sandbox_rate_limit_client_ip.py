@@ -30,8 +30,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from app.sandbox import rate_limiting
-from app.sandbox.client_ip import resolve_client_ip
+from services.ingestion.app.sandbox import rate_limiting
+from services.ingestion.app.sandbox.client_ip import resolve_client_ip
 from starlette.datastructures import Headers
 
 # ---------------------------------------------------------------------------

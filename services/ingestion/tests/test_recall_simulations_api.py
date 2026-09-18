@@ -12,8 +12,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.recall_simulations import _simulation_store, router as recall_simulations_router
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.recall_simulations import _simulation_store, router as recall_simulations_router
 
 
 @pytest.fixture()

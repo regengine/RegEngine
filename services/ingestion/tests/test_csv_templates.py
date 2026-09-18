@@ -14,8 +14,8 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import pytest
-from app.csv_templates import _CTE_TYPE_ALIASES, CTE_COLUMNS, _generate_csv_template, _validate_kde_completeness
-from app.webhook_models import REQUIRED_KDES_BY_CTE, IngestEvent, WebhookCTEType
+from services.ingestion.app.csv_templates import _CTE_TYPE_ALIASES, CTE_COLUMNS, _generate_csv_template, _validate_kde_completeness
+from services.ingestion.app.webhook_models import REQUIRED_KDES_BY_CTE, IngestEvent, WebhookCTEType
 
 EXPECTED_CTE_TYPES = {
     "growing",

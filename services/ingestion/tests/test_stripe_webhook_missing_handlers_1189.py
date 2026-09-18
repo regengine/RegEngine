@@ -43,7 +43,7 @@ import structlog
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.stripe_billing import (
+from services.ingestion.app.stripe_billing import (
     state as state_mod,  # noqa: E402
     webhooks as webhooks_mod,  # noqa: E402
 )

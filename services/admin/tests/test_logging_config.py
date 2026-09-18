@@ -9,14 +9,14 @@ import structlog
 
 def test_logging_config_import():
     """Test that logging_config module can be imported."""
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     assert callable(configure_logging)
 
 
 def test_configure_logging_info_level():
     """Test configuring logging with INFO level."""
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     # Should not raise any exceptions
     configure_logging("INFO")
@@ -28,7 +28,7 @@ def test_configure_logging_info_level():
 
 def test_configure_logging_debug_level(monkeypatch):
     """Test configuring logging with DEBUG level."""
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     # Clear LOG_LEVEL env override so the passed level takes effect
     monkeypatch.delenv("LOG_LEVEL", raising=False)
@@ -40,7 +40,7 @@ def test_configure_logging_debug_level(monkeypatch):
 
 def test_configure_logging_development_env(monkeypatch):
     """Test that development environment uses console renderer."""
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     monkeypatch.setenv("REGENGINE_ENV", "development")
     configure_logging("INFO")
@@ -52,7 +52,7 @@ def test_configure_logging_development_env(monkeypatch):
 
 def test_configure_logging_production_env(monkeypatch):
     """Test that production environment uses JSON renderer."""
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     monkeypatch.setenv("REGENGINE_ENV", "production")
     configure_logging("INFO")
@@ -64,7 +64,7 @@ def test_configure_logging_production_env(monkeypatch):
 
 def test_logger_can_log():
     """Test that logger can actually log messages."""
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     configure_logging("INFO")
     logger = structlog.get_logger("test_module")

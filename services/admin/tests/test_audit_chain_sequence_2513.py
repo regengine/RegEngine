@@ -33,9 +33,9 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("sqlalchemy")
 
-from app.audit import AuditLogger, compute_integrity_hash  # noqa: E402
-from app.audit_integrity import verify_chain  # noqa: E402
-from app.sqlalchemy_models import AuditLogModel  # noqa: E402
+from services.admin.app.audit import AuditLogger, compute_integrity_hash  # noqa: E402
+from services.admin.app.audit_integrity import verify_chain  # noqa: E402
+from services.admin.app.sqlalchemy_models import AuditLogModel  # noqa: E402
 
 TENANT = UUID("00000000-0000-0000-0000-000000000099")
 TENANT_OTHER = UUID("00000000-0000-0000-0000-0000000000aa")

@@ -12,7 +12,7 @@ import pytest
 
 @pytest.mark.parametrize("bad_tenant", ["", None])
 def test_falsy_tenant_id_raises(bad_tenant):
-    from app.database import get_tenant_session
+    from services.admin.app.database import get_tenant_session
 
     gen = get_tenant_session(bad_tenant)
     with pytest.raises(ValueError, match="non-empty tenant_id"):
@@ -22,7 +22,7 @@ def test_falsy_tenant_id_raises(bad_tenant):
 def test_valid_tenant_id_yields_session(monkeypatch):
     from unittest.mock import MagicMock
 
-    import app.database as db_mod
+    import services.admin.app.database as db_mod
 
     session = MagicMock()
     monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)

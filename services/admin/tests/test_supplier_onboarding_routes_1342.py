@@ -36,7 +36,7 @@ from sqlalchemy.pool import StaticPool
 service_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -45,7 +45,7 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-from app.supplier_onboarding_routes import (
+from services.admin.app.supplier_onboarding_routes import (
     _build_fda_export_rows,
     _compute_funnel_summary,
     _compute_supplier_compliance,

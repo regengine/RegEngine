@@ -29,8 +29,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import export_monitoring as em
-from app.export_monitoring import (
+from services.ingestion.app import export_monitoring as em
+from services.ingestion.app.export_monitoring import (
     ExportHealthCheck,
     ExportMetrics,
     HealthCheckResult,
@@ -53,7 +53,7 @@ from fastapi.testclient import TestClient
 def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 

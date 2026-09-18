@@ -26,8 +26,8 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import settings as s  # noqa: E402
-from app.settings import (  # noqa: E402
+from services.ingestion.app import settings as s  # noqa: E402
+from services.ingestion.app.settings import (  # noqa: E402
     CompanyProfile,
     DataRetention,
     IntegrationStatus,
@@ -60,7 +60,7 @@ def client(monkeypatch):
     app.include_router(router)
 
     # Bypass the API-key dependency — we test router logic, not auth.
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app)

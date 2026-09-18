@@ -38,9 +38,9 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-import app.canonical_router as cr_module
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.canonical_router import _get_db_session, router as canonical_router
+import services.ingestion.app.canonical_router as cr_module
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.canonical_router import _get_db_session, router as canonical_router
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -610,7 +610,7 @@ class TestTraceForward:
         assert body["truncated"] is False
         # SET LOCAL pragma was issued.
         sql, params = session.calls[0]
-        assert "app.tenant_id" in sql
+        assert "services.ingestion.app.tenant_id" in sql
         assert params == {"tid": TENANT_ID}
         # Store was called with the resolved tenant.
         assert stub.forward_calls == [(TENANT_ID, "TLC-EMPTY", 5, 10000)]
@@ -694,7 +694,7 @@ class TestTraceBackward:
         assert body["truncated"] is False
         # Pragma issued.
         sql, _ = session.calls[0]
-        assert "app.tenant_id" in sql
+        assert "services.ingestion.app.tenant_id" in sql
         assert stub.backward_calls == [(TENANT_ID, "TLC-EMPTY", 5, 10000)]
 
     def test_populated_links_use_input_quantity_and_unit(

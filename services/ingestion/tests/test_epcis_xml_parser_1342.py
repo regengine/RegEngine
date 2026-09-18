@@ -28,7 +28,7 @@ import sys
 from types import ModuleType
 
 import pytest
-from app.epcis import xml_parser as xp
+from services.ingestion.app.epcis import xml_parser as xp
 
 # ---------------------------------------------------------------------------
 # Helpers — build real XML trees via lxml (same engine used by the parser)

@@ -41,7 +41,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -239,8 +239,8 @@ def test_small_import_all_sync_and_durable_outbox(
     a failed immediate write is recovered by the drainer. Durability is
     now symmetric across import sizes.
     """
-    import app.bulk_upload.transaction_manager as tx_manager
-    from app.supplier_graph_sync import CTE_EVENT_QUERY
+    import services.admin.app.bulk_upload.transaction_manager as tx_manager
+    from services.admin.app.supplier_graph_sync import CTE_EVENT_QUERY
 
     sync_calls: list[dict[str, Any]] = []
 
@@ -308,8 +308,8 @@ def test_large_import_first_100_sync_remainder_enqueued(
         bulk-commit retries don't double-enqueue,
       * the warning text now describes the real behavior.
     """
-    import app.bulk_upload.transaction_manager as tx_manager
-    from app.supplier_graph_sync import CTE_EVENT_QUERY
+    import services.admin.app.bulk_upload.transaction_manager as tx_manager
+    from services.admin.app.supplier_graph_sync import CTE_EVENT_QUERY
 
     sync_calls: list[dict[str, Any]] = []
 
@@ -426,7 +426,7 @@ def test_outbox_enqueue_failure_rolls_back_bulk_import(
     failure silently swallowed, canonical rows committed anyway). #1695
     flagged that behavior as a contract violation.
     """
-    import app.bulk_upload.transaction_manager as tx_manager
+    import services.admin.app.bulk_upload.transaction_manager as tx_manager
 
     monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", lambda **_kw: None)
     monkeypatch.setattr(

@@ -32,7 +32,7 @@ import pytest
 service_dir = Path(__file__).resolve().parents[2] / "services" / "graph"
 sys.path.insert(0, str(service_dir))
 
-from app.hierarchy_builder import (  # noqa: E402
+from services.graph.app.hierarchy_builder import (  # noqa: E402
     _JURISDICTION_CODE_RE,
     _MAX_JURISDICTION_CODE_LENGTH,
     InvalidJurisdictionCodeError,
@@ -244,7 +244,7 @@ def test_no_fastapi_router_imports_builder():
 def test_module_docstring_documents_invariant():
     """Part of the fix is documentation discoverability: anyone who
     opens the module should see the invariant before they touch it."""
-    import app.hierarchy_builder as mod
+    import services.graph.app.hierarchy_builder as mod
 
     doc = mod.__doc__ or ""
     # Look for key phrases that capture the invariant.

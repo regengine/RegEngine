@@ -29,8 +29,8 @@ import pytest
 _SERVICE_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SERVICE_ROOT))
 
-import app.fsma_audit as fsma_audit  # noqa: E402
-from app.fsma_audit import FSMAAuditAction, FSMAAuditLog  # noqa: E402
+import services.graph.app.fsma_audit as fsma_audit  # noqa: E402
+from services.graph.app.fsma_audit import FSMAAuditAction, FSMAAuditLog  # noqa: E402
 
 _APP_DIR = _SERVICE_ROOT / "app"
 

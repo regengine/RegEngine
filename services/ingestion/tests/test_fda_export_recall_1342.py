@@ -36,8 +36,8 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from app.fda_export import recall as r
-from app.fda_export.queries import AuditLogWriteError
+from services.ingestion.app.fda_export import recall as r
+from services.ingestion.app.fda_export.queries import AuditLogWriteError
 from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------

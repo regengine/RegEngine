@@ -43,8 +43,8 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 pytest.importorskip("stripe")
 
-from app.stripe_billing import helpers as mod  # noqa: E402
-from app.stripe_billing.helpers import (  # noqa: E402
+from services.ingestion.app.stripe_billing import helpers as mod  # noqa: E402
+from services.ingestion.app.stripe_billing.helpers import (  # noqa: E402
     _allowed_redirect_hosts,
     _coerce_int,
     _coerce_optional_int,

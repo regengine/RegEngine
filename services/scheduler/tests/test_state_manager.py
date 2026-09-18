@@ -29,7 +29,7 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 
 import pytest
-from app.state import Base, SeenItem, StateManager
+from services.scheduler.app.state import Base, SeenItem, StateManager
 from sqlalchemy.orm import sessionmaker
 
 
@@ -200,7 +200,7 @@ class TestInitializeNoDdl:
         CREATE privilege, so initialize() must not execute any SQL."""
         from unittest.mock import MagicMock
 
-        from app import state as state_module
+        from services.scheduler.app import state as state_module
 
         engine = MagicMock()
         monkeypatch.setattr(state_module, "create_engine", lambda *a, **k: engine)

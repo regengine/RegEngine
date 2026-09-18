@@ -97,7 +97,7 @@ class TestWritersAgree2970:
     every event. Pin it instead of trusting the comment."""
 
     def test_both_writers_extract_the_same_quantity(self) -> None:
-        from app.epcis.normalization import _normalize_epcis_to_cte
+        from services.ingestion.app.epcis.normalization import _normalize_epcis_to_cte
 
         event = _transformation_event()
         shared_value, shared_uom = _extract_epcis_quantity(event)

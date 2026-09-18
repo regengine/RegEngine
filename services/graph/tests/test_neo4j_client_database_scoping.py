@@ -21,7 +21,7 @@ def _mk_client_with_fake_driver(enterprise: bool, database):
     ``settings.neo4j_enterprise`` patched to ``enterprise``. Returns the
     client instance.
     """
-    with patch("app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch("app.neo4j_utils.settings") as mock_settings:
+    with patch("services.graph.app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch("services.graph.app.neo4j_utils.settings") as mock_settings:
         mock_settings.neo4j_uri = "bolt://localhost:7687"
         mock_settings.neo4j_user = "neo4j"
         mock_settings.neo4j_password = "x"
@@ -33,7 +33,7 @@ def _mk_client_with_fake_driver(enterprise: bool, database):
 
         mock_gdb.driver.return_value = MagicMock()
 
-        from app.neo4j_utils import Neo4jClient
+        from services.graph.app.neo4j_utils import Neo4jClient
 
         if database is None:
             return Neo4jClient()
@@ -47,7 +47,7 @@ def test_client_pins_to_global_db_on_community():
     an explicit (not silent) decision so that reviewers and callers don't
     believe DB-level isolation exists when it does not.
     """
-    from app.neo4j_utils import Neo4jClient
+    from services.graph.app.neo4j_utils import Neo4jClient
 
     client = _mk_client_with_fake_driver(enterprise=False, database="reg_tenant_" + "a" * 32)
     assert client.database == Neo4jClient.DB_GLOBAL
@@ -67,7 +67,7 @@ def test_client_falls_back_to_global_when_no_database_on_enterprise():
     """Enterprise + no database= argument => DB_GLOBAL. Preserves the existing
     behavior of unannotated callers (e.g. regulatory/global reads).
     """
-    from app.neo4j_utils import Neo4jClient
+    from services.graph.app.neo4j_utils import Neo4jClient
 
     client = _mk_client_with_fake_driver(enterprise=True, database=None)
     assert client.database == Neo4jClient.DB_GLOBAL
@@ -76,7 +76,7 @@ def test_client_falls_back_to_global_when_no_database_on_enterprise():
 def test_get_tenant_database_name_format_is_stable():
     """The naming convention is part of the isolation contract; callers build
     DB names via this static method."""
-    from app.neo4j_utils import Neo4jClient
+    from services.graph.app.neo4j_utils import Neo4jClient
 
     tid = UUID("12345678-1234-5678-1234-567812345678")
     assert Neo4jClient.get_tenant_database_name(tid) == f"reg_tenant_{tid}"
@@ -89,7 +89,7 @@ def test_session_uses_configured_database_on_enterprise():
     lie.
     """
     tenant_db = "reg_tenant_" + "b" * 32
-    with patch("app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch("app.neo4j_utils.settings") as mock_settings:
+    with patch("services.graph.app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch("services.graph.app.neo4j_utils.settings") as mock_settings:
         mock_settings.neo4j_uri = "bolt://localhost:7687"
         mock_settings.neo4j_user = "neo4j"
         mock_settings.neo4j_password = "x"
@@ -102,7 +102,7 @@ def test_session_uses_configured_database_on_enterprise():
         fake_driver = MagicMock()
         mock_gdb.driver.return_value = fake_driver
 
-        from app.neo4j_utils import Neo4jClient
+        from services.graph.app.neo4j_utils import Neo4jClient
 
         client = Neo4jClient(database=tenant_db)
         client.session()

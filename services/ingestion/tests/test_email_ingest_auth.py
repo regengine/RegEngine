@@ -12,7 +12,7 @@ from __future__ import annotations
 import base64
 
 import pytest
-from app.email_ingest.auth import _configured_credentials, email_inbound_auth_configured, verify_inbound_email_auth
+from services.ingestion.app.email_ingest.auth import _configured_credentials, email_inbound_auth_configured, verify_inbound_email_auth
 from fastapi import HTTPException
 
 _USER = "postmark"

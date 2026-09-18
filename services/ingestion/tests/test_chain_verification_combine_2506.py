@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.chain_verification_job import _combine_verifications
+from services.ingestion.app.chain_verification_job import _combine_verifications
 
 
 def _canonical(valid, orphans=None, tamper=None, errors=None, length=0):

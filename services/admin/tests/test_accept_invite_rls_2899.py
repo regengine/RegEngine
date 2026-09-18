@@ -38,7 +38,7 @@ if str(_REPO_ADMIN) not in sys.path:
 # Tables whose reads/writes are gated on app.tenant_id by v078.
 _TENANT_SCOPED = ("invites", "memberships", "audit_logs", "roles")
 
-_RAISE = "app.tenant_id not set - tenant context required for RLS"
+_RAISE = "services.admin.app.tenant_id not set - tenant context required for RLS"
 
 
 class _Result:
@@ -146,13 +146,13 @@ def _starlette_request():
 
 
 async def _call(db):
-    from app.invite_routes import AcceptInviteRequest, accept_invite
+    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     payload = AcceptInviteRequest(token="raw-token", name="Invitee")
     with (
-        patch("app.invite_routes.ensure_passwordless_identity"),
-        patch("app.invite_routes.AuditLogger.log_event"),
-        patch("app.invite_routes.supplier_graph_sync"),
+        patch("services.admin.app.invite_routes.ensure_passwordless_identity"),
+        patch("services.admin.app.invite_routes.AuditLogger.log_event"),
+        patch("services.admin.app.invite_routes.supplier_graph_sync"),
     ):
         return await accept_invite.__wrapped__(payload=payload, request=_starlette_request(), db=db)
 

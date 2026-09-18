@@ -18,8 +18,8 @@ Issue: #1342
 from __future__ import annotations
 
 import pytest
-from app import integration_webhook as iw
-from app.integration_webhook import (
+from services.ingestion.app import integration_webhook as iw
+from services.ingestion.app.integration_webhook import (
     FieldMapping,
     WebhookPayload,
     WebhookResponse,
@@ -208,7 +208,7 @@ class TestReceiveWebhook:
         """Calling the stub endpoint raises NotImplementedError so a future
         accidental wire-up surfaces immediately rather than silently accepting
         unauthenticated traffic."""
-        from app.integration_webhook import FieldMapping, receive_webhook
+        from services.ingestion.app.integration_webhook import FieldMapping, receive_webhook
 
         async def _run():
             return await receive_webhook(
@@ -246,7 +246,7 @@ class TestReceiveWebhook:
         import importlib
 
         # Re-import to ensure no side effects.
-        importlib.import_module("app.integration_webhook")
+        importlib.import_module("services.ingestion.app.integration_webhook")
         # Best-effort check: load main.py source and verify it does not
         # include integration_webhook.
         import pathlib

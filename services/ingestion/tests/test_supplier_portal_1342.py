@@ -13,9 +13,9 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import pytest
-from app import integration_router as ir, supplier_portal as sp
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.supplier_portal import (
+from services.ingestion.app import integration_router as ir, supplier_portal as sp
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.supplier_portal import (
     CreatePortalLinkRequest,
     PortalLinkResponse,
     SubmissionResult,
@@ -29,8 +29,8 @@ from app.supplier_portal import (
     _portal_subscription_active as _real_portal_subscription_active,
     router,
 )
-from app.webhook_compat import _verify_api_key
-from app.webhook_models import EventResult, IngestResponse
+from services.ingestion.app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_models import EventResult, IngestResponse
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
@@ -1059,7 +1059,7 @@ class TestPortalAbuseControls:
         def _boom(_tenant_id):
             raise RuntimeError("circuit open")
 
-        import app.subscription_gate as gate
+        import services.ingestion.app.subscription_gate as gate
 
         monkeypatch.setattr(gate, "_check_subscription_and_redis_health", _boom)
 
@@ -1071,7 +1071,7 @@ class TestPortalAbuseControls:
         monkeypatch.setenv("REDIS_URL", "redis://unused")
         monkeypatch.setattr(sp, "is_production", lambda: True)
 
-        import app.subscription_gate as gate
+        import services.ingestion.app.subscription_gate as gate
 
         monkeypatch.setattr(gate, "_check_subscription_and_redis_health", lambda _t: (None, False))
 
@@ -1097,7 +1097,7 @@ class TestPortalAbuseControls:
         monkeypatch.setenv("REDIS_URL", "redis://unused")
         monkeypatch.setattr(sp, "is_production", lambda: True)
 
-        import app.subscription_gate as gate
+        import services.ingestion.app.subscription_gate as gate
 
         monkeypatch.setattr(gate, "_check_subscription_and_redis_health", lambda _t: ("active", True))
         assert _real_portal_subscription_active("tenant-x") is True

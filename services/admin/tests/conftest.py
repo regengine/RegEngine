@@ -204,7 +204,7 @@ def _clear_admin_brute_force_state():
     # the next test's five-attempt budget.
     import sys
 
-    for module_name in ("app.privileged_auth", "services.admin.app.privileged_auth"):
+    for module_name in ("services.admin.app.privileged_auth", "services.admin.app.privileged_auth"):
         module = sys.modules.get(module_name)
         throttle = getattr(module, "_privileged_auth_throttle", None) if module else None
         if throttle is None:

@@ -76,7 +76,7 @@ class TestSetTenantGucHappy:
         # parameterized tenant_id — keep the assertion focused on what
         # the contract actually is, not which SQL form Postgres is
         # equivalencing internally.
-        assert "app.tenant_id" in sql
+        assert "services.shared.app.tenant_id" in sql
         assert params == {"tid": tid}
 
     def test_uses_transaction_scoped_set_config(self):
@@ -101,7 +101,7 @@ class TestSetTenantGucHappy:
         sql = session.calls[0][0]
         # Must use set_config with is_local=true (the third arg).
         assert "set_config" in sql
-        assert "'app.tenant_id'" in sql
+        assert "'services.shared.app.tenant_id'" in sql
         assert "true" in sql
         # Must NOT use the dangerous session-scoped form.
         assert "false" not in sql.lower(), f"helper must use set_config(..., true) for transaction scope; got: {sql!r}"

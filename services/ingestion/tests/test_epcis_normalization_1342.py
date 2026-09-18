@@ -50,7 +50,7 @@ repo_root = service_dir.parent.parent
 sys.path.insert(0, str(repo_root))
 
 
-from app.epcis.normalization import (  # noqa: E402
+from services.ingestion.app.epcis.normalization import (  # noqa: E402
     _EVENT_TYPE_MAP,
     _compliance_alerts,
     _event_idempotency_key,

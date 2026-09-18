@@ -157,7 +157,7 @@ class TestCanonicalWriteIsSynchronous_Issue2499:
         main thread."""
         import threading
 
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -184,7 +184,7 @@ class TestCanonicalWriteIsSynchronous_Issue2499:
 
         _cte_mod.CTEPersistence = _IdempotentCTE  # type: ignore[attr-defined]
         try:
-            from app.epcis import persistence as persistence_mod
+            from services.ingestion.app.epcis import persistence as persistence_mod
 
             payload, status = persistence_mod._persist_prepared_event_in_session(
                 db_session=MagicMock(),
@@ -214,7 +214,7 @@ class TestCanonicalWriteFailLoud_Issue2534:
 
         monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _boom)
 
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         with pytest.raises(ValueError, match="bad timestamp"):
             persistence_mod._persist_prepared_event_in_session(
@@ -235,7 +235,7 @@ class TestCanonicalWriteFailLoud_Issue2534:
 
         monkeypatch.setattr(_store_mod, "CanonicalEventStore", _FailingStore)
 
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         with pytest.raises(RuntimeError, match="canonical insert failed"):
             persistence_mod._persist_prepared_event_in_session(
@@ -255,7 +255,7 @@ class TestCanonicalWriteFailLoud_Issue2534:
         monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _boom)
 
         sess = MagicMock()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
         # Skip the real EPCIS validation/normalization pipeline — we want

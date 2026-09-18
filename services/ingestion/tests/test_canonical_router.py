@@ -19,8 +19,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.canonical_router import _get_db_session, router as canonical_router
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.canonical_router import _get_db_session, router as canonical_router
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -423,7 +423,7 @@ class TestGetRecord:
             "tenant_id": TENANT_ID,
         }
 
-        import app.canonical_router as cr_module
+        import services.ingestion.app.canonical_router as cr_module
 
         class _PatchedStore:
             def __init__(self, sess, dual_write=False):
@@ -453,7 +453,7 @@ class TestGetRecord:
     def test_record_not_found_returns_404(self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch) -> None:
         session = _FakeSession([])
 
-        import app.canonical_router as cr_module
+        import services.ingestion.app.canonical_router as cr_module
 
         class _EmptyStore:
             def __init__(self, sess, dual_write=False):
@@ -693,7 +693,7 @@ class TestAuth:
         monkeypatch.setenv("API_KEY", "secret-master-key")
 
         # Force config cache to clear
-        from app.config import get_settings
+        from services.ingestion.app.config import get_settings
 
         get_settings.cache_clear()
 

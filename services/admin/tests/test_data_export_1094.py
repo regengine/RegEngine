@@ -110,7 +110,7 @@ def _make_role():
 
 def _make_db(user=None, memberships=None, sessions=None, recovery_code_count=0, audit_rows=None):
     """Return a mock SQLAlchemy Session pre-configured with test data."""
-    from app.sqlalchemy_models import (
+    from services.admin.app.sqlalchemy_models import (
         AuditLogModel,
         MembershipModel,
         MFARecoveryCodeModel,
@@ -181,14 +181,14 @@ class TestExportPersonalData:
     """Unit tests for the export_personal_data endpoint handler."""
 
     def _get_handler(self):
-        import app.data_export_routes as m
+        import services.admin.app.data_export_routes as m
 
         return m.export_personal_data
 
     @pytest.mark.asyncio
     async def test_happy_path_returns_user_email_and_memberships(self):
         """Authenticated export returns 200 with user email and memberships."""
-        from app.data_export_routes import _build_user_export
+        from services.admin.app.data_export_routes import _build_user_export
 
         mem = _make_membership()
         db = _make_db(memberships=[mem])
@@ -204,7 +204,7 @@ class TestExportPersonalData:
         """password_hash must never appear anywhere in the export payload."""
         import json
 
-        from app.data_export_routes import _build_user_export
+        from services.admin.app.data_export_routes import _build_user_export
 
         db = _make_db()
         data = _build_user_export(db, str(_USER_ID))
@@ -218,7 +218,7 @@ class TestExportPersonalData:
         """mfa_secret / mfa_secret_ciphertext must never appear in the export."""
         import json
 
-        from app.data_export_routes import _build_user_export
+        from services.admin.app.data_export_routes import _build_user_export
 
         user = _make_user(mfa_secret="SUPER_SECRET_TOTP", mfa_secret_ciphertext=None)
         db = _make_db(user=user)
@@ -236,7 +236,7 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_rate_limit_decorator_applied(self):
         """The endpoint must carry the @limiter.limit('1/day') decorator."""
-        import app.data_export_routes as m
+        import services.admin.app.data_export_routes as m
 
         handler = m.export_personal_data
         # slowapi stores the rate limit string in the handler's __dict__
@@ -257,7 +257,7 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_audit_log_entry_created_on_export(self):
         """Exporting data must emit an audit log entry."""
-        from app import data_export_routes as m
+        from services.admin.app import data_export_routes as m
 
         # RE-SEC-002: ``current_user`` is a UserModel ORM instance, not a
         # dict. Tenant_id comes from TenantContext.get_tenant_context(db).
@@ -294,7 +294,7 @@ class TestExportPersonalData:
         RE-SEC-002: was previously written against a dict ``current_user``;
         now constructs a UserModel-shaped mock with id=None.
         """
-        from app import data_export_routes as m
+        from services.admin.app import data_export_routes as m
         from fastapi import HTTPException
 
         current_user = _make_user(id=None)
@@ -314,7 +314,7 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_user_not_found_returns_404(self):
         """When user_id is valid UUID but not in DB, raises 404."""
-        from app import data_export_routes as m
+        from services.admin.app import data_export_routes as m
         from fastapi import HTTPException
 
         db = _make_db()
@@ -332,7 +332,7 @@ class TestExportPersonalData:
         """Session data must not include refresh_token_hash."""
         import json
 
-        from app.data_export_routes import _build_user_export
+        from services.admin.app.data_export_routes import _build_user_export
 
         session = MagicMock()
         session.id = uuid.uuid4()
@@ -357,7 +357,7 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_export_includes_mfa_enrolled_status(self):
         """MFA section shows enrolled=True when secret exists."""
-        from app.data_export_routes import _build_user_export
+        from services.admin.app.data_export_routes import _build_user_export
 
         user = _make_user(mfa_secret="SECRET_SEED")
         db = _make_db(user=user, recovery_code_count=3)
@@ -369,7 +369,7 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_export_includes_schema_version_and_generated_at(self):
         """Export payload includes schema_version and generated_at timestamp."""
-        from app.data_export_routes import _build_user_export
+        from services.admin.app.data_export_routes import _build_user_export
 
         db = _make_db()
         data = _build_user_export(db, str(_USER_ID))

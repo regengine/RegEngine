@@ -15,7 +15,7 @@ except ImportError:
     # Debug paths
     print(f"DEBUG: sys.path[0] = {sys.path[0]}")
     try:
-        import app as app_module
+        import services.graph.app as app_module
 
         print(f"DEBUG: app_module file = {getattr(app_module, '__file__', 'No __file__')}")
     except Exception as e:

@@ -25,8 +25,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from app import sla_tracking
-from app.sla_tracking import (
+from services.ingestion.app import sla_tracking
+from services.ingestion.app.sla_tracking import (
     ALERT_THRESHOLD_HOURS,
     SLA_HOURS,
     FDARequest,
@@ -39,7 +39,7 @@ from app.sla_tracking import (
     _try_persist_request,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

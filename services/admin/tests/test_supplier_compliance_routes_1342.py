@@ -12,7 +12,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -65,7 +65,7 @@ def db_session() -> Session:
 
 
 def _build_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID):
-    import app.supplier_compliance_routes as comp_routes
+    import services.admin.app.supplier_compliance_routes as comp_routes
 
     app = FastAPI()
     app.include_router(comp_routes.router, prefix="/v1")

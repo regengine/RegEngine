@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
-from app.neo4j_utils import Neo4jClient
+from services.graph.app.neo4j_utils import Neo4jClient
 from neo4j.exceptions import ClientError, ServiceUnavailable, SessionExpired
 
 logger = structlog.get_logger("graph-init")

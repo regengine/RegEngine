@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pytest
-from app import alerts as alerts_mod
-from app.alerts import (
+from services.ingestion.app import alerts as alerts_mod
+from services.ingestion.app.alerts import (
     _ALLOWED_ALERT_COLUMNS,
     DEFAULT_RULES,
     Alert,
@@ -27,7 +27,7 @@ from app.alerts import (
     _to_iso,
     router,
 )
-from app.webhook_compat import _verify_api_key, require_tenant_context
+from services.ingestion.app.webhook_compat import _verify_api_key, require_tenant_context
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext

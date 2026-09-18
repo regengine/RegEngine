@@ -10,15 +10,15 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from app.edi_ingestion import dedup as dedup_mod
-from app.edi_ingestion.extractors import (
+from services.ingestion.app.edi_ingestion import dedup as dedup_mod
+from services.ingestion.app.edi_ingestion.extractors import (
     _extract_810_fields,
     _extract_850_fields,
     _extract_856_fields,
     _extract_861_fields,
     _extract_envelope_ids,
 )
-from app.edi_ingestion.parser import _parse_x12_segments
+from services.ingestion.app.edi_ingestion.parser import _parse_x12_segments
 from fastapi import HTTPException
 
 # Canonical X12 856 template with both ISA and GS.
@@ -206,7 +206,7 @@ def test_allowlist_permits_listed_sender(monkeypatch):
 
 def test_enforce_rejects_envelope_mismatch():
     """ISA/GS mismatch -> HTTP 422."""
-    from app.edi_ingestion.routes import _enforce_envelope_integrity
+    from services.ingestion.app.edi_ingestion.routes import _enforce_envelope_integrity
 
     extracted = {
         "envelope_mismatch": True,
@@ -227,7 +227,7 @@ def test_enforce_rejects_envelope_mismatch():
 
 def test_enforce_rejects_duplicate_interchange():
     """Second retransmission of the same ISA13 -> HTTP 409."""
-    from app.edi_ingestion import routes as routes_mod
+    from services.ingestion.app.edi_ingestion import routes as routes_mod
 
     extracted = {
         "envelope_mismatch": False,
@@ -245,7 +245,7 @@ def test_enforce_rejects_duplicate_interchange():
 
 
 def test_enforce_rejects_disallowed_trading_partner(monkeypatch):
-    from app.edi_ingestion import routes as routes_mod
+    from services.ingestion.app.edi_ingestion import routes as routes_mod
 
     monkeypatch.setenv("EDI_PARTNER_ALLOWLIST_TENANT_X", "ONLY_THIS_ONE")
 
@@ -266,7 +266,7 @@ def test_enforce_rejects_disallowed_trading_partner(monkeypatch):
 
 def test_enforce_passes_on_clean_envelope():
     """Valid, unique, allowed envelope -> no exception."""
-    from app.edi_ingestion import routes as routes_mod
+    from services.ingestion.app.edi_ingestion import routes as routes_mod
 
     extracted = {
         "envelope_mismatch": False,

@@ -47,7 +47,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.edi_ingestion.routes import _decode_edi_bytes
+from services.ingestion.app.edi_ingestion.routes import _decode_edi_bytes
 
 # ---------------------------------------------------------------------------
 # Happy path: clean UTF-8 passes through exactly
@@ -218,7 +218,7 @@ class TestLoudFailure_Issue1170:
         the invariant, so a future refactor that swaps latin-1 for a
         partial encoding (like ascii) will fail loudly here.
         """
-        import app.edi_ingestion.routes as routes
+        import services.ingestion.app.edi_ingestion.routes as routes
 
         for byte_val in range(256):
             # Force the UTF-8 strict path to fail by injecting a high
@@ -248,8 +248,8 @@ class TestEndpointRejectsUndecodable_Issue1170:
         HTTP 422 with a decode-failure error body rather than accepting
         corrupted data.
         """
-        import app.edi_ingestion.routes as routes
-        from app.authz import IngestionPrincipal, get_ingestion_principal
+        import services.ingestion.app.edi_ingestion.routes as routes
+        from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 

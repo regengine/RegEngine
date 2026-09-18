@@ -26,8 +26,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.fda_export.router import router
-from app.subscription_gate import require_active_subscription
+from services.ingestion.app.fda_export.router import router
+from services.ingestion.app.subscription_gate import require_active_subscription
 
 # Routes deliberately NOT behind the billing gate, each with a reason. Keep
 # this list empty unless there is a documented, reviewed exemption — adding a

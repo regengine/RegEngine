@@ -33,7 +33,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.sqlalchemy_models import (  # noqa: E402
+from services.admin.app.sqlalchemy_models import (  # noqa: E402
     AuditLogModel,
     InviteModel,
     MembershipModel,
@@ -93,9 +93,9 @@ def _make_session() -> Session:
 def harness(monkeypatch):
     """Return (client, session, invite_routes) with auth stubbed out."""
     session = _make_session()
-    import app.invite_routes as invite_routes
-    from app.dependencies import PermissionChecker, get_current_user
-    from app.database import get_session
+    import services.admin.app.invite_routes as invite_routes
+    from services.admin.app.dependencies import PermissionChecker, get_current_user
+    from services.admin.app.database import get_session
 
     # The audit chain is the subject under test; everything else is stubbed
     # only as far as needed to reach it.
@@ -198,7 +198,7 @@ class TestGuardIsReachable:
     def test_log_event_signals_failure_by_returning_none(self):
         import inspect
 
-        from app.audit import AuditLogger
+        from services.admin.app.audit import AuditLogger
 
         source = inspect.getsource(AuditLogger.log_event)
         assert "return None" in source, (

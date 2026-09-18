@@ -10,8 +10,8 @@ from sqlalchemy.pool import StaticPool
 
 from services.admin.scripts.backfill_email_fingerprints import backfill_email_fingerprints
 
-from app.auth_crypto import AuthCryptoService
-from app.sqlalchemy_models import Base, UserEmailModel, UserModel
+from services.admin.app.auth_crypto import AuthCryptoService
+from services.admin.app.sqlalchemy_models import Base, UserEmailModel, UserModel
 
 
 def test_backfill_email_fingerprints_uses_auth_crypto_keyed_fingerprint():

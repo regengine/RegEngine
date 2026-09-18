@@ -55,7 +55,7 @@ def _reset_route_limiter(limiter) -> None:
 
 
 def _fake_review_actor(tenant_id: str | None = TENANT_ID):
-    from app.privileged_auth import PrivilegedActor
+    from services.admin.app.privileged_auth import PrivilegedActor
 
     return PrivilegedActor(
         actor_type="tenant_user",
@@ -101,7 +101,7 @@ class _FakeTracker:
 def app_and_tracker(monkeypatch):
     """Build a FastAPI app with review_routes mounted, override auth,
     and swap the tracker getter for a fake."""
-    from app import review_routes as review_mod
+    from services.admin.app import review_routes as review_mod
 
     _reset_route_limiter(review_mod.limiter)
 
@@ -244,10 +244,10 @@ def test_rate_limit_decorator_present_on_endpoint():
     reset between tests), so we assert the decorator statically
     instead. The slowapi library records decorated endpoints on
     ``limiter._route_limits``."""
-    from app import review_routes as review_mod
+    from services.admin.app import review_routes as review_mod
 
     registry = getattr(review_mod.limiter, "_route_limits", None) or {}
-    assert "app.review_routes.get_review_queue" in registry, (
+    assert "services.admin.app.review_routes.get_review_queue" in registry, (
         "expected @limiter.limit('30/minute') to register app.review_routes.get_review_queue in limiter._route_limits"
     )
 
@@ -259,7 +259,7 @@ def test_rate_limit_value_is_30_per_minute():
     fake clock) is fragile and the value is load-bearing for #1409."""
     import inspect
 
-    from app import review_routes as review_mod
+    from services.admin.app import review_routes as review_mod
 
     # Walk up through wrappers to find the source.
     source = inspect.getsource(review_mod.get_review_queue)
@@ -284,7 +284,7 @@ def test_tracker_list_projection_excludes_text_raw():
     chars. This closes the ``metrics.py:365-425`` parallel hole called
     out in issue #1409.
     """
-    from app.metrics import HallucinationTracker
+    from services.admin.app.metrics import HallucinationTracker
 
     # Build a stub ReviewItemModel-shaped object. The tracker calls
     # ``item.text_raw`` / ``item.reviewer_id`` / etc., so a duck-typed
@@ -321,7 +321,7 @@ def test_tracker_detail_projection_still_includes_text_raw():
     ``text_raw`` so the single-item view / audit exports keep working.
     This pins that we didn't accidentally strip ``text_raw`` from
     ``get_hallucination``'s projection too."""
-    from app.metrics import HallucinationTracker
+    from services.admin.app.metrics import HallucinationTracker
 
     long_raw = "y" * 5_000
     item = SimpleNamespace(
@@ -352,7 +352,7 @@ def test_tracker_detail_projection_still_includes_text_raw():
 
 def test_session_actor_without_tenant_is_rejected(app_and_tracker):
     """A dependency-contract regression cannot turn into an unscoped read."""
-    from app import review_routes as review_mod
+    from services.admin.app import review_routes as review_mod
 
     app, _tracker, _ = app_and_tracker
     app.dependency_overrides[review_mod.require_review_read] = lambda: _fake_review_actor(tenant_id=None)

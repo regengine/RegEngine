@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.session_store import InMemorySessionStore, RedisSessionStore, SessionData
+from services.admin.app.session_store import InMemorySessionStore, RedisSessionStore, SessionData
 
 
 @pytest.fixture

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, mock_open
 # /v1/ingest/regulation moved from app.routes to app.routes_ingest in PR #2200.
 # The original ``app.routes.router`` no longer has this endpoint mounted, so
 # we import the ingest router directly.
-import app.routes_ingest as routes_ingest
+import services.ingestion.app.routes_ingest as routes_ingest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.auth import APIKey, require_api_key
@@ -58,12 +58,12 @@ def _patch_regulation_enqueue(monkeypatch, fixed_job_id: str | None = None):
         monkeypatch.setattr(routes_ingest.uuid, "uuid4", lambda: uuid.UUID(fixed_job_id))
 
     monkeypatch.setattr(
-        "app.routes_ingest.get_staging_path" if False else "app.task_handlers_regulation.get_staging_path",
+        "services.ingestion.app.routes_ingest.get_staging_path" if False else "services.ingestion.app.task_handlers_regulation.get_staging_path",
         lambda job_id, filename: f"/tmp/regengine_ingest/{job_id}.pdf",
     )
     # Patch the import inside ingest_regulation
     monkeypatch.setattr(
-        "app.routes_ingest.SessionLocal" if False else "builtins.open",
+        "services.ingestion.app.routes_ingest.SessionLocal" if False else "builtins.open",
         mock_open(),
     )
     monkeypatch.setattr(routes_ingest, "SessionLocal", lambda: fake_session)
@@ -104,7 +104,7 @@ class TestIngestRegulation:
         # Re-import after env change
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -128,7 +128,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -154,7 +154,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -199,7 +199,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -219,7 +219,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -239,7 +239,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -262,7 +262,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -280,7 +280,7 @@ class TestIngestRegulation:
 
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
         monkeypatch.setattr(routes_ingest, "get_staging_path", thr.get_staging_path)
@@ -317,7 +317,7 @@ class TestIngestFile:
 
 class TestRegisterRegulationHandlers:
     def test_registers_regulation_ingest(self):
-        from app.task_handlers_regulation import register_regulation_handlers
+        from services.ingestion.app.task_handlers_regulation import register_regulation_handlers
         from shared.task_queue import TASK_HANDLERS
 
         TASK_HANDLERS.pop("regulation_ingest", None)
@@ -335,7 +335,7 @@ class TestGetStagingPath:
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
 
@@ -347,7 +347,7 @@ class TestGetStagingPath:
         monkeypatch.setenv("INGEST_STAGING_DIR", str(tmp_path))
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
 
@@ -359,7 +359,7 @@ class TestGetStagingPath:
         monkeypatch.setenv("INGEST_STAGING_DIR", str(staging))
         import importlib
 
-        import app.task_handlers_regulation as thr
+        import services.ingestion.app.task_handlers_regulation as thr
 
         importlib.reload(thr)
 

@@ -210,7 +210,7 @@ class TestEnforceOff:
         (the existing threaded canonical block is a separate caller
         and may still invoke it later, which is fine)."""
         _FakeEngine.summary_to_return = _critical_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -233,7 +233,7 @@ class TestEnforceCteOnly:
 
     def test_critical_failure_raises_422(self) -> None:
         _FakeEngine.summary_to_return = _critical_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         with pytest.raises(HTTPException) as exc_info:
             persistence_mod._persist_prepared_event_in_session(
@@ -252,7 +252,7 @@ class TestEnforceCteOnly:
 
     def test_warning_only_accepts(self) -> None:
         _FakeEngine.summary_to_return = _warning_only_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -267,7 +267,7 @@ class TestEnforceCteOnly:
         Blocking here would break ingestion for tenants without seeded
         rules and for non-FTL products."""
         _FakeEngine.summary_to_return = _no_verdict_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -279,7 +279,7 @@ class TestEnforceCteOnly:
 
     def test_compliant_accepts(self) -> None:
         _FakeEngine.summary_to_return = _compliant_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -308,7 +308,7 @@ class TestEnforceCteOnly:
 
         monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _raise)
 
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         with pytest.raises(HTTPException) as exc:
             persistence_mod._persist_prepared_event_in_session(
@@ -354,7 +354,7 @@ class TestEnforceCteOnly:
 
         monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _raise_unmapped)
 
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         with pytest.raises(HTTPException) as exc:
             persistence_mod._persist_prepared_event_in_session(
@@ -386,7 +386,7 @@ class TestEnforceAll:
         """ALL mode is stricter than CTE_ONLY: warning-severity failures
         ALSO reject."""
         _FakeEngine.summary_to_return = _warning_only_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         with pytest.raises(HTTPException) as exc_info:
             persistence_mod._persist_prepared_event_in_session(
@@ -400,7 +400,7 @@ class TestEnforceAll:
 
     def test_compliant_accepts(self) -> None:
         _FakeEngine.summary_to_return = _compliant_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -445,7 +445,7 @@ class TestThreadedBlockReusesPreComputedSummary:
           - persist_summary calls: 1 (threaded block uses pre-computed)
         """
         _FakeEngine.summary_to_return = _compliant_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -470,7 +470,7 @@ class TestThreadedBlockReusesPreComputedSummary:
         """Warning-only failure under cte_only mode → accept + threaded
         block uses persist_summary. Same single-eval pattern as compliant."""
         _FakeEngine.summary_to_return = _warning_only_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -492,7 +492,7 @@ class TestThreadedBlockReusesPreComputedSummary:
         ``event_id=str(_canonical.event_id)`` from the threaded block.
         """
         _FakeEngine.summary_to_return = _compliant_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -518,7 +518,7 @@ class TestThreadedBlockFallbackWhenNoPreComputedSummary:
         threaded block re-evaluates with persist=True. Single eval total."""
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
         _FakeEngine.summary_to_return = _compliant_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -541,7 +541,7 @@ class TestThreadedBlockFallbackWhenNoPreComputedSummary:
         evaluate_event so the eval rows actually get written."""
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
         _FakeEngine.summary_to_return = _no_verdict_summary()
-        from app.epcis import persistence as persistence_mod
+        from services.ingestion.app.epcis import persistence as persistence_mod
 
         payload, status = persistence_mod._persist_prepared_event_in_session(
             db_session=MagicMock(),
@@ -570,7 +570,7 @@ def test_audit_storage_failure_is_503_without_event_write(monkeypatch, rejection
     monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
     rejection_audit_writer.side_effect = RuntimeError("storage unavailable")
     _FakeEngine.summary_to_return = _critical_summary()
-    from app.epcis import persistence as persistence_mod
+    from services.ingestion.app.epcis import persistence as persistence_mod
 
     with pytest.raises(HTTPException) as exc:
         persistence_mod._persist_prepared_event_in_session(

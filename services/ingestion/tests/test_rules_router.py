@@ -15,9 +15,9 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz
-import app.rules_router as rules_router_mod
-from app.authz import IngestionPrincipal, get_ingestion_principal
+import services.ingestion.app.authz as authz
+import services.ingestion.app.rules_router as rules_router_mod
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 
 from services.ingestion.tests.authz_overrides import install_ingestion_principal_override
 

@@ -15,8 +15,8 @@ from typing import Any
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import fda_export_service as svc  # noqa: E402
-from app.webhook_models import WebhookCTEType  # noqa: E402
+from services.ingestion.app import fda_export_service as svc  # noqa: E402
+from services.ingestion.app.webhook_models import WebhookCTEType  # noqa: E402
 
 
 def _known_event(**overrides: Any) -> dict:

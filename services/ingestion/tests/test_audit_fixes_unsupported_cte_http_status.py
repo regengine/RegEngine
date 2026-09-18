@@ -27,7 +27,7 @@ from fastapi import HTTPException
 
 def _call_ingest_raising(exc: BaseException) -> HTTPException:
     """Drive `_ingest_single_event` with `_ingest_single_event_db` raising."""
-    from app.epcis import persistence as persistence_mod
+    from services.ingestion.app.epcis import persistence as persistence_mod
 
     original = persistence_mod._ingest_single_event_db
 
@@ -86,7 +86,7 @@ def test_unrelated_valueerror_is_not_swallowed_into_422() -> None:
     is deliberately not reached. That is unchanged by this fix and is
     asserted here so a future widening of the guard is caught.
     """
-    from app.epcis import persistence as persistence_mod
+    from services.ingestion.app.epcis import persistence as persistence_mod
 
     original = persistence_mod._ingest_single_event_db
 
@@ -133,7 +133,7 @@ def test_persistable_cte_types_matches_the_legacy_allowed_set() -> None:
     module is slated for retirement, #1335). A copy is only safe with a test
     holding the two together.
     """
-    from app.epcis.persistence import _PERSISTABLE_CTE_TYPES
+    from services.ingestion.app.epcis.persistence import _PERSISTABLE_CTE_TYPES
     from shared.cte_persistence.core import _ALLOWED_CTE_TYPES
 
     assert _PERSISTABLE_CTE_TYPES == _ALLOWED_CTE_TYPES
@@ -145,7 +145,7 @@ def test_persistable_cte_types_matches_the_legacy_allowed_set() -> None:
 )
 def test_non_cte_bizstep_is_rejected_in_phase_one(biz_step: str) -> None:
     """Rejected during validation, before any persistence is attempted."""
-    from app.epcis.persistence import _prepare_event_for_persistence
+    from services.ingestion.app.epcis.persistence import _prepare_event_for_persistence
 
     with pytest.raises(HTTPException) as caught:
         _prepare_event_for_persistence("t-1", _event_with_bizstep(biz_step))
@@ -164,7 +164,7 @@ def test_atomic_batch_reports_validation_failure_not_persistence_crash() -> None
     rejection, so it must be caught in phase 1 and reported per-index — and
     it must never reach phase 2, which would need a database.
     """
-    from app.epcis.persistence import _ingest_batch_events_db_atomic
+    from services.ingestion.app.epcis.persistence import _ingest_batch_events_db_atomic
 
     batch = [
         _event_with_bizstep("urn:epcglobal:cbv:bizstep:shipping"),

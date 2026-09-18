@@ -49,9 +49,9 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 
-from app.scrapers.state_adaptors import google_discovery as mod  # noqa: E402
-from app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
-from app.scrapers.state_adaptors.google_discovery import (  # noqa: E402
+from services.ingestion.app.scrapers.state_adaptors import google_discovery as mod  # noqa: E402
+from services.ingestion.app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
+from services.ingestion.app.scrapers.state_adaptors.google_discovery import (  # noqa: E402
     GoogleDiscoveryScraper,
 )
 

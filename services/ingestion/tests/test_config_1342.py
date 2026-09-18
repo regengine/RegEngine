@@ -9,8 +9,8 @@ Issue: #1342
 from __future__ import annotations
 
 import pytest
-from app import config as cfg
-from app.config import Settings, get_settings
+from services.ingestion.app import config as cfg
+from services.ingestion.app.config import Settings, get_settings
 
 
 @pytest.fixture(autouse=True)

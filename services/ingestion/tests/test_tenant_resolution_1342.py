@@ -26,8 +26,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from app.shared import tenant_resolution
-from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
+from services.ingestion.app.shared import tenant_resolution
+from services.ingestion.app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from fastapi import HTTPException
 from shared.api_key_store import api_key_hash_candidates
 
@@ -387,14 +387,14 @@ class TestPriorityOrderPairs:
 
 class TestModuleSurface:
     def test_resolve_tenant_id_is_exported(self):
-        import app.shared.tenant_resolution as m
+        import services.ingestion.app.shared.tenant_resolution as m
 
         assert callable(m.resolve_tenant_id)
 
     def test_logger_is_module_level(self):
         import logging
 
-        import app.shared.tenant_resolution as m
+        import services.ingestion.app.shared.tenant_resolution as m
 
         assert isinstance(m.logger, logging.Logger)
-        assert m.logger.name == "app.shared.tenant_resolution"
+        assert m.logger.name == "services.ingestion.app.shared.tenant_resolution"

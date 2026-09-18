@@ -25,8 +25,8 @@ failure must remain terminal, including 401, in both deployed and test modes.
 from __future__ import annotations
 
 import pytest
-from app import authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app import authz
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
@@ -81,7 +81,7 @@ def _arm(monkeypatch, status_code: int, *, detail: str = "denied", headers=None)
 class TestRateLimitDenialIsTerminal:
     def test_429_from_require_api_key_is_not_converted_into_a_principal(self, monkeypatch):
         """The bypass: 429 → caught → same key re-validated → admitted."""
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -95,7 +95,7 @@ class TestRateLimitDenialIsTerminal:
         )
 
     def test_429_preserves_retry_after_header(self, monkeypatch):
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -111,7 +111,7 @@ class TestRateLimitDenialIsTerminal:
         denial: admitting the request here is the exact inversion of the
         store's documented fail-closed behaviour.
         """
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -123,7 +123,7 @@ class TestRateLimitDenialIsTerminal:
 
     @pytest.mark.parametrize("status_code", [402, 403, 429, 500, 503])
     def test_no_non_401_status_is_converted_into_success(self, monkeypatch, status_code):
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -135,7 +135,7 @@ class TestRateLimitDenialIsTerminal:
     def test_429_does_not_count_as_an_auth_failure(self, monkeypatch):
         """A throttled valid key is not a bad credential — it must not feed
         the brute-force IP blocklist."""
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -148,7 +148,7 @@ class TestRateLimitDenialIsTerminal:
 class TestGenuineAuthFailureIsTerminal:
     def test_401_stays_denied_without_a_second_lookup(self, monkeypatch):
         """A rejected credential cannot be revived by a weaker lookup."""
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -159,7 +159,7 @@ class TestGenuineAuthFailureIsTerminal:
         assert resp.json()["detail"] == "Invalid API key"
 
     def test_401_with_no_matching_row_still_401s(self, monkeypatch):
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -181,7 +181,7 @@ class TestGenuineAuthFailureIsTerminal:
 
 class TestDevBranchDoesNotDrift:
     def test_dev_branch_429_is_terminal(self, monkeypatch):
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("REGENGINE_ENV", "development")
@@ -193,7 +193,7 @@ class TestDevBranchDoesNotDrift:
         )
 
     def test_dev_branch_401_stays_denied(self, monkeypatch):
-        from app import config as cfg
+        from services.ingestion.app import config as cfg
 
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("REGENGINE_ENV", "development")

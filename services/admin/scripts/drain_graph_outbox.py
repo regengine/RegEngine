@@ -34,9 +34,9 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     # Delayed imports so `--help` works without hitting DB / Neo4j envs.
-    from app.database import SessionLocal
-    from app.graph_outbox import GraphOutboxDrainer
-    from app.supplier_graph_sync import supplier_graph_sync  # module-level driver
+    from services.admin.app.database import SessionLocal
+    from services.admin.app.graph_outbox import GraphOutboxDrainer
+    from services.admin.app.supplier_graph_sync import supplier_graph_sync  # module-level driver
     from shared.neo4j_tenant_context import session_with_tenant
 
     logger = structlog.get_logger("drain_graph_outbox")

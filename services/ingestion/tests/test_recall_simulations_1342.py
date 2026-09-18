@@ -34,9 +34,9 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-import app.recall_simulations as rs_module
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.recall_simulations import (
+import services.ingestion.app.recall_simulations as rs_module
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.recall_simulations import (
     _build_csv_export,
     _csv_rows_for_view,
     _get_simulation_or_404,

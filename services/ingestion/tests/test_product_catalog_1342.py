@@ -12,8 +12,8 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import pytest
-from app import product_catalog as pc
-from app.product_catalog import (
+from services.ingestion.app import product_catalog as pc
+from services.ingestion.app.product_catalog import (
     FTL_CATEGORIES,
     CreateProductRequest,
     Product,
@@ -28,7 +28,7 @@ from app.product_catalog import (
     learn_from_event,
     router,
 )
-from app.webhook_compat import _verify_api_key, require_tenant_context
+from services.ingestion.app.webhook_compat import _verify_api_key, require_tenant_context
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext

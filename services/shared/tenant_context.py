@@ -349,7 +349,7 @@ def is_production() -> bool:
 # used (:tid / %s / $1 binds). It is defense-in-depth, not an exhaustive
 # ban — multi-line SQL blocks can evade a regex; the fail-hard
 # ``get_tenant_context()`` RLS predicate remains the actual security
-# control. Grep for "app.tenant_id" when reviewing tenant-adjacent code.
+# control. Grep for "services.shared.app.tenant_id" when reviewing tenant-adjacent code.
 #
 # Scope is ``SET LOCAL`` (transaction-scoped, auto-resets at COMMIT/ROLLBACK)
 # — never session-scoped. Pool-bleed safety relies on this: a connection

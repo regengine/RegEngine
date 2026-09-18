@@ -31,7 +31,7 @@ Targets the uncovered branches in the bulk-upload Pydantic validators:
 from __future__ import annotations
 
 import pytest
-from app.bulk_upload.validators import (
+from services.admin.app.bulk_upload.validators import (
     _AUTOFILL_WARNINGS,
     BulkCTEEventRow,
     BulkFacilityRow,

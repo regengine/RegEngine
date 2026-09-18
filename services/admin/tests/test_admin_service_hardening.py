@@ -33,7 +33,7 @@ async def test_legacy_entrypoint_fails_closed_when_rls_gate_is_enabled(monkeypat
 
     import services.admin.main as admin_main
 
-    database_module = importlib.import_module("app.database")
+    database_module = importlib.import_module("services.admin.app.database")
 
     def _inert_posture():
         raise RuntimeError("RLS enforcement required: inert role")
@@ -90,7 +90,7 @@ def test_reset_tenant_guc_issues_clearing_statements_on_postgres():
 
     # Both set_config statements issued
     calls = [str(c.args[0]) for c in cursor.execute.call_args_list]
-    assert any("app.tenant_id" in s for s in calls)
+    assert any("services.admin.app.tenant_id" in s for s in calls)
     assert any("regengine.is_sysadmin" in s for s in calls)
 
 

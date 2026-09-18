@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.supplier_graph_sync import SupplierGraphSync
+from services.admin.app.supplier_graph_sync import SupplierGraphSync
 
 
 class _FakeSession:

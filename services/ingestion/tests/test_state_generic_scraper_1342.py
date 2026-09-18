@@ -47,8 +47,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 
-from app.scrapers import state_generic as mod  # noqa: E402
-from app.scrapers.state_generic import (  # noqa: E402
+from services.ingestion.app.scrapers import state_generic as mod  # noqa: E402
+from services.ingestion.app.scrapers.state_generic import (  # noqa: E402
     KafkaProducer,
     S3Client,
     StateRegistryScraper,

@@ -149,7 +149,7 @@ def approved_alias(admin_engine, tenant_a):
 
 
 def _make_principal(tenant_id: str):
-    from app.authz import IngestionPrincipal
+    from services.ingestion.app.authz import IngestionPrincipal
 
     return IngestionPrincipal(
         key_id="rem-test-key",
@@ -162,11 +162,11 @@ def _make_principal(tenant_id: str):
 @pytest.fixture()
 def client(app_engine, tenant_a, monkeypatch):
     """TestClient wired to the real scratch DB as the non-superuser role."""
-    import app.authz as authz
-    from app.authz import get_ingestion_principal
-    from app.remediation import supplier_router as sup_mod
-    from app.remediation.router import router as buyer_router
-    from app.remediation.supplier_router import router as supplier_router
+    import services.ingestion.app.authz as authz
+    from services.ingestion.app.authz import get_ingestion_principal
+    from services.ingestion.app.remediation import supplier_router as sup_mod
+    from services.ingestion.app.remediation.router import router as buyer_router
+    from services.ingestion.app.remediation.supplier_router import router as supplier_router
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from shared.database import get_db_session

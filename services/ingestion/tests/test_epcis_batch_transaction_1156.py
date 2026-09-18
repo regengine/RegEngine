@@ -28,12 +28,12 @@ sys.path.insert(0, str(service_dir))
 
 import importlib
 
-from app.epcis import persistence as persistence_mod  # noqa: E402
+from services.ingestion.app.epcis import persistence as persistence_mod  # noqa: E402
 
 # NB: ``from app.epcis import router as router_mod`` resolves to the
 # APIRouter instance (router = APIRouter(...) shadows the module name
 # when the package re-exports). Use importlib to grab the real module.
-router_mod = importlib.import_module("app.epcis.router")
+router_mod = importlib.import_module("services.ingestion.app.epcis.router")
 
 
 # ── Shared fixtures ────────────────────────────────────────────────────────

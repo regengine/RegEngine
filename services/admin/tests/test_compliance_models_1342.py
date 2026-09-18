@@ -35,7 +35,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("sqlalchemy")
 
-from app.compliance_models import (  # noqa: E402
+from services.admin.app.compliance_models import (  # noqa: E402
     AlertSeverity,
     ComplianceAlertModel,
     ComplianceStatus,

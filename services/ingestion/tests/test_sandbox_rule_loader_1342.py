@@ -22,8 +22,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from app.sandbox import rule_loader
-from app.sandbox.rule_loader import (
+from services.ingestion.app.sandbox import rule_loader
+from services.ingestion.app.sandbox.rule_loader import (
     _DEMO_CUSTOM_RULES,
     _SANDBOX_RULES,
     _SANDBOX_RULES_WITH_CUSTOM,

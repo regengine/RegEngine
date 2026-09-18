@@ -5,7 +5,7 @@ import io
 from uuid import UUID, uuid4
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     AuditLogModel,
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -89,10 +89,10 @@ def db_session() -> Session:
 
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    import app.supplier_compliance_routes as compliance_routes
-    import app.supplier_facilities_routes as facilities_routes
-    import app.supplier_funnel_routes as funnel_routes
-    import app.supplier_onboarding_routes as supplier_routes
+    import services.admin.app.supplier_compliance_routes as compliance_routes
+    import services.admin.app.supplier_facilities_routes as facilities_routes
+    import services.admin.app.supplier_funnel_routes as funnel_routes
+    import services.admin.app.supplier_onboarding_routes as supplier_routes
 
     test_app = FastAPI()
     test_app.include_router(supplier_routes.router, prefix="/v1")
@@ -109,8 +109,8 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         assert current_user is not None
         return current_user
 
-    from app.database import get_session
-    from app.dependencies import PermissionChecker, get_current_user
+    from services.admin.app.database import get_session
+    from services.admin.app.dependencies import PermissionChecker, get_current_user
     from fastapi import Depends
 
     test_app.dependency_overrides[get_session] = override_get_session

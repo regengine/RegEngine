@@ -44,7 +44,7 @@ from types import SimpleNamespace
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import (
+from services.ingestion.app import (
     recall_report as rr,  # noqa: E402
     recall_simulations as rs,  # noqa: E402
 )

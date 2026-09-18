@@ -1,7 +1,7 @@
 """Structured logging configuration for the admin service.
 
 Thin wrapper around the shared logging config (#556). Kept for backward
-compatibility so existing `from app.logging_config import configure_logging`
+compatibility so existing `from .logging_config import configure_logging`
 imports continue to work without changes.
 
 Usage:

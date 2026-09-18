@@ -19,7 +19,7 @@ class TestSchedulerConfig:
         database_url = "postgresql://regengine:regengine@localhost:5432/regengine"  # pragma: allowlist secret
         monkeypatch.setenv("DATABASE_URL", database_url)
         monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.database_url.startswith("postgresql://")
@@ -30,14 +30,14 @@ class TestSchedulerConfig:
 
     def test_webhook_url_parsing_empty(self):
         """Empty webhook string should yield empty list."""
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings(webhook_urls="")
         assert settings.webhook_url_list == []
 
     def test_webhook_url_parsing_multiple(self):
         """Comma-separated URLs should be split correctly."""
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings(webhook_urls="https://a.com/hook, https://b.com/hook")
         assert len(settings.webhook_url_list) == 2
@@ -46,7 +46,7 @@ class TestSchedulerConfig:
 
     def test_get_settings_cached(self):
         """get_settings should return the same cached instance."""
-        from app.config import get_settings
+        from services.scheduler.app.config import get_settings
 
         s1 = get_settings()
         s2 = get_settings()
@@ -74,7 +74,7 @@ class TestCircuitBreakerConfig:
     """Test circuit breaker configuration."""
 
     def test_defaults(self):
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.circuit_breaker_failure_threshold == 5
@@ -85,7 +85,7 @@ class TestCircuitBreakerConfig:
         monkeypatch.setenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "10")
         monkeypatch.setenv("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", "600")
 
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.circuit_breaker_failure_threshold == 10
@@ -96,19 +96,19 @@ class TestKafkaTopicConfig:
     """Verify Kafka topic configuration defaults."""
 
     def test_enforcement_topic(self):
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.kafka_topic_enforcement == "enforcement.changes"
 
     def test_alerts_topic(self):
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.kafka_topic_alerts == "alerts.regulatory"
 
     def test_fsma_topic(self):
-        from app.config import SchedulerSettings
+        from services.scheduler.app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.kafka_topic_fsma == "fsma.events.extracted"

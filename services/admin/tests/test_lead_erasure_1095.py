@@ -112,12 +112,12 @@ def tvr(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "lead-erasure-test-secret")
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
     for modname in [
-        "app.tool_verification_routes",
+        "services.admin.app.tool_verification_routes",
         "services.admin.app.tool_verification_routes",
     ]:
         if modname in sys.modules:
             del sys.modules[modname]
-    module = importlib.import_module("app.tool_verification_routes")
+    module = importlib.import_module("services.admin.app.tool_verification_routes")
     # Clear the module-level in-memory store so state does not leak
     # across tests.
     module._memory_store.clear()
@@ -247,7 +247,7 @@ async def test_confirm_lead_erasure_wrong_code_returns_400(tvr):
         def close(self):
             return None
 
-    with patch("app.database.SessionLocal", lambda: _FakeSession()):
+    with patch("services.admin.app.database.SessionLocal", lambda: _FakeSession()):
         with pytest.raises(HTTPException) as excinfo:
             await tvr.confirm_lead_erasure(request=_stub_request(), payload=wrong)
 
@@ -299,7 +299,7 @@ async def test_confirm_lead_erasure_correct_code_deletes_and_returns_200(tvr):
 
     payload = tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code)
 
-    with patch("app.database.SessionLocal", lambda: _FakeSession()):
+    with patch("services.admin.app.database.SessionLocal", lambda: _FakeSession()):
         result = await tvr.confirm_lead_erasure(request=_stub_request(), payload=payload)
 
     assert result == {"status": "erased"}
@@ -340,7 +340,7 @@ async def test_confirm_lead_erasure_consumes_code_single_use(tvr):
         def close(self):
             pass
 
-    with patch("app.database.SessionLocal", lambda: _FakeSession()):
+    with patch("services.admin.app.database.SessionLocal", lambda: _FakeSession()):
         await tvr.confirm_lead_erasure(
             request=_stub_request(),
             payload=tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code),
@@ -381,7 +381,7 @@ async def test_verification_code_cannot_be_used_for_erasure(tvr):
         def close(self):
             pass
 
-    with patch("app.database.SessionLocal", lambda: _FakeSession()):
+    with patch("services.admin.app.database.SessionLocal", lambda: _FakeSession()):
         with pytest.raises(HTTPException) as excinfo:
             await tvr.confirm_lead_erasure(
                 request=_stub_request(),
@@ -448,7 +448,7 @@ async def test_lead_erasure_logs_use_mask_email(tvr):
             def close(self):
                 pass
 
-        with patch("app.database.SessionLocal", lambda: _FakeSession()):
+        with patch("services.admin.app.database.SessionLocal", lambda: _FakeSession()):
             await tvr.confirm_lead_erasure(
                 request=_stub_request(),
                 payload=tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code),

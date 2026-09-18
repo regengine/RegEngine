@@ -123,9 +123,9 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
 
     monkeypatch.setattr(wc, "_get_db_session", _db_gen_factory)
 
-    tv_mod = ModuleType("app.tenant_validation")
+    tv_mod = ModuleType("services.ingestion.app.tenant_validation")
     tv_mod.validate_tenant_id = lambda tid: None
-    monkeypatch.setitem(sys.modules, "app.tenant_validation", tv_mod)
+    monkeypatch.setitem(sys.modules, "services.ingestion.app.tenant_validation", tv_mod)
 
     cp_mod = ModuleType("shared.cte_persistence")
     cp_mod.CTEPersistence = lambda db_session: persist

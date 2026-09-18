@@ -19,11 +19,11 @@ import io
 from typing import Optional
 
 import pytest
-from app import csv_templates as ct
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.csv_templates import router
-from app.webhook_compat import _verify_api_key
-from app.webhook_models import EventResult, IngestResponse
+from services.ingestion.app import csv_templates as ct
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.csv_templates import router
+from services.ingestion.app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_models import EventResult, IngestResponse
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

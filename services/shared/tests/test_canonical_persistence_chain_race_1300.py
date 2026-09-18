@@ -366,7 +366,7 @@ class TestRLSTenantIsolation_Issue1300:
             # used to emit ``SET LOCAL app.tenant_id = :tid`` and now emits
             # ``SELECT set_config('app.tenant_id', :tid, true)`` for asyncpg
             # compatibility (#1879). Match either form on the GUC name.
-            if "app.tenant_id" in stmt
+            if "services.shared.app.tenant_id" in stmt
         ]
         assert tenant_context_calls, "set_tenant_context was never called"
         for params in tenant_context_calls:

@@ -30,8 +30,8 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-import app.routes_scraping as routes_scraping
-from app.scrapers.state_adaptors.base import FetchedItem, Source
+import services.ingestion.app.routes_scraping as routes_scraping
+from services.ingestion.app.scrapers.state_adaptors.base import FetchedItem, Source
 from shared.auth import APIKey, require_api_key
 
 scraping_router = routes_scraping.router

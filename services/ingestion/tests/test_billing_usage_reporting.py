@@ -29,7 +29,7 @@ import stripe
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.stripe_billing import usage_reporting as mod  # noqa: E402
+from services.ingestion.app.stripe_billing import usage_reporting as mod  # noqa: E402
 
 TENANT_ID = "tenant-reporting-1"
 PERIOD_START = date(2026, 9, 1)

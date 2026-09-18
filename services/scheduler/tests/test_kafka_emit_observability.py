@@ -111,12 +111,12 @@ class TestKafkaProducerRetryConfig:
     """Producer must be configured with aggressive retries (#1147)."""
 
     def test_producer_config_has_high_retries(self):
-        from app.kafka_producer import KafkaEventProducer
+        from services.scheduler.app.kafka_producer import KafkaEventProducer
 
         # Inspect the configured values on the instance rather than open a
         # real connection.
         prod = KafkaEventProducer()
-        with patch("app.kafka_producer.KafkaProducerLib") as KP:
+        with patch("services.scheduler.app.kafka_producer.KafkaProducerLib") as KP:
             prod._producer = None  # force rebuild
             prod._get_producer()
 

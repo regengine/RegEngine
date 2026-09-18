@@ -317,7 +317,7 @@ class TestBeginHookAppliesGuc:
 
 class TestFailClosedOnForcedTable:
     """Without any seeded context, a forced-table query under a
-    non-bypass role must RAISE 'app.tenant_id not set' — fail closed.
+    non-bypass role must RAISE 'services.shared.app.tenant_id not set' — fail closed.
 
     A probe row is seeded (as the privileged role, in the rolled-back
     transaction) because Postgres never evaluates the policy predicate
@@ -360,7 +360,7 @@ class TestFailClosedOnForcedTable:
             cur.execute("SET LOCAL ROLE regengine")
             with pytest.raises((psycopg.errors.RaiseException, psycopg.errors.InsufficientPrivilege)) as exc_info:
                 cur.execute("SELECT COUNT(*) FROM fsma.cte_events")
-            assert "app.tenant_id not set" in str(exc_info.value)
+            assert "services.shared.app.tenant_id not set" in str(exc_info.value)
         conn.rollback()
 
 

@@ -35,10 +35,10 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz  # noqa: E402
-from app import stripe_billing  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.stripe_billing import state as state_mod  # noqa: E402
+import services.ingestion.app.authz as authz  # noqa: E402
+from services.ingestion.app import stripe_billing  # noqa: E402
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from services.ingestion.app.stripe_billing import state as state_mod  # noqa: E402
 
 
 class _FakeRedis:

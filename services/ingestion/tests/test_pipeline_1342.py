@@ -43,8 +43,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 
-from app import pipeline as mod  # noqa: E402
-from app.pipeline import ScraperPipeline  # noqa: E402
+from services.ingestion.app import pipeline as mod  # noqa: E402
+from services.ingestion.app.pipeline import ScraperPipeline  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Spies

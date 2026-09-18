@@ -42,7 +42,7 @@ if str(_REPO_ADMIN) not in sys.path:
 # Test: constants exist and have the expected shape
 # ─────────────────────────────────────────────────────────────────────
 def test_audience_constants_are_distinct():
-    from app.auth_utils import (
+    from services.admin.app.auth_utils import (
         SESSION_AUDIENCE,
         SESSION_ISSUER,
         TOOL_ACCESS_AUDIENCE,
@@ -63,7 +63,7 @@ def test_audience_constants_are_distinct():
 # Test: session tokens minted by create_access_token carry aud + iss
 # ─────────────────────────────────────────────────────────────────────
 def test_session_tokens_include_aud_and_iss():
-    from app.auth_utils import (
+    from services.admin.app.auth_utils import (
         SESSION_AUDIENCE,
         SESSION_ISSUER,
         create_access_token,
@@ -92,7 +92,7 @@ def test_session_tokens_include_aud_and_iss():
 # Test: decode_access_token accepts its own tokens round-trip
 # ─────────────────────────────────────────────────────────────────────
 def test_decode_access_token_roundtrip_succeeds():
-    from app.auth_utils import create_access_token, decode_access_token
+    from services.admin.app.auth_utils import create_access_token, decode_access_token
 
     tok = create_access_token({"sub": "user-42", "tenant_id": "tenant-42"})
     payload = decode_access_token(tok)
@@ -107,7 +107,7 @@ def test_decode_access_token_roundtrip_succeeds():
 # be interpretable as a session token)
 # ─────────────────────────────────────────────────────────────────────
 def test_decode_access_token_rejects_tool_access_aud():
-    from app.auth_utils import (
+    from services.admin.app.auth_utils import (
         ALGORITHM,
         SECRET_KEY,
         SESSION_ISSUER,
@@ -137,7 +137,7 @@ def test_decode_access_token_rejects_tool_access_aud():
 # Test: decode_access_token REJECTS a token with wrong issuer
 # ─────────────────────────────────────────────────────────────────────
 def test_decode_access_token_rejects_wrong_issuer():
-    from app.auth_utils import (
+    from services.admin.app.auth_utils import (
         ALGORITHM,
         SECRET_KEY,
         SESSION_AUDIENCE,
@@ -163,7 +163,7 @@ def test_decode_access_token_rejects_wrong_issuer():
 # compat so we don't log everyone out at deploy time.
 # ─────────────────────────────────────────────────────────────────────
 def test_decode_access_token_accepts_legacy_tokens_without_aud():
-    from app.auth_utils import ALGORITHM, SECRET_KEY, decode_access_token
+    from services.admin.app.auth_utils import ALGORITHM, SECRET_KEY, decode_access_token
 
     legacy = pyjwt.encode(
         {
@@ -185,7 +185,7 @@ def test_decode_access_token_accepts_legacy_tokens_without_aud():
 def test_decode_tool_access_accepts_legacy_tokens_without_aud(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "legacy-test-secret")
     _reload_tool_verification_routes()
-    from app import tool_verification_routes as tvr
+    from services.admin.app import tool_verification_routes as tvr
 
     legacy = pyjwt.encode(
         {"email": "u@example.com", "domain": "example.com"},
@@ -207,8 +207,8 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "different-tool-secret")
     _reload_tool_verification_routes()
 
-    from app import tool_verification_routes as tvr
-    from app.auth_utils import (
+    from services.admin.app import tool_verification_routes as tvr
+    from services.admin.app.auth_utils import (
         ALGORITHM,
         SESSION_AUDIENCE,
         SESSION_ISSUER,
@@ -242,8 +242,8 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
 def test_tool_access_token_roundtrip(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "roundtrip-secret")
     _reload_tool_verification_routes()
-    from app import tool_verification_routes as tvr
-    from app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
+    from services.admin.app import tool_verification_routes as tvr
+    from services.admin.app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
 
     tok = pyjwt.encode(
         {
@@ -274,7 +274,7 @@ def test_tool_access_secret_does_not_fall_back_to_auth_secret(monkeypatch):
     monkeypatch.setenv("REGENGINE_ENV", "development")  # allow ephemeral dev key
 
     _reload_tool_verification_routes()
-    from app import tool_verification_routes as tvr
+    from services.admin.app import tool_verification_routes as tvr
 
     # Must NOT equal the session key — that was the bug.
     assert tvr.TOOL_ACCESS_SECRET != "session-key-do-not-reuse"
@@ -326,8 +326,8 @@ def test_tool_access_secret_empty_string_fails_in_production(monkeypatch):
 def test_session_decode_rejects_tool_access_key_signature(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "tool-secret-xyz")
     _reload_tool_verification_routes()
-    from app import tool_verification_routes as tvr
-    from app.auth_utils import (
+    from services.admin.app import tool_verification_routes as tvr
+    from services.admin.app.auth_utils import (
         ALGORITHM,
         SESSION_AUDIENCE,
         SESSION_ISSUER,
@@ -360,12 +360,12 @@ def _reload_tool_verification_routes():
     Tests that toggle env vars need a fresh import to observe the change.
     """
     for modname in [
-        "app.tool_verification_routes",
+        "services.admin.app.tool_verification_routes",
         "services.admin.app.tool_verification_routes",
     ]:
         if modname in sys.modules:
             del sys.modules[modname]
-    importlib.import_module("app.tool_verification_routes")
+    importlib.import_module("services.admin.app.tool_verification_routes")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -390,7 +390,7 @@ def test_regression_tool_access_cannot_impersonate_session():
     would itself be a misconfiguration), the token would still be
     rejected on audience mismatch.
     """
-    from app.auth_utils import (
+    from services.admin.app.auth_utils import (
         ALGORITHM,
         SECRET_KEY,
         SESSION_ISSUER,

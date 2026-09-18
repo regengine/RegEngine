@@ -29,7 +29,7 @@ from types import SimpleNamespace
 from typing import Any, List
 
 import pytest
-from app import kafka_utils as ku
+from services.ingestion.app import kafka_utils as ku
 from fastapi import HTTPException
 from shared.kafka_auth import KafkaAuthError
 

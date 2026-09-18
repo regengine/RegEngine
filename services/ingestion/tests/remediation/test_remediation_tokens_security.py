@@ -276,7 +276,7 @@ def test_attestation_required(client):
 
 def test_rate_limit_trips(client, monkeypatch):
     """Re-install the real shared limiter (conftest stubs it) and trip it."""
-    import app.remediation.supplier_router as sup_mod
+    import services.ingestion.app.remediation.supplier_router as sup_mod
     from shared.tenant_rate_limiting import consume_tenant_rate_limit
 
     monkeypatch.setattr(sup_mod, "_consume_rate_limit", consume_tenant_rate_limit)

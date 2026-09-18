@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path to import neo4j_utils
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.neo4j_utils import Neo4jClient
+from services.graph.app.neo4j_utils import Neo4jClient
 
 
 def apply_constraints(neo4j_client: Neo4jClient):

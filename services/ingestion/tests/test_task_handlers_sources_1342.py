@@ -75,7 +75,7 @@ sys.modules["regengine_ingestion.sources"] = _sources_mod
 # ``app.routes`` is heavy (full FastAPI router + many shared imports).
 # The handler only consumes ``_run_adapter_ingest`` from it, so stub
 # the whole module.
-_routes_stub = ModuleType("app.routes")
+_routes_stub = ModuleType("services.ingestion.app.routes")
 
 
 async def _stub_run_adapter_ingest(**_kwargs):
@@ -84,10 +84,10 @@ async def _stub_run_adapter_ingest(**_kwargs):
 
 _routes_stub._run_adapter_ingest = _stub_run_adapter_ingest
 _routes_stub.__file__ = str(service_dir / "app" / "routes.py")
-_REAL_APP_ROUTES = sys.modules.get("app.routes")
-sys.modules["app.routes"] = _routes_stub
+_REAL_APP_ROUTES = sys.modules.get("services.ingestion.app.routes")
+sys.modules["services.ingestion.app.routes"] = _routes_stub
 
-import app as _app_pkg  # noqa: E402
+import services.ingestion.app as _app_pkg  # noqa: E402
 
 _REAL_APP_ROUTES_ATTR = getattr(_app_pkg, "routes", None)
 _app_pkg.routes = _routes_stub
@@ -107,7 +107,7 @@ def _restore_modules_on_module_teardown():
     for name, real in (
         ("regengine_ingestion", _REAL_REGENGINE_INGESTION),
         ("regengine_ingestion.sources", _REAL_REGENGINE_INGESTION_SOURCES),
-        ("app.routes", _REAL_APP_ROUTES),
+        ("services.ingestion.app.routes", _REAL_APP_ROUTES),
     ):
         if real is not None:
             sys.modules[name] = real
@@ -119,8 +119,8 @@ def _restore_modules_on_module_teardown():
         delattr(_app_pkg, "routes")
 
 
-from app import task_handlers_sources as ths  # noqa: E402
-from app.task_handlers_sources import (  # noqa: E402
+from services.ingestion.app import task_handlers_sources as ths  # noqa: E402
+from services.ingestion.app.task_handlers_sources import (  # noqa: E402
     _handle_ecfr,
     _handle_fda,
     _handle_federal_register,
@@ -137,7 +137,7 @@ def _reset_state(monkeypatch):
     """Re-install stubs evicted by the root conftest and clear capture state."""
     sys.modules["regengine_ingestion"] = _sources_pkg
     sys.modules["regengine_ingestion.sources"] = _sources_mod
-    sys.modules["app.routes"] = _routes_stub
+    sys.modules["services.ingestion.app.routes"] = _routes_stub
 
     # Make sure the names imported into ``ths`` at module-load time
     # still point at our spies (root conftest may have purged the

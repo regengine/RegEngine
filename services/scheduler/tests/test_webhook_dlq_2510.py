@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import app.notifications as notifications_mod  # noqa: F401  (ensures package import path)
+import services.scheduler.app.notifications as notifications_mod  # noqa: F401  (ensures package import path)
 
 
 def _build_scheduler_service_without_init():

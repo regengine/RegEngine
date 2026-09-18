@@ -4,7 +4,7 @@ import asyncio
 import io
 
 import pytest
-from app.bulk_upload.parsers import _parse_pdf_matrix_table, parse_incoming_file
+from services.admin.app.bulk_upload.parsers import _parse_pdf_matrix_table, parse_incoming_file
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 

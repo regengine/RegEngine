@@ -12,10 +12,10 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.authz as authz
-import app.exchange_api as exchange_api
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.exchange_api import _exchange_store, router as exchange_router
+import services.ingestion.app.authz as authz
+import services.ingestion.app.exchange_api as exchange_api
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.exchange_api import _exchange_store, router as exchange_router
 
 
 @pytest.fixture()

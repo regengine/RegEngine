@@ -43,9 +43,9 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 
-from app import scraper_job as mod  # noqa: E402
-from app.scraper_job import run_generic_scrape_job, run_state_scrape_job  # noqa: E402
-from app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
+from services.ingestion.app import scraper_job as mod  # noqa: E402
+from services.ingestion.app.scraper_job import run_generic_scrape_job, run_state_scrape_job  # noqa: E402
+from services.ingestion.app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Stubs / spies

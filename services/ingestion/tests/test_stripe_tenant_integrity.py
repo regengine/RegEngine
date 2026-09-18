@@ -13,9 +13,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from app import stripe_billing
-from app.authz import IngestionPrincipal
-from app.stripe_billing import webhooks as webhooks_mod
+from services.ingestion.app import stripe_billing
+from services.ingestion.app.authz import IngestionPrincipal
+from services.ingestion.app.stripe_billing import webhooks as webhooks_mod
 from fastapi import HTTPException
 
 

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
-from app.models import (
+from services.scheduler.app.models import (
     AlertEvent,
     EnforcementItem,
     EnforcementSeverity,
@@ -227,7 +227,7 @@ class TestStateManagerHash:
     """Test StateManager.compute_hash (static method, no DB needed)."""
 
     def test_compute_hash_deterministic(self):
-        from app.state import StateManager
+        from services.scheduler.app.state import StateManager
 
         h1 = StateManager.compute_hash("hello world")
         h2 = StateManager.compute_hash("hello world")
@@ -235,7 +235,7 @@ class TestStateManagerHash:
         assert len(h1) == 64  # SHA-256 hex
 
     def test_compute_hash_different_input(self):
-        from app.state import StateManager
+        from services.scheduler.app.state import StateManager
 
         h1 = StateManager.compute_hash("hello")
         h2 = StateManager.compute_hash("world")

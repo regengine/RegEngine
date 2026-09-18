@@ -27,7 +27,7 @@ from fastapi import HTTPException
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.stripe_billing import helpers as sh  # noqa: E402
+from services.ingestion.app.stripe_billing import helpers as sh  # noqa: E402
 
 # ── 1. Happy-path: first-party hosts accepted ──────────────────────────────
 
@@ -197,14 +197,14 @@ def test_default_success_url_passes():
     """The default CheckoutRequest.success_url value must not be
     self-rejected — if it ever changes to an off-allowlist URL, every
     unauthenticated signup breaks."""
-    from app.stripe_billing.models import DEFAULT_CANCEL_URL, DEFAULT_SUCCESS_URL
+    from services.ingestion.app.stripe_billing.models import DEFAULT_CANCEL_URL, DEFAULT_SUCCESS_URL
 
     assert sh._validate_redirect_url(DEFAULT_SUCCESS_URL, field="success_url")
     assert sh._validate_redirect_url(DEFAULT_CANCEL_URL, field="cancel_url")
 
 
 def test_default_portal_return_url_passes():
-    from app.stripe_billing.plans import DEFAULT_PORTAL_RETURN_URL
+    from services.ingestion.app.stripe_billing.plans import DEFAULT_PORTAL_RETURN_URL
 
     assert sh._validate_redirect_url(DEFAULT_PORTAL_RETURN_URL, field="return_url")
 

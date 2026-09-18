@@ -21,7 +21,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from app.distributed import DistributedContext
+from services.scheduler.app.distributed import DistributedContext
 
 
 def _make_ctx_with_fake_engine(lock_returns: bool = True) -> DistributedContext:

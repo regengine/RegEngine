@@ -25,8 +25,8 @@ def client():
     Overrides the ``_verify_api_key`` dependency so tests can focus on the
     tenant-isolation logic rather than auth wiring.
     """
-    from app.epcis.router import router
-    from app.webhook_compat import _verify_api_key
+    from services.ingestion.app.epcis.router import router
+    from services.ingestion.app.webhook_compat import _verify_api_key
 
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
@@ -113,7 +113,7 @@ def test_resolve_authenticated_tenant_ignores_explicit_tenant():
     from the query string to resolve_tenant_id."""
     from unittest.mock import MagicMock
 
-    from app.epcis import router as epcis_router
+    from services.ingestion.app.epcis import router as epcis_router
 
     captured = {}
 
@@ -142,7 +142,7 @@ def test_resolve_authenticated_tenant_ignores_explicit_tenant():
 def test_reject_tenant_query_override_raises():
     from unittest.mock import MagicMock
 
-    from app.epcis.router import _reject_tenant_query_override
+    from services.ingestion.app.epcis.router import _reject_tenant_query_override
     from fastapi import HTTPException
 
     request = MagicMock()

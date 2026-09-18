@@ -39,7 +39,7 @@ from fastapi import HTTPException
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.stripe_billing import (  # noqa: E402
+from services.ingestion.app.stripe_billing import (  # noqa: E402
     customers as customers_mod,
     helpers as helpers_mod,
     webhooks as webhooks_mod,
@@ -1268,7 +1268,7 @@ class TestCheckoutEntitlementSafety2930:
         ``payment_status="unpaid"``. That must not unlock paid surfaces."""
         from types import SimpleNamespace
 
-        from app import subscription_gate as gate_mod
+        from services.ingestion.app import subscription_gate as gate_mod
         from shared.circuit_breaker import redis_circuit
 
         fake_redis.values["billing:session:cs_ach_unpaid"] = "tenant-ach-unpaid"

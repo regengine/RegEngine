@@ -21,8 +21,8 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app import stripe_billing
-from app.authz import IngestionPrincipal
+from services.ingestion.app import stripe_billing
+from services.ingestion.app.authz import IngestionPrincipal
 
 TENANT_ID = "tenant-usage-1"
 

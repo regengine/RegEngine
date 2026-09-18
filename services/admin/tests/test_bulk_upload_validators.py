@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from app.bulk_upload.validators import (
+from services.admin.app.bulk_upload.validators import (
     compute_payload_sha256,
     next_merkle_hash,
     normalize_cte_type,
     validate_and_normalize_payload,
 )
-from app.supplier_cte_service import _next_merkle_hash, _sha256_json
+from services.admin.app.supplier_cte_service import _next_merkle_hash, _sha256_json
 
 
 def test_cte_alias_normalization():

@@ -24,7 +24,7 @@ service_dir = Path(__file__).parent.parent
 # Purge any lingering ``app`` module from another service's test run so
 # the compliance service's ``app.routes`` resolves against this tree.
 for key in list(sys.modules):
-    if key == "app" or key.startswith("app.") or key == "main":
+    if key == "app" or key.startswith("services.compliance.app.") or key == "main":
         del sys.modules[key]
 sys.path.insert(0, str(service_dir))
 
@@ -38,15 +38,15 @@ def _fresh_routes():
     """Re-import ``app.routes`` on demand.
 
     Sibling compliance tests (``test_fda_spreadsheet.py``) purge
-    ``sys.modules['app.*']`` at import time. When those tests are
+    ``sys.modules['services.compliance.app.*']`` at import time. When those tests are
     collected before ours, a stale reference to the old ``app.routes``
     module gets bound to this module's imports. Calling this helper at
     fixture setup time guarantees we always work with whichever
     ``app.routes`` is current in sys.modules.
     """
-    if "app.routes" in sys.modules:
-        return sys.modules["app.routes"]
-    return importlib.import_module("app.routes")
+    if "services.compliance.app.routes" in sys.modules:
+        return sys.modules["services.compliance.app.routes"]
+    return importlib.import_module("services.compliance.app.routes")
 
 
 @pytest.fixture()

@@ -94,7 +94,7 @@ class EDIParser(DocumentParser):
         validation_report += "-----------------------------\n\n"
 
         # Use existing parsing logic for text
-        from app.format_extractors import _parse_x12
+        from services.ingestion.app.format_extractors import _parse_x12
 
         text, _, _ = _parse_x12(content, content.encode("utf-8"))
 
@@ -118,7 +118,7 @@ class EDIParser(DocumentParser):
         validation_report += "Status: UNVERIFIED (EDIFACT schema validation pending)\n"
         validation_report += "-----------------------------\n\n"
 
-        from app.format_extractors import _parse_edifact
+        from services.ingestion.app.format_extractors import _parse_edifact
 
         text, _, _ = _parse_edifact(content, content.encode("utf-8"))
 

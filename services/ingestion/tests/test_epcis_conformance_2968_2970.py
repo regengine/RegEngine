@@ -32,15 +32,15 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.epcis.normalization import _normalize_epcis_to_cte  # noqa: E402
-from app.epcis.persistence import (  # noqa: E402
+from services.ingestion.app.epcis.normalization import _normalize_epcis_to_cte  # noqa: E402
+from services.ingestion.app.epcis.persistence import (  # noqa: E402
     _epcis_idempotency_index,
     _epcis_store,
     _parse_epcis_document,
 )
-from app.epcis.router import router as epcis_ingestion_router  # noqa: E402
-from app.epcis.validation import _validate_epcis  # noqa: E402
-from app.webhook_compat import _verify_api_key  # noqa: E402
+from services.ingestion.app.epcis.router import router as epcis_ingestion_router  # noqa: E402
+from services.ingestion.app.epcis.validation import _validate_epcis  # noqa: E402
+from services.ingestion.app.webhook_compat import _verify_api_key  # noqa: E402
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
@@ -298,7 +298,7 @@ class TestXmlMixedDocument2970:
         monkeypatch.delenv("STRICT_FSMA_VALIDATION", raising=False)
         monkeypatch.delenv("FSMA_STRICT_MODE", raising=False)
 
-        from app.epcis.xml_parser import _parse_epcis_xml
+        from services.ingestion.app.epcis.xml_parser import _parse_epcis_xml
 
         events = _parse_epcis_xml(_MIXED_XML)
         assert [e["type"] for e in events] == ["ObjectEvent", "TransformationEvent"]
@@ -316,7 +316,7 @@ class TestXmlMixedDocument2970:
         # Stub the DB batch orchestrator (same pattern as
         # test_epcis_xml_strict_validation_1151) so the assertion is
         # about the strict-mode parse gate, not about Postgres.
-        import app.epcis.router as router_mod
+        import services.ingestion.app.epcis.router as router_mod
 
         forwarded: list[dict] = []
 

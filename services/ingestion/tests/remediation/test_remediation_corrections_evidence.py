@@ -153,7 +153,7 @@ def test_patches_append_only_and_hash_chained(client, admin_engine, app_engine):
     response = _submit(client, headers2, {"kdes.tlc_source_reference": "Valley Farms Packinghouse"})
     assert response.json()["status"] == "released"
 
-    from app.remediation.corrections import load_patches, verify_patch_chain
+    from services.ingestion.app.remediation.corrections import load_patches, verify_patch_chain
     from sqlalchemy.orm import sessionmaker
 
     Session = sessionmaker(bind=admin_engine)

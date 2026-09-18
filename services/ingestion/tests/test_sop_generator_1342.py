@@ -19,14 +19,14 @@ Tracks GitHub issue #1342.
 from __future__ import annotations
 
 import pytest
-from app.sop_generator import (
+from services.ingestion.app.sop_generator import (
     SOPRequest,
     SOPResponse,
     _generate_cte_procedures,
     generate_sop,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

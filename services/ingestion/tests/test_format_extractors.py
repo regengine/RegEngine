@@ -10,13 +10,13 @@ from pathlib import Path
 # Ensure ingestion service's 'app' package is resolved first
 _ingestion_dir = Path(__file__).resolve().parent.parent
 # Clear any cached 'app' modules from other services
-_to_remove = [key for key in sys.modules if key == "app" or key.startswith("app.")]
+_to_remove = [key for key in sys.modules if key == "app" or key.startswith("services.ingestion.app.")]
 for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(_ingestion_dir))
 
 import pytest
-from app.format_extractors import (
+from services.ingestion.app.format_extractors import (
     detect_format,
     extract_from_csv,
     extract_from_edi,

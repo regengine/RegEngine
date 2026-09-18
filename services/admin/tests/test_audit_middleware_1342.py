@@ -45,7 +45,7 @@ sys.path.insert(0, str(service_dir))
 # isn't installed (CI job matrix).
 pytest.importorskip("starlette")
 
-from app.audit_middleware import (  # noqa: E402
+from services.admin.app.audit_middleware import (  # noqa: E402
     AuditContextMiddleware,
     _is_trusted_proxy,
     _should_skip,

@@ -133,7 +133,7 @@ def test_exception_case_created_and_visible(client):
 
 def test_missing_dates_never_synthesized():
     """AC-5: absent factual data stays absent — no default timestamps."""
-    from app.remediation.validation import build_event_from_row
+    from services.ingestion.app.remediation.validation import build_event_from_row
 
     event, provenance, failures = build_event_from_row(
         {

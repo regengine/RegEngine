@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-import app.authz as authz
-from app import stripe_billing
-from app.authz import IngestionPrincipal, get_ingestion_principal
+import services.ingestion.app.authz as authz
+from services.ingestion.app import stripe_billing
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 
 
 class _FakeRedis:

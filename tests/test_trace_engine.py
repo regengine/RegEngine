@@ -13,8 +13,8 @@ Tests cover:
 from __future__ import annotations
 
 import pytest
-from app.sandbox.csv_parser import _parse_csv_to_events
-from app.sandbox.tracer import _trace_in_memory
+from services.ingestion.app.sandbox.csv_parser import _parse_csv_to_events
+from services.ingestion.app.sandbox.tracer import _trace_in_memory
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -119,7 +119,7 @@ def _fake_normalize_epcis_event(event: dict, tenant_id: str) -> Any:
     return _Canonical()
 
 
-from app.epcis import persistence as persistence_mod  # noqa: E402
+from services.ingestion.app.epcis import persistence as persistence_mod  # noqa: E402
 
 # ── Helpers: reset module-level state + install fakes between tests ────────
 

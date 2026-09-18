@@ -37,15 +37,15 @@ def backfill_email_fingerprints(
         raise ValueError("batch_size must be positive")
 
     if session_factory is None:
-        from app.database import SessionLocal
+        from services.admin.app.database import SessionLocal
 
         session_factory = SessionLocal
     if crypto_service is None:
-        from app.auth_crypto import AuthCryptoService
+        from services.admin.app.auth_crypto import AuthCryptoService
 
         crypto_service = AuthCryptoService()
 
-    from app.sqlalchemy_models import UserEmailModel
+    from services.admin.app.sqlalchemy_models import UserEmailModel
 
     total = 0
     session = session_factory()

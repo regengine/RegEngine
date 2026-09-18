@@ -41,9 +41,9 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.cte_persistence as shared_cte_persistence
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.fda_export.router import router as fda_router
-from app.fda_export_service import (
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.fda_export.router import router as fda_router
+from services.ingestion.app.fda_export_service import (
     PII_REDACTION_PLACEHOLDER,
     _event_to_fda_row,
     _event_to_fda_row_v2,

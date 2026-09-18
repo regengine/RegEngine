@@ -27,7 +27,7 @@ assert_legacy_entrypoint_not_in_production("admin")
 
 require_env("ADMIN_DATABASE_URL")
 
-from app.e2e_safety import assert_e2e_mode_allowed
+from services.admin.app.e2e_safety import assert_e2e_mode_allowed
 
 assert_e2e_mode_allowed()
 
@@ -40,12 +40,12 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 
 import structlog
-from app.agent_review_routes import router as agent_review_router
-from app.api_overlay import router as overlay_router
-from app.compliance_routes import router as compliance_router
-from app.config import get_settings
-from app.logging_config import configure_logging
-from app.routes import router, v1_router
+from services.admin.app.agent_review_routes import router as agent_review_router
+from services.admin.app.api_overlay import router as overlay_router
+from services.admin.app.compliance_routes import router as compliance_router
+from services.admin.app.config import get_settings
+from services.admin.app.logging_config import configure_logging
+from services.admin.app.routes import router, v1_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Database initialization. The RLS posture gate is a hard startup
     # boundary in production and whenever staging explicitly enables it.
     try:
-        from app.database import init_db
+        from services.admin.app.database import init_db
 
         init_db()
         log.info("database_initialized")
@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # without AUTH_OTP_HMAC_SECRET. Idempotent. Unset secret is a no-op in
     # non-production and a startup RuntimeError in production (same as v094).
     try:
-        from app.auth.fingerprint_repair import repair_null_email_fingerprints
+        from services.admin.app.auth.fingerprint_repair import repair_null_email_fingerprints
 
         repaired = repair_null_email_fingerprints()
         if repaired:
@@ -144,7 +144,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Shared auth runtime. Production startup is fatal unless Redis-backed
     # revocation and the JWT key registry are both ready.
-    from app.auth_runtime import initialize_auth_runtime, shutdown_auth_runtime
+    from services.admin.app.auth_runtime import initialize_auth_runtime, shutdown_auth_runtime
 
     auth_runtime = await initialize_auth_runtime()
 
@@ -158,7 +158,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Shutdown
         log.info("shutdown_initiated")
         _stop_review_consumer()
-        from app.api_key_admin_store import close_admin_api_key_store
+        from services.admin.app.api_key_admin_store import close_admin_api_key_store
 
         await close_admin_api_key_store()
         await shutdown_auth_runtime(auth_runtime)
@@ -289,7 +289,7 @@ from shared.middleware.security import add_trusted_host
 add_trusted_host(app)
 
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
-from app.audit_middleware import AuditContextMiddleware
+from services.admin.app.audit_middleware import AuditContextMiddleware
 
 app.add_middleware(AuditContextMiddleware)
 
@@ -372,74 +372,74 @@ app.include_router(overlay_router)
 app.include_router(compliance_router)
 app.include_router(agent_review_router, prefix="/v1")
 
-from app.system_routes import router as system_router
+from services.admin.app.system_routes import router as system_router
 
 app.include_router(system_router, prefix="/v1")
 
 
-from app.auth_routes import router as auth_router
+from services.admin.app.auth_routes import router as auth_router
 
 app.include_router(auth_router)
 
-from app.admin.organizations_router import router as admin_organizations_router
+from services.admin.app.admin.organizations_router import router as admin_organizations_router
 
 app.include_router(admin_organizations_router)
 
-from app.invite_routes import router as invite_router
+from services.admin.app.invite_routes import router as invite_router
 
 app.include_router(invite_router, prefix="/v1")
 
-from app.user_routes import router as user_router
+from services.admin.app.user_routes import router as user_router
 
 app.include_router(user_router, prefix="/v1")
 
-from app.supplier_onboarding_routes import router as supplier_onboarding_router
+from services.admin.app.supplier_onboarding_routes import router as supplier_onboarding_router
 
 app.include_router(supplier_onboarding_router, prefix="/v1")
 
-from app.supplier_facilities_routes import router as supplier_facilities_router
+from services.admin.app.supplier_facilities_routes import router as supplier_facilities_router
 
 app.include_router(supplier_facilities_router, prefix="/v1")
 
-from app.supplier_compliance_routes import router as supplier_compliance_router
+from services.admin.app.supplier_compliance_routes import router as supplier_compliance_router
 
 app.include_router(supplier_compliance_router, prefix="/v1")
 
-from app.supplier_funnel_routes import router as supplier_funnel_router
+from services.admin.app.supplier_funnel_routes import router as supplier_funnel_router
 
 app.include_router(supplier_funnel_router, prefix="/v1")
 
-from app.tenant_settings_routes import router as tenant_settings_router
+from services.admin.app.tenant_settings_routes import router as tenant_settings_router
 
 app.include_router(tenant_settings_router, prefix="/v1")
 
-from app.bulk_upload.routes import router as bulk_upload_router
+from services.admin.app.bulk_upload.routes import router as bulk_upload_router
 
 app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
 
 
 # Review Queue for curator workflow
-from app.review_routes import router as review_router
+from services.admin.app.review_routes import router as review_router
 
 app.include_router(review_router)
 
 # Audit log export (tamper-evident) — ISO 27001 12.4.1
-from app.audit_routes import router as audit_router
+from services.admin.app.audit_routes import router as audit_router
 
 app.include_router(audit_router)
 
 # Tool email verification — public lead capture for free tools (no auth required)
-from app.tool_verification_routes import router as tool_verification_router
+from services.admin.app.tool_verification_routes import router as tool_verification_router
 
 app.include_router(tool_verification_router)
 
 # GDPR right-to-erasure
-from app.erasure_routes import router as erasure_router
+from services.admin.app.erasure_routes import router as erasure_router
 
 app.include_router(erasure_router)
 
 # GDPR right-to-access / data portability (Art. 15 / 20) -- #1094
-from app.data_export_routes import router as data_export_router
+from services.admin.app.data_export_routes import router as data_export_router
 
 app.include_router(data_export_router)
 
@@ -474,7 +474,7 @@ def _start_review_consumer() -> None:
     if os.getenv("ENABLE_REVIEW_CONSUMER", "false").lower() not in ("1", "true", "yes"):
         return
     try:
-        from app.review_consumer import run_consumer
+        from services.admin.app.review_consumer import run_consumer
 
         _consumer_thread = threading.Thread(target=run_consumer, daemon=True)
         _consumer_thread.start()
@@ -486,7 +486,7 @@ def _start_review_consumer() -> None:
 def _stop_review_consumer() -> None:
     """Stop the Kafka consumer gracefully."""
     if _consumer_thread is not None:
-        from app.review_consumer import stop_consumer
+        from services.admin.app.review_consumer import stop_consumer
 
         stop_consumer()
         _consumer_thread.join(timeout=5)

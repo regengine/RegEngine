@@ -33,13 +33,13 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.cte_persistence as shared_cte_persistence
-from app.authz import IngestionPrincipal
-from app.fda_export.router import router as fda_router
+from services.ingestion.app.authz import IngestionPrincipal
+from services.ingestion.app.fda_export.router import router as fda_router
 
 # The ``app.fda_export`` package re-exports the ``router`` APIRouter, which
 # shadows the ``router`` *submodule* as a package attribute. Pull the actual
 # module object out of ``sys.modules`` so we can introspect handler functions.
-fda_router_module = sys.modules["app.fda_export.router"]
+fda_router_module = sys.modules["services.ingestion.app.fda_export.router"]
 
 from services.ingestion.tests.authz_overrides import (
     install_active_subscription_override,

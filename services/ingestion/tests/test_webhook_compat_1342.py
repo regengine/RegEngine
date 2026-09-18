@@ -32,7 +32,7 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import webhook_compat as wc
+from services.ingestion.app import webhook_compat as wc
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -207,9 +207,9 @@ def _install_stubs(
         if validate_tenant_id_raises is not None:
             raise validate_tenant_id_raises
 
-    tv_mod = ModuleType("app.tenant_validation")
+    tv_mod = ModuleType("services.ingestion.app.tenant_validation")
     tv_mod.validate_tenant_id = _validate_tenant
-    monkeypatch.setitem(sys.modules, "app.tenant_validation", tv_mod)
+    monkeypatch.setitem(sys.modules, "services.ingestion.app.tenant_validation", tv_mod)
 
     # Lazy import: shared.cte_persistence.CTEPersistence
     def _persistence_cls(db_session):

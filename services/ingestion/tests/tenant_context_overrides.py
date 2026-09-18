@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from app.webhook_compat import require_tenant_context
+from services.ingestion.app.webhook_compat import require_tenant_context
 from fastapi import Request
 from shared.tenant_context import TenantContext, assert_tenant_claim_matches
 
@@ -47,7 +47,7 @@ def install_tenant_context_override(
         return ctx
 
     dependencies = {require_tenant_context}
-    for module_name in ("app.webhook_compat", "services.ingestion.app.webhook_compat"):
+    for module_name in ("services.ingestion.app.webhook_compat", "services.ingestion.app.webhook_compat"):
         module = sys.modules.get(module_name)
         current = getattr(module, "require_tenant_context", None)
         if current is not None:

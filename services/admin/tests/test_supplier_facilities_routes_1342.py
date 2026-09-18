@@ -30,7 +30,7 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -96,7 +96,7 @@ def db_session() -> Session:
 
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    import app.supplier_facilities_routes as fac_routes
+    import services.admin.app.supplier_facilities_routes as fac_routes
 
     app = FastAPI()
     app.include_router(fac_routes.router, prefix="/v1")
@@ -124,7 +124,7 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 @pytest.fixture
 def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Client where TenantContext.get_tenant_context returns None."""
-    import app.supplier_facilities_routes as fac_routes
+    import services.admin.app.supplier_facilities_routes as fac_routes
 
     app = FastAPI()
     app.include_router(fac_routes.router, prefix="/v1")
@@ -338,7 +338,7 @@ class TestGetRequiredCtes:
         self, client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
     ):
         """Line 237: when graph_sync returns a payload, use it (neo4j path)."""
-        import app.supplier_facilities_routes as fac_routes
+        import services.admin.app.supplier_facilities_routes as fac_routes
 
         f = _make_facility(db_session)
         graph_response = {

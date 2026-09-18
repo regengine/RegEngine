@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
 import pytest
-from app import disaster_recovery as dr
-from app.disaster_recovery import (
+from services.ingestion.app import disaster_recovery as dr
+from services.ingestion.app.disaster_recovery import (
     DRCheck,
     DRReport,
     _check_data_volume,
@@ -25,7 +25,7 @@ from app.disaster_recovery import (
     _overall_status,
     router,
 )
-from app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError

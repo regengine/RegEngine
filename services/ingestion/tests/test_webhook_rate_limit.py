@@ -11,7 +11,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-import app.webhook_router_v2 as webhook_router_v2
+import services.ingestion.app.webhook_router_v2 as webhook_router_v2
 
 
 def test_check_rate_limit_uses_tenant_bucket(monkeypatch: pytest.MonkeyPatch) -> None:

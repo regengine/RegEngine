@@ -23,7 +23,7 @@ module in production).
 from __future__ import annotations
 
 import pytest
-from app.shared.csv_safety import (
+from services.ingestion.app.shared.csv_safety import (
     sanitize_cell,
     sanitize_row,
     sanitize_sequence,
@@ -237,7 +237,7 @@ class TestSanitizeSequence:
 
 class TestModuleSurface:
     def test_public_api_exports(self):
-        import app.shared.csv_safety as m
+        import services.ingestion.app.shared.csv_safety as m
 
         assert m.__all__ == ["sanitize_cell", "sanitize_row", "sanitize_sequence"]
 
@@ -245,6 +245,6 @@ class TestModuleSurface:
         """Lock in the prefix list so a future refactor doesn't accidentally
         drop one (e.g., tab — which bypasses quoting heuristics in older
         Excel versions)."""
-        import app.shared.csv_safety as m
+        import services.ingestion.app.shared.csv_safety as m
 
         assert set(m._DANGEROUS_PREFIXES) == {"=", "+", "-", "@", "\t", "\r"}

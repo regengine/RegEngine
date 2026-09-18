@@ -30,14 +30,14 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-import app.epcis_export as epcis_export
-from app.epcis_export import (
+import services.ingestion.app.epcis_export as epcis_export
+from services.ingestion.app.epcis_export import (
     SAMPLE_EPCIS_EVENTS,
     _query_tenant_events,
     _validate_epcis_document,
     router as epcis_export_router,
 )
-from app.webhook_compat import _verify_api_key, require_tenant_context
+from services.ingestion.app.webhook_compat import _verify_api_key, require_tenant_context
 from shared.tenant_context import TenantContext
 
 # ---------------------------------------------------------------------------

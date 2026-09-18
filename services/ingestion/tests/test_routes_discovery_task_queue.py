@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 from unittest.mock import MagicMock
 
-import app.routes_discovery as routes_discovery
+import services.ingestion.app.routes_discovery as routes_discovery
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.auth import APIKey, require_api_key
@@ -223,7 +223,7 @@ class TestRejectRoutes:
 
 class TestRegisterDiscoveryHandlers:
     def test_registers_discovery_scrape(self):
-        from app.task_handlers_discovery import register_discovery_handlers
+        from services.ingestion.app.task_handlers_discovery import register_discovery_handlers
         from shared.task_queue import TASK_HANDLERS
 
         TASK_HANDLERS.pop("discovery_scrape", None)

@@ -11,11 +11,11 @@ from __future__ import annotations
 import base64
 
 import pytest
-from app import inbound_email_rejection_log as rejlog
-from app import routes_inbound_email as m
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.csv_templates import parse_csv_rows
-from app.webhook_models import EventResult, IngestResponse
+from services.ingestion.app import inbound_email_rejection_log as rejlog
+from services.ingestion.app import routes_inbound_email as m
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.csv_templates import parse_csv_rows
+from services.ingestion.app.webhook_models import EventResult, IngestResponse
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 service_dir = Path(__file__).parent.parent
-_to_remove = [key for key in sys.modules if key == "app" or key.startswith("app.") or key == "main"]
+_to_remove = [key for key in sys.modules if key == "app" or key.startswith("services.compliance.app.") or key == "main"]
 for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(service_dir))
@@ -23,7 +23,7 @@ import io
 import json
 
 import pytest
-from app.fsma_spreadsheet import (
+from services.compliance.app.fsma_spreadsheet import (
     FDA_COLUMNS,
     FDA_HEADERS,
     FSMATimestampError,

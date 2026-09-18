@@ -12,7 +12,7 @@ Split from the original monolithic sandbox_router.py (1,576 lines) into:
     sandbox/router.py        — FastAPI router + endpoints
 
 All public names are re-exported here for backward compatibility:
-    from app.sandbox import router
+    from .sandbox import router
 """
 
 from .csv_parser import (  # noqa: F401

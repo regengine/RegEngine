@@ -46,11 +46,11 @@ def tvr(monkeypatch):
     monkeypatch.setenv("REGENGINE_ENV", "test")
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
     for modname in [
-        "app.tool_verification_routes",
+        "services.admin.app.tool_verification_routes",
         "services.admin.app.tool_verification_routes",
     ]:
         sys.modules.pop(modname, None)
-    module = importlib.import_module("app.tool_verification_routes")
+    module = importlib.import_module("services.admin.app.tool_verification_routes")
     module._memory_store.clear()
     module._redis_available = False
     module._redis_client = None

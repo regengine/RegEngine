@@ -32,8 +32,8 @@ import hashlib
 from types import SimpleNamespace
 
 import pytest
-from app.fda_export import formatters as fmt
-from app.fda_export_service import (
+from services.ingestion.app.fda_export import formatters as fmt
+from services.ingestion.app.fda_export_service import (
     _build_completeness_summary,
     _safe_filename_token,
 )

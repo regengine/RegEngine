@@ -23,13 +23,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
-from app.bulk_upload.routes import (
+from services.admin.app.bulk_upload.routes import (
     BulkUploadCommitSummary,
     _coerce_commit_summary,
     _coerce_validation_preview,
     router,
 )
-from app.sqlalchemy_models import (
+from services.admin.app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -128,7 +128,7 @@ def db_session() -> Session:
 
 
 def _make_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID, store=None):
-    import app.bulk_upload.routes as bulk_routes
+    import services.admin.app.bulk_upload.routes as bulk_routes
 
     app = FastAPI()
     app.include_router(bulk_routes.router, prefix="/v1/supplier/bulk-upload")
@@ -187,7 +187,7 @@ class TestCoerceHelpers:
 
     def test_coerce_validation_preview_non_dict_returns_none(self):
         """Line 117: non-dict value → None."""
-        from app.bulk_upload.routes import _coerce_validation_preview
+        from services.admin.app.bulk_upload.routes import _coerce_validation_preview
 
         assert _coerce_validation_preview(None) is None
         assert _coerce_validation_preview("oops") is None
@@ -267,7 +267,7 @@ class TestCommitCASRace:
         # Prime store with a parsed (not validated) session
         import asyncio
 
-        import app.bulk_upload.routes as bulk_routes
+        import services.admin.app.bulk_upload.routes as bulk_routes
 
         loop = asyncio.new_event_loop()
         tenant_key = str(TEST_TENANT_ID)
@@ -321,7 +321,7 @@ class TestCommitCASRace:
     def _race_client(self, db_session, monkeypatch, first_status, second_status, summary=None):
         """Helper: builds a TestClient where first get returns first_status,
         CAS fails, re-read returns second_status."""
-        import app.bulk_upload.routes as bulk_routes
+        import services.admin.app.bulk_upload.routes as bulk_routes
 
         call_count = [0]
 
@@ -373,7 +373,7 @@ class TestCommitCASRace:
         Simulates a race where a concurrent commit finished between the
         initial idempotency check and the CAS attempt.
         """
-        import app.bulk_upload.routes as bulk_routes
+        import services.admin.app.bulk_upload.routes as bulk_routes
 
         summary_payload = {
             "events_chained": 3,
@@ -437,7 +437,7 @@ class TestCommitExceptionHandler:
         and HTTP 400 returned. The exception message is surfaced in the detail."""
         import asyncio
 
-        import app.bulk_upload.routes as bulk_routes
+        import services.admin.app.bulk_upload.routes as bulk_routes
 
         tenant_key = str(TEST_TENANT_ID)
         user_key = str(TEST_USER_ID)

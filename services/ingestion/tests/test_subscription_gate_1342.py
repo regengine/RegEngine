@@ -31,8 +31,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from app import subscription_gate
-from app.subscription_gate import (
+from services.ingestion.app import subscription_gate
+from services.ingestion.app.subscription_gate import (
     _check_subscription_and_redis_health,
     _fail_open_override_enabled,
     _get_tenant_id_from_request,
@@ -215,7 +215,7 @@ class TestCheckSubscriptionAndHealth:
         # reuses the cached client from the first one, and the assertions
         # describe the wrong double. The sibling suites added for #2849 already
         # do this; this pre-existing file was not updated with them.
-        from app.subscription_gate import reset_redis_client
+        from services.ingestion.app.subscription_gate import reset_redis_client
 
         reset_redis_client()
 

@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import pytest
-from app import csv_templates as ct
-from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.csv_templates import (
+from services.ingestion.app import csv_templates as ct
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+from services.ingestion.app.csv_templates import (
     _CTE_TYPE_ALIASES,
     _SENTINEL_TS,
     CTE_COLUMNS,
@@ -29,8 +29,8 @@ from app.csv_templates import (
     _validate_kde_completeness,
     router,
 )
-from app.webhook_compat import _verify_api_key
-from app.webhook_models import (
+from services.ingestion.app.webhook_compat import _verify_api_key
+from services.ingestion.app.webhook_models import (
     REQUIRED_KDES_BY_CTE,
     EventResult,
     IngestEvent,
@@ -38,7 +38,7 @@ from app.webhook_models import (
     WebhookCTEType,
     validate_gln,
 )
-from app.webhook_router_v2.validation import _validate_event_kdes
+from services.ingestion.app.webhook_router_v2.validation import _validate_event_kdes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

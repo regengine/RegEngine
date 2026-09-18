@@ -47,7 +47,7 @@ import pytest
 service_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.session_store import (  # noqa: E402
+from services.admin.app.session_store import (  # noqa: E402
     RedisSessionStore,
     SessionData,
     redact_connection_url,

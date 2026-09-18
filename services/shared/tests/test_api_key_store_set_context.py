@@ -38,7 +38,7 @@ async def test_set_context_uses_set_config_not_set_local(monkeypatch):
     sql = captured["sql"]
     # Must use set_config — the parameterizable path
     assert "set_config" in sql
-    assert "app.tenant_id" in sql
+    assert "services.shared.app.tenant_id" in sql
     assert ":tid" in sql  # Still parameterized (no f-string interpolation)
     # Must NOT use SET LOCAL — the unparameterizable path
     assert "SET LOCAL" not in sql.upper()

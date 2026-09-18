@@ -4,7 +4,7 @@ from uuid import uuid4
 
 # Add service directory to path for imports to work
 service_dir = Path(__file__).parent.parent
-_to_remove = [key for key in sys.modules if key == "app" or key.startswith("app.") or key == "main"]
+_to_remove = [key for key in sys.modules if key == "app" or key.startswith("services.compliance.app.") or key == "main"]
 for key in _to_remove:
     del sys.modules[key]
 sys.path.insert(0, str(service_dir))
