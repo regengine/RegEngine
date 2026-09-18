@@ -1006,6 +1006,39 @@ class TestMassBalanceCrossTlc:
         xform_results = [r for r in res.get("E-XFORM", []) if r.rule_id == "R-MB"]
         assert any(r.result == "pass" for r in xform_results)
 
+    def test_mass_balance_reads_the_durable_input_lot_codes_key(self, monkeypatch):
+        # ``kdes.input_lot_codes`` is the key the parser now writes and the
+        # canonical link writer reads; the mass-balance check reads it too.
+        _only_mass_rule(monkeypatch, cte_types=["transformation"])
+        evts = [
+            {
+                "event_id": "E-IN-A",
+                "traceability_lot_code": "LOT-A",
+                "event_type": "harvesting",
+                "quantity": 50,
+                "unit_of_measure": "lbs",
+            },
+            {
+                "event_id": "E-IN-B",
+                "traceability_lot_code": "LOT-B",
+                "event_type": "harvesting",
+                "quantity": 50,
+                "unit_of_measure": "lbs",
+            },
+            {
+                "event_id": "E-XFORM",
+                "traceability_lot_code": "LOT-MEGA",
+                "event_type": "transformation",
+                "quantity": 99,
+                "unit_of_measure": "lbs",
+                "kdes": {"input_lot_codes": ["LOT-A", "LOT-B"]},
+            },
+        ]
+        res = _evaluate_relational_in_memory(evts)
+        # The transformation event's cross-TLC check should pass
+        xform_results = [r for r in res.get("E-XFORM", []) if r.rule_id == "R-MB"]
+        assert any(r.result == "pass" for r in xform_results)
+
     def test_transformation_output_exceeds_tolerance_fails(self, monkeypatch):
         _only_mass_rule(monkeypatch, cte_types=["transformation"], tolerance=1.0)
         evts = [

@@ -229,13 +229,20 @@ class TestParseCsvKdeAliases:
         # Use a quoted form instead for clarity:
         csv = 'cte_type,tlc,input_tlcs\ntransformation,LOT-MEGA,"LOT-A,LOT-B"\n'
         events = _parse_csv_to_events(csv)
-        assert events[0]["kdes"]["input_traceability_lot_codes"] == ["LOT-A", "LOT-B"]
+        # Stored under the durable key the canonical link writer reads.
+        assert events[0]["kdes"]["input_lot_codes"] == ["LOT-A", "LOT-B"]
+        assert "input_traceability_lot_codes" not in events[0]["kdes"]
 
-    def test_input_tlcs_single_value_stays_string(self):
+    def test_input_tlcs_single_value_is_a_one_element_list(self):
         csv = "cte_type,tlc,input_tlcs\ntransformation,LOT-MEGA,LOT-A\n"
         events = _parse_csv_to_events(csv)
-        # Single value with no comma — stored as string
-        assert events[0]["kdes"]["input_traceability_lot_codes"] == "LOT-A"
+        # A bare string is invisible to the link writer; always a list.
+        assert events[0]["kdes"]["input_lot_codes"] == ["LOT-A"]
+
+    def test_input_lot_codes_column_keeps_its_own_name(self):
+        csv = 'cte_type,tlc,input_lot_codes\ntransformation,LOT-MEGA,"LOT-A,LOT-B"\n'
+        events = _parse_csv_to_events(csv)
+        assert events[0]["kdes"]["input_lot_codes"] == ["LOT-A", "LOT-B"]
 
     def test_temperature_alias(self):
         csv = "cte_type,tlc,temp\ncooling,LOT-1,34\n"

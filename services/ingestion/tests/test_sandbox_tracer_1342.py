@@ -158,6 +158,16 @@ class TestTraceSameLot:
 
 
 class TestTraceTransformation:
+    def test_transformation_input_under_the_durable_key_is_followed(self):
+        # ``kdes.input_lot_codes`` is what the parser now writes and what the
+        # canonical link writer reads; the tracer follows it.
+        events = [
+            _ev("harvesting", "LOT-A"),
+            _ev("transformation", "LOT-MEGA", input_lot_codes=["LOT-A"]),
+        ]
+        res = _trace_in_memory(events, seed_tlc="LOT-A", direction="downstream")
+        assert "LOT-MEGA" in {n.traceability_lot_code for n in res.nodes}
+
     def test_transformation_input_as_list_consumes_inputs(self):
         events = [
             _ev("harvesting", "LOT-A"),
