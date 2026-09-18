@@ -48,10 +48,10 @@ import structlog as _structlog
 logger = _structlog.get_logger("ingestion")
 
 # Local imports (using absolute-style imports from app package)
-from app.config import get_settings
+from services.ingestion.app.config import get_settings
 
 settings = get_settings()
-from app.routes import router as ingestion_router
+from services.ingestion.app.routes import router as ingestion_router
 
 
 @asynccontextmanager
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
     # #2348: warn at boot if document-storage credentials are absent —
     # /v1/ingest/{url,file,direct,regulation} will return 503 until configured.
     try:
-        from app.s3_utils import is_object_storage_configured
+        from services.ingestion.app.s3_utils import is_object_storage_configured
 
         if not is_object_storage_configured():
             logger.warning(
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
         logger.info("integration_connectors_registered")
     except Exception as exc:
         logger.warning("connector_registration_skipped: %s", exc)
-    from app.task_handlers_sources import register_source_handlers
+    from services.ingestion.app.task_handlers_sources import register_source_handlers
 
     register_source_handlers()
     logger.info("task_handlers_registered")
@@ -108,7 +108,7 @@ add_security(app)
 add_rate_limiting(app)
 add_observability(app, service_name="ingestion-service")
 
-from app.middleware import RateLimitHeadersMiddleware
+from services.ingestion.app.middleware import RateLimitHeadersMiddleware
 from shared.middleware import RequestIDMiddleware, TenantContextMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
@@ -292,172 +292,172 @@ app.include_router(ingestion_router, tags=["Document Ingestion"])
 
 # Ingest endpoints (extracted from routes.py — /v1/ingest, /v1/ingest/file,
 # /v1/ingest/url, /v1/ingest/regulation)
-from app.routes_ingest import router as ingest_router
+from services.ingestion.app.routes_ingest import router as ingest_router
 
 app.include_router(ingest_router, tags=["Document Ingestion"])
 
 # Health & Metrics (extracted from routes.py, Finding #8)
-from app.routes_health_metrics import router as health_metrics_router
+from services.ingestion.app.routes_health_metrics import router as health_metrics_router
 
 app.include_router(health_metrics_router, tags=["Health & Metrics"])
 
 # #2893: named and gated so an operator can remove the stubs via
 # DISABLED_ROUTERS. Mounted by default — this changes no deployment.
 if _router_enabled("fsma_readiness_compat"):
-    from app.fsma_readiness_compat import router as fsma_readiness_compat_router
+    from services.ingestion.app.fsma_readiness_compat import router as fsma_readiness_compat_router
 
     app.include_router(fsma_readiness_compat_router)
 
 
 # Decomposed sub-routers (extracted from routes.py god file)
 if _router_enabled("scraping"):
-    from app.routes_scraping import router as scraping_router
+    from services.ingestion.app.routes_scraping import router as scraping_router
 
     app.include_router(scraping_router, tags=["Web Scraping"])
 
 
 if _router_enabled("discovery"):
-    from app.routes_discovery import router as discovery_router
+    from services.ingestion.app.routes_discovery import router as discovery_router
 
     app.include_router(discovery_router, tags=["Discovery"])
 
 # Status, audit, and document query routes
-from app.routes_status import router as status_router
+from services.ingestion.app.routes_status import router as status_router
 
 app.include_router(status_router)
 
 # Federal source ingestion (Federal Register, eCFR, openFDA)
 if _router_enabled("sources"):
-    from app.routes_sources import router as sources_router
+    from services.ingestion.app.routes_sources import router as sources_router
 
     app.include_router(sources_router)
 
 # Webhook Ingestion (V2: Postgres-backed CTE persistence)
-from app.webhook_router_v2 import router as webhook_router
+from services.ingestion.app.webhook_router_v2 import router as webhook_router
 
 app.include_router(webhook_router, tags=["Webhooks"])
 
 # Sandbox Evaluation (stateless, no auth, no persistence)
 if _router_enabled("sandbox"):
-    from app.sandbox.router import router as sandbox_router
+    from services.ingestion.app.sandbox.router import router as sandbox_router
 
     app.include_router(sandbox_router)
 
 # Inflow Lab Workbench (scenarios, saved runs, fix queue, commit gates)
 if _router_enabled("inflow_workbench"):
-    from app.inflow_workbench import router as inflow_workbench_router
+    from services.ingestion.app.inflow_workbench import router as inflow_workbench_router
 
     app.include_router(inflow_workbench_router)
 
 # FDA 24-Hour Export
 if _router_enabled("fda_export"):
-    from app.fda_export.router import router as fda_export_router
+    from services.ingestion.app.fda_export.router import router as fda_export_router
 
     app.include_router(fda_export_router, tags=["FDA Exports"])
 
 
 if _router_enabled("proof_verify"):
     # Public hash-chain verifier. Tenantless, no auth, rate-limited.
-    from app.proof_verify_router import router as proof_verify_router
+    from services.ingestion.app.proof_verify_router import router as proof_verify_router
 
     app.include_router(proof_verify_router, tags=["Public Proof"])
 
 
 # CSV Templates & Import
 if _router_enabled("csv"):
-    from app.csv_templates import router as csv_router
+    from services.ingestion.app.csv_templates import router as csv_router
 
     app.include_router(csv_router, tags=["CSV Import"])
 
 
 # IoT Import (Sensitech TempTale)
 if _router_enabled("sensitech"):
-    from app.sensitech_parser import router as sensitech_router
+    from services.ingestion.app.sensitech_parser import router as sensitech_router
 
     app.include_router(sensitech_router, tags=["IoT Ingestion"])
 
 
 # EDI 856 Inbound
 if _router_enabled("edi"):
-    from app.edi_ingestion import router as edi_router
+    from services.ingestion.app.edi_ingestion import router as edi_router
 
     app.include_router(edi_router, tags=["EDI Ingestion"])
 
 
 # Compliance Score
 if _router_enabled("score"):
-    from app.compliance_score import router as score_router
+    from services.ingestion.app.compliance_score import router as score_router
 
     app.include_router(score_router, tags=["Compliance Scoring"])
 
 
 # Supplier Portal
 if _router_enabled("portal"):
-    from app.supplier_portal import router as portal_router
+    from services.ingestion.app.supplier_portal import router as portal_router
 
     app.include_router(portal_router, tags=["Supplier Portal"])
 
 
 # Inbound Email Ingestion (Postmark Inbound Parse webhook)
 if _router_enabled("inbound_email"):
-    from app.routes_inbound_email import router as inbound_email_router
+    from services.ingestion.app.routes_inbound_email import router as inbound_email_router
 
     app.include_router(inbound_email_router, tags=["Inbound Email Webhook"])
 
 
 # Mock Audit Mode
 if _router_enabled("audit"):
-    from app.mock_audit import router as audit_router
+    from services.ingestion.app.mock_audit import router as audit_router
 
     app.include_router(audit_router, tags=["Audit"])
 
 
 # SOP Generator
 if _router_enabled("sop"):
-    from app.sop_generator import router as sop_router
+    from services.ingestion.app.sop_generator import router as sop_router
 
     app.include_router(sop_router, tags=["SOP Generation"])
 
 
 # EPCIS & FDA Export
 if _router_enabled("export"):
-    from app.epcis_export import router as export_router
+    from services.ingestion.app.epcis_export import router as export_router
 
     app.include_router(export_router, tags=["Data Export"])
 
 
 # EPCIS 2.0 Ingestion
 if _router_enabled("epcis_ingestion"):
-    from app.epcis.router import router as epcis_ingestion_router
+    from services.ingestion.app.epcis.router import router as epcis_ingestion_router
 
     app.include_router(epcis_ingestion_router, tags=["EPCIS"])
 
 
 # QR / GS1 Decode
 if _router_enabled("qr_decoder"):
-    from app.qr_decoder import router as qr_decoder_router
+    from services.ingestion.app.qr_decoder import router as qr_decoder_router
 
     app.include_router(qr_decoder_router, tags=["QR & GS1 Decoding"])
 
 
 # Computer Vision — Label Analysis
 if _router_enabled("label_vision"):
-    from app.label_vision import router as label_vision_router
+    from services.ingestion.app.label_vision import router as label_vision_router
 
     app.include_router(label_vision_router, tags=["Computer Vision"])
 
 
 # B2B Exchange API (EPCIS shipping package handoff)
 if _router_enabled("exchange"):
-    from app.exchange_api import router as exchange_router
+    from services.ingestion.app.exchange_api import router as exchange_router
 
     app.include_router(exchange_router, tags=["B2B Exchange"])
 
 
 # Stripe Billing
 if _router_enabled("billing"):
-    from app.stripe_billing import router as billing_router
-    from app.stripe_billing.routes import list_plans as _list_billing_plans
+    from services.ingestion.app.stripe_billing import router as billing_router
+    from services.ingestion.app.stripe_billing.routes import list_plans as _list_billing_plans
 
     app.include_router(billing_router, tags=["Billing"])
 
@@ -468,83 +468,83 @@ if _router_enabled("billing"):
 
 # Alerts & Notifications
 if _router_enabled("alerts"):
-    from app.alerts import router as alerts_router
+    from services.ingestion.app.alerts import router as alerts_router
 
     app.include_router(alerts_router, tags=["Alerts"])
 
 
 # Onboarding
 if _router_enabled("onboarding"):
-    from app.onboarding import router as onboarding_router
+    from services.ingestion.app.onboarding import router as onboarding_router
 
     app.include_router(onboarding_router, tags=["Onboarding"])
 
 
 # Recall Readiness Report
 if _router_enabled("recall"):
-    from app.recall_report import router as recall_router
+    from services.ingestion.app.recall_report import router as recall_router
 
     app.include_router(recall_router, tags=["Recall Reporting"])
 
 
 # Recall Simulations
 if _router_enabled("recall_simulations"):
-    from app.recall_simulations import router as recall_simulations_router
+    from services.ingestion.app.recall_simulations import router as recall_simulations_router
 
     app.include_router(recall_simulations_router, tags=["Recall Simulations"])
 
 
 if _router_enabled("proof_recall"):
-    from app.proof_recall_router import router as proof_recall_router
+    from services.ingestion.app.proof_recall_router import router as proof_recall_router
 
     app.include_router(proof_recall_router, tags=["Public Proof"])
 
 
 # Supplier Management
 if _router_enabled("supplier_mgmt"):
-    from app.supplier_mgmt import router as supplier_mgmt_router
+    from services.ingestion.app.supplier_mgmt import router as supplier_mgmt_router
 
     app.include_router(supplier_mgmt_router, tags=["Supplier Management"])
 
 
 # Audit Log
 if _router_enabled("audit_log"):
-    from app.audit_log import router as audit_log_router
+    from services.ingestion.app.audit_log import router as audit_log_router
 
     app.include_router(audit_log_router, tags=["Audit Logs"])
 
 
 # Product Catalog
 if _router_enabled("product_catalog"):
-    from app.product_catalog import router as product_catalog_router
+    from services.ingestion.app.product_catalog import router as product_catalog_router
 
     app.include_router(product_catalog_router, tags=["Product Catalog"])
 
 
 # Notification Preferences
 if _router_enabled("notification_prefs"):
-    from app.notification_prefs import router as notification_prefs_router
+    from services.ingestion.app.notification_prefs import router as notification_prefs_router
 
     app.include_router(notification_prefs_router, tags=["Notifications"])
 
 
 # Team Management
 if _router_enabled("team_mgmt"):
-    from app.team_mgmt import router as team_mgmt_router
+    from services.ingestion.app.team_mgmt import router as team_mgmt_router
 
     app.include_router(team_mgmt_router, tags=["Team Management"])
 
 
 # Settings
 if _router_enabled("settings"):
-    from app.settings import router as settings_router
+    from services.ingestion.app.settings import router as settings_router
 
     app.include_router(settings_router, tags=["Settings"])
 
 
 # Integration Connectors (SafetyCulture, CSV/SFTP, retailers, IoT)
 if _router_enabled("integration"):
-    from app.integration_router import router as integration_router
+    from services.ingestion.app.integration_router import router as integration_router
 
     app.include_router(integration_router, tags=["Integration Connectors"])
 
@@ -555,104 +555,104 @@ if _router_enabled("integration"):
 
 # Canonical Records (provenance, amendment chain, ingestion runs)
 if _router_enabled("canonical_records"):
-    from app.canonical_router import router as canonical_records_router
+    from services.ingestion.app.canonical_router import router as canonical_records_router
 
     app.include_router(canonical_records_router)
 
 # Rules Engine (evaluate, inspect, seed rule definitions)
 if _router_enabled("rules"):
-    from app.rules_router import router as rules_engine_router
+    from services.ingestion.app.rules_router import router as rules_engine_router
 
     app.include_router(rules_engine_router)
 
 # Exception Queue (remediation workflow)
 if _router_enabled("exceptions"):
-    from app.exception_router import router as exception_queue_router
+    from services.ingestion.app.exception_router import router as exception_queue_router
 
     app.include_router(exception_queue_router)
 
 # Supplier manifest remediation loop (compliance-critical)
 if _router_enabled("remediation"):
-    from app.remediation.router import router as remediation_router
-    from app.remediation.supplier_router import router as remediation_supplier_router
+    from services.ingestion.app.remediation.router import router as remediation_router
+    from services.ingestion.app.remediation.supplier_router import router as remediation_supplier_router
 
     app.include_router(remediation_router)
     app.include_router(remediation_supplier_router)
 
 # Request-Response Workflow (24-hour FDA response)
 if _router_enabled("request_workflow"):
-    from app.request_workflow_router import router as request_workflow_router
+    from services.ingestion.app.request_workflow_router import router as request_workflow_router
 
     app.include_router(request_workflow_router)
 
 # Identity Resolution (entities, aliases, merges, review queue)
 if _router_enabled("identity"):
-    from app.identity_router import router as identity_resolution_router
+    from services.ingestion.app.identity_router import router as identity_resolution_router
 
     app.include_router(identity_resolution_router)
 
 # Auditor Review (read-only evidentiary chain access)
 if _router_enabled("auditor"):
-    from app.auditor_router import router as auditor_review_router
+    from services.ingestion.app.auditor_router import router as auditor_review_router
 
     app.include_router(auditor_review_router)
 
 # Compliance Metrics (PRD Section 10 KPIs)
 if _router_enabled("compliance_metrics"):
-    from app.metrics_router import router as compliance_metrics_router
+    from services.ingestion.app.metrics_router import router as compliance_metrics_router
 
     app.include_router(compliance_metrics_router)
 
 
 # Readiness Wizard (PRD P2 — guided compliance assessment)
 if _router_enabled("readiness"):
-    from app.readiness_router import router as readiness_wizard_router
+    from services.ingestion.app.readiness_router import router as readiness_wizard_router
 
     app.include_router(readiness_wizard_router)
 
 # Incident Command (PRD P2 — real-time recall coordination)
 if _router_enabled("incidents"):
-    from app.incident_router import router as incident_command_router
+    from services.ingestion.app.incident_router import router as incident_command_router
 
     app.include_router(incident_command_router)
 
 
 # Chain Verification (background hash chain integrity checks)
 if _router_enabled("chain_verification"):
-    from app.chain_verification_job import router as chain_verification_router
+    from services.ingestion.app.chain_verification_job import router as chain_verification_router
 
     app.include_router(chain_verification_router)
 
 
 # Audit Export Log (export/verification/activity audit trail)
 if _router_enabled("audit_export_log"):
-    from app.audit_export_log import router as audit_export_log_router
+    from services.ingestion.app.audit_export_log import router as audit_export_log_router
 
     app.include_router(audit_export_log_router)
 
 
 # FDA 24-Hour SLA Tracking (FSMA 204 — 21 CFR 1.1455)
 if _router_enabled("sla_tracking"):
-    from app.sla_tracking import router as sla_tracking_router
+    from services.ingestion.app.sla_tracking import router as sla_tracking_router
 
     app.include_router(sla_tracking_router)
 
 # Export Monitoring & Health Checks
 if _router_enabled("export_monitoring"):
-    from app.export_monitoring import router as export_monitoring_router
+    from services.ingestion.app.export_monitoring import router as export_monitoring_router
 
     app.include_router(export_monitoring_router)
 
 
 # Supplier Validation (compliance scoring for supplier network)
 if _router_enabled("supplier_validation"):
-    from app.supplier_validation import router as supplier_validation_router
+    from services.ingestion.app.supplier_validation import router as supplier_validation_router
 
     app.include_router(supplier_validation_router)
 
 # Disaster Recovery (readiness assessment and recovery simulation)
 if _router_enabled("disaster_recovery"):
-    from app.disaster_recovery import router as disaster_recovery_router
+    from services.ingestion.app.disaster_recovery import router as disaster_recovery_router
 
     app.include_router(disaster_recovery_router)
 
@@ -661,7 +661,7 @@ if _router_enabled("disaster_recovery"):
 # corrupt or hide already-ingested compliance data — it only stops accepting
 # a new input channel.
 if _router_enabled("email_ingest"):
-    from app.email_ingest.router import router as email_ingest_router
+    from services.ingestion.app.email_ingest.router import router as email_ingest_router
 
     app.include_router(email_ingest_router, tags=["Inbound Email"])
 

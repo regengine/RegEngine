@@ -58,7 +58,7 @@ if str(_NLP_DIR) not in sys.path:
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app  # noqa: E402 — path bootstrapped above
+from services.compliance.main import app  # noqa: E402 — canonical, deterministic
 
 # The shared auth bypass token is recognised by shared/auth.py when
 # REGENGINE_ENV == "test".
@@ -67,8 +67,8 @@ _AUTH = {"X-RegEngine-API-Key": os.environ["AUTH_TEST_BYPASS_TOKEN"]}
 # ---------------------------------------------------------------------------
 # Import the extractor after the path is set up.
 # ---------------------------------------------------------------------------
-from app.extractors.fsma_extractor import FSMAExtractor  # noqa: E402
-from app.extractors.fsma_types import CTEType, ExtractionConfidence  # noqa: E402
+from services.nlp.app.extractors.fsma_extractor import FSMAExtractor  # noqa: E402
+from services.nlp.app.extractors.fsma_types import CTEType, ExtractionConfidence  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
