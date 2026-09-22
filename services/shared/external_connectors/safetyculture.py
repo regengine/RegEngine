@@ -30,6 +30,7 @@ from .base import (
     ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
+    _optional_float,
 )
 
 logger = logging.getLogger("connector-safetyculture")
@@ -225,16 +226,11 @@ class SafetyCultureConnector(IntegrationConnector):
         # Product description
         product = kdes.get("product_description") or kdes.get("product_name") or kdes.get("product") or template_name
 
-        # Quantity
-        quantity = 1.0
-        if kdes.get("quantity"):
-            try:
-                quantity = float(kdes["quantity"])
-            except (ValueError, TypeError):
-                pass
-
-        # Unit
-        unit = kdes.get("unit_of_measure", "units")
+        # Quantity and unit: only what the audit responses carry. An audit
+        # with neither is not one item of "units"; it is an event without a
+        # quantity, which the ingest schema rejects.
+        quantity = _optional_float(kdes.get("quantity"))
+        unit = kdes.get("unit_of_measure") or None
 
         # Timestamp
         timestamp = (

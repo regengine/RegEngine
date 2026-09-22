@@ -48,14 +48,36 @@ function nodeClasses(state: 'complete' | 'current' | 'pending') {
   );
 }
 
-export function WorkflowStepper({ currentStep, completedSteps = [], className }: WorkflowStepperProps) {
+/**
+ * `completedSteps` is authoritative whenever the caller supplies it: a step the
+ * caller leaves out is NOT complete, even when it sits left of the current one.
+ *
+ * Position alone used to imply completion (`index < currentIndex`), which made
+ * the prop dead on every current call site and put the stepper at odds with the
+ * page around it -- /ingest rendered "01 Setup" as a filled check at the same
+ * moment it rendered the "API Key Required" callout, and /review ignored
+ * `isOnboarded` entirely. Both surfaces legitimately render a step the visitor
+ * skipped, so the caller's answer wins.
+ *
+ * Callers that omit the prop keep the positional default.
+ */
+function isStepComplete(
+  stepId: WorkflowStep,
+  index: number,
+  currentIndex: number,
+  completedSteps: WorkflowStep[] | undefined,
+): boolean {
+  return completedSteps ? completedSteps.includes(stepId) : index < currentIndex;
+}
+
+export function WorkflowStepper({ currentStep, completedSteps, className }: WorkflowStepperProps) {
   const currentIndex = steps.findIndex(s => s.id === currentStep);
 
   return (
     <nav className={cn('w-full', className)} aria-label="Workflow progress">
       <ol className="flex items-start">
         {steps.map((step, index) => {
-          const isComplete = completedSteps.includes(step.id) || index < currentIndex;
+          const isComplete = isStepComplete(step.id, index, currentIndex, completedSteps);
           const isCurrent = step.id === currentStep;
           const state = isComplete ? 'complete' : isCurrent ? 'current' : 'pending';
 
@@ -103,13 +125,13 @@ export function WorkflowStepper({ currentStep, completedSteps = [], className }:
 }
 
 // Minimal inline version for headers
-export function WorkflowStepperInline({ currentStep, completedSteps = [] }: WorkflowStepperProps) {
+export function WorkflowStepperInline({ currentStep, completedSteps }: WorkflowStepperProps) {
   const currentIndex = steps.findIndex(s => s.id === currentStep);
 
   return (
     <div className="flex items-center gap-1.5 text-small">
       {steps.map((step, index) => {
-        const isComplete = completedSteps.includes(step.id) || index < currentIndex;
+        const isComplete = isStepComplete(step.id, index, currentIndex, completedSteps);
         const isCurrent = step.id === currentStep;
 
         return (

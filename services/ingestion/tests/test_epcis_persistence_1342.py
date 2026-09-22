@@ -724,6 +724,28 @@ class TestPrepareEventForPersistence:
         assert prepared["quantity_value"] == 10.0
         assert prepared["event_time"]
 
+    def test_missing_event_time_raises_422_instead_of_stamping_now(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No ``now()`` stand-in for an event time the partner never sent."""
+        monkeypatch.setattr(
+            persistence_mod,
+            "_normalize_epcis_to_cte",
+            lambda e: {
+                "event_type": "receiving",
+                "tlc": "TLC",
+                "epcis_event_type": "ObjectEvent",
+                "epcis_action": "OBSERVE",
+                "epcis_biz_step": "urn:epcglobal:cbv:bizstep:receiving",
+                "event_time": None,
+                "quantity": 4,
+            },
+        )
+        monkeypatch.setattr(persistence_mod, "_validate_as_fsma_event", lambda n, t: {"ok": True})
+
+        with pytest.raises(HTTPException) as exc:
+            persistence_mod._prepare_event_for_persistence("tenant-1", _VALID_EPCIS)
+        assert exc.value.status_code == 422
+        assert exc.value.detail["error"] == "missing_event_time"
+
 
 # ── _persist_prepared_event_in_session ────────────────────────────────────
 
@@ -731,6 +753,35 @@ class TestPrepareEventForPersistence:
 class TestPersistPreparedEventInSession:
     def _prep(self) -> dict:
         return persistence_mod._prepare_event_for_persistence("tenant-1", _VALID_EPCIS)
+
+    def test_stored_row_carries_only_what_the_payload_recorded(self) -> None:
+        """The legacy row used to store ``EPCIS Product <epc>`` as the product
+        description and ``"units"`` as the unit. It now stores the ILMD
+        description (or an empty cell) and the sent uom."""
+        _FakeCTEPersistence.idempotent_flag = False
+        event = dict(_VALID_EPCIS)
+        event["ilmd"] = {**_VALID_EPCIS["ilmd"], "cbvmda:productDescription": "Romaine Hearts"}
+        prepared = persistence_mod._prepare_event_for_persistence("tenant-1", event)
+        persistence_mod._persist_prepared_event_in_session(MagicMock(), "tenant-1", prepared)
+        stored = _FakeCTEPersistence.last_kwargs
+        assert stored["product_description"] == "Romaine Hearts"
+        assert stored["unit_of_measure"] == "CS"
+
+        persistence_mod._persist_prepared_event_in_session(MagicMock(), "tenant-1", self._prep())
+        assert _FakeCTEPersistence.last_kwargs["product_description"] == ""
+
+    def test_count_element_without_uom_is_stored_as_each_like_the_canonical_row(self) -> None:
+        """A quantityList element with no ``uom`` is a count of instances per
+        EPCIS CBV; the canonical row already records ``each`` for it."""
+        _FakeCTEPersistence.idempotent_flag = False
+        event = dict(_VALID_EPCIS)
+        event["extension"] = {
+            "quantityList": [{"epcClass": "urn:epc:class:lgtin:0614141.107346.ROM0042", "quantity": 7}]
+        }
+        prepared = persistence_mod._prepare_event_for_persistence("tenant-1", event)
+        persistence_mod._persist_prepared_event_in_session(MagicMock(), "tenant-1", prepared)
+        assert _FakeCTEPersistence.last_kwargs["unit_of_measure"] == "each"
+        assert _FakeCTEPersistence.last_kwargs["quantity"] == 7.0
 
     def test_non_idempotent_triggers_canonical_write(self) -> None:
         """Lines 662-685: non-idempotent store → canonical write fires."""

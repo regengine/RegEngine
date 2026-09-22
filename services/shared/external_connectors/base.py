@@ -86,6 +86,20 @@ class SyncResult:
         return len(self.errors) == 0 and self.events_rejected == 0
 
 
+def _optional_float(value: Any) -> Optional[float]:
+    """``float(value)`` when the source carried a numeric value, else ``None``.
+
+    Connectors used to substitute ``1.0`` here. A quantity the source never
+    reported stays unreported; the ingest schema rejects the event.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        return float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass
 class NormalizedCTEEvent:
     """A CTE event normalized from any external source into RegEngine format.
@@ -98,8 +112,12 @@ class NormalizedCTEEvent:
     cte_type: str  # harvesting, cooling, shipping, receiving, etc.
     traceability_lot_code: str
     product_description: str
-    quantity: float
-    unit_of_measure: str
+    # ``None`` when the source record carried no quantity or unit. The
+    # ingest schema (``IngestEvent``) requires both, so such an event is
+    # rejected there with a field-level error instead of being accepted
+    # with a ``1.0`` / ``"units"`` the source never reported.
+    quantity: Optional[float]
+    unit_of_measure: Optional[str]
     timestamp: str  # ISO 8601
     location_gln: Optional[str] = None
     location_name: Optional[str] = None

@@ -30,6 +30,7 @@ from .base import (
     ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
+    _optional_float,
 )
 
 logger = logging.getLogger("connector-csv-sftp")
@@ -320,13 +321,17 @@ class CSVSFTPConnector(IntegrationConnector):
         raw_cte = mapped.get("cte_type", self._default_cte_type)
         cte_type = CTE_TYPE_ALIASES.get(raw_cte.lower(), raw_cte.lower())
 
-        # Quantity
-        quantity = 1.0
+        # Quantity and unit: only what the row carries. A missing or
+        # non-numeric quantity is ``None`` (rejected at ingest), never 1.0.
+        quantity: Optional[float] = None
         if mapped.get("quantity"):
             try:
                 quantity = float(mapped["quantity"].replace(",", ""))
             except ValueError:
-                pass
+                logger.warning(
+                    "csv_row_quantity_invalid file=%s row=%s value=%r", source_file, row_num, mapped["quantity"]
+                )
+        unit_of_measure = mapped.get("unit_of_measure") or None
 
         # Timestamp
         timestamp = mapped.get("timestamp")
@@ -343,7 +348,7 @@ class CSVSFTPConnector(IntegrationConnector):
             traceability_lot_code=tlc,
             product_description=mapped.get("product_description", f"CSV Row {row_num}"),
             quantity=quantity,
-            unit_of_measure=mapped.get("unit_of_measure", "units"),
+            unit_of_measure=unit_of_measure,
             timestamp=timestamp,
             location_gln=mapped.get("location_gln"),
             location_name=mapped.get("location_name"),
@@ -357,8 +362,8 @@ class CSVSFTPConnector(IntegrationConnector):
             cte_type=raw_event.get("cte_type", self._default_cte_type),
             traceability_lot_code=raw_event.get("traceability_lot_code", ""),
             product_description=raw_event.get("product_description", ""),
-            quantity=float(raw_event.get("quantity", 1)),
-            unit_of_measure=raw_event.get("unit_of_measure", "units"),
+            quantity=_optional_float(raw_event.get("quantity")),
+            unit_of_measure=raw_event.get("unit_of_measure") or None,
             timestamp=raw_event.get("timestamp", datetime.now(timezone.utc).isoformat()),
             location_gln=raw_event.get("location_gln"),
             location_name=raw_event.get("location_name"),
