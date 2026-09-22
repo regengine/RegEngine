@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+Read `AGENTS.md` at the repository root before doing anything else. It is the
+canonical instruction file for this repo and is shared by every AI agent that
+works here. Also read `~/.config/agents/AGENTS.md` for machine-wide rules.
+
+Do not duplicate rules into this file. Edit `AGENTS.md` instead.
