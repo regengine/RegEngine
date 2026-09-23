@@ -1,4 +1,4 @@
-"""v121 — persist the event-level tri-state rules verdict.
+"""v125 — persist the event-level tri-state rules verdict.
 
 ``EvaluationSummary.compliant`` is tri-state (True / False / None) but
 only the per-rule rows reach ``fsma.rule_evaluations``. The summary-level
@@ -18,14 +18,14 @@ Rows evaluated before this migration keep NULL; consumers fall back to the
 per-rule rows (which now distinguish 'error' from 'fail') for those.
 
 Revision ID: 22a278f6dc78
-Revises: c6a120b4e901
+Revises: 26d215418784
 Create Date: 2026-09-10
 """
 
 from alembic import op
 
 revision = "22a278f6dc78"  # pragma: allowlist secret
-down_revision = "c6a120b4e901"  # pragma: allowlist secret
+down_revision = "26d215418784"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
