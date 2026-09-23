@@ -12,9 +12,17 @@ If a change does not protect or improve that spine, mark it as experimental, doc
 
 ## Workspace Map
 
-- `repo/` is the production RegEngine application repository.
-- `inflow-lab/` and `inflow-lab-fork/` are simulator/demo workspaces. Do not mix their code into `repo/` unless the task explicitly asks for an integration.
-- `petrefied-fork-android/`, `snapshots/`, and `_archive/` are local forks, extracted snapshots, or backups. Treat them as reference material only.
+- `repo/` (`~/Projects/RegEngine/repo`) is the production RegEngine application
+  repository and the default target for all work.
+- The directories beside it under `~/Projects/RegEngine/` are **git worktrees off
+  this same repo**, plus `_archive/` (snapshots and backups, reference only) and
+  `docs/` (founder/investor material). Many live worktrees exist across five
+  locations. Read `~/Projects/RegEngine/AGENTS.md` for the map, and run
+  `git worktree list` before editing so you know which checkout you are in.
+- The Inflow Lab simulator lives at `~/inflow-lab` (github.com/regengine/inflow-lab),
+  **not** beside this repo. A second checkout sits at
+  `~/Projects/conductor/repos/inflow-lab`. Do not mix Inflow Lab code into
+  `repo/` unless the task explicitly asks for an integration.
 
 ## Source Of Truth
 
@@ -61,6 +69,11 @@ python3 -m pytest services/ingestion/tests -q --no-cov
 python3 -m pytest services/admin/tests -q --no-cov
 cd frontend && npm run lint
 cd frontend && npm run test:run
+cd frontend && npm run build
 ```
+
+`frontend/` has no `typecheck` script. Use `npm run lint` (eslint + design-lint)
+and `npm run build` for type errors. Full script list is in
+`frontend/package.json`.
 
 Some integration tests require PostgreSQL, Redis, Neo4j, Docker, or live services. If a command is blocked by local infrastructure or secrets, say so explicitly.
