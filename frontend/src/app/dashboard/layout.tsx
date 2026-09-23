@@ -3,10 +3,21 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { QueryClientContext } from '@tanstack/react-query';
 import { DashboardBreadcrumb } from '@/components/dashboard/breadcrumb';
 import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
+import { Container } from '@/components/layout/container';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
+import { useSystemStatus } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
+import { clsx } from 'clsx';
 import { experimentalFeaturesEnabled, isExperimentalPageEnabled } from '@/lib/experimental-features';
+import type { LucideIcon } from 'lucide-react';
 import {
     BarChart3,
     Archive,
@@ -25,7 +36,8 @@ import {
     Activity,
     ChevronRight,
     ChevronDown,
-    LogOut,
+    Menu,
+    X,
     Zap,
     AlertTriangle,
     FileCheck,
@@ -46,7 +58,7 @@ import {
 interface NavItem {
     label: string;
     href: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: LucideIcon;
     sysadminOnly?: boolean;
     /** Hidden unless NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES is set (backend router auto-disabled in prod) */
     experimental?: boolean;
@@ -202,6 +214,56 @@ function isNavItemActive(pathname: string, href: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Shared recipes (SPEC §3.3)
+// ---------------------------------------------------------------------------
+
+const FOCUS_RING =
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-1 focus-visible:ring-offset-re-ring-offset';
+
+/** 36px row, inset tint when active, 2px brand rail on the left edge. */
+function navItemClass(active: boolean) {
+    return clsx(
+        'relative flex h-9 items-center gap-2.5 rounded-md px-3 text-ui transition-colors duration-120 motion-reduce:transition-none',
+        FOCUS_RING,
+        active
+            ? 'bg-re-surface-inset font-medium text-re-text-primary before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-re-brand before:content-[""]'
+            : 'text-re-text-secondary hover:bg-re-surface-inset hover:text-re-text-primary',
+    );
+}
+
+const footerLinkClass = clsx(
+    'flex items-center rounded-md px-3 py-1.5 text-small text-re-text-secondary transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary motion-reduce:transition-none',
+    FOCUS_RING,
+);
+
+function NavLinkItem({
+    item,
+    pathname,
+    role,
+    tabIndex,
+}: {
+    item: NavItem;
+    pathname: string;
+    role?: string;
+    tabIndex?: number;
+}) {
+    const Icon = item.icon;
+    const isActive = isNavItemActive(pathname, item.href);
+    return (
+        <Link
+            href={item.href}
+            role={role}
+            tabIndex={tabIndex}
+            aria-current={isActive ? 'page' : undefined}
+            className={navItemClass(isActive)}
+        >
+            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            <span className="flex-1 truncate">{item.label}</span>
+        </Link>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // CollapsibleNavSection component
 // ---------------------------------------------------------------------------
 
@@ -232,51 +294,90 @@ function CollapsibleNavSection({
             <button
                 type="button"
                 onClick={onToggle}
-                className="flex w-full items-center gap-1.5 px-5 py-1.5 group cursor-pointer select-none"
+                className={clsx(
+                    'flex w-full cursor-pointer select-none items-center gap-1.5 rounded-md px-3 py-2 text-label uppercase text-re-text-muted transition-colors duration-120 hover:text-re-text-secondary motion-reduce:transition-none',
+                    FOCUS_RING,
+                )}
                 aria-expanded={expanded}
             >
                 {expanded ? (
-                    <ChevronDown className="h-3 w-3 text-[var(--re-text-disabled)] transition-transform duration-200" />
+                    <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                 ) : (
-                    <ChevronRight className="h-3 w-3 text-[var(--re-text-disabled)] transition-transform duration-200" />
+                    <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                 )}
-                <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">
-                    {section.title}
-                </span>
+                <span>{section.title}</span>
             </button>
 
             {/* Collapsible items */}
             <div
-                className="overflow-hidden transition-all duration-200"
+                className="overflow-hidden transition-all duration-200 motion-reduce:transition-none"
                 style={{ maxHeight: expanded ? (height ?? 1000) : 0, opacity: expanded ? 1 : 0 }}
             >
-                <div ref={contentRef} className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
-                    {section.items.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = isNavItemActive(pathname, item.href);
-                        return (
-                            <Link
-                                key={item.href + item.label}
-                                href={item.href}
-                                role="listitem"
-                                tabIndex={expanded ? 0 : -1}
-                                aria-current={isActive ? 'page' : undefined}
-                                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all min-h-[36px] ${
-                                    isActive
-                                        ? 'bg-[var(--re-brand)] text-white font-medium shadow-sm'
-                                        : 'text-[var(--re-text-muted)] hover:bg-[var(--re-brand-muted)] hover:text-foreground'
-                                }`}
-                            >
-                                <Icon className="h-4 w-4 flex-shrink-0" />
-                                <span className="flex-1">{item.label}</span>
-                                {isActive && <ChevronRight className="h-3 w-3 opacity-50" />}
-                            </Link>
-                        );
-                    })}
+                <div ref={contentRef} className="space-y-0.5 pb-1 pl-2" role="list">
+                    {section.items.map((item) => (
+                        <NavLinkItem
+                            key={item.href + item.label}
+                            item={item}
+                            pathname={pathname}
+                            role="listitem"
+                            tabIndex={expanded ? 0 : -1}
+                        />
+                    ))}
                 </div>
             </div>
         </div>
     );
+}
+
+// ---------------------------------------------------------------------------
+// Status strip (SPEC §3.3) — the single topbar
+// ---------------------------------------------------------------------------
+
+const HEALTH_BADGE: Record<string, { state: ComplianceState; label: string }> = {
+    loading: { state: 'in-progress', label: 'Checking...' },
+    operational: { state: 'compliant', label: 'All Systems Operational' },
+    degraded: { state: 'at-risk', label: 'Degraded Performance' },
+    disruption: { state: 'non-compliant', label: 'Services Unreachable' },
+};
+
+function formatSyncTime(timestamp: number): string {
+    return `${new Date(timestamp).toISOString().slice(11, 16)}Z`;
+}
+
+function ServiceHealthReadout() {
+    const { data: systemStatus, isLoading, dataUpdatedAt } = useSystemStatus();
+
+    let key: keyof typeof HEALTH_BADGE = 'disruption';
+    if (isLoading && !systemStatus) key = 'loading';
+    else if (systemStatus?.overall_status === 'healthy') key = 'operational';
+    else if (systemStatus?.overall_status === 'degraded') key = 'degraded';
+
+    const badge = HEALTH_BADGE[key];
+
+    return (
+        <>
+            <StatusBadge state={badge.state} label={badge.label} size="sm" className="hidden md:inline-flex" />
+            {dataUpdatedAt ? (
+                <time
+                    dateTime={new Date(dataUpdatedAt).toISOString()}
+                    className="hidden font-mono text-small text-re-text-muted lg:inline"
+                >
+                    {formatSyncTime(dataUpdatedAt)}
+                </time>
+            ) : null}
+        </>
+    );
+}
+
+/**
+ * The health readout polls through React Query. Rendering the shell without a
+ * QueryClientProvider (unit tests mount the layout directly) must not throw, so
+ * the provider is probed before the hook is reached.
+ */
+function ServiceHealth() {
+    const queryClient = React.useContext(QueryClientContext);
+    if (!queryClient) return null;
+    return <ServiceHealthReadout />;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,39 +386,51 @@ function CollapsibleNavSection({
 
 function DashboardShellSkeleton() {
     return (
-        <div className="flex flex-col min-h-screen re-app-shell" aria-busy="true">
+        <div className="re-app-shell flex min-h-screen flex-col" aria-busy="true">
             <div className="flex flex-1">
-                <aside className="hidden md:flex flex-col w-[244px] border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0">
-                    <div className="p-4 border-b border-[var(--re-border-subtle)]">
-                        <div className="h-8 w-32 rounded bg-muted animate-pulse" />
+                <aside className="hidden w-[244px] flex-shrink-0 flex-col border-r border-re-border-subtle bg-re-surface-elevated md:flex">
+                    <div className="flex h-14 items-center border-b border-re-border-subtle px-4">
+                        <Skeleton className="h-5 w-32" />
                     </div>
-                    <div className="flex-1 p-3 space-y-2">
+                    <div className="flex-1 space-y-1.5 p-3">
                         {[1, 2, 3, 4, 5, 6, 7].map((item) => (
-                            <div key={item} className="h-9 rounded-md bg-muted animate-pulse" />
+                            <Skeleton key={item} className="h-9 rounded-md" />
                         ))}
                     </div>
-                    <div className="p-3 border-t border-[var(--re-border-subtle)]">
-                        <div className="h-20 rounded-md bg-muted animate-pulse" />
+                    <div className="space-y-1.5 border-t border-re-border-subtle p-3">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-4 w-24" />
                     </div>
                 </aside>
-                <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--re-sticky-bg)] border-b border-[var(--re-surface-border)] shadow-sm">
-                    <div className="flex gap-2 px-3 py-2">
-                        {[1, 2, 3].map((item) => (
-                            <div key={item} className="h-9 w-24 rounded-md bg-muted animate-pulse" />
-                        ))}
-                    </div>
-                </div>
-                <main className="flex-1 md:pt-0 pt-[52px] overflow-y-auto">
-                    <div className="h-10 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-base)]" />
-                    <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-pulse">
-                        <div className="h-8 w-44 rounded bg-muted" />
-                        <div className="h-[244px] rounded-lg bg-muted" />
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-2 h-[360px] rounded-lg bg-muted" />
-                            <div className="h-[360px] rounded-lg bg-muted" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex h-12 items-center gap-2 border-b border-re-border-subtle bg-re-surface-base px-3 md:h-11 md:px-4">
+                        <Skeleton className="h-4 w-40" />
+                        <div className="ml-auto flex items-center gap-2">
+                            <Skeleton className="hidden h-5 w-32 rounded-full md:block" />
+                            <Skeleton className="h-9 w-9 rounded-md" />
                         </div>
                     </div>
-                </main>
+                    <div className="flex-1 pb-20 md:pb-0">
+                        <Container width="app" className="space-y-6 py-6">
+                            <Skeleton className="h-8 w-44" />
+                            <Skeleton className="h-[244px] rounded-lg" />
+                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                                <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
+                                <Skeleton className="h-[360px] rounded-lg" />
+                            </div>
+                        </Container>
+                    </div>
+                </div>
+            </div>
+            <div className="fixed inset-x-0 bottom-0 border-t border-re-border-subtle bg-re-surface-elevated pb-[env(safe-area-inset-bottom,0px)] md:hidden">
+                <div className="flex h-14 items-stretch">
+                    {[1, 2, 3, 4, 5].map((item) => (
+                        <div key={item} className="flex flex-1 flex-col items-center justify-center gap-1">
+                            <Skeleton className="h-5 w-5 rounded-md" />
+                            <Skeleton className="h-2 w-10" />
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -329,10 +442,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { demoMode, isAuthenticated, isHydrated, logout, user } = useAuth();
     const isSysadmin = Boolean(user?.is_sysadmin);
     const navSections = React.useMemo(() => visibleSections(isSysadmin), [isSysadmin]);
+    const topItems = React.useMemo(
+        () => TOP_ITEMS.filter((item) => isNavItemVisible(item, isSysadmin)),
+        [isSysadmin],
+    );
 
     // ------ Collapsible section state with localStorage persistence ------
     const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({});
     const initializedRef = React.useRef(false);
+
+    // ------ Mobile nav sheet ------
+    const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
     // Hydrate from localStorage + auto-expand sections containing the active route
     React.useEffect(() => {
@@ -372,6 +492,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     }, [expandedSections]);
 
+    // The sheet is a navigation surface: following a link closes it.
+    React.useEffect(() => {
+        setMobileNavOpen(false);
+    }, [pathname]);
+
+    React.useEffect(() => {
+        if (!mobileNavOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setMobileNavOpen(false);
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [mobileNavOpen]);
+
     const toggleSection = React.useCallback((key: string) => {
         setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
     }, []);
@@ -387,167 +521,224 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return <DashboardShellSkeleton />;
     }
 
+    // Arrow keys traverse nav items (MEDIUM #12)
+    const onNavKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        const links = Array.from(e.currentTarget.querySelectorAll<HTMLAnchorElement>('a[href]'));
+        const current = links.findIndex(l => l === document.activeElement);
+        let next = current;
+        if (e.key === 'ArrowDown') next = Math.min(current + 1, links.length - 1);
+        else if (e.key === 'ArrowUp') next = Math.max(current - 1, 0);
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = links.length - 1;
+        links[next]?.focus();
+    };
+
+    const sectionList = navSections.map((section) => (
+        <CollapsibleNavSection
+            key={section.key}
+            section={section}
+            expanded={!!expandedSections[section.key]}
+            onToggle={() => toggleSection(section.key)}
+            pathname={pathname}
+        />
+    ));
+
     return (
-        <div className="flex flex-col min-h-screen re-app-shell">
+        <div className="re-app-shell flex min-h-screen flex-col">
             {demoMode && (
-                <div className="bg-re-warning-muted0/90 text-black text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-2 z-50">
-                    <span>Sandbox mode — using sample data for demonstration.</span>
-                    <Link href="/ingest" className="underline hover:no-underline">
-                        Connect real data to exit sample mode
-                    </Link>
-                </div>
+                <Callout tone="warning" className="rounded-none border-r-0 border-t-0 px-4 py-2 text-small">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>Sandbox mode — using sample data for demonstration.</span>
+                        <Link href="/ingest" className="underline hover:no-underline">
+                            Connect real data to exit sample mode
+                        </Link>
+                    </span>
+                </Callout>
             )}
             <div className="flex flex-1">
-            {/* Sidebar */}
-            <aside aria-label="Dashboard sidebar" className="hidden md:flex flex-col w-[244px] border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex-shrink-0 shadow-sm">
-                {/* Brand */}
-                <div className="p-4 border-b border-[var(--re-border-subtle)]">
-                    <Link href="/dashboard" className="flex items-center gap-2.5 group">
-                        <div className="w-7 h-7 rounded-md bg-[var(--re-brand)] flex items-center justify-center shadow-sm">
-                            <Activity className="h-4 w-4 text-white" />
-                        </div>
-                        <div>
-                            <span className="font-bold text-sm block leading-tight">RegEngine</span>
-                            <span className="text-[10px] text-[var(--re-text-disabled)] leading-tight">Readiness console</span>
-                        </div>
-                    </Link>
-                </div>
-
-                {/* Nav sections */}
-                {/* MEDIUM #12: Keyboard navigation — arrow keys traverse nav items */}
-                <nav
-                    aria-label="Dashboard navigation"
-                    className="flex-1 py-3 overflow-y-auto"
-                    role="navigation"
-                    onKeyDown={(e) => {
-                        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
-                        e.preventDefault();
-                        const links = Array.from(e.currentTarget.querySelectorAll<HTMLAnchorElement>('a[href]'));
-                        const current = links.findIndex(l => l === document.activeElement);
-                        let next = current;
-                        if (e.key === 'ArrowDown') next = Math.min(current + 1, links.length - 1);
-                        else if (e.key === 'ArrowUp') next = Math.max(current - 1, 0);
-                        else if (e.key === 'Home') next = 0;
-                        else if (e.key === 'End') next = links.length - 1;
-                        links[next]?.focus();
-                    }}
+                {/* Sidebar */}
+                <aside
+                    aria-label="Dashboard sidebar"
+                    className="hidden w-[244px] flex-shrink-0 flex-col border-r border-re-border-subtle bg-re-surface-elevated md:sticky md:top-0 md:flex md:h-screen"
                 >
-                    {/* Always-visible top items */}
-                    <div className="px-2.5 space-y-0.5" role="list">
-                        {TOP_ITEMS.filter((item) => isNavItemVisible(item, isSysadmin)).map((item) => {
-                            const Icon = item.icon;
-                            const isActive = isNavItemActive(pathname, item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    role="listitem"
-                                    aria-current={isActive ? 'page' : undefined}
-                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all min-h-[36px] ${
-                                        isActive
-                                        ? 'bg-[var(--re-brand)] text-white font-medium shadow-sm'
-                                        : 'text-[var(--re-text-muted)] hover:bg-[var(--re-brand-muted)] hover:text-foreground'
-                                    }`}
-                                >
-                                    <Icon className="h-4 w-4 flex-shrink-0" />
-                                    <span className="flex-1">{item.label}</span>
-                                    {isActive && <ChevronRight className="h-3 w-3 opacity-50" />}
-                                </Link>
-                            );
-                        })}
+                    {/* Brand */}
+                    <div className="flex h-14 flex-shrink-0 items-center border-b border-re-border-subtle px-4">
+                        <Link href="/dashboard" className={clsx('flex items-center rounded-md', FOCUS_RING)}>
+                            <RegEngineWordmark size="sm" />
+                        </Link>
                     </div>
 
-                    {/* Divider between top items and collapsible sections */}
-                    <div className="mx-4 my-3 border-t border-[var(--re-border-subtle)]" />
-
-                    {/* Collapsible sections */}
-                    {navSections.map((section) => (
-                        <CollapsibleNavSection
-                            key={section.key}
-                            section={section}
-                            expanded={!!expandedSections[section.key]}
-                            onToggle={() => toggleSection(section.key)}
-                            pathname={pathname}
-                        />
-                    ))}
-                </nav>
-
-                {/* Footer */}
-                <div className="p-3 border-t border-[var(--re-border-subtle)]">
-                    {user?.email && (
-                        <div
-                            aria-label="Signed in user"
-                            className="mb-2 truncate rounded-md border border-[var(--re-border-subtle)] bg-[var(--re-surface-base)] px-3 py-2 text-xs text-[var(--re-text-muted)]"
-                            title={user.email}
-                        >
-                            {user.email}
+                    {/* Nav sections */}
+                    {/* MEDIUM #12: Keyboard navigation — arrow keys traverse nav items */}
+                    <nav
+                        aria-label="Dashboard navigation"
+                        className="flex-1 overflow-y-auto px-2 py-3"
+                        role="navigation"
+                        onKeyDown={onNavKeyDown}
+                    >
+                        {/* Always-visible top items */}
+                        <div className="space-y-0.5" role="list">
+                            {topItems.map((item) => (
+                                <NavLinkItem key={item.href} item={item} pathname={pathname} role="listitem" />
+                            ))}
                         </div>
-                    )}
-                        <Link href="/dashboard/settings" className="block px-3 py-2.5 rounded-md bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] hover:border-[var(--re-border-strong)] hover:bg-[var(--re-surface-elevated)] transition-colors">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Workspace</div>
-                                <div className="text-xs font-semibold mt-0.5">Settings & usage</div>
+
+                        {/* Divider between top items and collapsible sections */}
+                        <div className="my-3 border-t border-re-border-subtle" />
+
+                        {/* Collapsible sections */}
+                        {sectionList}
+                    </nav>
+
+                    {/* Footer */}
+                    <div className="flex-shrink-0 border-t border-re-border-subtle p-2">
+                        {user?.email && (
+                            <div
+                                aria-label="Signed in user"
+                                className="truncate px-3 py-1.5 font-mono text-small text-re-text-muted"
+                                title={user.email}
+                            >
+                                {user.email}
                             </div>
-                            <div className="w-6 h-6 rounded-md bg-[var(--re-brand)]/10 flex items-center justify-center">
-                                <Zap className="h-3 w-3 text-[var(--re-brand)]" />
+                        )}
+                        <div className="flex flex-col">
+                            <Link href="/dashboard/settings" className={footerLinkClass}>
+                                Settings & usage
+                            </Link>
+                            <Link href="/onboarding" className={footerLinkClass}>
+                                Onboarding
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    await logout();
+                                    router.replace('/login');
+                                }}
+                                className={clsx(footerLinkClass, 'text-left')}
+                            >
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+
+                <div className="flex min-w-0 flex-1 flex-col">
+                    {/* Status strip — the only topbar (SPEC §3.3) */}
+                    <header className="sticky top-0 z-[var(--re-z-sticky)] border-b border-re-border-subtle bg-re-surface-base/95 backdrop-blur">
+                        <div className="flex h-12 items-center gap-2 px-3 md:h-11 md:px-4">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="-ml-1 md:hidden"
+                                aria-label="Open navigation menu"
+                                aria-expanded={mobileNavOpen}
+                                aria-controls="dashboard-mobile-nav"
+                                onClick={() => setMobileNavOpen(true)}
+                            >
+                                <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+                            </Button>
+                            <Link
+                                href="/dashboard"
+                                className={clsx('flex shrink-0 items-center rounded-md md:hidden', FOCUS_RING)}
+                            >
+                                <RegEngineWordmark size="sm" />
+                            </Link>
+                            <DashboardBreadcrumb />
+                            <div className="ml-auto flex min-w-0 items-center gap-2">
+                                <ServiceHealth />
+                                <ThemeToggle />
+                                {user?.email && (
+                                    <span
+                                        className="hidden max-w-[200px] truncate font-mono text-small text-re-text-muted xl:inline"
+                                        title={user.email}
+                                    >
+                                        {user.email}
+                                    </span>
+                                )}
                             </div>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">Workspace and billing settings</div>
-                    </Link>
-                    <div className="flex items-center gap-2 mt-2">
-                        <Link
-                            href="/onboarding"
-                            className="flex-1 text-[11px] text-center py-1.5 rounded-md text-[var(--re-text-disabled)] hover:text-[var(--re-text-muted)] hover:bg-[var(--re-brand-muted)] transition-colors"
-                        >
-                            Onboarding
-                        </Link>
-                        <button
-                            onClick={async () => {
-                                await logout();
-                                router.replace('/login');
-                            }}
-                            className="flex items-center justify-center gap-1 flex-1 py-1.5 rounded-md text-[11px] text-[var(--re-text-disabled)] hover:text-destructive hover:bg-destructive/5 transition-colors"
-                        >
-                            <LogOut className="h-3 w-3" />
-                            Sign Out
-                        </button>
+                    </header>
+
+                    {/* Main content. overflow-x keeps a wide table inside the
+                        content column instead of widening the whole page. */}
+                    <div className="min-w-0 flex-1 overflow-x-auto pb-20 md:pb-0">
+                        <DashboardErrorBoundary>
+                            {children}
+                        </DashboardErrorBoundary>
                     </div>
                 </div>
-            </aside>
+            </div>
 
-            {/* Mobile top nav — limited to 5 always-visible items */}
-            <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--re-sticky-bg)] border-b border-[var(--re-surface-border)] shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-                <nav aria-label="Dashboard quick navigation" className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto no-scrollbar scrollbar-none">
+            {/* Mobile bottom tab bar — same links, same order, new position */}
+            <nav
+                aria-label="Dashboard quick navigation"
+                className="fixed inset-x-0 bottom-0 z-[var(--re-z-nav)] border-t border-re-border-subtle bg-re-surface-elevated pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+            >
+                <div className="flex h-14 items-stretch">
                     {MOBILE_NAV_ITEMS.filter((item) => isNavItemVisible(item, isSysadmin)).map((item) => {
                         const Icon = item.icon;
-                        const isActive = pathname === item.href;
+                        const isActive = isNavItemActive(pathname, item.href);
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-md text-xs font-medium whitespace-nowrap border transition-all active:scale-[0.96] ${
-                                    isActive
-                                        ? 'bg-[var(--re-brand)] text-[var(--re-surface-base)] border-[var(--re-brand)]'
-                                        : 'border-[var(--re-border-default)] text-[var(--re-text-muted)]'
-                                }`}
+                                aria-current={isActive ? 'page' : undefined}
+                                className={clsx(
+                                    'flex min-h-[44px] min-w-[44px] flex-1 flex-col items-center justify-center gap-1 px-1 text-label transition-colors duration-120 motion-reduce:transition-none',
+                                    FOCUS_RING,
+                                    isActive ? 'font-medium text-re-brand' : 'text-re-text-muted',
+                                )}
                             >
-                                <Icon className="h-3.5 w-3.5" />
-                                {item.label}
+                                <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+                                <span className="max-w-full truncate">{item.label}</span>
                             </Link>
                         );
                     })}
-                </nav>
-            </div>
+                </div>
+            </nav>
 
-            {/* Main content */}
-            <main className="flex-1 md:pt-0 pt-[52px] overflow-y-auto">
-                <DashboardBreadcrumb />
-                <DashboardErrorBoundary>
-                    {children}
-                </DashboardErrorBoundary>
-            </main>
-        </div>
+            {/* Mobile nav sheet — TOP_ITEMS plus the collapsible sections */}
+            {mobileNavOpen && (
+                <div className="fixed inset-0 z-[var(--re-z-nav)] md:hidden">
+                    <div
+                        className="absolute inset-0 bg-re-surface-overlay"
+                        aria-hidden="true"
+                        onClick={() => setMobileNavOpen(false)}
+                    />
+                    <div
+                        id="dashboard-mobile-nav"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Dashboard navigation menu"
+                        className="relative flex h-full w-[min(20rem,86vw)] flex-col border-r border-re-border-subtle bg-re-surface-elevated"
+                    >
+                        <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-re-border-subtle px-3">
+                            <RegEngineWordmark size="sm" />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Close navigation menu"
+                                onClick={() => setMobileNavOpen(false)}
+                            >
+                                <X className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+                            </Button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-2 py-3" onKeyDown={onNavKeyDown}>
+                            <div className="space-y-0.5">
+                                {topItems.map((item) => (
+                                    <NavLinkItem key={item.href} item={item} pathname={pathname} />
+                                ))}
+                            </div>
+                            <div className="my-3 border-t border-re-border-subtle" />
+                            {sectionList}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

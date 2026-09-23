@@ -1,15 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Callout } from '@/components/ui/callout';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { StatTile } from '@/components/ui/stat-tile';
 import { useInitializeLabelBatch } from '@/hooks/use-api';
-import { Package, QrCode, Printer, CheckCircle } from 'lucide-react';
+import { Package, Printer, CheckCircle } from 'lucide-react';
 import { useTenant } from '@/lib/tenant-context';
 import type { LabelFormData, LabelBatchInitResponse } from '@/types/labels';
 import dynamic from 'next/dynamic';
@@ -19,8 +23,8 @@ const LabelPdfDownloadSection = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex-1 flex items-center justify-center h-10 rounded-md bg-muted animate-pulse">
-        <span className="text-xs text-muted-foreground">Loading PDF renderer...</span>
+      <div className="flex h-10 flex-1 items-center justify-center rounded-md bg-re-surface-inset">
+        <span className="text-small text-re-text-tertiary">Loading PDF renderer...</span>
       </div>
     ),
   }
@@ -161,314 +165,299 @@ export default function LabelsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <PageContainer>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
-              <QrCode className="h-8 w-8 text-re-info dark:text-re-info" />
+    <PageContainer>
+      <PageHeader
+        title="Traceability Label Generator"
+        description="Generate FSMA 204 compliant labels with QR codes and ZPL for thermal printing"
+      />
+
+      {/* Input Form */}
+      {step === 'input' && (
+        <Card>
+          <CardHeader className="flex-col items-stretch gap-1">
+            <CardTitle>Label Batch Information</CardTitle>
+            <CardDescription>
+              Enter product and traceability information to generate labels
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {error && (
+              <Callout tone="danger" role="alert">
+                {error}
+              </Callout>
+            )}
+            {/* Packer Information */}
+            <div className="space-y-4">
+              <h3 className="text-subheading text-re-text-primary">Packer Information</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Packer GLN" htmlFor="packer-gln" required>
+                  <Input
+                    id="packer-gln"
+                    value={formData.packerGln}
+                    onChange={(e) => handleInputChange('packerGln', e.target.value)}
+                    placeholder="0614141000001"
+                    required
+                    aria-required="true"
+                    mono
+                  />
+                </Field>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-bold">Traceability Label Generator</h1>
-              <p className="text-muted-foreground mt-1">
-                Generate FSMA 204 compliant labels with QR codes and ZPL for thermal printing
+
+            {/* Product Information */}
+            <div className="space-y-4">
+              <h3 className="text-subheading text-re-text-primary">Product Information</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="GTIN" htmlFor="gtin" required>
+                  <Input
+                    id="gtin"
+                    value={formData.gtin}
+                    onChange={(e) => handleInputChange('gtin', e.target.value)}
+                    placeholder="00000012345678"
+                    required
+                    aria-required="true"
+                    mono
+                  />
+                </Field>
+                <Field label="Product Description" htmlFor="product-desc" required>
+                  <Input
+                    id="product-desc"
+                    value={formData.productDescription}
+                    onChange={(e) => handleInputChange('productDescription', e.target.value)}
+                    placeholder="Organic Tomatoes"
+                    required
+                    aria-required="true"
+                  />
+                </Field>
+                <Field label="PLU (Optional)" htmlFor="plu">
+                  <Input
+                    id="plu"
+                    value={formData.plu}
+                    onChange={(e) => handleInputChange('plu', e.target.value)}
+                    placeholder="4011"
+                    mono
+                  />
+                </Field>
+                <Field label="Expected Units" htmlFor="expected-units" required>
+                  <Input
+                    id="expected-units"
+                    type="number"
+                    value={formData.expectedUnits}
+                    onChange={(e) => handleInputChange('expectedUnits', parseInt(e.target.value))}
+                    min={1}
+                    required
+                    aria-required="true"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {/* Traceability Information */}
+            <div className="space-y-4">
+              <h3 className="text-subheading text-re-text-primary">Traceability Information</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Lot Number" htmlFor="lot-number" required>
+                  <Input
+                    id="lot-number"
+                    value={formData.lotNumber}
+                    onChange={(e) => handleInputChange('lotNumber', e.target.value)}
+                    placeholder="LOT-2024-001"
+                    required
+                    aria-required="true"
+                    mono
+                  />
+                </Field>
+                <Field label="Pack Date" htmlFor="pack-date" required>
+                  <Input
+                    id="pack-date"
+                    type="date"
+                    value={formData.packDate}
+                    onChange={(e) => handleInputChange('packDate', e.target.value)}
+                    required
+                    aria-required="true"
+                  />
+                </Field>
+                <Field label="Grower GLN (Optional)" htmlFor="grower-gln">
+                  <Input
+                    id="grower-gln"
+                    value={formData.growerGln}
+                    onChange={(e) => handleInputChange('growerGln', e.target.value)}
+                    placeholder="0614141000002"
+                    mono
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {/* Label Configuration */}
+            <div className="space-y-4">
+              <h3 className="text-subheading text-re-text-primary">Label Configuration</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <Field label="Quantity" htmlFor="quantity" required>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={formData.quantity}
+                    onChange={(e) => handleInputChange('quantity', parseInt(e.target.value))}
+                    min={1}
+                    max={10000}
+                    required
+                    aria-required="true"
+                  />
+                </Field>
+                <Field label="Unit of Measure" htmlFor="uom">
+                  <select
+                    id="uom"
+                    className={fieldControlClasses}
+                    value={formData.unitOfMeasure}
+                    onChange={(e) => handleInputChange('unitOfMeasure', e.target.value)}
+                  >
+                    <option value="EA">Each (EA)</option>
+                    <option value="LBS">Pounds (LBS)</option>
+                    <option value="CASE">Case</option>
+                  </select>
+                </Field>
+                <Field label="Packaging Level" htmlFor="packaging-level">
+                  <select
+                    id="packaging-level"
+                    className={fieldControlClasses}
+                    value={formData.packagingLevel}
+                    onChange={(e) => handleInputChange('packagingLevel', e.target.value)}
+                  >
+                    <option value="item">Item</option>
+                    <option value="case">Case</option>
+                    <option value="pallet">Pallet</option>
+                  </select>
+                </Field>
+              </div>
+            </div>
+
+            <Button
+              size="lg"
+              onClick={handleGenerate}
+              loading={isPending}
+              disabled={
+                !formData.packerGln ||
+                !formData.gtin ||
+                !formData.productDescription ||
+                !formData.lotNumber ||
+                !formData.packDate ||
+                !formData.quantity
+              }
+              className="w-full"
+              leadingIcon={<Package strokeWidth={1.75} aria-hidden="true" />}
+            >
+              Generate Labels
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Generating State */}
+      {step === 'generating' && (
+        <Card>
+          <CardContent className="py-16" aria-busy="true">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <Spinner size="lg" />
+              <p className="text-subheading text-re-text-primary">Generating labels...</p>
+              <p className="text-ui text-re-text-tertiary">
+                Creating {formData.quantity} labels with QR codes
               </p>
             </div>
-          </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Input Form */}
-          {step === 'input' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Label Batch Information</CardTitle>
-                <CardDescription>
-                  Enter product and traceability information to generate labels
+      {/* Preview State */}
+      {step === 'preview' && labelResponse && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                  Labels Generated Successfully
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Batch ID: {labelResponse.batch_id}
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {error && (
-                  <div className="p-3 text-sm text-re-danger bg-re-danger-muted dark:bg-re-danger/10 border border-re-danger dark:border-re-danger rounded-md">
-                    {error}
-                  </div>
-                )}
-                {/* Packer Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Packer Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="packer-gln">Packer GLN *</label>
-                      <Input
-                        id="packer-gln"
-                        value={formData.packerGln}
-                        onChange={(e) => handleInputChange('packerGln', e.target.value)}
-                        placeholder="0614141000001"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Product Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Product Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="gtin">GTIN *</label>
-                      <Input
-                        id="gtin"
-                        value={formData.gtin}
-                        onChange={(e) => handleInputChange('gtin', e.target.value)}
-                        placeholder="00000012345678"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="product-desc">Product Description *</label>
-                      <Input
-                        id="product-desc"
-                        value={formData.productDescription}
-                        onChange={(e) => handleInputChange('productDescription', e.target.value)}
-                        placeholder="Organic Tomatoes"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="plu">PLU (Optional)</label>
-                      <Input
-                        id="plu"
-                        value={formData.plu}
-                        onChange={(e) => handleInputChange('plu', e.target.value)}
-                        placeholder="4011"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="expected-units">Expected Units *</label>
-                      <Input
-                        id="expected-units"
-                        type="number"
-                        value={formData.expectedUnits}
-                        onChange={(e) => handleInputChange('expectedUnits', parseInt(e.target.value))}
-                        min={1}
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Traceability Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Traceability Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="lot-number">Lot Number *</label>
-                      <Input
-                        id="lot-number"
-                        value={formData.lotNumber}
-                        onChange={(e) => handleInputChange('lotNumber', e.target.value)}
-                        placeholder="LOT-2024-001"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="pack-date">Pack Date *</label>
-                      <Input
-                        id="pack-date"
-                        type="date"
-                        value={formData.packDate}
-                        onChange={(e) => handleInputChange('packDate', e.target.value)}
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="grower-gln">Grower GLN (Optional)</label>
-                      <Input
-                        id="grower-gln"
-                        value={formData.growerGln}
-                        onChange={(e) => handleInputChange('growerGln', e.target.value)}
-                        placeholder="0614141000002"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Label Configuration */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Label Configuration</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="quantity">Quantity *</label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        value={formData.quantity}
-                        onChange={(e) => handleInputChange('quantity', parseInt(e.target.value))}
-                        min={1}
-                        max={10000}
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="uom">Unit of Measure</label>
-                      <select
-                        id="uom"
-                        className="w-full p-2 border rounded-md"
-                        value={formData.unitOfMeasure}
-                        onChange={(e) => handleInputChange('unitOfMeasure', e.target.value)}
-                      >
-                        <option value="EA">Each (EA)</option>
-                        <option value="LBS">Pounds (LBS)</option>
-                        <option value="CASE">Case</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2" htmlFor="packaging-level">Packaging Level</label>
-                      <select
-                        id="packaging-level"
-                        className="w-full p-2 border rounded-md"
-                        value={formData.packagingLevel}
-                        onChange={(e) => handleInputChange('packagingLevel', e.target.value)}
-                      >
-                        <option value="item">Item</option>
-                        <option value="case">Case</option>
-                        <option value="pallet">Pallet</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleGenerate}
-                  disabled={
-                    !formData.packerGln ||
-                    !formData.gtin ||
-                    !formData.productDescription ||
-                    !formData.lotNumber ||
-                    !formData.packDate ||
-                    !formData.quantity
+              </div>
+              <Button onClick={handleReset} variant="secondary">
+                Generate New Batch
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <StatTile
+                  label="TLC"
+                  value={<span className="font-mono text-[0.8125rem]">{labelResponse.tlc}</span>}
+                />
+                <StatTile
+                  label="Serial Range"
+                  value={
+                    <span className="font-mono text-[0.8125rem]">
+                      {labelResponse.reserved_range?.start || 'N/A'} - {labelResponse.reserved_range?.end || 'N/A'}
+                    </span>
                   }
-                  className="w-full"
+                />
+                <StatTile label="Labels Generated" value={labelResponse.labels.length} />
+              </div>
+
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Button
+                  onClick={handleDownloadZPL}
+                  className="flex-1"
+                  leadingIcon={<Printer strokeWidth={1.75} aria-hidden="true" />}
                 >
-                  <Package className="mr-2 h-4 w-4" />
-                  Generate Labels
+                  Download ZPL File
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+                <LabelPdfDownloadSection
+                  labels={getPdfLabels()}
+                  productName={formData.productDescription}
+                  batchId={labelResponse.batch_id}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Generating State */}
-          {step === 'generating' && (
-            <Card>
-              <CardContent className="py-16">
-                <div className="flex flex-col items-center justify-center space-y-4">
-                  <Spinner size="lg" />
-                  <p className="text-lg font-medium">Generating labels...</p>
-                  <p className="text-sm text-muted-foreground">
-                    Creating {formData.quantity} labels with QR codes
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Label Preview */}
+          <Card>
+            <CardHeader className="flex-col items-stretch gap-1">
+              <CardTitle>Label Preview (First 5)</CardTitle>
+              <CardDescription>QR codes and serial numbers for verification</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {labelResponse.labels.slice(0, 5).map((label, index) => {
+                  const qrDataUrl = qrDataUrls[label.serial_number];
 
-          {/* Preview State */}
-          {step === 'preview' && labelResponse && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <CheckCircle className="h-5 w-5 text-re-success" />
-                        Labels Generated Successfully
-                      </CardTitle>
-                      <CardDescription>
-                        Batch ID: {labelResponse.batch_id}
-                      </CardDescription>
-                    </div>
-                    <Button onClick={handleReset} variant="outline">
-                      Generate New Batch
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">TLC</p>
-                      <p className="font-mono text-sm">{labelResponse.tlc}</p>
-                    </div>
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">Serial Range</p>
-                      <p className="font-mono text-sm">
-                        {labelResponse.reserved_range?.start || 'N/A'} - {labelResponse.reserved_range?.end || 'N/A'}
+                  return (
+                    <div key={index} className="space-y-2 rounded-lg border border-re-border p-4">
+                      <p className="text-subheading text-re-text-primary">Label {index + 1}</p>
+                      <p className="font-mono text-[0.8125rem] text-re-text-tertiary">
+                        Serial: {label.serial}
+                      </p>
+                      <div className="flex items-center justify-center rounded-md bg-white p-2">
+                        {qrDataUrl ? (
+                          <img src={qrDataUrl} alt={`QR Code ${index + 1}`} className="h-32 w-32" />
+                        ) : (
+                          <>
+                            <Skeleton className="h-32 w-32" />
+                            <span className="sr-only">Generating QR...</span>
+                          </>
+                        )}
+                      </div>
+                      <p className="truncate font-mono text-[0.8125rem] text-re-text-tertiary">
+                        {label.qr_payload}
                       </p>
                     </div>
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">Labels Generated</p>
-                      <p className="font-mono text-sm">{labelResponse.labels.length}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4">
-                    <Button onClick={handleDownloadZPL} className="flex-1">
-                      <Printer className="mr-2 h-4 w-4" />
-                      Download ZPL File
-                    </Button>
-                    <LabelPdfDownloadSection
-                      labels={getPdfLabels()}
-                      productName={formData.productDescription}
-                      batchId={labelResponse.batch_id}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Label Preview */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Label Preview (First 5)</CardTitle>
-                  <CardDescription>QR codes and serial numbers for verification</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {labelResponse.labels.slice(0, 5).map((label, index) => {
-                      const qrDataUrl = qrDataUrls[label.serial_number];
-
-                      return (
-                        <div key={index} className="p-4 border rounded-lg space-y-2">
-                          <p className="text-sm font-semibold">Label {index + 1}</p>
-                          <p className="text-xs text-muted-foreground font-mono">
-                            Serial: {label.serial}
-                          </p>
-                          <div className="bg-white p-2 rounded flex items-center justify-center">
-                            {qrDataUrl ? (
-                              <img src={qrDataUrl} alt={`QR Code ${index + 1}`} className="w-32 h-32" />
-                            ) : (
-                              <div className="w-32 h-32 flex items-center justify-center text-xs text-muted-foreground">
-                                Generating QR...
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {label.qr_payload}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </motion.div>
-      </PageContainer>
-    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </PageContainer>
   );
 }

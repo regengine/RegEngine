@@ -4,18 +4,19 @@ import {
     ArrowLeft,
     ArrowRight,
     AlertTriangle,
-    HeadphonesIcon,
-    Layers,
     LifeBuoy,
     Mail,
-    MessageCircle,
-    Phone,
     ShieldAlert,
     Siren,
-    Users,
     Zap,
 } from 'lucide-react';
 import { SUPPORT_CHANNELS } from '@/lib/customer-readiness';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Section } from '@/components/layout/section';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
     title: 'Support & Escalation Model | RegEngine',
@@ -28,16 +29,12 @@ export const metadata: Metadata = {
     },
 };
 
-const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-sm';
-const sectionAlt = 'border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]';
-
 const ESCALATION_PATH = [
     {
         step: '1',
         title: 'Self-serve documentation',
         description: 'FSMA 204 Guide, API docs, FTL Checker, and compliance dashboard. Most operational questions are answered here without waiting for a human.',
         icon: LifeBuoy,
-        color: 'bg-re-info/15 text-re-info',
         availability: 'Always available',
     },
     {
@@ -45,14 +42,13 @@ const ESCALATION_PATH = [
         title: 'Email support',
         description: 'Standard support channel for configuration questions, export issues, data mapping help, and non-urgent compliance questions.',
         icon: Mail,
-        color: 'bg-re-brand/15 text-re-brand',
         availability: 'All plans',
     },
     {
         step: '3',
         title: 'Priority queue',
-        description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',        icon: Zap,
-        color: 'bg-re-warning/15 text-re-warning',
+        description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',
+        icon: Zap,
         availability: 'Standard and Premium',
     },
     {
@@ -60,7 +56,6 @@ const ESCALATION_PATH = [
         title: 'Recall-response coordination',
         description: 'Customers with a recall-response addendum receive coordinated support on data exports and evidence packaging during active FDA investigations or live recall events, per the terms of that agreement. RegEngine does not own recall timeline management.',
         icon: Siren,
-        color: 'bg-re-danger/15 text-re-danger',
         availability: 'Per contract',
     },
 ];
@@ -79,7 +74,8 @@ const SUPPORT_BOUNDARIES = [
     },
     {
         title: 'What support does not cover',
-        items: [            'Regulatory legal advice or audit representation',
+        items: [
+            'Regulatory legal advice or audit representation',
             'Upstream ERP/WMS system administration',
             'Custom report development outside your plan',
             'Recall operations or logistics coordination',
@@ -89,165 +85,146 @@ const SUPPORT_BOUNDARIES = [
     },
 ];
 
+const BACK_LINK =
+    'inline-flex items-center gap-1.5 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none';
+
 export default function SupportPage() {
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+        <div className="re-page min-h-screen">
             {/* Header */}
-            <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10 sm:pb-14">
-                <Link
-                    href="/trust"
-                    className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors mb-6"
-                >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    Trust Center
-                </Link>
-                <span className="block text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
-                    Support &amp; Escalation
-                </span>
-                <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
-                    Who to call, when, and what to expect
-                </h1>                <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[720px]">
-                    Support posture depends on plan tier. This page documents the escalation path from self-serve through
-                    emergency recall response so your team knows exactly what&apos;s available before they need it.
-                </p>
-            </section>
+            <Container className="pb-10 pt-14 sm:pb-14 sm:pt-20">
+                <PageHeader
+                    breadcrumbs={
+                        <Link href="/trust" className={BACK_LINK}>
+                            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                            Trust Center
+                        </Link>
+                    }
+                    size="hero"
+                    eyebrow={<span className="font-mono uppercase">Support &amp; Escalation</span>}
+                    title="Who to call, when, and what to expect"
+                    description="Support posture depends on plan tier. This page documents the escalation path from self-serve through emergency recall response so your team knows exactly what's available before they need it."
+                    className="mb-0 border-b-0 pb-0"
+                />
+            </Container>
 
             {/* Escalation path */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Escalation path</h2>
-                    <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        Four tiers, from self-serve to recall-response coordination. Plan availability is shown on each tier; specific response and availability commitments are negotiated per contract.
-                    </p>
-                    <div className="space-y-3">
-                        {ESCALATION_PATH.map((tier) => {
-                            const Icon = tier.icon;
-                            return (
-                                <div key={tier.step} className={`${card} p-5 flex gap-4`}>
-                                    <div className={`w-10 h-10 rounded-xl ${tier.color} flex items-center justify-center flex-shrink-0`}>
-                                        <Icon className="h-5 w-5" />
+            <Section
+                width="marketing"
+                title="Escalation path"
+                description="Four tiers, from self-serve to recall-response coordination. Plan availability is shown on each tier; specific response and availability commitments are negotiated per contract."
+            >
+                <Card className="overflow-hidden">
+                    {ESCALATION_PATH.map((tier) => {
+                        const Icon = tier.icon;
+                        return (
+                            <div key={tier.step} className="flex gap-4 border-b border-re-border-subtle p-5 last:border-0">
+                                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                <div className="flex-1">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="text-subheading text-re-text-primary">{tier.title}</div>
+                                        <span className="mt-0.5 shrink-0 font-mono text-label uppercase text-re-text-muted">{tier.availability}</span>
                                     </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="text-sm font-semibold text-[var(--re-text-primary)]">{tier.title}</div>
-                                            <span className="text-[10px] uppercase tracking-wider text-[var(--re-text-disabled)] flex-shrink-0 mt-0.5">{tier.availability}</span>
-                                        </div>
-                                        <p className="text-sm text-[var(--re-text-muted)] mt-1.5 leading-relaxed">{tier.description}</p>
-                                    </div>
+                                    <p className="mt-1.5 text-ui text-re-text-secondary">{tier.description}</p>
                                 </div>
-                            );
-                        })}                    </div>
-                </div>
-            </section>
+                            </div>
+                        );
+                    })}
+                </Card>
+            </Section>
 
             {/* Support channels by plan */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Support channels by plan</h2>
-                <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                    We do not publish SLA numbers. Specific response, availability, and escalation commitments are negotiated per contract.
-                </p>
-                <div className="space-y-3">
+            <Section
+                width="marketing"
+                title="Support channels by plan"
+                description="We do not publish SLA numbers. Specific response, availability, and escalation commitments are negotiated per contract."
+            >
+                <Card className="overflow-hidden">
                     {SUPPORT_CHANNELS.map((channel) => (
-                        <div key={channel.tier} className={`${card} p-5`}>
-                            <div className="flex items-center justify-between gap-3 mb-2">
-                                <div className="text-base font-semibold text-[var(--re-text-primary)]">{channel.tier}</div>
-                                <div className="text-sm text-[var(--re-text-muted)]">
+                        <div key={channel.tier} className="border-b border-re-border-subtle p-5 last:border-0">
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="text-subheading text-re-text-primary">{channel.tier}</div>
+                                <div className="font-mono text-[0.8125rem] text-re-text-tertiary">
                                     {channel.responseWindow}
                                 </div>
                             </div>
-                            <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{channel.escalation}</p>
-                            <p className="text-xs text-[var(--re-text-disabled)] mt-2">{channel.notes}</p>
+                            <p className="text-ui text-re-text-secondary">{channel.escalation}</p>
+                            <p className="mt-2 text-small text-re-text-tertiary">{channel.notes}</p>
                         </div>
                     ))}
-                </div>
-            </section>
+                </Card>
+            </Section>
+
             {/* Recall emergency */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">During a live recall</h2>
-                    <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to meet statutory retention or a live recall response — your recall-readiness plan owns that.
-                    </p>
-                    <div className={`${card} p-6 border-re-danger/20 bg-re-danger/[0.02]`}>
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-re-danger/15 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert className="h-5 w-5 text-re-danger" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does during a recall</h3>
-                                <ul className="space-y-2 text-sm text-[var(--re-text-muted)]">
-                                    <li>Generates FDA-oriented sortable spreadsheet for the affected product and date range</li>
-                                    <li>Provides hash-manifest verification artifacts for records in the recall scope</li>
-                                    <li>Exports available committed CTE/KDE records for affected lots, subject to upstream data quality and the configured workflow</li>
-                                    <li>Customers with a recall-response addendum receive coordinated export and evidence support per contract</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <div className={`${card} p-6 mt-3`}>
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-re-warning/15 flex items-center justify-center flex-shrink-0">
-                                <AlertTriangle className="h-5 w-5 text-re-warning" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does not do during a recall</h3>
-                                <ul className="space-y-2 text-sm text-[var(--re-text-muted)]">                                    <li>RegEngine does not coordinate recall logistics, supplier notifications, or retail removals</li>
-                                    <li>RegEngine does not provide legal representation or regulatory advice</li>
-                                    <li>RegEngine does not promise FDA acceptance of any export or report format</li>
-                                    <li>Public support windows are not a substitute for your recall-readiness plan</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+            <Section
+                width="marketing"
+                title="During a live recall"
+                description="This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to meet statutory retention or a live recall response — your recall-readiness plan owns that."
+            >
+                <Callout tone="danger" icon={ShieldAlert}>
+                    <h3 className="mb-2 text-subheading text-re-text-primary">What RegEngine does during a recall</h3>
+                    <ul className="space-y-2 text-ui text-re-text-secondary">
+                        <li>Generates FDA-oriented sortable spreadsheet for the affected product and date range</li>
+                        <li>Provides hash-manifest verification artifacts for records in the recall scope</li>
+                        <li>Exports available committed CTE/KDE records for affected lots, subject to upstream data quality and the configured workflow</li>
+                        <li>Customers with a recall-response addendum receive coordinated export and evidence support per contract</li>
+                    </ul>
+                </Callout>
+                <Callout tone="warning" icon={AlertTriangle} className="mt-3">
+                    <h3 className="mb-2 text-subheading text-re-text-primary">What RegEngine does not do during a recall</h3>
+                    <ul className="space-y-2 text-ui text-re-text-secondary">
+                        <li>RegEngine does not coordinate recall logistics, supplier notifications, or retail removals</li>
+                        <li>RegEngine does not provide legal representation or regulatory advice</li>
+                        <li>RegEngine does not promise FDA acceptance of any export or report format</li>
+                        <li>Public support windows are not a substitute for your recall-readiness plan</li>
+                    </ul>
+                </Callout>
+            </Section>
 
             {/* Support boundaries */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Support scope and boundaries</h2>
+            <Section width="marketing" title="Support scope and boundaries">
                 <div className="grid gap-4 md:grid-cols-2">
                     {SUPPORT_BOUNDARIES.map((group) => (
-                        <div key={group.title} className={`${card} p-5`}>
-                            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-3">{group.title}</h3>
+                        <Card key={group.title} className="p-5">
+                            <h3 className="mb-3 text-subheading text-re-text-primary">{group.title}</h3>
                             <ul className="space-y-2">
                                 {group.items.map((item, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-sm text-[var(--re-text-muted)]">
-                                        <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                                            group.title.includes('not') ? 'bg-re-danger/50' : 'bg-re-brand/50'
-                                        }`} />
+                                    <li key={i} className="flex items-start gap-2 text-ui text-re-text-secondary">
+                                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-re-text-muted" aria-hidden="true" />
                                         {item}
                                     </li>
                                 ))}
                             </ul>
-                        </div>
-                    ))}                </div>
-            </section>
+                        </Card>
+                    ))}
+                </div>
+            </Section>
 
             {/* CTA */}
-            <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[860px] mx-auto py-10 sm:py-14 px-4 sm:px-6 text-center">
-                    <p className="text-sm text-[var(--re-text-muted)] mb-4">
+            <Section width="marketing">
+                <div className="text-center">
+                    <p className="mx-auto max-w-[68ch] text-ui text-re-text-secondary">
                         Questions about support coverage for your plan? Enterprise escalation terms are defined in your service agreement.
                     </p>
-                    <div className="flex flex-wrap gap-3 justify-center">
-                        <Link href="/pricing">
-                            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--re-brand)] hover:opacity-80 transition-opacity">
-                                Compare plans <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>
-                        <Link href="/contact">
-                            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors">
-                                Contact us <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>
-                        <Link href="/trust">
-                            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors">
-                                Trust Center <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                        </Link>
+                    <div className="mt-4 flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/pricing">
+                                Compare plans <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="lg">
+                            <Link href="/contact">
+                                Contact us <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="lg">
+                            <Link href="/trust">
+                                Trust Center <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+                            </Link>
+                        </Button>
                     </div>
                 </div>
-            </section>
+            </Section>
         </div>
     );
 }

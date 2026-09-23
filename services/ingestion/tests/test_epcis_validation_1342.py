@@ -43,7 +43,7 @@ pytest.importorskip("fastapi")
 from app.epcis import validation as mod  # noqa: E402
 from app.epcis.validation import (  # noqa: E402
     _audit_log_validation_failure,
-    _default_product_description,
+    _epcis_product_description,
     _validate_as_fsma_event,
     _validate_epcis,
     _validate_gln_format,
@@ -57,27 +57,27 @@ _GOOD_TLC = "00012345678901-L2025-1105-A"
 
 
 # ---------------------------------------------------------------------------
-# _default_product_description
+# _epcis_product_description
 # ---------------------------------------------------------------------------
 
 
-class TestDefaultProductDescription:
-    def test_with_product_id_returns_formatted_string(self):
+class TestEpcisProductDescription:
+    """Only what the payload carries; ``""`` otherwise. The old helper
+    synthesized ``EPCIS Product <epc>`` / ``EPCIS Traceability Event`` and
+    stored it as the product description of every EPCIS event."""
+
+    def test_top_level_product_description_wins(self):
         assert (
-            _default_product_description({"product_id": "urn:epc:id:gtin:123"}) == "EPCIS Product urn:epc:id:gtin:123"
+            _epcis_product_description({"productDescription": " Romaine Hearts "}, {"productDescription": "ILMD"})
+            == "Romaine Hearts"
         )
 
-    def test_without_product_id_returns_generic_fallback(self):
-        assert _default_product_description({}) == "EPCIS Traceability Event"
+    def test_ilmd_product_description_is_used_when_top_level_absent(self):
+        assert _epcis_product_description({}, {"productDescription": "Romaine Hearts"}) == "Romaine Hearts"
 
-    def test_with_none_product_id_returns_generic_fallback(self):
-        # ``if product_id`` — None is falsy, fall to generic.
-        assert _default_product_description({"product_id": None}) == "EPCIS Traceability Event"
-
-    def test_with_empty_product_id_returns_generic_fallback(self):
-        # Defensive: EPCIS producers sometimes emit empty strings for
-        # "field known but blank" — must not produce "EPCIS Product ".
-        assert _default_product_description({"product_id": ""}) == "EPCIS Traceability Event"
+    def test_nothing_recorded_is_an_empty_cell(self):
+        assert _epcis_product_description({"epcList": ["urn:epc:id:gtin:123"]}, {}) == ""
+        assert _epcis_product_description({"productDescription": "   "}, None) == ""
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +263,12 @@ class TestValidateAsFsmaEvent:
             ("transformation", "TRANSFORMATION"),
             ("initial_packing", "CREATION"),
             ("creation", "CREATION"),
+            # Every type ``_normalize_epcis_to_cte`` can emit is mapped
+            # explicitly; none of them silently validates as a receipt.
+            ("harvesting", "CREATION"),
+            ("cooling", "CREATION"),
+            ("growing", "CREATION"),
+            ("first_land_based_receiving", "RECEIVING"),
         ],
     )
     def test_event_type_map_covers_all_entries(self, raw, expected):
@@ -272,54 +278,41 @@ class TestValidateAsFsmaEvent:
         assert result is not None
         assert result["event_type"] == expected
 
-    def test_unknown_event_type_defaults_to_receiving(self):
-        # The `.get(raw_type, FSMAEventType.RECEIVING)` default — pins
-        # the fallback so an unmapped event_type doesn't 500 the
-        # pipeline mid-ingestion.
+    def test_unknown_event_type_fails_validation(self, monkeypatch):
+        # An unmapped event_type used to validate as RECEIVING. It now fails
+        # the gate (None) and is audit-trailed like any other rejection.
+        captured = {}
+        monkeypatch.setattr(mod, "_audit_log_validation_failure", lambda e, t, n: captured.update(errors=e))
         n = self._good_normalized()
         n["event_type"] = "mystery"
-        result = _validate_as_fsma_event(n)
-        assert result is not None
-        assert result["event_type"] == "RECEIVING"
+        assert _validate_as_fsma_event(n, tenant_id="t1") is None
+        assert captured["errors"][0]["loc"] == ["event_type"]
 
-    def test_none_event_type_defaults_to_receiving(self):
-        # The ``or "receiving"`` on the .lower() line — None event_type
-        # becomes the "receiving" literal which resolves to RECEIVING.
+    def test_none_event_type_fails_validation(self):
         n = self._good_normalized()
         n["event_type"] = None
-        result = _validate_as_fsma_event(n)
-        assert result is not None
-        assert result["event_type"] == "RECEIVING"
+        assert _validate_as_fsma_event(n) is None
 
-    def test_missing_product_description_synthesizes_default(self):
+    def test_missing_product_description_still_passes_the_gate(self):
+        # The gate only reports pass/fail; nothing synthesized here is stored.
         n = self._good_normalized()
         n.pop("product_description")
         n["product_id"] = "urn:epc:id:gtin:42"
         result = _validate_as_fsma_event(n)
         assert result is not None
-        assert result["product_description"] == "EPCIS Product urn:epc:id:gtin:42"
+        assert "EPCIS Product" not in result["product_description"]
 
-    def test_missing_product_description_and_product_id(self):
-        n = self._good_normalized()
-        n.pop("product_description")
-        result = _validate_as_fsma_event(n)
-        assert result is not None
-        assert result["product_description"] == "EPCIS Traceability Event"
-
-    def test_missing_event_time_synthesizes_now(self):
-        # ``or datetime.now(timezone.utc).isoformat()`` — not ideal
-        # (event_time should be required), but the fallback keeps the
-        # pipeline flowing rather than 500ing on a missing timestamp.
+    def test_missing_event_time_fails_validation(self):
+        # The gate used to stamp ``now()`` on a missing event_time, so an
+        # event with no time passed validation with a time the partner
+        # never sent. It now fails.
         n = self._good_normalized()
         n.pop("event_time")
-        result = _validate_as_fsma_event(n)
-        assert result is not None
-        assert result["event_time"]  # non-empty ISO string
-        assert "T" in result["event_time"]
+        assert _validate_as_fsma_event(n) is None
 
-    def test_missing_tlc_defaults_to_unknown_and_fails_validation(self):
-        # tlc defaults to "UNKNOWN" (7 chars) — fails FSMAEvent's
-        # min_length=15 + GTIN regex — ValidationError → None.
+    def test_missing_tlc_fails_validation(self):
+        # No "UNKNOWN" stand-in: a missing tlc is a missing required field
+        # and the ValidationError branch returns None.
         n = self._good_normalized()
         n.pop("tlc")
         result = _validate_as_fsma_event(n)

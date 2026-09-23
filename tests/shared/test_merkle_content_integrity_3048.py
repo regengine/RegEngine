@@ -40,7 +40,9 @@ def test_merkle_recomputes_event_content(tampered):
         "Warehouse",
         timestamp,
         {},
-        None,
+        None,  # matched_legacy_id
+        None,  # hashed_timestamp (normalized_payload->>'event_timestamp')
+        digest,  # canonical_sha256 (te.sha256_hash): the persisted content digest
     ]
 
     class Session:

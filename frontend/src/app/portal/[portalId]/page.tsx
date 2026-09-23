@@ -4,10 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-    Package, Truck, CheckCircle2, AlertTriangle, Loader2,
-    ArrowRight, ShieldCheck, Clock, FileCheck,
+    Truck, ArrowRight, ShieldCheck, Clock, FileCheck,
 } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getServiceURL } from '@/lib/api-config';
+import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -241,34 +249,34 @@ export default function PortalSubmissionPage() {
 
     if (loadingPortal) {
         return (
-            <div className="min-h-screen bg-[var(--re-surface-base)] flex items-center justify-center">
-                <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-[var(--re-brand)] mx-auto mb-4" />
-                    <p className="text-[var(--re-text-muted)]">Loading portal...</p>
+            <Container width="prose" className="py-10 sm:py-14">
+                <div className="space-y-6" aria-busy="true">
+                    <div className="space-y-3 border-b border-re-border-subtle pb-5">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-8 w-64" />
+                        <Skeleton className="h-4 w-48" />
+                    </div>
+                    <p className="text-ui text-re-text-tertiary">Loading portal...</p>
+                    <Skeleton className="h-96 w-full" />
                 </div>
-            </div>
+            </Container>
         );
     }
 
     if (portalError || !portal) {
         return (
-            <div className="min-h-screen bg-[var(--re-surface-base)] flex items-center justify-center px-4">
-                <div className="max-w-md text-center">
-                    <AlertTriangle className="h-12 w-12 text-re-warning mx-auto mb-4" />
-                    <h1 className="text-xl font-bold text-[var(--re-text-primary)] mb-2">
-                        Portal Link Unavailable
-                    </h1>
-                    <p className="text-[var(--re-text-muted)] mb-6">
-                        {portalError || 'This portal link is not found or has expired.'}
-                    </p>
-                    <p className="text-sm text-[var(--re-text-disabled)]">
-                        Contact your buyer for a new portal link, or{' '}
-                        <Link href="/supplier-compliance" className="text-[var(--re-brand)] underline">
-                            learn about FSMA 204 compliance
-                        </Link>.
-                    </p>
-                </div>
-            </div>
+            <Container width="prose" className="py-10 sm:py-14">
+                <PageHeader title="Portal Link Unavailable" />
+                <Callout tone="danger" role="alert">
+                    {portalError || 'This portal link is not found or has expired.'}
+                </Callout>
+                <p className="mt-4 text-small text-re-text-tertiary">
+                    Contact your buyer for a new portal link, or{' '}
+                    <Link href="/supplier-compliance" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
+                        learn about FSMA 204 compliance
+                    </Link>.
+                </p>
+            </Container>
         );
     }
 
@@ -276,54 +284,48 @@ export default function PortalSubmissionPage() {
 
     if (result && result.status === 'accepted') {
         return (
-            <div className="min-h-screen bg-[var(--re-surface-base)] flex items-center justify-center px-4">
-                <div className="max-w-lg w-full">
-                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl p-8 text-center shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-                        <CheckCircle2 className="h-16 w-16 text-[var(--re-brand)] mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">
-                            Shipment Data Received
-                        </h1>
-                        <p className="text-[var(--re-text-muted)] mb-6">
-                            Your traceability data has been validated and recorded.
+            <Container width="prose" className="py-10 sm:py-14">
+                <PageHeader
+                    title="Shipment Data Received"
+                    description="Your traceability data has been validated and recorded."
+                />
+
+                <Card>
+                    <CardContent className="space-y-5">
+                        <dl className="divide-y divide-re-border-subtle">
+                            <div className="flex items-center justify-between gap-4 py-2 first:pt-0">
+                                <dt className="text-ui text-re-text-muted">Event ID</dt>
+                                <dd className="font-mono text-[0.8125rem] text-re-text-secondary">{result.event_id}</dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-2">
+                                <dt className="text-ui text-re-text-muted">SHA-256 Hash</dt>
+                                <dd className="max-w-[16rem] truncate font-mono text-[0.8125rem] text-re-text-secondary">
+                                    {result.sha256_hash}
+                                </dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-2 last:pb-0">
+                                <dt className="text-ui text-re-text-muted">Submitted</dt>
+                                <dd className="text-ui text-re-text-secondary">
+                                    {new Date(result.submitted_at).toLocaleString()}
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <p className="flex items-center gap-2 text-small text-re-text-tertiary">
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                            <span>Cryptographically verified and chain-linked</span>
                         </p>
 
-                        <div className="bg-[var(--re-surface-elevated)] rounded-xl p-4 text-left space-y-2 mb-6">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-[var(--re-text-muted)]">Event ID</span>
-                                <span className="font-mono text-xs text-[var(--re-text-secondary)]">{result.event_id}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-[var(--re-text-muted)]">SHA-256 Hash</span>
-                                <span className="font-mono text-[10px] text-[var(--re-text-secondary)] max-w-[200px] truncate">
-                                    {result.sha256_hash}
-                                </span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-[var(--re-text-muted)]">Submitted</span>
-                                <span className="text-[var(--re-text-secondary)]">
-                                    {new Date(result.submitted_at).toLocaleString()}
-                                </span>
-                            </div>
-                        </div>
+                        <Button size="lg" onClick={handleSubmitAnother} trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}>
+                            Submit Another Shipment
+                        </Button>
+                    </CardContent>
+                </Card>
 
-                        <div className="flex items-center justify-center gap-2 text-xs text-[var(--re-text-disabled)] mb-6">
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                            <span>Cryptographically verified and chain-linked</span>
-                        </div>
-
-                        <button
-                            onClick={handleSubmitAnother}
-                            className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:brightness-110 transition-all active:scale-[0.97]"
-                        >
-                            Submit Another Shipment <ArrowRight className="h-4 w-4" />
-                        </button>
-                    </div>
-
-                    <p className="text-center text-xs text-[var(--re-text-disabled)] mt-4">
-                        Powered by <Link href="/" className="text-[var(--re-brand)] underline">RegEngine</Link> — FSMA 204 Compliance
-                    </p>
-                </div>
-            </div>
+                <p className="mt-4 text-center text-small text-re-text-tertiary">
+                    Powered by <Link href="/" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">RegEngine</Link> — FSMA 204 Compliance
+                </p>
+            </Container>
         );
     }
 
@@ -331,364 +333,317 @@ export default function PortalSubmissionPage() {
 
     const UOM_OPTIONS = ['cases', 'lbs', 'kg', 'pallets', 'each', 'cartons', 'bags'];
 
+    const TRUST_FACTS = [
+        { icon: ShieldCheck, label: 'SHA-256 hash-chained' },
+        { icon: Clock, label: 'FSMA 204 program' },
+        { icon: FileCheck, label: '§1.1455(c) format' },
+    ];
+
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] py-8 px-4">
-            <div className="max-w-2xl mx-auto">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center gap-2 bg-[var(--re-brand-muted)] text-[var(--re-brand)] px-3 py-1.5 rounded-lg text-xs font-semibold mb-4">
-                        <Truck className="h-3.5 w-3.5" />
+        <Container width="prose" className="py-10 sm:py-14">
+            <PageHeader
+                eyebrow={
+                    <span className="inline-flex items-center gap-1.5">
+                        <Truck className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                         Supplier Portal
-                    </div>
-                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">
-                        Submit Shipment Data
-                    </h1>
-                    <p className="text-[var(--re-text-muted)]">
-                        Submitting for <span className="font-semibold text-[var(--re-text-primary)]">{portal.supplier_name}</span>
-                    </p>
-                </div>
+                    </span>
+                }
+                title="Submit Shipment Data"
+                description={
+                    <>
+                        Submitting for <span className="font-medium text-re-text-primary">{portal.supplier_name}</span>
+                    </>
+                }
+            />
 
-                {/* Trust badges */}
-                <div className="flex items-center justify-center gap-4 mb-6 flex-wrap">
-                    {[
-                        { icon: ShieldCheck, label: 'SHA-256 hash-chained' },
-                        { icon: Clock, label: 'FSMA 204 program' },
-                        { icon: FileCheck, label: '§1.1455(c) format' },
-                    ].map((badge) => (
-                        <div key={badge.label} className="flex items-center gap-1.5 text-xs text-[var(--re-text-disabled)]">
-                            <badge.icon className="h-3.5 w-3.5 text-[var(--re-brand)]" />
-                            {badge.label}
-                        </div>
-                    ))}
-                </div>
-
-                {portal.integration_profile && (
-                    <div className="mb-6 border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] rounded-xl p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div className="flex items-start gap-3">
-                                <FileCheck className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" />
-                                <div>
-                                    <div className="text-sm font-semibold text-[var(--re-text-primary)]">
-                                        {portal.integration_profile.display_name}
-                                    </div>
-                                    <div className="text-xs text-[var(--re-text-muted)]">
-                                        {portal.integration_profile.source_type.toUpperCase()} mapping · {portal.integration_profile.default_cte_type}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-xs text-[var(--re-text-muted)]">
-                                {Math.round(portal.integration_profile.confidence * 100)}% mapping confidence
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Form */}
-                <form onSubmit={handleSubmit}>
-                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] overflow-hidden">
-
-                        {/* Required fields */}
-                        <div className="p-6 space-y-4">
-                            <h2 className="text-sm font-semibold text-[var(--re-text-primary)] flex items-center gap-2">
-                                <Package className="h-4 w-4 text-[var(--re-brand)]" />
-                                Shipment Details
-                            </h2>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Traceability Lot Code (TLC) *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={tlc}
-                                        onChange={(e) => setTlc(e.target.value)}
-                                        placeholder="e.g., LOT-2026-03-001"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                        required
-                                        minLength={3}
-                                    />
-                                </div>
-
-                                <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Product Description *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={productDescription}
-                                        onChange={(e) => setProductDescription(e.target.value)}
-                                        placeholder="e.g., Romaine Lettuce Hearts, 3-pack"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Quantity *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={quantity}
-                                        onChange={(e) => setQuantity(e.target.value)}
-                                        placeholder="e.g., 500"
-                                        min="0.01"
-                                        step="any"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Unit of Measure *
-                                    </label>
-                                    <select
-                                        value={unitOfMeasure}
-                                        onChange={(e) => setUnitOfMeasure(e.target.value)}
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                    >
-                                        {UOM_OPTIONS.map((uom) => (
-                                            <option key={uom} value={uom}>{uom}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Ship Date *
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={shipDate}
-                                        onChange={(e) => setShipDate(e.target.value)}
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Location fields */}
-                        <div className="p-6 border-t border-[var(--re-surface-border)] space-y-4">
-                            <h2 className="text-sm font-semibold text-[var(--re-text-primary)] flex items-center gap-2">
-                                <Truck className="h-4 w-4 text-[var(--re-brand)]" />
-                                Origin & Destination
-                            </h2>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Ship From (Facility Name) *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={shipFromLocation}
-                                        onChange={(e) => setShipFromLocation(e.target.value)}
-                                        placeholder="e.g., Central Valley Farms"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Ship From GLN
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={shipFromGln}
-                                        onChange={(e) => setShipFromGln(e.target.value)}
-                                        placeholder="13-digit GLN (optional)"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Ship To (Facility Name) *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={shipToLocation}
-                                        onChange={(e) => setShipToLocation(e.target.value)}
-                                        placeholder="e.g., Walmart DC #4523"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Ship To GLN
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={shipToGln}
-                                        onChange={(e) => setShipToGln(e.target.value)}
-                                        placeholder="13-digit GLN (optional)"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Optional fields */}
-                        <div className="p-6 border-t border-[var(--re-surface-border)] space-y-4">
-                            <h2 className="text-sm font-semibold text-[var(--re-text-muted)]">
-                                Additional Details (Optional)
-                            </h2>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Carrier Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={carrierName}
-                                        onChange={(e) => setCarrierName(e.target.value)}
-                                        placeholder="e.g., FedEx Freight"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        PO Number
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={poNumber}
-                                        onChange={(e) => setPoNumber(e.target.value)}
-                                        placeholder="e.g., PO-78234"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                        Temperature (C)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={temperatureCelsius}
-                                        onChange={(e) => setTemperatureCelsius(e.target.value)}
-                                        placeholder="e.g., 4"
-                                        step="0.1"
-                                        className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-medium text-[var(--re-text-muted)] mb-1.5">
-                                    Notes
-                                </label>
-                                <textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Any additional notes about this shipment..."
-                                    rows={2}
-                                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:border-transparent resize-none"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Submit */}
-                        <div className="p-6 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
-                            {preflight && (
-                                <div
-                                    className={`p-3 rounded-xl text-sm mb-4 border ${
-                                        preflight.status === 'ready'
-                                            ? 'bg-re-success-muted border-re-success text-re-success'
-                                            : 'bg-re-warning-muted border-re-warning text-re-warning'
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div>
-                                            <div className="font-semibold">
-                                                Preflight {preflight.status === 'ready' ? 'passed' : 'blocked'} · {preflight.readiness.score}
-                                            </div>
-                                            <div className="text-xs mt-0.5 opacity-90">{preflight.message}</div>
-                                        </div>
-                                        <span className="text-xs font-mono">{preflight.commit_gate.next_state}</span>
-                                    </div>
-                                    {preflight.result.blocking_reasons.length > 0 && (
-                                        <ul className="mt-2 space-y-1 text-xs">
-                                            {preflight.result.blocking_reasons.slice(0, 3).map((reason) => (
-                                                <li key={reason}>{reason}</li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                            )}
-
-                            {submitError && (
-                                <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger mb-4">
-                                    {submitError}
-                                </div>
-                            )}
-
-                            <button
-                                type="button"
-                                disabled={!isValid || preflighting || submitting}
-                                onClick={runPreflight}
-                                className="w-full inline-flex items-center justify-center gap-2 bg-[var(--re-surface-card)] text-[var(--re-text-primary)] border border-[var(--re-surface-border)] px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:border-[var(--re-brand)] disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] mb-2"
-                            >
-                                {preflighting ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Running Preflight...
-                                    </>
-                                ) : (
-                                    <>
-                                        <ShieldCheck className="h-4 w-4 text-[var(--re-brand)]" />
-                                        Preflight Check
-                                    </>
-                                )}
-                            </button>
-
-                            <button
-                                type="submit"
-                                disabled={!isValid || submitting || preflighting}
-                                className="w-full inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3.5 rounded-xl text-sm font-semibold transition-all hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
-                            >
-                                {submitting ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Submitting...
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle2 className="h-4 w-4" />
-                                        Submit Shipment Data
-                                    </>
-                                )}
-                            </button>
-
-                            <p className="text-center text-[11px] text-[var(--re-text-disabled)] mt-3">
-                                Data is SHA-256 hashed and chain-linked for FSMA 204 compliance.
-                                No account required.
-                            </p>
-                        </div>
-                    </div>
-                </form>
-
-                {/* Footer */}
-                <div className="text-center mt-6 space-y-2">
-                    <p className="text-xs text-[var(--re-text-disabled)]">
-                        Powered by <Link href="/" className="text-[var(--re-brand)] underline">RegEngine</Link> — FSMA 204 Compliance Infrastructure
-                    </p>
-                    <Link
-                        href="/supplier-compliance"
-                        className="inline-flex items-center gap-1 text-xs text-[var(--re-brand)] hover:underline"
+            {/* Trust facts */}
+            <ul className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+                {TRUST_FACTS.map((fact, index) => (
+                    <li
+                        key={fact.label}
+                        className={cn(
+                            'flex items-center gap-1.5 text-label text-re-text-tertiary',
+                            index > 0 && 'sm:border-l sm:border-re-border-subtle sm:pl-4'
+                        )}
                     >
-                        Learn about FSMA 204 compliance <ArrowRight className="h-3 w-3" />
-                    </Link>
-                </div>
+                        <fact.icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                        {fact.label}
+                    </li>
+                ))}
+            </ul>
+
+            {portal.integration_profile && (
+                <Card className="mb-6">
+                    <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                            <div className="min-w-0">
+                                <div className="text-ui font-medium text-re-text-primary">
+                                    {portal.integration_profile.display_name}
+                                </div>
+                                <div className="text-small text-re-text-tertiary">
+                                    {portal.integration_profile.source_type.toUpperCase()} mapping · {portal.integration_profile.default_cte_type}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-small tabular-nums text-re-text-tertiary">
+                            {Math.round(portal.integration_profile.confidence * 100)}% mapping confidence
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit}>
+                <Card>
+                    {/* Required fields */}
+                    <div className="space-y-4 p-5">
+                        <h2 className="text-subheading text-re-text-primary">
+                            Shipment Details
+                        </h2>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <Field
+                                className="sm:col-span-2"
+                                label="Traceability Lot Code (TLC)"
+                                htmlFor="portal-tlc"
+                                required
+                            >
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={tlc}
+                                    onChange={(e) => setTlc(e.target.value)}
+                                    placeholder="e.g., LOT-2026-03-001"
+                                    minLength={3}
+                                    mono
+                                />
+                            </Field>
+
+                            <Field
+                                className="sm:col-span-2"
+                                label="Product Description"
+                                htmlFor="portal-product-description"
+                                required
+                            >
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={productDescription}
+                                    onChange={(e) => setProductDescription(e.target.value)}
+                                    placeholder="e.g., Romaine Lettuce Hearts, 3-pack"
+                                />
+                            </Field>
+
+                            <Field label="Quantity" htmlFor="portal-quantity" required>
+                                <Input
+                                    type="number"
+                                    size="lg"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(e.target.value)}
+                                    placeholder="e.g., 500"
+                                    min="0.01"
+                                    step="any"
+                                />
+                            </Field>
+
+                            <Field label="Unit of Measure" htmlFor="portal-uom" required>
+                                <select
+                                    value={unitOfMeasure}
+                                    onChange={(e) => setUnitOfMeasure(e.target.value)}
+                                    className={cn(fieldControlClasses, 'h-11')}
+                                >
+                                    {UOM_OPTIONS.map((uom) => (
+                                        <option key={uom} value={uom}>{uom}</option>
+                                    ))}
+                                </select>
+                            </Field>
+
+                            <Field label="Ship Date" htmlFor="portal-ship-date" required>
+                                <Input
+                                    type="date"
+                                    size="lg"
+                                    value={shipDate}
+                                    onChange={(e) => setShipDate(e.target.value)}
+                                />
+                            </Field>
+                        </div>
+                    </div>
+
+                    {/* Location fields */}
+                    <div className="space-y-4 border-t border-re-border-subtle p-5">
+                        <h2 className="text-subheading text-re-text-primary">
+                            Origin &amp; Destination
+                        </h2>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <Field label="Ship From (Facility Name)" htmlFor="portal-ship-from" required>
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={shipFromLocation}
+                                    onChange={(e) => setShipFromLocation(e.target.value)}
+                                    placeholder="e.g., Central Valley Farms"
+                                />
+                            </Field>
+
+                            <Field label="Ship From GLN" htmlFor="portal-ship-from-gln">
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={shipFromGln}
+                                    onChange={(e) => setShipFromGln(e.target.value)}
+                                    placeholder="13-digit GLN (optional)"
+                                    mono
+                                />
+                            </Field>
+
+                            <Field label="Ship To (Facility Name)" htmlFor="portal-ship-to" required>
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={shipToLocation}
+                                    onChange={(e) => setShipToLocation(e.target.value)}
+                                    placeholder="e.g., Walmart DC #4523"
+                                />
+                            </Field>
+
+                            <Field label="Ship To GLN" htmlFor="portal-ship-to-gln">
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={shipToGln}
+                                    onChange={(e) => setShipToGln(e.target.value)}
+                                    placeholder="13-digit GLN (optional)"
+                                    mono
+                                />
+                            </Field>
+                        </div>
+                    </div>
+
+                    {/* Optional fields */}
+                    <div className="space-y-4 border-t border-re-border-subtle p-5">
+                        <h2 className="text-subheading text-re-text-primary">
+                            Additional Details (Optional)
+                        </h2>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <Field label="Carrier Name" htmlFor="portal-carrier">
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={carrierName}
+                                    onChange={(e) => setCarrierName(e.target.value)}
+                                    placeholder="e.g., FedEx Freight"
+                                />
+                            </Field>
+
+                            <Field label="PO Number" htmlFor="portal-po-number">
+                                <Input
+                                    type="text"
+                                    size="lg"
+                                    value={poNumber}
+                                    onChange={(e) => setPoNumber(e.target.value)}
+                                    placeholder="e.g., PO-78234"
+                                    mono
+                                />
+                            </Field>
+
+                            <Field label="Temperature (C)" htmlFor="portal-temperature">
+                                <Input
+                                    type="number"
+                                    size="lg"
+                                    value={temperatureCelsius}
+                                    onChange={(e) => setTemperatureCelsius(e.target.value)}
+                                    placeholder="e.g., 4"
+                                    step="0.1"
+                                />
+                            </Field>
+                        </div>
+
+                        <Field label="Notes" htmlFor="portal-notes">
+                            <textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                placeholder="Any additional notes about this shipment..."
+                                rows={2}
+                                className={cn(fieldControlClasses, 'h-auto resize-none py-2')}
+                            />
+                        </Field>
+                    </div>
+
+                    {/* Submit */}
+                    <div className="space-y-3 border-t border-re-border-subtle bg-re-surface-inset p-5">
+                        {preflight && (
+                            <Callout tone={preflight.status === 'ready' ? 'success' : 'warning'}>
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-re-text-primary">
+                                            Preflight {preflight.status === 'ready' ? 'passed' : 'blocked'} · {preflight.readiness.score}
+                                        </div>
+                                        <div className="mt-0.5 text-small">{preflight.message}</div>
+                                    </div>
+                                    <span className="shrink-0 font-mono text-small text-re-text-tertiary">{preflight.commit_gate.next_state}</span>
+                                </div>
+                                {preflight.result.blocking_reasons.length > 0 && (
+                                    <ul className="mt-2 space-y-1 text-small">
+                                        {preflight.result.blocking_reasons.slice(0, 3).map((reason) => (
+                                            <li key={reason}>{reason}</li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </Callout>
+                        )}
+
+                        {submitError && (
+                            <Callout tone="danger" role="alert">
+                                {submitError}
+                            </Callout>
+                        )}
+
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="lg"
+                            className="w-full"
+                            disabled={!isValid || preflighting || submitting}
+                            onClick={runPreflight}
+                            loading={preflighting}
+                            leadingIcon={<ShieldCheck strokeWidth={1.75} aria-hidden="true" />}
+                        >
+                            {preflighting ? 'Running Preflight...' : 'Preflight Check'}
+                        </Button>
+
+                        <Button
+                            type="submit"
+                            size="lg"
+                            className="w-full"
+                            disabled={!isValid || submitting || preflighting}
+                            loading={submitting}
+                        >
+                            {submitting ? 'Submitting...' : 'Submit Shipment Data'}
+                        </Button>
+
+                        <p className="text-center text-small text-re-text-tertiary">
+                            Data is SHA-256 hashed and chain-linked for FSMA 204 compliance.
+                            No account required.
+                        </p>
+                    </div>
+                </Card>
+            </form>
+
+            {/* Footer */}
+            <div className="mt-6 space-y-2 text-center">
+                <p className="text-small text-re-text-tertiary">
+                    Powered by <Link href="/" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">RegEngine</Link> — FSMA 204 Compliance Infrastructure
+                </p>
+                <Link
+                    href="/supplier-compliance"
+                    className="inline-flex items-center gap-1 text-small text-re-brand no-underline hover:underline"
+                >
+                    Learn about FSMA 204 compliance <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
             </div>
-        </div>
+        </Container>
     );
 }

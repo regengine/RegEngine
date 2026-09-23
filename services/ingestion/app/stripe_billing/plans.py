@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import HTTPException
 
@@ -84,6 +84,22 @@ DEFAULT_CANCEL_URL = "https://regengine.co/pricing?checkout=cancelled"
 DEFAULT_PORTAL_RETURN_URL = "https://regengine.co/dashboard"
 
 
+# ── Metered add-ons (per-label metered billing, DESIGN_metering-billing.md) ──
+#
+# A metered add-on is attached alongside a tenant's existing flat-tier
+# subscription (see stripe_billing/usage_reporting.py opt-in flow) — it is
+# not a standalone plan, so it deliberately does not appear in ``PLANS``.
+METERED_ADDONS: dict[str, dict[str, Any]] = {
+    "label_events": {
+        "id": "label_events",
+        "name": "Per-Label Metering",
+        "stripe_price_env": "STRIPE_PRICE_METERED_LABEL_EVENTS",
+        "meter_event_name": "regengine_label_events",
+        "unit_label": "label event",
+    },
+}
+
+
 def _normalize_plan_id(plan_id: str) -> str:
     normalized = PLAN_ALIASES.get(plan_id, plan_id)
     return normalized
@@ -129,3 +145,25 @@ def _resolve_price_id(plan_id: str, billing_period: str) -> tuple[dict[str, Any]
         raise HTTPException(status_code=400, detail="Plan does not support self-serve checkout")
 
     return plan, price_id, amount
+
+
+def _plan_for_stripe_price(price_id: str) -> Optional[tuple[str, str]]:
+    """Reverse-map a Stripe price ID to ``(plan_id, billing_period)``.
+
+    Webhook verification counterpart to ``_resolve_price_id``: checkout
+    metadata *claims* a plan, but the subscription's actual price is
+    Stripe-side truth. Walk the catalog's env-configured price IDs and
+    return the plan/period the price belongs to. Returns ``None`` when
+    the price matches no configured catalog entry. Never raises — the
+    webhook path must fail closed on catalog gaps, not 500.
+    """
+    if not price_id:
+        return None
+    for plan_id, plan in PLANS.items():
+        for period in ("monthly", "annual"):
+            env_var = plan.get(f"stripe_price_env_{period}")
+            if not env_var:
+                continue
+            if os.getenv(env_var) == price_id:
+                return (plan_id, period)
+    return None

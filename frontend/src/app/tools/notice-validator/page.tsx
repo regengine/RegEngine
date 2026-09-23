@@ -2,9 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardPaste, FileWarning, Info, RotateCcw, Shield, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardPaste, FileWarning, Info, RotateCcw, XCircle } from 'lucide-react';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { EmailGate } from '@/components/tools/EmailGate';
+import { Container } from '@/components/layout/container';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
+import { fieldControlClasses } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface Requirement {
     id: string;
@@ -117,62 +123,90 @@ export default function NoticeValidatorPage() {
         return { checks, detected, total, gaps };
     }, [hasAnalyzed, noticeText]);
 
-    const summaryColor = (gaps?: number) => {
-        if (gaps === 0) return 'text-re-brand border-re-brand/40 bg-re-brand-muted';
-        if (gaps && gaps <= 1) return 'text-sky-500 border-sky-500/40 bg-sky-500/10';
-        if (gaps && gaps <= 2) return 'text-re-warning border-re-warning/40 bg-re-warning/10';
-        return 'text-rose-500 border-rose-500/40 bg-rose-500/10';
+    // Gap severity is a tone on the summary tile, never a grade: the tile always
+    // spells out "N of M elements detected · N gap-indicated".
+    const summaryTone = (gaps?: number): 'neutral' | 'info' | 'warning' | 'danger' => {
+        if (gaps === 0) return 'neutral';
+        if (gaps && gaps <= 1) return 'info';
+        if (gaps && gaps <= 2) return 'warning';
+        return 'danger';
     };
+
+    const summary = (disclaimer: string) => results && (
+        <Callout tone={summaryTone(results.gaps)} role="status" title="Keyword self-check summary">
+            <p className="mt-1 text-heading text-re-text-primary">{results.detected} of {results.total} elements detected · {results.gaps} gap-indicated</p>
+            <p className="mt-2 text-small text-re-text-tertiary">{disclaimer}</p>
+        </Callout>
+    );
 
     return (
         <EmailGate toolName="notice-validator">
-        <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-            <section className="max-w-[1100px] mx-auto px-6 py-20">
-                <div className="max-w-[760px]">
-                    <p className="text-xs uppercase tracking-[0.12em] text-[var(--re-brand)] mb-3">FSMA Response Self-Check</p>
-                    <h1 className="text-[clamp(32px,4vw,48px)] font-bold text-[var(--re-text-primary)] leading-tight">
+        <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
+            <Container width="tool">
+                <div className="border-b border-re-border-subtle pb-5">
+                    <p className="mb-2 text-label text-re-text-muted">FSMA Response Self-Check</p>
+                    <h1 className="text-title text-re-text-primary">
                         Spot keyword gaps in a draft FSMA 204 response before your team or counsel reviews it
                     </h1>
-                    <p className="mt-4 text-lg text-[var(--re-text-muted)] leading-relaxed">
+                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
                         Paste a draft response, export summary, or internal request memo. This is a heuristic keyword self-check, not an FDA validator. It looks for keywords associated with FSMA 204 elements; presence of a keyword does not mean the underlying record content is sufficient. Have counsel and your QA lead review any response before submission to FDA.
                     </p>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-3">
-                    <button onClick={() => { setNoticeText(SAMPLE_NOTICES.good); setHasAnalyzed(false); }} className="inline-flex items-center gap-2 rounded-xl border border-[var(--re-surface-border)] px-4 py-2 text-sm font-medium text-[var(--re-text-primary)]">
-                        <ClipboardPaste className="h-4 w-4" />
+                <div className="mt-6 flex flex-wrap gap-2">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => { setNoticeText(SAMPLE_NOTICES.good); setHasAnalyzed(false); }}
+                        leadingIcon={<ClipboardPaste aria-hidden="true" strokeWidth={1.75} />}
+                    >
                         Load strong sample
-                    </button>
-                    <button onClick={() => { setNoticeText(SAMPLE_NOTICES.bad); setHasAnalyzed(false); }} className="inline-flex items-center gap-2 rounded-xl border border-[var(--re-surface-border)] px-4 py-2 text-sm font-medium text-[var(--re-text-primary)]">
-                        <FileWarning className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => { setNoticeText(SAMPLE_NOTICES.bad); setHasAnalyzed(false); }}
+                        leadingIcon={<FileWarning aria-hidden="true" strokeWidth={1.75} />}
+                    >
                         Load weak sample
-                    </button>
-                    <button onClick={() => { setNoticeText(''); setHasAnalyzed(false); }} className="inline-flex items-center gap-2 rounded-xl border border-[var(--re-surface-border)] px-4 py-2 text-sm font-medium text-[var(--re-text-primary)]">
-                        <RotateCcw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => { setNoticeText(''); setHasAnalyzed(false); }}
+                        leadingIcon={<RotateCcw aria-hidden="true" strokeWidth={1.75} />}
+                    >
                         Reset
-                    </button>
+                    </Button>
                 </div>
 
-                <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="mt-6 grid gap-6 md:grid-cols-2">
                     <div>
+                        <label htmlFor="notice-text" className="sr-only">
+                            Paste an FDA request response or traceability export summary here...
+                        </label>
                         <textarea
+                            id="notice-text"
                             value={noticeText}
                             onChange={(e) => setNoticeText(e.target.value)}
                             placeholder="Paste an FDA request response or traceability export summary here..."
-                            className="min-h-[340px] w-full rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 text-sm text-[var(--re-text-primary)] outline-none"
+                            className={cn(fieldControlClasses, 'h-auto min-h-[340px] py-3 font-mono text-[0.8125rem]')}
                         />
                         <div className="mt-4 flex flex-wrap gap-3">
-                            <button
+                            <Button
+                                type="button"
+                                size="lg"
                                 onClick={() => setHasAnalyzed(Boolean(noticeText.trim()))}
                                 disabled={!noticeText.trim()}
-                                className="inline-flex items-center justify-center h-11 px-6 rounded-xl bg-[var(--re-brand)] text-white font-semibold disabled:opacity-40"
+                                trailingIcon={<ArrowRight aria-hidden="true" strokeWidth={1.75} />}
                             >
                                 Run keyword self-check
-                                <ArrowRight className="ml-2 h-4 w-4" />
-                            </button>
-                            <Link href="/docs/fsma-204" className="inline-flex items-center justify-center h-11 px-6 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-primary)] font-semibold">
-                                FSMA Guide
-                            </Link>
+                            </Button>
+                            <Button asChild variant="secondary" size="lg">
+                                <Link href="/docs/fsma-204">
+                                    FSMA Guide
+                                </Link>
+                            </Button>
                         </div>
                     </div>
 
@@ -184,79 +218,63 @@ export default function NoticeValidatorPage() {
                                 subheadline="See which elements are detected and which are gap-indicated, with the per-CTE citations to review with counsel. This is a keyword self-check, not a compliance determination."
                                 ctaText="See breakdown"
                                 toolContext={{ quizGrade: undefined, quizScore: results.detected }}
-                                teaser={
-                                    <div className={`rounded-2xl border p-6 ${summaryColor(results.gaps)}`}>
-                                        <p className="text-sm font-medium">Keyword self-check summary</p>
-                                        <p className="mt-1 text-2xl font-bold">{results.detected} of {results.total} elements detected · {results.gaps} gap-indicated</p>
-                                        <p className="mt-2 text-xs opacity-80">Heuristic keyword check on a draft. Not a compliance determination.</p>
-                                    </div>
-                                }
+                                teaser={summary('Heuristic keyword check on a draft. Not a compliance determination.')}
                             >
-                                <div className={`rounded-2xl border p-6 ${summaryColor(results.gaps)}`}>
-                                    <p className="text-sm font-medium">Keyword self-check summary</p>
-                                    <p className="mt-1 text-2xl font-bold">{results.detected} of {results.total} elements detected · {results.gaps} gap-indicated</p>
-                                    <p className="mt-2 text-xs opacity-80">Heuristic keyword check on a draft. Not a compliance determination — have counsel and your QA lead review before any FDA submission.</p>
-                                </div>
+                                {summary('Heuristic keyword check on a draft. Not a compliance determination — have counsel and your QA lead review before any FDA submission.')}
 
                                 {results.checks.map((check) => (
-                                    <article key={check.id} className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                                        <div className="flex items-start gap-3">
-                                            {check.found ? (
-                                                <CheckCircle2 className="h-5 w-5 text-re-brand mt-0.5" />
-                                            ) : (
-                                                <XCircle className="h-5 w-5 text-rose-500 mt-0.5" />
-                                            )}
-                                            <div>
-                                                <p className="font-semibold text-[var(--re-text-primary)]">{check.found ? 'Detected: ' : 'Gap indicated: '}{check.label}</p>
-                                                <p className="text-xs text-[var(--re-text-muted)] mt-1">{check.regulation} · {check.citation}</p>
-                                                <p className="text-sm text-[var(--re-text-muted)] mt-2">{check.description}</p>
-                                            </div>
-                                        </div>
+                                    <article key={check.id}>
+                                        <Card>
+                                            <CardContent>
+                                                <div className="flex items-start gap-3">
+                                                    {check.found ? (
+                                                        <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} />
+                                                    ) : (
+                                                        <XCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} />
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="text-subheading text-re-text-primary">{check.found ? 'Detected: ' : 'Gap indicated: '}{check.label}</p>
+                                                        <p className="mt-1 font-mono text-[0.8125rem] text-re-text-tertiary">{check.regulation} · {check.citation}</p>
+                                                        <p className="mt-2 text-ui text-re-text-secondary">{check.description}</p>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
                                     </article>
                                 ))}
                             </LeadGate>
                         ) : (
                             <>
-                                <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6">
-                                    <div className="flex items-start gap-3">
-                                        <Info className="h-5 w-5 text-[var(--re-brand)] mt-0.5" />
-                                        <div>
-                                            <p className="font-semibold text-[var(--re-text-primary)]">What this checks</p>
-                                            <p className="mt-2 text-sm text-[var(--re-text-muted)]">
-                                                Lot scope, CTE references, KDE coverage, sortable export signals, and traceability record integrity markers.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="rounded-2xl border border-[rgba(245,158,11,0.24)] bg-[rgba(245,158,11,0.08)] p-6">
-                                    <div className="flex items-start gap-3">
-                                        <AlertTriangle className="h-5 w-5 text-re-warning mt-0.5" />
-                                        <div>
-                                            <p className="font-semibold text-[var(--re-text-primary)]">Scope note</p>
-                                            <p className="mt-2 text-sm text-[var(--re-text-muted)]">
-                                                Heuristic keyword self-check on a draft response. Does not validate FDA compliance, evidentiary integrity, or your 24-hour obligation under §1.1455(c). Have counsel and your QA lead review any response before submission to FDA.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+                                <Callout tone="info" role="note" icon={Info} title="What this checks">
+                                    Lot scope, CTE references, KDE coverage, sortable export signals, and traceability record integrity markers.
+                                </Callout>
+                                <Callout tone="warning" role="note" icon={AlertTriangle} title="Scope note">
+                                    Heuristic keyword self-check on a draft response. Does not validate FDA compliance, evidentiary integrity, or your 24-hour obligation under §1.1455(c). Have counsel and your QA lead review any response before submission to FDA.
+                                </Callout>
                             </>
                         )}
                     </div>
                 </div>
 
                 <div className="mt-8 flex flex-wrap gap-3">
-                    <Link href="/tools/kde-checker" className="inline-flex items-center justify-center h-11 px-6 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-primary)] font-semibold">
-                        KDE Checker
-                    </Link>
-                    <Link href="/tools/cte-mapper" className="inline-flex items-center justify-center h-11 px-6 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-primary)] font-semibold">
-                        CTE Mapper
-                    </Link>
-                    <Link href="/trace" className="inline-flex items-center justify-center h-11 px-6 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-primary)] font-semibold">
-                        Trace Explorer
-                    </Link>
+                    <Button asChild variant="secondary" size="lg">
+                        <Link href="/tools/kde-checker">
+                            KDE Checker
+                        </Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="lg">
+                        <Link href="/tools/cte-mapper">
+                            CTE Mapper
+                        </Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="lg">
+                        <Link href="/trace">
+                            Trace Explorer
+                        </Link>
+                    </Button>
                 </div>
-            </section>
-        </main>
+            </Container>
+        </div>
         </EmailGate>
     );
 }

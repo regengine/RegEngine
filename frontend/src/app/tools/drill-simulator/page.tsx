@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import { DrillSimulatorClient } from "./components/DrillSimulatorClient";
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";

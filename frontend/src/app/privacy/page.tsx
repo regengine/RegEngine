@@ -24,7 +24,14 @@ import {
   Trash2,
   UserCheck,
   Users,
+  type LucideIcon,
 } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | RegEngine',
@@ -138,70 +145,87 @@ const rightsItems = [
 
 /* ── page ─────────────────────────────────────────────────────── */
 
+const PROSE_LINK =
+  'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
+
+function NoteCard({
+  Icon,
+  heading,
+  children,
+}: {
+  Icon: LucideIcon;
+  heading: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="flex items-start gap-3 p-5">
+      <Icon className="mt-0.5 h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+      <div className="min-w-0">
+        <h2 className="mb-1 text-heading text-re-text-primary">{heading}</h2>
+        {children}
+      </div>
+    </Card>
+  );
+}
+
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+    <div className="re-page min-h-screen">
       {/* ── Hero ───────────────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-6">
-        <div className="flex items-center gap-2.5 mb-5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-3 py-1 text-[11px] font-semibold tracking-wide text-[var(--re-brand)]">
-            <Sparkles className="h-3 w-3" /> Privacy by Design
-          </span>
+      <Container width="prose" className="pb-6 pt-14 sm:pt-20">
+        <div className="mb-5 flex items-center gap-2.5">
+          <Badge tone="brand">
+            <Sparkles className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" /> Privacy by Design
+          </Badge>
         </div>
 
-        <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mb-3 leading-tight tracking-tight">
-          Privacy Policy
-        </h1>
-        <p className="text-sm text-[var(--re-text-disabled)] font-mono">
+        <PageHeader
+          size="hero"
+          title="Privacy Policy"
+          className="mb-0 border-b-0 pb-0"
+        />
+        <p className="mt-3 font-mono text-[0.8125rem] text-re-text-tertiary">
           Effective: March 11, 2026 · Last updated: March 11, 2026
         </p>
-        <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mt-4">
+        <p className="mt-4 text-ui text-re-text-secondary">
           Related documents:{' '}
-          <Link href="/terms" className="text-[var(--re-brand)] underline hover:opacity-90">
+          <Link href="/terms" className={PROSE_LINK}>
             Terms of Service
           </Link>
           ,{' '}
-          <Link href="/dpa" className="text-[var(--re-brand)] underline hover:opacity-90">
+          <Link href="/dpa" className={PROSE_LINK}>
             Data Processing Agreement
           </Link>
           , and{' '}
-          <Link href="/security" className="text-[var(--re-brand)] underline hover:opacity-90">
+          <Link href="/security" className={PROSE_LINK}>
             Security
           </Link>
           .
         </p>
-      </section>
+      </Container>
 
       {/* ── TL;DR callout ──────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto px-4 sm:px-6 pb-10">
-        <div
-          className="rounded-2xl border border-[var(--re-brand)]/20 p-6"
-          style={{ background: 'var(--re-brand-muted)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
-        >
-          <div className="flex items-start gap-3">
-            <Shield className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-            <div>
-              <h2 className="font-display text-[15px] font-bold text-[var(--re-text-primary)] mb-1">
-                Plain language. No legalese walls.
-              </h2>
-              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                Here&apos;s what we collect, why, and what we do with it. Your compliance data belongs
-                to you. RegEngine is designed to restrict tenant access at the database layer,
-                provide verifiable evidence exports where configured, and don&apos;t sell your data
-                (as defined by the CCPA/CPRA).
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <Container width="prose" className="pb-10">
+        <Callout tone="info" icon={Shield}>
+          <h2 className="text-subheading text-re-text-primary">
+            Plain language. No legalese walls.
+          </h2>
+          <p className="mt-1 text-ui text-re-text-secondary">
+            Here&apos;s what we collect, why, and what we do with it. Your compliance data belongs
+            to you. RegEngine is designed to restrict tenant access at the database layer,
+            provide verifiable evidence exports where configured, and don&apos;t sell your data
+            (as defined by the CCPA/CPRA).
+          </p>
+        </Callout>
+      </Container>
 
       {/* ── Two-column layout: TOC + Content ───────────────── */}
-      <section className="relative z-[2] max-w-[1020px] mx-auto px-4 sm:px-6 pb-12">
-        <div className="flex gap-6 lg:gap-10">
+      <Container width="docs" className="pb-12">
+        <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,720px)] lg:justify-center lg:gap-10">
           {/* Sticky TOC — desktop only */}
-          <nav className="hidden lg:block w-[220px] shrink-0">
+          <nav className="hidden lg:block">
             <div className="sticky top-24">
-              <p className="text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase mb-3">
+              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
                 On this page
               </p>
               <ul className="flex flex-col gap-1">
@@ -209,9 +233,9 @@ export default function PrivacyPage() {
                   <li key={t.id}>
                     <a
                       href={`#${t.id}`}
-                      className="flex items-center gap-1.5 text-[13px] text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors py-1"
+                      className="flex items-center gap-1.5 py-1 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                     >
-                      <ChevronRight className="h-3 w-3 opacity-40" />
+                      <ChevronRight className="h-3 w-3 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
                       {t.label}
                     </a>
                   </li>
@@ -221,114 +245,91 @@ export default function PrivacyPage() {
           </nav>
 
           {/* Main content */}
-          <div className="flex-1 min-w-0 max-w-[720px]">
+          <div className="min-w-0">
             {/* ── What We Collect ─────────────────────────── */}
             <div id="collect" className="scroll-mt-24 pb-10">
-              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
+              <h2 className="mb-5 text-heading text-re-text-primary">
                 What We Collect
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {collectItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5"
-                    style={{
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px var(--re-surface-border)',
-                    }}
-                  >
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
-                      <item.Icon className="h-4 w-4" />
-                    </div>
-                    <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                  <Card key={i} className="p-5">
+                    <item.Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                    <h3 className="mb-1 text-subheading text-re-text-primary">
                       {item.subtitle}
                     </h3>
-                    <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                    <p className="text-ui text-re-text-secondary">
                       {item.text}
                     </p>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>
 
             {/* ── How We Use It ───────────────────────────── */}
-            <div id="use" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
+            <div id="use" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <h2 className="mb-5 text-heading text-re-text-primary">
                 How We Use Your Data
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {useItems.map((item, i) => (
-                  <div key={i} className="group flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
-                      <item.Icon className="h-4 w-4" />
-                    </div>
-                    <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed pt-1.5">
+                  <Card key={i} className="flex items-start gap-3 p-4">
+                    <item.Icon className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                    <p className="text-ui text-re-text-secondary">
                       {item.text}
                     </p>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>
 
             {/* ── What We Don't Do — highlighted callout ──── */}
-            <div id="dont" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div
-                className="rounded-2xl border-2 border-re-danger/20 p-4 sm:p-6"
-                style={{ background: 'rgba(239,68,68,0.04)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
-              >
-                <div className="flex items-center gap-2.5 mb-4">
-                  <Ban className="h-5 w-5 text-re-danger" />
-                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)]">
-                    What We Don&apos;t Do
-                  </h2>
-                </div>
+            <div id="dont" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <Callout tone="neutral" icon={Ban}>
+                <h2 className="mb-4 text-heading text-re-text-primary">
+                  What We Don&apos;t Do
+                </h2>
                 <ul className="flex flex-col gap-2.5">
                   {dontItems.map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5">
-                      <ShieldCheck className="h-4 w-4 text-re-brand mt-0.5 shrink-0" />
-                      <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                      <p className="text-ui text-re-text-secondary">
                         {item}
                       </p>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </Callout>
             </div>
 
             {/* ── Data Storage & Security ─────────────────── */}
-            <div id="storage" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
+            <div id="storage" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <h2 className="mb-5 text-heading text-re-text-primary">
                 Data Storage &amp; Security
               </h2>
               <div className="grid gap-4 sm:grid-cols-3">
                 {storageItems.map((item, i) => (
-                  <article
-                    key={i}
-                    className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5"
-                    style={{
-                      borderTop: '3px solid var(--re-brand)',
-                      boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
-                    }}
-                  >
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
-                      <item.Icon className="h-4 w-4" />
-                    </div>
-                    <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-1">
-                      {item.subtitle}
-                    </h3>
-                    <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                      {item.text}
-                    </p>
+                  <article key={i}>
+                    <Card className="h-full p-5">
+                      <item.Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                      <h3 className="mb-1 text-subheading text-re-text-primary">
+                        {item.subtitle}
+                      </h3>
+                      <p className="text-ui text-re-text-secondary">
+                        {item.text}
+                      </p>
+                    </Card>
                   </article>
                 ))}
               </div>
               {/* Retention note */}
-              <div className="mt-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 flex items-start gap-3">
-                <LockKeyhole className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
+              <Card className="mt-4 flex items-start gap-3 p-4">
+                <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
                 <div>
-                  <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">
+                  <h3 className="mb-0.5 text-subheading text-re-text-primary">
                     Retention
                   </h3>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                  <p className="text-ui text-re-text-secondary">
                     We retain your compliance data for the duration of your subscription and any
                     post-cancellation period defined by your customer agreement. After cancellation,
                     you can request available exports of customer-submitted compliance data, subject
@@ -340,162 +341,122 @@ export default function PrivacyPage() {
                     cycles, and legal or regulatory holds may require longer retention.
                   </p>
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* ── Your Rights ─────────────────────────────── */}
-            <div id="rights" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
+            <div id="rights" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <h2 className="mb-5 text-heading text-re-text-primary">
                 Your Rights
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {rightsItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5"
-                    style={{
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px var(--re-surface-border)',
-                    }}
-                  >
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
-                      <item.Icon className="h-4 w-4" />
-                    </div>
-                    <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                  <Card key={i} className="p-5">
+                    <item.Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                    <h3 className="mb-1 text-subheading text-re-text-primary">
                       {item.subtitle}
                     </h3>
-                    <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                    <p className="text-ui text-re-text-secondary">
                       {item.text}
                     </p>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>
 
             {/* ── Cookies ─────────────────────────────────── */}
-            <div id="cookies" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Cookie className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">Cookies</h2>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    We use essential cookies for authentication and session management. We use basic
-                    analytics cookies to understand product usage. We do not use third-party
-                    advertising cookies. You can disable non-essential cookies in your browser
-                    settings.
-                  </p>
-                </div>
-              </div>
+            <div id="cookies" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <NoteCard Icon={Cookie} heading="Cookies">
+                <p className="text-ui text-re-text-secondary">
+                  We use essential cookies for authentication and session management. We use basic
+                  analytics cookies to understand product usage. We do not use third-party
+                  advertising cookies. You can disable non-essential cookies in your browser
+                  settings.
+                </p>
+              </NoteCard>
             </div>
 
             {/* ── Third-Party Services ────────────────────── */}
-            <div id="third-party" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <CreditCard className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">
-                    Third-Party Services
-                  </h2>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    RegEngine uses subprocessors to operate the platform. Default processors support
-                    core hosting, database, and request-routing functions; optional processors are used
-                    only where the relevant billing flow, analytics flow, email flow, object storage,
-                    or AI extraction workflow is enabled or configured. The authoritative public list,
-                    including purpose, data processed, region, and availability, is in the{' '}
-                    <Link href="/dpa" className="text-[var(--re-brand)] underline">DPA</Link>. The
-                    executed agreement controls notice periods, objections, and any negotiated
-                    subprocessor terms.
-                  </p>
-                </div>
-              </div>
+            <div id="third-party" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <NoteCard Icon={CreditCard} heading="Third-Party Services">
+                <p className="text-ui text-re-text-secondary">
+                  RegEngine uses subprocessors to operate the platform. Default processors support
+                  core hosting, database, and request-routing functions; optional processors are used
+                  only where the relevant billing flow, analytics flow, email flow, object storage,
+                  or AI extraction workflow is enabled or configured. The authoritative public list,
+                  including purpose, data processed, region, and availability, is in the{' '}
+                  <Link href="/dpa" className={PROSE_LINK}>DPA</Link>. The
+                  executed agreement controls notice periods, objections, and any negotiated
+                  subprocessor terms.
+                </p>
+              </NoteCard>
             </div>
 
             {/* ── Service Availability ────────────────────── */}
-            <div id="availability" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <RefreshCw className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">
-                    Service Availability Notice
-                  </h2>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    RegEngine features and workflows may change as we improve the platform, and
-                    access may be modified during staged rollouts or service updates. This Privacy
-                    Policy applies throughout those updates and after broader rollout.
-                  </p>
-                </div>
-              </div>
+            <div id="availability" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <NoteCard Icon={RefreshCw} heading="Service Availability Notice">
+                <p className="text-ui text-re-text-secondary">
+                  RegEngine features and workflows may change as we improve the platform, and
+                  access may be modified during staged rollouts or service updates. This Privacy
+                  Policy applies throughout those updates and after broader rollout.
+                </p>
+              </NoteCard>
             </div>
 
             {/* ── Changes to This Policy ──────────────────── */}
-            <div id="changes" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Bell className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">
-                    Changes to This Policy
-                  </h2>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    We&apos;ll provide reasonable advance notice of material changes by email.
-                    Non-material changes (clarifications, formatting) may be made without
-                    notice.
-                  </p>
-                </div>
-              </div>
+            <div id="changes" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <NoteCard Icon={Bell} heading="Changes to This Policy">
+                <p className="text-ui text-re-text-secondary">
+                  We&apos;ll provide reasonable advance notice of material changes by email.
+                  Non-material changes (clarifications, formatting) may be made without
+                  notice.
+                </p>
+              </NoteCard>
             </div>
 
             {/* ── Contact ─────────────────────────────────── */}
-            <div id="contact" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Mail className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">Contact</h2>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    Questions about this policy?{' '}
-                    <a
-                      href="mailto:privacy@regengine.co"
-                      className="text-[var(--re-brand)] underline hover:opacity-90"
-                    >
-                      privacy@regengine.co
-                    </a>{' '}
-                    — you&apos;ll hear from the founder directly, not a legal department.
-                  </p>
-                </div>
-              </div>
+            <div id="contact" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
+              <NoteCard Icon={Mail} heading="Contact">
+                <p className="text-ui text-re-text-secondary">
+                  Questions about this policy?{' '}
+                  <a
+                    href="mailto:privacy@regengine.co"
+                    className={PROSE_LINK}
+                  >
+                    privacy@regengine.co
+                  </a>{' '}
+                  — you&apos;ll hear from the founder directly, not a legal department.
+                </p>
+              </NoteCard>
             </div>
           </div>
         </div>
-      </section>
+      </Container>
 
       {/* ── Alpha CTA callout ──────────────────────────────── */}
-      <section className="relative z-[2] max-w-[700px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-        <div
-          className="rounded-2xl border border-[var(--re-brand)]/20 p-5 sm:p-8 text-center"
-          style={{
-            background: 'var(--re-brand-muted)',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-          }}
-        >
-          <h2 className="font-display text-[22px] font-bold text-[var(--re-text-primary)] mb-2">
+      <Container width="prose" className="pb-12 sm:pb-16">
+        <Card className="p-5 text-center sm:p-8">
+          <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">
             Your data belongs to you — always
           </h2>
-          <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">
+          <p className="mx-auto mb-6 max-w-[520px] text-ui text-re-text-secondary">
             Become a Founding Design Partner to review the current tenant-isolation posture and
             evidence verification workflows in your workspace.
           </p>
-          <div className="flex gap-3 justify-center flex-wrap">
-            <Link href="/alpha">
-              <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--re-brand)] text-white text-[15px] font-semibold shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                Become a Founding Design Partner <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
-            <a href="mailto:privacy@regengine.co">
-              <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] text-[var(--re-text-primary)] text-[15px] font-semibold hover:border-[var(--re-brand)]/40 transition-colors">
-                <Mail className="h-4 w-4" /> Contact the founder
-              </button>
-            </a>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg">
+              <Link href="/alpha">
+                Become a Founding Design Partner <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <a href="mailto:privacy@regengine.co">
+                <Mail aria-hidden="true" strokeWidth={1.75} /> Contact the founder
+              </a>
+            </Button>
           </div>
-        </div>
-      </section>
+        </Card>
+      </Container>
     </div>
   );
 }

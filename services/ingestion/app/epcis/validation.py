@@ -93,11 +93,24 @@ def _audit_log_validation_failure(
         logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
 
 
-def _default_product_description(normalized: dict) -> str:
-    product_id = normalized.get("product_id")
-    if product_id:
-        return f"EPCIS Product {product_id}"
-    return "EPCIS Traceability Event"
+def _epcis_product_description(event: dict, kde_map: dict | None = None) -> str:
+    """The product description the EPCIS payload carries, or ``""``.
+
+    Precedence matches the canonical normalizer: a top-level
+    ``productDescription``, then the ILMD ``productDescription`` that
+    ``_extract_kdes`` copies into the KDE map. An empty string is stored when
+    neither exists: the column is NOT NULL, and an empty cell is a true
+    statement about a missing record, where the old ``EPCIS Product <epc>`` /
+    ``EPCIS Traceability Event`` prose read as a description the partner
+    never sent.
+    """
+    for value in (
+        event.get("productDescription"),
+        (kde_map or {}).get("productDescription"),
+    ):
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
 
 
 def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> dict | None:
@@ -110,30 +123,63 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
         from pydantic import ValidationError
         from shared.schemas import FSMAEvent, FSMAEventType
 
-        # Map internal event_type strings to FSMAEventType enum
+        # Every CTE type ``_normalize_epcis_to_cte`` can emit, mapped onto
+        # the four FSMAEventType members this validation gate knows. The
+        # lot-origination CTEs (harvesting, cooling, growing, initial
+        # packing) validate as CREATION and first land-based receiving as
+        # RECEIVING; this is an explicit approximation for the gate only.
+        # The stored ``event_type`` is the normalized value, not this one.
+        # Anything else fails validation instead of being treated as a
+        # receipt, which is what the old ``.get(raw, RECEIVING)`` did.
         event_type_map = {
             "shipping": FSMAEventType.SHIPPING,
             "receiving": FSMAEventType.RECEIVING,
+            "first_land_based_receiving": FSMAEventType.RECEIVING,
             "transformation": FSMAEventType.TRANSFORMATION,
-            "initial_packing": FSMAEventType.CREATION,
             "creation": FSMAEventType.CREATION,
+            "initial_packing": FSMAEventType.CREATION,
+            "harvesting": FSMAEventType.CREATION,
+            "cooling": FSMAEventType.CREATION,
+            "growing": FSMAEventType.CREATION,
         }
-        raw_type = (normalized.get("event_type") or "receiving").lower()
-        fsma_type = event_type_map.get(raw_type, FSMAEventType.RECEIVING)
+        raw_type = str(normalized.get("event_type") or "").lower()
+        fsma_type = event_type_map.get(raw_type)
+        if fsma_type is None:
+            errors = [
+                {
+                    "loc": ["event_type"],
+                    "msg": f"event_type {raw_type or None!r} has no FSMA event type mapping",
+                    "type": "value_error",
+                }
+            ]
+            logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, errors)
+            _audit_log_validation_failure(errors, tenant_id, normalized)
+            return None
+
+        # ``tlc`` and ``event_time`` are required; a missing one fails
+        # validation below. The old ``"UNKNOWN"`` and ``now()`` stand-ins
+        # made the gate pass on a lot code and an event time that the
+        # partner never sent.
+        # The gate discards the dump after pass/fail, so FSMAEvent's own
+        # model default stands in for a missing description here; nothing
+        # synthesized in this function is stored.
+        optional_fields: dict[str, Any] = {}
+        if normalized.get("product_description"):
+            optional_fields["product_description"] = normalized["product_description"]
 
         fsma_event = FSMAEvent(
             event_type=fsma_type,
-            tlc=normalized.get("tlc") or "UNKNOWN",
-            product_description=normalized.get("product_description") or _default_product_description(normalized),
+            tlc=normalized.get("tlc"),
             quantity=normalized.get("quantity"),
             unit_of_measure=normalized.get("unit_of_measure"),
             location_gln=normalized.get("location_id"),
-            event_time=normalized.get("event_time") or datetime.now(timezone.utc).isoformat(),
+            event_time=normalized.get("event_time"),
             source_gln=normalized.get("source_location_id"),
             destination_gln=normalized.get("dest_location_id"),
             reference_document_type="EPCIS",
             reference_document_number=None,
             tenant_id=tenant_id,
+            **optional_fields,
         )
         return fsma_event.model_dump()
     except ValidationError as exc:

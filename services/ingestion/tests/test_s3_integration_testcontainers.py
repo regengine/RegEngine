@@ -33,7 +33,9 @@ pytestmark = [
 @pytest.fixture(scope="session")
 def minio_container():
     """Start a real MinIO container for S3 integration testing."""
-    container = DockerContainer("minio/minio:RELEASE.2024-01-16T16-07-38Z")
+    # MinIO removed its Docker Hub repository (docker.io/minio/minio now 404s);
+    # the same release tag is published on quay.io.
+    container = DockerContainer("quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z")
     container.with_env("MINIO_ROOT_USER", "minio")
     container.with_env("MINIO_ROOT_PASSWORD", "minio123")
     container.with_command("server /data --console-address :9001")

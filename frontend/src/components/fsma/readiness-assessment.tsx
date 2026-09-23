@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import {
     CheckCircle2,
     XCircle,
@@ -108,6 +110,16 @@ const SYSTEM_QUESTIONS = [
     { id: 'testing', question: 'Have you conducted mock recall drills?', weight: 5 },
 ];
 
+/** One selected-row recipe for every pick list in the assessment (SPEC §4). */
+const selectableClasses = (selected: boolean, padding: string) =>
+    cn(
+        'w-full rounded-lg border text-left transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-card motion-reduce:transition-none',
+        padding,
+        selected
+            ? 'border-re-border-strong bg-re-surface-inset text-re-text-primary'
+            : 'border-re-border bg-re-surface-card text-re-text-secondary hover:border-re-border-strong hover:bg-re-surface-inset'
+    );
+
 export function FSMA204Assessment() {
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -168,11 +180,11 @@ export function FSMA204Assessment() {
         return Math.round(score);
     };
 
-    const getReadinessLevel = (score: number) => {
-        if (score >= 80) return { level: 'No gaps indicated', color: 'text-re-success', bg: 'bg-re-success-muted', icon: CheckCircle2 };
-        if (score >= 60) return { level: 'Few gaps indicated', color: 'text-re-warning', bg: 'bg-re-warning-muted', icon: AlertTriangle };
-        if (score >= 40) return { level: 'Several gaps indicated', color: 'text-orange-600', bg: 'bg-orange-100', icon: AlertTriangle };
-        return { level: 'Many gaps indicated', color: 'text-re-danger', bg: 'bg-re-danger-muted', icon: XCircle };
+    const getReadinessLevel = (score: number): { level: string; tone: BadgeTone; icon: typeof CheckCircle2 } => {
+        if (score >= 80) return { level: 'No gaps indicated', tone: 'success', icon: CheckCircle2 };
+        if (score >= 60) return { level: 'Few gaps indicated', tone: 'warning', icon: AlertTriangle };
+        if (score >= 40) return { level: 'Several gaps indicated', tone: 'warning', icon: AlertTriangle };
+        return { level: 'Many gaps indicated', tone: 'danger', icon: XCircle };
     };
 
     const canProceed = () => {
@@ -198,16 +210,14 @@ export function FSMA204Assessment() {
                                 <button
                                     key={category.id}
                                     onClick={() => toggleProduct(category.id)}
-                                    className={`p-3 rounded-lg border text-left transition-all ${isSelected
-                                        ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                                        }`}
+                                    aria-pressed={isSelected}
+                                    className={selectableClasses(isSelected, 'p-3')}
                                 >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Icon className={`h-4 w-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                                        <span className="font-medium text-sm">{category.name}</span>
+                                    <div className="mb-1 flex items-center gap-2">
+                                        <Icon className={cn('h-4 w-4 shrink-0', isSelected ? 'text-re-text-primary' : 'text-re-text-tertiary')} strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="text-ui font-medium">{category.name}</span>
                                     </div>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">{category.examples}</p>
+                                    <p className="line-clamp-2 text-small text-re-text-tertiary">{category.examples}</p>
                                 </button>
                             );
                         })}
@@ -223,13 +233,11 @@ export function FSMA204Assessment() {
                                 <button
                                     key={role.id}
                                     onClick={() => setSelectedRole(role.id)}
-                                    className={`p-4 rounded-lg border text-left transition-all ${isSelected
-                                        ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                                        }`}
+                                    aria-pressed={isSelected}
+                                    className={selectableClasses(isSelected, 'p-4')}
                                 >
-                                    <div className="font-medium mb-1">{role.name}</div>
-                                    <p className="text-xs text-muted-foreground">{role.description}</p>
+                                    <div className="mb-1 text-ui font-medium">{role.name}</div>
+                                    <p className="text-small text-re-text-tertiary">{role.description}</p>
                                 </button>
                             );
                         })}
@@ -239,7 +247,7 @@ export function FSMA204Assessment() {
             case 2:
                 return (
                     <div className="space-y-3">
-                        <p className="text-sm text-muted-foreground mb-4">
+                        <p className="mb-4 text-ui text-re-text-secondary">
                             Critical Tracking Events (CTEs) are key points where traceability data must be captured.
                         </p>
                         {CTES.map(cte => {
@@ -248,18 +256,15 @@ export function FSMA204Assessment() {
                                 <button
                                     key={cte.id}
                                     onClick={() => toggleCTE(cte.id)}
-                                    className={`w-full p-4 rounded-lg border text-left transition-all flex items-center gap-4 ${isSelected
-                                        ? 'border-primary bg-primary/10'
-                                        : 'border-border hover:border-primary/50'
-                                        }`}
+                                    aria-pressed={isSelected}
+                                    className={cn(selectableClasses(isSelected, 'p-4'), 'flex items-center gap-4')}
                                 >
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
-                                        }`}>
-                                        {isSelected && <CheckCircle2 className="h-4 w-4 text-white" />}
-                                    </div>
+                                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full border', isSelected ? 'border-re-border-strong' : 'border-re-border')} aria-hidden="true">
+                                        {isSelected && <CheckCircle2 className="h-4 w-4 text-re-text-primary" strokeWidth={1.75} />}
+                                    </span>
                                     <div>
-                                        <div className="font-medium">{cte.name}</div>
-                                        <p className="text-sm text-muted-foreground">{cte.description}</p>
+                                        <div className="text-ui font-medium">{cte.name}</div>
+                                        <p className="text-small text-re-text-tertiary">{cte.description}</p>
                                     </div>
                                 </button>
                             );
@@ -270,7 +275,7 @@ export function FSMA204Assessment() {
             case 3:
                 return (
                     <div className="space-y-3">
-                        <p className="text-sm text-muted-foreground mb-4">
+                        <p className="mb-4 text-ui text-re-text-secondary">
                             Key Data Elements (KDEs) are the specific information required at each CTE.
                         </p>
                         {KDES.map(kde => {
@@ -279,18 +284,15 @@ export function FSMA204Assessment() {
                                 <button
                                     key={kde.id}
                                     onClick={() => toggleKDE(kde.id)}
-                                    className={`w-full p-4 rounded-lg border text-left transition-all flex items-center gap-4 ${isSelected
-                                        ? 'border-primary bg-primary/10'
-                                        : 'border-border hover:border-primary/50'
-                                        }`}
+                                    aria-pressed={isSelected}
+                                    className={cn(selectableClasses(isSelected, 'p-4'), 'flex items-center gap-4')}
                                 >
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
-                                        }`}>
-                                        {isSelected && <CheckCircle2 className="h-4 w-4 text-white" />}
-                                    </div>
+                                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full border', isSelected ? 'border-re-border-strong' : 'border-re-border')} aria-hidden="true">
+                                        {isSelected && <CheckCircle2 className="h-4 w-4 text-re-text-primary" strokeWidth={1.75} />}
+                                    </span>
                                     <div>
-                                        <div className="font-medium">{kde.name}</div>
-                                        <p className="text-sm text-muted-foreground">{kde.description}</p>
+                                        <div className="text-ui font-medium">{kde.name}</div>
+                                        <p className="text-small text-re-text-tertiary">{kde.description}</p>
                                     </div>
                                 </button>
                             );
@@ -306,20 +308,24 @@ export function FSMA204Assessment() {
                             return (
                                 <div
                                     key={q.id}
-                                    className="flex items-center justify-between p-4 rounded-lg border"
+                                    className="flex flex-col gap-3 rounded-lg border border-re-border bg-re-surface-card p-4 sm:flex-row sm:items-center sm:justify-between"
                                 >
-                                    <span className="text-sm pr-4">{q.question}</span>
-                                    <div className="flex gap-2 shrink-0">
+                                    <span className="pr-4 text-ui text-re-text-secondary">{q.question}</span>
+                                    <div className="flex shrink-0 gap-2">
                                         <Button
                                             size="sm"
-                                            variant={isYes === true ? 'default' : 'outline'}
+                                            variant="secondary"
+                                            aria-pressed={isYes === true}
+                                            className={cn(isYes === true && 'bg-re-surface-inset font-semibold text-re-text-primary')}
                                             onClick={() => setSystemAnswers(prev => ({ ...prev, [q.id]: true }))}
                                         >
                                             Yes
                                         </Button>
                                         <Button
                                             size="sm"
-                                            variant={isYes === false ? 'destructive' : 'outline'}
+                                            variant="secondary"
+                                            aria-pressed={isYes === false}
+                                            className={cn(isYes === false && 'bg-re-surface-inset font-semibold text-re-text-primary')}
                                             onClick={() => setSystemAnswers(prev => ({ ...prev, [q.id]: false }))}
                                         >
                                             No
@@ -338,16 +344,18 @@ export function FSMA204Assessment() {
                 return (
                     <div className="space-y-6">
                         {/* Score Display */}
-                        <div className="text-center py-8">
-                            <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full ${readiness.bg} mb-4`}>
+                        <div className="py-8 text-center">
+                            <div className="mb-4 inline-flex h-32 w-32 items-center justify-center rounded-full border border-re-border bg-re-surface-inset">
                                 <div className="text-center">
-                                    <span className={`text-4xl font-bold ${readiness.color}`}>{score}</span>
-                                    <span className="text-lg text-muted-foreground">/100</span>
+                                    <span className="text-title tabular-nums text-re-text-primary">{score}</span>
+                                    <span className="text-ui text-re-text-tertiary">/100</span>
                                 </div>
                             </div>
-                            <div className={`flex items-center justify-center gap-2 ${readiness.color}`}>
-                                <ReadinessIcon className="h-5 w-5" />
-                                <span className="text-xl font-semibold">{readiness.level}</span>
+                            <div className="flex items-center justify-center">
+                                <Badge tone={readiness.tone}>
+                                    <ReadinessIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                    {readiness.level}
+                                </Badge>
                             </div>
                         </div>
 
@@ -356,43 +364,43 @@ export function FSMA204Assessment() {
                             <Card>
                                 <CardContent className="pt-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <Package className="h-4 w-4 text-primary" />
-                                        <span className="font-medium">Products</span>
+                                        <Package className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="font-mono uppercase text-label text-re-text-muted">Products</span>
                                     </div>
-                                    <p className="text-2xl font-bold">{selectedProducts.length}</p>
-                                    <p className="text-xs text-muted-foreground">FTL categories covered</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">{selectedProducts.length}</p>
+                                    <p className="text-small text-re-text-tertiary">FTL categories covered</p>
                                 </CardContent>
                             </Card>
                             <Card>
                                 <CardContent className="pt-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <ClipboardCheck className="h-4 w-4 text-primary" />
-                                        <span className="font-medium">CTEs</span>
+                                        <ClipboardCheck className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="font-mono uppercase text-label text-re-text-muted">CTEs</span>
                                     </div>
-                                    <p className="text-2xl font-bold">{selectedCTEs.length}/{CTES.length}</p>
-                                    <p className="text-xs text-muted-foreground">Events tracked</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">{selectedCTEs.length}/{CTES.length}</p>
+                                    <p className="text-small text-re-text-tertiary">Events tracked</p>
                                 </CardContent>
                             </Card>
                             <Card>
                                 <CardContent className="pt-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <FileCheck className="h-4 w-4 text-primary" />
-                                        <span className="font-medium">KDEs</span>
+                                        <FileCheck className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="font-mono uppercase text-label text-re-text-muted">KDEs</span>
                                     </div>
-                                    <p className="text-2xl font-bold">{selectedKDEs.length}/{KDES.length}</p>
-                                    <p className="text-xs text-muted-foreground">Data elements captured</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">{selectedKDEs.length}/{KDES.length}</p>
+                                    <p className="text-small text-re-text-tertiary">Data elements captured</p>
                                 </CardContent>
                             </Card>
                             <Card>
                                 <CardContent className="pt-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <Shield className="h-4 w-4 text-primary" />
-                                        <span className="font-medium">Systems</span>
+                                        <Shield className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                        <span className="font-mono uppercase text-label text-re-text-muted">Systems</span>
                                     </div>
-                                    <p className="text-2xl font-bold">
+                                    <p className="text-title tabular-nums text-re-text-primary">
                                         {Object.values(systemAnswers).filter(Boolean).length}/{SYSTEM_QUESTIONS.length}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">Capabilities in place</p>
+                                    <p className="text-small text-re-text-tertiary">Capabilities in place</p>
                                 </CardContent>
                             </Card>
                         </div>
@@ -400,36 +408,36 @@ export function FSMA204Assessment() {
                         {/* Recommendations */}
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-lg">Recommendations</CardTitle>
+                                <CardTitle>Recommendations</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {selectedCTEs.length < CTES.length && (
-                                    <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
+                                    <div className="flex items-start gap-2 text-ui text-re-text-secondary">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                                         <span>Implement tracking for missing CTEs: {CTES.filter(c => !selectedCTEs.includes(c.id)).map(c => c.name).join(', ')}</span>
                                     </div>
                                 )}
                                 {selectedKDEs.length < KDES.length && (
-                                    <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
+                                    <div className="flex items-start gap-2 text-ui text-re-text-secondary">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                                         <span>Capture missing KDEs: {KDES.filter(k => !selectedKDEs.includes(k.id)).map(k => k.name).join(', ')}</span>
                                     </div>
                                 )}
                                 {!systemAnswers['electronic'] && (
-                                    <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
+                                    <div className="flex items-start gap-2 text-ui text-re-text-secondary">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                                         <span>Transition to electronic record-keeping for faster FDA response</span>
                                     </div>
                                 )}
                                 {!systemAnswers['24hr'] && (
-                                    <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
+                                    <div className="flex items-start gap-2 text-ui text-re-text-secondary">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                                         <span>Gap indicated: ability to produce records within 24 hours of an FDA request — review your retrieval workflow.</span>
                                     </div>
                                 )}
                                 {!systemAnswers['testing'] && (
-                                    <div className="flex items-start gap-2 text-sm">
-                                        <AlertTriangle className="h-4 w-4 text-re-warning mt-0.5" />
+                                    <div className="flex items-start gap-2 text-ui text-re-text-secondary">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                                         <span>Conduct mock recall drills to test your traceability system</span>
                                     </div>
                                 )}
@@ -437,19 +445,14 @@ export function FSMA204Assessment() {
                         </Card>
 
                         {/* Enforcement Reminder */}
-                        <Card className="border-primary/50 bg-primary/5">
-                            <CardContent className="pt-4">
-                                <div className="flex items-center gap-3">
-                                    <Clock className="h-8 w-8 text-primary" />
-                                    <div>
-                                        <p className="font-semibold">FDA enforcement begins {FSMA_ENFORCEMENT_DATE}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {FSMA_ENFORCEMENT_FRAMING}
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <Callout
+                            tone="info"
+                            icon={Clock}
+                            role="note"
+                            title={`FDA enforcement begins ${FSMA_ENFORCEMENT_DATE}`}
+                        >
+                            {FSMA_ENFORCEMENT_FRAMING}
+                        </Callout>
                     </div>
                 );
 
@@ -462,19 +465,19 @@ export function FSMA204Assessment() {
     const StepIcon = step.icon;
 
     return (
-        <Card className="w-full max-w-4xl mx-auto">
+        <Card className="mx-auto w-full max-w-4xl">
             <CardHeader>
-                <div className="flex items-center justify-between mb-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-re-brand-muted dark:bg-re-brand">
-                            <StepIcon className="h-6 w-6 text-re-brand-dark dark:text-re-brand" />
-                        </div>
+                        <span aria-hidden="true" className="shrink-0 text-re-text-tertiary [&_svg]:size-5 [&_svg]:stroke-[1.75]">
+                            <StepIcon className="h-5 w-5" />
+                        </span>
                         <div>
                             <CardTitle>{step.title}</CardTitle>
                             <CardDescription>{step.description}</CardDescription>
                         </div>
                     </div>
-                    <Badge variant="outline">
+                    <Badge tone="neutral" mono>
                         Step {currentStep + 1} of {ASSESSMENT_STEPS.length}
                     </Badge>
                 </div>
@@ -497,11 +500,11 @@ export function FSMA204Assessment() {
 
             <CardFooter className="flex justify-between">
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => setCurrentStep(prev => prev - 1)}
                     disabled={currentStep === 0}
+                    leadingIcon={<ArrowLeft strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
                     Back
                 </Button>
 
@@ -509,9 +512,9 @@ export function FSMA204Assessment() {
                     <Button
                         onClick={() => setCurrentStep(prev => prev + 1)}
                         disabled={!canProceed()}
+                        trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
                     >
                         Next
-                        <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                 ) : (
                     <Button onClick={() => setCurrentStep(0)}>

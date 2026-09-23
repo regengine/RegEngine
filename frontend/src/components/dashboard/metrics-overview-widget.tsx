@@ -1,147 +1,100 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
+
 import { useSystemMetrics, useSystemStatus } from "@/hooks/use-api";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Shield, FileCheck, Link2, AlertTriangle } from "lucide-react";
+import { StatTile } from "@/components/ui/stat-tile";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { WorkbenchReadinessSnapshot } from "@/lib/api-hooks";
 
-export function MetricsOverviewWidget() {
-  const { data: metrics, isLoading, error } = useSystemMetrics();
+/**
+ * The dashboard's figure row: one hero stat and four KPIs.
+ *
+ * Follows the data-viz rules (SPEC §4, §7.1): exactly one hero figure per view;
+ * a tile is label / value / delta / trend with no icon; the value is never
+ * coloured; only the delta arrow carries sentiment. The readiness score appears
+ * here and nowhere else on the page — it used to be rendered twice, once in
+ * this row and again in the "Traceability Readiness" card below it.
+ */
+export function MetricsOverviewWidget({
+  readiness,
+}: {
+  readiness?: WorkbenchReadinessSnapshot;
+}) {
+  const { data: metrics, isLoading } = useSystemMetrics();
   const { data: systemStatus } = useSystemStatus();
-  const systemHealthy = systemStatus?.overall_status === "healthy";
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
-              <Skeleton className="h-4 w-[80px] sm:w-[100px]" />
-              <Skeleton className="h-4 w-4 rounded-full" />
-            </CardHeader>
-            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-              <Skeleton className="h-7 sm:h-8 w-[50px] sm:w-[60px] mb-1" />
-              <Skeleton className="h-3 w-[70px] sm:w-[80px]" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  const isDemo = !!(metrics as unknown as Record<string, unknown>)?._demo;
   const score = metrics?.compliance_score ?? 0;
-  const grade = metrics?.compliance_grade ?? "—";
   const events = metrics?.events_ingested ?? 0;
   const chainLen = metrics?.chain_length ?? 0;
   const chainOk = metrics?.chain_valid ?? false;
   const alerts = metrics?.open_alerts ?? 0;
+  const hasMetrics = Boolean(metrics) && !isLoading;
+  const servicesDown =
+    systemStatus?.overall_status && systemStatus.overall_status !== "healthy";
 
-  // Color grade badge
-  const gradeColor =
-    score >= 90
-      ? "text-re-brand-dark"
-      : score >= 70
-        ? "text-re-warning"
-        : "text-re-danger";
+  const openFixes = readiness?.unresolved_fix_count;
+  const exportEligible = readiness?.export_eligible;
 
   return (
-    <div className="space-y-3">
-      {isDemo && (
-        <div className="flex items-center gap-2 border border-re-warning/40 bg-[var(--re-surface-card)] px-3 py-2 text-xs text-re-warning">
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span>
-            {systemHealthy
-              ? "Sample data shown — connect a supplier feed to see live metrics."
-              : "Backend services unreachable — data will appear once services are connected."}
-          </span>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1 sm:p-6 sm:pb-2">
-            <CardTitle className="text-xs font-medium sm:text-sm">
-              FSMA Readiness Score
-            </CardTitle>
-            <Shield className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="flex flex-wrap items-baseline gap-1 sm:gap-2">
-              <span className={`text-xl font-bold sm:text-2xl ${gradeColor}`}>
-                {score > 0 ? `${score}%` : "—"}
-              </span>
-              {grade !== "—" && (
-                <span
-                  className={`text-sm font-semibold sm:text-lg ${gradeColor}`}
-                >
-                  ({grade})
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-muted-foreground sm:text-xs">
-              FSMA 204 readiness
-            </p>
-          </CardContent>
-        </Card>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr] lg:grid-rows-2">
+      <StatTile
+        className="sm:col-span-2 lg:col-span-1 lg:row-span-2"
+        hero
+        label="FSMA readiness score"
+        value={score > 0 ? score : ""}
+        unit={score > 0 ? "/100" : undefined}
+        loading={isLoading}
+        empty={!isLoading && score <= 0}
+        emptyCaption={
+          servicesDown
+            ? "No data — services unreachable"
+            : "No saved Inflow Workbench run yet"
+        }
+        status={
+          hasMetrics && score > 0 ? (
+            <StatusBadge
+              state={exportEligible ? "compliant" : "at-risk"}
+              label={exportEligible ? "Export eligible" : "Not export eligible"}
+              size="sm"
+            />
+          ) : undefined
+        }
+      />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1 sm:p-6 sm:pb-2">
-            <CardTitle className="text-xs font-medium sm:text-sm">
-              CTE Events
-            </CardTitle>
-            <FileCheck className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="truncate text-xl font-bold sm:text-2xl">
-              {events > 0 ? events.toLocaleString() : "—"}
-            </div>
-            <p className="text-[11px] text-muted-foreground sm:text-xs">
-              Traceability events tracked
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1 sm:p-6 sm:pb-2">
-            <CardTitle className="text-xs font-medium sm:text-sm">
-              Hash Chain
-            </CardTitle>
-            <Link2 className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="flex flex-wrap items-baseline gap-1 sm:gap-2">
-              <span className="text-xl font-bold sm:text-2xl">
-                {chainLen > 0 ? chainLen : "—"}
-              </span>
-              {chainLen > 0 && (
-                <span
-                  className={`text-[10px] font-medium sm:text-xs ${
-                    chainOk ? "text-re-brand-dark" : "text-re-danger"
-                  }`}
-                >
-                  {chainOk ? "Valid" : "Broken"}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-muted-foreground sm:text-xs">
-              Tamper-evident ledger entries
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1 sm:p-6 sm:pb-2">
-            <CardTitle className="text-xs font-medium sm:text-sm">
-              Open Alerts
-            </CardTitle>
-            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="text-xl font-bold sm:text-2xl">{alerts}</div>
-            <p className="text-[11px] text-muted-foreground sm:text-xs">
-              Compliance issues to resolve
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <StatTile
+        label="CTE events"
+        value={events > 0 ? events.toLocaleString() : ""}
+        loading={isLoading}
+        empty={!isLoading && events <= 0}
+        emptyCaption="Traceability events tracked"
+      />
+      <StatTile
+        label="Hash chain"
+        value={chainLen > 0 ? (chainOk ? "Verified" : "Broken") : ""}
+        loading={isLoading}
+        empty={!isLoading && chainLen <= 0}
+        emptyCaption="Tamper-evident ledger entries"
+        status={
+          chainLen > 0 ? (
+            <StatusBadge
+              state={chainOk ? "committed" : "non-compliant"}
+              label={`${chainLen.toLocaleString()} entries`}
+              size="sm"
+            />
+          ) : undefined
+        }
+      />
+      <StatTile
+        label="Open alerts"
+        value={alerts}
+        loading={isLoading}
+        emptyCaption="Compliance issues to resolve"
+      />
+      <StatTile
+        label="Open fixes"
+        value={typeof openFixes === "number" ? openFixes : ""}
+        empty={typeof openFixes !== "number"}
+        emptyCaption="From the Inflow Workbench run"
+      />
     </div>
   );
 }

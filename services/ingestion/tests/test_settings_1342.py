@@ -174,28 +174,22 @@ class TestDefaultSettings:
         result = _default_settings("tenant-1")
         assert result.data_retention.cte_retention_days == 1095
 
-    def test_integrations_list_includes_sensitech_connected(self):
+    def test_no_integration_is_reported_connected_or_synced(self):
+        """A tenant with no saved settings has connected nothing; the defaults must not say otherwise."""
         result = _default_settings("tenant-1")
         integrations_by_id = {i.id: i for i in result.integrations}
         assert "sensitech" in integrations_by_id
-        assert integrations_by_id["sensitech"].status == "connected"
-        assert integrations_by_id["sensitech"].last_sync is not None
+        assert {i.status for i in result.integrations} == {"disconnected"}
+        assert all(i.last_sync is None for i in result.integrations)
 
     def test_integrations_cover_iot_erp_retailer(self):
         result = _default_settings("tenant-1")
         categories = {i.category for i in result.integrations}
         assert {"iot", "erp", "retailer"} <= categories
 
-    def test_api_keys_include_live_and_test(self):
+    def test_no_api_keys_are_invented(self):
         result = _default_settings("tenant-1")
-        prefixes = {k["prefix"] for k in result.api_keys}
-        assert "rge_live_" in prefixes
-        assert "rge_test_" in prefixes
-
-    def test_test_key_has_never_been_used(self):
-        result = _default_settings("tenant-1")
-        test_key = next(k for k in result.api_keys if k["prefix"] == "rge_test_")
-        assert test_key["last_used"] is None
+        assert result.api_keys == []
 
     def test_plan_is_professional(self):
         result = _default_settings("tenant-1")
@@ -204,6 +198,11 @@ class TestDefaultSettings:
         assert result.plan["price_monthly"] == 499
         assert result.plan["facilities_limit"] == 5
         assert result.plan["events_limit"] == 50000
+
+    def test_plan_usage_starts_at_zero(self):
+        result = _default_settings("tenant-1")
+        assert result.plan["facilities_used"] == 0
+        assert result.plan["events_used"] == 0
 
 
 # ---------------------------------------------------------------------------

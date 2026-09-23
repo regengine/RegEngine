@@ -3,19 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { EXPERIMENTAL_TOOL_SLUGS, isExperimentalToolEnabled } from '@/lib/experimental-features';
+import { Container } from '@/components/layout/container';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import {
     ArrowRight,
-    BarChart3,
     ClipboardList,
-    Database,
-    FileOutput,
     FlaskConical,
     Leaf,
     Map,
-    ScanBarcode,
     ShieldCheck,
     Timer,
-    Upload,
 } from 'lucide-react';
 
 type Category = 'all' | 'assess' | 'validate' | 'simulate' | 'operate';
@@ -37,88 +35,97 @@ const TOOLS = [
     ['records-request-checklist', 'Records-Request Checklist', 'Self-reported checklist. Not a 24-hour capability test.', Timer, 'assess'],
 ] as const;
 
+/** The hero aside: a hairline ledger, not a bordered data table (SPEC §6). */
+const ROUTE_ROWS: [string, string][] = [
+    ['Start', 'FTL list'],
+    ['Map', 'CTEs and KDEs'],
+    ['Check', 'Self-reported fields'],
+    ['Operate', 'Inflow and export'],
+];
+
 export function ToolsLandingClient() {
     const [activeCategory, setActiveCategory] = useState<Category>('all');
     const visibleTools = TOOLS.filter((tool) => !EXPERIMENTAL_TOOL_SLUGS.has(tool[0]) || isExperimentalToolEnabled(tool[0]));
     const filtered = activeCategory === 'all' ? visibleTools : visibleTools.filter((tool) => tool[4] === activeCategory);
 
     return (
-        <main className="re-page min-h-screen text-[var(--re-text-secondary)]">
-            <section className="re-container grid items-start gap-10 pb-10 pt-12 md:grid-cols-[0.75fr_1fr] md:pb-12 md:pt-16">
+        <div className="bg-re-surface-base">
+            <Container
+                as="section"
+                width="marketing"
+                className="grid items-start gap-10 pb-10 pt-12 md:grid-cols-[0.75fr_1fr] md:pb-12 md:pt-16"
+            >
                 <div>
-                    <p className="re-label mb-5">Tools</p>
-                    <h1 className="re-hero-title max-w-[620px]">
+                    <p className="mb-5 font-mono uppercase text-label text-re-text-muted">Tools</p>
+                    <h1 className="max-w-[20ch] font-display text-display text-re-text-primary">
                         Small tools for list checks and field checks.
                     </h1>
-                    <p className="re-hero-copy mt-6">
+                    <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
                         These pages help you look at the Food Traceability List, CTE/KDE fields, and a self-reported records-request checklist. They do not score readiness, they do not decide if you are a covered person, and they do not claim you can meet §1.1455's clock.
                     </p>
-                    <p className="re-hero-copy mt-4 text-sm" style={{ color: 'var(--re-text-muted)' }}>
+                    <p className="mt-4 max-w-[68ch] text-small text-re-text-muted">
                         The federal Food Traceability Rule compliance date is July 20, 2028.
                     </p>
                 </div>
-                <div className="re-panel self-start overflow-hidden">
-                    <table className="re-rule-table">
-                        <tbody>
-                            {[
-                                ['Start', 'FTL list'],
-                                ['Map', 'CTEs and KDEs'],
-                                ['Check', 'Self-reported fields'],
-                                ['Operate', 'Inflow and export'],
-                            ].map(([label, value]) => (
-                                <tr key={label}>
-                                    <td className="w-1/3 font-mono text-[12px] uppercase text-[var(--re-text-muted)]">{label}</td>
-                                    <td className="font-medium text-[var(--re-text-primary)]">{value}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section className="re-section pt-6">
-                <div className="re-container">
-                    <div className="mb-6 flex flex-wrap gap-2">
-                        {CATEGORIES.map((cat) => (
-                            <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => setActiveCategory(cat.id)}
-                                className={`h-9 border px-4 font-mono text-[12px] font-medium uppercase ${
-                                    activeCategory === cat.id
-                                        ? 'border-[var(--re-text-primary)] bg-[var(--re-text-primary)] text-[var(--re-surface-base)]'
-                                        : 'border-[var(--re-surface-border)] bg-transparent text-[var(--re-text-muted)]'
-                                }`}
-                            >
-                                {cat.label}
-                            </button>
+                <Card className="self-start overflow-hidden">
+                    <dl className="divide-y divide-re-border-subtle">
+                        {ROUTE_ROWS.map(([label, value]) => (
+                            <div key={label} className="flex items-baseline gap-4 px-4 py-2.5">
+                                <dt className="w-1/3 shrink-0 font-mono uppercase text-label text-re-text-muted">{label}</dt>
+                                <dd className="min-w-0 text-ui font-medium text-re-text-primary">{value}</dd>
+                            </div>
                         ))}
-                    </div>
+                    </dl>
+                </Card>
+            </Container>
 
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {filtered.map(([id, title, description, Icon, category], index) => (
-                            <Link
-                                key={id}
-                                href={`/tools/${id}`}
-                                className="re-panel group flex min-h-[210px] flex-col justify-between p-5 no-underline"
-                            >
-                                <div>
-                                    <div className="mb-8 flex items-center justify-between border-b border-[var(--re-surface-border)] pb-3">
-                                        <Icon className="h-5 w-5" style={{ color: index % 4 === 0 ? 'var(--re-info)' : index % 4 === 1 ? 'var(--re-success)' : index % 4 === 2 ? 'var(--re-warning)' : 'var(--re-danger)' }} />
-                                        <span className="font-mono text-[11px] uppercase text-[var(--re-text-muted)]">{category}</span>
-                                    </div>
-                                    <h2 className="text-xl font-semibold text-[var(--re-text-primary)]">{title}</h2>
-                                    <p className="mt-3 text-sm leading-6 text-[var(--re-text-muted)]">{description}</p>
+            <Container as="section" width="marketing" className="pb-16 pt-6 sm:pb-20">
+                <div className="mb-6 flex flex-wrap gap-2">
+                    {CATEGORIES.map((cat) => (
+                        <button
+                            key={cat.id}
+                            type="button"
+                            aria-pressed={activeCategory === cat.id}
+                            onClick={() => setActiveCategory(cat.id)}
+                            className={cn(
+                                'inline-flex h-9 items-center rounded-md border px-4 font-mono uppercase text-label transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-base motion-reduce:transition-none',
+                                activeCategory === cat.id
+                                    ? 'border-re-border-strong bg-re-surface-inset text-re-text-primary'
+                                    : 'border-re-border bg-re-surface-card text-re-text-muted hover:bg-re-surface-inset hover:text-re-text-primary'
+                            )}
+                        >
+                            {cat.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {filtered.map(([id, title, description, Icon, category]) => (
+                        <Link
+                            key={id}
+                            href={`/tools/${id}`}
+                            className="group flex min-h-[210px] flex-col justify-between rounded-lg border border-re-border bg-re-surface-card p-5 no-underline transition-colors duration-120 hover:border-re-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-base motion-reduce:transition-none"
+                        >
+                            <div>
+                                <div className="mb-8 flex items-center justify-between border-b border-re-border-subtle pb-3">
+                                    <Icon className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                    <span className="font-mono uppercase text-label text-re-text-muted">{category}</span>
                                 </div>
-                                <span className="mt-6 flex items-center justify-between font-mono text-[12px] uppercase text-[var(--re-text-primary)]">
-                                    Open
-                                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                                </span>
-                            </Link>
-                        ))}
-                    </div>
+                                <h2 className="text-heading text-re-text-primary">{title}</h2>
+                                <p className="mt-3 text-ui text-re-text-secondary">{description}</p>
+                            </div>
+                            <span className="mt-6 flex items-center justify-between font-mono uppercase text-label text-re-text-primary">
+                                Open
+                                <ArrowRight
+                                    className="h-4 w-4 transition-transform duration-120 group-hover:translate-x-1 motion-reduce:transition-none"
+                                    strokeWidth={1.75}
+                                    aria-hidden="true"
+                                />
+                            </span>
+                        </Link>
+                    ))}
                 </div>
-            </section>
-        </main>
+            </Container>
+        </div>
     );
 }

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
 import { SandboxClient } from './SandboxClient';
 import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
@@ -28,36 +31,33 @@ export default function SandboxPage() {
   // that can only fail, say so plainly and point at what does work.
   if (!isSandboxEnabled()) {
     return (
-      <main className="min-h-screen bg-[var(--re-surface-base)]">
-        <div className="max-w-2xl mx-auto px-4 py-20">
-          <h1 className="text-2xl font-semibold text-[var(--re-text-primary)]">
-            The CSV sandbox is not enabled on this deployment
-          </h1>
-          <p className="mt-4 text-[0.9rem] leading-7 text-[var(--re-text-muted)]">
-            RegEngine&apos;s stateless CSV evaluation endpoint is part of the experimental router
-            surface and is turned off here. Nothing is broken on your end — the feature simply is
-            not switched on for this environment.
-          </p>
-          <p className="mt-4 text-[0.9rem] leading-7 text-[var(--re-text-muted)]">
-            The interactive demo covers the same rule evaluation against a synthetic dataset, and
-            the walkthrough shows the ingest-to-export path end to end.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/demo"
-              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors hover:bg-[var(--re-brand-dark)]"
-            >
-              Explore the interactive demo <ArrowRight className="w-4 h-4" />
+      // No <main> here: the root layout already renders main#main-content, and
+      // a nested one gave the page two main landmarks.
+      <Container width="prose" className="py-16 sm:py-20">
+        <PageHeader title="The CSV sandbox is not enabled on this deployment" />
+        <p className="text-body text-re-text-secondary">
+          RegEngine&apos;s stateless CSV evaluation endpoint is part of the experimental router
+          surface and is turned off here. Nothing is broken on your end — the feature simply is
+          not switched on for this environment.
+        </p>
+        <p className="mt-4 text-body text-re-text-secondary">
+          The interactive demo covers the same rule evaluation against a synthetic dataset, and
+          the walkthrough shows the ingest-to-export path end to end.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Button size="lg" asChild>
+            <Link href="/demo">
+              Explore the interactive demo
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             </Link>
-            <Link
-              href="/walkthrough"
-              className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-5 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-[var(--re-surface-elevated)]"
-            >
+          </Button>
+          <Button size="lg" variant="secondary" asChild>
+            <Link href="/walkthrough">
               See the walkthrough
             </Link>
-          </div>
+          </Button>
         </div>
-      </main>
+      </Container>
     );
   }
 

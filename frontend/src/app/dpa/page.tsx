@@ -17,6 +17,21 @@ import {
   Users,
 } from 'lucide-react';
 import { TRUST_SUBPROCESSORS } from '@/lib/trust-subprocessors';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 export const metadata: Metadata = {
   title: 'Data Processing Agreement | RegEngine',
@@ -104,72 +119,95 @@ const SECURITY_MEASURES = [
 
 /* ── Page ─────────────────────────────────────────────────────── */
 
+const PROSE_LINK =
+  'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
+
+const PROCESSOR_COMMITMENTS = [
+  'Processing Personal Data on documented customer instructions, unless applicable law requires otherwise.',
+  'Requiring personnel authorized to process Personal Data to follow confidentiality obligations.',
+  'Maintaining the technical and organizational security measures described in Section 6, subject to the executed agreement and current deployment posture.',
+  'Using Sub-Processors under the authorization, notice, and objection process in the executed agreement or signed DPA.',
+  'Assisting the Controller, by appropriate technical and organizational measures, in responding to applicable data subject rights requests.',
+  'Assisting the Controller with security, breach notification, data protection impact assessment, and prior consultation obligations, taking into account the nature of processing and information available to RegEngine.',
+  'Returning or scheduling active-system deletion of Personal Data after the end of Services, subject to legal-retention, backup, immutable-log, and executed-agreement limits.',
+  'Providing available documentation reasonably needed to support DPA verification under the confidentiality, scope, and cost controls in the executed agreement.',
+  'Informing the Controller if RegEngine believes an instruction infringes Applicable Data Protection Law, to the extent required and permitted by law.',
+];
+
+const SUBJECT_RIGHTS = [
+  { Icon: FileText, title: 'Access & Portability', text: 'Export records through the API, dashboard, or enabled workflow surfaces available to your plan and agreement.' },
+  { Icon: Trash2, title: 'Erasure', text: 'Request deletion under your executed agreement. Verified requests are scheduled for active-system deletion; provider backups expire on their normal cycles.' },
+  { Icon: Building2, title: 'Rectification', text: 'Update or correct records through the dashboard. API updates are available to all plans.' },
+];
+
+const SECTION_BLOCK = 'scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8';
+const SECTION_PROSE = 'space-y-3 text-ui text-re-text-secondary';
+
 export default function DpaPage() {
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+    <div className="re-page min-h-screen">
 
       {/* ── Hero ───────────────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-6">
-        <div className="flex items-center gap-2.5 mb-5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-3 py-1 text-[11px] font-semibold tracking-wide text-[var(--re-brand)]">
-            <ShieldCheck className="h-3 w-3" /> Data Processing Terms
-          </span>
+      <Container width="prose" className="pb-6 pt-14 sm:pt-20">
+        <div className="mb-5 flex items-center gap-2.5">
+          <Badge tone="brand">
+            <ShieldCheck className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" /> Data Processing Terms
+          </Badge>
         </div>
-        <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mb-3 leading-tight tracking-tight">
-          Data Processing Agreement
-        </h1>
-        <p className="text-sm text-[var(--re-text-disabled)] font-mono">
+        <PageHeader
+          size="hero"
+          title="Data Processing Agreement"
+          className="mb-0 border-b-0 pb-0"
+        />
+        <p className="mt-3 font-mono text-[0.8125rem] text-re-text-tertiary">
           Effective: August 2, 2026 · Version 1.2
         </p>
-        <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mt-4">
+        <p className="mt-4 text-ui text-re-text-secondary">
           Related documents:{' '}
-          <Link href="/privacy" className="text-[var(--re-brand)] underline hover:opacity-90">
+          <Link href="/privacy" className={PROSE_LINK}>
             Privacy Policy
           </Link>
           ,{' '}
-          <Link href="/terms" className="text-[var(--re-brand)] underline hover:opacity-90">
+          <Link href="/terms" className={PROSE_LINK}>
             Terms of Service
           </Link>
           , and{' '}
-          <Link href="/security" className="text-[var(--re-brand)] underline hover:opacity-90">
+          <Link href="/security" className={PROSE_LINK}>
             Security
           </Link>
           .
         </p>
-      </section>
+      </Container>
 
       {/* ── Summary callout ────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto px-4 sm:px-6 pb-10">
-        <div
-          className="rounded-2xl border border-[var(--re-brand)]/20 p-6"
-          style={{ background: 'var(--re-brand-muted)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
-        >
-          <div className="grid gap-3 sm:grid-cols-3">
-            {DPA_SUMMARY_CARDS.map(({ Icon, title, text }) => (
-              <div key={title} className="rounded-xl border border-[var(--re-brand)]/15 bg-[var(--re-surface-card)] p-4">
-                <Icon className="mb-3 h-5 w-5 text-[var(--re-brand)]" />
-                <h2 className="text-[13px] font-bold text-[var(--re-text-primary)]">{title}</h2>
-                <p className="mt-2 text-[12px] leading-relaxed text-[var(--re-text-muted)]">{text}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-[var(--re-text-muted)]">
+      <Container width="prose" className="pb-10">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {DPA_SUMMARY_CARDS.map(({ Icon, title, text }) => (
+            <Card key={title} padding="compact">
+              <Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+              <h2 className="text-subheading text-re-text-primary">{title}</h2>
+              <p className="mt-2 text-ui text-re-text-secondary">{text}</p>
+            </Card>
+          ))}
+        </div>
+        <Callout tone="info" className="mt-3">
+          <p>
             This public page is not a substitute for an executed DPA, order form, or negotiated
             agreement. It is a diligence summary for standard processor obligations, subprocessors,
             data subject rights, incident notification, deletion, transfers, audits, and liability
             boundaries.
           </p>
-        </div>
-      </section>
+        </Callout>
+      </Container>
 
       {/* ── Two-column: TOC + Content ──────────────────────── */}
-      <section className="relative z-[2] max-w-[1020px] mx-auto px-4 sm:px-6 pb-16">
-        <div className="flex gap-6 lg:gap-10">
+      <Container width="docs" className="pb-16">
+        <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,720px)] lg:justify-center lg:gap-10">
 
           {/* Sticky TOC */}
-          <nav className="hidden lg:block w-[220px] shrink-0">
+          <nav className="hidden lg:block">
             <div className="sticky top-24">
-              <p className="text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase mb-3">
+              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
                 On this page
               </p>
               <ul className="flex flex-col gap-1">
@@ -177,9 +215,9 @@ export default function DpaPage() {
                   <li key={t.id}>
                     <a
                       href={`#${t.id}`}
-                      className="flex items-center gap-1.5 text-[13px] text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors py-1"
+                      className="flex items-center gap-1.5 py-1 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                     >
-                      <ChevronRight className="h-3 w-3 opacity-40" />
+                      <ChevronRight className="h-3 w-3 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
                       {t.label}
                     </a>
                   </li>
@@ -189,49 +227,49 @@ export default function DpaPage() {
           </nav>
 
           {/* Main content */}
-          <div className="flex-1 min-w-0 max-w-[720px] space-y-0">
+          <div className="min-w-0">
 
             {/* ── 1. Definitions ──────────────────────────── */}
             <div id="definitions" className="scroll-mt-24 pb-10">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 1. Definitions
               </h2>
-              <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className={SECTION_PROSE}>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Controller&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Controller&rdquo;</strong>{' '}
                   means the natural or legal person, public authority, agency, or other body that
                   determines the purposes and means of processing personal data — in this context,
                   the RegEngine customer.
                 </p>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Processor&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Processor&rdquo;</strong>{' '}
                   means RegEngine LLC, which processes personal data on behalf of the Controller.
                 </p>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Personal Data&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Personal Data&rdquo;</strong>{' '}
                   means any information relating to an identified or identifiable natural person,
                   processed by RegEngine on behalf of the Controller in connection with the Services.
                   In the food safety context this may include supplier contact names, employee
                   identifiers on traceability records, and logistics personnel information.
                 </p>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Traceability Data&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Traceability Data&rdquo;</strong>{' '}
                   means Critical Tracking Events (CTEs), Key Data Elements (KDEs), Traceability Lot
                   Codes (TLCs), and associated supply chain records submitted to RegEngine under
                   FSMA Section 204 compliance workflows.
                 </p>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Services&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Services&rdquo;</strong>{' '}
                   means the RegEngine FSMA 204 food traceability compliance platform, including all
                   associated APIs, dashboard surfaces, ingestion pipelines, and export tools.
                 </p>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Sub-Processor&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Sub-Processor&rdquo;</strong>{' '}
                   means any third party engaged by RegEngine to process Personal Data in connection
                   with providing the Services.
                 </p>
                 <p>
-                  <strong className="text-[var(--re-text-secondary)]">&ldquo;Applicable Data Protection Law&rdquo;</strong>{' '}
+                  <strong className="font-medium text-re-text-primary">&ldquo;Applicable Data Protection Law&rdquo;</strong>{' '}
                   means the EU General Data Protection Regulation (GDPR) 2016/679, the UK GDPR, the
                   California Consumer Privacy Act (CCPA) as amended, and any other data protection
                   legislation applicable to the processing described in this DPA.
@@ -240,11 +278,11 @@ export default function DpaPage() {
             </div>
 
             {/* ── 2. Roles & Scope ────────────────────────── */}
-            <div id="roles" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="roles" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 2. Roles &amp; Scope
               </h2>
-              <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className={SECTION_PROSE}>
                 <p>
                   The Controller determines the purposes and means of processing Traceability Data
                   and any Personal Data it submits to the Services. RegEngine acts solely as a
@@ -265,26 +303,16 @@ export default function DpaPage() {
             </div>
 
             {/* ── 3. Processor Obligations ────────────────── */}
-            <div id="obligations" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="obligations" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 3. Processor Obligations
               </h2>
-              <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className={SECTION_PROSE}>
                 <p>RegEngine&apos;s standard processor commitments are intended to include:</p>
                 <ul className="list-none space-y-2 pl-0">
-                  {[
-                    'Processing Personal Data on documented customer instructions, unless applicable law requires otherwise.',
-                    'Requiring personnel authorized to process Personal Data to follow confidentiality obligations.',
-                    'Maintaining the technical and organizational security measures described in Section 6, subject to the executed agreement and current deployment posture.',
-                    'Using Sub-Processors under the authorization, notice, and objection process in the executed agreement or signed DPA.',
-                    'Assisting the Controller, by appropriate technical and organizational measures, in responding to applicable data subject rights requests.',
-                    'Assisting the Controller with security, breach notification, data protection impact assessment, and prior consultation obligations, taking into account the nature of processing and information available to RegEngine.',
-                    'Returning or scheduling active-system deletion of Personal Data after the end of Services, subject to legal-retention, backup, immutable-log, and executed-agreement limits.',
-                    'Providing available documentation reasonably needed to support DPA verification under the confidentiality, scope, and cost controls in the executed agreement.',
-                    'Informing the Controller if RegEngine believes an instruction infringes Applicable Data Protection Law, to the extent required and permitted by law.',
-                  ].map((item, i) => (
+                  {PROCESSOR_COMMITMENTS.map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5">
-                      <ShieldCheck className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
                       <span>{item}</span>
                     </li>
                   ))}
@@ -293,62 +321,60 @@ export default function DpaPage() {
             </div>
 
             {/* ── 4. Sub-Processors ───────────────────────── */}
-            <div id="subprocessors" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-2">
+            <div id="subprocessors" className={SECTION_BLOCK}>
+              <h2 className="mb-2 text-heading text-re-text-primary">
                 4. Sub-Processors
               </h2>
-              <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-5">
+              <p className="mb-5 text-ui text-re-text-secondary">
                 The executed agreement or signed DPA controls subprocessor authorization, notice,
                 objection, and termination rights. The list below summarizes current default and
                 where-configured processors. Default processors support core platform operations;
                 optional processors are used only where the relevant feature, billing flow, analytics
                 flow, object storage, or AI extraction workflow is enabled or configured.
               </p>
-              <div className="rounded-xl border border-[var(--re-surface-border)] overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)]">
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Sub-Processor</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Use</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Data Processed</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)] hidden sm:table-cell">Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TRUST_SUBPROCESSORS.map((sp, i) => (
-                      <tr
-                        key={sp.name}
-                        className={`border-b border-[var(--re-surface-border)] last:border-0 ${i % 2 === 1 ? 'bg-[var(--re-surface-card)]' : ''}`}
-                      >
-                        <td className="px-4 py-3 font-medium text-[var(--re-text-primary)] whitespace-nowrap">
+              <Card className="overflow-hidden">
+                <Table className="min-w-[640px]">
+                  <TableCaption className="sr-only">Sub-Processors</TableCaption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">Sub-Processor</TableHead>
+                      <TableHead scope="col">Use</TableHead>
+                      <TableHead scope="col">Data Processed</TableHead>
+                      <TableHead scope="col">Location</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {TRUST_SUBPROCESSORS.map((sp) => (
+                      <TableRow key={sp.name} className="align-top">
+                        <TableCell className="whitespace-nowrap">
                           <a
                             href={sp.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[var(--re-brand)] hover:underline"
+                            className={PROSE_LINK}
                           >
                             {sp.name}
                           </a>
-                          <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--re-text-disabled)]">
+                          <span className="mt-1 block font-mono text-label uppercase text-re-text-muted">
                             {sp.availabilityLabel}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-[var(--re-text-muted)]">{sp.purpose}</td>
-                        <td className="px-4 py-3 text-[var(--re-text-muted)]">{sp.dataProcessed}</td>
-                        <td className="px-4 py-3 text-[var(--re-text-muted)] hidden sm:table-cell whitespace-nowrap">{sp.location}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell>{sp.purpose}</TableCell>
+                        <TableCell>{sp.dataProcessed}</TableCell>
+                        <TableCell className="whitespace-nowrap">{sp.location}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </Card>
             </div>
 
             {/* ── 5. Data Subject Rights ──────────────────── */}
-            <div id="rights" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="rights" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 5. Data Subject Rights
               </h2>
-              <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className={SECTION_PROSE}>
                 <p>
                   The Controller is responsible for handling data subject requests (rights of access,
                   rectification, erasure, restriction, portability, and objection) received from
@@ -362,30 +388,24 @@ export default function DpaPage() {
                   to the data subject directly without the Controller&apos;s authorisation, unless
                   required to do so by applicable law.
                 </p>
-                <div className="grid gap-3 sm:grid-cols-3 mt-4">
-                  {[
-                    { Icon: FileText, title: 'Access & Portability', text: 'Export records through the API, dashboard, or enabled workflow surfaces available to your plan and agreement.' },
-                    { Icon: Trash2, title: 'Erasure', text: 'Request deletion under your executed agreement. Verified requests are scheduled for active-system deletion; provider backups expire on their normal cycles.' },
-                    { Icon: Building2, title: 'Rectification', text: 'Update or correct records through the dashboard. API updates are available to all plans.' },
-                  ].map(({ Icon, title, text }) => (
-                    <div key={title} className="group rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4">
-                      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <h3 className="text-[13px] font-semibold text-[var(--re-text-primary)] mb-1">{title}</h3>
-                      <p className="text-[12px] text-[var(--re-text-muted)] leading-relaxed">{text}</p>
-                    </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {SUBJECT_RIGHTS.map(({ Icon, title, text }) => (
+                    <Card key={title} padding="compact">
+                      <Icon className="mb-2 h-4 w-4 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                      <h3 className="mb-1 text-subheading text-re-text-primary">{title}</h3>
+                      <p className="text-ui text-re-text-secondary">{text}</p>
+                    </Card>
                   ))}
                 </div>
               </div>
             </div>
 
             {/* ── 6. Security Measures ────────────────────── */}
-            <div id="security" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="security" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 6. Technical &amp; Organisational Security Measures
               </h2>
-              <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-5">
+              <p className="mb-5 text-ui text-re-text-secondary">
                 RegEngine implements and maintains the following technical and organisational measures
                 to protect Personal Data processed on behalf of the Controller. These measures reflect
                 the state of the art, the costs of implementation, and the nature, scope, context,
@@ -394,59 +414,56 @@ export default function DpaPage() {
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {SECURITY_MEASURES.map(({ Icon, title, text }) => (
-                  <div key={title} className="group rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <h3 className="text-[13px] font-semibold text-[var(--re-text-primary)] mb-1">{title}</h3>
-                    <p className="text-[12px] text-[var(--re-text-muted)] leading-relaxed">{text}</p>
-                  </div>
+                  <Card key={title} className="p-5">
+                    <Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                    <h3 className="mb-1 text-subheading text-re-text-primary">{title}</h3>
+                    <p className="text-ui text-re-text-secondary">{text}</p>
+                  </Card>
                 ))}
               </div>
             </div>
 
             {/* ── 7. Breach Notification ──────────────────── */}
-            <div id="breach" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="breach" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 7. Personal Data Breach Notification
               </h2>
-              <div className="rounded-xl border border-re-warning/30 bg-re-warning/5 p-5 space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                <div className="flex items-center gap-2 mb-1">
-                  <Bell className="h-4 w-4 text-re-warning shrink-0" />
-                  <h3 className="text-[14px] font-semibold text-[var(--re-text-primary)]">Incident Notification Process</h3>
+              <Callout tone="warning" icon={Bell}>
+                <h3 className="text-subheading text-re-text-primary">Incident Notification Process</h3>
+                <div className="mt-2 space-y-3 text-ui text-re-text-secondary">
+                  <p>
+                    RegEngine&apos;s standard incident process is designed to notify affected Controllers
+                    without undue delay. Where required by applicable law or agreed in the executed
+                    agreement or signed DPA, notification will follow the timeline and recipient
+                    process stated there.
+                  </p>
+                  <p>
+                    Any notification will include, to the extent available and appropriate at the time: a description of
+                    the nature of the breach; the categories and approximate number of data subjects
+                    concerned; the categories and approximate number of personal data records concerned;
+                    the likely consequences of the breach; and the measures taken or proposed to address
+                    the breach.
+                  </p>
+                  <p>
+                    Where it is not possible to provide complete information at the time of initial
+                    notification, RegEngine expects to provide reasonable updates as information becomes
+                    available, subject to confidentiality, security, legal privilege, and scope limits.
+                  </p>
+                  <p>
+                    RegEngine may provide reasonable incident summaries to affected Controllers where
+                    required or agreed, subject to confidentiality, legal privilege, security, and scope
+                    limits.
+                  </p>
                 </div>
-                <p>
-                  RegEngine&apos;s standard incident process is designed to notify affected Controllers
-                  without undue delay. Where required by applicable law or agreed in the executed
-                  agreement or signed DPA, notification will follow the timeline and recipient
-                  process stated there.
-                </p>
-                <p>
-                  Any notification will include, to the extent available and appropriate at the time: a description of
-                  the nature of the breach; the categories and approximate number of data subjects
-                  concerned; the categories and approximate number of personal data records concerned;
-                  the likely consequences of the breach; and the measures taken or proposed to address
-                  the breach.
-                </p>
-                <p>
-                  Where it is not possible to provide complete information at the time of initial
-                  notification, RegEngine expects to provide reasonable updates as information becomes
-                  available, subject to confidentiality, security, legal privilege, and scope limits.
-                </p>
-                <p>
-                  RegEngine may provide reasonable incident summaries to affected Controllers where
-                  required or agreed, subject to confidentiality, legal privilege, security, and scope
-                  limits.
-                </p>
-              </div>
+              </Callout>
             </div>
 
             {/* ── 8. Data Deletion & Return ───────────────── */}
-            <div id="deletion" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="deletion" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 8. Data Deletion &amp; Return
               </h2>
-              <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className={SECTION_PROSE}>
                 <p>
                   Upon termination or expiry of the Controller&apos;s subscription, data return,
                   retention, and deletion windows are controlled by the executed agreement or DPA.
@@ -458,7 +475,7 @@ export default function DpaPage() {
                 </p>
                 <p>
                   The Controller may request deletion at any time by contacting{' '}
-                  <a href="mailto:privacy@regengine.co" className="text-[var(--re-brand)] underline hover:opacity-90">
+                  <a href="mailto:privacy@regengine.co" className={PROSE_LINK}>
                     privacy@regengine.co
                   </a>
                   . RegEngine will process verified deletion requests according to the executed
@@ -466,25 +483,25 @@ export default function DpaPage() {
                   expire according to the applicable provider&apos;s normal retention cycle and may not
                   be overwritten immediately.
                 </p>
-                <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 flex items-start gap-3 mt-2">
-                  <Trash2 className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                  <p className="text-[12px] text-[var(--re-text-muted)] leading-relaxed">
-                    <strong className="text-[var(--re-text-secondary)]">FSMA 204 Retention Note:</strong>{' '}
+                <Card className="mt-2 flex items-start gap-3 p-4">
+                  <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                  <p className="text-ui text-re-text-secondary">
+                    <strong className="font-medium text-re-text-primary">FSMA 204 Retention Note:</strong>{' '}
                     FDA regulations require covered entities to maintain traceability records for a
                     minimum of 2 years. RegEngine helps support those workflows, but customers remain
                     responsible for maintaining any independent archives required by their own legal,
                     operational, or regulator-facing obligations.
                   </p>
-                </div>
+                </Card>
               </div>
             </div>
 
             {/* ── 9. International Transfers ──────────────── */}
-            <div id="transfers" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
+            <div id="transfers" className={SECTION_BLOCK}>
+              <h2 className="mb-4 text-heading text-re-text-primary">
                 9. International Data Transfers
               </h2>
-              <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className={SECTION_PROSE}>
                 <p>
                   RegEngine primarily processes data in the United States. For Controllers in the
                   European Economic Area (EEA), the United Kingdom, or Switzerland, transfers of
@@ -504,7 +521,7 @@ export default function DpaPage() {
                 <p>
                   Controllers who require transfer documentation for their records may request the
                   current execution package by emailing{' '}
-                  <a href="mailto:privacy@regengine.co" className="text-[var(--re-brand)] underline hover:opacity-90">
+                  <a href="mailto:privacy@regengine.co" className={PROSE_LINK}>
                     privacy@regengine.co
                   </a>
                   .
@@ -513,19 +530,19 @@ export default function DpaPage() {
             </div>
 
             {/* ── 10. Audits & Compliance ─────────────────── */}
-            <div id="audits" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Shield className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-2">
+            <div id="audits" className={SECTION_BLOCK}>
+              <Card className="flex items-start gap-3 p-5">
+                <Shield className="mt-0.5 h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                <div className="min-w-0">
+                  <h2 className="mb-2 text-heading text-re-text-primary">
                     10. Audits &amp; Compliance Verification
                   </h2>
-                  <div className="space-y-2 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                  <div className="space-y-2 text-ui text-re-text-secondary">
                     <p>
-                  Audit and verification rights are controlled by the executed agreement or signed
-                  DPA. RegEngine&apos;s standard diligence process prioritizes written security
-                  questionnaires, available policies, control summaries, and completed third-party
-                  attestations when available.
+                      Audit and verification rights are controlled by the executed agreement or signed
+                      DPA. RegEngine&apos;s standard diligence process prioritizes written security
+                      questionnaires, available policies, control summaries, and completed third-party
+                      attestations when available.
                     </p>
                     <p>
                       Direct system, facility, or personnel audits are available only where required by
@@ -536,18 +553,18 @@ export default function DpaPage() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* ── 11. Liability ───────────────────────────── */}
-            <div id="liability" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Lock className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-2">
+            <div id="liability" className={SECTION_BLOCK}>
+              <Card className="flex items-start gap-3 p-5">
+                <Lock className="mt-0.5 h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                <div className="min-w-0">
+                  <h2 className="mb-2 text-heading text-re-text-primary">
                     11. Liability
                   </h2>
-                  <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                  <p className="text-ui text-re-text-secondary">
                     Each party&apos;s liability under this DPA is subject to the limitations and
                     exclusions set out in the RegEngine Terms of Service. Nothing in this DPA is
                     intended to limit either party&apos;s liability to data subjects or to supervisory
@@ -557,18 +574,18 @@ export default function DpaPage() {
                     Controller to the extent permitted by law.
                   </p>
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* ── 12. Governing Law ───────────────────────── */}
-            <div id="governing" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Globe className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-2">
+            <div id="governing" className={SECTION_BLOCK}>
+              <Card className="flex items-start gap-3 p-5">
+                <Globe className="mt-0.5 h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                <div className="min-w-0">
+                  <h2 className="mb-2 text-heading text-re-text-primary">
                     12. Governing Law &amp; Amendments
                   </h2>
-                  <div className="space-y-2 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                  <div className="space-y-2 text-ui text-re-text-secondary">
                     <p>
                       The governing law for any binding data processing terms is the law specified in
                       the executed agreement or signed DPA, except where Applicable Data Protection Law
@@ -582,71 +599,68 @@ export default function DpaPage() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* ── 13. Contact ─────────────────────────────── */}
-            <div id="contact" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-                <Mail className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-2">
+            <div id="contact" className={SECTION_BLOCK}>
+              <Card className="flex items-start gap-3 p-5">
+                <Mail className="mt-0.5 h-5 w-5 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                <div className="min-w-0">
+                  <h2 className="mb-2 text-heading text-re-text-primary">
                     13. Contact &amp; Executed Copies
                   </h2>
-                  <div className="space-y-2 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                  <div className="space-y-2 text-ui text-re-text-secondary">
                     <p>
                       For questions about this public DPA summary, to request an execution package, or
                       to exercise privacy rights, contact:{' '}
                       <a
                         href="mailto:privacy@regengine.co"
-                        className="text-[var(--re-brand)] underline hover:opacity-90"
+                        className={PROSE_LINK}
                       >
                         privacy@regengine.co
                       </a>
                       . Customer agreements and DPA redlines should be reviewed by the appropriate
                       business, security, and legal contacts before execution.
                     </p>
-                    <p className="font-medium text-[var(--re-text-secondary)]">
+                    <p className="font-medium text-re-text-primary">
                       RegEngine LLC<br />
                       Los Angeles, California, United States
                     </p>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
 
           </div>
         </div>
-      </section>
+      </Container>
 
       {/* ── CTA ────────────────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[700px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-        <div
-          className="rounded-2xl border border-[var(--re-brand)]/20 p-5 sm:p-8 text-center"
-          style={{ background: 'var(--re-brand-muted)', boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}
-        >
-          <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-2">
+      <Container width="prose" className="pb-12 sm:pb-16">
+        <Card className="p-5 text-center sm:p-8">
+          <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">
             Questions about data processing?
           </h2>
-          <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">
+          <p className="mx-auto mb-6 max-w-[520px] text-ui text-re-text-secondary">
             Enterprise and design-partner customers can request a DPA execution package, custom data
             retention schedules, or a security review call. Legal terms require appropriate customer
             and RegEngine review before execution.
           </p>
-          <div className="flex gap-3 justify-center flex-wrap">
-            <a href="mailto:privacy@regengine.co">
-              <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--re-brand)] text-white text-[15px] font-semibold hover:-translate-y-0.5 transition-all">
-                <Mail className="h-4 w-4" /> Contact us about data
-              </button>
-            </a>
-            <Link href="/security">
-              <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] text-[var(--re-text-primary)] text-[15px] font-semibold hover:border-[var(--re-brand)]/40 transition-colors">
-                Security overview <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg">
+              <a href="mailto:privacy@regengine.co">
+                <Mail aria-hidden="true" strokeWidth={1.75} /> Contact us about data
+              </a>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/security">
+                Security overview <ArrowRight aria-hidden="true" strokeWidth={1.75} />
+              </Link>
+            </Button>
           </div>
-        </div>
-      </section>
+        </Card>
+      </Container>
 
     </div>
   );

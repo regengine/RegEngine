@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { AlertCircle, ArrowRight, Check, ShieldCheck, X } from "lucide-react";
 import { submitAssessment } from "@/app/actions/submit-assessment";
+import { Container } from "@/components/layout/container";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 const checklistItems = [
     {
@@ -63,54 +69,6 @@ const checklistItems = [
     },
 ];
 
-function CheckIcon() {
-    return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path
-                d="M4 9.5L7.5 13L14 5"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-        </svg>
-    );
-}
-
-function AlertIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path
-                d="M10 6V10M10 14H10.01"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-            />
-            <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-    );
-}
-
-function ShieldIcon() {
-    return (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M12 2L4 6V12C4 16.4 7.4 20.5 12 22C16.6 20.5 20 16.4 20 12V6L12 2Z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-            />
-            <path
-                d="M8.5 12L11 14.5L16 9"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-        </svg>
-    );
-}
-
 export default function FSMAChecklist() {
     const [checked, setChecked] = useState<Record<string, boolean>>({});
     const [showResults, setShowResults] = useState(false);
@@ -118,15 +76,6 @@ export default function FSMAChecklist() {
     const [company, setCompany] = useState("");
     const [submitted, setSubmitted] = useState(false);
     const [submissionError, setSubmissionError] = useState<string | null>(null);
-    const [animateIn, setAnimateIn] = useState(false);
-
-    // Enter animation: the class must change *after* the first paint or the
-    // transition has no from-state to animate out of, so this flip is
-    // deliberately post-mount rather than an initial state value.
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setAnimateIn(true);
-    }, []);
 
     const checkedCount = Object.values(checked).filter(Boolean).length;
     const total = checklistItems.length;
@@ -178,198 +127,200 @@ export default function FSMAChecklist() {
         }
     };
 
-    const scoreColor =
+    // Band colour for the readiness meter. The number itself stays ink — the
+    // meter is a supporting mark, and "N/8" carries the meaning on its own.
+    const scoreBarClass =
         checkedCount <= 3
-            ? "var(--re-danger)"
+            ? "bg-re-danger"
             : checkedCount <= 5
-                ? "var(--re-warning)"
+                ? "bg-re-warning"
                 : checkedCount <= 7
-                    ? "var(--re-accent-blue)"
-                    : "var(--re-brand-dark)";
+                    ? "bg-re-info"
+                    : "bg-re-success";
+
+    const bandRailClass =
+        checkedCount <= 3
+            ? "border-l-re-danger"
+            : checkedCount <= 5
+                ? "border-l-re-warning"
+                : "border-l-re-info";
+
+    const bandIconClass =
+        checkedCount <= 3
+            ? "text-re-danger"
+            : checkedCount <= 5
+                ? "text-re-warning"
+                : "text-re-info";
 
     return (
-        <div className="bg-[#0a0e17] text-[#e2e8f0] py-16 px-4">
-            <div className="max-w-[720px] mx-auto">
+        <section className="border-t border-re-border-subtle bg-re-surface-base py-16 sm:py-20">
+            <Container width="prose">
                 {/* Title */}
-                <div
-                    className="mb-12 transition-all duration-500"
-                    style={{
-                        opacity: animateIn ? 1 : 0,
-                        transform: animateIn ? "translateY(0)" : "translateY(12px)",
-                    }}
-                >
-                    <h2 className="text-3xl font-bold text-[#f8fafc] mb-3">
+                <div className="mb-10 space-y-3">
+                    <h2 className="font-display text-heading-lg text-re-text-primary">
                         Are You Retailer-Ready?
                     </h2>
-                    <p className="text-base text-[#64748b]">
+                    <p className="text-body text-re-text-secondary">
                         Check off each FSMA 204 requirement your company currently meets.
-                        Be honest — gaps are fixable, surprises during an FDA audit aren't.
+                        Be honest — gaps are fixable, surprises during an FDA audit aren&apos;t.
                     </p>
                 </div>
 
                 {/* Score Bar */}
-                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 sm:p-5 mb-8 flex items-center justify-between gap-4">
-                    <div>
-                        <div className="text-xs sm:text-sm text-[#64748b] mb-2 font-medium">
-                            FSMA Readiness Score
+                <Card padding="compact" className="mb-8">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="text-label text-re-text-muted">
+                                FSMA Readiness Score
+                            </p>
+                            <div className="mt-2 flex items-baseline gap-1">
+                                <span className="font-mono text-title tabular-nums text-re-text-primary">
+                                    {checkedCount}
+                                </span>
+                                <span className="font-mono text-ui text-re-text-tertiary">/{total}</span>
+                            </div>
                         </div>
-                        <div className="flex items-baseline gap-1">
-                            <span
-                                className="text-3xl sm:text-4xl font-bold font-mono transition-colors duration-300"
-                                style={{ color: scoreColor }}
-                            >
-                                {checkedCount}
-                            </span>
-                            <span className="text-base sm:text-lg text-[#475569] font-mono">/{total}</span>
+                        <div className="flex flex-wrap items-center justify-end gap-1" aria-hidden="true">
+                            {checklistItems.map((item) => (
+                                <span
+                                    key={item.id}
+                                    className={cn(
+                                        "h-1.5 w-5 rounded-sm transition-colors duration-180 motion-reduce:transition-none sm:w-7",
+                                        checked[item.id] ? scoreBarClass : "bg-re-surface-inset"
+                                    )}
+                                />
+                            ))}
                         </div>
                     </div>
-                    <div className="flex gap-1 items-center flex-wrap justify-end">
-                        {checklistItems.map((item) => (
-                            <div
-                                key={item.id}
-                                className="w-5 sm:w-7 h-1.5 rounded-sm transition-all duration-300"
-                                style={{
-                                    background: checked[item.id] ? scoreColor : "rgba(255,255,255,0.06)",
-                                }}
-                            />
-                        ))}
-                    </div>
-                </div>
+                </Card>
 
                 {/* Checklist */}
-                <div className="flex flex-col gap-2 mb-8">
-                    {checklistItems.map((item, index) => {
-                        const isChecked = checked[item.id];
+                <ul className="mb-8 flex flex-col gap-2">
+                    {checklistItems.map((item) => {
+                        const isChecked = Boolean(checked[item.id]);
                         return (
-                            <button
+                            <li
                                 key={item.id}
-                                onClick={() => toggle(item.id)}
-                                className="flex items-start gap-3 sm:gap-4 p-3.5 sm:p-[18px] rounded-lg cursor-pointer text-left w-full transition-all duration-200"
-                                style={{
-                                    background: isChecked ? "rgba(5, 150, 105, 0.06)" : "rgba(255,255,255,0.02)",
-                                    border: `1px solid ${isChecked ? "rgba(5, 150, 105, 0.25)" : "rgba(255,255,255,0.06)"}`,
-                                    opacity: animateIn ? 1 : 0,
-                                    transform: animateIn ? "translateY(0)" : "translateY(8px)",
-                                    transitionDelay: `${index * 50}ms`,
-                                    minHeight: 48,
-                                }}
+                                className={cn(
+                                    "flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors duration-120 motion-reduce:transition-none",
+                                    isChecked
+                                        ? "border-re-border-strong bg-re-surface-inset"
+                                        : "border-re-border bg-re-surface-card"
+                                )}
                             >
-                                {/* Checkbox */}
-                                <div
-                                    className="w-7 h-7 sm:w-6 sm:h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-[1px] transition-all duration-200"
-                                    style={{
-                                        border: isChecked ? "none" : "2px solid rgba(255,255,255,0.15)",
-                                        background: isChecked ? "var(--re-brand-dark)" : "transparent",
-                                    }}
+                                <button
+                                    type="button"
+                                    onClick={() => toggle(item.id)}
+                                    aria-pressed={isChecked}
+                                    className="flex min-h-12 flex-1 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-card"
                                 >
-                                    {isChecked && <CheckIcon />}
-                                </div>
-
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                    <div
-                                        className="text-[14px] sm:text-[15px] font-semibold mb-1 transition-colors duration-200"
-                                        style={{
-                                            color: isChecked ? "#059669" : "#f1f5f9",
-                                            textDecoration: isChecked ? "line-through" : "none",
-                                            textDecorationColor: "rgba(5,150,105,0.3)",
-                                        }}
+                                    {/* Check indicator */}
+                                    <span
+                                        aria-hidden="true"
+                                        className={cn(
+                                            "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors duration-120 motion-reduce:transition-none",
+                                            isChecked
+                                                ? "border-transparent bg-re-brand text-re-brand-foreground"
+                                                : "border-re-border-strong"
+                                        )}
                                     >
-                                        {item.title}
-                                    </div>
-                                    <div className="text-xs sm:text-sm text-[#64748b] leading-relaxed">
-                                        {item.description}
-                                    </div>
-                                </div>
+                                        {isChecked && <Check className="h-4 w-4" strokeWidth={1.75} />}
+                                    </span>
+
+                                    {/* Content */}
+                                    <span className="min-w-0 flex-1">
+                                        <span
+                                            className={cn(
+                                                "block text-subheading",
+                                                isChecked
+                                                    ? "text-re-text-tertiary line-through"
+                                                    : "text-re-text-primary"
+                                            )}
+                                        >
+                                            {item.title}
+                                        </span>
+                                        <span className="mt-1 block text-small text-re-text-tertiary">
+                                            {item.description}
+                                        </span>
+                                    </span>
+                                </button>
 
                                 {/* CFR Reference */}
                                 <a
                                     href={item.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="hidden sm:inline text-[11px] font-mono text-[#60a5fa] whitespace-nowrap mt-[3px] hover:underline"
+                                    className="mt-1 hidden whitespace-nowrap font-mono text-label text-re-brand underline-offset-[3px] hover:underline sm:inline"
                                 >
                                     {item.regulation}
                                 </a>
-                            </button>
+                            </li>
                         );
                     })}
-                </div>
+                </ul>
 
                 {/* Check Results Button */}
                 {!showResults && (
-                    <button
+                    <Button
+                        size="lg"
+                        className="w-full"
                         onClick={() => setShowResults(true)}
                         disabled={checkedCount === 0}
-                        className="w-full p-4 rounded-lg text-[15px] font-semibold transition-all duration-300 min-h-[48px]"
-                        style={{
-                            background: checkedCount === 0 ? "rgba(255,255,255,0.04)" : scoreColor,
-                            color: checkedCount === 0 ? "var(--re-text-muted)" : "#fff",
-                            border: checkedCount === 0 ? "1px solid rgba(255,255,255,0.08)" : "none",
-                            opacity: checkedCount === 0 ? 0.5 : 1,
-                            cursor: checkedCount === 0 ? "default" : "pointer",
-                        }}
                     >
                         {checkedCount === 0
                             ? "Check at least one item to see your results"
-                            : `See My Results →`}
-                    </button>
+                            : `See My Results`}
+                        {checkedCount > 0 && (
+                            <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                        )}
+                    </Button>
                 )}
 
                 {/* Results */}
                 {showResults && (
-                    <div className="animate-in fade-in slide-in-from-bottom-3 duration-400">
+                    <div>
                         {allChecked ? (
                             /* All Checked */
-                            <div className="bg-[rgba(5,150,105,0.08)] border border-[rgba(5,150,105,0.2)] rounded-xl p-8 text-center">
-                                <div className="text-[#059669] mb-4">
-                                    <ShieldIcon />
-                                </div>
-                                <h3 className="text-[22px] font-bold text-[#059669] mb-2">
-                                    You're Retailer-Ready
+                            <Card padding="spacious" className="text-center">
+                                <ShieldCheck
+                                    className="mx-auto mb-4 h-6 w-6 text-re-success"
+                                    strokeWidth={1.75}
+                                    aria-hidden="true"
+                                />
+                                <h3 className="mb-2 text-heading text-re-text-primary">
+                                    You&apos;re Retailer-Ready
                                 </h3>
-                                <p className="text-sm text-[#64748b] mb-6 leading-relaxed">
+                                <p className="mx-auto mb-6 max-w-[48ch] text-ui text-re-text-secondary">
                                     All FSMA 204 readiness checks passed. Want to automate your compliance
                                     monitoring and get alerts when regulations change?
                                 </p>
-                                <Link
-                                    href="/tools/ftl-checker"
-                                    className="inline-block py-3 px-7 bg-[#059669] text-white rounded-lg text-sm font-semibold hover:brightness-105 transition-all"
-                                >
-                                    Try the FTL Checker →
-                                </Link>
-                            </div>
+                                <Button asChild>
+                                    <Link href="/tools/ftl-checker">
+                                        Try the FTL Checker
+                                        <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                    </Link>
+                                </Button>
+                            </Card>
                         ) : (
                             /* Gaps Found */
                             <div>
                                 <div
-                                    className="rounded-xl p-6 mb-5"
-                                    style={{
-                                        background:
-                                            checkedCount <= 3
-                                                ? "rgba(220,38,38,0.08)"
-                                                : checkedCount <= 5
-                                                    ? "rgba(217,119,6,0.08)"
-                                                    : "rgba(37,99,235,0.08)",
-                                        border: `1px solid ${checkedCount <= 3
-                                            ? "rgba(220,38,38,0.2)"
-                                            : checkedCount <= 5
-                                                ? "rgba(217,119,6,0.2)"
-                                                : "rgba(37,99,235,0.2)"
-                                            }`,
-                                    }}
+                                    className={cn(
+                                        "mb-5 rounded-md border border-l-[3px] border-re-border bg-re-surface-card px-4 py-4",
+                                        bandRailClass
+                                    )}
                                 >
-                                    <div
-                                        className="flex items-center gap-2.5 mb-3"
-                                        style={{ color: scoreColor }}
-                                    >
-                                        <AlertIcon />
-                                        <span className="text-base font-bold">
+                                    <div className="mb-3 flex items-center gap-2.5">
+                                        <AlertCircle
+                                            className={cn("h-5 w-5 shrink-0", bandIconClass)}
+                                            strokeWidth={1.75}
+                                            aria-hidden="true"
+                                        />
+                                        <span className="text-subheading text-re-text-primary">
                                             {total - checkedCount} Gap{total - checkedCount > 1 ? "s" : ""} Found
                                         </span>
                                     </div>
-                                    <p className="text-sm text-[#94a3b8] mb-4 leading-relaxed">
+                                    <p className="mb-4 text-ui text-re-text-secondary">
                                         {checkedCount <= 3
                                             ? "Your traceability infrastructure needs significant work before you're retailer-ready. The good news: these are solvable problems."
                                             : checkedCount <= 5
@@ -378,106 +329,120 @@ export default function FSMAChecklist() {
                                     </p>
 
                                     {/* Gap List */}
-                                    <div className="flex flex-col gap-2">
+                                    <ul className="flex flex-col gap-2">
                                         {uncheckedItems.map((item) => (
-                                            <div
+                                            <li
                                                 key={item.id}
-                                                className="flex items-center gap-2.5 py-2.5 px-3.5 bg-black/20 rounded-lg text-sm"
+                                                className="flex items-center gap-2.5 rounded-md bg-re-surface-inset px-3 py-2.5 text-ui"
                                             >
-                                                <span style={{ color: scoreColor }}>✗</span>
-                                                <span className="text-[#cbd5e1]">{item.title}</span>
+                                                <X
+                                                    className={cn("h-4 w-4 shrink-0", bandIconClass)}
+                                                    strokeWidth={1.75}
+                                                    aria-hidden="true"
+                                                />
+                                                <span className="min-w-0 text-re-text-secondary">{item.title}</span>
                                                 <a
                                                     href={item.url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="ml-auto font-mono text-[10px] text-[#60a5fa] hover:underline"
+                                                    className="ml-auto whitespace-nowrap font-mono text-label text-re-brand underline-offset-[3px] hover:underline"
                                                 >
                                                     {item.regulation}
                                                 </a>
-                                            </div>
+                                            </li>
                                         ))}
-                                    </div>
+                                    </ul>
                                 </div>
 
                                 {/* Consultation CTA */}
                                 {!submitted ? (
-                                    <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl p-7">
-                                        <h3 className="text-lg font-bold text-[#f8fafc] mb-1.5">
+                                    <Card padding="spacious">
+                                        <h3 className="mb-1.5 text-heading text-re-text-primary">
                                             Free Gap Analysis
                                         </h3>
-                                        <p className="text-sm text-[#64748b] mb-5 leading-relaxed">
-                                            I'll personally review your {total - checkedCount} gap
+                                        <p className="mb-5 text-ui text-re-text-secondary">
+                                            I&apos;ll personally review your {total - checkedCount} gap
                                             {total - checkedCount > 1 ? "s" : ""} and send you a
                                             prioritized remediation plan within 24 hours.
                                         </p>
                                         <div className="flex flex-col gap-2.5">
-                                            <input
-                                                type="text"
-                                                placeholder="Company name"
-                                                value={company}
-                                                onChange={(e) => setCompany(e.target.value)}
-                                                className="p-3 bg-black/30 border border-white/[0.08] rounded-lg text-[#e2e8f0] text-sm outline-none placeholder:text-[#475569]"
-                                            />
-                                            <input
-                                                type="email"
-                                                placeholder="Work email"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                className="p-3 bg-black/30 border border-white/[0.08] rounded-lg text-[#e2e8f0] text-sm outline-none placeholder:text-[#475569]"
-                                            />
-                                            <button
+                                            <div>
+                                                <label htmlFor="gap-analysis-company" className="sr-only">
+                                                    Company name
+                                                </label>
+                                                <Input
+                                                    id="gap-analysis-company"
+                                                    size="lg"
+                                                    type="text"
+                                                    placeholder="Company name"
+                                                    value={company}
+                                                    onChange={(e) => setCompany(e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label htmlFor="gap-analysis-email" className="sr-only">
+                                                    Work email
+                                                </label>
+                                                <Input
+                                                    id="gap-analysis-email"
+                                                    size="lg"
+                                                    type="email"
+                                                    placeholder="Work email"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
+                                                />
+                                            </div>
+                                            <Button
+                                                size="lg"
                                                 onClick={handleSubmit}
                                                 disabled={!email || !company}
-                                                className="p-3.5 rounded-lg text-[15px] font-semibold transition-all duration-200 min-h-[48px]"
-                                                style={{
-                                                    background: email && company ? "var(--re-accent-blue)" : "rgba(255,255,255,0.04)",
-                                                    color: email && company ? "#fff" : "var(--re-text-disabled)",
-                                                    cursor: email && company ? "pointer" : "default",
-                                                }}
                                             >
-                                                Get Free Gap Analysis →
-                                            </button>
+                                                Get Free Gap Analysis
+                                                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                            </Button>
                                             {submissionError && (
-                                                <p role="alert" className="text-xs text-[var(--re-danger)] mt-1">
+                                                <p role="alert" className="mt-1 text-small text-re-danger">
                                                     {submissionError}
                                                 </p>
                                             )}
                                         </div>
-                                        <p className="text-xs text-[#475569] mt-3">
+                                        <p className="mt-3 text-small text-re-text-tertiary">
                                             No commitment. No sales pitch. Just a technical review from the founder.
                                         </p>
-                                    </div>
+                                    </Card>
                                 ) : (
-                                    <div className="bg-[rgba(37,99,235,0.08)] border border-[rgba(37,99,235,0.2)] rounded-xl p-7 text-center">
-                                        <h3 className="text-lg font-bold text-[#60a5fa] mb-2">
+                                    <Card padding="spacious" className="text-center">
+                                        <h3 className="mb-2 text-heading text-re-text-primary">
                                             Gap analysis on its way
                                         </h3>
-                                        <p className="text-sm text-[#94a3b8] leading-relaxed">
-                                            I'll review your {total - checkedCount} gap
+                                        <p className="text-ui text-re-text-secondary">
+                                            I&apos;ll review your {total - checkedCount} gap
                                             {total - checkedCount > 1 ? "s" : ""} and send a prioritized
                                             remediation plan to {email} within 24 hours.
                                         </p>
-                                    </div>
+                                    </Card>
                                 )}
                             </div>
                         )}
 
                         {/* Reset */}
-                        <button
-                            onClick={() => {
-                                setChecked({});
-                                setShowResults(false);
-                                setSubmitted(false);
-                                setEmail("");
-                                setCompany("");
-                            }}
-                            className="block mx-auto mt-5 py-2.5 px-5 bg-transparent border border-white/[0.08] rounded-lg text-[#64748b] text-sm cursor-pointer hover:border-white/20 transition-all"
-                        >
-                            Start Over
-                        </button>
+                        <div className="mt-5 flex justify-center">
+                            <Button
+                                variant="secondary"
+                                onClick={() => {
+                                    setChecked({});
+                                    setShowResults(false);
+                                    setSubmitted(false);
+                                    setEmail("");
+                                    setCompany("");
+                                }}
+                            >
+                                Start Over
+                            </Button>
+                        </div>
                     </div>
                 )}
-            </div>
-        </div>
+            </Container>
+        </section>
     );
 }

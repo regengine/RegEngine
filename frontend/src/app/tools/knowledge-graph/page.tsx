@@ -6,6 +6,9 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { FeatureNotEnabled } from "@/components/experimental/FeatureNotEnabled";
 import { isExperimentalToolEnabled } from "@/lib/experimental-features";
+import { Container } from "@/components/layout/container";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "Supply Chain Knowledge Graph | FSMA 204 Network Mapper | RegEngine",
@@ -41,28 +44,23 @@ const jsonLd = {
 
 function KnowledgeGraphFallback() {
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
-            <div className="max-w-2xl mx-auto text-center mb-12">
-                <div className="w-16 h-16 rounded-2xl bg-re-brand-muted border border-re-brand/20 flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-8 h-8 text-re-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="5" r="2" strokeWidth="1.5"/><circle cx="5" cy="19" r="2" strokeWidth="1.5"/><circle cx="19" cy="19" r="2" strokeWidth="1.5"/><path d="M12 7v4M12 11l-5 6M12 11l5 6" strokeWidth="1.5" strokeLinecap="round"/></svg>
+        <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
+            <Container width="tool">
+                <div className="border-b border-re-border-subtle pb-5">
+                    <h1 className="text-title text-re-text-primary">Supply Chain Knowledge Graph</h1>
+                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">Interactively map your FSMA 204 supply chain nodes — growers, coolers, packhouses, distributors, retailers — and visualize which Critical Tracking Events and Key Data Elements each link requires. Identify coverage gaps before they become compliance gaps.</p>
                 </div>
-                <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Supply Chain Knowledge Graph</h1>
-                <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto leading-relaxed">Interactively map your FSMA 204 supply chain nodes — growers, coolers, packhouses, distributors, retailers — and visualize which Critical Tracking Events and Key Data Elements each link requires. Identify coverage gaps before they become compliance gaps.</p>
-            </div>
-            <div className="max-w-2xl mx-auto">
-                <h2 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">Node Types You Can Map</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+                <h2 className="mt-6 text-heading text-re-text-primary">Node Types You Can Map</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
                     {["Grower / Farm", "Cooler", "Packhouse", "First Land-Based Receiver (Seafood)", "Distributor / DC", "Processor", "Retailer"].map((node) => (
-                        <div key={node} className="rounded-lg border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] p-3 text-center">
-                            <span className="text-xs font-medium text-re-brand">{node}</span>
-                        </div>
+                        <Badge key={node} tone="neutral">{node}</Badge>
                     ))}
                 </div>
-                <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
-                    <div className="w-3 h-3 rounded-full border-2 border-re-brand border-t-transparent animate-spin" />
-                    Loading graph builder…
+                <div className="mt-6 space-y-3" role="status" aria-live="polite">
+                    <Skeleton className="h-64 w-full" />
+                    <p className="pt-2 text-small text-re-text-muted">Loading graph builder…</p>
                 </div>
-            </div>
+            </Container>
         </div>
     );
 }

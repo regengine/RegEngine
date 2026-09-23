@@ -1,13 +1,11 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import {
     ArrowLeft,
     Egg,
     Fish,
     Leaf,
     Milk,
-    Shield,
     UtensilsCrossed,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -15,6 +13,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Container } from '@/components/layout/container';
 
 const FRAMEWORKS = [
     {
@@ -86,7 +85,7 @@ const FRAMEWORKS = [
 
 function CodeBlock({ code }: { code: string }) {
     return (
-        <pre className="bg-[var(--re-surface-base)] text-[var(--re-text-secondary)] p-4 rounded-lg overflow-x-auto text-xs font-mono border border-[var(--re-surface-border)]">
+        <pre className="overflow-x-auto rounded-md border border-re-border-subtle bg-re-surface-inset p-4 font-mono text-[0.8125rem] text-re-text-secondary">
             <code>{code}</code>
         </pre>
     );
@@ -94,96 +93,84 @@ function CodeBlock({ code }: { code: string }) {
 
 export default function ComplianceVerticalsPage() {
     return (
-        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)] overflow-x-hidden">
-            <div className="fixed inset-0 pointer-events-none z-[1] opacity-[0.015]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")" }} />
-
-            <section className="relative z-[2] max-w-[1120px] mx-auto pt-[96px] pb-[72px] px-6">
-                <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.08)_0%,transparent_72%)] pointer-events-none" />
-
-                <Link href="/developers" className="inline-flex items-center text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] mb-8 transition-colors">
-                    <ArrowLeft className="h-4 w-4 mr-2" />
+        <div className="bg-re-surface-base text-re-text-secondary">
+            <Container as="section" width="marketing" className="py-16 sm:py-20">
+                <Link
+                    href="/developers"
+                    className="mb-8 inline-flex items-center text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
+                >
+                    <ArrowLeft className="mr-2 h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     Back to Developers
                 </Link>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                    <div className="inline-flex items-center gap-1.5 bg-[var(--re-brand-muted)] border border-[var(--re-brand)] rounded-full py-1 px-3 text-xs text-[var(--re-brand)] font-semibold mb-6 w-fit">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--re-brand)] animate-pulse" />
+                <div>
+                    <Badge tone="brand" className="mb-6 w-fit">
                         FSMA 204 Profiles
-                    </div>
-                    <h1 className="font-display text-[clamp(36px,5vw,52px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-4 tracking-[-0.02em]">
+                    </Badge>
+                    <h1 className="mb-4 font-display text-display text-re-text-primary">
                         Food-First Compliance
                         <br />
                         Vertical Profiles
                     </h1>
-                    <p className="text-lg text-[var(--re-text-muted)] max-w-[780px]">
+                    <p className="max-w-[68ch] text-body text-re-text-secondary">
                         Pre-built FSMA 204 profile templates for the food categories most frequently
                         requested in retailer onboarding and recall drills.
                     </p>
-                </motion.div>
-            </section>
+                </div>
+            </Container>
 
-            <section className="relative z-[2] max-w-[1120px] mx-auto px-6 pb-[88px]">
+            <Container as="section" width="marketing" className="pb-16 sm:pb-20">
                 <div className="grid gap-8">
-                    {FRAMEWORKS.map((framework, index) => (
-                        <motion.div
-                            key={framework.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.08 }}
-                        >
-                            <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)] overflow-hidden">
-                                <div className="grid md:grid-cols-2">
-                                    <div className="p-6 md:p-8 flex flex-col justify-center">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="p-2 bg-[var(--re-brand-muted)] rounded-lg">
-                                                <framework.icon className="h-6 w-6 text-[var(--re-brand)]" />
-                                            </div>
-                                            <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)]">{framework.title}</h2>
-                                        </div>
+                    {FRAMEWORKS.map((framework) => (
+                        <Card key={framework.id} className="overflow-hidden">
+                            <div className="grid md:grid-cols-2">
+                                <div className="flex min-w-0 flex-col justify-center p-6 md:p-8">
+                                    <h2 className="mb-4 font-display text-heading-lg text-re-text-primary">{framework.title}</h2>
 
-                                        <Badge className="mb-4 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand-muted)] w-fit">
-                                            {framework.description}
-                                        </Badge>
+                                    <Badge tone="neutral" className="mb-4 h-auto w-fit max-w-full items-start whitespace-normal py-1 text-left">
+                                        <framework.icon className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                                        {framework.description}
+                                    </Badge>
 
-                                        <p className="text-[var(--re-text-muted)] mb-6">
-                                            {framework.details}
-                                        </p>
+                                    <p className="mb-6 text-ui leading-relaxed text-re-text-secondary">
+                                        {framework.details}
+                                    </p>
 
-                                        <div className="flex gap-4 flex-wrap">
-                                            <Button asChild variant="outline" className="border-[var(--re-surface-border)] hover:bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
-                                                <Link href="/docs/fsma-204">View FSMA Controls</Link>
-                                            </Button>
-                                            <Button asChild className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
-                                                <Link href="/onboarding">Start Guided Setup</Link>
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-[var(--re-surface-base)] p-6 md:p-8 border-l border-[var(--re-surface-border)]">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <span className="text-xs font-semibold text-[var(--re-text-muted)] uppercase tracking-wider">
-                                                Example Seed Data
-                                            </span>
-                                            <Badge variant="outline" className="text-xs border-[var(--re-surface-border)] text-[var(--re-text-muted)]">
-                                                JSON
-                                            </Badge>
-                                        </div>
-                                        <CodeBlock code={framework.jsonSnippet} />
+                                    <div className="flex flex-wrap gap-3">
+                                        <Button asChild variant="secondary" size="lg">
+                                            <Link href="/docs/fsma-204" className="no-underline">View FSMA Controls</Link>
+                                        </Button>
+                                        <Button asChild size="lg">
+                                            <Link href="/onboarding" className="no-underline">Start Guided Setup</Link>
+                                        </Button>
                                     </div>
                                 </div>
-                            </Card>
-                        </motion.div>
+
+                                <div className="min-w-0 border-t border-re-border-subtle p-6 md:border-l md:border-t-0 md:p-8">
+                                    <div className="mb-4 flex items-center justify-between gap-3">
+                                        <span className="font-mono text-label uppercase text-re-text-muted">
+                                            Example Seed Data
+                                        </span>
+                                        <Badge tone="neutral" size="sm" mono>
+                                            JSON
+                                        </Badge>
+                                    </div>
+                                    <CodeBlock code={framework.jsonSnippet} />
+                                </div>
+                            </div>
+                        </Card>
                     ))}
                 </div>
-            </section>
+            </Container>
 
-            <section className="relative z-[2] border-t border-[var(--re-surface-border)] py-[72px] px-6 text-center bg-[var(--re-surface-card)]">
-                <Shield className="h-12 w-12 text-[var(--re-brand)] mx-auto mb-4" />
-                <h3 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Built for FDA and Retailer Readiness</h3>
-                <p className="text-[var(--re-text-muted)] max-w-[720px] mx-auto">
-                    Each profile maps to practical CTE and KDE coverage so teams can move from supplier
-                    data chaos to auditable FSMA 204 responses.
-                </p>
+            <section className="border-t border-re-border-subtle bg-re-surface-inset">
+                <Container width="marketing" className="py-16 text-center sm:py-20">
+                    <h3 className="mb-2 font-display text-heading-lg text-re-text-primary">Built for FDA and Retailer Readiness</h3>
+                    <p className="mx-auto max-w-[68ch] text-body text-re-text-secondary">
+                        Each profile maps to practical CTE and KDE coverage so teams can move from supplier
+                        data chaos to auditable FSMA 204 responses.
+                    </p>
+                </Container>
             </section>
         </div>
     );

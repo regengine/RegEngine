@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { BLOG_POST_SLUGS } from '@/lib/blog-posts';
+import { BLOG_POST_PUBLISHED, BLOG_POST_SLUGS } from '@/lib/blog-posts';
 import { EXPERIMENTAL_TOOL_SLUGS, isExperimentalToolEnabled } from '@/lib/experimental-features';
 import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
@@ -14,7 +14,6 @@ import { isSandboxEnabled } from '@/lib/sandbox-cta';
  */
 export default function sitemap(): MetadataRoute.Sitemap {
     const baseUrl = 'https://regengine.co';
-    const now = new Date().toISOString();
 
     // Core marketing pages
     const marketingPages = [
@@ -27,6 +26,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/demo`, changeFrequency: 'monthly' as const, priority: 0.7 },
+        { url: `${baseUrl}/buyer-programs`, changeFrequency: 'monthly' as const, priority: 0.7 },
+        { url: `${baseUrl}/supplier-compliance`, changeFrequency: 'monthly' as const, priority: 0.7 },
+        { url: `${baseUrl}/compare/foodlogiq`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/compare/repositrak`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/compare/tracegains`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/integrations`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/trust`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/contact`, changeFrequency: 'yearly' as const, priority: 0.5 },
@@ -38,6 +43,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
             : []),
         { url: `${baseUrl}/privacy`, changeFrequency: 'yearly' as const, priority: 0.3 },
         { url: `${baseUrl}/terms`, changeFrequency: 'yearly' as const, priority: 0.3 },
+        { url: `${baseUrl}/dpa`, changeFrequency: 'yearly' as const, priority: 0.3 },
+        { url: `${baseUrl}/legal/vulnerability-disclosure`, changeFrequency: 'yearly' as const, priority: 0.3 },
     ];
 
     // Free tools (high-value PLG pages) — all verified functional Apr 2026
@@ -54,6 +61,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'data-import',
         'readiness-assessment',
         'fsma-unified',
+        // Added Sep 2026 — built after the April curation, never listed.
+        // ask, label-scanner and inflow-lab are experimental and drop out of
+        // the list below unless their flags are enabled.
+        'records-request-checklist',
+        'self-reported-checklist',
+        'scan',
+        'export',
+        'ask',
+        'label-scanner',
+        'inflow-lab',
     ]
         .filter((tool) => !EXPERIMENTAL_TOOL_SLUGS.has(tool) || isExperimentalToolEnabled(tool))
         .map((tool) => ({
@@ -73,6 +90,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         // four posts were live but uncrawled while these were hand-maintained.
         ...BLOG_POST_SLUGS.map((slug) => ({
             url: `${baseUrl}/blog/${slug}`,
+            lastModified: BLOG_POST_PUBLISHED[slug],
             changeFrequency: 'monthly' as const,
             priority: 0.8,
         })),
@@ -83,10 +101,25 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/tools`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/docs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.6 },
+        { url: `${baseUrl}/docs/quickstart`, changeFrequency: 'monthly' as const, priority: 0.6 },
+        { url: `${baseUrl}/docs/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.6 },
+        { url: `${baseUrl}/docs/api`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/authentication`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/sdks`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/webhooks`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/errors`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/rate-limits`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/changelog`, changeFrequency: 'weekly' as const, priority: 0.5 },
+        { url: `${baseUrl}/docs/connectors/inflow-lab`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/trust/architecture`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/trust/retention`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/trust/support`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/proof`, changeFrequency: 'monthly' as const, priority: 0.5 },
+        { url: `${baseUrl}/proof/transformation`, changeFrequency: 'monthly' as const, priority: 0.5 },
     ];
 
-    return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages].map((page) => ({
-        ...page,
-        lastModified: now,
-    }));
+    // No blanket lastModified: stamping every URL "now" on every request
+    // teaches crawlers the field is meaningless. Blog entries carry their real
+    // publication dates; other pages omit the field, which is valid.
+    return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages];
 }

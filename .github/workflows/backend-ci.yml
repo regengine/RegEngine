@@ -830,6 +830,15 @@ jobs:
           python scripts/validate_release_evidence.py
           pytest tests/security/test_release_evidence.py -v --no-cov -o "testpaths=tests"
 
+      - name: Anti-stub canonical guard (#2989)
+        # Catches the incident class that merged green on 2026-09-17: a
+        # cross-module call site whose backing function was dropped by a
+        # merge resolution (0c6dfd8b^). Guard fires: call site exists,
+        # function missing. Behavioral drivers re-prove the load-bearing
+        # modules in fresh subprocesses. Bite proof: PR #3129.
+        run: |
+          pytest tests/test_guard_canonical.py -v --no-cov -o "testpaths=tests"
+
       - name: Create isolated test databases
         env:
           PGPASSWORD: postgres

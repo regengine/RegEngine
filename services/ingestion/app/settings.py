@@ -8,7 +8,6 @@ data retention, and integrations configuration.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -68,47 +67,35 @@ class SettingsResponse(BaseModel):
 
 
 def _default_settings(tenant_id: str) -> SettingsResponse:
-    now = datetime.now(timezone.utc)
+    """Settings for a tenant that has never saved any.
+
+    Every value here is an honest zero: no integration is connected, nothing
+    has ever synced, no API key exists, and no usage has accrued. Earlier
+    versions returned a demo payload (a "connected" Sensitech feed synced
+    "now", two active API keys, 12,847 events used) that read as real tenant
+    state on the settings page.
+    """
     return SettingsResponse(
         tenant_id=tenant_id,
         profile=CompanyProfile(),
         data_retention=DataRetention(),
         integrations=[
-            IntegrationStatus(
-                id="sensitech", name="Sensitech TempTale", category="iot", status="connected", last_sync=now.isoformat()
-            ),
+            IntegrationStatus(id="sensitech", name="Sensitech TempTale", category="iot", status="disconnected"),
             IntegrationStatus(id="tive", name="Tive Trackers", category="iot", status="disconnected"),
             IntegrationStatus(id="sap", name="SAP S/4HANA", category="erp", status="disconnected"),
             IntegrationStatus(id="netsuite", name="Oracle NetSuite", category="erp", status="disconnected"),
-            IntegrationStatus(id="walmart", name="Walmart GDSN", category="retailer", status="pending"),
-            IntegrationStatus(id="kroger", name="Kroger 84.51°", category="retailer", status="disconnected"),
+            IntegrationStatus(id="walmart", name="Walmart GDSN", category="retailer", status="disconnected"),
+            IntegrationStatus(id="kroger", name="Kroger 84.51\u00b0", category="retailer", status="disconnected"),
         ],
-        api_keys=[
-            {
-                "id": "key-001",
-                "name": "Production API Key",
-                "prefix": "rge_live_",
-                "created": now.isoformat(),
-                "last_used": now.isoformat(),
-                "status": "active",
-            },
-            {
-                "id": "key-002",
-                "name": "Test API Key",
-                "prefix": "rge_test_",
-                "created": now.isoformat(),
-                "last_used": None,
-                "status": "active",
-            },
-        ],
+        api_keys=[],
         plan={
             "id": "professional",
             "name": "Professional",
             "price_monthly": 499,
             "facilities_limit": 5,
             "events_limit": 50000,
-            "facilities_used": 2,
-            "events_used": 12847,
+            "facilities_used": 0,
+            "events_used": 0,
         },
     )
 

@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -30,24 +32,28 @@ export class DashboardErrorBoundary extends React.Component<
     render() {
         if (this.state.hasError) {
             return (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-re-danger/10 flex items-center justify-center mb-4">
-                        <AlertTriangle className="h-7 w-7 text-re-danger" />
-                    </div>
-                    <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
-                    <p className="text-sm text-muted-foreground max-w-md mb-6">
-                        An unexpected error occurred while rendering this page.
-                    </p>
-                    <button
-                        onClick={() => {
-                            this.setState({ hasError: false, error: null });
-                            window.location.reload();
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--re-brand)] text-white text-sm font-medium hover:brightness-110 active:scale-[0.97] transition-all"
+                <div className="flex min-h-[60vh] items-center justify-center px-4 py-10">
+                    <Callout
+                        tone="danger"
+                        role="alert"
+                        title="Something went wrong"
+                        className="w-full max-w-md"
+                        action={
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                leadingIcon={<RefreshCw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                                onClick={() => {
+                                    this.setState({ hasError: false, error: null });
+                                    window.location.reload();
+                                }}
+                            >
+                                Reload Page
+                            </Button>
+                        }
                     >
-                        <RefreshCw className="h-4 w-4" />
-                        Reload Page
-                    </button>
+                        An unexpected error occurred while rendering this page.
+                    </Callout>
                 </div>
             );
         }

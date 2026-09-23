@@ -81,6 +81,22 @@ vi.mock('lucide-react', () => {
         Hash: stub,
         Info: stub,
         Shield: stub,
+        // The shared design-system primitives (Callout, StatusBadge, StatTile,
+        // DataTable, Field, Button) build their icon maps at module scope, so
+        // every icon they reference must exist on this mock or the import
+        // throws before a single assertion runs.
+        AlertCircle: stub,
+        ArrowDown: stub,
+        ArrowDownRight: stub,
+        ArrowUp: stub,
+        ArrowUpDown: stub,
+        ArrowUpRight: stub,
+        CheckCircle2: stub,
+        HelpCircle: stub,
+        Loader2: stub,
+        Minus: stub,
+        X: stub,
+        XCircle: stub,
     };
 });
 
@@ -190,6 +206,20 @@ describe('AuditLogPage', () => {
         expect(screen.queryByText('facility_created')).not.toBeInTheDocument();
         expect(screen.queryByText('North Packing House')).not.toBeInTheDocument();
         expect(mockListSupplierFacilities).not.toHaveBeenCalled();
+    });
+
+    it('describes the empty audit log as hash-chained, not signed', async () => {
+        mockAuditFetch([]);
+        render(<AuditLogPage />, { wrapper: createWrapper() });
+
+        await waitFor(() => {
+            expect(screen.getByText('No Audit Entries Yet')).toBeInTheDocument();
+        });
+
+        // Audit entries are SHA-256 hash-chained and guarded by append-only
+        // triggers; no digital signature is applied, so copy must not say so.
+        expect(screen.getByText(/SHA-256 hash-chained/i)).toBeInTheDocument();
+        expect(screen.queryByText(/cryptographically signed/i)).not.toBeInTheDocument();
     });
 
     it('does not fetch when the user is signed out', () => {

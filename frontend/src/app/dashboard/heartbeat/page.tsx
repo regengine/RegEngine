@@ -77,7 +77,7 @@ function gradeColor(grade: string): string {
     if (grade === 'A' || grade === 'A+') return 'text-re-brand';
     if (grade === 'B' || grade === 'B+') return 'text-re-success';
     if (grade === 'C' || grade === 'C+') return 'text-re-warning';
-    if (grade === 'D') return 'text-orange-400';
+    if (grade === 'D') return 'text-re-warning';
     return 'text-re-danger';
 }
 
@@ -112,10 +112,10 @@ function severityConfig(severity: string) {
             dot: 'bg-re-danger',
         },
         high: {
-            bg: 'bg-orange-500/10',
-            border: 'border-l-orange-500',
-            text: 'text-orange-400',
-            dot: 'bg-orange-500',
+            bg: 'bg-re-warning/10',
+            border: 'border-l-re-warning',
+            text: 'text-re-warning',
+            dot: 'bg-re-warning',
         },
         medium: {
             bg: 'bg-re-warning/10',
@@ -210,15 +210,15 @@ function ScoreRing({ score, grade, size = 200 }: { score: number; grade: string;
 function BreakdownBar({ label, value, detail, delay = 0 }: { label: string; value: number; detail?: string; delay?: number }) {
     const barColor =
         value >= 80
-            ? 'from-emerald-500 to-emerald-400'
+            ? 'bg-re-success'
             : value >= 60
-                ? 'from-yellow-500 to-yellow-400'
+                ? 'bg-re-warning'
                 : value >= 40
-                    ? 'from-orange-500 to-orange-400'
-                    : 'from-red-500 to-red-400';
+                    ? 'bg-re-warning'
+                    : 'bg-re-danger';
 
     const dotColor =
-        value >= 80 ? 'bg-re-brand' : value >= 60 ? 'bg-re-warning' : value >= 40 ? 'bg-orange-500' : 'bg-re-danger';
+        value >= 80 ? 'bg-re-brand' : value >= 60 ? 'bg-re-warning' : value >= 40 ? 'bg-re-warning' : 'bg-re-danger';
 
     return (
         <motion.div
@@ -236,7 +236,7 @@ function BreakdownBar({ label, value, detail, delay = 0 }: { label: string; valu
             </div>
             <div className="h-2 rounded-full bg-muted/20 overflow-hidden">
                 <motion.div
-                    className={`h-full rounded-full bg-gradient-to-r ${barColor}`}
+                    className={`h-full rounded-full ${barColor}`}
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.max(value, 2)}%` }}
                     transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1], delay: delay + 0.2 }}
@@ -410,7 +410,7 @@ function HeartbeatPageContent() {
     // Show skeleton while auth is hydrating (never render blank)
     if (!isHydrated) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/10">
+            <div className="min-h-screen bg-re-surface-base">
                 <PageContainer>
                     <HeartbeatSkeleton />
                 </PageContainer>
@@ -421,7 +421,7 @@ function HeartbeatPageContent() {
     // Redirect handled by useEffect above; show skeleton while redirecting
     if (!effectiveUser) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/10">
+            <div className="min-h-screen bg-re-surface-base">
                 <PageContainer>
                     <HeartbeatSkeleton />
                 </PageContainer>
@@ -437,7 +437,7 @@ function HeartbeatPageContent() {
     const showEmptyState = queryDisabled && !loading && !compliance;
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/10">
+        <div className="min-h-screen bg-re-surface-base">
             <PageContainer>
                 <AnimatePresence mode="wait">
                     {loading && !compliance ? (
@@ -526,7 +526,7 @@ function HeartbeatPageContent() {
                                             </p>
                                             <div className="flex gap-3 mt-5">
                                                 <Link href="/ingest">
-                                                    <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
+                                                    <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-[var(--re-brand-foreground)]">
                                                         <Upload className="h-3.5 w-3.5" /> Import Data
                                                     </Button>
                                                 </Link>
@@ -601,7 +601,7 @@ function HeartbeatPageContent() {
                                                 <p className="text-sm font-medium mb-1">No data yet</p>
                                                 <p className="text-xs text-muted-foreground/60 mb-3">Import traceability events to get started</p>
                                                 <Link href="/ingest">
-                                                    <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
+                                                    <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-[var(--re-brand-foreground)]">
                                                         <Upload className="h-3.5 w-3.5" /> Import Data
                                                     </Button>
                                                 </Link>
@@ -672,7 +672,7 @@ function HeartbeatPageContent() {
                                 <Card className="overflow-hidden border-[var(--re-border-default)] hover:border-[var(--re-border-subtle)] transition-colors">
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                                            <Activity className="h-4 w-4 text-purple-500" />
+                                            <Activity className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                             System Status
                                         </CardTitle>
                                     </CardHeader>
@@ -704,7 +704,7 @@ function HeartbeatPageContent() {
                                                 animate={{ opacity: 1 }}
                                                 transition={{ delay: 0.6 }}
                                             >
-                                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-medium">Latest Chain Hash</p>
+                                                <p className="mb-1 text-label uppercase text-re-text-muted">Latest Chain Hash</p>
                                                 <code className="text-[11px] font-mono text-foreground/60 break-all leading-relaxed">
                                                     {compliance.last_chain_hash.slice(0, 40)}...
                                                 </code>
@@ -724,7 +724,7 @@ function HeartbeatPageContent() {
                                                 <AlertTriangle className="h-4 w-4 text-re-warning" />
                                                 Recent Alerts
                                                 {criticalAlerts.length > 0 && (
-                                                    <Badge className="text-[10px] px-1.5 py-0 bg-re-danger/15 text-re-danger border-re-danger/20 ml-1">
+                                                    <Badge className="ml-1 text-label px-1.5 py-0 bg-re-danger/15 text-re-danger border-re-danger/20">
                                                         {criticalAlerts.length} urgent
                                                     </Badge>
                                                 )}
@@ -754,7 +754,7 @@ function HeartbeatPageContent() {
                                                                 <p className="text-sm font-medium truncate">{alert.title || alert.message}</p>
                                                                 <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{alert.category}</p>
                                                             </div>
-                                                            <span className="text-[10px] text-muted-foreground/60 flex-shrink-0 mt-0.5 tabular-nums">
+                                                            <span className="mt-0.5 flex-shrink-0 text-label tabular-nums text-re-text-muted">
                                                                 {alert.created_at ? timeAgo(alert.created_at) : ''}
                                                             </span>
                                                         </motion.div>
@@ -777,7 +777,7 @@ function HeartbeatPageContent() {
                                 <Card className="overflow-hidden border-[var(--re-border-default)] hover:border-[var(--re-border-subtle)] transition-colors">
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                                            <Zap className="h-4 w-4 text-indigo-500" />
+                                            <Zap className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                             Priority Actions
                                         </CardTitle>
                                     </CardHeader>
@@ -792,7 +792,7 @@ function HeartbeatPageContent() {
                                                         transition={{ delay: i * 0.06 }}
                                                         className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/20 transition-colors"
                                                     >
-                                                        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold flex-shrink-0 mt-0.5 ${
+                                                        <span className={`mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-label font-bold ${
                                                             action.priority === 'HIGH'
                                                                 ? 'bg-re-danger/15 text-re-danger'
                                                                 : action.priority === 'MEDIUM'

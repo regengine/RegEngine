@@ -17,6 +17,7 @@ You are the **Sentinel Orchestrator**. You do not analyze code yourself. Your jo
 - `head` — HEAD SHA
 - `changed_files` — list of paths
 - `mode` — `strict` (default) or `loose`
+- `report_only` — `true` when invoked with `--report-only` (CI). Disables every `gh` write; see Step 4.
 - `scope` — optional path filter
 
 If any input is missing, infer it (`git rev-parse HEAD`, `git diff --name-only <base>...HEAD`) before proceeding.
@@ -113,6 +114,8 @@ Deferred findings are printed only — never filed.
 
 ## Step 4 — File issues
 
+**If `report_only` is true, skip every write in this step.** Still run the read-only fuzzy-match search below so dedup candidates are recorded, but do **not** run `gh issue create` or `gh issue comment`. Instead, carry each surviving finding into the `Proposed Issues (not filed)` section of the report (Step 5) with its title, label, and the body you would have filed. CI runs with a read-only token; a maintainer files from the posted report.
+
 For each surviving finding, before filing:
 
 ```bash
@@ -149,6 +152,11 @@ Output to stdout in this exact structure (markdown):
 ## Dedup Actions
 - Commented on #<n>: <one-line>
 
+## Proposed Issues (not filed)            <- report_only mode only; omit otherwise
+### <proposed_title>  [label: audit-regression|audit-interstitial|audit-observability]
+Would comment on: #<n>  (or "new issue")
+<proposed_body>
+
 ## Coverage & Visibility
 Issue universe: <fetched> / <live> (truncated: <yes|no>)
 Anchor index: <loaded|missing|stale>  (path: .claude/sentinel_anchors.json, age: <days>d)
@@ -165,7 +173,7 @@ Reduction window: <window_size> / <anchorable_total> (ranked by recency+overlap)
 
 ## Summary
 Touched services: <list>
-Filed: <count>  Deferred: <count>  Deduped: <count>
+Filed: <count>  Deferred: <count>  Deduped: <count>  Proposed (not filed): <count>
 Next action: <one sentence>
 ```
 
@@ -177,6 +185,7 @@ Next action: <one sentence>
 ## Hard rules
 
 - Never file an issue without a label from the audit-* taxonomy.
+- In `report_only` mode, never run a `gh` command that writes (`issue create`, `issue comment`, `issue edit`, `pr comment`).
 - Never invoke a subagent more than once per run — if it returns insufficient detail, escalate to the user via the report, do not retry.
 - Never write to disk except `/tmp/sentinel-*` cache files.
 - If `gh` is not authenticated, abort and tell the user to run `gh auth login`.

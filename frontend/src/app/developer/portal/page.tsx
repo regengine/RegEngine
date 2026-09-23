@@ -3,9 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatTile } from '@/components/ui/stat-tile';
 import {
     Key, BarChart3, BookOpen, ArrowRight, Terminal, Zap,
-    CheckCircle2, Circle, Webhook, Package, Loader2,
+    CheckCircle2, Circle, Webhook,
 } from 'lucide-react';
 
 interface DeveloperProfile {
@@ -69,10 +74,21 @@ export default function DeveloperPortalDashboard() {
     const completedSteps = onboardingSteps.filter(s => s.done).length;
     const progress = Math.round((completedSteps / onboardingSteps.length) * 100);
 
+    // The skeleton mirrors the header + checklist + tiles below, so nothing
+    // jumps when the dashboard payload lands.
     if (loading) {
         return (
-            <div className="flex justify-center py-20">
-                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} />
+            <div className="space-y-8">
+                <div className="space-y-2 border-b border-re-border-subtle pb-5">
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="h-4 w-80" />
+                </div>
+                <Skeleton className="h-52 w-full rounded-lg" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Skeleton className="h-24 w-full rounded-lg" />
+                    <Skeleton className="h-24 w-full rounded-lg" />
+                    <Skeleton className="h-24 w-full rounded-lg" />
+                </div>
             </div>
         );
     }
@@ -81,118 +97,116 @@ export default function DeveloperPortalDashboard() {
     // zero-state dashboard for nobody.
     if (!authUser) {
         return (
-            <div className="rounded-lg p-8 text-center" style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
-                <h1 className="text-lg font-semibold" style={{ color: 'var(--re-text-primary)' }}>Your session has expired</h1>
-                <p className="text-sm mt-2" style={{ color: 'var(--re-text-muted)' }}>
+            <Card className="px-6 py-14 text-center">
+                <h1 className="text-title text-re-text-primary">Your session has expired</h1>
+                <p className="mx-auto mt-2 max-w-[48ch] text-ui text-re-text-tertiary">
                     Sign in again to open your developer dashboard.
                 </p>
-                <Link
-                    href="/login?next=/developer/portal"
-                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-md text-sm font-semibold no-underline"
-                    style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
-                >
-                    Sign in
-                </Link>
-            </div>
+                <Button asChild size="lg" className="mt-6">
+                    <Link href="/login?next=/developer/portal" className="no-underline">
+                        Sign in
+                    </Link>
+                </Button>
+            </Card>
         );
     }
 
     return (
         <div className="space-y-8">
-            {/* Welcome */}
-            <div>
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
-                    Welcome back, {greeting}
-                </h1>
-                <p className="text-sm mt-1" style={{ color: 'var(--re-text-muted)' }}>
-                    {profile?.company_name ? `${profile.company_name} · ` : ''}Your developer dashboard for RegEngine.
-                </p>
-            </div>
+            <PageHeader
+                title={`Welcome back, ${greeting}`}
+                description={`${profile?.company_name ? `${profile.company_name} · ` : ''}Your developer dashboard for RegEngine.`}
+                className="mb-0"
+            />
 
             {/* Onboarding checklist */}
             {completedSteps < onboardingSteps.length && (
-                <div className="rounded-lg p-5" style={{
-                    background: 'var(--re-success-bg)',
-                    border: '1px solid var(--re-success-border)',
-                }}>
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-sm font-semibold" style={{ color: 'var(--re-text-primary)' }}>Getting Started</h2>
-                            <p className="text-xs mt-0.5" style={{ color: 'var(--re-text-muted)' }}>
+                <Card>
+                    <CardHeader className="items-center">
+                        <div className="min-w-0">
+                            <CardTitle>Getting Started</CardTitle>
+                            <p className="mt-0.5 text-small text-re-text-tertiary">
                                 {completedSteps} of {onboardingSteps.length} steps complete
                             </p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--re-surface-border)' }}>
-                                <div className="h-full rounded-full transition-all" style={{
-                                    width: `${progress}%`,
-                                    background: 'var(--re-brand)',
-                                }} />
-                            </div>
-                            <span className="text-xs font-medium" style={{ color: 'var(--re-brand)' }}>{progress}%</span>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <span className="h-1.5 w-24 overflow-hidden rounded-full bg-re-surface-inset" aria-hidden="true">
+                                <span
+                                    className="block h-full rounded-full bg-re-text-primary transition-[width] duration-240 motion-reduce:transition-none"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </span>
+                            <span className="text-small tabular-nums text-re-text-secondary">{progress}%</span>
                         </div>
-                    </div>
-                    <div className="space-y-2">
-                        {onboardingSteps.map((step) => {
-                            const content = (
-                                <>
-                                    {step.done
-                                        ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--re-brand)' }} />
-                                        : <Circle className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--re-text-disabled)' }} />
-                                    }
-                                    <span className="text-sm" style={{
-                                        color: step.done ? 'var(--re-text-disabled)' : 'var(--re-text-primary)',
-                                        textDecoration: step.done ? 'line-through' : 'none',
-                                    }}>
-                                        {step.label}
-                                    </span>
-                                    {!step.done && <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--re-text-muted)' }} />}
-                                </>
-                            );
+                    </CardHeader>
+                    <CardContent className="py-2">
+                        <ul className="divide-y divide-re-border-subtle">
+                            {onboardingSteps.map((step) => {
+                                const content = (
+                                    <>
+                                        {step.done
+                                            ? <CheckCircle2 className="h-4 w-4 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
+                                            : <Circle className="h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                                        }
+                                        <span className={step.done ? 'text-ui text-re-text-muted line-through' : 'text-ui text-re-text-primary'}>
+                                            {step.label}
+                                        </span>
+                                        {!step.done && (
+                                            <ArrowRight
+                                                className="ml-auto h-4 w-4 shrink-0 text-re-text-muted"
+                                                strokeWidth={1.75}
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                    </>
+                                );
 
-                            return step.href ? (
-                                <Link key={step.label} href={step.href} className="flex items-center gap-3 py-1.5 no-underline group">
-                                    {content}
-                                </Link>
-                            ) : (
-                                <div key={step.label} className="flex items-center gap-3 py-1.5 group">
-                                    {content}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                                return (
+                                    <li key={step.label}>
+                                        {step.href ? (
+                                            <Link
+                                                href={step.href}
+                                                className="flex items-center gap-3 rounded-md py-2.5 no-underline transition-colors duration-120 hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+                                            >
+                                                {content}
+                                            </Link>
+                                        ) : (
+                                            <div className="flex items-center gap-3 py-2.5">
+                                                {content}
+                                            </div>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </CardContent>
+                </Card>
             )}
 
-            {/* Stats cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Stats */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {[
-                    { label: 'Active API Keys', value: stats.activeKeys, sub: `${stats.totalKeys} total`, color: 'var(--re-brand)' },
+                    { label: 'Active API Keys', value: stats.activeKeys, sub: `${stats.totalKeys} total` },
                     // Sandbox keys don't record traffic — say so instead of implying an all-time count of zero.
-                    { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), sub: 'sandbox telemetry not yet recorded', color: 'var(--re-signal-blue)' },
+                    { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), sub: 'sandbox telemetry not yet recorded' },
                     // A signed-in console user without a developer profile is NOT an
                     // active developer account — don't claim otherwise.
                     profile
-                        ? { label: 'Account Status', value: 'Active', sub: `since ${new Date(profile.created_at).toLocaleDateString()}`, color: 'var(--re-brand)' }
-                        : { label: 'Account Status', value: 'Not provisioned', sub: 'developer access is enabled during onboarding', color: 'var(--re-text-muted)' },
+                        ? { label: 'Account Status', value: 'Active', sub: `since ${new Date(profile.created_at).toLocaleDateString()}` }
+                        : { label: 'Account Status', value: 'Not provisioned', sub: 'developer access is enabled during onboarding' },
                 ].map((card) => (
-                    <div key={card.label} className="rounded-lg p-5" style={{
-                        background: 'var(--re-surface-card)',
-                        border: '1px solid var(--re-surface-border)',
-                    }}>
-                        <p className="text-xs font-medium mb-2" style={{ color: 'var(--re-text-muted)' }}>{card.label}</p>
-                        <p className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</p>
-                        <p className="text-xs mt-1" style={{ color: 'var(--re-text-disabled)' }}>{card.sub}</p>
-                    </div>
+                    <StatTile key={card.label} label={card.label} value={card.value}>
+                        <p className="text-small text-re-text-tertiary">{card.sub}</p>
+                    </StatTile>
                 ))}
             </div>
 
             {/* Quick links */}
             <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--re-text-disabled)' }}>
+                <h2 className="mb-3 text-label text-re-text-muted">
                     Quick Links
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <ul className="divide-y divide-re-border-subtle border-y border-re-border-subtle">
                     {[
                         { label: 'API Keys', desc: 'Generate, revoke, and rotate', href: '/developer/portal/keys', icon: Key },
                         { label: 'Usage & Logs', desc: 'Requests, latency, errors', href: '/developer/portal/usage', icon: BarChart3 },
@@ -201,19 +215,21 @@ export default function DeveloperPortalDashboard() {
                         { label: 'Playground', desc: 'Test endpoints live', href: '/developer/portal/playground', icon: Terminal },
                         { label: 'Webhook Ingestion', desc: 'Send events into RegEngine', href: '/docs/webhooks', icon: Webhook },
                     ].map((item) => (
-                        <Link key={item.href} href={item.href} className="group flex items-center gap-3 rounded-lg p-4 no-underline transition-all" style={{
-                            background: 'var(--re-surface-card)',
-                            border: '1px solid var(--re-surface-border)',
-                        }}>
-                            <item.icon className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--re-brand)' }} />
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium" style={{ color: 'var(--re-text-primary)' }}>{item.label}</p>
-                                <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>{item.desc}</p>
-                            </div>
-                            <ArrowRight className="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--re-text-disabled)' }} />
-                        </Link>
+                        <li key={item.href}>
+                            <Link
+                                href={item.href}
+                                className="flex items-center gap-3 py-3 no-underline transition-colors duration-120 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+                            >
+                                <item.icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-ui font-medium text-re-text-primary">{item.label}</span>
+                                    <span className="block truncate text-small text-re-text-tertiary">{item.desc}</span>
+                                </span>
+                                <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+                            </Link>
+                        </li>
                     ))}
-                </div>
+                </ul>
             </div>
         </div>
     );

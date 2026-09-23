@@ -5,6 +5,8 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { Container } from "@/components/layout/container";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "Records-Request Checklist | RegEngine",
@@ -41,21 +43,29 @@ const jsonLd = {
 export default function RecordsRequestChecklistPage() {
     return (
         <>
-            <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+            <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
                 <JSONLD data={jsonLd} />
-                <div className="max-w-7xl mx-auto">
+                <Container width="tool">
                     <Breadcrumbs
                         items={[
                             { label: "Free Tools", href: "/tools" },
                             { label: "Records-Request Checklist" }
                         ]}
                     />
-                    <Suspense>
+                    <Suspense
+                        fallback={
+                            <div className="space-y-3" role="status" aria-live="polite">
+                                <Skeleton className="h-8 w-2/3" />
+                                <Skeleton className="h-32 w-full" />
+                                <Skeleton className="h-10 w-full" />
+                            </div>
+                        }
+                    >
                         <EmailGate toolName="records-request-checklist">
                             <RecordsRequestChecklistClient />
                         </EmailGate>
                     </Suspense>
-                </div>
+                </Container>
             </div>
             <RelatedTools tools={[
                 { href: "/tools/ftl-checker", title: "FTL List Checker", description: "Look at the Food Traceability List. This page does not decide if you are a covered person." },

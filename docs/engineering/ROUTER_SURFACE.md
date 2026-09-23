@@ -58,6 +58,7 @@ These routers belong closest to the FSMA production story:
 - `epcis_ingestion`
 - `score`
 - `portal`
+- `inbound_email` (Postmark inbound-parse webhook ingestion; disable-by-default — pending an explicit production-allowlist security review, not in the recommended `ENABLED_ROUTERS` string)
 - `billing`
 - `onboarding`
 - `recall`
@@ -98,6 +99,9 @@ These may be useful for onboarding, customer operations, or commercial workflow,
   the historical query targeted a table that was never migrated
 - `incidents`
 - `disaster_recovery`
+- `email_ingest` — Postmark inbound-parse webhook (`POST /webhooks/email/inbound`);
+  new input channel, not yet promoted to production pending release review of
+  the Basic-Auth webhook credential rollout
 
 Recommendation: keep only the minimum required subset enabled in production until each route has explicit owner documentation and tenant-boundary tests.
 

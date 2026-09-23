@@ -50,9 +50,14 @@ vi.mock('framer-motion', () => ({
 }));
 
 // Mock lucide-react icons
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  // The design-system primitives (Callout, StatTile, DataTable, StatusBadge)
+  // read their icons at module scope, so a partial mock throws on import.
+  // Spread the real module and keep stubbing the icons this suite names.
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const stub = (props: any) => <svg {...props} />;
   return {
+    ...actual,
     Building2: stub,
     CheckCircle: stub,
     GitMerge: stub,

@@ -299,7 +299,7 @@ class TestBridgeToCanonicalHappyPath:
                 event=event,
                 facility=facility,
                 tlc_code="TLC-1342-002",
-                kde_data={},
+                kde_data={"quantity": 5, "unit_of_measure": "cases"},
             )
 
         failed = [
@@ -310,6 +310,86 @@ class TestBridgeToCanonicalHappyPath:
             and r.message == "supplier_canonical_bridge_failed"
         ]
         assert len(failed) == 1
+
+
+class TestBridgeToCanonicalRequiresQuantityAndUnit:
+    """The bridge used to substitute ``1.0`` / ``"each"`` for KDEs the
+    supplier never reported. It now skips the canonical write and says why."""
+
+    @pytest.mark.parametrize(
+        "kde_data,reason",
+        [
+            ({}, "missing quantity, unit_of_measure"),
+            ({"unit_of_measure": "cases"}, "missing quantity"),
+            ({"quantity": "lots", "unit_of_measure": "cases"}, "missing quantity"),
+            ({"quantity": 5}, "missing unit_of_measure"),
+            ({"quantity": 5, "unit_of_measure": "  "}, "missing unit_of_measure"),
+        ],
+    )
+    def test_missing_quantity_or_unit_skips_bridge(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        reset_fake_store,
+        kde_data,
+        reason,
+    ):
+        import shared.canonical_persistence as cp_mod
+        import shared.canonical_persistence.writer as cp_writer
+
+        monkeypatch.setattr(cp_mod, "CanonicalEventStore", _FakeCanonicalEventStore)
+        monkeypatch.setattr(cp_writer, "CanonicalEventStore", _FakeCanonicalEventStore)
+
+        event = MagicMock()
+        event.id = uuid.UUID("00000000-0000-0000-0000-000000000eee")
+        event.cte_type = "receiving"
+        event.event_time = datetime(2026, 4, 20, 12, 0, 0, tzinfo=timezone.utc)
+        facility = MagicMock()
+        facility.id = uuid.UUID("00000000-0000-0000-0000-000000000fff")
+        del facility.gln
+
+        with caplog.at_level(logging.WARNING, logger="supplier-canonical-bridge"):
+            _bridge_to_canonical(
+                db=MagicMock(),
+                tenant_id=TENANT_ID,
+                event=event,
+                facility=facility,
+                tlc_code="TLC-1342-003",
+                kde_data=kde_data,
+            )
+
+        assert _FakeCanonicalEventStore.instances == []
+        skipped = [r for r in caplog.records if r.message == "supplier_canonical_bridge_skipped"]
+        assert len(skipped) == 1
+        assert getattr(skipped[0], "reason") == reason
+
+    def test_reported_quantity_and_unit_are_persisted_verbatim(self, monkeypatch, reset_fake_store):
+        import shared.canonical_persistence as cp_mod
+        import shared.canonical_persistence.writer as cp_writer
+
+        monkeypatch.setattr(cp_mod, "CanonicalEventStore", _FakeCanonicalEventStore)
+        monkeypatch.setattr(cp_writer, "CanonicalEventStore", _FakeCanonicalEventStore)
+
+        event = MagicMock()
+        event.id = uuid.UUID("00000000-0000-0000-0000-000000000abc")
+        event.cte_type = "shipping"
+        event.event_time = datetime(2026, 4, 20, 12, 0, 0, tzinfo=timezone.utc)
+        facility = MagicMock()
+        facility.id = uuid.UUID("00000000-0000-0000-0000-000000000def")
+        del facility.gln
+
+        _bridge_to_canonical(
+            db=MagicMock(),
+            tenant_id=TENANT_ID,
+            event=event,
+            facility=facility,
+            tlc_code="TLC-1342-004",
+            kde_data={"quantity": "42.5", "unit_of_measure": "lbs"},
+        )
+
+        persisted = _FakeCanonicalEventStore.instances[0].persisted[0]
+        assert persisted.quantity == 42.5
+        assert persisted.unit_of_measure == "lbs"
 
 
 # ---------------------------------------------------------------------------

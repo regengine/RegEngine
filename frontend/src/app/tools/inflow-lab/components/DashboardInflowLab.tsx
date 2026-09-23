@@ -1188,7 +1188,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         : toLineage([]);
 
     return (
-        <main
+        <div
             data-inflow-lab-app
             data-inflow-lab-mode="dashboard"
             data-dashboard-shell
@@ -1968,7 +1968,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                 onComplete={dismissInflowLabTutorialBanner}
                 storageKey={INFLOW_LAB_TUTORIAL_STORAGE_KEY}
             />
-        </main>
+        </div>
     );
 }
 

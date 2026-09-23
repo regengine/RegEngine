@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
 import {
   FileText,
   Building2,
@@ -14,8 +12,6 @@ import {
   ChevronLeft,
   Download,
   RefreshCw,
-  CheckCircle,
-  Loader2,
   Leaf,
   Package,
   Truck,
@@ -24,11 +20,16 @@ import {
 } from 'lucide-react';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useApiMutate } from '@/hooks/use-api-query';
+import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -72,6 +73,16 @@ const STEPS = [
   { id: 'records', title: 'Record Keeping', description: 'Where you store records' },
   { id: 'review', title: 'Review & Generate', description: 'Confirm and generate your plan' },
 ];
+
+const RECORD_TYPES = ['electronic', 'paper', 'hybrid'];
+
+const selectableTileClasses = (selected: boolean) =>
+  cn(
+    'rounded-md border px-4 py-3 text-left text-ui transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-card motion-reduce:transition-none',
+    selected
+      ? 'border-re-border-strong bg-re-surface-inset text-re-text-primary'
+      : 'border-re-border bg-re-surface-card text-re-text-secondary hover:bg-re-surface-inset hover:text-re-text-primary'
+  );
 
 // ---------------------------------------------------------------------------
 // Component
@@ -181,315 +192,296 @@ export default function TraceabilityPlanPage() {
   // If plan is generated, show it
   if (generatedPlan) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-        <PageContainer>
-          <div className="max-w-4xl mx-auto py-12 space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-re-success-muted dark:bg-green-900">
-                  <CheckCircle className="h-8 w-8 text-re-success dark:text-re-success" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold">Traceability Plan Generated</h1>
-                  <p className="text-muted-foreground">
-                    {firmData.firm_name} &mdash; FSMA 204 Traceability Plan
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleDownload}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download (.md)
-                </Button>
-                <Button variant="outline" onClick={() => { setGeneratedPlan(null); setStep(4); }}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Regenerate
-                </Button>
-              </div>
-            </div>
+      <PageContainer width="tool">
+        <PageHeader
+          title="Traceability Plan Generated"
+          description={`${firmData.firm_name} — FSMA 204 Traceability Plan`}
+          secondaryActions={
+            <>
+              <Button variant="secondary" onClick={handleDownload}>
+                <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Download (.md)
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => { setGeneratedPlan(null); setStep(4); }}
+              >
+                <RefreshCw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                Regenerate
+              </Button>
+            </>
+          }
+        />
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap font-mono text-sm leading-relaxed">
-                  {generatedPlan}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </PageContainer>
-      </div>
+        <Card>
+          <CardContent>
+            <div className="overflow-x-auto whitespace-pre-wrap font-mono text-[0.8125rem] leading-relaxed text-re-text-secondary">
+              {generatedPlan}
+            </div>
+          </CardContent>
+        </Card>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <PageContainer>
-        <div className="max-w-3xl mx-auto py-12">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-re-info-muted dark:bg-blue-900">
-              <FileText className="h-8 w-8 text-re-info dark:text-re-info" />
+    <PageContainer width="tool">
+      <PageHeader
+        title="Traceability Plan"
+        description="Generate your FSMA 204 traceability plan in minutes"
+      />
+
+      <Card>
+        <CardHeader className="flex-col items-stretch gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <CardTitle>{STEPS[step].title}</CardTitle>
+              <CardDescription className="mt-1">{STEPS[step].description}</CardDescription>
             </div>
-            <div>
-              <h1 className="text-4xl font-bold">Traceability Plan</h1>
-              <p className="text-muted-foreground mt-1">
-                Generate your FSMA 204 traceability plan in minutes
-              </p>
-            </div>
+            <Badge tone="neutral" mono>
+              Step {step + 1} of {STEPS.length}
+            </Badge>
           </div>
+          <Progress value={progress} className="h-1.5 bg-re-surface-inset" aria-label={`Step ${step + 1} of ${STEPS.length}`} />
+        </CardHeader>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <CardTitle>{STEPS[step].title}</CardTitle>
-                  <CardDescription>{STEPS[step].description}</CardDescription>
-                </div>
-                <Badge variant="outline">
-                  Step {step + 1} of {STEPS.length}
-                </Badge>
+        <CardContent className="min-h-[400px]">
+          {step === 0 && (
+            <div className="space-y-4">
+              <Field label="Firm Name" htmlFor="plan-firm-name" required>
+                <Input
+                  id="plan-firm-name"
+                  value={firmData.firm_name}
+                  onChange={e => handleFieldChange('firm_name', e.target.value)}
+                  placeholder="Your company name"
+                  leadingIcon={<Building2 strokeWidth={1.75} />}
+                />
+              </Field>
+              <Field label="Address" htmlFor="plan-firm-address" required>
+                <Input
+                  id="plan-firm-address"
+                  value={firmData.firm_address}
+                  onChange={e => handleFieldChange('firm_address', e.target.value)}
+                  placeholder="123 Main St, Anytown, CA 90210"
+                  leadingIcon={<MapPin strokeWidth={1.75} />}
+                />
+              </Field>
+              <Field label="Contact Name" htmlFor="plan-contact-name">
+                <Input
+                  id="plan-contact-name"
+                  value={firmData.contact_name}
+                  onChange={e => handleFieldChange('contact_name', e.target.value)}
+                  placeholder="Jane Smith"
+                  leadingIcon={<Building2 strokeWidth={1.75} />}
+                />
+              </Field>
+              <Field label="Contact Email" htmlFor="plan-contact-email">
+                <Input
+                  id="plan-contact-email"
+                  type="email"
+                  value={firmData.contact_email}
+                  onChange={e => handleFieldChange('contact_email', e.target.value)}
+                  placeholder="contact@yourcompany.com"
+                  leadingIcon={<Mail strokeWidth={1.75} />}
+                />
+              </Field>
+              <Field label="Contact Phone" htmlFor="plan-contact-phone">
+                <Input
+                  id="plan-contact-phone"
+                  type="tel"
+                  value={firmData.contact_phone}
+                  onChange={e => handleFieldChange('contact_phone', e.target.value)}
+                  placeholder="(555) 123-4567"
+                  leadingIcon={<Phone strokeWidth={1.75} />}
+                />
+              </Field>
+              <Field label="GLN (optional)" htmlFor="plan-gln">
+                <Input
+                  id="plan-gln"
+                  value={firmData.gln}
+                  onChange={e => handleFieldChange('gln', e.target.value)}
+                  placeholder="0614141000005"
+                  leadingIcon={<Hash strokeWidth={1.75} />}
+                  mono
+                />
+              </Field>
+              <Field label="FDA Registration (optional)" htmlFor="plan-fda-registration">
+                <Input
+                  id="plan-fda-registration"
+                  value={firmData.fda_registration}
+                  onChange={e => handleFieldChange('fda_registration', e.target.value)}
+                  placeholder="12345678"
+                  leadingIcon={<Hash strokeWidth={1.75} />}
+                  mono
+                />
+              </Field>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {FIRM_TYPES.map(ft => {
+                const Icon = ft.icon;
+                const isSelected = firmType === ft.id;
+                return (
+                  <button
+                    key={ft.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setFirmType(ft.id)}
+                    className={selectableTileClasses(isSelected)}
+                  >
+                    <span className="flex items-center gap-3">
+                      <Icon
+                        className="h-4 w-4 shrink-0 text-re-text-tertiary"
+                        strokeWidth={1.75}
+                        aria-hidden="true"
+                      />
+                      <span className="font-medium">{ft.label}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <p className="text-ui text-re-text-secondary">
+                Select the FDA Food Traceability List commodities your facility handles.
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+                {FTL_COMMODITIES.map(comm => {
+                  const isSelected = selectedCommodities.includes(comm.name);
+                  return (
+                    <button
+                      key={comm.name}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => toggleCommodity(comm.name)}
+                      className={selectableTileClasses(isSelected)}
+                    >
+                      <span className={isSelected ? 'font-medium' : undefined}>{comm.name}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <Progress value={progress} className="h-2" />
-            </CardHeader>
+            </div>
+          )}
 
-            <CardContent className="min-h-[400px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={step}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {step === 0 && (
-                    <div className="space-y-4">
-                      <InputField label="Firm Name" required value={firmData.firm_name}
-                        onChange={v => handleFieldChange('firm_name', v)} icon={Building2} placeholder="Your company name" />
-                      <InputField label="Address" required value={firmData.firm_address}
-                        onChange={v => handleFieldChange('firm_address', v)} icon={MapPin} placeholder="123 Main St, Anytown, CA 90210" />
-                      <InputField label="Contact Name" value={firmData.contact_name}
-                        onChange={v => handleFieldChange('contact_name', v)} icon={Building2} placeholder="Jane Smith" />
-                      <InputField label="Contact Email" value={firmData.contact_email}
-                        onChange={v => handleFieldChange('contact_email', v)} icon={Mail} placeholder="contact@yourcompany.com" />
-                      <InputField label="Contact Phone" value={firmData.contact_phone}
-                        onChange={v => handleFieldChange('contact_phone', v)} icon={Phone} placeholder="(555) 123-4567" />
-                      <InputField label="GLN (optional)" value={firmData.gln}
-                        onChange={v => handleFieldChange('gln', v)} icon={Hash} placeholder="0614141000005" />
-                      <InputField label="FDA Registration (optional)" value={firmData.fda_registration}
-                        onChange={v => handleFieldChange('fda_registration', v)} icon={Hash} placeholder="12345678" />
-                    </div>
-                  )}
-
-                  {step === 1 && (
-                    <div className="grid grid-cols-2 gap-3">
-                      {FIRM_TYPES.map(ft => {
-                        const Icon = ft.icon;
-                        const isSelected = firmType === ft.id;
-                        return (
-                          <button
-                            key={ft.id}
-                            onClick={() => setFirmType(ft.id)}
-                            className={`p-4 rounded-lg border text-left transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                                : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Icon className={`h-5 w-5 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                              <span className="font-medium">{ft.label}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {step === 2 && (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Select the FDA Food Traceability List commodities your facility handles.
-                      </p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {FTL_COMMODITIES.map(comm => {
-                          const isSelected = selectedCommodities.includes(comm.name);
-                          return (
-                            <button
-                              key={comm.name}
-                              onClick={() => toggleCommodity(comm.name)}
-                              className={`p-3 rounded-lg border text-left text-sm transition-all ${
-                                isSelected
-                                  ? 'border-primary bg-primary/10'
-                                  : 'border-border hover:border-primary/50'
-                              }`}
-                            >
-                              <span className={isSelected ? 'font-medium' : ''}>{comm.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {step === 3 && (
-                    <div className="space-y-6">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Record Storage Type</label>
-                        <div className="flex gap-3">
-                          {['electronic', 'paper', 'hybrid'].map(type => (
-                            <button
-                              key={type}
-                              onClick={() => setRecordSystem(type)}
-                              className={`px-4 py-2 rounded-lg border capitalize transition-all ${
-                                recordSystem === type
-                                  ? 'border-primary bg-primary/10 font-medium'
-                                  : 'border-border hover:border-primary/50'
-                              }`}
-                            >
-                              {type}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">TLC Format Template</label>
-                        <input
-                          type="text"
-                          value={tlcFormat}
-                          onChange={e => setTlcFormat(e.target.value)}
-                          className="w-full px-3 py-2 border rounded-lg bg-background font-mono text-sm"
-                          placeholder="[PLANT]-[YYYYMMDD]-[SEQ]"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Example: ACME-20260404-001
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {step === 4 && (
-                    <div className="space-y-4">
-                      <h3 className="font-semibold">Review Your Information</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Firm</p>
-                          <p className="font-medium">{firmData.firm_name}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Type</p>
-                          <p className="font-medium capitalize">{firmType}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Address</p>
-                          <p className="font-medium">{firmData.firm_address}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Contact</p>
-                          <p className="font-medium">{firmData.contact_name || 'Not provided'}</p>
-                        </div>
-                        <div className="col-span-2">
-                          <p className="text-muted-foreground">Commodities ({selectedCommodities.length})</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {selectedCommodities.map(c => (
-                              <Badge key={c} variant="secondary">{c}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Records</p>
-                          <p className="font-medium capitalize">{recordSystem}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">TLC Format</p>
-                          <p className="font-mono text-xs">{tlcFormat}</p>
-                        </div>
-                      </div>
-
-                      <Button
-                        className="w-full mt-6"
-                        size="lg"
-                        onClick={handleGenerate}
-                        disabled={generatePlan.isPending}
-                      >
-                        {generatePlan.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Generating Plan...
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="w-4 h-4 mr-2" />
-                            Generate Traceability Plan
-                          </>
-                        )}
-                      </Button>
-
-                      {generatePlan.isError && (
-                        <p className="text-sm text-re-danger text-center">
-                          Failed to generate plan. Please try again.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </CardContent>
-
-            <CardFooter className="flex justify-between">
-              <Button
-                variant="outline"
-                onClick={() => setStep(prev => prev - 1)}
-                disabled={step === 0}
+          {step === 3 && (
+            <div className="space-y-6">
+              <fieldset>
+                <legend className="mb-2 text-ui font-medium text-re-text-primary">Record Storage Type</legend>
+                <div className="flex flex-wrap gap-2">
+                  {RECORD_TYPES.map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={recordSystem === type}
+                      onClick={() => setRecordSystem(type)}
+                      className={cn(selectableTileClasses(recordSystem === type), 'capitalize')}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <Field
+                label="TLC Format Template"
+                htmlFor="plan-tlc-format"
+                hint="Example: ACME-20260404-001"
               >
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Back
+                <Input
+                  id="plan-tlc-format"
+                  type="text"
+                  value={tlcFormat}
+                  onChange={e => setTlcFormat(e.target.value)}
+                  placeholder="[PLANT]-[YYYYMMDD]-[SEQ]"
+                  mono
+                />
+              </Field>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <h3 className="text-subheading text-re-text-primary">Review Your Information</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-label text-re-text-muted">Firm</p>
+                  <p className="mt-1 text-ui text-re-text-primary">{firmData.firm_name}</p>
+                </div>
+                <div>
+                  <p className="text-label text-re-text-muted">Type</p>
+                  <p className="mt-1 text-ui capitalize text-re-text-primary">{firmType}</p>
+                </div>
+                <div>
+                  <p className="text-label text-re-text-muted">Address</p>
+                  <p className="mt-1 text-ui text-re-text-primary">{firmData.firm_address}</p>
+                </div>
+                <div>
+                  <p className="text-label text-re-text-muted">Contact</p>
+                  <p className="mt-1 text-ui text-re-text-primary">{firmData.contact_name || 'Not provided'}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-label text-re-text-muted">Commodities ({selectedCommodities.length})</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {selectedCommodities.map(c => (
+                      <Badge key={c} tone="neutral">{c}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-label text-re-text-muted">Records</p>
+                  <p className="mt-1 text-ui capitalize text-re-text-primary">{recordSystem}</p>
+                </div>
+                <div>
+                  <p className="text-label text-re-text-muted">TLC Format</p>
+                  <p className="mt-1 font-mono text-[0.8125rem] text-re-text-primary">{tlcFormat}</p>
+                </div>
+              </div>
+
+              <Button
+                className="mt-6 w-full"
+                size="lg"
+                onClick={handleGenerate}
+                loading={generatePlan.isPending}
+                leadingIcon={<FileText strokeWidth={1.75} aria-hidden="true" />}
+              >
+                {generatePlan.isPending ? 'Generating Plan...' : 'Generate Traceability Plan'}
               </Button>
 
-              {step < STEPS.length - 1 && (
-                <Button
-                  onClick={() => setStep(prev => prev + 1)}
-                  disabled={!canProceed()}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
+              {generatePlan.isError && (
+                <Callout tone="danger" role="alert">
+                  Failed to generate plan. Please try again.
+                </Callout>
               )}
-            </CardFooter>
-          </Card>
-        </div>
-      </PageContainer>
-    </div>
-  );
-}
+            </div>
+          )}
+        </CardContent>
 
-// ---------------------------------------------------------------------------
-// Input field helper
-// ---------------------------------------------------------------------------
+        <CardFooter className="justify-between">
+          <Button
+            variant="secondary"
+            onClick={() => setStep(prev => prev - 1)}
+            disabled={step === 0}
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            Back
+          </Button>
 
-function InputField({
-  label, value, onChange, icon: Icon, placeholder, required,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  icon: React.ElementType;
-  placeholder: string;
-  required?: boolean;
-}) {
-  return (
-    <div>
-      <label className="text-sm font-medium mb-1.5 block">
-        {label}{required && <span className="text-re-danger ml-1">*</span>}
-      </label>
-      <div className="relative">
-        <Icon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full pl-10 pr-3 py-2 border rounded-lg bg-background text-sm"
-        />
-      </div>
-    </div>
+          {step < STEPS.length - 1 && (
+            <Button
+              onClick={() => setStep(prev => prev + 1)}
+              disabled={!canProceed()}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Button>
+          )}
+        </CardFooter>
+      </Card>
+    </PageContainer>
   );
 }

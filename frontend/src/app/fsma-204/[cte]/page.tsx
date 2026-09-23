@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowRight,
-  AlertTriangle,
   CheckCircle2,
   Leaf,
   Snowflake,
@@ -13,10 +12,23 @@ import {
   Repeat2,
   Anchor,
   ClipboardList,
-  Users,
   ShieldCheck,
   Zap,
 } from "lucide-react";
+import { Container } from "@/components/layout/container";
+import { PageHeader } from "@/components/layout/page-header";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 /* ------------------------------------------------------------------ */
 /*  CTE DATA                                                           */
@@ -310,228 +322,175 @@ export default async function CTELandingPage({
   const Icon = CTE_ICONS[cteSlug] ?? ClipboardList;
 
   return (
-    <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
+    <div className="bg-re-surface-base">
       {/* — HERO — */}
-      <section className="max-w-4xl mx-auto px-6 pt-20 pb-16">
+      <Container width="marketing" className="pt-12 sm:pt-16">
         <Link
           href="/fsma-204"
-          className="inline-flex items-center gap-1.5 text-[0.82rem] text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors mb-6"
+          className="mb-6 inline-flex items-center gap-1.5 text-ui text-re-text-secondary transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
         >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" />
+          <ArrowRight className="h-3.5 w-3.5 rotate-180" strokeWidth={1.75} aria-hidden="true" />
           Back to FSMA 204 Guide
         </Link>
 
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] flex items-center justify-center flex-shrink-0">
-            <Icon className="h-6 w-6 text-[var(--re-brand)]" />
-          </div>
-          <div>
-            <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-2">
+        <PageHeader
+          size="hero"
+          eyebrow={
+            <span className="inline-flex items-center gap-1.5 font-mono uppercase">
+              <Icon className="h-3.5 w-3.5 text-re-text-tertiary" aria-hidden="true" />
               Critical Tracking Event
-            </p>
-            <h1 className="font-serif text-[clamp(2rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight">
-              {data.name}
-            </h1>
-          </div>
-        </div>
+            </span>
+          }
+          title={data.name}
+          description={
+            <>
+              <span className="block font-mono text-small text-re-text-muted">{data.cfr}</span>
+              <span className="mt-3 block">{data.description}</span>
+            </>
+          }
+          className="border-b-0 pb-0"
+        />
 
-        <p className="font-mono text-[0.8rem] text-[var(--re-text-muted)] mb-4">
-          {data.cfr}
-        </p>
-        <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed max-w-[600px]">
-          {data.description}
-        </p>
-      </section>
-
-      {/* — WHO NEEDS THIS — */}
-      <div className="max-w-4xl mx-auto px-6 pb-12">
-        <div className="p-5 rounded-xl border border-[rgba(16,163,74,0.2)] bg-[rgba(16,163,74,0.03)]">
-          <div className="flex items-start gap-3">
-            <Users className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-[var(--re-text-primary)] mb-1">
-                Who needs to record this CTE
-              </p>
-              <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                {data.whoNeedsThis.join(" \u00B7 ")}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+        {/* — WHO NEEDS THIS — */}
+        <Callout tone="neutral" className="mt-8 max-w-[68ch]">
+          <p className="font-medium text-re-text-primary">
+            Who needs to record this CTE
+          </p>
+          <p className="mt-1">{data.whoNeedsThis.join(" \u00B7 ")}</p>
+        </Callout>
+      </Container>
 
       {/* — REQUIRED KDEs TABLE — */}
-      <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-            Required Data Elements
-          </p>
-          <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-            Key Data Elements (KDEs)
-          </h2>
-          <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
+      <Section
+        width="marketing"
+        eyebrow={<span className="font-mono uppercase">Required Data Elements</span>}
+        title="Key Data Elements (KDEs)"
+        description={
+          <>
             The FDA requires each {data.name.toLowerCase()} event to include
             these {data.kdes.length} data points. Every field is mandatory.
-          </p>
-
-          <div className="overflow-x-auto rounded-xl border border-[var(--re-surface-border)]">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-[var(--re-surface-border)] bg-[var(--re-surface-base)]">
-                  <th className="px-5 py-3 text-[0.75rem] font-mono font-medium text-[var(--re-text-muted)] uppercase tracking-[0.06em]">
-                    Field
-                  </th>
-                  <th className="px-5 py-3 text-[0.75rem] font-mono font-medium text-[var(--re-text-muted)] uppercase tracking-[0.06em]">
-                    Description
-                  </th>
-                  <th className="px-5 py-3 text-[0.75rem] font-mono font-medium text-[var(--re-text-muted)] uppercase tracking-[0.06em]">
-                    Example
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.kdes.map((kde, i) => (
-                  <tr
-                    key={kde.field}
-                    className={
-                      i < data.kdes.length - 1
-                        ? "border-b border-[var(--re-surface-border)]"
-                        : ""
-                    }
-                  >
-                    <td className="px-5 py-3.5 text-[0.88rem] font-medium text-[var(--re-text-primary)] whitespace-nowrap">
-                      {kde.field}
-                    </td>
-                    <td className="px-5 py-3.5 text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
-                      {kde.description}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[0.8rem] text-[var(--re-text-muted)]">
-                      {kde.example}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Field</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Example</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.kdes.map((kde) => (
+              <TableRow key={kde.field}>
+                <TableCell className="whitespace-nowrap">{kde.field}</TableCell>
+                <TableCell>{kde.description}</TableCell>
+                <TableCell className="font-mono text-[0.8125rem] text-re-text-tertiary">
+                  {kde.example}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Section>
 
       {/* — COMMON DATA QUALITY ISSUES — */}
-      <section className="max-w-4xl mx-auto px-6 py-16">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-danger,#dc2626)] uppercase tracking-[0.08em] mb-4">
-          Watch out for these
-        </p>
-        <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-          Common Data Quality Issues
-        </h2>
-        <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
-          These are the mistakes we see most often in {data.name.toLowerCase()}{" "}
-          data. Each one can cause an audit finding or break the traceability
-          chain.
-        </p>
-
-        <div className="space-y-4 max-w-[680px]">
+      <Section
+        width="marketing"
+        eyebrow={<span className="font-mono uppercase">Watch out for these</span>}
+        title="Common Data Quality Issues"
+        description={
+          <>
+            These are the mistakes we see most often in {data.name.toLowerCase()}{" "}
+            data. Each one can cause an audit finding or break the traceability
+            chain.
+          </>
+        }
+      >
+        <div className="max-w-[68ch] space-y-3">
           {data.commonMistakes.map((mistake, i) => (
-            <div
-              key={i}
-              className="flex gap-4 p-5 rounded-xl border border-[rgba(234,179,8,0.25)] bg-[rgba(234,179,8,0.04)]"
-            >
-              <AlertTriangle className="h-5 w-5 text-re-warning flex-shrink-0 mt-0.5" />
-              <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                {mistake}
-              </p>
-            </div>
+            <Callout key={i} tone="warning">
+              <p>{mistake}</p>
+            </Callout>
           ))}
         </div>
-      </section>
+      </Section>
 
       {/* — HOW REGENGINE HELPS — */}
-      <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-            Automated validation
-          </p>
-          <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-            How RegEngine Helps
-          </h2>
-          <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
+      <Section
+        width="marketing"
+        eyebrow={<span className="font-mono uppercase">Automated validation</span>}
+        title="How RegEngine Helps"
+        description={
+          <>
             Upload your {data.name.toLowerCase()} data to the sandbox and
             RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
-          </p>
-
-          <div className="space-y-3 max-w-[680px]">
-            {data.howRegEngineHelps.map((item, i) => (
-              <div
-                key={i}
-                className="flex gap-3 p-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]"
-              >
+          </>
+        }
+      >
+        <ul className="max-w-[68ch] space-y-3">
+          {data.howRegEngineHelps.map((item, i) => (
+            <li key={i}>
+              <Card variant="inset" padding="compact" className="flex gap-3">
                 {i === 0 ? (
-                  <ShieldCheck className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                 ) : i === 1 ? (
-                  <Zap className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                  <Zap className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                 ) : (
-                  <CheckCircle2 className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                 )}
-                <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                  {item}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+                <p className="text-ui text-re-text-secondary">{item}</p>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
       {/* — CTA — */}
-      <section className="max-w-4xl mx-auto px-6 py-20">
-        <div className="text-center">
-          <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4">
+      <Section width="marketing" tone="inset">
+        <div className="mx-auto max-w-[640px] text-center">
+          <h2 className="font-display text-heading-lg text-re-text-primary">
             See it in action.
           </h2>
-          <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[500px] mx-auto">
+          <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
             Upload a sample {data.name.toLowerCase()} file to the RegEngine
             sandbox and get an instant validation report — free, no signup
             required.
           </p>
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Link
-              href="/demo"
-              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
-            >
-              Try it now — free
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/fsma-204"
-              className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-lg text-[0.95rem] font-medium hover:border-[var(--re-text-muted)] transition-all"
-            >
-              Full FSMA 204 Guide
-            </Link>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg">
+              <Link href="/demo">
+                Try it now — free
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/fsma-204">Full FSMA 204 Guide</Link>
+            </Button>
           </div>
         </div>
-      </section>
+      </Section>
 
       {/* — OTHER CTEs NAV — */}
-      <section className="bg-[var(--re-surface-card)] border-t border-[var(--re-surface-border)] py-12 px-6">
-        <div className="max-w-4xl mx-auto">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.08em] mb-5 text-center">
-            Other Critical Tracking Events
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {CTE_SLUGS.filter((s) => s !== cteSlug).map((s) => {
-              const other = CTE_DATA[s];
-              return (
-                <Link
-                  key={s}
-                  href={`/fsma-204/${s}`}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--re-surface-border)] text-[0.82rem] text-[var(--re-text-secondary)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-all"
-                >
-                  {other.name}
-                </Link>
-              );
-            })}
-          </div>
+      <Section width="marketing" className="py-12 sm:py-12">
+        <p className="mb-5 text-center font-mono text-label uppercase text-re-text-muted">
+          Other Critical Tracking Events
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {CTE_SLUGS.filter((s) => s !== cteSlug).map((s) => {
+            const other = CTE_DATA[s];
+            return (
+              <Link
+                key={s}
+                href={`/fsma-204/${s}`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-re-border px-4 py-2 text-ui text-re-text-secondary transition-colors duration-120 hover:border-re-border-strong hover:text-re-text-primary motion-reduce:transition-none"
+              >
+                {other.name}
+              </Link>
+            );
+          })}
         </div>
-      </section>
+      </Section>
     </div>
   );
 }

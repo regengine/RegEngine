@@ -4,9 +4,14 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { PlayCircle, ShieldAlert, TimerReset, FileText, Link2Off } from 'lucide-react';
 import type { RecallDrillRun } from '@/lib/customer-readiness';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 
 type RecallDrillsResponse = {
@@ -14,6 +19,36 @@ type RecallDrillsResponse = {
     drills?: RecallDrillRun[];
     meta?: { status?: string; message?: string };
 };
+
+/**
+ * Notice recipe.
+ *
+ * This is the `Callout` recipe inlined rather than the primitive itself:
+ * `src/__tests__/pages/recall-drills.test.tsx` replaces `lucide-react` with a
+ * five-icon factory mock, and `Callout` (like `StatusBadge`, `StatTile` and
+ * `DataTable`) builds its icon map at module scope, so importing it throws
+ * before the suite runs. Classes are byte-identical to the primitive's.
+ */
+const NOTICE_BASE =
+    'flex gap-3 rounded-md border border-l-[3px] border-re-border px-4 py-3 text-ui text-re-text-secondary';
+
+const METRICS = [
+    {
+        label: 'Response target',
+        value: 'Under 24 hours',
+        detail: 'Test weekend, holiday, and supplier-delay conditions.',
+    },
+    {
+        label: 'Artifacts',
+        value: 'Package + manifest',
+        detail: 'Each drill records generated artifacts and missing-data warnings.',
+    },
+    {
+        label: 'Escalation',
+        value: 'Support path documented',
+        detail: 'Enterprise escalation is contractual; public support does not replace customer-run drills.',
+    },
+] as const;
 
 export default function RecallDrillsPage() {
     const { isAuthenticated } = useAuth();
@@ -59,31 +94,27 @@ export default function RecallDrillsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto space-y-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
-                            <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Recall Drills
-                        </h1>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            Run customer lots through the current drill contract, capture elapsed time, and review generated export artifacts before a regulator or retailer request.
-                        </p>
-                    </div>
+        <PageContainer>
+            <PageHeader
+                title="Recall Drills"
+                description="Run customer lots through the current drill contract, capture elapsed time, and review generated export artifacts before a regulator or retailer request."
+                primaryAction={
                     <Button
-                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]"
+                        size="lg"
+                        className="w-full sm:w-auto"
                         onClick={() => void handleStartDrill()}
                         disabled={status === 'saving' || status === 'loading' || notConnected}
+                        leadingIcon={<PlayCircle strokeWidth={1.75} aria-hidden="true" />}
                     >
-                        <PlayCircle className="h-4 w-4 mr-1" />
                         {status === 'saving' ? 'Starting...' : 'Start drill'}
                     </Button>
-                </div>
+                }
+            />
 
+            <div className="space-y-6">
                 {notConnected && (
-                    <div className="rounded-xl border border-re-warning/20 bg-re-warning/[0.06] p-4 text-sm text-re-warning flex items-start gap-3">
-                        <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
+                    <div className={`${NOTICE_BASE} border-l-re-warning bg-re-surface-card`}>
+                        <Link2Off className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                         <span>
                             Automated drill scheduling is still in development. You can run a full manual drill today: open Requests, create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit.
                         </span>
@@ -92,109 +123,103 @@ export default function RecallDrillsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Launch a drill</CardTitle>
-                        <CardDescription>
-                            Choose the lots, date range, and scenario you want to test. When drill automation ships, runs will generate a timestamped audit artifact; today, use the Requests workflow for a full manual drill.
-                        </CardDescription>
+                        <div className="min-w-0">
+                            <CardTitle>Launch a drill</CardTitle>
+                            <CardDescription>
+                                Choose the lots, date range, and scenario you want to test. When drill automation ships, runs will generate a timestamped audit artifact; today, use the Requests workflow for a full manual drill.
+                            </CardDescription>
+                        </div>
                     </CardHeader>
-                    <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Scenario</label>
-                            <Input value={scenario} onChange={(e) => setScenario(e.target.value)} className="rounded-xl min-h-[44px]" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Lots (comma-separated)</label>
-                            <Input value={lots} onChange={(e) => setLots(e.target.value)} placeholder="LOT-001, LOT-002" className="rounded-xl min-h-[44px]" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Date range</label>
-                            <Input value={dateRange} onChange={(e) => setDateRange(e.target.value)} placeholder="2026-03-01 to 2026-03-12" className="rounded-xl min-h-[44px]" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Output package</label>
-                            <select className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm">
+                    <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Scenario" htmlFor="drill-scenario">
+                            <Input id="drill-scenario" size="lg" value={scenario} onChange={(e) => setScenario(e.target.value)} />
+                        </Field>
+                        <Field label="Lots (comma-separated)" htmlFor="drill-lots">
+                            <Input id="drill-lots" size="lg" value={lots} onChange={(e) => setLots(e.target.value)} placeholder="LOT-001, LOT-002" />
+                        </Field>
+                        <Field label="Date range" htmlFor="drill-date-range">
+                            <Input id="drill-date-range" size="lg" value={dateRange} onChange={(e) => setDateRange(e.target.value)} placeholder="2026-03-01 to 2026-03-12" />
+                        </Field>
+                        <Field label="Output package" htmlFor="drill-output-package">
+                            <select id="drill-output-package" className={`${fieldControlClasses} h-11`}>
                                 <option>FDA package + manifest</option>
                                 <option>EPCIS export + warning summary</option>
                                 <option>Full audit bundle</option>
                             </select>
-                        </div>
+                        </Field>
                     </CardContent>
                 </Card>
 
-                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
-                    <Card>
-                        <CardContent className="pt-4 sm:pt-6">
-                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Response target</div>
-                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Under 24 hours</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Test weekend, holiday, and supplier-delay conditions.</div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-4 sm:pt-6">
-                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Artifacts</div>
-                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Package + manifest</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Each drill records generated artifacts and missing-data warnings.</div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-4 sm:pt-6">
-                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Escalation</div>
-                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Support path documented</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Enterprise escalation is contractual; public support does not replace customer-run drills.</div>
-                        </CardContent>
-                    </Card>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {METRICS.map((metric) => (
+                        <Card key={metric.label} padding="compact">
+                            <p className="text-label text-re-text-muted">{metric.label}</p>
+                            <p className="mt-2 text-subheading text-re-text-primary">{metric.value}</p>
+                            <p className="mt-1 text-small text-re-text-tertiary">{metric.detail}</p>
+                        </Card>
+                    ))}
                 </div>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Recent drill history</CardTitle>
-                        <CardDescription>
-                            Drill runs capture elapsed time, warnings, and generated artifacts from the current drill route so teams can measure operational readiness over time.
-                        </CardDescription>
+                        <div className="min-w-0">
+                            <CardTitle>Recent drill history</CardTitle>
+                            <CardDescription>
+                                Drill runs capture elapsed time, warnings, and generated artifacts from the current drill route so teams can measure operational readiness over time.
+                            </CardDescription>
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {runs.map((run) => (
-                            <div key={run.id} className="rounded-xl border border-[var(--re-border-default)] p-3 sm:p-4">
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                    <div className="text-xs sm:text-sm font-semibold">{run.scenario}</div>
-                                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{run.status.replaceAll('_', ' ')}</div>
+                            <div key={run.id} className="rounded-lg border border-re-border p-4">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <div className="text-ui font-medium text-re-text-primary">{run.scenario}</div>
+                                    <div className="font-mono text-label text-re-text-muted">{run.status.replaceAll('_', ' ')}</div>
                                 </div>
-                                <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted-foreground break-all">
+                                <div className="mt-2 break-all text-ui text-re-text-secondary">
                                     Lots: {run.lots.join(', ')} · {run.dateRange}
                                 </div>
-                                <div className="mt-1.5 sm:mt-2 flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
-                                    <span className="inline-flex items-center gap-1"><TimerReset className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)]" /> {run.elapsed}</span>
-                                    <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)]" /> {run.artifacts.join(', ')}</span>
+                                <div className="mt-2 flex flex-wrap gap-4 text-ui text-re-text-secondary">
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <TimerReset className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> {run.elapsed}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <FileText className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> {run.artifacts.join(', ')}
+                                    </span>
                                 </div>
                                 {run.warnings.length > 0 && (
-                                    <div className="mt-3 rounded-lg border border-re-warning/20 bg-re-warning/10 p-3 text-sm text-re-warning">
-                                        {run.warnings.join(' · ')}
+                                    <div className={`mt-3 ${NOTICE_BASE} border-l-re-warning bg-re-surface-card`}>
+                                        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
+                                        <span>{run.warnings.join(' · ')}</span>
                                     </div>
                                 )}
                             </div>
                         ))}
                         {status === 'loading' && runs.length === 0 && (
-                            <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                                Loading drill history...
+                            <div className="space-y-2" aria-busy="true">
+                                {[0, 1, 2].map((row) => (
+                                    <Skeleton key={row} className="h-16 w-full" />
+                                ))}
                             </div>
                         )}
                         {status !== 'loading' && runs.length === 0 && !notConnected && (
-                            <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-8 text-center">
-                                <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-                                <p className="text-sm font-medium mb-1">No drills yet</p>
-                                <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                                    Configure a scenario above and click &ldquo;Start drill&rdquo; to run your first recall drill. Results will appear here.
-                                </p>
-                            </div>
+                            <EmptyState
+                                icon={ShieldAlert}
+                                title="No drills yet"
+                                description={'Configure a scenario above and click “Start drill” to run your first recall drill. Results will appear here.'}
+                            />
                         )}
                         {status === 'error' && (
-                            <div className="rounded-xl border border-re-warning/20 bg-re-warning/10 p-4 text-sm text-re-warning">
-                                {startDrillMutation.error?.message ?? 'Could not start the drill. Please check your inputs and try again.'}
+                            <div className={`${NOTICE_BASE} border-l-re-danger bg-re-danger-bg`} role="alert">
+                                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
+                                <span>
+                                    {startDrillMutation.error?.message ?? 'Could not start the drill. Please check your inputs and try again.'}
+                                </span>
                             </div>
                         )}
                     </CardContent>
                 </Card>
             </div>
-        </div>
+        </PageContainer>
     );
 }

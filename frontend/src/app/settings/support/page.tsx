@@ -1,32 +1,37 @@
 'use client';
 
 import Link from 'next/link';
-import { LifeBuoy, ShieldAlert, FileText, Mail } from 'lucide-react';
+import { ShieldAlert, FileText, Mail } from 'lucide-react';
 import { SUPPORT_CHANNELS } from '@/lib/customer-readiness';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+const RELATED_LINKS = [
+    { href: '/trust', label: 'Trust Center' },
+    { href: '/dashboard/export-jobs', label: 'FDA Export' },
+    { href: '/dashboard/recall-drills', label: 'Recall Drills' },
+] as const;
 
 export default function SupportSettingsPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-            <div className="max-w-5xl mx-auto px-4 py-12 space-y-6">
-                <div>
-                    <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-                        <LifeBuoy className="h-8 w-8 text-[var(--re-brand)]" />
-                        Support & Escalation
-                    </h1>
-                    <p className="text-muted-foreground">
-                        Document support expectations, emergency recall escalation, and where your team should look before a live regulator request.
-                    </p>
-                </div>
+        <PageContainer>
+            <PageHeader
+                title="Support & Escalation"
+                description="Document support expectations, emergency recall escalation, and where your team should look before a live regulator request."
+            />
 
+            <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-3">
                     {SUPPORT_CHANNELS.map((channel) => (
                         <Card key={channel.tier}>
                             <CardHeader>
-                                <CardTitle>{channel.tier}</CardTitle>
-                                <CardDescription>{channel.responseWindow}</CardDescription>
+                                <div className="min-w-0">
+                                    <CardTitle>{channel.tier}</CardTitle>
+                                    <CardDescription>{channel.responseWindow}</CardDescription>
+                                </div>
                             </CardHeader>
-                            <CardContent className="space-y-2 text-sm text-muted-foreground">
+                            <CardContent className="space-y-2 text-ui text-re-text-secondary">
                                 <p>{channel.escalation}</p>
                                 <p>{channel.notes}</p>
                             </CardContent>
@@ -36,27 +41,48 @@ export default function SupportSettingsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Emergency recall workflow</CardTitle>
-                        <CardDescription>
-                            Use this flow if you need to produce an FDA-style package under time pressure.
-                        </CardDescription>
+                        <div className="min-w-0">
+                            <CardTitle>Emergency recall workflow</CardTitle>
+                            <CardDescription>
+                                Use this flow if you need to produce an FDA-style package under time pressure.
+                            </CardDescription>
+                        </div>
                     </CardHeader>
-                    <CardContent className="space-y-3 text-sm text-muted-foreground">
-                        <p className="inline-flex items-start gap-2"><ShieldAlert className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Run a live drill or export from Recall Drills before reaching out for support.</p>
-                        <p className="inline-flex items-start gap-2"><FileText className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Confirm your recurring export jobs completed successfully so you have off-platform evidence available.</p>
-                        <p className="inline-flex items-start gap-2"><Mail className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Contact support@regengine.co for operational issues. Custom SLA and named contacts apply only where contractually negotiated.</p>
+                    <CardContent className="p-0">
+                        <ul className="divide-y divide-re-border-subtle">
+                            <li className="flex items-start gap-2.5 px-5 py-3 text-ui text-re-text-secondary">
+                                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <span>Run a live drill or export from Recall Drills before reaching out for support.</span>
+                            </li>
+                            <li className="flex items-start gap-2.5 px-5 py-3 text-ui text-re-text-secondary">
+                                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <span>Confirm your recurring export jobs completed successfully so you have off-platform evidence available.</span>
+                            </li>
+                            <li className="flex items-start gap-2.5 px-5 py-3 text-ui text-re-text-secondary">
+                                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                                <span>Contact support@regengine.co for operational issues. Custom SLA and named contacts apply only where contractually negotiated.</span>
+                            </li>
+                        </ul>
                     </CardContent>
                 </Card>
 
-                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5 text-sm text-muted-foreground">
-                    Related pages:{' '}
-                    <Link href="/trust" className="text-[var(--re-brand)] underline">Trust Center</Link>
-                    {' '}·{' '}
-                    <Link href="/dashboard/export-jobs" className="text-[var(--re-brand)] underline">FDA Export</Link>
-                    {' '}·{' '}
-                    <Link href="/dashboard/recall-drills" className="text-[var(--re-brand)] underline">Recall Drills</Link>
-                </div>
+                <Card>
+                    <CardContent className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui text-re-text-secondary">
+                        <span>Related pages:</span>
+                        {RELATED_LINKS.map((link, index) => (
+                            <span key={link.href} className="inline-flex items-center gap-2">
+                                {index > 0 && <span aria-hidden="true">·</span>}
+                                <Link
+                                    href={link.href}
+                                    className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                                >
+                                    {link.label}
+                                </Link>
+                            </span>
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
-        </div>
+        </PageContainer>
     );
 }

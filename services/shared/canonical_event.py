@@ -28,7 +28,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -825,6 +825,43 @@ def normalize_webhook_event(
     return canonical.prepare_for_persistence()
 
 
+def _epcis_quantity_element(epcis_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The first ``QuantityElement`` an EPCIS event carries, or ``None``.
+
+    Precedence (kept in sync with ``epcis/normalization.py``): the EPCIS 1.x
+    ``extension.quantityList`` wrapper, the EPCIS 2.0 top-level
+    ``quantityList``, then a TransformationEvent's output and input lists.
+    """
+    quantity_list = (
+        epcis_data.get("extension", {}).get("quantityList")
+        or epcis_data.get("quantityList")
+        or epcis_data.get("outputQuantityList")
+        or epcis_data.get("inputQuantityList")
+        or []
+    )
+    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
+        return quantity_list[0]
+    return None
+
+
+def _epcis_unit_of_measure(epcis_data: Dict[str, Any]) -> str:
+    """Unit for the quantity :func:`_require_epcis_quantity` returns.
+
+    EPCIS CBV defines a ``QuantityElement`` without ``uom`` as a count of
+    instances, so ``each`` is the standard's own meaning for that case, not a
+    substitute for a missing value. The flattened legacy shape
+    (``quantity.value``) has no such rule: a missing unit there raises rather
+    than being guessed.
+    """
+    element = _epcis_quantity_element(epcis_data)
+    if element is not None and element.get("quantity") is not None:
+        return str(element.get("uom") or "each")
+    flat = epcis_data.get("quantity")
+    if isinstance(flat, dict) and flat.get("uom"):
+        return str(flat["uom"])
+    raise ValueError("EPCIS event carries a quantity but no unit of measure (quantity.uom); refusing to assume one")
+
+
 def _extract_epcis_quantity(
     epcis_data: Dict[str, Any],
 ) -> tuple[Optional[float], Optional[str]]:
@@ -855,16 +892,10 @@ def _extract_epcis_quantity(
     # mirrors ``epcis/normalization.py`` exactly — that module's comment
     # already claims the two agree on every event, and this is what makes
     # that true.
-    quantity_list = (
-        epcis_data.get("extension", {}).get("quantityList")
-        or epcis_data.get("quantityList")
-        or epcis_data.get("outputQuantityList")
-        or epcis_data.get("inputQuantityList")
-        or []
-    )
-    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
-        raw = quantity_list[0].get("quantity")
-        uom = quantity_list[0].get("uom")
+    element = _epcis_quantity_element(epcis_data)
+    if element is not None:
+        raw = element.get("quantity")
+        uom = element.get("uom")
         if raw is not None:
             try:
                 return float(raw), uom
@@ -1032,6 +1063,123 @@ def _resolve_bizstep_to_cte_type(biz_step: Any) -> CTEType:
     )
 
 
+def _epc_last_segment(epc: Any) -> Optional[str]:
+    """Lot (LGTIN) or serial (SGTIN) segment of a GS1 EPC URI; None for other schemes."""
+    text = str(epc or "").strip()
+    lowered = text.lower()
+    if "lgtin" not in lowered and "sgtin" not in lowered:
+        return None
+    parts = text.rsplit(".", 1)
+    if len(parts) == 2 and parts[1]:
+        return parts[1]
+    return None
+
+
+def _epc_gtin(epc: Any) -> Optional[str]:
+    """GTIN component of an SGTIN/LGTIN URI (``...:<company>.<item>.<lot>``)."""
+    text = str(epc or "").strip()
+    if not _epc_last_segment(text):
+        return None
+    prefix = text.rsplit(".", 1)[0]
+    gtin_part = prefix.rsplit(":", 1)
+    return gtin_part[-1] if gtin_part and gtin_part[-1] else None
+
+
+def _epcis_list(epcis_data: Dict[str, Any], key: str) -> List[Any]:
+    value = epcis_data.get(key)
+    return list(value) if isinstance(value, list) else []
+
+
+def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """Resolve ``(traceability_lot_code, gtin)`` for an EPCIS event.
+
+    Precedence: ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` (the
+    same order as ``epcis/extraction._extract_lot_data``), then the lot of an
+    LGTIN among the event's own EPCs or class-level quantities (output side for
+    a transformation), then an SGTIN serial, then the flattened top-level keys.
+    Raises ``ValueError`` when nothing identifies the lot: the previous
+    ``"UNKNOWN"`` placeholder fabricated a lot code.
+    """
+    ilmd = epcis_data.get("ilmd")
+    if not isinstance(ilmd, dict):
+        ilmd = {}
+    epcs = _epcis_list(epcis_data, "epcList") + _epcis_list(epcis_data, "outputEPCList")
+    extension = epcis_data.get("extension")
+    extension = extension if isinstance(extension, dict) else {}
+    classes = [
+        q.get("epcClass")
+        for q in (
+            _epcis_list(epcis_data, "outputQuantityList")
+            + _epcis_list(epcis_data, "quantityList")
+            + (list(extension.get("quantityList") or []) if isinstance(extension.get("quantityList"), list) else [])
+        )
+        if isinstance(q, dict) and q.get("epcClass")
+    ]
+    gtin = next((g for g in (_epc_gtin(e) for e in epcs + classes) if g), None)
+
+    for key in ("fsma:traceabilityLotCode", "traceabilityLotCode", "cbvmda:lotNumber", "lotNumber"):
+        value = ilmd.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip(), gtin
+    for epc in epcs + classes:
+        if "lgtin" in str(epc).lower():
+            segment = _epc_last_segment(epc)
+            if segment:
+                return segment, gtin
+    for epc in epcs:
+        if "sgtin" in str(epc).lower():
+            segment = _epc_last_segment(epc)
+            if segment:
+                return segment, gtin
+    for key in ("traceability_lot_code", "lotNumber"):
+        value = epcis_data.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip(), gtin
+    raise ValueError(
+        "EPCIS event carries no lot identifier (ILMD traceabilityLotCode or lotNumber, an LGTIN or SGTIN "
+        "EPC, or traceability_lot_code); refusing to fabricate one"
+    )
+
+
+def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Per-input lot, quantity and unit for a TransformationEvent.
+
+    ``inputQuantityList`` carries class-level (LGTIN) inputs with an explicit
+    quantity; a quantityElement without ``uom`` is a count of instances in
+    EPCIS, recorded as ``each``. ``inputEPCList`` carries instance EPCs, each
+    of which is exactly one item. Lots are not merged or summed.
+    """
+    inputs: List[Dict[str, Any]] = []
+    seen: set = set()
+    for element in _epcis_list(epcis_data, "inputQuantityList"):
+        if not isinstance(element, dict):
+            continue
+        lot = _epc_last_segment(element.get("epcClass"))
+        if not lot or lot in seen:
+            continue
+        raw_quantity = element.get("quantity")
+        try:
+            quantity = float(raw_quantity) if raw_quantity is not None else None
+        except (TypeError, ValueError):
+            quantity = None
+        inputs.append(
+            {
+                "traceability_lot_code": lot,
+                "quantity": quantity,
+                "unit_of_measure": (element.get("uom") or "each") if quantity is not None else None,
+                "epc_class": element.get("epcClass"),
+            }
+        )
+        seen.add(lot)
+    for epc in _epcis_list(epcis_data, "inputEPCList"):
+        segment = _epc_last_segment(epc)
+        if not segment or segment in seen:
+            continue
+        inputs.append({"traceability_lot_code": segment, "quantity": 1.0, "unit_of_measure": "each", "epc": str(epc)})
+        seen.add(segment)
+    return inputs
+
+
 def normalize_epcis_event(
     epcis_data: Dict[str, Any],
     tenant_id: str,
@@ -1069,30 +1217,40 @@ def normalize_epcis_event(
     biz_step = epcis_data.get("bizStep", "")
     cte_type = _resolve_bizstep_to_cte_type(biz_step)
 
-    # Extract identifiers
-    epc_list = epcis_data.get("epcList", [])
-    tlc = ""
-    gtin = None
-    for epc in epc_list:
-        if "sgtin" in epc.lower() or "lgtin" in epc.lower():
-            # Extract GTIN and serial/lot from EPC URI
-            parts = epc.rsplit(".", 1)
-            if len(parts) == 2:
-                tlc = parts[-1]
-                gtin_part = parts[0].rsplit(":", 1)
-                if gtin_part:
-                    gtin = gtin_part[-1]
-    if not tlc:
-        tlc = epcis_data.get("traceability_lot_code", epcis_data.get("lotNumber", "UNKNOWN"))
+    # Extract identifiers. The lot code follows the same precedence as the
+    # legacy path (epcis/extraction._extract_lot_data): ILMD first. The old
+    # code read only epcList, so a TransformationEvent (which carries
+    # input/output lists instead) or any event naming its lot in ILMD was
+    # stored as "UNKNOWN" -- a fabricated lot code on the system of record.
+    tlc, gtin = _epcis_traceability_lot_code(epcis_data)
+    if len(tlc) < 3:
+        # The old code stored ``EPCIS-<tlc>`` here, which rewrote the lot
+        # identifier the partner sent. The canonical model requires three
+        # characters; a shorter one is rejected, never renamed.
+        raise ValueError(f"EPCIS lot identifier {tlc!r} is shorter than 3 characters; refusing to rewrite it")
+
+    event_time = epcis_data.get("eventTime")
+    if not event_time:
+        raise ValueError("EPCIS event has no eventTime; refusing to stamp the current time as the event time")
 
     # Build KDEs from EPCIS extensions
     kdes: Dict[str, Any] = {}
     if gtin:
         kdes["gtin"] = gtin
-    extensions = epcis_data.get("ilmd", {})
-    extensions.update(epcis_data.get("extension", {}))
+    extensions = dict(epcis_data.get("ilmd") or {})
+    extensions.update(epcis_data.get("extension") or {})
     for k, v in extensions.items():
         kdes[k] = v
+
+    # Transformation inputs (21 CFR 1.1350(a)(1)): each input lot with its
+    # quantity and unit from inputQuantityList, plus instance EPCs from
+    # inputEPCList. Feeds fsma.transformation_links via kdes.inputs and the
+    # lot-linkage rule via kdes.input_lot_codes.
+    if cte_type == CTEType.TRANSFORMATION:
+        inputs = _epcis_transformation_inputs(epcis_data)
+        if inputs:
+            kdes["inputs"] = inputs
+            kdes.setdefault("input_lot_codes", [entry["traceability_lot_code"] for entry in inputs])
 
     provenance = ProvenanceMetadata(
         mapper_name="epcis_normalizer",
@@ -1107,16 +1265,16 @@ def normalize_epcis_event(
         source_record_id=epcis_data.get("eventID"),
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
         event_type=cte_type,
-        event_timestamp=epcis_data.get("eventTime", datetime.now(timezone.utc).isoformat()),
+        event_timestamp=event_time,
         event_timezone=epcis_data.get("eventTimeZoneOffset", "UTC"),
         product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
         lot_reference=tlc,
-        traceability_lot_code=tlc if len(tlc) >= 3 else f"EPCIS-{tlc or 'UNKNOWN'}",
+        traceability_lot_code=tlc,
         # #1249: extract from real EPCIS shape; do NOT fabricate on missing.
         # Raising here forces ingestion code to surface the problem rather
         # than silently producing a 1.0-quantity canonical row.
         quantity=_require_epcis_quantity(epcis_data),
-        unit_of_measure=_extract_epcis_quantity(epcis_data)[1] or "each",
+        unit_of_measure=_epcis_unit_of_measure(epcis_data),
         from_facility_reference=epcis_data.get("readPoint", {}).get("id")
         if isinstance(epcis_data.get("readPoint"), dict)
         else epcis_data.get("readPoint"),
@@ -1134,6 +1292,47 @@ def normalize_epcis_event(
     return canonical.prepare_for_persistence()
 
 
+class CSVRowNormalizationError(ValueError):
+    """A CSV row lacks a required KDE or names an unrecognised event type.
+
+    The canonical normalizer never invents a value for a missing field. A
+    fabricated timestamp, lot code, quantity, unit, or event type would enter
+    the hash chain as evidence, so the row is rejected and the caller reports
+    ``missing`` / ``invalid`` back to the uploader (row-level, not file-level).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        row_number: Optional[int] = None,
+        missing: Optional[List[str]] = None,
+        invalid: Optional[List[str]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.row_number = row_number
+        self.missing = list(missing or [])
+        self.invalid = list(invalid or [])
+
+
+_CSV_CTE_TYPE_MAP: Dict[str, str] = {
+    "harvest": "harvesting",
+    "harvesting": "harvesting",
+    "cool": "cooling",
+    "cooling": "cooling",
+    "pack": "initial_packing",
+    "initial_packing": "initial_packing",
+    "initial packing": "initial_packing",
+    "first_land_based_receiving": "first_land_based_receiving",
+    "ship": "shipping",
+    "shipping": "shipping",
+    "receive": "receiving",
+    "receiving": "receiving",
+    "transform": "transformation",
+    "transformation": "transformation",
+}
+
+
 def normalize_csv_row(
     row: Dict[str, Any],
     tenant_id: str,
@@ -1147,6 +1346,13 @@ def normalize_csv_row(
 
     column_mapping maps source column names to canonical field names.
     Unmapped columns are stored in kdes.
+
+    Required after mapping: ``event_type`` (a recognised CTE), ``event_timestamp``
+    (or ``timestamp``), ``traceability_lot_code`` (or ``tlc``), a numeric
+    ``quantity``, and ``unit_of_measure``. A blank or unrecognised required
+    field raises :class:`CSVRowNormalizationError`; nothing is defaulted.
+    Earlier versions silently substituted ``now()``, ``"UNKNOWN"``, ``1``,
+    ``"each"`` and ``receiving`` for those fields.
     """
     # Apply column mapping
     mapped: Dict[str, Any] = {}
@@ -1159,41 +1365,70 @@ def normalize_csv_row(
             if value is not None and str(value).strip():
                 kdes[src_col] = value
 
-    # Required fields with fallbacks
-    event_type_raw = str(mapped.get("event_type", "receiving")).lower().strip()
-    cte_type_map = {
-        "harvest": "harvesting",
-        "harvesting": "harvesting",
-        "cool": "cooling",
-        "cooling": "cooling",
-        "pack": "initial_packing",
-        "initial_packing": "initial_packing",
-        "initial packing": "initial_packing",
-        "first_land_based_receiving": "first_land_based_receiving",
-        "ship": "shipping",
-        "shipping": "shipping",
-        "receive": "receiving",
-        "receiving": "receiving",
-        "transform": "transformation",
-        "transformation": "transformation",
-    }
-    event_type = cte_type_map.get(event_type_raw, "receiving")
+    def _first(*names: str) -> Optional[Any]:
+        for name in names:
+            value = mapped.get(name)
+            if value is not None and str(value).strip():
+                return value
+        return None
 
-    rules_applied = ["csv_column_mapping"]
-    confidence = 1.0
+    missing: List[str] = []
+    invalid: List[str] = []
 
-    # Detect if event type was inferred
-    if event_type_raw not in cte_type_map:
-        rules_applied.append("event_type_inference")
-        confidence = 0.7
+    event_type: Optional[str] = None
+    event_type_raw = _first("event_type")
+    if event_type_raw is None:
+        missing.append("event_type")
+    else:
+        event_type = _CSV_CTE_TYPE_MAP.get(str(event_type_raw).lower().strip())
+        if event_type is None:
+            accepted = sorted(set(_CSV_CTE_TYPE_MAP.values()))
+            invalid.append(f"event_type={str(event_type_raw).strip()!r} (accepted: {', '.join(accepted)})")
+
+    timestamp_raw = _first("event_timestamp", "timestamp")
+    if timestamp_raw is None:
+        missing.append("event_timestamp")
+
+    tlc_raw = _first("traceability_lot_code", "tlc")
+    if tlc_raw is None:
+        missing.append("traceability_lot_code")
+
+    quantity: Optional[float] = None
+    quantity_raw = _first("quantity")
+    if quantity_raw is None:
+        missing.append("quantity")
+    else:
+        try:
+            quantity = float(str(quantity_raw).strip())
+        except ValueError:
+            invalid.append(f"quantity={str(quantity_raw).strip()!r} (not a number)")
+
+    uom_raw = _first("unit_of_measure")
+    if uom_raw is None:
+        missing.append("unit_of_measure")
+
+    if missing or invalid:
+        where = f"row {row_number}" if row_number is not None else "row"
+        parts = []
+        if missing:
+            parts.append("missing " + ", ".join(missing))
+        if invalid:
+            parts.append("invalid " + "; ".join(invalid))
+        raise CSVRowNormalizationError(
+            f"CSV {where} cannot be normalized: " + " | ".join(parts),
+            row_number=row_number,
+            missing=missing,
+            invalid=invalid,
+        )
+    assert event_type is not None and quantity is not None  # narrowed above
 
     provenance = ProvenanceMetadata(
         source_file_name=source_file_name,
         mapper_name="csv_normalizer",
-        mapper_version="1.0.0",
+        mapper_version="1.1.0",
         original_format="csv",
-        normalization_rules_applied=rules_applied,
-        extraction_confidence=confidence,
+        normalization_rules_applied=["csv_column_mapping"],
+        extraction_confidence=1.0,
     )
 
     canonical = TraceabilityEvent(
@@ -1202,12 +1437,12 @@ def normalize_csv_row(
         source_record_id=str(row_number) if row_number is not None else None,
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
         event_type=CTEType(event_type),
-        event_timestamp=mapped.get("event_timestamp", mapped.get("timestamp", datetime.now(timezone.utc).isoformat())),
+        event_timestamp=timestamp_raw,
         product_reference=mapped.get("product_description", mapped.get("product_reference", "")),
-        lot_reference=mapped.get("lot_reference", mapped.get("traceability_lot_code", "")),
-        traceability_lot_code=mapped.get("traceability_lot_code", mapped.get("tlc", "UNKNOWN")),
-        quantity=float(mapped.get("quantity", 1)),
-        unit_of_measure=str(mapped.get("unit_of_measure", "each")).lower(),
+        lot_reference=_first("lot_reference") or str(tlc_raw).strip(),
+        traceability_lot_code=str(tlc_raw).strip(),
+        quantity=quantity,
+        unit_of_measure=str(uom_raw).strip().lower(),
         from_facility_reference=mapped.get(
             "from_facility_reference", mapped.get("ship_from_location", mapped.get("location_gln"))
         ),
@@ -1218,7 +1453,7 @@ def normalize_csv_row(
         kdes=kdes,
         raw_payload=row,
         provenance_metadata=provenance,
-        confidence_score=confidence,
+        confidence_score=1.0,
     )
 
     return canonical.prepare_for_persistence()

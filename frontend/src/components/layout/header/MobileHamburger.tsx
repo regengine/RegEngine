@@ -1,59 +1,33 @@
 'use client';
 
+import { Menu, X } from 'lucide-react';
+
 interface MobileHamburgerProps {
     mobileOpen: boolean;
     setMobileOpen: (open: boolean) => void;
 }
 
+/**
+ * The `.marketing-mobile-toggle` class hook stays — globals.css forces it to
+ * `display: flex` under 768px with `!important`. The `xl:hidden` here extends
+ * it upward: between 769 and 1279 the eleven-item desktop row did not fit the
+ * viewport and the body's `overflow-x: hidden` clipped the overflow away, so
+ * the drawer now carries the nav at those widths too.
+ */
 export function MobileHamburger({ mobileOpen, setMobileOpen }: MobileHamburgerProps) {
     return (
         <button
-            className="marketing-mobile-toggle"
+            type="button"
+            className="marketing-mobile-toggle flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[var(--re-mobile-toggle-border)] bg-transparent p-0 text-re-text-primary transition-colors duration-120 hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none xl:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={mobileOpen}
-            style={{
-                background: "transparent",
-                border: "1px solid var(--re-mobile-toggle-border)",
-                borderRadius: "8px",
-                cursor: "pointer",
-                color: "var(--re-text-primary)",
-                width: "44px",
-                height: "44px",
-                display: "none",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-                WebkitTapHighlightColor: "transparent",
-                transition: "border-color 0.2s, background 0.2s",
-            }}
         >
-            {/* Animated hamburger -> X */}
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <line
-                    x1="3" y1={mobileOpen ? "10" : "5"} x2="17" y2={mobileOpen ? "10" : "5"}
-                    style={{
-                        transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                        transform: mobileOpen ? "rotate(45deg)" : "rotate(0)",
-                        transformOrigin: "center",
-                    }}
-                />
-                <line
-                    x1="3" y1="10" x2="17" y2="10"
-                    style={{
-                        transition: "opacity 0.2s",
-                        opacity: mobileOpen ? 0 : 1,
-                    }}
-                />
-                <line
-                    x1="3" y1={mobileOpen ? "10" : "15"} x2="17" y2={mobileOpen ? "10" : "15"}
-                    style={{
-                        transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                        transform: mobileOpen ? "rotate(-45deg)" : "rotate(0)",
-                        transformOrigin: "center",
-                    }}
-                />
-            </svg>
+            {mobileOpen ? (
+                <X aria-hidden="true" size={20} strokeWidth={1.75} />
+            ) : (
+                <Menu aria-hidden="true" size={20} strokeWidth={1.75} />
+            )}
         </button>
     );
 }

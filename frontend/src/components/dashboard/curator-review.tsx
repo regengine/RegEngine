@@ -3,7 +3,9 @@
 import React, { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Spinner } from '@/components/ui/spinner';
 import { useReviewItems, useApproveReviewItem, useRejectReviewItem } from '@/hooks/use-review';
 import { useAuth } from '@/lib/auth-context';
@@ -42,15 +44,15 @@ export function CuratorReview() {
 
   if (!hasAdminSession) {
     return (
-      <div className="p-6 text-sm text-re-warning bg-re-warning-muted border border-re-warning rounded-lg">
+      <Callout tone="warning">
         Workspace admin or sysadmin access is required to load the review queue.
-      </div>
+      </Callout>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center gap-3 p-6 text-muted-foreground">
+      <div className="flex flex-col items-center gap-3 p-6 text-re-text-tertiary">
         <Spinner />
         <p>Loading queue...</p>
       </div>
@@ -59,54 +61,52 @@ export function CuratorReview() {
 
   if (error) {
     return (
-      <div className="p-6 text-sm text-re-danger bg-re-danger-muted border border-re-danger rounded-lg">
+      <Callout tone="danger" role="alert">
         Unable to load review queue. Please verify service connectivity.
-      </div>
+      </Callout>
     );
   }
 
   if (sortedItems.length === 0) {
-    return (
-      <div className="p-6 text-center text-muted-foreground border rounded-lg bg-muted/20">
-        All caught up! No pending reviews.
-      </div>
-    );
+    return <EmptyState bare title="All caught up! No pending reviews." />;
   }
 
   return (
     <div className="grid gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Review Queue ({sortedItems.length})</h2>
-        <Badge variant="secondary">Curator Review</Badge>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-heading text-re-text-primary">Review Queue ({sortedItems.length})</h2>
+        <Badge>Curator Review</Badge>
       </div>
       {sortedItems.map((item) => (
-        <Card key={item.id} className="border-l-4 border-l-yellow-400 shadow-sm">
-          <CardHeader className="flex flex-row justify-between items-start gap-3">
-            <div className="space-y-1">
-              <CardTitle className="text-sm font-mono">ID: {item.id?.substring(0, 8) || 'N/A'}...</CardTitle>
-              <p className="text-xs text-muted-foreground">
+        <Card key={item.id}>
+          <CardHeader>
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="font-mono text-[0.8125rem]">
+                ID: {item.id?.substring(0, 8) || 'N/A'}...
+              </CardTitle>
+              <p className="text-small text-re-text-tertiary">
                 Created: {new Date(item.created_at).toLocaleDateString()}
               </p>
             </div>
-            <Badge variant="outline" className="text-xs">
+            <Badge size="sm">
               {(item.confidence_score * 100).toFixed(1)}% confidence
             </Badge>
           </CardHeader>
-          <CardContent className="grid md:grid-cols-2 gap-4">
-            <div className="bg-slate-100 p-3 rounded text-sm whitespace-pre-wrap dark:bg-slate-900/60 max-h-60 overflow-y-auto">
-              <div className="font-semibold text-xs text-muted-foreground mb-1 uppercase">
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-md border border-re-border-subtle bg-re-surface-inset p-3 text-ui text-re-text-secondary">
+              <div className="mb-1 text-label text-re-text-muted">
                 Source Preview
               </div>
               {item.source_text || 'No source preview available.'}
             </div>
             <div className="space-y-3">
-              <div className="font-semibold text-xs text-muted-foreground mb-1 uppercase">Extraction</div>
-              <pre className="bg-re-info-muted p-3 rounded text-xs overflow-auto max-h-48 dark:bg-re-info/30 border">
+              <div className="text-label text-re-text-muted">Extraction</div>
+              <pre className="max-h-48 overflow-auto rounded-md border border-re-border-subtle bg-re-surface-inset p-3 font-mono text-small text-re-text-secondary">
                 {JSON.stringify(item.extracted_data, null, 2)}
               </pre>
-              <div className="flex gap-2 justify-end">
+              <div className="flex justify-end gap-2">
                 <Button
-                  variant="destructive"
+                  variant="danger"
                   size="sm"
                   onClick={() => handleDecision(item.id, 'reject')}
                   disabled={!!processing || rejectMutation.isPending}
@@ -114,7 +114,6 @@ export function CuratorReview() {
                   {processing === item.id && rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
                 </Button>
                 <Button
-                  className="bg-re-success hover:bg-re-success"
                   size="sm"
                   onClick={() => handleDecision(item.id, 'approve')}
                   disabled={!!processing || approveMutation.isPending}

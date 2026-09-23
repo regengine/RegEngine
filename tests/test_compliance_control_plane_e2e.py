@@ -306,7 +306,9 @@ class TestComplianceControlPlaneE2E:
         assert result.result == "fail"
         assert result.why_failed is not None
         assert result.severity == "critical"
-        assert result.citation_reference == "21 CFR §1.1345(b)(5)"
+        # §1.1345(a)(4) is the receiving KDE for the immediate previous source;
+        # (b)(5) belongs to the exempt-source receiving list.
+        assert result.citation_reference == "21 CFR §1.1345(a)(4)"
         assert result.remediation_suggestion is not None
         assert len(result.evidence_fields_inspected) > 0
 

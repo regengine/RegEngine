@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
     AlertTriangle,
     Play,
@@ -12,27 +11,13 @@ import {
     RotateCcw,
     Lock,
 } from 'lucide-react';
-
-/* ─────────────────────────────────────────────────────────────
-   DESIGN TOKENS (matches /verify and /proof family)
-   ───────────────────────────────────────────────────────────── */
-const T = {
-    bg: 'var(--re-surface-base)',
-    surface: 'rgba(255,255,255,0.02)',
-    elevated: 'rgba(255,255,255,0.05)',
-    border: 'rgba(255,255,255,0.06)',
-    borderHover: 'rgba(255,255,255,0.12)',
-    text: 'var(--re-text-primary)',
-    textDim: 'var(--re-text-tertiary)',
-    textMuted: 'var(--re-text-muted)',
-    accent: 'var(--re-success)',
-    accentDim: 'rgba(34,197,94,0.12)',
-    danger: 'var(--re-danger)',
-    dangerDim: 'rgba(239,68,68,0.12)',
-    info: 'var(--re-info)',
-    mono: "'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
-    brand: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-};
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardHeader } from '@/components/ui/card';
+import { StatTile } from '@/components/ui/stat-tile';
 
 const RECALL_CSV_URL = '/samples/sample_recall_drill.csv';
 const PROOF_RECALL_ENDPOINT = '/api/ingestion/api/v1/proof/recall-drill';
@@ -267,164 +252,122 @@ export default function RecallDrillPage() {
     const marginMultiple = finalSeconds > 0 ? Math.round(fdaMandateSeconds / finalSeconds) : 0;
 
     return (
-        <div className="min-h-screen pb-32" style={{ background: T.bg, color: T.text }}>
-            {/* ─── Hero ──────────────────────────────────────────────── */}
-            <section className="max-w-[960px] mx-auto text-center px-6 pt-20 pb-10">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                >
-                    <div
-                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-[20px] text-[13px] font-medium mb-6"
-                        style={{ background: T.dangerDim, color: T.danger }}
-                    >
-                        <AlertTriangle size={14} />
-                        Live Recall Drill • Synthetic Data
-                    </div>
+        <div className="re-page min-h-screen pb-32">
+            {/* ─── Hero ────────────────────────────────── */}
+            <Container className="pb-10 pt-14 sm:pt-20">
+                <PageHeader
+                    size="hero"
+                    eyebrow={
+                        <Badge tone="warning">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                            Live Recall Drill • Synthetic Data
+                        </Badge>
+                    }
+                    title="Run a recall drill on synthetic supply-chain data."
+                    className="mb-0 border-b-0 pb-0"
+                />
+                <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
+                    Click <span className="font-medium text-re-text-primary">Start drill</span> — RegEngine
+                    traces the contaminated lot through the applicable CTEs and produces an FDA-oriented sortable
+                    recall CSV in under 60 seconds. Synthetic data — illustrative only.
+                </p>
 
-                    <h1
-                        className="text-[clamp(32px,5vw,56px)] font-bold leading-[1.1] mb-4"
-                        style={{ fontFamily: T.brand }}
-                    >
-                        Run a recall drill on synthetic supply-chain data.
-                    </h1>
-
-                    <p
-                        className="text-lg max-w-[680px] mx-auto mb-8 leading-relaxed"
-                        style={{ color: T.textDim }}
-                    >
-                        Click <span className="font-semibold" style={{ color: T.text }}>Start drill</span> — RegEngine
-                        traces the contaminated lot through the applicable CTEs and produces an FDA-oriented sortable
-                        recall CSV in under 60 seconds. Synthetic data — illustrative only.
-                    </p>
-
-                    <div className="flex gap-3 justify-center flex-wrap">
-                        {state === 'idle' && (
-                            <button
-                                onClick={startDrill}
-                                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold cursor-pointer text-black border-none"
-                                style={{ background: T.accent }}
-                            >
-                                <Play size={16} fill="currentColor" />
-                                Start drill
-                            </button>
-                        )}
-                        {state === 'running' && (
-                            <button
-                                disabled
-                                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold border-none"
-                                style={{ background: T.elevated, color: T.textDim, cursor: 'not-allowed' }}
-                            >
-                                <Clock size={16} className="animate-pulse" />
-                                Drill in progress · {elapsedS}s
-                            </button>
-                        )}
-                        {state === 'loading' && (
-                            <button
-                                disabled
-                                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold border-none"
-                                style={{ background: T.elevated, color: T.textDim, cursor: 'not-allowed' }}
-                            >
-                                <Clock size={16} className="animate-pulse" />
-                                Starting endpoint run…
-                            </button>
-                        )}
-                        {state === 'done' && (
-                            <button
-                                onClick={resetDrill}
-                                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-medium cursor-pointer border-none"
-                                style={{
-                                    background: T.elevated,
-                                    border: `1px solid ${T.border}`,
-                                    color: T.text,
-                                }}
-                            >
-                                <RotateCcw size={16} />
-                                Run again
-                            </button>
-                        )}
-                    </div>
-                    {errorMessage && (
-                        <p
-                            className="text-sm mt-4 mb-0"
-                            style={{ color: T.danger }}
-                            role="alert"
+                <div className="mt-8 flex flex-wrap gap-3">
+                    {state === 'idle' && (
+                        <Button
+                            size="lg"
+                            onClick={startDrill}
+                            leadingIcon={<Play fill="currentColor" strokeWidth={1.75} aria-hidden="true" />}
                         >
-                            {errorMessage}
-                        </p>
+                            Start drill
+                        </Button>
                     )}
-                </motion.div>
-            </section>
-
-            {/* ─── Progress / Steps ─────────────────────────────────── */}
-            {(state === 'running' || state === 'done') && (
-                <section className="max-w-[760px] mx-auto px-4 sm:px-6 pb-10">
-                    <div
-                        className="rounded-xl overflow-hidden"
-                        style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                    >
-                        <div
-                            className="flex items-center justify-between px-5 py-3"
-                            style={{ borderBottom: `1px solid ${T.border}`, background: T.elevated }}
+                    {state === 'running' && (
+                        <Button
+                            size="lg"
+                            variant="secondary"
+                            disabled
+                            leadingIcon={<Clock strokeWidth={1.75} aria-hidden="true" />}
                         >
-                            <span className="text-xs uppercase tracking-wider" style={{ color: T.textMuted }}>
+                            Drill in progress · {elapsedS}s
+                        </Button>
+                    )}
+                    {state === 'loading' && (
+                        <Button size="lg" variant="secondary" loading>
+                            Starting endpoint run…
+                        </Button>
+                    )}
+                    {state === 'done' && (
+                        <Button
+                            size="lg"
+                            variant="secondary"
+                            onClick={resetDrill}
+                            leadingIcon={<RotateCcw strokeWidth={1.75} aria-hidden="true" />}
+                        >
+                            Run again
+                        </Button>
+                    )}
+                </div>
+                {errorMessage && (
+                    <Callout tone="danger" role="alert" className="mt-4">
+                        {errorMessage}
+                    </Callout>
+                )}
+            </Container>
+
+            {/* ─── Progress / Steps ───────────────────── */}
+            {(state === 'running' || state === 'done') && (
+                <Container className="pb-10">
+                    <Card className="overflow-hidden">
+                        <CardHeader className="items-center py-3">
+                            <span className="font-mono text-label uppercase text-re-text-muted">
                                 Drill log
                             </span>
-                            <span
-                                className="text-xs"
-                                style={{ fontFamily: T.mono, color: T.textDim }}
-                            >
+                            <span className="font-mono text-label uppercase tabular-nums text-re-text-tertiary">
                                 {state === 'done'
                                     ? `done · ${totalDurationLabel}s total`
                                     : `running · ${elapsedS}s`}
                             </span>
-                        </div>
-                        <div className="p-5 flex flex-col gap-3">
+                        </CardHeader>
+                        <div className="flex flex-col gap-3 p-5">
                             {drillSteps.map((step, idx) => {
                                 const isComplete = activeStep > idx || state === 'done';
                                 const isActive = activeStep === idx && state === 'running';
                                 const isPending = activeStep < idx && state === 'running';
                                 return (
                                     <div key={idx} className="flex items-start gap-3">
-                                        <div
-                                            className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                                            style={{
-                                                background: isComplete
-                                                    ? T.accentDim
-                                                    : isActive
-                                                        ? T.dangerDim
-                                                        : T.elevated,
-                                                color: isComplete
-                                                    ? T.accent
-                                                    : isActive
-                                                        ? T.danger
-                                                        : T.textMuted,
-                                            }}
-                                        >
+                                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
                                             {isComplete ? (
-                                                <CheckCircle2 size={14} />
+                                                <CheckCircle2
+                                                    className="h-4 w-4 text-re-success"
+                                                    strokeWidth={1.75}
+                                                    aria-hidden="true"
+                                                />
                                             ) : isActive ? (
-                                                <Clock size={12} className="animate-pulse" />
+                                                <Clock
+                                                    className="h-4 w-4 text-re-info"
+                                                    strokeWidth={1.75}
+                                                    aria-hidden="true"
+                                                />
                                             ) : (
-                                                <span className="text-[11px]">{idx + 1}</span>
+                                                <span className="font-mono text-label tabular-nums text-re-text-muted">
+                                                    {idx + 1}
+                                                </span>
                                             )}
-                                        </div>
-                                        <div className="flex-1">
+                                        </span>
+                                        <div className="min-w-0 flex-1">
                                             <div
-                                                className="text-[14px] font-medium"
-                                                style={{
-                                                    color: isPending ? T.textMuted : T.text,
-                                                }}
+                                                className={
+                                                    isPending
+                                                        ? 'text-ui text-re-text-muted'
+                                                        : 'text-ui font-medium text-re-text-primary'
+                                                }
                                             >
                                                 {step.label}
                                                 {isActive && '…'}
                                             </div>
                                             {(isComplete || isActive) && (
-                                                <div
-                                                    className="mt-1 text-[12.5px] leading-relaxed"
-                                                    style={{ color: T.textDim, fontFamily: T.mono }}
-                                                >
+                                                <div className="mt-1 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
                                                     {step.detailLines.map((line, j) => (
                                                         <div key={j}>{line}</div>
                                                     ))}
@@ -435,222 +378,137 @@ export default function RecallDrillPage() {
                                 );
                             })}
                         </div>
-                    </div>
-                </section>
+                    </Card>
+                </Container>
             )}
 
-            {/* ─── Result panel (after done) ────────────────────────── */}
-            <AnimatePresence>
-                {state === 'done' && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                        className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10"
-                    >
-                        {/* Time-to-trace metric */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-                            <MetricCard
-                                label="Time to trace"
-                                value={`${finalSecondsLabel}s`}
-                                sub={`Synthetic lot ${drill.lot_code}`}
-                                tone="success"
-                            />
-                            <MetricCard
-                                label="FDA mandate"
-                                value="24 hours"
-                                sub="§ 204 — produce records on request"
-                                tone="info"
-                            />
-                            <MetricCard
-                                label="Margin"
-                                value={`${marginMultiple}× faster`}
-                                sub="Headroom vs. regulatory window"
-                                tone="success"
-                            />
-                        </div>
+            {/* ─── Result panel (after done) ────────────── */}
+            {state === 'done' && (
+                <Container as="section" className="pb-10">
+                    {/* Time-to-trace metric */}
+                    <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
+                        <StatTile label="Time to trace" value={`${finalSecondsLabel}s`}>
+                            <p className="text-small text-re-text-tertiary">Synthetic lot {drill.lot_code}</p>
+                        </StatTile>
+                        <StatTile label="FDA mandate" value="24 hours">
+                            <p className="text-small text-re-text-tertiary">§ 204 — produce records on request</p>
+                        </StatTile>
+                        <StatTile label="Margin" value={`${marginMultiple}× faster`}>
+                            <p className="text-small text-re-text-tertiary">Headroom vs. regulatory window</p>
+                        </StatTile>
+                    </div>
 
-                        {/* Trace diagram */}
-                        <div
-                            className="rounded-xl p-6 mb-8"
-                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                        >
-                            <h2 className="text-[18px] font-semibold mb-4">Forward trace graph</h2>
-                            <div className="overflow-x-auto">
-                                <div className="flex items-stretch gap-2 min-w-max pb-2">
-                                    {TRACE_NODES.map((n, i) => (
-                                        <div key={n.id} className="flex items-stretch">
+                    {/* Trace diagram */}
+                    <Card className="mb-8 p-6">
+                        <h2 className="mb-4 text-heading text-re-text-primary">Forward trace graph</h2>
+                        <div className="overflow-x-auto">
+                            <div className="flex min-w-max items-stretch gap-2 pb-2">
+                                {TRACE_NODES.map((n, i) => (
+                                    <div key={n.id} className="flex items-stretch">
+                                        <Card
+                                            variant="inset"
+                                            padding="compact"
+                                            className={
+                                                n.cte === 'TRANSFORMATION'
+                                                    ? 'min-w-[170px] border-re-danger'
+                                                    : 'min-w-[170px]'
+                                            }
+                                        >
                                             <div
-                                                className="rounded-lg p-3 min-w-[170px]"
-                                                style={{
-                                                    background: T.elevated,
-                                                    border: `1px solid ${
-                                                        n.cte === 'TRANSFORMATION' ? T.danger : T.border
-                                                    }`,
-                                                }}
+                                                className={
+                                                    n.cte === 'TRANSFORMATION'
+                                                        ? 'mb-1 font-mono text-label uppercase text-re-danger'
+                                                        : 'mb-1 font-mono text-label uppercase text-re-text-muted'
+                                                }
                                             >
-                                                <div
-                                                    className="text-[10px] uppercase tracking-wider mb-1"
-                                                    style={{
-                                                        color: n.cte === 'TRANSFORMATION' ? T.danger : T.textMuted,
-                                                        fontFamily: T.mono,
-                                                    }}
-                                                >
-                                                    {n.cte}
-                                                </div>
-                                                <div className="text-[13px] font-semibold mb-1">
-                                                    {n.facility}
-                                                </div>
-                                                <div
-                                                    className="text-[11px]"
-                                                    style={{ color: T.textDim, fontFamily: T.mono }}
-                                                >
-                                                    {n.lot}
-                                                </div>
-                                                <div
-                                                    className="text-[11px]"
-                                                    style={{ color: T.textMuted }}
-                                                >
-                                                    {n.qty}
-                                                </div>
+                                                {n.cte}
                                             </div>
-                                            {i < TRACE_NODES.length - 1 && (
-                                                <div
-                                                    className="flex items-center justify-center px-1"
-                                                    style={{ color: T.textMuted }}
-                                                >
-                                                    <ArrowRight size={14} />
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+                                            <div className="mb-1 text-subheading text-re-text-primary">
+                                                {n.facility}
+                                            </div>
+                                            <div className="font-mono text-[0.8125rem] text-re-text-secondary">
+                                                {n.lot}
+                                            </div>
+                                            <div className="font-mono text-[0.8125rem] tabular-nums text-re-text-tertiary">
+                                                {n.qty}
+                                            </div>
+                                        </Card>
+                                        {i < TRACE_NODES.length - 1 && (
+                                            <div className="flex items-center justify-center px-1 text-re-text-muted">
+                                                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
-                            <p
-                                className="mt-3 text-[12px]"
-                                style={{ color: T.textMuted }}
-                            >
-                                Red border = transformation node where a single inbound lot fans out
-                                into multiple downstream lots.
-                            </p>
                         </div>
+                        <p className="mt-3 text-small text-re-text-tertiary">
+                            Red border = transformation node where a single inbound lot fans out
+                            into multiple downstream lots.
+                        </p>
+                    </Card>
 
-                        {/* CSV download */}
-                        <div
-                            className="rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                        >
-                            <div>
-                                <div className="text-[15px] font-semibold mb-1">
-                                    Recall CSV ready
-                                </div>
-                                <div className="text-[13px]" style={{ color: T.textDim }}>
-                                    21 CFR §§1.1325–1.1350 Key Data Elements · 11 rows · synthetic data
-                                </div>
+                    {/* CSV download */}
+                    <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
+                        <div>
+                            <div className="mb-1 text-subheading text-re-text-primary">
+                                Recall CSV ready
                             </div>
-                            <a
-                                href={outputCsvUrl}
-                                download
-                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[14px] font-semibold no-underline text-black"
-                                style={{ background: T.accent }}
-                            >
-                                <Download size={15} />
+                            <div className="text-ui text-re-text-secondary">
+                                21 CFR §§1.1325–1.1350 Key Data Elements · 11 rows · synthetic data
+                            </div>
+                        </div>
+                        <Button asChild size="lg" className="shrink-0">
+                            <a href={outputCsvUrl} download>
+                                <Download strokeWidth={1.75} aria-hidden="true" />
                                 Download recall CSV
                             </a>
-                        </div>
-                    </motion.section>
-                )}
-            </AnimatePresence>
+                        </Button>
+                    </Card>
+                </Container>
+            )}
 
-            {/* ─── Idle-state explainer ─────────────────────────────── */}
+            {/* ─── Idle-state explainer ────────────────── */}
             {state === 'idle' && (
-                <section className="max-w-[820px] mx-auto px-4 sm:px-6 pb-10">
-                    <div
-                        className="rounded-xl p-6"
-                        style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                    >
-                        <h2 className="text-[18px] font-semibold mb-3">What happens when you click start</h2>
-                        <ol className="flex flex-col gap-2 text-[14px]" style={{ color: T.textDim }}>
+                <Container as="section" className="pb-10">
+                    <Card className="p-6">
+                        <h2 className="mb-3 text-heading text-re-text-primary">What happens when you click start</h2>
+                        <ol className="flex flex-col gap-2 text-ui text-re-text-secondary">
                             <li>
-                                <span style={{ color: T.text }}>1.</span> RegEngine loads a known-contaminated lot
+                                <span className="font-mono tabular-nums text-re-text-primary">1.</span> RegEngine loads a known-contaminated lot
                                 ({' '}
-                                <code style={{ fontFamily: T.mono, color: T.accent }}>SV-20240115-001</code>) from
+                                <code className="font-mono text-[0.8125rem] text-re-text-primary">SV-20240115-001</code>) from
                                 the synthetic dataset.
                             </li>
                             <li>
-                                <span style={{ color: T.text }}>2.</span> The recall simulator walks downstream
+                                <span className="font-mono tabular-nums text-re-text-primary">2.</span> The recall simulator walks downstream
                                 through all 7 CTEs — harvesting, cooling, packing, shipping,
                                 receiving, transformation, shipping again.
                             </li>
                             <li>
-                                <span style={{ color: T.text }}>3.</span> Every receiver of the contaminated lot
+                                <span className="font-mono tabular-nums text-re-text-primary">3.</span> Every receiver of the contaminated lot
                                 (and any downstream lot derived from it via transformation) is
                                 identified.
                             </li>
                             <li>
-                                <span style={{ color: T.text }}>4.</span> The output is a recall CSV in the format
+                                <span className="font-mono tabular-nums text-re-text-primary">4.</span> The output is a recall CSV in the format
                                 FDA inspectors will request under § 204.
                             </li>
                         </ol>
-                    </div>
-                </section>
+                    </Card>
+                </Container>
             )}
 
-            {/* ─── Sticky footer ───────────────────────────────────── */}
-            <div
-                className="fixed bottom-0 left-0 right-0 z-40 px-4 py-3 flex items-center justify-center gap-2 text-[12.5px]"
-                style={{
-                    background: 'rgba(0,0,0,0.65)',
-                    backdropFilter: 'blur(8px)',
-                    borderTop: `1px solid ${T.border}`,
-                    color: T.textDim,
-                }}
-            >
-                <Lock size={12} />
-                <span>
-                    All data is synthetic. The drill runs on a frozen public dataset separate
-                    from any customer data. Run as many times as you like — results are
-                    deterministic.
-                </span>
-            </div>
-        </div>
-    );
-}
-
-/* ───────────────────────────────────────────── helpers ──── */
-
-function MetricCard({
-    label,
-    value,
-    sub,
-    tone,
-}: {
-    label: string;
-    value: string;
-    sub: string;
-    tone: 'success' | 'info';
-}) {
-    const color = tone === 'success' ? T.accent : T.info;
-    const bg = tone === 'success' ? T.accentDim : 'rgba(59,130,246,0.10)';
-    return (
-        <div
-            className="rounded-xl p-5"
-            style={{ background: T.surface, border: `1px solid ${T.border}` }}
-        >
-            <div
-                className="text-[11px] uppercase tracking-wider mb-2"
-                style={{ color: T.textMuted }}
-            >
-                {label}
-            </div>
-            <div
-                className="text-[28px] font-bold mb-1 inline-block px-2 py-0.5 rounded-md"
-                style={{ color, background: bg }}
-            >
-                {value}
-            </div>
-            <div className="text-[12.5px]" style={{ color: T.textDim }}>
-                {sub}
+            {/* ─── Sticky footer ─────────────────────── */}
+            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-re-border-subtle bg-re-surface-card/95 backdrop-blur">
+                <Container className="flex items-center justify-center gap-2 py-3 text-small text-re-text-tertiary">
+                    <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                    <span>
+                        All data is synthetic. The drill runs on a frozen public dataset separate
+                        from any customer data. Run as many times as you like — results are
+                        deterministic.
+                    </span>
+                </Container>
             </div>
         </div>
     );

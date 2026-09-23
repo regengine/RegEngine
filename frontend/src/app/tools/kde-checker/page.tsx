@@ -2,9 +2,11 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 import { KDECheckerClient } from "./components/KDECheckerClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { Container } from "@/components/layout/container";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "KDE Checklist Builder | FSMA 204 Starting Checklist | RegEngine",
@@ -38,24 +40,35 @@ const jsonLd = {
     }
 };
 
+function KDECheckerFallback() {
+    return (
+        <div className="mx-auto max-w-3xl space-y-4 py-6" aria-busy="true">
+            <Skeleton className="h-10 w-2/3 rounded-md" />
+            <Skeleton className="h-16 w-full rounded-md" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-11 w-full rounded-md" />
+        </div>
+    );
+}
+
 export default function KDECheckerPage() {
     return (
         <>
-            <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+            <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
                 <JSONLD data={jsonLd} />
-                <div className="max-w-7xl mx-auto">
+                <Container width="tool">
                     <Breadcrumbs
                         items={[
                             { label: "Free Tools", href: "/tools" },
                             { label: "KDE Checker" }
                         ]}
                     />
-                    <Suspense>
+                    <Suspense fallback={<KDECheckerFallback />}>
                         <EmailGate toolName="kde-checker">
                             <KDECheckerClient />
                         </EmailGate>
                     </Suspense>
-                </div>
+                </Container>
             </div>
             <RelatedTools tools={[
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Visualize all 7 Critical Tracking Events across your supply chain nodes." },

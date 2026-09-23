@@ -2,6 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 interface CodeBlockProps {
   code: string;
@@ -10,6 +12,15 @@ interface CodeBlockProps {
   copyable?: boolean;
 }
 
+/**
+ * Code block — SPEC §4/§5.1.
+ *
+ * `Card variant="inset"`: code is a well, so it sits one surface step *below*
+ * the card it is on, bounded by a subtle hairline rather than a shadow. The
+ * copy control is a real `Button variant="ghost" size="icon"` so it picks up
+ * the system's focus ring and hit area; its `aria-label` still flips between
+ * "Copy code" and "Copied".
+ */
 export function CodeBlock({
   code,
   language,
@@ -27,66 +38,54 @@ export function CodeBlock({
   const lines = code.split('\n');
 
   return (
-    <div
-      className="relative rounded-lg overflow-hidden group"
-      style={{
-        background: 'var(--re-surface-card, rgba(0,0,0,0.3))',
-        border: '1px solid var(--re-surface-border, rgba(255,255,255,0.08))',
-      }}
-    >
-      {/* Language badge */}
+    <Card variant="inset" className="group relative overflow-hidden">
+      {/* Language label — a real header row, so a long first line of code can
+          never run underneath it. */}
       {language && (
-        <span
-          className="absolute top-2 right-10 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded"
-          style={{
-            background: 'rgba(255,255,255,0.06)',
-            color: 'var(--re-text-muted, #999)',
-          }}
-        >
-          {language}
-        </span>
+        <div className="border-b border-re-border-subtle px-4 py-2">
+          <span
+            className={`block font-mono text-label uppercase text-re-text-muted ${
+              copyable ? 'pr-8' : ''
+            }`}
+          >
+            {language}
+          </span>
+        </div>
       )}
 
       {/* Copy button */}
       {copyable && (
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           onClick={handleCopy}
-          className="absolute top-2 right-2 p-1.5 rounded transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100"
-          style={{
-            background: 'rgba(255,255,255,0.08)',
-            color: copied ? 'var(--re-brand, #10b981)' : 'var(--re-text-muted, #999)',
-          }}
           aria-label={copied ? 'Copied' : 'Copy code'}
+          className="absolute right-1.5 top-1.5 opacity-0 transition-opacity duration-120 focus-visible:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
         >
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-        </button>
+          {copied ? (
+            <Check aria-hidden="true" strokeWidth={1.75} className="text-re-success" />
+          ) : (
+            <Copy aria-hidden="true" strokeWidth={1.75} />
+          )}
+        </Button>
       )}
 
       {/* Code body */}
-      <pre
-        className="p-4 overflow-x-auto text-[13px] leading-relaxed m-0"
-        style={{ fontFamily: 'var(--re-font-mono, "JetBrains Mono", ui-monospace, monospace)' }}
-      >
-        <code style={{ color: 'var(--re-text-primary, #e0e0e0)' }}>
+      <pre className="m-0 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 text-re-text-primary">
+        <code>
           {showLineNumbers
             ? lines.map((line, i) => (
-                <span key={i} className="table-row">
-                  <span
-                    className="table-cell select-none text-right pr-4"
-                    style={{
-                      color: 'var(--re-text-disabled, #555)',
-                      minWidth: '2.5rem',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="table-cell whitespace-pre">{line}</span>
+              <span key={i} className="table-row">
+                <span className="table-cell min-w-[2.5rem] select-none pr-4 text-right text-re-text-disabled">
+                  {i + 1}
                 </span>
-              ))
+                <span className="table-cell whitespace-pre">{line}</span>
+              </span>
+            ))
             : code}
         </code>
       </pre>
-    </div>
+    </Card>
   );
 }

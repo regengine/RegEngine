@@ -614,6 +614,10 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.inflow_workbench_scenarios": ("SELECT", "INSERT"),
         "fsma.ingestion_run_receipts": ("INSERT",),
         "fsma.ingestion_runs": ("SELECT", "INSERT", "UPDATE"),
+        # v121 -- per-label FSMA 204 billing. Claimed via INSERT ... ON
+        # CONFLICT DO NOTHING (SELECT to read back an existing claim,
+        # UPDATE to record the Stripe outcome); never deleted.
+        "fsma.label_charges": ("SELECT", "INSERT", "UPDATE"),
         "fsma.notification_outbox": ("SELECT", "UPDATE"),
         "fsma.products": ("SELECT", "INSERT", "UPDATE"),
         "fsma.remediation_tokens": ("SELECT", "INSERT", "UPDATE"),
@@ -755,7 +759,29 @@ REGENGINE_SYSADMIN_SEQUENCE_GRANTS = {
 
 
 def _grant_sql(role: str, object_name: str, privileges: tuple[str, ...], kind: str) -> str:
-    return f"GRANT {', '.join(privileges)} ON {kind} {object_name} TO {role};"
+    grant = f"GRANT {', '.join(privileges)} ON {kind} {object_name} TO {role};"
+    # Guarded so a table/sequence can be registered here ahead of the later
+    # migration that actually creates it (v121 registers fsma.label_charges
+    # this way -- see REGENGINE_TABLE_GRANTS below -- so the post-deploy
+    # cutover script, scripts/apply_runtime_role_cutover.py, which re-imports
+    # and re-executes this exact module against an already-fully-migrated
+    # DB, grants it correctly there). Without the guard, replaying the FULL
+    # migration chain from scratch runs THIS revision's own upgrade() at its
+    # own chain position -- before the later revision has created the
+    # object yet -- and a bare GRANT aborts the whole run with
+    # UndefinedTable/UndefinedObject. to_regclass resolves both tables and
+    # sequences, so one guard covers both; it is a no-op for every entry
+    # here that predates v111, since all of those objects already exist by
+    # the time this revision runs.
+    return f"""
+DO $$
+BEGIN
+    IF to_regclass('{object_name}') IS NOT NULL THEN
+        EXECUTE '{grant}';
+    END IF;
+END
+$$;
+"""
 
 
 def _build_object_grants() -> str:

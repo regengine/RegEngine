@@ -3,6 +3,12 @@
 import { useState } from 'react';
 import { CodeBlock } from '@/components/developer/CodeBlock';
 import { API_BASE } from '@/lib/api-base';
+import { Badge } from '@/components/ui/badge';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { fieldControlClasses } from '@/components/ui/field-control';
+import { PageHeader } from '@/components/layout/page-header';
+import { cn } from '@/lib/utils';
 
 const OPERATIONS = [
   { id: 'ingest', label: 'Ingest Webhook Events', method: 'POST', path: '/api/v1/webhooks/ingest' },
@@ -271,59 +277,49 @@ export default function CodeGenPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>Code Generator</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--re-text-muted)' }}>
-          Generate ready-to-use code snippets with your API key pre-filled.
-        </p>
-      </div>
+      <PageHeader
+        title="Code Generator"
+        description="Generate ready-to-use code snippets with your API key pre-filled."
+        className="mb-0"
+      />
 
       {/* Config */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--re-text-muted)' }}>Operation</label>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field label="Operation" htmlFor="codegen-operation">
           <select
             value={selectedOp.id}
             onChange={(e) => setSelectedOp(OPERATIONS.find(o => o.id === e.target.value) || OPERATIONS[0])}
-            className="w-full px-3 py-2 rounded-md text-sm"
-            style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
+            className={cn(fieldControlClasses, 'appearance-none pr-8')}
           >
             {OPERATIONS.map(op => (
               <option key={op.id} value={op.id}>{op.method} -- {op.label}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--re-text-muted)' }}>API Key</label>
-          <input
+        </Field>
+        <Field label="API Key" htmlFor="codegen-api-key">
+          <Input
             type="text"
+            mono
             placeholder="rge_live_..."
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            className="w-full px-3 py-2 rounded-md text-sm font-mono"
-            style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
           />
-        </div>
-        <div>
-          <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--re-text-muted)' }}>Tenant ID</label>
-          <input
+        </Field>
+        <Field label="Tenant ID" htmlFor="codegen-tenant-id">
+          <Input
             type="text"
+            mono
             placeholder="your-tenant-uuid"
             value={tenantId}
             onChange={(e) => setTenantId(e.target.value)}
-            className="w-full px-3 py-2 rounded-md text-sm font-mono"
-            style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
           />
-        </div>
+        </Field>
       </div>
 
       {/* Endpoint badge */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: 'var(--re-surface-elevated)', border: '1px solid var(--re-surface-border)' }}>
-        <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded" style={{
-          color: selectedOp.method === 'POST' ? 'var(--re-brand-light)' : 'var(--re-signal-blue)',
-          background: selectedOp.method === 'POST' ? 'var(--re-success-bg)' : 'var(--re-info-bg)',
-        }}>{selectedOp.method}</span>
-        <code className="text-sm font-mono" style={{ color: 'var(--re-text-primary)' }}>{selectedOp.path}</code>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-re-border bg-re-surface-card px-3 py-2">
+        <Badge tone="neutral" size="sm" mono>{selectedOp.method}</Badge>
+        <code className="min-w-0 break-all font-mono text-[0.8125rem] text-re-text-primary">{selectedOp.path}</code>
       </div>
 
       {/* Generated code */}

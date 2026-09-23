@@ -80,46 +80,44 @@ export function PricingCheckoutButton({
 
     return (
         <div>
+            {/* `highlighted` is what makes exactly one card in the tier grid carry
+                the primary action; the other two are secondary (SPEC §4). */}
             <Button
                 asChild
-                style={{
-                    width: '100%',
-                    marginTop: '24px',
-                    fontWeight: 600,
-                    borderRadius: '10px',
-                    padding: '12px 20px',
-                    transition: 'all 0.2s',
-                    ...style,
-                }}
+                variant={highlighted ? 'primary' : 'secondary'}
+                size="lg"
+                className="mb-5 mt-6 w-full"
+                style={style}
             >
                 <Link
                     href={signupHref}
                     onClick={handleCheckout}
                     aria-disabled={isLoading}
                     data-cta-target={signupHref}
+                    className="no-underline"
                 >
                     {isLoading ? (
                         <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden="true" />
                             Redirecting to checkout...
                         </>
                     ) : (
                         <>
                             {label}
-                            <ArrowRight className="ml-2 w-4 h-4" />
+                            <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         </>
                     )}
                 </Link>
             </Button>
             {error && (
                 <>
-                    <p className="text-red-500 text-xs mt-2 text-center" role="alert">
+                    <p className="mt-2 text-center text-small text-re-danger" role="alert">
                         {error}
                     </p>
                     <button
                         type="button"
                         onClick={() => router.push(signupHref)}
-                        className="mt-2 w-full text-xs text-center underline text-gray-700 hover:text-gray-900"
+                        className="mt-2 w-full text-center text-small text-re-text-secondary underline underline-offset-[3px] transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
                     >
                         Continue to signup
                     </button>

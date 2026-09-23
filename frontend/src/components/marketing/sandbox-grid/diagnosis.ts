@@ -81,7 +81,14 @@ const KDE_TO_CSV_COLUMNS: Record<string, string[]> = {
   carrier: ['carrier', 'carrier_name', 'transport'],
   harvester_business_name: ['harvester_business_name', 'harvester', 'grower', 'farm'],
   transformation_date: ['transformation_date', 'transform_date'],
-  input_traceability_lot_codes: ['input_traceability_lot_codes', 'input_tlcs', 'input_lots'],
+  input_lot_codes: [
+    'input_lot_codes',
+    'input_traceability_lot_codes',
+    'input_tlcs',
+    'input_lots',
+    'source_lots',
+    'source_tlcs',
+  ],
   traceability_lot_code: ['traceability_lot_code', 'tlc', 'lot_code', 'lot'],
   product_description: ['product_description', 'product', 'product_name', 'commodity'],
   quantity: ['quantity', 'qty', 'amount', 'weight'],
@@ -147,7 +154,7 @@ function ruleTargetColumn(rule: SandboxRuleResultForDiagnosis, headers: string[]
   if (rule.category === 'temporal_ordering') return findCsvColumn('timestamp', headers);
   if (rule.category === 'quantity_consistency') return findCsvColumn('quantity', headers);
   if (rule.category === 'lot_linkage' && /identity/i.test(rule.rule_title)) return findCsvColumn('product_description', headers);
-  if (rule.category === 'lot_linkage') return findCsvColumn('input_traceability_lot_codes', headers);
+  if (rule.category === 'lot_linkage') return findCsvColumn('input_lot_codes', headers);
   if (rule.category === 'custom_business_rule' && /temperature/i.test(rule.rule_title)) return findCsvColumn('temperature', headers);
   if (rule.category === 'operational_quality' && /temperature/i.test(rule.rule_title)) return findCsvColumn('temperature', headers);
   return findCsvColumn('cte_type', headers);

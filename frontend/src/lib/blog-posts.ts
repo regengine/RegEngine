@@ -20,6 +20,23 @@ export const BLOG_POST_TITLES = {
     '24-hour-rule': 'The FSMA 204 24-Hour Rule Explained',
 } as const;
 
+/**
+ * Publication dates, for the sitemap's lastModified and BlogPosting JSON-LD.
+ * Exact where a post declares openGraph.publishedTime; otherwise the first of
+ * the month the blog index displays for it.
+ */
+export const BLOG_POST_PUBLISHED = {
+    'fsma-204-compliance-guide': '2026-04-01',
+    'fsma-204-mid-market-guide': '2026-04-01',
+    'fda-food-traceability-requirements': '2026-04-01',
+    'fsma-204-compliance-checklist-2026': '2026-04-01',
+    'regengine-vs-spreadsheets-traceability': '2026-04-01',
+    'food-traceability-software': '2026-04-01',
+    'fsma-204-cte-kde-guide': '2026-04-01',
+    'fsma-204-traceability-lot-codes': '2026-03-01',
+    '24-hour-rule': '2026-03-15',
+} as const;
+
 export const BLOG_POST_SLUGS = [
     'fsma-204-compliance-guide',
     'fsma-204-mid-market-guide',
@@ -39,3 +56,6 @@ export type BlogPostSlug = (typeof BLOG_POST_SLUGS)[number];
 const _titlesCoverEverySlug: Record<BlogPostSlug, string> = BLOG_POST_TITLES;
 const _slugsCoverEveryTitle: Record<keyof typeof BLOG_POST_TITLES, string> = _titlesCoverEverySlug;
 void _slugsCoverEveryTitle;
+const _datesCoverEverySlug: Record<BlogPostSlug, string> = BLOG_POST_PUBLISHED;
+const _slugsCoverEveryDate: Record<keyof typeof BLOG_POST_PUBLISHED, string> = _datesCoverEverySlug;
+void _slugsCoverEveryDate;

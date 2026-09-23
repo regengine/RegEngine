@@ -49,7 +49,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
               </p>
               <Link
                 href="/sandbox"
-                className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2 rounded-lg text-[0.8rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)]"
+                className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-[var(--re-brand-foreground)] px-5 py-2 rounded-lg text-[0.8rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)]"
               >
                 Try Your Own Data
               </Link>

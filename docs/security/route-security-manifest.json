@@ -305,6 +305,58 @@
       "test_adapter": "tenant_api_key_postgres_rls"
     },
     {
+      "operation": "billing:GET:/api/v1/billing/usage",
+      "owner": "billing",
+      "method": "GET",
+      "path": "/api/v1/billing/usage",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.read"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:DELETE:/api/v1/billing/usage/opt-in",
+      "owner": "billing",
+      "method": "DELETE",
+      "path": "/api/v1/billing/usage/opt-in",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.manage"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/usage/opt-in",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/usage/opt-in",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.manage"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "billing:POST:/api/v1/billing/usage/report",
+      "owner": "billing",
+      "method": "POST",
+      "path": "/api/v1/billing/usage/report",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "billing.usage.report"
+      ],
+      "storage_boundary": "stripe+postgres-rls:credential-bound-tenant",
+      "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
       "operation": "billing:POST:/api/v1/billing/webhook/stripe",
       "owner": "billing",
       "method": "POST",
@@ -3182,6 +3234,15 @@
   ],
   "disabled_operations": [
     {
+      "operation": "agent_org:POST:/agent-org/onboard",
+      "owner": "agent_org",
+      "method": "POST",
+      "path": "/agent-org/onboard",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/agent-org/onboard"
+    },
+    {
       "operation": "alerts:GET:/api/v1/alerts/{tenant_id}",
       "owner": "alerts",
       "method": "GET",
@@ -4541,6 +4602,33 @@
       "probe_path": "/api/v1/vision/analyze-label"
     },
     {
+      "operation": "inbound_email:POST:/api/v1/webhooks/inbound-email",
+      "owner": "inbound_email",
+      "method": "POST",
+      "path": "/api/v1/webhooks/inbound-email",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/webhooks/inbound-email"
+    },
+    {
+      "operation": "inbound_email:POST:/api/v1/webhooks/inbound-email/addresses",
+      "owner": "inbound_email",
+      "method": "POST",
+      "path": "/api/v1/webhooks/inbound-email/addresses",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/api/v1/webhooks/inbound-email/addresses"
+    },
+    {
+      "operation": "inbound_email:GET:/api/v1/webhooks/inbound-email/rejections",
+      "owner": "inbound_email",
+      "method": "GET",
+      "path": "/api/v1/webhooks/inbound-email/rejections",
+      "inventory_source": "development-route-table",
+      "probe_method": "GET",
+      "probe_path": "/api/v1/webhooks/inbound-email/rejections"
+    },
+    {
       "operation": "scraping:POST:/scrape/{adaptor}",
       "owner": "scraping",
       "method": "POST",
@@ -4782,16 +4870,25 @@
       "inventory_source": "development-route-table",
       "probe_method": "POST",
       "probe_path": "/v1/scrape/cppa"
+    },
+    {
+      "operation": "email_ingest:POST:/webhooks/email/inbound",
+      "owner": "email_ingest",
+      "method": "POST",
+      "path": "/webhooks/email/inbound",
+      "inventory_source": "development-route-table",
+      "probe_method": "POST",
+      "probe_path": "/webhooks/email/inbound"
     }
   ],
   "summary": {
-    "enabled_operation_count": 246,
-    "disabled_operation_count": 178,
-    "disabled_unique_path_count": 161,
+    "enabled_operation_count": 250,
+    "disabled_operation_count": 183,
+    "disabled_unique_path_count": 166,
     "enabled_by_classification": {
       "global-sysadmin": 15,
       "public": 29,
-      "tenant-scoped": 195,
+      "tenant-scoped": 199,
       "workload-only": 7
     }
   }

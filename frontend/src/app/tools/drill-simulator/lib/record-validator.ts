@@ -970,22 +970,31 @@ export function generateSampleCSV(): string {
   return lines.join('\n');
 }
 
+/**
+ * Design-system colour helpers.
+ *
+ * These used to return raw Tailwind palette classes (`from-green-500 …`) that
+ * the caller passed to `style={{ color }}` — i.e. they never rendered at all.
+ * They now return token utility classes meant for `className`.
+ */
 export function getScoreColor(score: number): string {
-  if (score >= 90) return 'from-green-500 to-green-600';
-  if (score >= 80) return 'from-blue-500 to-blue-600';
-  if (score >= 70) return 'from-yellow-500 to-yellow-600';
-  if (score >= 60) return 'from-orange-500 to-orange-600';
-  return 'from-red-500 to-red-600';
+  if (score >= 90) return 'text-re-success';
+  if (score >= 80) return 'text-re-info';
+  if (score >= 70) return 'text-re-warning';
+  if (score >= 60) return 'text-re-warning';
+  return 'text-re-danger';
 }
 
+/** Left rail for a finding row — matches the Callout recipe (SPEC §4). */
 export function getSeverityColor(severity: 'critical' | 'major' | 'minor'): string {
-  if (severity === 'critical') return 'border-red-500 bg-red-50';
-  if (severity === 'major') return 'border-yellow-500 bg-yellow-50';
-  return 'border-blue-500 bg-blue-50';
+  if (severity === 'critical') return 'border-l-re-danger';
+  if (severity === 'major') return 'border-l-re-warning';
+  return 'border-l-re-info';
 }
 
+/** Badge tone for a finding severity (SPEC §4 Badge tones). */
 export function getSeverityBadgeColor(severity: 'critical' | 'major' | 'minor'): string {
-  if (severity === 'critical') return 'bg-red-100 text-red-800';
-  if (severity === 'major') return 'bg-yellow-100 text-yellow-800';
-  return 'bg-blue-100 text-blue-800';
+  if (severity === 'critical') return 'danger';
+  if (severity === 'major') return 'warning';
+  return 'info';
 }

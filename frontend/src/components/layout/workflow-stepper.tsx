@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { Settings, Upload, CheckSquare, BarChart3, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 export type WorkflowStep = 'setup' | 'ingest' | 'review' | 'analyze';
 
@@ -13,80 +13,109 @@ interface WorkflowStepperProps {
 }
 
 const steps = [
-  { id: 'setup' as const, label: 'Setup', href: '/onboarding', icon: Settings, description: 'Configure credentials' },
-  { id: 'ingest' as const, label: 'Ingest', href: '/ingest', icon: Upload, description: 'Upload documents' },
-  { id: 'review' as const, label: 'Review', href: '/review', icon: CheckSquare, description: 'Validate extractions' },
-  { id: 'analyze' as const, label: 'Analyze', href: '/dashboard/compliance', icon: BarChart3, description: 'Discover insights' },
+  { id: 'setup' as const, label: 'Setup', href: '/onboarding', description: 'Configure credentials' },
+  { id: 'ingest' as const, label: 'Ingest', href: '/ingest', description: 'Upload documents' },
+  { id: 'review' as const, label: 'Review', href: '/review', description: 'Validate extractions' },
+  { id: 'analyze' as const, label: 'Analyze', href: '/dashboard/compliance', description: 'Discover insights' },
 ];
 
-export function WorkflowStepper({ currentStep, completedSteps = [], className }: WorkflowStepperProps) {
+/**
+ * The one stepper recipe (SPEC §6 / proposal-A §6.6): 24px circle nodes
+ * carrying a mono numeral, joined by hairlines. Current node is outlined in
+ * ink, a completed node is filled ink with a Check, an upcoming node is
+ * outlined in the default border. No brand fill, no 2px rings, no icon per
+ * step — the numeral is the state, the label is the name.
+ */
+const nodeBase =
+  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-label tracking-normal no-underline transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset motion-reduce:transition-none';
+
+/**
+ * Zero-padded mono numerals ("01".."04"), matching the numbered mono labels the
+ * redesign uses elsewhere. The padding is also load-bearing: a bare "3" in the
+ * stepper collided with the "3" of an "Events detected" figure on /ingest
+ * (src/__tests__/pages/ingest-handoff.test.tsx queries by exact text).
+ */
+function stepNumeral(index: number) {
+  return String(index + 1).padStart(2, '0');
+}
+
+function nodeClasses(state: 'complete' | 'current' | 'pending') {
+  return cn(
+    nodeBase,
+    state === 'complete' && 'border-re-text-primary bg-re-text-primary text-re-surface-card',
+    state === 'current' && 'border-re-text-primary text-re-text-primary',
+    state === 'pending' && 'border-re-border text-re-text-tertiary hover:border-re-border-strong',
+  );
+}
+
+/**
+ * `completedSteps` is authoritative whenever the caller supplies it: a step the
+ * caller leaves out is NOT complete, even when it sits left of the current one.
+ *
+ * Position alone used to imply completion (`index < currentIndex`), which made
+ * the prop dead on every current call site and put the stepper at odds with the
+ * page around it -- /ingest rendered "01 Setup" as a filled check at the same
+ * moment it rendered the "API Key Required" callout, and /review ignored
+ * `isOnboarded` entirely. Both surfaces legitimately render a step the visitor
+ * skipped, so the caller's answer wins.
+ *
+ * Callers that omit the prop keep the positional default.
+ */
+function isStepComplete(
+  stepId: WorkflowStep,
+  index: number,
+  currentIndex: number,
+  completedSteps: WorkflowStep[] | undefined,
+): boolean {
+  return completedSteps ? completedSteps.includes(stepId) : index < currentIndex;
+}
+
+export function WorkflowStepper({ currentStep, completedSteps, className }: WorkflowStepperProps) {
   const currentIndex = steps.findIndex(s => s.id === currentStep);
 
   return (
     <nav className={cn('w-full', className)} aria-label="Workflow progress">
-      <ol className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0">
+      <ol className="flex items-start">
         {steps.map((step, index) => {
-          const isComplete = completedSteps.includes(step.id) || index < currentIndex;
+          const isComplete = isStepComplete(step.id, index, currentIndex, completedSteps);
           const isCurrent = step.id === currentStep;
-          const isPending = index > currentIndex && !completedSteps.includes(step.id);
+          const state = isComplete ? 'complete' : isCurrent ? 'current' : 'pending';
 
           return (
-            <li key={step.id} className="flex-1 relative">
-              <div className="flex flex-col items-center">
-                {/* Connector line */}
-                {index > 0 && (
-                  <>
-                    {/* Desktop Horizontal Line */}
-                    <div
-                      className={cn(
-                        'hidden md:block absolute top-5 right-1/2 w-full h-0.5 -translate-y-1/2',
-                        isComplete || isCurrent ? 'bg-primary' : 'bg-muted'
-                      )}
-                      style={{ width: 'calc(100% - 2.5rem)', right: 'calc(50% + 1.25rem)' }}
-                    />
-                    {/* Mobile Vertical Line */}
-                    <div
-                      className={cn(
-                        'md:hidden absolute -top-4 left-1/2 h-4 w-0.5 -translate-x-1/2',
-                        isComplete || isCurrent ? 'bg-primary' : 'bg-muted'
-                      )}
-                    />
-                  </>
-                )}
-
-                {/* Step circle */}
+            <li key={step.id} className={cn('flex items-start gap-2', index < steps.length - 1 && 'flex-1')}>
+              <div className="flex min-w-0 flex-col items-center gap-2 text-center">
                 <Link
                   href={step.href}
-                  className={cn(
-                    'relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all',
-                    isComplete && 'bg-primary border-primary text-primary-foreground',
-                    isCurrent && 'border-primary bg-primary/10 text-primary',
-                    isPending && 'border-muted bg-background text-muted-foreground'
-                  )}
+                  className={nodeClasses(state)}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`Step ${index + 1}: ${step.label}`}
                 >
                   {isComplete ? (
-                    <Check className="w-5 h-5" />
+                    <Check className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                   ) : (
-                    <step.icon className="w-5 h-5" />
+                    stepNumeral(index)
                   )}
                 </Link>
-
-                {/* Label */}
-                <div className="mt-2 text-center">
+                <div className="min-w-0">
                   <p
                     className={cn(
-                      'text-sm font-medium',
-                      isCurrent && 'text-primary',
-                      isPending && 'text-muted-foreground'
+                      'text-small font-medium',
+                      isCurrent || isComplete ? 'text-re-text-primary' : 'text-re-text-tertiary',
                     )}
                   >
                     {step.label}
                   </p>
-                  <p className="text-xs text-muted-foreground hidden sm:block">
-                    {step.description}
-                  </p>
+                  <p className="hidden text-small text-re-text-muted sm:block">{step.description}</p>
                 </div>
               </div>
+              {index < steps.length - 1 && (
+                <div
+                  className={cn(
+                    'mt-3 h-px flex-1',
+                    isComplete ? 'bg-re-text-primary' : 'bg-re-border',
+                  )}
+                />
+              )}
             </li>
           );
         })}
@@ -96,35 +125,36 @@ export function WorkflowStepper({ currentStep, completedSteps = [], className }:
 }
 
 // Minimal inline version for headers
-export function WorkflowStepperInline({ currentStep, completedSteps = [] }: WorkflowStepperProps) {
+export function WorkflowStepperInline({ currentStep, completedSteps }: WorkflowStepperProps) {
   const currentIndex = steps.findIndex(s => s.id === currentStep);
 
   return (
-    <div className="flex items-center gap-1 text-sm">
+    <div className="flex items-center gap-1.5 text-small">
       {steps.map((step, index) => {
-        const isComplete = completedSteps.includes(step.id) || index < currentIndex;
+        const isComplete = isStepComplete(step.id, index, currentIndex, completedSteps);
         const isCurrent = step.id === currentStep;
 
         return (
-          <div key={step.id} className="flex items-center">
+          <div key={step.id} className="flex items-center gap-1.5">
             <Link
               href={step.href}
+              aria-current={isCurrent ? 'step' : undefined}
+              aria-label={`Step ${index + 1}: ${step.label}`}
               className={cn(
-                'flex items-center gap-1 px-2 py-1 rounded-md transition-colors',
-                isComplete && 'text-primary',
-                isCurrent && 'bg-primary/10 text-primary font-medium',
-                !isComplete && !isCurrent && 'text-muted-foreground hover:text-foreground'
+                'flex items-center gap-1.5 rounded-md px-1 py-1 no-underline transition-colors duration-120 motion-reduce:transition-none',
+                isCurrent ? 'text-re-text-primary' : 'text-re-text-tertiary hover:text-re-text-primary',
               )}
             >
-              {isComplete ? (
-                <Check className="w-3 h-3" />
-              ) : (
-                <step.icon className="w-3 h-3" />
-              )}
-              <span className="hidden md:inline">{step.label}</span>
+              <span
+                className={nodeClasses(isComplete ? 'complete' : isCurrent ? 'current' : 'pending')}
+                aria-hidden="true"
+              >
+                {isComplete ? <Check className="h-3 w-3" strokeWidth={1.75} /> : stepNumeral(index)}
+              </span>
+              <span className="hidden font-medium md:inline">{step.label}</span>
             </Link>
             {index < steps.length - 1 && (
-              <span className="text-muted-foreground mx-1">/</span>
+              <span className="h-px w-3 bg-re-border" aria-hidden="true" />
             )}
           </div>
         );

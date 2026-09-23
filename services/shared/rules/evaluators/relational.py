@@ -408,6 +408,16 @@ def evaluate_mass_balance(
     container_weights = params.get("container_weights") or {}
 
     input_types = {"harvesting", "receiving", "first_land_based_receiving"}
+    # TLC-origin events: a TLC is assigned at initial packing (§1.1330) or
+    # created by a transformation (§1.1350). For lots with no harvesting/
+    # receiving event under the same TLC — every transformed lot, and
+    # packed lots whose TLC starts at packing — the origin event's
+    # quantity IS the available input. Used only as a fallback when no
+    # primary input exists, so lots that DO have harvest+packing events
+    # under one TLC are not double-counted. Previously such lots warned
+    # "no input events found" on every shipment (caught by the 2026-09-02
+    # production-grade data run).
+    origin_types = {"initial_packing", "transformation"}
     output_types = {"shipping"}
 
     total_input = 0.0
@@ -446,18 +456,28 @@ def evaluate_mass_balance(
 
         if all_convertible:
             use_converted = True
+            origin_input = 0.0
             for mass, etype in converted_entries:
                 if etype in input_types:
                     total_input += mass
+                elif etype in origin_types:
+                    origin_input += mass
                 elif etype in output_types:
                     total_output += mass
+            if total_input == 0:
+                total_input = origin_input
 
     if not use_converted:
+        origin_input = 0.0
         for qty, uom, etype in all_entries:
             if etype in input_types:
                 total_input += qty
+            elif etype in origin_types:
+                origin_input += qty
             elif etype in output_types:
                 total_output += qty
+        if total_input == 0:
+            total_input = origin_input
 
     evidence = [
         {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface CodeSnippet {
     language: string;
@@ -31,47 +32,46 @@ export function CodeBlock({ snippets, title }: CodeBlockProps) {
     }
 
     return (
-        <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--re-surface-border)' }}>
+        <div className="overflow-hidden rounded-lg border border-re-border">
             {/* Header: title + language tabs + copy */}
-            <div className="flex items-center justify-between px-4 py-2" style={{
-                background: 'var(--re-surface-elevated)',
-                borderBottom: '1px solid var(--re-border-subtle)',
-            }}>
-                <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-re-border-subtle bg-re-surface-card px-4 py-2">
+                <div className="flex flex-wrap items-center gap-1">
                     {title && (
-                        <span className="text-[11px] font-medium mr-3" style={{ color: 'var(--re-text-disabled)' }}>
+                        <span className="mr-3 font-mono text-label text-re-text-muted">
                             {title}
                         </span>
                     )}
                     {snippets.map((s, i) => (
                         <button
                             key={s.language}
+                            type="button"
                             onClick={() => { setActiveIdx(i); setCopied(false); }}
-                            className="px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
-                            style={{
-                                background: i === activeIdx ? 'var(--re-brand-muted)' : 'transparent',
-                                color: i === activeIdx ? 'var(--re-brand-light)' : 'var(--re-text-disabled)',
-                            }}
+                            aria-pressed={i === activeIdx}
+                            className={cn(
+                                'rounded-sm px-2.5 py-1 text-[0.8125rem] transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none',
+                                i === activeIdx
+                                    ? 'bg-re-surface-inset font-medium text-re-text-primary'
+                                    : 'text-re-text-tertiary hover:text-re-text-primary',
+                            )}
                         >
                             {s.label}
                         </button>
                     ))}
                 </div>
                 <button
+                    type="button"
                     onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors hover:bg-[var(--re-brand-muted)]"
-                    style={{ color: copied ? 'var(--re-brand-light)' : 'var(--re-text-disabled)' }}
+                    className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[0.8125rem] text-re-text-tertiary transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
                 >
-                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copied
+                        ? <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                        : <Copy className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />}
                     {copied ? 'Copied' : 'Copy'}
                 </button>
             </div>
             {/* Code body */}
-            <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed" style={{
-                background: 'var(--re-surface-inset)',
-                margin: 0,
-            }}>
-                <code style={{ color: 'var(--re-text-muted)', fontFamily: 'var(--re-font-mono, ui-monospace, monospace)' }}>
+            <pre className="m-0 overflow-x-auto bg-re-surface-inset p-4 text-[0.8125rem] leading-relaxed">
+                <code className="font-mono text-re-text-secondary">
                     {active.code}
                 </code>
             </pre>

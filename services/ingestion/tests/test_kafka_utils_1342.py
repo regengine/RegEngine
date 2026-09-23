@@ -75,8 +75,9 @@ class _FakeProducer:
         if self.produce_raises is not None:
             raise self.produce_raises
 
-    def flush(self):
+    def flush(self, timeout: float | None = None):
         self.flush_called += 1
+        self.flush_timeout = timeout
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +203,12 @@ def _install_fake(
 
 
 class TestSend:
+    @pytest.fixture(autouse=True)
+    def _kafka_on(self, monkeypatch):
+        # Tests in this class exercise the Kafka path; prod default is the
+        # PG backbone (#1159), so send() is a no-op unless we opt in.
+        monkeypatch.setattr(ku, "kafka_enabled", lambda: True)
+
     def test_happy_path_sends_and_flushes(self, monkeypatch):
         fake = _install_fake(monkeypatch)
         ku.send("events", {"hello": "world"}, key="k1")
@@ -315,3 +322,25 @@ class TestSend:
     def test_ingestion_producer_service_constant(self):
         """Lock the producer-service allowlist string (#1078)."""
         assert ku.INGESTION_PRODUCER_SERVICE == "ingestion-service"
+
+    def test_pg_backbone_is_noop(self, monkeypatch):
+        """#3087: with the default PG event backbone (#1159), send() must not
+        touch a producer at all — prod has no broker, and flush() blocking on
+        an unresolvable bootstrap host held requests open past the proxy
+        timeout, turning successful ingests into client-visible 502s."""
+        monkeypatch.setattr(ku, "kafka_enabled", lambda: False)
+
+        def _explode():
+            raise AssertionError("get_producer must not be called on pg backbone")
+
+        monkeypatch.setattr(ku, "get_producer", _explode)
+        # Must return without raising and without signing work.
+        ku.send("events", {"hello": "world"}, key="k1")
+
+    def test_flush_is_bounded(self, monkeypatch):
+        """#3087: when Kafka IS enabled, flush must carry a timeout so an
+        unreachable broker can never hold the request open indefinitely."""
+        fake = _install_fake(monkeypatch)
+        ku.send("events", {"a": 1})
+        assert fake.flush_called == 1
+        assert fake.flush_timeout is not None and fake.flush_timeout <= 10

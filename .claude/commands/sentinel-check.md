@@ -1,6 +1,6 @@
 ---
 description: Run Project Sentinel audit on the current branch — regression + interstitial checks, strict-mode GH issue filing
-argument-hint: "[--loose] [--base=origin/main] [--scope=services/<name>]"
+argument-hint: "[--loose] [--report-only] [--base=origin/main] [--scope=services/<name>]"
 ---
 
 # /sentinel-check
@@ -14,6 +14,7 @@ You are running the Project Sentinel audit. This is **not** a generic code revie
 
 Parse `$ARGUMENTS` for:
 - `--loose` — file issues even without strict evidence (default: strict, terminal-only for weak signals)
+- `--report-only` — never run `gh issue create` / `gh issue comment`; list would-be issues under `Proposed Issues (not filed)` instead. Used by CI (`.github/workflows/sentinel.yml`), which runs with a read-only token and has a separate privileged job post the report.
 - `--base=<ref>` — diff base, defaults to `origin/main`
 - `--scope=<path>` — restrict to a service, e.g. `--scope=services/kernel`
 
@@ -36,14 +37,15 @@ Spawn the `sentinel-orchestrator` subagent with a self-contained prompt that inc
 - The base ref and HEAD SHA
 - The full list of changed files (one per line)
 - The strict/loose mode flag
+- The report-only flag (`report_only: true` when `--report-only` is set)
 - The scope filter, if any
 
-The orchestrator returns a structured report with three sections: `Regressions`, `Interstitial Findings`, `Deferred (terminal-only)`.
+The orchestrator returns a structured report with three sections: `Regressions`, `Interstitial Findings`, `Deferred (terminal-only)` — plus `Proposed Issues (not filed)` in report-only mode.
 
 ## Step 3 — Surface results to the user
 
 Print the orchestrator's report verbatim. Then summarize:
-- Count of issues filed (with `gh issue` URLs)
+- Count of issues filed (with `gh issue` URLs), or count of proposed issues in report-only mode
 - Count of deferred findings (printed in full, not filed)
 - Recommended next action
 
@@ -54,3 +56,4 @@ Print the orchestrator's report verbatim. Then summarize:
 - No issue is filed without (a) a concrete `file:line` and (b) either a closed-PR-diff reference (regression) or a cross-service taint/contract path (interstitial).
 - Before filing, search open issues for fuzzy matches: `gh issue list --search "<key terms>" --state open --json number,title`. If a match exists, append a comment instead of filing new.
 - Apply labels: `audit-regression`, `audit-interstitial`, or `audit-observability`. Never file without a label.
+- In `--report-only` mode, no `gh` write command is ever run; every surviving finding is rendered as a proposed issue (title, label, body) for a maintainer to file.

@@ -2,11 +2,12 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, KeyRound, Loader2, Mail, RotateCcw } from 'lucide-react';
+import { ArrowRight, Loader2, RotateCcw } from 'lucide-react';
 
-import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { Callout } from '@/components/ui/callout';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   clearOtpChallengeState,
@@ -78,99 +79,76 @@ export default function VerifyClient({ initialEmail = '', initialChallengeId = '
   };
 
   return (
-    <div className="re-compliance-os min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
-      <section className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8 sm:px-6">
-        <Card className="w-full border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-lg">
-          <CardHeader className="px-5 pb-3 pt-6 sm:px-8 sm:pt-8">
-            <Link href="/" className="mb-8 inline-flex w-fit items-center text-[var(--re-text-primary)] no-underline">
-              <RegEngineWordmark size="md" />
-            </Link>
-            <div className="inline-flex w-fit items-center gap-2 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
-              <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
-              Email code
-            </div>
-            <h1 className="mt-5 text-3xl font-semibold leading-tight text-[var(--re-text-primary)]">
-              Enter your 6-digit sign-in code.
-            </h1>
-            <CardDescription className="mt-2 text-sm leading-6 text-[var(--re-text-muted)]">
-              {state?.email ? (
-                <span className="inline-flex items-center gap-2">
-                  <Mail className="h-4 w-4" aria-hidden="true" />
-                  If this address is eligible, use the code sent to {state.email}
-                </span>
-              ) : (
-                'Use the same browser where you requested the sign-in code.'
-              )}
-            </CardDescription>
-          </CardHeader>
+    <AuthShell
+      title="Enter your 6-digit sign-in code."
+      description={
+        state?.email
+          ? `If this address is eligible, use the code sent to ${state.email}`
+          : 'Use the same browser where you requested the sign-in code.'
+      }
+      footer={
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-2 font-medium text-re-text-secondary underline-offset-[3px] transition-colors duration-120 hover:text-re-text-primary hover:underline motion-reduce:transition-none"
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          Request a new code
+        </Link>
+      }
+    >
+      {!state?.challengeId && (
+        <Callout tone="warning" role="status" className="mb-4">
+          We could not find a challenge ID for this code. Request a new code, then return here from the same browser.
+        </Callout>
+      )}
 
-          <CardContent className="px-5 pb-6 sm:px-8 sm:pb-8">
-            {!state?.challengeId && (
-              <div className="mb-4 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300" role="status">
-                We could not find a challenge ID for this code. Request a new code, then return here from the same browser.
-              </div>
-            )}
+      {error && (
+        <Callout
+          id="otp-error"
+          tone="danger"
+          role="alert"
+          aria-live="polite"
+          className="mb-4"
+        >
+          {error}
+        </Callout>
+      )}
 
-            {error && (
-              <div
-                id="otp-error"
-                role="alert"
-                aria-live="polite"
-                className="mb-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400"
-              >
-                {error}
-              </div>
-            )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Verification code" htmlFor="otp-code">
+          <Input
+            id="otp-code"
+            name="code"
+            type="text"
+            size="lg"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            autoComplete="one-time-code"
+            placeholder="123456"
+            value={code}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            disabled={isSubmitting}
+            aria-invalid={!!error}
+            aria-describedby={error ? 'otp-error' : undefined}
+            className="font-mono text-lg tracking-[0.24em]"
+          />
+        </Field>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)]" htmlFor="otp-code">
-                  Verification code
-                </label>
-                <Input
-                  id="otp-code"
-                  name="code"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  placeholder="123456"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                  disabled={isSubmitting}
-                  aria-invalid={!!error}
-                  aria-describedby={error ? 'otp-error' : undefined}
-                  className="h-12 font-mono text-lg tracking-[0.24em]"
-                />
-              </div>
-
-              <Button className="h-12 w-full gap-2" type="submit" disabled={isSubmitting || !state?.challengeId}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    Verify and continue
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </>
-                )}
-              </Button>
-            </form>
-
-            <div className="mt-5 border-t border-[var(--re-border-subtle)] pt-5 text-center">
-              <Button asChild variant="ghost" className="gap-2">
-                <Link href="/login">
-                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  Request a new code
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-    </div>
+        <Button className="w-full" size="lg" type="submit" disabled={isSubmitting || !state?.challengeId}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              Verifying...
+            </>
+          ) : (
+            <>
+              Verify and continue
+              <ArrowRight aria-hidden="true" />
+            </>
+          )}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

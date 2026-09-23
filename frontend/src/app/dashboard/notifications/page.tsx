@@ -1,23 +1,23 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import { Spinner } from '@/components/ui/spinner';
+import { fieldControlClasses } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import {
     Bell,
     Mail,
     MessageSquare,
     Webhook,
     Smartphone,
-    Clock,
-    ArrowUp,
-    Settings,
-    Shield,
     AlertTriangle,
 } from 'lucide-react';
 
@@ -95,19 +95,69 @@ async function apiSavePrefs(tenantId: string, prefs: Partial<NotificationPrefere
     if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
 }
 
-function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+/**
+ * A real switch: role, checked state and an accessible name bound to the row
+ * label, with a 44px target around a 24px track.
+ */
+function Toggle({
+    enabled,
+    onToggle,
+    labelledBy,
+}: {
+    enabled: boolean;
+    onToggle: () => void;
+    labelledBy: string;
+}) {
     return (
         <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-labelledby={labelledBy}
             onClick={onToggle}
-            className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${enabled ? 'bg-[var(--re-brand)]' : 'bg-[var(--re-surface-elevated)]'}`}
-            style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: enabled ? 'flex-end' : 'flex-start', padding: '0 2px' }}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-card"
         >
-            <motion.div
-                className="w-5 h-5 rounded-full bg-white shadow"
-                layout
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            />
+            <span
+                className={cn(
+                    'relative block h-6 w-11 rounded-full transition-colors duration-120 motion-reduce:transition-none',
+                    enabled ? 'bg-re-brand' : 'bg-re-border-strong'
+                )}
+            >
+                <span
+                    className={cn(
+                        'absolute left-0.5 top-0.5 block h-5 w-5 rounded-full transition-transform duration-120 motion-reduce:transition-none',
+                        enabled ? 'translate-x-5 bg-re-brand-foreground' : 'translate-x-0 bg-re-surface-card'
+                    )}
+                />
+            </span>
         </button>
+    );
+}
+
+/** One label / description / control row — the shape repeated eight times here. */
+function SettingRow({
+    id,
+    title,
+    description,
+    children,
+}: {
+    id: string;
+    title: React.ReactNode;
+    description?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-3 px-5 py-3">
+            <div className="min-w-0">
+                <div id={id} className="text-ui font-medium text-re-text-primary">
+                    {title}
+                </div>
+                {description && (
+                    <div className="mt-0.5 text-small text-re-text-tertiary">{description}</div>
+                )}
+            </div>
+            <div className="flex shrink-0 items-center gap-3">{children}</div>
+        </div>
     );
 }
 
@@ -116,6 +166,7 @@ export default function NotificationPrefsPage() {
     const { tenantId } = useTenant();
     const queryClient = useQueryClient();
     const isLoggedIn = isAuthenticated;
+    const rowIdPrefix = useId();
 
     const { data: prefs = null, isLoading: loading, error: prefsError } = useQuery({
         queryKey: ['notification-prefs', tenantId],
@@ -165,199 +216,204 @@ export default function NotificationPrefsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
-            <div className="max-w-3xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
-                            <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Notification Preferences
-                        </h1>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                            Configure alert delivery for the channels currently enabled on this workspace
-                        </p>
-                    </div>
-                    {!fetchFailed && (
-                        <Button onClick={handleSave} disabled={saving || !effectivePrefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
+        <PageContainer>
+            <PageHeader
+                title="Notification Preferences"
+                description="Configure alert delivery for the channels currently enabled on this workspace"
+                primaryAction={
+                    !fetchFailed ? (
+                        <Button
+                            size="lg"
+                            className="w-full sm:w-auto"
+                            aria-live="polite"
+                            onClick={handleSave}
+                            disabled={saving || !effectivePrefs}
+                        >
                             {saving ? <Spinner size="sm" /> : saved ? '✓ Saved' : 'Save Changes'}
                         </Button>
-                    )}
-                </div>
+                    ) : undefined
+                }
+            />
 
-                {!isLoggedIn && (
-                    <Card className="border-orange-300 dark:border-orange-700">
-                        <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                            Sign in to manage notification preferences.
-                        </CardContent>
-                    </Card>
-                )}
-
+            {/* Settings surfaces keep a readable form column inside the app width
+                (SPEC §6.10) — a toggle 1,100px from its label is unusable. */}
+            <div className="max-w-[760px] space-y-6">
                 {loading && (
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
                 {fetchFailed && (
-                    <Card className="border-orange-300 dark:border-orange-700">
-                        <CardContent className="py-6">
-                            <div className="flex flex-col items-center gap-3 text-center">
-                                <AlertTriangle className="h-8 w-8 text-orange-500 flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm font-medium text-foreground">
-                                        Notification preferences are currently unavailable.
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Please try again later. If this persists, contact support.
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <Callout
+                        tone="danger"
+                        role="alert"
+                        icon={AlertTriangle}
+                        title="Notification preferences are currently unavailable."
+                    >
+                        Please try again later. If this persists, contact support.
+                    </Callout>
                 )}
 
                 {saveError && (
-                    <Card className="border-re-danger dark:border-re-danger">
-                        <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-re-danger dark:text-re-danger">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm">Failed to save preferences. Please try again.</p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <Callout tone="danger" role="alert" icon={AlertTriangle}>
+                        Failed to save preferences. Please try again.
+                    </Callout>
                 )}
 
                 {effectivePrefs && !loading && !fetchFailed && (
                     <>
                         {/* Channels */}
-                        <Card className="border-[var(--re-border-default)]">
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Bell className="h-4 w-4 text-[var(--re-brand)]" />
-                                    Delivery Channels
-                                </CardTitle>
+                        <Card>
+                            <CardHeader className="flex-col items-start gap-1">
+                                <CardTitle>Delivery Channels</CardTitle>
                                 <CardDescription>Only channels configured for this workspace appear here.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-2 sm:space-y-3">
-                                {effectivePrefs.channels.map((ch) => {
-                                    const Icon = CHANNEL_ICONS[ch.channel] || Bell;
-                                    return (
-                                        <div key={ch.channel} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                                <Icon className="h-4 w-4 text-[var(--re-brand)] flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <div className="text-sm font-medium capitalize">{ch.channel}</div>
-                                                    {ch.target && <div className="text-[11px] sm:text-xs text-muted-foreground truncate">{ch.target}</div>}
-                                                </div>
-                                            </div>
-                                            <Toggle enabled={ch.enabled} onToggle={() => toggleChannel(ch.channel)} />
-                                        </div>
-                                    );
-                                })}
+                            <CardContent className="p-0">
+                                <div className="divide-y divide-re-border-subtle">
+                                    {effectivePrefs.channels.map((ch) => {
+                                        const Icon = CHANNEL_ICONS[ch.channel] || Bell;
+                                        const rowId = `${rowIdPrefix}-channel-${ch.channel}`;
+                                        return (
+                                            <SettingRow
+                                                key={ch.channel}
+                                                id={rowId}
+                                                title={
+                                                    <span className="flex items-center gap-2 capitalize">
+                                                        <Icon
+                                                            className="h-4 w-4 shrink-0 text-re-text-tertiary"
+                                                            strokeWidth={1.75}
+                                                            aria-hidden="true"
+                                                        />
+                                                        {ch.channel}
+                                                    </span>
+                                                }
+                                                description={ch.target ? <span className="truncate">{ch.target}</span> : undefined}
+                                            >
+                                                <Toggle
+                                                    enabled={ch.enabled}
+                                                    labelledBy={rowId}
+                                                    onToggle={() => toggleChannel(ch.channel)}
+                                                />
+                                            </SettingRow>
+                                        );
+                                    })}
+                                </div>
                             </CardContent>
                         </Card>
 
                         {/* Alert Rules */}
-                        <Card className="border-[var(--re-border-default)]">
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Shield className="h-4 w-4 text-[var(--re-brand)]" />
-                                    Alert Rules
-                                </CardTitle>
+                        <Card>
+                            <CardHeader className="flex-col items-start gap-1">
+                                <CardTitle>Alert Rules</CardTitle>
                                 <CardDescription>Enable or disable notifications for each rule</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-2">
-                                {effectivePrefs.alert_preferences.map((alert) => (
-                                    <div key={alert.rule_id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                        <div className="min-w-0">
-                                            <div className="text-xs sm:text-sm font-medium truncate">{alert.rule_name}</div>
-                                            <div className="flex gap-1 mt-1 flex-wrap">
-                                                {alert.channels.map(ch => (
-                                                    <Badge key={ch} variant="outline" className="text-[9px] py-0">{ch}</Badge>
-                                                ))}
-                                                <Badge variant="outline" className="text-[9px] py-0">≥ {alert.min_severity}</Badge>
-                                            </div>
-                                        </div>
-                                        <Toggle enabled={alert.enabled} onToggle={() => toggleAlert(alert.rule_id)} />
-                                    </div>
-                                ))}
+                            <CardContent className="p-0">
+                                <div className="divide-y divide-re-border-subtle">
+                                    {effectivePrefs.alert_preferences.map((alert) => {
+                                        const rowId = `${rowIdPrefix}-rule-${alert.rule_id}`;
+                                        return (
+                                            <SettingRow
+                                                key={alert.rule_id}
+                                                id={rowId}
+                                                title={alert.rule_name}
+                                                description={
+                                                    <span className="flex flex-wrap gap-1">
+                                                        {alert.channels.map(ch => (
+                                                            <Badge key={ch} tone="neutral" size="sm">{ch}</Badge>
+                                                        ))}
+                                                        <Badge tone="neutral" size="sm">≥ {alert.min_severity}</Badge>
+                                                    </span>
+                                                }
+                                            >
+                                                <Toggle
+                                                    enabled={alert.enabled}
+                                                    labelledBy={rowId}
+                                                    onToggle={() => toggleAlert(alert.rule_id)}
+                                                />
+                                            </SettingRow>
+                                        );
+                                    })}
+                                </div>
                             </CardContent>
                         </Card>
 
                         {/* Quiet Hours & Digest */}
-                        <Card className="border-[var(--re-border-default)]">
+                        <Card>
                             <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-[var(--re-brand)]" />
-                                    Schedule
-                                </CardTitle>
+                                <CardTitle>Schedule</CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-3 sm:space-y-4">
-                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                    <div className="min-w-0">
-                                        <div className="text-xs sm:text-sm font-medium">Quiet Hours</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground">
-                                            Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 – {effectivePrefs.quiet_hours.end_hour}:00
-                                            {effectivePrefs.quiet_hours.override_critical && ' (critical bypass)'}
-                                        </div>
-                                    </div>
-                                    <Toggle
-                                        enabled={effectivePrefs.quiet_hours.enabled}
-                                        onToggle={() => setLocalPrefs({ ...effectivePrefs, quiet_hours: { ...effectivePrefs.quiet_hours, enabled: !effectivePrefs.quiet_hours.enabled } })}
-                                    />
-                                </div>
+                            <CardContent className="p-0">
+                                <div className="divide-y divide-re-border-subtle">
+                                    <SettingRow
+                                        id={`${rowIdPrefix}-quiet-hours`}
+                                        title="Quiet Hours"
+                                        description={
+                                            <>
+                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 – {effectivePrefs.quiet_hours.end_hour}:00
+                                                {effectivePrefs.quiet_hours.override_critical && ' (critical bypass)'}
+                                            </>
+                                        }
+                                    >
+                                        <Toggle
+                                            enabled={effectivePrefs.quiet_hours.enabled}
+                                            labelledBy={`${rowIdPrefix}-quiet-hours`}
+                                            onToggle={() => setLocalPrefs({ ...effectivePrefs, quiet_hours: { ...effectivePrefs.quiet_hours, enabled: !effectivePrefs.quiet_hours.enabled } })}
+                                        />
+                                    </SettingRow>
 
-                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                    <div className="min-w-0">
-                                        <div className="text-xs sm:text-sm font-medium">Digest</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground">
-                                            {effectivePrefs.digest_frequency} summary at {effectivePrefs.digest_time}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                                    <SettingRow
+                                        id={`${rowIdPrefix}-digest`}
+                                        title="Digest"
+                                        description={`${effectivePrefs.digest_frequency} summary at ${effectivePrefs.digest_time}`}
+                                    >
+                                        <label htmlFor={`${rowIdPrefix}-digest-frequency`} className="sr-only">
+                                            Digest frequency
+                                        </label>
                                         <select
+                                            id={`${rowIdPrefix}-digest-frequency`}
                                             value={effectivePrefs.digest_frequency}
                                             onChange={e => setLocalPrefs({ ...effectivePrefs, digest_frequency: e.target.value })}
-                                            className="text-xs rounded-lg border border-[var(--re-border-default)] bg-background px-2 py-1.5 min-h-[44px]"
+                                            className={cn(fieldControlClasses, 'w-auto')}
                                         >
                                             <option value="daily">Daily</option>
                                             <option value="weekly">Weekly</option>
                                         </select>
                                         <Toggle
                                             enabled={effectivePrefs.digest_enabled}
+                                            labelledBy={`${rowIdPrefix}-digest`}
                                             onToggle={() => setLocalPrefs({ ...effectivePrefs, digest_enabled: !effectivePrefs.digest_enabled })}
                                         />
-                                    </div>
+                                    </SettingRow>
                                 </div>
                             </CardContent>
                         </Card>
 
                         {/* Escalation */}
-                        <Card className="border-[var(--re-border-default)]">
+                        <Card>
                             <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <ArrowUp className="h-4 w-4 text-[var(--re-brand)]" />
-                                    Escalation
-                                </CardTitle>
+                                <CardTitle>Escalation</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                    <div className="min-w-0">
-                                        <div className="text-xs sm:text-sm font-medium">Auto-escalate unacknowledged alerts</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+                            <CardContent className="p-0">
+                                <SettingRow
+                                    id={`${rowIdPrefix}-escalation`}
+                                    title="Auto-escalate unacknowledged alerts"
+                                    description={
+                                        <>
                                             If critical alert not acknowledged within {effectivePrefs.escalation.escalate_after_minutes} min
                                             {effectivePrefs.escalation.escalate_to && `, escalate to ${effectivePrefs.escalation.escalate_to}`}
-                                        </div>
-                                    </div>
+                                        </>
+                                    }
+                                >
                                     <Toggle
                                         enabled={effectivePrefs.escalation.enabled}
+                                        labelledBy={`${rowIdPrefix}-escalation`}
                                         onToggle={() => setLocalPrefs({ ...effectivePrefs, escalation: { ...effectivePrefs.escalation, enabled: !effectivePrefs.escalation.enabled } })}
                                     />
-                                </div>
+                                </SettingRow>
                             </CardContent>
                         </Card>
                     </>
                 )}
             </div>
-        </div>
+        </PageContainer>
     );
 }

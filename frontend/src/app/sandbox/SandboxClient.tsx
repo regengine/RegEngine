@@ -146,7 +146,7 @@ export function SandboxClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--re-surface-base)]">
+    <div className="min-h-screen bg-[var(--re-surface-base)]">
       <div className="max-w-4xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-semibold text-[var(--re-text-primary)]">
           FSMA 204 Sandbox
@@ -181,7 +181,7 @@ export function SandboxClient() {
               const file = e.target.files?.[0];
               if (file) void onFile(file);
             }}
-            className="mt-4 mx-auto block text-[0.8rem] text-[var(--re-text-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--re-brand)] file:px-4 file:py-2 file:text-[0.8rem] file:font-semibold file:text-white hover:file:bg-[var(--re-brand-dark)] disabled:opacity-50"
+            className="mt-4 mx-auto block text-[0.8rem] text-[var(--re-text-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--re-brand)] file:px-4 file:py-2 file:text-[0.8rem] file:font-semibold file:text-[var(--re-brand-foreground)] hover:file:bg-[var(--re-brand-dark)] disabled:opacity-50"
           />
           <div className="mt-5 text-[0.75rem] text-[var(--re-text-muted)]">
             No file handy?{' '}
@@ -251,7 +251,7 @@ export function SandboxClient() {
                   </p>
                   <Link
                     href="/pricing"
-                    className="inline-flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2 text-[0.8rem] font-semibold text-white transition-all hover:bg-[var(--re-brand-dark)]"
+                    className="inline-flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2 text-[0.8rem] font-semibold text-[var(--re-brand-foreground)] transition-all hover:bg-[var(--re-brand-dark)]"
                   >
                     See pricing and apply <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -261,6 +261,6 @@ export function SandboxClient() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

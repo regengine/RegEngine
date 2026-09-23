@@ -4,8 +4,10 @@ import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
 import { usePostHog } from '@/lib/posthog-provider';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Search, AlertTriangle, CheckCircle2, FlaskConical, ArrowRight } from 'lucide-react';
+import { Search, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardContent } from '@/components/ui/card';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
@@ -77,63 +79,62 @@ export function TLCValidatorClient() {
             score -= 5;
         }
 
-        const getScoreColor = (s: number) => {
-            if (s >= 80) return 'var(--re-brand)';
-            if (s >= 50) return 'var(--re-warning)';
-            return 'var(--re-danger)';
-        };
+        // The heuristic total stays internal — it tunes the summary tone only.
+        // It is deliberately never rendered as a grade or a score out of 100.
+        const summaryTone: 'neutral' | 'warning' | 'danger' =
+            score >= 80 ? 'neutral' : score >= 50 ? 'warning' : 'danger';
 
         return (
             <div className="space-y-8">
-                <div className="flex flex-col items-center py-6 border-b border-[var(--re-border-default)]">
-                    <Badge variant="outline" className="uppercase tracking-widest text-[10px]" style={{ color: getScoreColor(score) }}>
+                <div className="flex flex-col items-center gap-4 border-b border-re-border-subtle py-6">
+                    <Badge tone={summaryTone} mono>
                         {findings.length === 0 ? 'No structural concerns detected' : `${findings.length} heuristic finding${findings.length === 1 ? '' : 's'}`}
                     </Badge>
-                    <div className="mt-4 font-mono bg-[var(--re-surface-elevated)] px-4 py-2 rounded border border-[var(--re-border-default)]">
+                    <div className="max-w-full break-all rounded-md border border-re-border bg-re-surface-inset px-4 py-2 font-mono text-[0.8125rem] text-re-text-primary">
                         {tlc}
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">Analysis Findings</h4>
+                    <h4 className="text-label text-re-text-muted">Analysis Findings</h4>
                     <div className="space-y-3">
                         {findings.length === 0 ? (
-                            <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)] / 20">
-                                <CheckCircle2 className="h-5 w-5 text-[var(--re-brand)]" />
-                                <span className="text-sm">No structural concerns detected by the heuristic checks. This is not a uniqueness promise — uniqueness must be enforced by your assignment system.</span>
-                            </div>
+                            <Callout tone="success" icon={CheckCircle2}>
+                                No structural concerns detected by the heuristic checks. This is not a uniqueness promise — uniqueness must be enforced by your assignment system.
+                            </Callout>
                         ) : (
                             findings.map((f, i) => (
-                                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-sm">
-                                    <f.icon className={`h-4 w-4 shrink-0 ${f.severity === 'HIGH' ? 'text-[var(--re-danger)]' : 'text-[var(--re-warning)]'}`} />
-                                    <span className="text-[var(--re-text-primary)]">{f.label}</span>
-                                </div>
+                                <Callout key={i} tone={f.severity === 'HIGH' ? 'danger' : 'warning'} icon={f.icon}>
+                                    {f.label}
+                                </Callout>
                             ))
                         )}
                     </div>
                 </div>
 
-                <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)] / 20 text-center">
-                    <h4 className="font-bold mb-2">Automate TLC Integrity</h4>
-                    <p className="text-xs text-[var(--re-text-secondary)] mb-4">
-                        RegEngine enforces TLC stability across your entire supply chain, preventing re-labeling errors that lead to audit failure.
-                    </p>
-                    <Button asChild className="bg-[var(--re-brand)] w-full gap-2">
-                        <a
-                            href="https://calendly.com/regengine/fsma-strategy-session"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            Schedule a Demo <ArrowRight className="h-4 w-4" />
-                        </a>
-                    </Button>
-                </div>
+                <Card>
+                    <CardContent className="space-y-3 text-center">
+                        <h4 className="text-subheading text-re-text-primary">Automate TLC Integrity</h4>
+                        <p className="text-small text-re-text-secondary">
+                            RegEngine enforces TLC stability across your entire supply chain, preventing re-labeling errors that lead to audit failure.
+                        </p>
+                        <Button asChild variant="secondary" size="lg" className="w-full gap-2">
+                            <a
+                                href="https://calendly.com/regengine/fsma-strategy-session"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Schedule a Demo <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
+                            </a>
+                        </Button>
+                    </CardContent>
+                </Card>
             </div>
         );
     };
 
     return (
-        <div className="min-h-screen py-20 px-4" style={{ background: 'var(--re-surface-base)' }}>
+        <>
             <FSMAToolShell
                 config={TLC_VALIDATOR_CONFIG}
                 renderResults={analyzeTLC}
@@ -148,11 +149,9 @@ export function TLCValidatorClient() {
                 }}
             />
 
-            <div className="max-w-3xl mx-auto">
-                <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['kde-checker', 'cte-mapper', 'ftl-checker'].includes(t.id))}
-                />
-            </div>
-        </div>
+            <RelatedTools
+                tools={FREE_TOOLS.filter(t => ['kde-checker', 'cte-mapper', 'ftl-checker'].includes(t.id))}
+            />
+        </>
     );
 }
