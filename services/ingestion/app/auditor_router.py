@@ -283,13 +283,18 @@ async def audit_events(
             " AND COALESCE(e.evaluation_verdict, 'pass') NOT IN ('no_verdict', 'fail')"
         )
     elif compliance_status == "non_compliant":
-        query += " AND (COALESCE(eval_summary.failed, 0) > 0 OR e.evaluation_verdict = 'fail')"
+        query += (
+            " AND (COALESCE(eval_summary.failed, 0) > 0"
+            " OR (COALESCE(eval_summary.errored, 0) = 0"
+            " AND e.evaluation_verdict = 'fail'))"
+        )
     elif compliance_status == "error":
         query += " AND COALESCE(eval_summary.failed, 0) = 0 AND COALESCE(eval_summary.errored, 0) > 0"
     elif compliance_status == "no_verdict":
         query += (
             " AND COALESCE(eval_summary.failed, 0) = 0"
             " AND COALESCE(eval_summary.errored, 0) = 0"
+            " AND COALESCE(e.evaluation_verdict, '') <> 'fail'"
             " AND ("
             "e.evaluation_verdict = 'no_verdict'"
             " OR (COALESCE(eval_summary.total_rules, 0) > 0"
@@ -351,10 +356,14 @@ def _event_compliance(r) -> Dict[str, Any]:
     evaluation_verdict = r[16] if len(r) > 16 else None
     no_verdict_reason = r[17] if len(r) > 17 else None
 
-    if failed > 0 or evaluation_verdict == "fail":
+    # Precedence mirrors ``classify_event_verdict``: fail rows outrank
+    # error rows, error rows outrank a persisted ``fail`` verdict.
+    if failed > 0:
         status = "non_compliant"
     elif errored > 0:
         status = "error"
+    elif evaluation_verdict == "fail":
+        status = "non_compliant"
     elif evaluation_verdict == "no_verdict":
         status = "no_verdict"
     elif total_rules == 0:
