@@ -603,6 +603,47 @@ class TestEvents:
         client = _build_client(_make_principal(), session)
         assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "non_compliant"
 
+    # -- precedence mirrors classify_event_verdict: fail rows > error rows >
+    # persisted 'fail' verdict --
+
+    def test_errored_outranks_persisted_fail_verdict(self):
+        """errored=1, failed=0, verdict='fail' is an evaluator crash, not a
+        rule failure — status must be "error" like the classifier says."""
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=1, passed=0, failed=0, errored=1, affirmative=0, evaluation_verdict="fail")
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "error"
+
+    def test_fail_rows_outrank_error_rows_and_fail_verdict(self):
+        """failed=1, errored=1, verdict='fail' reports non_compliant — fail
+        rows have the highest precedence."""
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=3, passed=1, failed=1, errored=1, affirmative=1, evaluation_verdict="fail")
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "non_compliant"
+
+    def test_persisted_fail_verdict_without_fail_or_error_rows(self):
+        """failed=0, errored=0, verdict='fail' still reports non_compliant."""
+        session = FakeSession(
+            {
+                r"FROM fsma\.traceability_events": lambda _: [
+                    _events_row(total_rules=1, passed=1, failed=0, errored=0, evaluation_verdict="fail")
+                ]
+            }
+        )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "non_compliant"
+
     def test_warn_only_rows_count_as_compliant(self):
         session = FakeSession(
             {
@@ -682,6 +723,9 @@ class TestEvents:
         last_sql = session.calls[-1][0]
         assert "e.evaluation_verdict = 'no_verdict'" in last_sql
         assert "COALESCE(eval_summary.affirmative, 0) = 0" in last_sql
+        # A persisted 'fail' verdict with no fail/error rows is non_compliant,
+        # not no_verdict.
+        assert "COALESCE(e.evaluation_verdict, '') <> 'fail'" in last_sql
 
     def test_compliance_status_non_compliant_adds_sql_filter(self):
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
@@ -690,6 +734,9 @@ class TestEvents:
         last_sql = session.calls[-1][0]
         assert "> 0" in last_sql
         assert "e.evaluation_verdict = 'fail'" in last_sql
+        # The persisted-fail branch only applies when nothing errored — an
+        # errored event is "error", not "non_compliant".
+        assert "COALESCE(eval_summary.errored, 0) = 0 AND e.evaluation_verdict = 'fail'" in last_sql
 
     def test_compliance_status_unevaluated_adds_sql_filter(self):
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
