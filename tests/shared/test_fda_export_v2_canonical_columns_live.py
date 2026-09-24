@@ -143,10 +143,10 @@ def test_fetch_v2_events_executes_against_canonical_schema() -> None:
         # rule under "Rule Failures" in the FDA-facing CSV.
         rule_results = sorted(event["rule_results"], key=lambda r: r["passed"])
         assert rule_results == [
-            {"rule_name": "KDE completeness", "passed": False, "why_failed": "missing harvest_date"},
-            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
-            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
-            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": False, "result": "fail", "why_failed": "missing harvest_date"},
+            {"rule_name": "KDE completeness", "passed": True, "result": "pass", "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": True, "result": "warn", "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": True, "result": "skip", "why_failed": None},
         ]
 
         # Fully-filtered query: exercises every branch of the WHERE builder.
