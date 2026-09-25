@@ -51,7 +51,7 @@ boto3>=1.43.93
 supabase>=2.31.0
 gotrue>=2.12.4,<3
 resend>=2.44.0,<3
-stripe>=15.5.0,<16
+stripe>=15.6.1,<16
 
 # Data Processing
 pandas>=3.0.5
@@ -69,7 +69,7 @@ xlrd>=2.0.2
 # Floored to >=2.13.0 for PYSEC-2026-175 (SSRF via PyJWKClient jku),
 # PYSEC-2026-177 (unbounded JWKS fetch DoS), PYSEC-2026-178 (detached-JWS
 # work-amplifier DoS), and PYSEC-2026-179 (HMAC-with-JWK key confusion).
-PyJWT>=2.13.0
+PyJWT>=2.14.0
 pyotp>=2.10.0
 argon2-cffi>=25.1.0
 authlib>=1.8.0
