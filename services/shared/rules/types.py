@@ -110,3 +110,31 @@ class EvaluationSummary:
             return None
         # #1354 — errors count against compliance, not as skips.
         return self.failed == 0 and self.errored == 0
+
+    @property
+    def verdict(self) -> str:
+        """Persistable event-level verdict: ``pass`` | ``fail`` | ``no_verdict``.
+
+        This is what ``RulesEngine`` stamps on
+        ``fsma.traceability_events.evaluation_verdict`` so SQL consumers
+        (FDA export, auditor list) can see the tri-state outcome instead of
+        re-deriving it from per-rule rows — which loses the summary-level
+        no-verdict context (non-FTL meta-pass) entirely.
+        """
+        compliant = self.compliant
+        if compliant is True:
+            return "pass"
+        if compliant is False:
+            return "fail"
+        return "no_verdict"
+
+    @property
+    def verdict_reason(self) -> Optional[str]:
+        """Why ``verdict`` is ``no_verdict``; ``None`` for pass/fail."""
+        if self.compliant is not None:
+            return None
+        if self.no_verdict_reason:
+            return self.no_verdict_reason
+        if self.total_rules == 0:
+            return "nothing_evaluated"
+        return "not_ftl_scoped"
