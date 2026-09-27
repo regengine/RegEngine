@@ -893,6 +893,9 @@ def _record_header_mapping_evidence(
     ledger receipt to the ingestion run, so the review queue and the export
     audit trail both see what Jev suggested and what code did with it.
     Returns the number of artifacts queued; failures are logged, not raised.
+
+    This is synchronous psycopg I/O: the async route calls it through
+    ``run_in_threadpool`` so the round-trips never block the event loop.
     """
     try:
         artifacts = build_field_mapping_artifacts(
@@ -1019,7 +1022,8 @@ async def ingest_csv(
 
     artifacts_recorded = 0
     if header_mapping.ok and header_mapping.suggestions:
-        artifacts_recorded = _record_header_mapping_evidence(
+        artifacts_recorded = await run_in_threadpool(
+            _record_header_mapping_evidence,
             header_mapping,
             tenant_id=tenant_id,
             source_hash=receipt.sha256,
