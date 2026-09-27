@@ -65,7 +65,7 @@ GOOD_BODY = {
 
 
 def _settings(**overrides) -> JevSettings:
-    base = {"api_key": "test-key", "max_retries": 0, "timeout_seconds": 1.0}
+    base = {"api_key": "test-key", "max_retries": 0, "timeout_seconds": 1.0}  # pragma: allowlist secret
     base.update(overrides)
     return JevSettings(**base)
 
@@ -346,7 +346,7 @@ def test_settings_parse_overrides_and_strip_whitespace():
             "REGENGINE_JEV_REVIEW_CONFIDENCE": "0.6",
         }
     )
-    assert settings.api_key == "key"
+    assert settings.api_key == "key"  # pragma: allowlist secret
     assert settings.model == "jev-latest"
     assert settings.base_url == "https://gw.example.test"
     assert settings.timeout_seconds == 2.5
