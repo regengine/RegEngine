@@ -36,6 +36,7 @@ from shared.jev.header_mapping import (
     build_state,
     collect_sample_values,
     normalize_csv_header,
+    outranked_columns,
     suggest_header_mappings,
     unrecognized_headers,
 )
@@ -209,6 +210,56 @@ def test_target_already_present_in_file_is_not_applied():
 
     assert result.applied_mapping == {}
     assert result.suggestions[0].blocked_reason == "target_present"
+
+
+LOT_PRECEDENCE = (("traceability_lot_code", "tlc", "lot_code"),)
+LOCATION_PRECEDENCE = (("location_name", "ship_from_location", "receiving_location", "location"),)
+
+
+def test_outranked_columns_follow_parser_precedence():
+    dates = ("event_date", "harvest_date", "ship_date")
+    assert outranked_columns("event_date", (dates,)) == ("harvest_date", "ship_date")
+    assert outranked_columns("harvest_date", (dates,)) == ("ship_date",)
+    assert outranked_columns("ship_date", (dates,)) == ()
+    assert outranked_columns("traceability_lot_code", LOT_PRECEDENCE) == ("tlc", "lot_code")
+    assert outranked_columns("quantity", LOT_PRECEDENCE) == ()
+
+
+def test_mapping_that_would_outrank_a_column_the_file_carries_is_not_applied():
+    # The parser reads traceability_lot_code before tlc, so applying "Lot #"
+    # under the canonical key would replace the tlc values the file provides.
+    answers = {"Lot #": _choice("traceability_lot_code", 0.99)}
+    decider = _decider(_transport(answers), apply_header_mappings=True)
+    result = suggest_header_mappings(
+        ["Lot #", "tlc", "quantity"], recognized=RECOGNIZED | {"tlc"}, decider=decider, precedence=LOT_PRECEDENCE
+    )
+
+    assert result.applied_mapping == {}
+    (suggestion,) = result.suggestions
+    assert suggestion.band is ConfidenceBand.AUTO_APPLY
+    assert suggestion.applied is False
+    assert suggestion.blocked_reason == "shadows_existing_column"
+    assert suggestion.shadowed_columns == ("tlc",)
+    assert suggestion.to_dict()["shadowed_columns"] == ["tlc"]
+
+    (artifact,) = build_field_mapping_artifacts(
+        result, tenant_id="00000000-0000-0000-0000-000000000001", source_hash=SOURCE_HASH
+    )
+    assert artifact.requires_human_review is True
+    assert "already carries tlc" in artifact.payload.rationale
+
+
+def test_mapping_onto_a_lower_precedence_key_is_still_applied():
+    # location_name outranks ship_from_location, so a mapped ship_from_location
+    # can never replace the file's location_name: it only fills the shipping KDE.
+    answers = {"Origin": _choice("ship_from_location", 0.96)}
+    decider = _decider(_transport(answers), apply_header_mappings=True)
+    result = suggest_header_mappings(
+        ["Origin", "location_name", "quantity"], recognized=RECOGNIZED, decider=decider, precedence=LOCATION_PRECEDENCE
+    )
+
+    assert result.applied_mapping == {"origin": "ship_from_location"}
+    assert result.suggestions[0].shadowed_columns == ()
 
 
 def test_unknown_choice_label_is_treated_as_no_match():

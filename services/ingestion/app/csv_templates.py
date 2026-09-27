@@ -12,7 +12,7 @@ import csv
 import io
 import logging
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -30,6 +30,7 @@ from shared.jev.header_mapping import (
     build_field_mapping_artifacts,
     collect_sample_values,
     normalize_csv_header,
+    outranked_columns,
     suggest_header_mappings,
     unrecognized_headers,
 )
@@ -306,6 +307,59 @@ _DATE_FIELDS = [
 # Columns that might hold the CTE type in a mixed-type CSV
 _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
 
+# Fallback chains: when several columns can supply the same field, the first
+# present, non-empty one wins. ``parse_csv_rows`` reads through these tuples
+# (never through ad-hoc ``row.get(a) or row.get(b)`` chains) so the Jev apply
+# policy below can see the same precedence: a mapped column copied under a
+# key that outranks a column the file already carries would silently replace
+# the uploader's own value.
+_LOT_CODE_COLUMNS = ("traceability_lot_code", "tlc", "lot_code")
+_PRODUCT_COLUMNS = ("product_description", "product", "description")
+_QUANTITY_COLUMNS = ("quantity", "qty")
+_UNIT_COLUMNS = ("unit_of_measure", "uom")
+_LOCATION_GLN_COLUMNS = ("location_gln", "ship_from_gln", "receiving_gln", "gln")
+_LOCATION_NAME_COLUMNS = (
+    "location_name",
+    "ship_from_location",
+    "receiving_location",
+    "location_identifier",
+    "facility_name",
+    "location",
+)
+_SHIP_TO_COLUMNS = ("ship_to_location", "destination")
+_COLUMN_PRECEDENCE: tuple[tuple[str, ...], ...] = (
+    tuple(_DATE_FIELDS),
+    tuple(_CTE_TYPE_COLUMNS),
+    _LOT_CODE_COLUMNS,
+    _PRODUCT_COLUMNS,
+    _QUANTITY_COLUMNS,
+    _UNIT_COLUMNS,
+    _LOCATION_GLN_COLUMNS,
+    _LOCATION_NAME_COLUMNS,
+    _SHIP_TO_COLUMNS,
+)
+
+
+def _first_present(row: Mapping[str, Optional[str]], keys: Sequence[str]) -> str:
+    """The first non-empty value among ``keys`` in ``row`` (parser precedence), else ``""``."""
+    for key in keys:
+        value = row.get(key)
+        if value:
+            return value
+    return ""
+
+
+def _row_provides(row: Mapping[str, Optional[str]], canonical_field: str) -> bool:
+    """True when copying a mapped value under ``canonical_field`` would replace one the row carries.
+
+    That is the case when the row already has ``canonical_field`` itself, or a
+    non-empty column the parser consults only after it (see
+    ``_COLUMN_PRECEDENCE``): the copy would outrank that column.
+    """
+    if row.get(canonical_field):
+        return True
+    return any(row.get(key) for key in outranked_columns(canonical_field, _COLUMN_PRECEDENCE))
+
 
 def _detect_row_cte_type(row: dict, fallback: Optional[str]) -> Optional[str]:
     """Detect the CTE type from a row, checking known columns then falling back."""
@@ -333,28 +387,6 @@ _CTE_DATE_KDE: dict[str, str] = {
 # are the only columns the Jev header-mapping step is asked about.
 _RECOGNIZED_COLUMNS: frozenset[str] = frozenset(
     {
-        "traceability_lot_code",
-        "tlc",
-        "lot_code",
-        "product_description",
-        "product",
-        "description",
-        "quantity",
-        "qty",
-        "unit_of_measure",
-        "uom",
-        "location_gln",
-        "ship_from_gln",
-        "receiving_gln",
-        "gln",
-        "location_name",
-        "ship_from_location",
-        "receiving_location",
-        "location_identifier",
-        "facility_name",
-        "location",
-        "ship_to_location",
-        "destination",
         "input_lot_codes",
         "input_quantities",
         "input_units_of_measure",
@@ -362,8 +394,7 @@ _RECOGNIZED_COLUMNS: frozenset[str] = frozenset(
         # Read from ``kdes`` by ``normalize_webhook_event`` (transport_reference).
         "carrier",
     }
-    | set(_DATE_FIELDS)
-    | set(_CTE_TYPE_COLUMNS)
+    | {key for chain in _COLUMN_PRECEDENCE for key in chain}
     | {column for columns in CTE_COLUMNS.values() for column, _, _ in columns}
     | {kde for kdes in REQUIRED_KDES_BY_CTE.values() for kde in kdes}
 )
@@ -385,7 +416,7 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
         # reports it missing and the ship-to rule fails on the event, which
         # is the true state of the record.
         if "ship_to_location" not in kdes:
-            ship_to = row.get("ship_to_location") or row.get("destination")
+            ship_to = _first_present(row, _SHIP_TO_COLUMNS)
             if ship_to:
                 kdes["ship_to_location"] = ship_to
     elif row_cte in ("receiving", "first_land_based_receiving"):
@@ -394,17 +425,18 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
 
     # Inject standard fields the validator checks in KDEs
     for kde_key, row_keys in [
-        ("traceability_lot_code", ["traceability_lot_code", "tlc", "lot_code"]),
-        ("product_description", ["product_description", "product", "description"]),
-        ("quantity", ["quantity", "qty"]),
-        ("unit_of_measure", ["unit_of_measure", "uom"]),
-        ("location_name", ["location_name", "facility_name", "location"]),
+        ("traceability_lot_code", _LOT_CODE_COLUMNS),
+        ("product_description", _PRODUCT_COLUMNS),
+        ("quantity", _QUANTITY_COLUMNS),
+        ("unit_of_measure", _UNIT_COLUMNS),
+        # Deliberately narrower than _LOCATION_NAME_COLUMNS: the ship-from and
+        # receiving columns are their own KDEs and must not double as this one.
+        ("location_name", ("location_name", "facility_name", "location")),
     ]:
         if kde_key not in kdes:
-            for rk in row_keys:
-                if row.get(rk):
-                    kdes[kde_key] = row[rk]
-                    break
+            value = _first_present(row, row_keys)
+            if value:
+                kdes[kde_key] = value
 
 
 def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) -> list[str]:
@@ -671,8 +703,11 @@ def parse_csv_rows(
     ``header_mapping`` (``normalised source column -> canonical column``) is
     the set of Jev header suggestions that passed the apply policy in
     ``shared.jev.header_mapping``. Each mapped value is copied under the
-    canonical key before the row is read; the source column is left in place
-    so the raw column still reaches ``kdes`` and nothing is lost.
+    canonical key before the row is read, unless the row already provides
+    that field through the canonical key or a column the parser consults
+    after it (``_row_provides``): a mapping never replaces a value the file
+    carries. The source column is left in place so the raw column still
+    reaches ``kdes`` and nothing is lost.
 
     Returns ``(events, parse_errors, kde_warnings)``.
     """
@@ -691,7 +726,7 @@ def parse_csv_rows(
         if header_mapping:
             for source_key, canonical_field in header_mapping.items():
                 value = row.get(source_key)
-                if value and not row.get(canonical_field):
+                if value and not _row_provides(row, canonical_field):
                     row[canonical_field] = value
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
@@ -709,7 +744,7 @@ def parse_csv_rows(
             # Date: accept any human format. An unreadable or empty date
             # rejects the row; a placeholder timestamp would enter the hash
             # chain as evidence of when the event happened.
-            raw_date = next((row[f] for f in _DATE_FIELDS if row.get(f)), "")
+            raw_date = _first_present(row, _DATE_FIELDS)
             event_time_raw = (row.get("event_time") or "").strip()
             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
             if ts is None:
@@ -717,27 +752,13 @@ def parse_csv_rows(
                 continue
 
             # Location: strip whitespace and expand abbreviations
-            loc_gln = (
-                row.get("location_gln")
-                or row.get("ship_from_gln")
-                or row.get("receiving_gln")
-                or row.get("gln")
-                or None
-            )
-            _loc_raw = (
-                row.get("location_name")
-                or row.get("ship_from_location")
-                or row.get("receiving_location")
-                or row.get("location_identifier")
-                or row.get("facility_name")
-                or row.get("location")
-                or ""
-            )
+            loc_gln = _first_present(row, _LOCATION_GLN_COLUMNS) or None
+            _loc_raw = _first_present(row, _LOCATION_NAME_COLUMNS)
             loc_name = _normalize_location(_loc_raw) if _loc_raw else None
 
             # Unit of measure: map abbreviations before Pydantic sees them.
             # No default: a unit the uploader did not record is not "units".
-            uom_raw = row.get("unit_of_measure") or row.get("uom")
+            uom_raw = _first_present(row, _UNIT_COLUMNS)
             if not uom_raw:
                 parse_errors.append(f"Row {row_num}: unit_of_measure is required")
                 continue
@@ -745,7 +766,7 @@ def parse_csv_rows(
 
             # Quantity: required and numeric. The generic exception handler
             # below would reject the row too, but with an opaque message.
-            quantity_raw = row.get("quantity") or row.get("qty")
+            quantity_raw = _first_present(row, _QUANTITY_COLUMNS)
             if not quantity_raw:
                 parse_errors.append(f"Row {row_num}: quantity is required")
                 continue
@@ -756,7 +777,7 @@ def parse_csv_rows(
                 continue
 
             # Lot code: extract and run integrity checks
-            lot_code = row.get("traceability_lot_code") or row.get("tlc") or row.get("lot_code") or ""
+            lot_code = _first_present(row, _LOT_CODE_COLUMNS)
             for integrity_warn in _check_lot_code_integrity(lot_code):
                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
 
@@ -809,9 +830,7 @@ def parse_csv_rows(
             event = IngestEvent(
                 cte_type=WebhookCTEType(row_cte),
                 traceability_lot_code=lot_code,
-                product_description=(
-                    row.get("product_description") or row.get("product") or row.get("description") or ""
-                ),
+                product_description=_first_present(row, _PRODUCT_COLUMNS),
                 quantity=quantity,
                 unit_of_measure=uom,
                 location_gln=loc_gln,
@@ -874,6 +893,7 @@ async def _suggest_header_mappings_for_upload(text: str) -> HeaderMappingResult:
             recognized=_RECOGNIZED_COLUMNS,
             samples=samples,
             decider=decider,
+            precedence=_COLUMN_PRECEDENCE,
         )
     except Exception:  # noqa: BLE001 - a suggestion failure must never reject an upload.
         logger.exception("csv_header_mapping_failed")

@@ -53,8 +53,11 @@ can gate on.
    column under its canonical name, and only when the answer is in the
    `AUTO_APPLY` band (default `>= 0.90`), clears the agent-artifact
    human-review threshold (`0.85`), the target column is absent from the
-   file, and no other column competes for the same target. The source column
-   is left in place so nothing leaves the evidence trail.
+   file, no column the parser would consult after the target is present
+   either (a mapped column must never outrank a value the file carries, e.g.
+   `tlc` when the target is `traceability_lot_code`), and no other column
+   competes for the same target. The source column is left in place so
+   nothing leaves the evidence trail.
 5. Pin the model (`jev-1.13.0`) rather than the floating `jev-latest` alias,
    because the confidence thresholds are calibrated against a specific
    model. The concrete model name from each response is recorded anyway.

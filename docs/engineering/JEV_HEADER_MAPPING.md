@@ -70,14 +70,20 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
 
 | Band | Condition | What code does |
 | --- | --- | --- |
-| `auto_apply` | `confidence >= REGENGINE_JEV_AUTO_APPLY_CONFIDENCE` (0.90) | Artifact queued. Applied to rows **only if** all of: `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`; `confidence >= 0.85` (agent-artifact human-review threshold); target column not already in the file; no other column in the same band names the same target. |
+| `auto_apply` | `confidence >= REGENGINE_JEV_AUTO_APPLY_CONFIDENCE` (0.90) | Artifact queued. Applied to rows **only if** all of: `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`; `confidence >= 0.85` (agent-artifact human-review threshold); target column not already in the file; no column the parser reads *after* the target is in the file either (`tlc` for `traceability_lot_code`, `qty` for `quantity`, any later date column for `event_date`, ...: a mapped column must never outrank a value the file carries); no other column in the same band names the same target. |
 | `review` | `REGENGINE_JEV_REVIEW_CONFIDENCE` (0.50) `<= confidence <` auto-apply | Artifact queued with `requires_human_review=true`. Never applied. |
 | `reject` | below the review bound | Returned on the response only. No artifact, never applied. |
 | `no_match` | the model picked the no-match option | Returned on the response only. |
 
 `blocked_reason` on each suggestion names which condition stopped an apply:
 `apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`,
-`target_present`, `conflict`, `no_match`.
+`target_present`, `shadows_existing_column`, `conflict`, `no_match`. The
+parser's fallback chains (`_COLUMN_PRECEDENCE` in
+`services/ingestion/app/csv_templates.py`) are the single source for
+`shadows_existing_column`; the artifact rationale names the column that
+would have been outranked. `parse_csv_rows` applies the same rule per row:
+a mapped value is copied only when the row has neither the canonical key
+nor a later column in its chain filled in.
 
 Applied mappings are also written to the application log as
 `csv_header_mappings_applied` (column names only).

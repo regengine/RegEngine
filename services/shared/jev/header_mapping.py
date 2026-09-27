@@ -306,6 +306,7 @@ class HeaderMappingSuggestion:
     probabilities: dict[str, float] = field(default_factory=dict)
     applied: bool = False
     blocked_reason: Optional[str] = None
+    shadowed_columns: tuple[str, ...] = ()
     sample_value: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -318,6 +319,7 @@ class HeaderMappingSuggestion:
             "probabilities": dict(self.probabilities),
             "applied": self.applied,
             "blocked_reason": self.blocked_reason,
+            "shadowed_columns": list(self.shadowed_columns),
         }
 
 
@@ -347,6 +349,26 @@ def _top_probabilities(probabilities: Mapping[str, float], limit: int = 3) -> di
     return {label: round(float(p), 4) for label, p in ordered[:limit]}
 
 
+def outranked_columns(canonical_field: str, precedence: Sequence[Sequence[str]]) -> tuple[str, ...]:
+    """Columns the parser consults only after ``canonical_field``.
+
+    ``precedence`` lists, per field, the columns the parser tries in order
+    (the first non-empty one wins). A value copied under ``canonical_field``
+    would outrank every later column in the same chain, so a mapping onto it
+    is refused when the file already carries one of them: applying it would
+    silently replace a value the uploader provided.
+    """
+    outranked: list[str] = []
+    for chain in precedence:
+        keys = list(chain)
+        if canonical_field not in keys:
+            continue
+        for key in keys[keys.index(canonical_field) + 1 :]:
+            if key != canonical_field and key not in outranked:
+                outranked.append(key)
+    return tuple(outranked)
+
+
 def _decide(
     columns: Sequence[str],
     answers: Mapping[str, Any],
@@ -355,6 +377,7 @@ def _decide(
     thresholds: ConfidenceThresholds,
     apply_enabled: bool,
     samples: Mapping[str, Sequence[str]] | None,
+    precedence: Sequence[Sequence[str]] = (),
 ) -> list[HeaderMappingSuggestion]:
     """Turn Choice answers into suggestions and apply the policy deterministically."""
     provisional: list[dict[str, Any]] = []
@@ -384,6 +407,9 @@ def _decide(
     suggestions: list[HeaderMappingSuggestion] = []
     for item in provisional:
         canonical = item["canonical"]
+        shadowed: tuple[str, ...] = ()
+        if canonical is not None:
+            shadowed = tuple(c for c in outranked_columns(canonical, precedence) if c in present_keys)
         blocked: Optional[str] = None
         if canonical is None:
             blocked = "no_match"
@@ -395,6 +421,8 @@ def _decide(
             blocked = "apply_disabled"
         elif canonical in present_keys:
             blocked = "target_present"
+        elif shadowed:
+            blocked = "shadows_existing_column"
         elif candidates[canonical] > 1:
             blocked = "conflict"
         sample = None
@@ -411,6 +439,7 @@ def _decide(
                 probabilities=item["probabilities"],
                 applied=blocked is None,
                 blocked_reason=blocked,
+                shadowed_columns=shadowed,
                 sample_value=sample,
             )
         )
@@ -451,12 +480,15 @@ def suggest_header_mappings(
     recognized: Collection[str],
     samples: Mapping[str, Sequence[str]] | None = None,
     decider: JevDecider | None = None,
+    precedence: Sequence[Sequence[str]] = (),
 ) -> HeaderMappingResult:
     """Ask Jev about every unrecognised header. Never raises.
 
-    ``recognized`` is the parser's set of normalised column names. The
-    decider's settings supply thresholds and the apply switch, so the policy
-    is configured in one place.
+    ``recognized`` is the parser's set of normalised column names.
+    ``precedence`` lists the parser's fallback chains (see
+    :func:`outranked_columns`) so a mapping is never applied where it would
+    outrank a column the file already carries. The decider's settings supply
+    thresholds and the apply switch, so the policy is configured in one place.
     """
     decider = decider if decider is not None else get_jev_decider()
     settings = decider.settings
@@ -501,6 +533,7 @@ def suggest_header_mappings(
         thresholds=thresholds,
         apply_enabled=apply_enabled,
         samples=samples,
+        precedence=precedence,
     )
     logger.info(
         "jev.header_mapping.suggested",
@@ -522,6 +555,13 @@ def suggest_header_mappings(
     )
 
 
+def _blocked_detail(suggestion: HeaderMappingSuggestion) -> str:
+    if not suggestion.shadowed_columns:
+        return ""
+    columns = ", ".join(suggestion.shadowed_columns)
+    return f"; the file already carries {columns}, which the parser reads only after {suggestion.canonical_field}"
+
+
 def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult) -> str:
     evidence = result.evidence
     parts = [
@@ -531,7 +571,7 @@ def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult)
         f"(auto_apply >= {result.thresholds.auto_apply}, review >= {result.thresholds.review}).",
         "Applied to the upload's rows by deterministic code."
         if suggestion.applied
-        else f"Not applied to rows (reason: {suggestion.blocked_reason}).",
+        else f"Not applied to rows (reason: {suggestion.blocked_reason}{_blocked_detail(suggestion)}).",
     ]
     if evidence is not None:
         parts.append(

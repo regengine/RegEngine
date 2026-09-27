@@ -32,7 +32,7 @@ from app.webhook_models import EventResult, IngestResponse
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.jev import JevDecider, JevSettings
-from shared.jev.header_mapping import CANONICAL_FIELD_NAMES, NO_MATCH
+from shared.jev.header_mapping import CANONICAL_FIELD_NAMES, NO_MATCH, outranked_columns
 
 TENANT = str(uuid.uuid4())
 RUN_ID = str(uuid.uuid4())
@@ -46,6 +46,15 @@ CSV_BODY = (
     "TLC-001,,Kale,10,lbs,2026-04-17,Farm A,REF-1,call 555-123-4567\n"
     "TLC-002,,Chard,5,lbs,2026-04-17,Farm A,REF-2,\n"
     ",TLC-003,Beet,7,lbs,2026-04-17,Farm A,REF-3,\n"
+).encode()
+
+# The same upload without the ``tlc`` column: nothing in the file competes
+# with a mapped lot code, so apply mode may act on every row.
+CSV_BODY_NO_ALIAS = (
+    "Lot #,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document,Notes\n"
+    "TLC-001,Kale,10,lbs,2026-04-17,Farm A,REF-1,call 555-123-4567\n"
+    "TLC-002,Chard,5,lbs,2026-04-17,Farm A,REF-2,\n"
+    "TLC-003,Beet,7,lbs,2026-04-17,Farm A,REF-3,\n"
 ).encode()
 
 
@@ -247,7 +256,7 @@ def test_advisory_mode_suggests_records_and_leaves_rows_alone(harness):
 def test_apply_mode_maps_the_column_and_records_reviewed_evidence(harness):
     harness["use_decider"](_decider(_transport(DEFAULT_ANSWERS), apply_header_mappings=True))
 
-    resp = _post(_client())
+    resp = _post(_client(), CSV_BODY_NO_ALIAS)
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -257,8 +266,6 @@ def test_apply_mode_maps_the_column_and_records_reviewed_evidence(harness):
     # The source column still reaches the KDEs: nothing is dropped from the evidence trail.
     assert payload.events[0].kdes["lot_#"] == "TLC-001"
     assert payload.events[0].kdes["traceability_lot_code"] == "TLC-001"
-    # The row that already had a lot code is untouched by the mapping.
-    assert "lot_#" not in payload.events[2].kdes
 
     suggestion = next(s for s in body["header_mapping_suggestions"] if s["source_header"] == "Lot #")
     assert suggestion["applied"] is True and suggestion["blocked_reason"] is None
@@ -267,6 +274,34 @@ def test_apply_mode_maps_the_column_and_records_reviewed_evidence(harness):
     (artifact,) = harness["artifacts"]
     assert artifact.requires_human_review is False
     assert "applied" in artifact.suggestion
+
+
+def test_apply_mode_never_outranks_a_column_the_file_carries(harness):
+    # CSV_BODY carries ``tlc``, which the parser reads right after
+    # traceability_lot_code: applying "Lot #" would replace TLC-003 on the row
+    # that provides it through ``tlc``. The suggestion is recorded for review
+    # instead, and the rows parse exactly as they do without Jev.
+    harness["use_decider"](_decider(_transport(DEFAULT_ANSWERS), apply_header_mappings=True))
+
+    resp = _post(_client())
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    suggestion = next(s for s in body["header_mapping_suggestions"] if s["source_header"] == "Lot #")
+    assert suggestion["band"] == "auto_apply"
+    assert suggestion["applied"] is False
+    assert suggestion["blocked_reason"] == "shadows_existing_column"
+    assert body["accepted"] == 1 and body["rejected"] == 2
+    (payload,) = harness["payloads"]
+    assert [e.traceability_lot_code for e in payload.events] == ["TLC-003"]
+    assert (
+        "traceability_lot_code" not in payload.events[0].kdes
+        or payload.events[0].kdes["traceability_lot_code"] == "TLC-003"
+    )
+
+    (artifact,) = harness["artifacts"]
+    assert artifact.requires_human_review is True
+    assert "already carries tlc" in artifact.payload.rationale
 
 
 def test_sample_values_are_sent_only_when_configured_and_are_redacted(harness):
@@ -370,3 +405,35 @@ def test_parse_csv_rows_default_is_unchanged():
     )
     assert [e.traceability_lot_code for e in mapped_events] == ["TLC-001", "TLC-002", "TLC-003"]
     assert mapped_errors == []
+
+
+def test_parse_csv_rows_mapping_never_replaces_a_value_the_row_provides():
+    # Row 2 provides its lot code through ``tlc``; the mapped "Lot #" must not
+    # outrank it. Row 3 has no lot code of its own, so the mapping fills it in.
+    text = (
+        "Lot #,tlc,product_description,quantity,unit_of_measure,harvest_date,location_name\n"
+        "MAPPED-1,FILE-1,Kale,10,lbs,2026-04-17,Farm A\n"
+        "MAPPED-2,,Chard,5,lbs,2026-04-17,Farm A\n"
+    )
+    events, errors, _ = ct.parse_csv_rows(text, "harvesting", header_mapping={"lot_#": "traceability_lot_code"})
+
+    assert errors == []
+    assert [e.traceability_lot_code for e in events] == ["FILE-1", "MAPPED-2"]
+
+
+def test_precedence_chains_pin_the_parser_order_the_policy_relies_on():
+    for chain in ct._COLUMN_PRECEDENCE:
+        assert len(chain) == len(set(chain))
+        assert set(chain) <= ct._RECOGNIZED_COLUMNS
+    assert outranked_columns("traceability_lot_code", ct._COLUMN_PRECEDENCE) == ("tlc", "lot_code")
+    assert outranked_columns("quantity", ct._COLUMN_PRECEDENCE) == ("qty",)
+    assert outranked_columns("location_name", ct._COLUMN_PRECEDENCE) == (
+        "ship_from_location",
+        "receiving_location",
+        "location_identifier",
+        "facility_name",
+        "location",
+    )
+    # event_date is read before every CTE-specific date column.
+    assert set(outranked_columns("event_date", ct._COLUMN_PRECEDENCE)) == set(ct._DATE_FIELDS) - {"event_date"}
+    assert outranked_columns("landing_date", ct._COLUMN_PRECEDENCE) == ()
