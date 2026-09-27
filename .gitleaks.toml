@@ -32,6 +32,9 @@ regexes = [
   '''(?i)(revision|down_revision)\s*[=:]\s*(Union\[[^\]]+\],\s*)?["'][0-9a-f]{12}["']''',
   # Inline pragma: allowlist secret markers in test code
   '''pragma:\s+allowlist\s+secret''',
+  # Placeholder API key value used in UI/docs example curl snippets
+  # (-H "X-RegEngine-API-Key: YOUR_API_KEY"); not a real credential
+  '''YOUR_API_KEY''',
 ]
 
 # Stop-words to exclude specific known test fixture values from historical
@@ -43,6 +46,11 @@ stopwords = [
   "s3cr3t-internal-2844",
   "test-internal-secret-2841",
   "internal-secret-for-2859",
+  # FSMA seed-data fact keys from 8f0069f6 (dict `key` fields, not credentials;
+  # kernel/reporting/worker/main.py no longer tracked)
+  "FSMA_204_TLC_ASSIGNMENT",
+  "FSMA_204_RETENTION_PERIOD",
+  "FSMA_204_KDE_SCOPE",
 ]
 
 paths = [
