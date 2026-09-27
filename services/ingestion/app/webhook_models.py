@@ -328,6 +328,37 @@ class IngestResponse(BaseModel):
     )
 
 
+class HeaderMappingSuggestionResult(BaseModel):
+    """One Jev suggestion for a CSV column the parser did not recognise.
+
+    ``applied`` is true only when deterministic code copied the column under
+    ``canonical_field`` for this upload (see ``shared.jev.header_mapping``);
+    otherwise ``blocked_reason`` says why the suggestion stayed advisory.
+    """
+
+    source_header: str = Field(..., description="Column header as it appeared in the file.")
+    source_key: str = Field(..., description="Normalised column key the parser sees.")
+    canonical_field: Optional[str] = Field(None, description="Suggested canonical FSMA 204 field; null for no match.")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Jev confidence in the selected field.")
+    band: str = Field(..., description="Confidence band: auto_apply, review, or reject.")
+    applied: bool = Field(False, description="Whether the mapping was applied to this upload's rows.")
+    blocked_reason: Optional[str] = Field(None, description="Why the mapping was not applied, when it was not.")
+
+
+class HeaderMappingEngineResult(BaseModel):
+    """Provenance for the header-mapping suggestions on a CSV upload."""
+
+    provider: str = Field("typesafe", description="Suggestion provider.")
+    status: str = Field(..., description="ok, no_unrecognized_headers, unavailable:<reason>, or error.")
+    model: Optional[str] = Field(None, description="Model that answered, as reported by the provider.")
+    request_id: Optional[str] = Field(None, description="Provider request id for the call.")
+    questions_version: Optional[str] = Field(None, description="Version of the question set that was asked.")
+    apply_enabled: bool = Field(False, description="Whether auto-apply of AUTO_APPLY-band mappings is switched on.")
+    auto_apply_confidence: Optional[float] = Field(None, description="Lower bound of the auto_apply band.")
+    review_confidence: Optional[float] = Field(None, description="Lower bound of the review band.")
+    artifacts_recorded: int = Field(0, description="Advisory field_mapping_suggestion artifacts queued for review.")
+
+
 class CsvIngestResponse(IngestResponse):
     """Response from POST /api/v1/ingest/csv (#2892).
 
@@ -349,6 +380,18 @@ class CsvIngestResponse(IngestResponse):
     kde_warning_count: int = Field(
         default=0,
         description="Number of entries in kde_warnings.",
+    )
+    # Both default so they stay out of ``required`` for the same replay
+    # reason as the KDE fields above. ``header_mapping_engine`` is null when
+    # the Jev integration is not configured, so the wire shape for tenants
+    # without it is unchanged apart from an empty list.
+    header_mapping_suggestions: List[HeaderMappingSuggestionResult] = Field(
+        default_factory=list,
+        description="Jev suggestions for columns the parser did not recognise (empty when not configured).",
+    )
+    header_mapping_engine: Optional[HeaderMappingEngineResult] = Field(
+        default=None,
+        description="Provenance for header_mapping_suggestions; null when the integration is not configured.",
     )
 
 

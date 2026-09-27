@@ -23,6 +23,7 @@ This document establishes governance over AI/ML models used in RegEngine for reg
 | NLP-002 | Confidence Scorer | Rule-based + ML | Score extraction confidence 0.0-1.0 | High |
 | NLP-003 | Entity Linker | Graph matching | Link extracted entities to knowledge graph | Medium |
 | NLP-004 | Threshold Parser | Regex + NER | Extract numeric thresholds with units | Medium |
+| ING-001 | Jev CSV Header Mapper | Calibrated classifier (TypeSafe AI Jev 1.13.0, external API) | Suggest the canonical FSMA 204 field for CSV column headers the parser does not recognise; advisory by default, applied only at >= 0.90 confidence when explicitly enabled (ADR-005) | Medium |
 
 ### Model Risk Tiers
 
@@ -59,6 +60,29 @@ Limitations:
   - Accuracy degrades on highly technical financial regulations
   - May misclassify conditional obligations
   - Not validated for non-English text
+```
+
+**Example: ING-001 Jev CSV Header Mapper**
+(`services/shared/jev/header_mapping.py`, `docs/engineering/JEV_HEADER_MAPPING.md`)
+
+```yaml
+Intended Use:
+  - Classify a CSV column header the parser does not recognise into one
+    canonical FSMA 204 field, or no_match, with a calibrated confidence
+  - Produce advisory field_mapping_suggestion artifacts for operator review
+
+Prohibited Use:
+  - Reading, extracting or normalising cell values (only headers are asked about)
+  - Applying a mapping below the 0.85 human-review threshold, without the
+    explicit REGENGINE_JEV_APPLY_HEADER_MAPPINGS opt-in, or when two columns
+    compete for the same target
+  - Any decision outside CSV column identification
+
+Limitations:
+  - Reads instructions literally; no arithmetic or date comparison
+  - English-first; lower accuracy on non-English headers
+  - Thresholds are vendor starting points, not yet validated on RegEngine uploads
+  - External processor: column headers (and optional redacted samples) leave the process
 ```
 
 ### 3.2 Methodology Documentation

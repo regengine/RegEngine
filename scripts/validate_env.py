@@ -110,6 +110,9 @@ _CREDENTIAL_VARS: list[str] = [
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
     "GRAFANA_PASSWORD",
     "SUPABASE_SERVICE_ROLE_KEY",
+    # Optional TypeSafe AI credential (Jev header-mapping suggestions). Never
+    # required; only weak-value scanned when set.
+    "TYPESAFE_API_KEY",
 ]
 
 
