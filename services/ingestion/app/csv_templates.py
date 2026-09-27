@@ -12,13 +12,28 @@ import csv
 import io
 import logging
 import re
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Optional
 
 from dateutil import parser as _dateutil_parser
 from dateutil.parser import ParserError as _DateParserError
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
+from shared.agent_task_bridge import enqueue_agent_artifact_task
+from shared.database import SessionLocal
+from shared.jev import get_jev_decider
+from shared.jev.header_mapping import (
+    QUESTIONS_VERSION as _JEV_QUESTIONS_VERSION,
+    HeaderMappingResult,
+    build_field_mapping_artifacts,
+    collect_sample_values,
+    normalize_csv_header,
+    suggest_header_mappings,
+    unrecognized_headers,
+)
+from shared.tenant_context import set_tenant_guc
 
 from .authz import IngestionPrincipal, require_permission
 from .config import get_settings
@@ -28,6 +43,8 @@ from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
     CsvIngestResponse,
+    HeaderMappingEngineResult,
+    HeaderMappingSuggestionResult,
     IngestEvent,
     WebhookCTEType,
     WebhookPayload,
@@ -309,6 +326,47 @@ _CTE_DATE_KDE: dict[str, str] = {
     "transformation": "transformation_date",
     "first_land_based_receiving": "landing_date",
 }
+
+# Every normalised column name ``parse_csv_rows`` (or a validator it feeds)
+# reads by name. A header outside this set is opaque to the parser: it passes
+# through into ``kdes`` unchanged and can never satisfy a required KDE. Those
+# are the only columns the Jev header-mapping step is asked about.
+_RECOGNIZED_COLUMNS: frozenset[str] = frozenset(
+    {
+        "traceability_lot_code",
+        "tlc",
+        "lot_code",
+        "product_description",
+        "product",
+        "description",
+        "quantity",
+        "qty",
+        "unit_of_measure",
+        "uom",
+        "location_gln",
+        "ship_from_gln",
+        "receiving_gln",
+        "gln",
+        "location_name",
+        "ship_from_location",
+        "receiving_location",
+        "location_identifier",
+        "facility_name",
+        "location",
+        "ship_to_location",
+        "destination",
+        "input_lot_codes",
+        "input_quantities",
+        "input_units_of_measure",
+        "event_time",
+        # Read from ``kdes`` by ``normalize_webhook_event`` (transport_reference).
+        "carrier",
+    }
+    | set(_DATE_FIELDS)
+    | set(_CTE_TYPE_COLUMNS)
+    | {column for columns in CTE_COLUMNS.values() for column, _, _ in columns}
+    | {kde for kdes in REQUIRED_KDES_BY_CTE.values() for kde in kdes}
+)
 
 
 def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optional[str], date_val: str) -> None:
@@ -598,13 +656,23 @@ def _parse_input_quantities(
     return inputs, None, None
 
 
-def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[IngestEvent], list[str], list[str]]:
+def parse_csv_rows(
+    text: str,
+    fallback_cte: Optional[str] = None,
+    header_mapping: Optional[Mapping[str, str]] = None,
+) -> tuple[list[IngestEvent], list[str], list[str]]:
     """Parse CSV text into ``IngestEvent`` objects.
 
     Shared by the ``/ingest/csv`` upload route and any other ingestion
     entrypoint (e.g. the Postmark inbound-email webhook) that needs to accept
     the same CSV structure and produce identical validation results — this
     is the single place CTE/KDE row-mapping logic lives.
+
+    ``header_mapping`` (``normalised source column -> canonical column``) is
+    the set of Jev header suggestions that passed the apply policy in
+    ``shared.jev.header_mapping``. Each mapped value is copied under the
+    canonical key before the row is read; the source column is left in place
+    so the raw column still reaches ``kdes`` and nothing is lost.
 
     Returns ``(events, parse_errors, kde_warnings)``.
     """
@@ -619,7 +687,12 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
         if row_num - 1 > MAX_CSV_ROWS:
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
             break
-        row = {(k or "").strip().lower().replace(" ", "_"): (v or "").strip() for k, v in row.items()}
+        row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+        if header_mapping:
+            for source_key, canonical_field in header_mapping.items():
+                value = row.get(source_key)
+                if value and not row.get(canonical_field):
+                    row[canonical_field] = value
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
             continue
@@ -761,6 +834,120 @@ def parse_csv_rows(text: str, fallback_cte: Optional[str] = None) -> tuple[list[
     return events, parse_errors, kde_warnings
 
 
+# ---------------------------------------------------------------------------
+# Jev header-mapping suggestions (shared.jev.header_mapping)
+#
+# Optional: without TYPESAFE_API_KEY every helper below is a no-op and the
+# route behaves exactly as before. With it, unrecognised column headers are
+# sent to Jev once per upload, each answer is recorded as an advisory
+# ``field_mapping_suggestion`` agent artifact for the review queue, and only
+# with REGENGINE_JEV_APPLY_HEADER_MAPPINGS are AUTO_APPLY-band answers copied
+# onto the rows. No failure in this block can fail the upload.
+# ---------------------------------------------------------------------------
+
+
+def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], dict[str, list[str]]]:
+    """The header row and, when enabled, PII-redacted sample values for unrecognised columns."""
+    reader = csv.DictReader(io.StringIO(text))
+    headers = [header or "" for header in (reader.fieldnames or [])]
+    if sample_limit <= 0 or not headers:
+        return headers, {}
+    unknown = unrecognized_headers(headers, _RECOGNIZED_COLUMNS)
+    if not unknown:
+        return headers, {}
+    data_rows = (row for row in reader if not str(next(iter(row.values()), "") or "").startswith("#"))
+    return headers, collect_sample_values(data_rows, unknown, sample_limit)
+
+
+async def _suggest_header_mappings_for_upload(text: str) -> HeaderMappingResult:
+    """Ask Jev about the upload's unrecognised headers, off the event loop. Never raises."""
+    decider = get_jev_decider()
+    if not decider.enabled:
+        return HeaderMappingResult(status="disabled", thresholds=decider.settings.thresholds)
+    try:
+        headers, samples = _csv_headers_and_samples(text, decider.settings.header_sample_values)
+        if not headers:
+            return HeaderMappingResult(status="no_headers", thresholds=decider.settings.thresholds)
+        return await run_in_threadpool(
+            suggest_header_mappings,
+            headers,
+            recognized=_RECOGNIZED_COLUMNS,
+            samples=samples,
+            decider=decider,
+        )
+    except Exception:  # noqa: BLE001 - a suggestion failure must never reject an upload.
+        logger.exception("csv_header_mapping_failed")
+        return HeaderMappingResult(status="error", thresholds=decider.settings.thresholds)
+
+
+def _record_header_mapping_evidence(
+    result: HeaderMappingResult,
+    *,
+    tenant_id: str,
+    source_hash: str,
+    ingestion_run_id: Optional[str],
+) -> int:
+    """Queue advisory ``field_mapping_suggestion`` artifacts for the agent bridge.
+
+    The bridge persists them to ``fsma.agent_artifacts`` and appends a
+    ledger receipt to the ingestion run, so the review queue and the export
+    audit trail both see what Jev suggested and what code did with it.
+    Returns the number of artifacts queued; failures are logged, not raised.
+    """
+    try:
+        artifacts = build_field_mapping_artifacts(
+            result, tenant_id=tenant_id, source_hash=source_hash, ingestion_run_id=ingestion_run_id
+        )
+    except ValueError as exc:
+        logger.warning("csv_header_mapping_evidence_skipped reason=%s", exc)
+        return 0
+    if not artifacts:
+        return 0
+    session = SessionLocal()
+    try:
+        set_tenant_guc(session, str(tenant_id))
+        for artifact in artifacts:
+            enqueue_agent_artifact_task(session, artifact)
+        session.commit()
+    except Exception:  # noqa: BLE001 - evidence queueing is best-effort; the run itself is already retained.
+        session.rollback()
+        logger.exception(
+            "csv_header_mapping_evidence_failed source_hash=%s ingestion_run_id=%s applied=%d",
+            source_hash,
+            ingestion_run_id,
+            len(result.applied_mapping),
+        )
+        return 0
+    finally:
+        session.close()
+    logger.info(
+        "csv_header_mapping_evidence_queued artifacts=%d applied=%d ingestion_run_id=%s",
+        len(artifacts),
+        len(result.applied_mapping),
+        ingestion_run_id,
+    )
+    return len(artifacts)
+
+
+def _header_mapping_engine_result(
+    result: HeaderMappingResult, artifacts_recorded: int
+) -> Optional[HeaderMappingEngineResult]:
+    """Response provenance for the suggestions; ``None`` when Jev is not configured."""
+    if result.status == "disabled":
+        return None
+    evidence = result.evidence
+    return HeaderMappingEngineResult(
+        status=result.status,
+        model=evidence.model if evidence else None,
+        request_id=evidence.request_id if evidence else None,
+        questions_version=_JEV_QUESTIONS_VERSION if evidence else None,
+        apply_enabled=result.apply_enabled,
+        auto_apply_confidence=result.thresholds.auto_apply,
+        review_confidence=result.thresholds.review,
+        artifacts_recorded=artifacts_recorded,
+    )
+
+
 @router.post(
     "/ingest/csv",
     response_model=CsvIngestResponse,
@@ -795,7 +982,16 @@ async def ingest_csv(
     # Read and parse CSV
     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
     text = content.decode("utf-8-sig")  # Handle BOM
-    events, parse_errors, kde_warnings = parse_csv_rows(text, fallback_cte)
+    header_mapping = await _suggest_header_mappings_for_upload(text)
+    if header_mapping.applied_mapping:
+        logger.info(
+            "csv_header_mappings_applied count=%d mapping=%s",
+            len(header_mapping.applied_mapping),
+            sorted(header_mapping.applied_mapping.items()),
+        )
+    events, parse_errors, kde_warnings = parse_csv_rows(
+        text, fallback_cte, header_mapping=header_mapping.applied_mapping
+    )
 
     if not events and parse_errors:
         raise HTTPException(status_code=400, detail={"message": "No valid rows found", "errors": parse_errors})
@@ -820,6 +1016,15 @@ async def ingest_csv(
         x_regengine_api_key=x_regengine_api_key,
         source_file=receipt,
     )
+
+    artifacts_recorded = 0
+    if header_mapping.ok and header_mapping.suggestions:
+        artifacts_recorded = _record_header_mapping_evidence(
+            header_mapping,
+            tenant_id=tenant_id,
+            source_hash=receipt.sha256,
+            ingestion_run_id=response.ingestion_run_id,
+        )
 
     if parse_errors:
         from .webhook_models import EventResult
@@ -855,4 +1060,17 @@ async def ingest_csv(
         **response.model_dump(),
         kde_warnings=kde_warnings,
         kde_warning_count=len(kde_warnings),
+        header_mapping_suggestions=[
+            HeaderMappingSuggestionResult(
+                source_header=suggestion.source_header,
+                source_key=suggestion.source_key,
+                canonical_field=suggestion.canonical_field,
+                confidence=suggestion.confidence,
+                band=suggestion.band.value,
+                applied=suggestion.applied,
+                blocked_reason=suggestion.blocked_reason,
+            )
+            for suggestion in header_mapping.suggestions
+        ],
+        header_mapping_engine=_header_mapping_engine_result(header_mapping, artifacts_recorded),
     )

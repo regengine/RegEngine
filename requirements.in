@@ -130,6 +130,16 @@ langsmith>=0.12.4  # Transitive of langchain; pinned for CVE-2026-45134 and GHSA
 openai>=3.13.0
 jsonschema>=4.26.0
 
+# AI decisioning — TypeSafe AI "Jev" System One model (services/shared/jev/).
+# Returns calibrated Choice/Score/Noul answers for ingestion header mapping and
+# CTE-type suggestions; optional at runtime (no TYPESAFE_API_KEY -> disabled).
+# Pre-1.0 SDK: 0.6 -> 0.7 changed the Score criteria shape and swapped msgspec
+# for pydantic, so cap at the next minor and let Dependabot propose the bump.
+# Transitives are httpx2 (pydantic's maintained httpx fork; a separate import
+# name, coexists with httpx), httpcore2 and truststore — all pure-Python
+# wheels, so --require-hashes stays satisfiable on Railway.
+typesafe-sdk>=0.7.2,<0.8
+
 # Scheduler
 apscheduler>=3.11.3
 
