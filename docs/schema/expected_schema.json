@@ -4549,6 +4549,10 @@
         "nullable": true,
         "type": "text"
       },
+      "evaluation_verdict": {
+        "nullable": true,
+        "type": "text"
+      },
       "event_id": {
         "nullable": false,
         "type": "uuid"
@@ -4590,6 +4594,10 @@
         "type": "jsonb"
       },
       "lot_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "no_verdict_reason": {
         "nullable": true,
         "type": "text"
       },

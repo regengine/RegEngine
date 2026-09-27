@@ -141,12 +141,14 @@ def test_fetch_v2_events_executes_against_canonical_schema() -> None:
         # semantics. 'warn'/'skip' must map to passed=True, or
         # _event_to_fda_row_v2 renders the event FAIL and lists the warn
         # rule under "Rule Failures" in the FDA-facing CSV.
-        rule_results = sorted(event["rule_results"], key=lambda r: r["passed"])
+        # Since #3144 every rule row also carries the raw tri-state verdict
+        # in `result`, so auditors can tell warn from skip from pass.
+        rule_results = sorted(event["rule_results"], key=lambda r: (r["passed"], r["result"]))
         assert rule_results == [
-            {"rule_name": "KDE completeness", "passed": False, "why_failed": "missing harvest_date"},
-            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
-            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
-            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": False, "result": "fail", "why_failed": "missing harvest_date"},
+            {"rule_name": "KDE completeness", "passed": True, "result": "pass", "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": True, "result": "skip", "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": True, "result": "warn", "why_failed": None},
         ]
 
         # Fully-filtered query: exercises every branch of the WHERE builder.
