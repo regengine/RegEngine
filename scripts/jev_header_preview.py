@@ -11,6 +11,7 @@ policy. Nothing is ingested, persisted or queued, and no database is used.
     python3 scripts/jev_header_preview.py supplier.csv --json
     python3 scripts/jev_header_preview.py supplier.csv --sample-values 2 --simulate-apply
     python3 scripts/jev_header_preview.py supplier.csv --prompt-key
+    python3 scripts/jev_header_preview.py supplier.csv --cte-type shipping
 
 Configuration comes from the environment through ``shared.jev.JevSettings``
 (``TYPESAFE_API_KEY``, ``TYPESAFE_DEFAULT_MODEL``, ``TYPESAFE_BASE_URL`` and
@@ -19,14 +20,17 @@ the ``REGENGINE_JEV_*`` variables; see docs/engineering/JEV_HEADER_MAPPING.md).
 terminal; read from stdin otherwise), for this run only. The script never
 prints, logs or writes the key.
 
-What leaves the process is what production sends: the header row, plus
-PII-redacted sample values per unrecognised column only when
-``--sample-values`` (or ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0.
-Rows are never sent.
+What leaves the process is what production sends: the header row, the
+declared CTE when ``--cte-type`` is given (the route's ``cte_type`` form
+field, accepting the same values) and no row can contradict it (the
+report says when it was withheld and why), plus PII-redacted sample
+values per unrecognised column only when ``--sample-values`` (or
+``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0. Rows are never sent.
 
 Exit codes:
     0  suggestions received, or no unrecognised headers (no request made)
-    1  bad usage; unreadable, oversized or non-UTF-8 file; no header row; unexpected error
+    1  bad usage; unreadable, oversized or non-UTF-8 file; no header row; malformed header
+       row (status malformed_header: nothing is sent, with or without a key); unexpected error
     2  Jev not configured (no TYPESAFE_API_KEY) or switched off (REGENGINE_JEV_ENABLED)
     3  Jev unavailable (auth, rate limit, timeout, connection, server error, ...)
 """
@@ -98,7 +102,7 @@ if __name__ == "__main__":  # before the imports below can log anything
 from app import csv_templates as route  # noqa: E402
 from app.shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES  # noqa: E402
 from shared.jev import JevDecider, JevSettings  # noqa: E402
-from shared.jev.header_mapping import HeaderMappingResult, unrecognized_headers  # noqa: E402
+from shared.jev.header_mapping import MALFORMED_HEADER, HeaderMappingResult, unrecognized_headers  # noqa: E402
 from shared.jev.settings import (  # noqa: E402
     API_KEY_ENV,
     APPLY_HEADER_MAPPINGS_ENV,
@@ -149,12 +153,27 @@ def _sample_count(raw: str) -> int:
     return value
 
 
+def _cte_type(raw: str) -> str | None:
+    """Normalise ``--cte-type`` the way the route normalises its ``cte_type`` form field.
+
+    An empty value means "not declared", as an empty form field does.
+    """
+    if not raw:
+        return None
+    canonical = route._CTE_TYPE_ALIASES.get(raw.strip().lower().replace(" ", "_"))
+    if not canonical:
+        valid = ", ".join(sorted(set(route._CTE_TYPE_ALIASES.values())))
+        raise argparse.ArgumentTypeError(f"unknown CTE type '{raw}'; valid: {valid}")
+    return canonical
+
+
 def _parser() -> _Parser:
     parser = _Parser(
         prog=PROG,
         description=(
             "Preview Jev header-mapping suggestions for a local CSV, using the same code path as "
-            "POST /api/v1/ingest/csv. Sends the header row only (plus redacted samples if asked)."
+            "POST /api/v1/ingest/csv. Sends the header row only, plus the declared CTE name if --cte-type "
+            "is given and no row contradicts it, and redacted samples if asked."
         ),
     )
     parser.add_argument("csv_file", type=Path, help="CSV file to preview")
@@ -175,6 +194,13 @@ def _parser() -> _Parser:
         "--prompt-key",
         action="store_true",
         help=f"read the API key from a hidden prompt for this run instead of {API_KEY_ENV}",
+    )
+    parser.add_argument(
+        "--cte-type",
+        type=_cte_type,
+        metavar="CTE",
+        help="the CTE every row of the file records (for example shipping), as the route's cte_type "
+        "form field; omit for mixed-type files",
     )
     return parser
 
@@ -199,15 +225,15 @@ def _read_csv_text(path: Path) -> str:
         raise _UsageError(f"{path}: not UTF-8 text") from None
 
 
-def _header_row(path: Path, text: str) -> list[str]:
-    """The header row as the route reads it (same helper), or a usage error if there is none."""
+def _header_row(path: Path, text: str) -> tuple[list[str], str | None]:
+    """The header row as the route reads it (same helper) and why it is malformed, or a usage error if none."""
     try:
-        headers, _ = route._csv_headers_and_samples(text, 0)
+        headers, _, malformed = route._csv_headers_and_samples(text, 0)
     except csv.Error as exc:
         raise _UsageError(f"{path}: not parseable as CSV ({exc})") from None
     if not headers:
         raise _UsageError(f"{path}: no header row")
-    return headers
+    return headers, malformed
 
 
 def _resolve_settings(
@@ -238,7 +264,12 @@ def _exit_code(status: str) -> int:
     return EXIT_USAGE
 
 
-def _hint(status: str, settings: JevSettings, prompted: bool) -> str | None:
+def _hint(status: str, settings: JevSettings, prompted: bool, malformed: str | None = None) -> str | None:
+    if status == MALFORMED_HEADER:
+        return (
+            f"The header row is malformed ({malformed}), so nothing was sent: "
+            "check it for an unterminated quote or a line break inside a header."
+        )
     if status == "disabled":
         if not settings.api_key:
             if prompted:
@@ -261,6 +292,8 @@ def _build_report(
     *,
     simulated: bool,
     prompted: bool,
+    file_cte_type_dropped: str | None = None,
+    malformed_header_reason: str | None = None,
 ) -> dict[str, Any]:
     evidence = result.evidence
     suggestions = []
@@ -273,7 +306,7 @@ def _build_report(
         "file": str(path),
         "status": result.status,
         "exit_code": _exit_code(result.status),
-        "hint": _hint(result.status, settings, prompted),
+        "hint": _hint(result.status, settings, prompted, malformed_header_reason),
         "engine": {
             "provider": "typesafe",
             "requested_model": settings.model,
@@ -294,6 +327,9 @@ def _build_report(
         "request": {
             "header_count": len(headers),
             "unrecognized_headers": list(unknown),
+            "malformed_header_reason": malformed_header_reason,
+            "file_cte_type": result.file_cte_type,
+            "file_cte_type_dropped": file_cte_type_dropped,
             "truncated_columns": result.truncated_columns,
             "sample_values_per_column": settings.header_sample_values,
             "rows_sent": 0,
@@ -340,7 +376,11 @@ def _render_text(report: dict[str, Any]) -> str:
         f"review >= {policy['review_confidence']:.2f}, apply to rows: {apply_state}"
     )
     unknown = request["unrecognized_headers"]
-    columns = f"Columns: {request['header_count']} in the header row, {len(unknown)} unrecognised"
+    if request["malformed_header_reason"]:
+        # Never echo the "headers": they may be whole rows of the file.
+        columns = f"Columns: the header row is malformed: {request['malformed_header_reason']}"
+    else:
+        columns = f"Columns: {request['header_count']} in the header row, {len(unknown)} unrecognised"
     if request["truncated_columns"]:
         columns += f" ({request['truncated_columns']} over the per-upload cap, not asked)"
     lines.append(columns)
@@ -348,12 +388,16 @@ def _render_text(report: dict[str, Any]) -> str:
         # On an unavailable status the request may never have left (connection
         # refused, SDK-side refusal), so say what was attempted, not what was sent.
         label = "Sent:   " if report["status"] == "ok" else "Attempted:"
+        cte = f"file_cte_type {request['file_cte_type']}; " if request["file_cte_type"] else ""
         lines.append(
-            f"{label} header row; {request['sample_values_per_column']} redacted sample value(s) per "
+            f"{label} header row; {cte}{request['sample_values_per_column']} redacted sample value(s) per "
             "unrecognised column; no rows"
         )
-    elif report["status"] in ("disabled", "no_unrecognized_headers"):
+    elif report["status"] in ("disabled", "no_unrecognized_headers", MALFORMED_HEADER):
         lines.append("Sent:    nothing")
+    if request["file_cte_type_dropped"]:
+        verdict = "would be withheld from Jev" if report["status"] == "disabled" else "not sent to Jev"
+        lines.append(f"CTE:     --cte-type {verdict}: {request['file_cte_type_dropped']}")
     if unknown and not report["suggestions"]:
         lines.append("Unrecognised: " + ", ".join(unknown))
     if report["suggestions"]:
@@ -388,19 +432,37 @@ def main(
     try:
         args = _parser().parse_args(argv)
         text = _read_csv_text(args.csv_file)
-        headers = _header_row(args.csv_file, text)
+        headers, malformed = _header_row(args.csv_file, text)
     except _UsageError as exc:
         print(f"{PROG}: error: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
     settings = _resolve_settings(args, env, read_key)
-    decider = JevDecider(settings, transport=transport)
-    try:
-        result = asyncio.run(route._suggest_header_mappings_for_upload(text, decider=decider))
-    finally:
-        decider.close()
-
-    unknown = unrecognized_headers(headers, route._RECOGNIZED_COLUMNS)
+    unknown: list[str] = []
+    dropped: str | None = None
+    if malformed:
+        # The route's own check (_csv_headers_and_samples) says the "headers"
+        # may be row data. The route sends nothing for such a file; the
+        # preview sends nothing either, with or without a key.
+        result = HeaderMappingResult(
+            status=MALFORMED_HEADER, thresholds=settings.thresholds, apply_enabled=settings.apply_header_mappings
+        )
+    else:
+        decider = JevDecider(settings, transport=transport)
+        try:
+            result = asyncio.run(
+                route._suggest_header_mappings_for_upload(text, decider=decider, cte_type=args.cte_type)
+            )
+        finally:
+            decider.close()
+        unknown = unrecognized_headers(headers, route._RECOGNIZED_COLUMNS)
+        # What the route's own helper withheld, and why. Without Jev configured
+        # it returns before looking at the file, so ask the same rule directly:
+        # the operator still learns that --cte-type would be withheld. Nothing
+        # was sent, so request.file_cte_type stays null.
+        dropped = result.file_cte_type_dropped
+        if dropped is None and result.status == "disabled":
+            _, dropped = route._file_cte_type_for_jev(text, args.cte_type)
     report = _build_report(
         args.csv_file,
         result,
@@ -409,6 +471,8 @@ def main(
         unknown,
         simulated=args.simulate_apply,
         prompted=args.prompt_key,
+        file_cte_type_dropped=dropped,
+        malformed_header_reason=malformed,
     )
 
     if args.json:

@@ -226,7 +226,7 @@ def finalize_inbound_email_audit(
                    accepted_attachment_count, rejected_attachment_count
             FROM fsma.finalize_inbound_email_audit(
                 :p_message_id, :p_tenant_id, :p_status, :p_rejection_reason,
-                :p_attachment_count, :p_accepted_count, :p_rejected_count, :p_details::jsonb
+                :p_attachment_count, :p_accepted_count, :p_rejected_count, CAST(:p_details AS jsonb)
             )
             """
         ),
@@ -359,10 +359,7 @@ async def _process_one_attachment(tenant_id: str, attachment: PostmarkAttachment
         return AttachmentResult(
             name=safe_name,
             status="rejected",
-            reason=(
-                f"{safe_name} exceeds maximum attachment size of "
-                f"{MAX_CSV_FILE_SIZE_BYTES // (1024 * 1024)} MB"
-            ),
+            reason=(f"{safe_name} exceeds maximum attachment size of {MAX_CSV_FILE_SIZE_BYTES // (1024 * 1024)} MB"),
         )
 
     return await _ingest_attachment_csv(tenant_id, safe_name, raw)
@@ -390,9 +387,7 @@ async def process_inbound_email(db_session, payload: PostmarkInboundPayload) -> 
     # configured inbound address. The DB-backed lookup additionally requires
     # `sender_address` to match that tenant's `allowed_senders` allowlist.
     tenant_id = (
-        tenant_lookup.lookup_tenant_by_inbound_address(db_session, recipient, sender_address)
-        if recipient
-        else None
+        tenant_lookup.lookup_tenant_by_inbound_address(db_session, recipient, sender_address) if recipient else None
     )
 
     # Claim-then-act (v122): this INSERT is the first write for this

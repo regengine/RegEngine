@@ -130,6 +130,7 @@ def fake(monkeypatch):
     monkeypatch.setattr(boot, "railway", railway)
     monkeypatch.setattr(boot, "role_psql", _fake_role_psql(logins))
     monkeypatch.setattr(boot.shutil, "which", lambda name: "/usr/bin/" + os.path.basename(name))
+    monkeypatch.setattr(boot, "read_psql_major", lambda psql: 16)  # hermetic: no real psql needed
     railway.role_logins = logins
     return railway
 
@@ -351,7 +352,10 @@ def test_stale_kept_password_is_refused_before_any_superuser_step(fake, monkeypa
     monkeypatch.setattr(boot, "role_psql", _fake_role_psql(logins, failing={boot.ADMIN_ROLE}))
     assert boot.main(["--apply"]) == boot.EXIT_REFUSED
     err = capsys.readouterr().err
-    assert "stored URL password for regengine_sysadmin does not log in; re-run with --apply --rotate-passwords" in err
+    assert (
+        "stored URL password for regengine_sysadmin does not log in; re-run with: "
+        "bash scripts/railway/bootstrap_staging_database.sh --apply --rotate-passwords"
+    ) in err
     assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)
     assert fake.sets() == []
     assert boot.main(["--dry-run"]) == boot.EXIT_REFUSED  # the dry run reports it too
@@ -410,7 +414,73 @@ def test_role_psql_runs_with_a_private_home_and_no_inherited_libpq_settings(tmp_
     env = json.loads(capture.read_text())
     assert env["HOME"] == str(private_home)
     assert env["PGSSLMODE"] == "require"
+    assert env["PGCHANNELBINDING"] == "require"  # SCRAM-SHA-256-PLUS: no cleartext/MD5 password to a MITM
     assert "PGSSLROOTCERT" not in env
+
+
+def test_role_psql_channel_binding_cannot_be_overridden_by_the_operator_env(tmp_path, monkeypatch):
+    capture = tmp_path / "env.json"
+    fake_psql = tmp_path / "psql"
+    fake_psql.write_text(
+        "#!" + sys.executable + "\nimport json, os, sys\n"
+        f"sys.stdin.read(); json.dump(dict(os.environ), open({str(capture)!r}, 'w'))\n"
+        "print('identity|regengine|regengine|regengine_staging|true'); print('bootstrap-login-sql-complete')\n"
+    )
+    fake_psql.chmod(0o755)
+    monkeypatch.setenv("PGCHANNELBINDING", "disable")
+    ctx = boot.Context(project=PROJECT, environment="staging", database="regengine_staging", apply=True)
+    ctx.psql, ctx.psql_home = str(fake_psql), str(tmp_path)
+    ctx.endpoint = {"host": "proxy.example.invalid", "port": "15432", "user": "postgres", "database": "railway"}
+    boot.role_psql(ctx, "regengine", "c" * 64, boot.runtime_login_sql(), boot.LOGIN_SENTINEL, "login")
+    assert json.loads(capture.read_text())["PGCHANNELBINDING"] == "require"
+
+
+@pytest.mark.parametrize(
+    "version_text,major",
+    [
+        ("psql (PostgreSQL) 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)", 16),
+        ("psql (PostgreSQL) 18.0", 18),
+        ("psql (PostgreSQL) 13.22", 13),
+        ("psql (PostgreSQL) 12.18", 12),
+        ("psql (PostgreSQL) 9.6.24", 9),
+        ("something else", None),
+    ],
+)
+def test_parse_psql_major(version_text, major):
+    assert boot.parse_psql_major(version_text) == major
+
+
+@pytest.mark.parametrize("major,allowed", [(9, False), (12, False), (None, False), (13, True), (18, True)])
+def test_refuses_psql_older_than_13_before_any_railway_run(fake, monkeypatch, major, allowed):
+    """libpq < 13 silently ignores PGCHANNELBINDING, so such a psql could hand a password to a MITM."""
+    monkeypatch.setattr(boot, "read_psql_major", lambda psql: major)
+    code = boot.main(["--apply"])
+    if allowed:
+        assert code == 0
+    else:
+        assert code == boot.EXIT_REFUSED
+        assert not any(call[0] == "run" for call in fake.calls)
+        assert fake.sets() == []
+
+
+def test_blocking_outgoing_grant_is_refused_even_with_adoption(fake, capsys):
+    """A RegEngine role that re-granted a foreign role to a foreign role cannot be cleaned up by cascading."""
+    _existing_roles(
+        fake,
+        "outside|regengine|is a member of role vendor_ops (granted by postgres, WITH ADMIN OPTION)",
+        "outside|regengine|used its ADMIN OPTION to grant role vendor_ops to role contractor",
+        "blocked-grant|regengine|vendor_ops|contractor",
+    )
+    fake.variables.update(_stored_urls())
+    assert boot.main(["--dry-run", "--adopt-existing-roles"]) == boot.EXIT_REFUSED
+    captured = capsys.readouterr()
+    assert (
+        "BLOCKING GRANT: regengine used its ADMIN OPTION to grant foreign role vendor_ops to contractor" in captured.out
+    )
+    assert "revoke them by hand" in captured.err
+    assert boot.main(["--apply", "--adopt-existing-roles", "--rotate-passwords"]) == boot.EXIT_REFUSED
+    assert fake.sets() == []
+    assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)
 
 
 def test_main_creates_and_removes_the_private_psql_home(fake):
@@ -509,7 +579,41 @@ def test_failure_partway_leaves_migrations_url_unset(fake, capsys):
     assert boot.main(["--apply"]) == boot.EXIT_FAILED
     assert "MIGRATIONS_DATABASE_URL" not in fake.variables
     assert "DATABASE_URL" in fake.sets()
-    assert "--rotate-passwords" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "MIGRATIONS_DATABASE_URL was not updated (unset, or still holding the old password)" in err
+    assert "gunicorn never starts" in err and "--rotate-passwords" in err
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["--apply"], "bash scripts/railway/bootstrap_staging_database.sh --apply --rotate-passwords"),
+        (
+            ["--apply", "--adopt-existing-roles", "--rotate-passwords"],
+            "bash scripts/railway/bootstrap_staging_database.sh --apply --adopt-existing-roles --rotate-passwords",
+        ),
+        (
+            ["--apply", "--adopt-existing-roles", "--rotate-passwords", "--database", "regengine_staging_b"],
+            "bash scripts/railway/bootstrap_staging_database.sh --apply --adopt-existing-roles --rotate-passwords "
+            "--database regengine_staging_b",
+        ),
+    ],
+)
+def test_recovery_hint_repeats_the_options_the_run_needs(fake, capsys, argv, expected):
+    """A failed run's hint names a command that can work.
+
+    Adoption leaves the pre-existing roles' grants and policies in the archive
+    database, so a re-run without --adopt-existing-roles is refused again. The
+    hint must carry it (and a non-default --database) instead of printing a
+    bare --apply --rotate-passwords.
+    """
+    if "--adopt-existing-roles" in argv:
+        _existing_roles(fake, managed=False)
+    fake.fail_set = "REGENGINE_ENV"
+    assert boot.main(argv) == boot.EXIT_FAILED
+    err = capsys.readouterr().err
+    assert "gunicorn never starts" in err
+    assert err.rstrip().endswith(expected)
 
 
 def test_every_run_variable_and_redeploy_call_is_scoped(fake):
@@ -574,6 +678,7 @@ def test_psql_launcher_moves_the_url_into_the_environment(tmp_path):
             "DATABASE_PUBLIC_URL": url,
             "PGOPTIONS": "-c search_path=evil",
             "PGSSLROOTCERT": "/personal/root.crt",
+            "PGCHANNELBINDING": "disable",
         },
         check=True,
     )
@@ -591,6 +696,7 @@ def test_psql_launcher_moves_the_url_into_the_environment(tmp_path):
         "railway",
     )
     assert env["PGSSLMODE"] == "require"
+    assert env["PGCHANNELBINDING"] == "require"  # superuser password never offered to a MITM; not overridable
     assert "DATABASE_PUBLIC_URL" not in env
     assert env["PGOPTIONS"] == boot.SERVER_OPTIONS  # the inherited PGOPTIONS is replaced
 
@@ -674,3 +780,144 @@ def test_get_tenant_context_seed_matches_ci_fresh_chain_seed():
     )
     assert seeds, "backend-ci.yml no longer seeds get_tenant_context(); re-check the fresh-chain bootstrap"
     assert _normalize(boot.GET_TENANT_CONTEXT_SQL) in {_normalize(seed) for seed in seeds}
+
+
+# --- membership revocation against a real, disposable PostgreSQL ------------
+#
+# Roles are cluster-wide, so these tests never touch a shared server: they start
+# their own throwaway container and run every scenario inside a transaction that
+# is rolled back. Without Docker they skip, or fail under REGENGINE_REQUIRE_DB=1.
+
+_CHAIN_ROLES = ("alice", "bob", "carol", "vendor_ops", "contractor")
+
+
+def _skip_or_fail(reason: str) -> None:
+    if os.getenv("REGENGINE_REQUIRE_DB", "").strip().lower() in {"1", "true", "yes"}:
+        pytest.fail(f"{reason} (REGENGINE_REQUIRE_DB=1)")
+    pytest.skip(reason)
+
+
+@pytest.fixture(scope="module")
+def disposable_pg_url():
+    try:
+        import psycopg  # noqa: F401
+
+        try:
+            from testcontainers.community.postgres import PostgresContainer
+        except ImportError:  # testcontainers < the community split (the pinned 4.15)
+            from testcontainers.postgres import PostgresContainer
+    except ImportError as exc:
+        _skip_or_fail(f"psycopg/testcontainers unavailable: {exc}")
+    try:
+        container = PostgresContainer("postgres:17", driver=None)
+        container.start()
+    except Exception as exc:  # no Docker daemon, image pull blocked, ...
+        _skip_or_fail(f"cannot start a disposable PostgreSQL container: {exc}")
+    try:
+        yield container.get_connection_url()
+    finally:
+        container.stop()
+
+
+@pytest.fixture
+def pg(disposable_pg_url):
+    """(connection, notices) inside one transaction that is always rolled back."""
+    import psycopg
+
+    notices: list[tuple[str, str]] = []
+    conn = psycopg.connect(disposable_pg_url)
+    conn.add_notice_handler(lambda diag: notices.append((diag.severity_nonlocalized or "", diag.message_primary or "")))
+    try:
+        for role in (*boot.ALL_ROLES, *_CHAIN_ROLES):
+            conn.execute(f"CREATE ROLE {boot.quote_ident(role)}")
+        yield conn, notices
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def _as(conn, role: str, statement: str) -> None:
+    conn.execute(f"SET ROLE {boot.quote_ident(role)}")
+    conn.execute(statement)
+    conn.execute("RESET ROLE")
+
+
+def _memberships(conn) -> list[tuple[str, str, str]]:
+    roles = list(boot.ALL_ROLES)
+    return conn.execute(
+        "SELECT g.rolname, m.rolname, gr.rolname FROM pg_auth_members am "
+        "JOIN pg_roles g ON g.oid = am.roleid JOIN pg_roles m ON m.oid = am.member "
+        "JOIN pg_roles gr ON gr.oid = am.grantor "
+        "WHERE g.rolname = ANY(%s) OR m.rolname = ANY(%s) ORDER BY 1, 2, 3",
+        (roles, roles),
+    ).fetchall()
+
+
+def _listing(conn) -> list[tuple[str, str]]:
+    return conn.execute(f"SELECT role_name, detail FROM ({boot.outside_usage_sql('regengine_staging')}) o").fetchall()
+
+
+def test_incoming_admin_option_chain_is_listed_and_fully_revoked(pg):
+    import psycopg
+
+    conn, notices = pg
+    superuser = conn.execute("SELECT current_user").fetchone()[0]
+    conn.execute("GRANT regengine TO alice WITH ADMIN OPTION")
+    _as(conn, "alice", "GRANT regengine TO bob WITH ADMIN OPTION")
+    _as(conn, "bob", "GRANT regengine TO carol")
+
+    # Dry-run listing shows every link of the chain with its grantor.
+    listing = set(_listing(conn))
+    assert ("regengine", f"is granted to role alice (granted by {superuser}, WITH ADMIN OPTION)") in listing
+    assert ("regengine", "is granted to role bob (granted by alice, WITH ADMIN OPTION)") in listing
+    assert ("regengine", "is granted to role carol (granted by bob)") in listing
+    assert conn.execute(boot.blocked_grants_sql()).fetchall() == []
+
+    # Negative control: the pre-fix statement (REVOKE without CASCADE) cannot remove the chain.
+    with pytest.raises(psycopg.errors.DependentObjectsStillExist):
+        with conn.transaction():
+            conn.execute(f"REVOKE regengine FROM alice GRANTED BY {boot.quote_ident(superuser)}")
+
+    notices.clear()
+    conn.execute(boot.membership_sql())
+    assert _memberships(conn) == []
+    assert not [n for n in notices if n[0] == "WARNING"], notices
+    revoked = [message for _, message in notices if message.startswith("revoked membership:")]
+    assert 1 <= len(revoked) <= 3  # CASCADE may take dependents with it; never a line for a grant already gone
+    assert f"revoked membership: regengine from alice (granted by {superuser}) with CASCADE" in revoked
+    assert any("memberships involving RegEngine roles removed: 3" in message for _, message in notices)
+
+
+def test_outgoing_membership_with_foreign_dependent_grant_is_refused_not_cascaded(pg):
+    import psycopg
+
+    conn, _ = pg
+    conn.execute("GRANT vendor_ops TO regengine WITH ADMIN OPTION")
+    _as(conn, "regengine", "GRANT vendor_ops TO contractor")
+    before = _memberships(conn)
+
+    assert conn.execute(boot.blocked_grants_sql()).fetchall() == [("regengine", "vendor_ops", "contractor")]
+    assert ("regengine", "used its ADMIN OPTION to grant role vendor_ops to role contractor") in set(_listing(conn))
+    with pytest.raises(psycopg.errors.RaiseException, match="without cascading outside RegEngine"):
+        with conn.transaction():
+            conn.execute(boot.membership_sql())
+    assert _memberships(conn) == before  # nothing revoked
+    foreign = conn.execute(
+        "SELECT count(*) FROM pg_auth_members am JOIN pg_roles g ON g.oid = am.roleid "
+        "JOIN pg_roles m ON m.oid = am.member WHERE g.rolname = 'vendor_ops' AND m.rolname = 'contractor'"
+    ).fetchone()
+    assert foreign == (1,)  # the foreign grant is untouched
+
+
+def test_outgoing_chain_between_regengine_roles_is_revoked_without_cascade(pg):
+    conn, notices = pg
+    conn.execute("GRANT vendor_ops TO regengine_sysadmin WITH ADMIN OPTION")
+    _as(conn, "regengine_sysadmin", "GRANT vendor_ops TO regengine")
+    assert conn.execute(boot.blocked_grants_sql()).fetchall() == []
+
+    notices.clear()
+    conn.execute(boot.membership_sql())
+    assert _memberships(conn) == []
+    assert not [n for n in notices if n[0] == "WARNING"], notices
+    revoked = [message for _, message in notices if message.startswith("revoked membership:")]
+    assert len(revoked) == 2 and not any("CASCADE" in message for message in revoked)
