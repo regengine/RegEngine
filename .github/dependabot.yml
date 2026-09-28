@@ -78,9 +78,12 @@ updates:
   # updated cli/requirements.txt and did not update requirements.lock.
   # #2780-#2784 all landed this way, and #2787 had to resync afterwards.
   #
-  # Durable fix is to rename requirements.lock -> requirements.txt, which
-  # touches the Dockerfile and ten workflows and so wants its own PR. Until
-  # then: expect the red gate, run the pip-compile command it prints, push.
+  # Handled automatically since 2026-09-28: .github/workflows/dependabot-lock-sync.yml
+  # recompiles requirements.lock on the PR branch (pinning only the packages
+  # whose new floor the old lock violates, at exactly Dependabot's version),
+  # pushes it, and re-dispatches backend-ci + security. Wait for those runs to
+  # go green before merging. The rename to requirements.txt remains the
+  # longer-term alternative.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:

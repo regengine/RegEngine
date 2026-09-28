@@ -126,3 +126,36 @@ and the vendor call can neither block nor reject an upload.
   starting points, not RegEngine-validated numbers. They are environment
   overridable and the rollout plan in
   `docs/engineering/JEV_HEADER_MAPPING.md` says how to validate them.
+
+## Addendum (2026-09-28): the file's CTE when the upload declares none
+
+**Context.** The upload UI never sends `cte_type`, and RegEngine's own CSV
+templates have no CTE column, so every row of a filled-in template uploaded
+from the UI is rejected with `No CTE type`.
+
+**Decision.** A second question set (`services/shared/jev/cte_classification.py`,
+`csv-file-cte.v1`) asks one `Choice` over the seven FDA CTEs plus
+`mixed_or_unclear`, from the header row, only when the upload declares no
+CTE and has no per-row CTE column. The same principles as above apply:
+
+- Advisory by default. The answer is returned on the response and in the
+  400 body, and the upload UI offers it as a one-click re-upload with
+  `cte_type` set; the uploader's click is the decision.
+- Applied by code only behind its own switch
+  (`REGENGINE_JEV_APPLY_FILE_CTE_TYPE`), only in the `auto_apply` band and
+  at or above the artifact human-review threshold, only when it names one
+  CTE, and only when no row names a different CTE. A row's own CTE always
+  wins.
+- Recorded as an advisory `field_mapping_suggestion` artifact targeting
+  `cte_type`, reusing the existing artifact type (the `artifact_type` CHECK
+  constraint is unchanged).
+- No new data category leaves the process: the header row, plus the same
+  redacted samples only where enabled. The request is now also made for a
+  file whose columns are all recognised, when it declares no CTE.
+
+**Alternative considered.** Inferring the CTE from CTE-specific date
+columns (`receive_date` means receiving) deterministically. It would cover
+RegEngine's templates without a vendor, but it is a product decision about
+accepting files that declare nothing, and it does not cover supplier
+exports. Left open; the advisory answer and the UI prompt keep a human in
+the loop either way.

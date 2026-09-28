@@ -1,0 +1,122 @@
+name: Dependabot lock sync
+
+# Dependabot's root-pip PRs raise floors in requirements.in but never touch
+# requirements.lock (it only recompiles files named requirements.txt — see
+# the KNOWN LIMITATION note in .github/dependabot.yml). Every such PR fails
+# "Dependency Lock Freshness", and merging one anyway breaks main and blocks
+# Railway deploys (2026-09-14 #3107, 2026-09-28 #3158/#3159 → fixed by #3160).
+#
+# This job recompiles the lock on the PR branch with CI's exact toolchain and
+# pins each package whose floor changed to EXACTLY the version Dependabot
+# proposed (`--upgrade-package name==version`), the same recipe #3160 used by
+# hand. A plain pip-compile would jump to the newest allowed release instead.
+#
+# A push made with GITHUB_TOKEN does not start new workflow runs, so the job
+# dispatches backend-ci and security on the branch afterwards; their check
+# runs attach to the new head commit and show on the PR.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'requirements.in'
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-lock-sync-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Regenerate requirements.lock
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned toolchain (matches backend-ci freshness gate)
+        run: python -m pip install "pip==24.3.1" pip-tools==7.5.2
+
+      - name: Recompile lock, pinning Dependabot's proposed versions
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # Collect "name==version" for every floor this PR raised.
+          mapfile -t PINS < <(git diff "$BASE_SHA"...HEAD -- requirements.in \
+            | python3 -c '
+          import re, sys
+          from packaging.utils import canonicalize_name
+          from packaging.version import Version
+          locked = {
+              canonicalize_name(m.group(1)): Version(m.group(2))
+              for m in re.finditer(r"^([A-Za-z0-9_.\-]+)(?:\[[^\]]*\])?==([^\s\\]+)",
+                                   open("requirements.lock").read(), re.M)
+          }
+          for line in sys.stdin:
+              if not line.startswith("+") or line.startswith("+++"):
+                  continue
+              m = re.match(r"\+\s*([A-Za-z0-9_.\-]+)(\[[^\]]*\])?\s*>=\s*([0-9][^,;\s]*)", line)
+              if not m:
+                  continue
+              name, floor = m.group(1), Version(m.group(3))
+              current = locked.get(canonicalize_name(name))
+              # Only move packages the new floor actually invalidates. A lock
+              # already at or above the floor stays put (never downgrade).
+              if current is None or current < floor:
+                  print(f"{name}=={floor}")
+          ')
+          ARGS=()
+          for p in "${PINS[@]}"; do ARGS+=(--upgrade-package "$p"); done
+          echo "Pinning: ${PINS[*]:-<none>}"
+          CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
+            pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock "${ARGS[@]}" requirements.in
+          # Same check the freshness gate runs: a plain recompile must be a no-op.
+          cp requirements.lock /tmp/lock.expected
+          CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
+            pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
+          diff -u /tmp/lock.expected requirements.lock
+
+      - name: Commit and push
+        id: push
+        env:
+          # Never interpolate github.* context into run: (semgrep
+          # run-shell-injection); a branch name is attacker-controllable.
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- requirements.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "requirements.lock already fresh"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements.lock
+          git commit -m "chore(deps): regenerate requirements.lock for this Dependabot bump"
+          git push origin "HEAD:${BRANCH}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Re-run CI on the new head
+        if: steps.push.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh workflow run backend-ci.yml --ref "$BRANCH"
+          gh workflow run security.yml --ref "$BRANCH"
+          gh pr comment "$PR" --body "Regenerated \`requirements.lock\` with CI's toolchain (pip 24.3.1, pip-tools 7.5.2, Python 3.11), pinned to the versions this PR proposes. Backend CI and security were re-dispatched on the new head — wait for them to go green before merging."

@@ -180,8 +180,12 @@ export const useIngestURL = () => {
 
 export const useIngestFile = () => {
   return useMutation({
-    mutationFn: ({ apiKey, file, sourceSystem }: { apiKey?: string | null; file: File; sourceSystem?: string }) =>
-      apiClient.ingestFile(apiKey, file, sourceSystem),
+    mutationFn: ({ apiKey, file, sourceSystem, cteType }: {
+      apiKey?: string | null;
+      file: File;
+      sourceSystem?: string;
+      cteType?: string;
+    }) => apiClient.ingestFile(apiKey, file, sourceSystem, cteType),
   });
 };
 

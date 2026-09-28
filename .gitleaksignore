@@ -100,3 +100,30 @@ a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/gaming/README.md:curl-auth-hea
 a6d476464bfe7afaf3ff830b65dc312a2be6d426:services/gaming/README.md:curl-auth-header:178
 debc14c4816c51f1a600b0f9130fe447a305284b:frontend/src/app/tools/data-import/components/DataImportClient.tsx:curl-auth-header:31
 f6c2537615ab730e34c95a57e65f06a9bf94eb07:.agent/CONSTITUTION.md:curl-auth-header:264
+
+# ── 2026-09-28 triage (remaining 20 findings; #3080 closed out) ─────
+# curl examples with the literal YOUR_API_KEY placeholder (frontend docs
+# pages, launch_orchestrator quick-start) and generic-api-key false positives
+# on FSMA_204_* fact-key names (dict entries in the seed facts) in
+# kernel/reporting/worker/main.py.
+8f0069f6c5f60e36378144708930f009ebb9f213:frontend/src/app/admin/api-console/page.tsx:curl-auth-header:367
+8f0069f6c5f60e36378144708930f009ebb9f213:frontend/src/app/api-keys/page.tsx:curl-auth-header:236
+8f0069f6c5f60e36378144708930f009ebb9f213:frontend/src/app/tools/data-import/components/DataImportClient.tsx:curl-auth-header:38
+8f0069f6c5f60e36378144708930f009ebb9f213:kernel/reporting/worker/main.py:generic-api-key:192
+8f0069f6c5f60e36378144708930f009ebb9f213:kernel/reporting/worker/main.py:generic-api-key:199
+8f0069f6c5f60e36378144708930f009ebb9f213:kernel/reporting/worker/main.py:generic-api-key:206
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:110
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:120
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:21
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:33
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:51
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:55
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:69
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:88
+8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:97
+
+# #3165 landed a comment in this file that quoted a seed-fact dict entry and
+# tripped generic-api-key on itself; the wording is fixed above, and these pin
+# the historical line (squash commit on main + the pre-squash branch commit).
+db6df3d2c2f25e395ef6f66204eb55af893f674a:.gitleaksignore:generic-api-key:108
+7020a8d88edbc8791e16f242cf1187204fb527bc:.gitleaksignore:generic-api-key:108

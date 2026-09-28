@@ -86,6 +86,109 @@ describe('Data Import Hub CSV results', () => {
     expect(screen.queryByText('CSV processed')).not.toBeInTheDocument();
   });
 
+  it('offers the CTE Jev suggested and re-uploads with it only on confirmation', async () => {
+    const error = Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: No CTE type'],
+            cte_type_suggestion: {
+              status: 'ok', cte_type: 'shipping', confidence: 0.912, band: 'auto_apply', applied: false,
+            },
+          },
+        },
+      },
+    });
+    mocks.ingestFile.mockRejectedValueOnce(error).mockResolvedValueOnce(csvResult(1, 0));
+    await uploadCsv();
+
+    expect(await screen.findByText('These rows look like Shipping events (91% confidence).')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenLastCalledWith('cookie-managed', expect.any(File), 'data_import_hub', undefined);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Import as Shipping' }));
+
+    expect(await screen.findByText('CSV processed')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
+    expect(mocks.ingestFile).toHaveBeenLastCalledWith('cookie-managed', expect.any(File), 'data_import_hub', 'shipping');
+  });
+
+  it('does not offer a suggestion again after a confirmed CTE is rejected', async () => {
+    const error = Object.assign(new Error('No valid rows found: Row 2: Missing receive_date'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: Missing receive_date'],
+            cte_type_suggestion: {
+              status: 'ok', cte_type: 'receiving', confidence: 0.95, band: 'auto_apply', applied: false,
+            },
+          },
+        },
+      },
+    });
+    mocks.ingestFile.mockRejectedValue(error);
+    await uploadCsv();
+    await userEvent.click(await screen.findByRole('button', { name: 'Import as Receiving' }));
+
+    expect(await screen.findByText('No valid rows found: Row 2: Missing receive_date')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: /^Import as/ })).not.toBeInTheDocument();
+  });
+
+  it('starts one upload however fast Import as is clicked', async () => {
+    const error = Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: No CTE type'],
+            cte_type_suggestion: {
+              status: 'ok', cte_type: 'receiving', confidence: 0.95, band: 'auto_apply', applied: false,
+            },
+          },
+        },
+      },
+    });
+    // The re-upload stays in flight, as a slow network would keep it.
+    mocks.ingestFile.mockRejectedValueOnce(error).mockReturnValueOnce(new Promise(() => {}));
+    await uploadCsv();
+    const importButton = await screen.findByRole('button', { name: 'Import as Receiving' });
+
+    // The result panel animates out, so the button stays in the page (and
+    // clickable) for a moment after the first click.
+    fireEvent.click(importButton);
+    fireEvent.click(importButton);
+    fireEvent.click(screen.getByRole('button', { name: /uploading/i }));
+
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
+    expect(mocks.ingestFile).toHaveBeenLastCalledWith('cookie-managed', expect.any(File), 'data_import_hub', 'receiving');
+  });
+
+  it('lists Jev column suggestions when rows were rejected', async () => {
+    const result = csvResult(1, 1);
+    mocks.ingestFile.mockResolvedValue({
+      ...result,
+      header_mapping_suggestions: [
+        {
+          source_header: 'Qty Shpd', source_key: 'qty_shpd', canonical_field: 'quantity',
+          confidence: 0.91, band: 'auto_apply', applied: false, blocked_reason: 'apply_disabled',
+        },
+        {
+          source_header: 'Notes', source_key: 'notes', canonical_field: null,
+          confidence: 0.99, band: 'auto_apply', applied: false, blocked_reason: 'no_match',
+        },
+      ],
+    });
+    await uploadCsv();
+
+    expect(await screen.findByText(/.Qty Shpd. looks like Quantity \(91% confidence\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Notes. looks like/)).not.toBeInTheDocument();
+  });
+
   it('rejects TSV before calling the CSV endpoint', async () => {
     render(<DataImportClient />);
     fireEvent.change(screen.getByLabelText('Upload CSV file'), {

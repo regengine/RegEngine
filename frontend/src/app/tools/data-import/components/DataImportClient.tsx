@@ -28,6 +28,14 @@ import { apiClient } from '@/lib/api-client';
 import type { IngestCSVResponse } from '@/types/api';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { toast } from '@/components/ui/use-toast';
+import { ColumnSuggestionList } from '@/components/fsma/ColumnSuggestionList';
+import { CteSuggestionPrompt } from '@/components/fsma/CteSuggestionPrompt';
+import {
+    columnSuggestions,
+    columnSuggestionsFromUploadError,
+    type ColumnSuggestion,
+} from '@/lib/column-suggestions';
+import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -96,7 +104,12 @@ export function DataImportClient() {
     // Real file upload state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadState, setUploadState] = useState<UploadState>('idle');
-    const [uploadResult, setUploadResult] = useState<{ data?: IngestCSVResponse; error?: string } | null>(null);
+    const [uploadResult, setUploadResult] = useState<{
+        data?: IngestCSVResponse;
+        error?: string;
+        cteSuggestion?: ActionableCteSuggestion | null;
+        columnSuggestions?: ColumnSuggestion[];
+    } | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
 
@@ -140,18 +153,33 @@ export function DataImportClient() {
         setUploadResult(null);
     }, []);
 
-    const handleUpload = useCallback(async () => {
-        if (!selectedFile) return;
+    // One upload at a time. The result panel animates out, so its buttons stay
+    // mounted and clickable for a moment after a click: state alone cannot stop
+    // a second click from storing the same file twice.
+    const uploadInFlightRef = useRef(false);
+
+    // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
+    // confirming the CTE Jev suggested for a file the server rejected.
+    const handleUpload = useCallback(async (cteType?: string) => {
+        if (!selectedFile || uploadInFlightRef.current) return;
+        uploadInFlightRef.current = true;
         setUploadState('uploading');
         setUploadResult(null);
         try {
             const effectiveKey = apiKey || '';
-            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub');
+            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub', cteType);
             setUploadResult({ data: result });
             setUploadState(result.accepted === 0 ? 'error' : result.rejected > 0 ? 'partial' : 'success');
         } catch (err: unknown) {
-            setUploadResult({ error: err instanceof Error ? err.message : 'Upload failed' });
+            setUploadResult({
+                error: err instanceof Error ? err.message : 'Upload failed',
+                // A declared CTE is never second-guessed.
+                cteSuggestion: cteType ? null : cteSuggestionFromUploadError(err),
+                columnSuggestions: columnSuggestionsFromUploadError(err),
+            });
             setUploadState('error');
+        } finally {
+            uploadInFlightRef.current = false;
         }
     }, [selectedFile, apiKey]);
 
@@ -360,7 +388,7 @@ export function DataImportClient() {
                                 {/* Upload button */}
                                 {selectedFile && (
                                     <Button
-                                        onClick={handleUpload}
+                                        onClick={() => void handleUpload()}
                                         disabled={uploadState === 'uploading'}
                                         size="lg"
                                         className="w-full"
@@ -403,10 +431,23 @@ export function DataImportClient() {
                                                         {uploadResult.data.kde_warnings?.map((warning, index) => (
                                                             <p key={index} className="mt-2 text-small">{warning}</p>
                                                         ))}
+                                                        <ColumnSuggestionList
+                                                            suggestions={columnSuggestions(uploadResult.data.header_mapping_suggestions)}
+                                                        />
                                                     </>
                                                 )}
                                                 {uploadResult.error && (
                                                     <div className="text-small">{uploadResult.error}</div>
+                                                )}
+                                                {uploadResult.columnSuggestions && (
+                                                    <ColumnSuggestionList suggestions={uploadResult.columnSuggestions} />
+                                                )}
+                                                {uploadResult.cteSuggestion && (
+                                                    <CteSuggestionPrompt
+                                                        suggestion={uploadResult.cteSuggestion}
+                                                        disabled={uploadState === 'uploading'}
+                                                        onImport={(cte) => void handleUpload(cte)}
+                                                    />
                                                 )}
                                             </Callout>
                                         </motion.div>
