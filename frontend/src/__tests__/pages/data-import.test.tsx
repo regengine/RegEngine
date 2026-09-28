@@ -86,6 +86,58 @@ describe('Data Import Hub CSV results', () => {
     expect(screen.queryByText('CSV processed')).not.toBeInTheDocument();
   });
 
+  it('offers the CTE Jev suggested and re-uploads with it only on confirmation', async () => {
+    const error = Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: No CTE type'],
+            cte_type_suggestion: {
+              status: 'ok', cte_type: 'shipping', confidence: 0.912, band: 'auto_apply', applied: false,
+            },
+          },
+        },
+      },
+    });
+    mocks.ingestFile.mockRejectedValueOnce(error).mockResolvedValueOnce(csvResult(1, 0));
+    await uploadCsv();
+
+    expect(await screen.findByText('These rows look like Shipping events (91% confidence).')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenLastCalledWith('cookie-managed', expect.any(File), 'data_import_hub', undefined);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Import as Shipping' }));
+
+    expect(await screen.findByText('CSV processed')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
+    expect(mocks.ingestFile).toHaveBeenLastCalledWith('cookie-managed', expect.any(File), 'data_import_hub', 'shipping');
+  });
+
+  it('does not offer a suggestion again after a confirmed CTE is rejected', async () => {
+    const error = Object.assign(new Error('No valid rows found: Row 2: Missing receive_date'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: Missing receive_date'],
+            cte_type_suggestion: {
+              status: 'ok', cte_type: 'receiving', confidence: 0.95, band: 'auto_apply', applied: false,
+            },
+          },
+        },
+      },
+    });
+    mocks.ingestFile.mockRejectedValue(error);
+    await uploadCsv();
+    await userEvent.click(await screen.findByRole('button', { name: 'Import as Receiving' }));
+
+    expect(await screen.findByText('No valid rows found: Row 2: Missing receive_date')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: /^Import as/ })).not.toBeInTheDocument();
+  });
+
   it('rejects TSV before calling the CSV endpoint', async () => {
     render(<DataImportClient />);
     fireEvent.change(screen.getByLabelText('Upload CSV file'), {

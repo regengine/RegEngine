@@ -197,6 +197,27 @@ def test_answers_convert_to_plain_results_with_evidence():
     assert dumped["scores"]["severity"]["legend"] == {"0": "low", "1": "medium", "2": "high"}
 
 
+def test_out_of_range_confidences_and_probabilities_are_clamped():
+    body = json.loads(json.dumps(GOOD_BODY))
+    body["answers"]["field"].update(confidence=1.0000001, probabilities={"lot_code": 1.2, "no_match": -0.2})
+    body["answers"]["is_date"]["noul"] = 1.5
+    body["answers"]["severity"]["confidence"] = -0.01
+
+    answers = _decider(lambda request: httpx2.Response(200, json=body)).ask(STATE, QUESTIONS, purpose="p")
+
+    assert answers.choices["field"].confidence == 1.0
+    assert answers.choices["field"].probabilities == {"lot_code": 1.0, "no_match": 0.0}
+    assert answers.nouls["is_date"].probability == 1.0
+    assert answers.scores["severity"].confidence == 0.0
+
+
+@pytest.mark.parametrize("value,expected", [(float("nan"), 0.0), (float("inf"), 0.0), (float("-inf"), 0.0), (0.5, 0.5)])
+def test_non_finite_values_read_as_no_confidence(value, expected):
+    from shared.jev.client import _unit
+
+    assert _unit(value) == expected
+
+
 def test_missing_request_id_header_is_tolerated():
     def handler(request):
         return httpx2.Response(200, json=GOOD_BODY)

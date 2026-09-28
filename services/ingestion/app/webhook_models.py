@@ -359,6 +359,38 @@ class HeaderMappingEngineResult(BaseModel):
     artifacts_recorded: int = Field(0, description="Advisory field_mapping_suggestion artifacts queued for review.")
 
 
+class CteTypeSuggestionResult(BaseModel):
+    """Jev's answer to "which CTE does every row of this CSV file record?".
+
+    Asked only when the upload declared no ``cte_type`` and no column gives
+    rows their own CTE (``shared.jev.cte_classification``). ``applied`` is
+    true only when deterministic code used ``cte_type`` as the file's
+    fallback CTE; otherwise ``blocked_reason`` says why the answer stayed
+    advisory, and re-uploading with ``cte_type`` set to it accepts it.
+    """
+
+    provider: str = Field("typesafe", description="Suggestion provider.")
+    status: str = Field(
+        ...,
+        description=(
+            "ok, per_row_cte_column (not asked: rows name their own CTE), no_headers, malformed_header, "
+            "unavailable:<reason>, no_answer, or error."
+        ),
+    )
+    cte_type: Optional[str] = Field(
+        None, description="Suggested CTE for every row; null when the rows look mixed or unclear, or on no answer."
+    )
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Jev confidence in the answer.")
+    band: Optional[str] = Field(None, description="Confidence band: auto_apply, review, or reject.")
+    applied: bool = Field(False, description="Whether the CTE was used for this upload's rows without one.")
+    blocked_reason: Optional[str] = Field(None, description="Why the CTE was not applied, when it was not.")
+    model: Optional[str] = Field(None, description="Model that answered, as reported by the provider.")
+    request_id: Optional[str] = Field(None, description="Provider request id for the call.")
+    questions_version: Optional[str] = Field(None, description="Version of the question that was asked.")
+    apply_enabled: bool = Field(False, description="Whether applying AUTO_APPLY-band answers is switched on.")
+    artifacts_recorded: int = Field(0, description="Advisory field_mapping_suggestion artifacts queued for review.")
+
+
 class CsvIngestResponse(IngestResponse):
     """Response from POST /api/v1/ingest/csv (#2892).
 
@@ -392,6 +424,12 @@ class CsvIngestResponse(IngestResponse):
     header_mapping_engine: Optional[HeaderMappingEngineResult] = Field(
         default=None,
         description="Provenance for header_mapping_suggestions; null when the integration is not configured.",
+    )
+    # Null unless Jev is configured and the upload declared no cte_type, so
+    # the wire shape for every other upload is unchanged.
+    cte_type_suggestion: Optional[CteTypeSuggestionResult] = Field(
+        default=None,
+        description="Jev's suggested CTE for a file that declares none; null when not asked.",
     )
 
 
