@@ -26,10 +26,12 @@ from shared.agent_task_bridge import enqueue_agent_artifact_task
 from shared.database import SessionLocal
 from shared.jev import JevDecider, get_jev_decider
 from shared.jev.header_mapping import (
+    MALFORMED_HEADER,
     QUESTIONS_VERSION as _JEV_QUESTIONS_VERSION,
     HeaderMappingResult,
     build_field_mapping_artifacts,
     collect_sample_values,
+    malformed_header_reason,
     normalize_csv_header,
     outranked_columns,
     suggest_header_mappings,
@@ -866,17 +868,36 @@ def parse_csv_rows(
 # ---------------------------------------------------------------------------
 
 
-def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], dict[str, list[str]]]:
-    """The header row and, when enabled, PII-redacted sample values for unrecognised columns."""
-    reader = csv.DictReader(io.StringIO(text))
+def _read_header_row(reader: csv.DictReader) -> tuple[list[str], Optional[str]]:
+    """The header row as the parser reads it, and why it cannot be a real one (``None`` if it can).
+
+    An unterminated quote in the header row makes the reader take everything
+    up to the next closing quote, often the rest of the file, as one header.
+    Such a row spans more than one physical line; ``malformed_header_reason``
+    also refuses line breaks and over-long headers. The reason never quotes
+    the header, which may hold row data.
+    """
     headers = [header or "" for header in (reader.fieldnames or [])]
-    if sample_limit <= 0 or not headers:
-        return headers, {}
+    if reader.line_num > 1:
+        return headers, f"the header row spans {reader.line_num} lines"
+    return headers, malformed_header_reason(headers)
+
+
+def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], dict[str, list[str]], Optional[str]]:
+    """The header row, PII-redacted sample values when enabled, and why the header row is malformed.
+
+    When the header row is malformed no samples are collected: the caller
+    must send nothing (``_suggest_header_mappings_for_upload``).
+    """
+    reader = csv.DictReader(io.StringIO(text))
+    headers, malformed = _read_header_row(reader)
+    if malformed or sample_limit <= 0 or not headers:
+        return headers, {}, malformed
     unknown = unrecognized_headers(headers, _RECOGNIZED_COLUMNS)
     if not unknown:
-        return headers, {}
+        return headers, {}, None
     data_rows = (row for row in reader if not str(next(iter(row.values()), "") or "").startswith("#"))
-    return headers, collect_sample_values(data_rows, unknown, sample_limit)
+    return headers, collect_sample_values(data_rows, unknown, sample_limit), None
 
 
 def _per_row_cte_column(headers: Sequence[Optional[str]]) -> Optional[str]:
@@ -920,7 +941,10 @@ def _file_cte_type_for_jev(text: str, cte_type: Optional[str]) -> tuple[Optional
         return None, None
     reader = csv.DictReader(io.StringIO(text))
     try:
-        headers = [header or "" for header in (reader.fieldnames or [])]
+        headers, malformed = _read_header_row(reader)
+        if malformed:
+            # Never scan, and never name, headers that may be row data.
+            return None, "the header row is malformed"
         column = _per_row_cte_column(headers)
         if column is not None:
             return None, f"file has a per-row CTE column: {column}"
@@ -967,7 +991,16 @@ async def _suggest_header_mappings_for_upload(
     if not decider.enabled:
         return HeaderMappingResult(status="disabled", thresholds=decider.settings.thresholds)
     try:
-        headers, samples = _csv_headers_and_samples(text, decider.settings.header_sample_values)
+        headers, samples, malformed = _csv_headers_and_samples(text, decider.settings.header_sample_values)
+        if malformed:
+            # Checked before anything else reads the file for Jev: the "header"
+            # may be whole rows, so nothing about it may leave the process.
+            logger.warning("csv_header_mapping_malformed_header reason=%s", malformed)
+            return HeaderMappingResult(
+                status=MALFORMED_HEADER,
+                thresholds=decider.settings.thresholds,
+                apply_enabled=decider.settings.apply_header_mappings,
+            )
         if not headers:
             return HeaderMappingResult(status="no_headers", thresholds=decider.settings.thresholds)
         file_cte_type, dropped = _file_cte_type_for_jev(text, cte_type)

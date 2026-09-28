@@ -27,7 +27,9 @@ from shared.jev.header_mapping import (
     AGENT_NAME,
     CANONICAL_FIELD_NAMES,
     CANONICAL_FIELDS,
+    MALFORMED_HEADER,
     MAX_COLUMNS_PER_UPLOAD,
+    MAX_HEADER_CHARS,
     NO_MATCH,
     PURPOSE,
     QUESTIONS_VERSION,
@@ -36,6 +38,7 @@ from shared.jev.header_mapping import (
     build_questions,
     build_state,
     collect_sample_values,
+    malformed_header_reason,
     normalize_csv_header,
     outranked_columns,
     suggest_header_mappings,
@@ -421,6 +424,61 @@ def test_unknown_choice_label_is_treated_as_no_match():
     )
     assert result.suggestions[0].canonical_field is None
     assert result.suggestions[0].blocked_reason == "no_match"
+
+
+# ---------------------------------------------------------------------------
+# Malformed header rows: row data must never leave as a "header"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "header,reason",
+    [
+        ("Lot #", None),
+        ("x" * MAX_HEADER_CHARS, None),
+        ("  " + "x" * MAX_HEADER_CHARS + "  ", None),  # measured after stripping, as build_state sends it
+        (
+            "x" * (MAX_HEADER_CHARS + 1),
+            f"a header is {MAX_HEADER_CHARS + 1} characters long (limit {MAX_HEADER_CHARS})",
+        ),
+        ("Ship\nDate", "a header contains a line break"),
+        ("Ship\rDate", "a header contains a line break"),
+        (None, None),
+    ],
+    ids=["normal", "at-cap", "padded-at-cap", "over-cap", "newline", "carriage-return", "blank"],
+)
+def test_malformed_header_reason(header, reason):
+    assert malformed_header_reason(["quantity", header]) == reason
+
+
+def test_header_cap_leaves_headroom_over_every_known_column_name():
+    known = [name for name in CANONICAL_FIELDS] + [e for d in CANONICAL_FIELDS.values() for e in d["examples"]]
+    assert max(len(name) for name in known) * 4 < MAX_HEADER_CHARS
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        ["Lot #,product_description,Notes\nTLC-1,Kale,call 555-123-4567 jane@example.com\nTLC-2,Chard,x\n"],
+        ["Lot #", "quantity", "Notes " + "x" * 200],
+    ],
+    ids=["unterminated-quote", "over-cap"],
+)
+def test_malformed_header_row_is_never_sent(headers):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx2.Response(500)
+
+    result = suggest_header_mappings(
+        headers, recognized=RECOGNIZED, decider=_decider(httpx2.MockTransport(handler)), cte_type="shipping"
+    )
+
+    assert calls == []
+    assert result.status == MALFORMED_HEADER
+    assert result.suggestions == () and result.evidence is None and result.file_cte_type is None
+    assert build_field_mapping_artifacts(result, tenant_id=str(uuid.uuid4()), source_hash=SOURCE_HASH) == []
 
 
 def test_disabled_and_nothing_to_map_short_circuit_without_a_request():

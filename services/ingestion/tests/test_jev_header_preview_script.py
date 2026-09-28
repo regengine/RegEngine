@@ -12,7 +12,8 @@ tests; nothing reaches the network):
   field, confidence, band, would-apply and blocked reason, plus model,
   request id and latency.
 * Exit codes: 0 ok / no unrecognised headers (no request), 1 usage or file
-  error, 2 not configured or switched off, 3 vendor unavailable.
+  error (including a malformed header row, which is never sent), 2 not
+  configured or switched off, 3 vendor unavailable.
 * The API key never appears on stdout, stderr or in log events.
 """
 
@@ -465,6 +466,53 @@ def test_usage_and_file_errors_exit_1(script, capsys, tmp_path):
         assert out == "", argv
         assert err.startswith("jev_header_preview: error: "), argv
         assert "requests" not in seen, argv
+
+
+# The review's reproduction: an unterminated quote makes the reader take the
+# rest of the file, PII included, as a single "header".
+OPEN_QUOTE_CSV_TEXT = '"Lot #,product_description,Notes\nTLC-1,Kale,call 555-123-4567 jane@example.com\nTLC-2,Chard,x\n'
+
+
+@pytest.mark.parametrize("env", [BASE_ENV, {}], ids=["configured", "not-configured"])
+def test_unterminated_quote_header_is_never_sent_or_called_no_rows(script, capsys, tmp_path, env):
+    path = str(_csv(tmp_path, OPEN_QUOTE_CSV_TEXT))
+    argv = [path, "--json", "--sample-values", "2", "--cte-type", "harvesting"]
+    seen: dict = {}
+    code, out, err, logs = _run(script, capsys, argv, env=env, seen=seen)
+
+    assert "requests" not in seen  # zero requests reached the transport
+    assert code == 1
+    report = json.loads(out)
+    assert report["status"] == "malformed_header" and report["exit_code"] == 1
+    assert report["request"]["malformed_header_reason"] == "the header row spans 3 lines"
+    assert report["request"]["unrecognized_headers"] == []
+    assert report["request"]["file_cte_type"] is None and report["request"]["file_cte_type_dropped"] is None
+    assert report["suggestions"] == []
+    assert err.startswith(
+        "jev_header_preview: malformed_header: The header row is malformed (the header row spans 3 lines)"
+    )
+    for text in (out, err, json.dumps(logs, default=str)):
+        assert "555-123-4567" not in text and "jane@example.com" not in text
+
+    code, out, err, _ = _run(script, capsys, [path], env=env, seen=seen)
+    assert code == 1
+    assert "requests" not in seen
+    assert "Columns: the header row is malformed: the header row spans 3 lines" in out
+    assert "Sent:    nothing" in out
+    assert "no rows" not in out  # never claim rows were withheld from a request that did not happen
+    assert "555-123-4567" not in out + err
+
+
+def test_over_long_header_is_never_sent(script, capsys, tmp_path):
+    text = CSV_TEXT.replace("Notes\n", "Notes " + "x" * 200 + "\n", 1)
+    seen: dict = {}
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path, text)), "--json"], env=BASE_ENV, seen=seen)
+
+    assert "requests" not in seen
+    assert code == 1
+    report = json.loads(out)
+    assert report["status"] == "malformed_header"
+    assert report["request"]["malformed_header_reason"] == "a header is 206 characters long (limit 128)"
 
 
 def test_oversized_file_is_rejected_like_the_route(script, capsys, tmp_path, monkeypatch):

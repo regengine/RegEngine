@@ -18,6 +18,7 @@ Contract pinned here:
 
 from __future__ import annotations
 
+import asyncio
 import collections
 import json
 import uuid
@@ -631,6 +632,90 @@ def test_sample_values_are_sent_only_when_configured_and_are_redacted(harness):
     assert columns["Lot #"]["sample_values"] == ["TLC-001", "TLC-002"]
     assert columns["Notes"]["sample_values"] == ["call [PHONE_REDACTED]"]
     assert "555-123-4567" not in json.dumps(seen["bodies"][0])
+
+
+# ---------------------------------------------------------------------------
+# Malformed header row: row data never leaves as a "header"
+# ---------------------------------------------------------------------------
+
+# The review's reproduction: an unterminated quote makes the reader take the
+# rest of the file, PII included, as a single "header".
+OPEN_QUOTE_TEXT = '"Lot #,product_description,Notes\nTLC-1,Kale,call 555-123-4567 jane@example.com\nTLC-2,Chard,x\n'
+
+# One ordinary line whose last header is far longer than any column name.
+LONG_HEADER_TEXT = (
+    "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,"
+    "reference_document,Notes " + "x" * 200 + "\n"
+    "TLC-001,Kale,10,lbs,2026-04-17,Farm A,REF-1,call 555-123-4567\n"
+)
+
+
+def test_unterminated_quote_in_the_header_row_sends_nothing(harness, caplog):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(DEFAULT_ANSWERS, seen), header_sample_values=2))
+
+    with caplog.at_level("WARNING", logger="csv-templates"):
+        resp = _post(_client(), OPEN_QUOTE_TEXT.encode(), data={"cte_type": "harvesting"})
+
+    assert "bodies" not in seen  # zero requests reached the transport
+    assert resp.status_code == 400  # no data rows, exactly as without Jev
+    assert harness["artifacts"] == [] and harness["payloads"] == []
+    logged = caplog.text
+    assert "csv_header_mapping_malformed_header reason=the header row spans 3 lines" in logged
+    assert "555-123-4567" not in logged and "jane@example.com" not in logged
+
+
+def test_malformed_header_row_is_reported_on_the_response_with_no_evidence(harness):
+    seen: dict = {}
+    harness["use_decider"](
+        _decider(_transport(DEFAULT_ANSWERS, seen), apply_header_mappings=True, header_sample_values=2)
+    )
+
+    resp = _post(_client(), LONG_HEADER_TEXT.encode())
+
+    assert "bodies" not in seen
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    engine = body["header_mapping_engine"]
+    assert engine["status"] == "malformed_header"
+    assert engine["model"] is None and engine["request_id"] is None and engine["questions_version"] is None
+    assert engine["artifacts_recorded"] == 0
+    assert body["header_mapping_suggestions"] == []
+    assert harness["artifacts"] == []
+    # The rows themselves are unaffected: the file ingests as it would without Jev.
+    assert body["accepted"] == 1
+
+
+@pytest.mark.parametrize(
+    "text,reason",
+    [
+        (OPEN_QUOTE_TEXT, "the header row spans 3 lines"),
+        ('"Ship\nDate",quantity\nA,1\n', "the header row spans 2 lines"),
+        ('"Ship\rDate",quantity\nA,1\n', "a header contains a line break"),
+        (LONG_HEADER_TEXT, "a header is 206 characters long (limit 128)"),
+    ],
+    ids=["unterminated-quote", "quoted-newline", "quoted-carriage-return", "over-cap"],
+)
+def test_malformed_header_row_stops_every_reader_of_the_file(text, reason):
+    headers, samples, malformed = ct._csv_headers_and_samples(text, 5)
+    assert malformed == reason
+    assert samples == {}  # no sample values are even collected
+    # The CTE value scan neither scans nor names the "headers".
+    assert ct._file_cte_type_for_jev(text, "shipping") == (None, "the header row is malformed")
+
+    seen: dict = {}
+    decider = _decider(_transport(DEFAULT_ANSWERS, seen), header_sample_values=5)
+    result = asyncio.run(ct._suggest_header_mappings_for_upload(text, decider=decider, cte_type="shipping"))
+    assert result.status == "malformed_header"
+    assert "bodies" not in seen
+
+
+def test_well_formed_header_rows_are_unchanged():
+    quoted = '"Lot #","Notes, internal",quantity\nA,B,1\n'  # properly closed quotes on one line
+    for text in (CSV_BODY.decode(), CSV_BODY.decode().replace("\n", "\r\n"), quoted):
+        headers, samples, malformed = ct._csv_headers_and_samples(text, 2)
+        assert malformed is None and headers
+    assert ct._csv_headers_and_samples(quoted, 2)[0] == ["Lot #", "Notes, internal", "quantity"]
 
 
 # ---------------------------------------------------------------------------

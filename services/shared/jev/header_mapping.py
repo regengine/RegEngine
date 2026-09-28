@@ -32,7 +32,10 @@ How it works
 
 What leaves the process: the CSV header row and, only when
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES`` is set, up to that many PII-redacted
-sample values per unrecognised column. Never whole rows.
+sample values per unrecognised column. Never whole rows: a header row that
+spans lines, contains a line break or has a header over
+:data:`MAX_HEADER_CHARS` characters is refused (``malformed_header``) and
+nothing is sent.
 """
 
 from __future__ import annotations
@@ -69,6 +72,14 @@ PURPOSE = "csv_header_mapping"
 NO_MATCH = "no_match"
 MAX_COLUMNS_PER_UPLOAD = 48
 MAX_SAMPLE_VALUE_CHARS = 64
+# Longest header, after stripping, that can be a real column name. The
+# longest name RegEngine itself uses is 25 characters
+# (``immediate_previous_source``) and the longest vocabulary example is 21
+# (``Ingredient Quantities``); descriptive ERP export headers run to 40-60.
+# 128 leaves that 2x headroom. Anything longer is almost certainly row data
+# swallowed into the header (an unterminated quote), so it is never sent.
+MAX_HEADER_CHARS = 128
+MALFORMED_HEADER = "malformed_header"
 
 # Canonical vocabulary. Keys are the exact column names the CSV parser and
 # the FSMA validators consume. Descriptions follow the vendor guidance for
@@ -241,6 +252,23 @@ CANONICAL_FIELD_NAMES: frozenset[str] = frozenset(name for name in CANONICAL_FIE
 def normalize_csv_header(header: str | None) -> str:
     """Normalise a header exactly as the CSV parser does before it looks up columns."""
     return (header or "").strip().lower().replace(" ", "_")
+
+
+def malformed_header_reason(headers: Iterable[str | None]) -> str | None:
+    """Why this cannot be a real header row, or ``None`` when it can.
+
+    An unterminated quote makes the CSV reader take the rest of the file as
+    one header, so whole rows would leave the process as a "column name". A
+    header with a line break, or longer than :data:`MAX_HEADER_CHARS`, is
+    refused. The reason names the problem, never the header's content.
+    """
+    for header in headers:
+        text = (header or "").strip()
+        if "\r" in text or "\n" in text:
+            return "a header contains a line break"
+        if len(text) > MAX_HEADER_CHARS:
+            return f"a header is {len(text)} characters long (limit {MAX_HEADER_CHARS})"
+    return None
 
 
 def unrecognized_headers(headers: Iterable[str | None], recognized: Collection[str]) -> list[str]:
@@ -533,6 +561,11 @@ def suggest_header_mappings(
 
     if not decider.enabled:
         return HeaderMappingResult(status="disabled", thresholds=thresholds, apply_enabled=apply_enabled)
+
+    # Defence in depth for any caller: the CSV route also refuses a header
+    # row that spans lines before it gets here (``_csv_headers_and_samples``).
+    if malformed_header_reason(all_headers):
+        return HeaderMappingResult(status=MALFORMED_HEADER, thresholds=thresholds, apply_enabled=apply_enabled)
 
     columns = unrecognized_headers(all_headers, recognized)
     if not columns:

@@ -40,7 +40,13 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
 
 ## Request flow
 
-1. The route reads the header row. Headers the parser recognises
+1. The route reads the header row. If it is malformed (it spans more than
+   one physical line, a header contains a line break, or a header is longer
+   than 128 characters after stripping), nothing is sent, not even the
+   header row, and the status is `malformed_header`; see
+   [Failure modes](#failure-modes). An unterminated quote is the usual
+   cause: the reader then takes the rest of the file as one "header", so
+   sending it would send whole rows. Headers the parser recognises
    (`_RECOGNIZED_COLUMNS` in `csv_templates.py`: every column
    `parse_csv_rows`, the templates, the required-KDE table and the canonical
    normalizer read by name) are skipped. Blank and duplicate headers are
@@ -165,7 +171,12 @@ Applied mappings are also written to the application log as
 
 ## What leaves the process
 
-- Always (when configured): the CSV header row.
+- Always (when configured): the CSV header row, but only a well-formed one:
+  a single physical line, no line breaks inside a header, and no header
+  over 128 characters after stripping (`MAX_HEADER_CHARS` in
+  `services/shared/jev/header_mapping.py`; RegEngine's own longest column
+  name is 25 characters). Otherwise nothing at all is sent
+  (`malformed_header`), so row data can never leave as a "header".
 - Only when the upload passes the `cte_type` form field and no row can
   contradict it: its canonical CTE name (for example `shipping`) as
   `file_cte_type`. Listed in the TypeSafe entry of
@@ -281,7 +292,10 @@ and `Trucking Co` show `would_apply: yes`, since the file has no
 
 Exit codes: `0` suggestions received, or no unrecognised headers (no request
 made); `1` bad usage (including an unknown `--cte-type`), an unreadable, oversized (over 5 MB) or non-UTF-8
-file (stdout stays empty, the message goes to stderr), or an unexpected error
+file (stdout stays empty, the message goes to stderr), a malformed header
+row (status `malformed_header`, with or without a key: the report on stdout
+names the problem, never the header's content, says `Sent: nothing`, and a
+hint goes to stderr), or an unexpected error
 (status `error`, for example a malformed `TYPESAFE_BASE_URL`); `2` not configured (`TYPESAFE_API_KEY` unset) or switched off
 (`REGENGINE_JEV_ENABLED=0`); `3` vendor unavailable. For `2` and `3` the
 status (for example `unavailable:auth`) and a one-line hint go to stderr.
@@ -319,6 +333,7 @@ repository. (`.env` is excluded from commits but is still plaintext on disk.)
 | --- | --- |
 | `ok` | Answers received and recorded. |
 | `no_unrecognized_headers` | Every column was already known; no request made. |
+| `malformed_header` | The header row spans lines, contains a line break, or has a header over 128 characters (usually an unterminated quote). No request made, no sample values collected, no artifacts; `csv_header_mapping_malformed_header` is logged with the reason, never the header. Such a file usually fails row parsing too (400); if its rows parse, they ingest exactly as without Jev. |
 | `unavailable:disabled` | Kill switch or no key (engine field is null in this case). |
 | `unavailable:auth` | 401/403 from the vendor: check the key. |
 | `unavailable:rate_limited` | 429 after retries. |
