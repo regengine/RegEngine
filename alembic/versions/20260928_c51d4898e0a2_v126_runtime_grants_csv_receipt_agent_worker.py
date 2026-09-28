@@ -66,6 +66,8 @@ The foreign key is validated as the NOBYPASSRLS owner with the v116/v120
 pattern: FORCE RLS would apply the tenant policies to the owner, whose
 ``get_tenant_context()`` raises without a tenant. Rows that would violate
 the new key abort the migration with their count; nothing is deleted.
+``runbooks/predeploy-v126-misattached-blobs.sql`` lists them beforehand from
+a provider superuser/BYPASSRLS session.
 
 Downgrade restores the single-column foreign key, revokes exactly these
 grants, and restores the prior function definitions byte-for-byte (v079
@@ -509,16 +511,35 @@ def _constraint_exists(conn, name: str) -> bool:
     ).scalar_one()
 
 
+_PREDEPLOY_RUNBOOK = "runbooks/predeploy-v126-misattached-blobs.sql"
+
+
+def _misattached_blobs_refusal(count: int) -> str:
+    """Operator guidance when existing rows would violate the new key.
+
+    A plain schema-owner session cannot review them: under FORCE RLS it
+    errors without app.tenant_id, and with a tenant it sees no
+    ingestion_runs rows (those policies are TO the runtime roles), so every
+    blob of that tenant would look misattached.
+    """
+    return (
+        f"v126: {count} fsma.manifest_blobs row(s) are not attached to an ingestion run of "
+        "their own tenant; refusing to add the (ingestion_run_id, tenant_id) foreign key. "
+        "Nothing was changed or deleted. List them with "
+        f"{_PREDEPLOY_RUNBOOK} from a provider superuser or BYPASSRLS session, or as "
+        "the schema owner only after ALTER TABLE fsma.ingestion_runs / fsma.manifest_blobs "
+        "NO FORCE ROW LEVEL SECURITY inside a transaction that is rolled back. A plain "
+        "schema-owner session gives wrong per-tenant results under FORCE RLS (it sees no "
+        "ingestion runs and flags every blob of the tenant) -- do not delete evidence on "
+        "that basis."
+    )
+
+
 def _pin_blobs_to_their_tenant_run() -> None:
     with _owner_validates_blob_runs() as conn:
         misattached = conn.execute(sa.text(_BLOBS_OFF_THEIR_TENANT_RUN)).scalar_one()
         if misattached:
-            raise RuntimeError(
-                f"v126: {misattached} fsma.manifest_blobs row(s) are not attached to an "
-                "ingestion run of their own tenant; refusing to add the (ingestion_run_id, "
-                "tenant_id) foreign key. Nothing was changed or deleted -- review those rows "
-                "as the schema owner before retrying."
-            )
+            raise RuntimeError(_misattached_blobs_refusal(misattached))
         for quoted_name in conn.execute(sa.text(_SINGLE_COLUMN_BLOB_RUN_FKS)).scalars().all():
             conn.execute(sa.text(f"ALTER TABLE fsma.manifest_blobs DROP CONSTRAINT {quoted_name}"))
         if not _constraint_exists(conn, _BLOB_RUN_TENANT_FK):

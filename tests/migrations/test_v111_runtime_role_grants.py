@@ -10,6 +10,8 @@ import importlib.util
 import json
 import os
 import re
+import shutil
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -19,6 +21,7 @@ import pytest
 from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore
 from shared.tenant_context import set_rls_tenant_id
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
@@ -1752,6 +1755,69 @@ def test_digest_helpers_are_pinned_owner_definers(owner_engine, migration_owner_
     assert not helpers["sha256_text_array_is_valid"].prosecdef
     for helper in helpers.values():
         assert helper.runtime_execute and not helper.public_execute, helper.proname
+
+
+_RUNBOOKS = Path(__file__).resolve().parents[2] / "runbooks"
+
+
+def _run_runbook(url: str, runbook: str, *, search_path: str | None = None) -> subprocess.CompletedProcess:
+    """Execute an operator runbook with psql exactly as documented.
+
+    Credentials travel in the child's environment, never on the command line,
+    and assertion output below carries only psql's own stdout/stderr.
+    """
+    psql = shutil.which("psql")
+    if psql is None:
+        pytest.fail("psql is required to execute the operator runbooks")
+    target = make_url(url)
+    env = {
+        **os.environ,
+        "PGHOST": target.host or str(target.query.get("host", "")),
+        "PGPORT": str(target.port or target.query.get("port", 5432)),
+        "PGUSER": target.username or "",
+        "PGPASSWORD": target.password or "",
+        "PGDATABASE": target.database or "",
+        "PGOPTIONS": f"-c search_path={search_path}" if search_path else "",
+    }
+    return subprocess.run(
+        [psql, "-X", "-q", "-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=1", "-f", str(_RUNBOOKS / runbook)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize("search_path", [None, "public,fsma,extensions"])
+def test_v126_verify_runbook_reports_ready_for_the_migration_owner(search_path):
+    """runbooks/verify-v126-runtime-grants.sql is READY at head from any search_path.
+
+    Migration sessions use public,fsma,extensions; the runbook must not read
+    schema-dependent catalog text (a false NOT READY after a correct deploy).
+    """
+    result = _run_runbook(OWNER_URL, "verify-v126-runtime-grants.sql", search_path=search_path)
+    assert result.returncode == 0, result.stderr
+    checks = [line.split("|") for line in result.stdout.splitlines() if line.count("|") == 3]
+    assert len(checks) > 30
+    assert [check for check in checks if check[3] != "t"] == []
+    assert checks[-1][0].startswith("== READY") and checks[-1][3] == "t"
+
+
+def test_v126_predeploy_runbook_needs_a_session_that_sees_every_row():
+    """The pre-deploy listing runs for the provider and refuses the plain owner.
+
+    Under FORCE RLS the NOBYPASSRLS owner would see no ingestion runs and
+    report every blob as misattached, so the runbook stops instead.
+    """
+    provider = _run_runbook(ROLE_ADMIN_URL, "predeploy-v126-misattached-blobs.sql")
+    assert provider.returncode == 0, provider.stderr
+    # The composite key at head admits no misattached blob.
+    assert provider.stdout.strip() == ""
+
+    owner = _run_runbook(OWNER_URL, "predeploy-v126-misattached-blobs.sql", search_path="public,fsma,extensions")
+    assert owner.returncode != 0
+    assert "provider superuser or BYPASSRLS session" in owner.stderr
 
 
 def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):

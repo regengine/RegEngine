@@ -29,7 +29,9 @@
 --   BEFORE the deploy: the final `== READY` row has `ok = f`; the failing
 --     rows name what is missing (manifest_blobs column INSERT and foreign key,
 --     the column SELECTs, EXECUTE, the definer helpers, qualified digest,
---     parent-run lock).
+--     parent-run lock). Also run runbooks/predeploy-v126-misattached-blobs.sql
+--     from a provider superuser/BYPASSRLS session: it must return no rows,
+--     otherwise v126 refuses to add the (ingestion_run_id, tenant_id) key.
 --   AFTER the deploy (migrations + runtime-role cutover): every row, and the
 --     `== READY` row, has `ok = t`. Run it again after the NEXT deploy too:
 --     the cutover rebuilds grants and helpers on every deploy and must leave
@@ -39,6 +41,9 @@
 -- =============================================================================
 
 BEGIN TRANSACTION READ ONLY;
+-- Name resolution and catalog deparsing must not depend on the caller's
+-- search_path (migration sessions run with public,fsma,extensions).
+SET LOCAL search_path = pg_catalog, pg_temp;
 
 SELECT version_num AS alembic_version FROM public.alembic_version;
 
@@ -86,17 +91,42 @@ checks(sort_key, check_name, expected, actual) AS (
     UNION ALL SELECT 16, 'manifest_blobs storage_url/created_at not insertable', false,
         has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'storage_url', 'INSERT')
         OR has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'created_at', 'INSERT')
+    -- Compared through the catalog, not pg_get_constraintdef() text, whose
+    -- schema prefix depends on the session search_path.
     UNION ALL SELECT 17, 'manifest_blobs FK is (ingestion_run_id, tenant_id) -> ingestion_runs', true,
         EXISTS (
-            SELECT 1 FROM pg_constraint
-             WHERE conrelid = to_regclass('fsma.manifest_blobs') AND contype = 'f' AND convalidated
-               AND confrelid = to_regclass('fsma.ingestion_runs')
-               AND pg_get_constraintdef(oid) LIKE 'FOREIGN KEY (ingestion_run_id, tenant_id) REFERENCES fsma.ingestion_runs(id, tenant_id)%'
+            SELECT 1
+              FROM pg_constraint AS con
+             WHERE con.conrelid = to_regclass('fsma.manifest_blobs')
+               AND con.contype = 'f'
+               AND con.convalidated
+               AND con.confdeltype = 'c'
+               AND con.confrelid = to_regclass('fsma.ingestion_runs')
+               AND ARRAY(
+                       SELECT a.attname::text
+                         FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+                         JOIN pg_attribute AS a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+                        ORDER BY k.ord
+                   ) = ARRAY['ingestion_run_id', 'tenant_id']
+               AND ARRAY(
+                       SELECT a.attname::text
+                         FROM unnest(con.confkey) WITH ORDINALITY AS k(attnum, ord)
+                         JOIN pg_attribute AS a ON a.attrelid = con.confrelid AND a.attnum = k.attnum
+                        ORDER BY k.ord
+                   ) = ARRAY['id', 'tenant_id']
         )
         AND NOT EXISTS (
-            SELECT 1 FROM pg_constraint
-             WHERE conrelid = to_regclass('fsma.manifest_blobs') AND contype = 'f'
-               AND pg_get_constraintdef(oid) LIKE 'FOREIGN KEY (ingestion_run_id) REFERENCES%'
+            SELECT 1
+              FROM pg_constraint AS con
+             WHERE con.conrelid = to_regclass('fsma.manifest_blobs')
+               AND con.contype = 'f'
+               AND con.confrelid = to_regclass('fsma.ingestion_runs')
+               AND ARRAY(
+                       SELECT a.attname::text
+                         FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+                         JOIN pg_attribute AS a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+                        ORDER BY k.ord
+                   ) = ARRAY['ingestion_run_id']
         )
 
     -- Agent-artifact worker: fsma.agent_artifacts
@@ -232,16 +262,3 @@ SELECT (SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.ex
          LIMIT 1) AS regengine_role_settings;
 
 ROLLBACK;
-
--- OPTIONAL, BEFORE the deploy, only from a session that bypasses RLS (for
--- example a provider superuser; under FORCE RLS the tenant policy raises for
--- anyone else): blobs the new (ingestion_run_id, tenant_id) foreign key would
--- reject. v126 aborts with this count rather than deleting anything.
---
---   BEGIN TRANSACTION READ ONLY;
---   SELECT count(*) AS blobs_off_their_tenant_run
---     FROM fsma.manifest_blobs AS blob
---    WHERE NOT EXISTS (SELECT 1 FROM fsma.ingestion_runs AS run
---                       WHERE run.id = blob.ingestion_run_id
---                         AND run.tenant_id = blob.tenant_id);
---   ROLLBACK;

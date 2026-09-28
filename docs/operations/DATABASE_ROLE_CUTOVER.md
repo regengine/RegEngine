@@ -169,6 +169,24 @@ ownership drift. It intentionally fails for a superuser/BYPASSRLS credential,
 role membership, mismatched database/schema/object ownership, or an identity
 pin mismatch until the provider administrator corrects the posture.
 
+### v126 (`c51d4898e0a2`): CSV retention and agent-worker grants
+
+v126 grants the runtime role what `POST /api/v1/ingest/csv` and the
+agent-artifact worker write, and pins each `fsma.manifest_blobs` row to its own
+tenant's run with an `(ingestion_run_id, tenant_id)` foreign key.
+
+- Before the deploy, run `runbooks/predeploy-v126-misattached-blobs.sql` from a
+  provider superuser or BYPASSRLS session. It must return no rows; otherwise
+  v126 refuses with the row count and changes nothing. Do not review those rows
+  from a plain schema-owner session: under FORCE RLS it errors without a
+  tenant, and with one it sees no `fsma.ingestion_runs` rows and flags every
+  blob of that tenant. The runbook header shows the schema-owner alternative
+  (NO FORCE inside a transaction that is rolled back).
+- After the deploy, and again after the next one, run
+  `runbooks/verify-v126-runtime-grants.sql` as the migration owner. Every row,
+  including `== READY`, must report `ok = t`. It pins its own search_path, so a
+  session with `search_path=public,fsma,extensions` gives the same result.
+
 ## 4. Configure and verify runtime boot
 
 The consolidated Railway service requires:
