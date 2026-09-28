@@ -294,6 +294,16 @@ The script refuses a run, before writing anything, in each of these cases:
 - The Postgres service's `DATABASE_PUBLIC_URL` is not that service's own
   `RAILWAY_TCP_PROXY_DOMAIN:RAILWAY_TCP_PROXY_PORT`.
 - The server is older than PostgreSQL 15.
+- `psql --version` reports a major version older than 13. libpq before 13
+  silently ignores `PGCHANNELBINDING`, and that setting is what protects the
+  passwords (see step 1). The check relies on psql being linked against the
+  libpq of its own major version, as the PGDG, Homebrew and Debian/Ubuntu
+  packages are.
+- A RegEngine role is a member of a foreign role and used that membership's
+  ADMIN OPTION to grant the foreign role to another role outside RegEngine.
+  Revoking that membership would cascade outside RegEngine, and
+  `--adopt-existing-roles` never does that. Revoke those grants by hand after
+  review, then re-run. The dry run lists them as `BLOCKING GRANT`.
 - A pre-existing `regengine*` role is used outside the target database. That
   covers objects, privileges or settings in other databases, open sessions
   there, role memberships, and any elevated attribute (SUPERUSER, BYPASSRLS,
@@ -317,16 +327,34 @@ The script refuses a run, before writing anything, in each of these cases:
 1. As the Postgres template superuser, it pins the three roles with the
    attributes in section 1 and revokes their memberships. The pinned
    attributes add VALID UNTIL `infinity`, no connection limit, and no
-   role-level settings. It then creates the database from `template0` if it
+   role-level settings. A grant of a RegEngine role is revoked with
+   `CASCADE`; every grant that depends on it is itself a grant of that
+   RegEngine role, so the cascade stays within what the dry run listed. This
+   covers a membership re-granted by another member through its ADMIN OPTION.
+   A RegEngine role's own membership of a foreign role is never cascaded.
+   Each grant is re-checked just before it is revoked, so one an earlier
+   cascade already removed is skipped silently.
+   It then creates the database from `template0` if it
    is absent, runs `REVOKE ALL ... FROM PUBLIC`, and grants `CONNECT` to the
    three roles. It pins `search_path = public, fsma, extensions` and
    `timezone = UTC` for the migrator in that database only; these are the
    session defaults CI passes through `PGOPTIONS`.
    The superuser URL is used only inside the process that
    `railway run -s Postgres` starts. A launcher there turns the URL into libpq
-   environment variables with `PGSSLMODE=require`. The URL and password never
-   appear in a command line, in the output, or in a file. Every connection
-   through the public proxy requires TLS. A timeout or Ctrl-C kills the whole
+   environment variables with `PGSSLMODE=require` and
+   `PGCHANNELBINDING=require`. The URL and password never appear in a command
+   line, in the output, or in a file.
+   Every connection through the public proxy, superuser and role logins
+   alike, requires TLS and SCRAM-SHA-256 with channel binding
+   (SCRAM-SHA-256-PLUS over `tls-server-end-point`). Channel binding, not the
+   certificate, is what protects the passwords. psql refuses to send a
+   cleartext or MD5 password, or to finish SCRAM without binding it to the
+   TLS channel it actually sees. An interceptor presenting its own
+   certificate therefore gets no password and cannot relay the login. Railway's
+   proxy certificate is self-signed, so the certificate itself is not
+   CA-verified. The Railway server must allow SCRAM for these logins; if it
+   does not, psql refuses to connect and the run stops.
+   A timeout or Ctrl-C kills the whole
    child process group, including psql. Every session sets
    `client_connection_check_interval`, so the server also drops the session
    and rolls back its open transaction.
@@ -334,8 +362,7 @@ The script refuses a run, before writing anything, in each of these cases:
    `PG*` settings. A personal `~/.postgresql/root.crt`, `PGSSLROOTCERT` or
    `PGSSLMODE` would otherwise turn `sslmode=require` into CA verification,
    and that fails against Railway's self-signed proxy certificate. The dry run
-   notes when such a file or variable exists. The connection is encrypted but
-   the proxy certificate is not CA-verified.
+   notes when such a file or variable exists.
    `REVOKE ALL ... FROM PUBLIC` also removes the default `TEMP` privilege, so
    the runtime roles cannot create temporary tables. That makes staging
    stricter than CI, whose scratch databases keep PUBLIC's defaults. No
@@ -355,8 +382,11 @@ The script refuses a run, before writing anything, in each of these cases:
 
 Railway CLI writes are not staged. They are live at once, and the next deploy,
 including one triggered by a push, uses them. `--skip-deploys` only stops the
-CLI itself from starting one. Writing `MIGRATIONS_DATABASE_URL` last means a
-deploy that starts mid-run stops harmlessly at `run-migrations.sh` (exit 64).
+CLI itself from starting one. Because `MIGRATIONS_DATABASE_URL` is written
+last, a deploy that starts mid-run stops at `run-migrations.sh` and gunicorn
+never starts. On a first run it exits 64 because `MIGRATIONS_DATABASE_URL` is
+still unset. On a `--rotate-passwords` re-run the variable still holds the
+old password, so the migration login fails password authentication.
 Every value goes to `railway variable set NAME --stdin`. To check what exists,
 the script reads the raw variable values into memory. It prints names only,
 never values.
