@@ -65,11 +65,15 @@ def opener_returning(response: FakeResponse, captured: list[Request] | None = No
     return open_request
 
 
+def credential_env(value: str = "unit-key") -> dict[str, str]:
+    return {"REGENGINE_API_KEY": value}  # pragma: allowlist secret
+
+
 def test_success_uses_get_and_emits_only_sanitized_evidence() -> None:
-    api_key = "sensitive-unit-key"
+    credential = "sensitive-unit-key"
     captured: list[Request] = []
     evidence = mod.verify_runtime(
-        env={"REGENGINE_API_KEY": api_key},
+        env=credential_env(credential),
         open_request=opener_returning(
             json_response([scenario(), scenario(id="unrelated", csv="private-customer-csv")]),
             captured,
@@ -79,7 +83,7 @@ def test_success_uses_get_and_emits_only_sanitized_evidence() -> None:
     assert len(captured) == 1
     request = captured[0]
     assert request.get_method() == "GET"
-    assert request.get_header("X-regengine-api-key") == api_key
+    assert request.get_header("X-regengine-api-key") == credential
     assert evidence == {
         "endpoint": mod.DEFAULT_ENDPOINT,
         "scenario": {
@@ -92,7 +96,7 @@ def test_success_uses_get_and_emits_only_sanitized_evidence() -> None:
         "status": "verified",
     }
     rendered = json.dumps(evidence)
-    assert api_key not in rendered
+    assert credential not in rendered
     assert "private-customer-csv" not in rendered
     assert "\"csv\"" not in rendered
 
@@ -131,7 +135,7 @@ def test_unapproved_endpoint_fails_before_network(endpoint: str) -> None:
 
     with pytest.raises(mod.VerificationError, match="approved production endpoint"):
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             endpoint=endpoint,
             open_request=open_request,
         )
@@ -142,7 +146,7 @@ def test_unapproved_endpoint_fails_before_network(endpoint: str) -> None:
 def test_non_200_response_fails_without_body_disclosure() -> None:
     with pytest.raises(mod.VerificationError, match="HTTP 503") as exc_info:
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             open_request=opener_returning(
                 FakeResponse(b'{"detail":"private-provider-error"}', status=503)
             ),
@@ -154,7 +158,7 @@ def test_non_200_response_fails_without_body_disclosure() -> None:
 def test_malformed_json_fails_without_body_disclosure() -> None:
     with pytest.raises(mod.VerificationError, match="valid JSON") as exc_info:
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             open_request=opener_returning(FakeResponse(b"private-not-json")),
         )
 
@@ -165,7 +169,7 @@ def test_malformed_json_fails_without_body_disclosure() -> None:
 def test_non_array_payload_fails(payload) -> None:
     with pytest.raises(mod.VerificationError, match="JSON array"):
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             open_request=opener_returning(json_response(payload)),
         )
 
@@ -173,7 +177,7 @@ def test_non_array_payload_fails(payload) -> None:
 def test_missing_scenario_fails() -> None:
     with pytest.raises(mod.VerificationError, match="missing"):
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             open_request=opener_returning(json_response([scenario(id="other")])),
         )
 
@@ -181,7 +185,7 @@ def test_missing_scenario_fails() -> None:
 def test_duplicate_scenario_fails() -> None:
     with pytest.raises(mod.VerificationError, match="duplicate"):
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             open_request=opener_returning(json_response([scenario(), scenario()])),
         )
 
@@ -200,21 +204,21 @@ def test_duplicate_scenario_fails() -> None:
 def test_mismatched_scenario_fields_fail(overrides, message: str) -> None:
     with pytest.raises(mod.VerificationError, match=message):
         mod.verify_runtime(
-            env={"REGENGINE_API_KEY": "unit-key"},
+            env=credential_env(),
             open_request=opener_returning(json_response([scenario(**overrides)])),
         )
 
 
 def test_main_never_prints_api_key_or_full_csv(capsys: pytest.CaptureFixture[str]) -> None:
-    api_key = "sensitive-unit-key"
+    credential = "sensitive-unit-key"
     exit_code = mod.main(
         [],
-        env={"REGENGINE_API_KEY": api_key},
+        env=credential_env(credential),
         open_request=opener_returning(json_response([scenario()])),
     )
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert api_key not in captured.out + captured.err
+    assert credential not in captured.out + captured.err
     assert "cte_type,traceability_lot_code" not in captured.out + captured.err
     assert json.loads(captured.out)["scenario"]["csv_contains_demo_lot"] is True
