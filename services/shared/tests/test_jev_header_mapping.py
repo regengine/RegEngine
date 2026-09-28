@@ -15,6 +15,7 @@ The policy under test, in one place:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import uuid
 
@@ -26,7 +27,9 @@ from shared.jev.header_mapping import (
     AGENT_NAME,
     CANONICAL_FIELD_NAMES,
     CANONICAL_FIELDS,
+    MALFORMED_HEADER,
     MAX_COLUMNS_PER_UPLOAD,
+    MAX_HEADER_CHARS,
     NO_MATCH,
     PURPOSE,
     QUESTIONS_VERSION,
@@ -35,6 +38,7 @@ from shared.jev.header_mapping import (
     build_questions,
     build_state,
     collect_sample_values,
+    malformed_header_reason,
     normalize_csv_header,
     outranked_columns,
     suggest_header_mappings,
@@ -124,6 +128,47 @@ def test_build_state_only_includes_samples_when_present():
     assert build_state(["Lot #"], ["Lot #"], None)["columns_to_map"] == [{"index": 0, "header": "Lot #"}]
 
 
+def test_build_state_without_cte_type_is_the_v1_shape_byte_for_byte():
+    # A file without a declared CTE must send exactly what it sent before
+    # ``file_cte_type`` existed: no key, not a null.
+    expected = {
+        "csv_headers": ["Lot #", "quantity"],
+        "columns_to_map": [{"index": 0, "header": "Lot #", "sample_values": ["L1"]}],
+    }
+    for state in (
+        build_state([" Lot # ", "quantity"], ["Lot #"], {"Lot #": ["L1"]}),
+        build_state([" Lot # ", "quantity"], ["Lot #"], {"Lot #": ["L1"]}, cte_type=None),
+    ):
+        assert state == expected
+        assert "file_cte_type" not in state
+        assert json.dumps(state) == (
+            '{"csv_headers": ["Lot #", "quantity"], '
+            '"columns_to_map": [{"index": 0, "header": "Lot #", "sample_values": ["L1"]}]}'
+        )
+
+
+def test_build_state_with_cte_type_names_the_file_cte():
+    state = build_state(["Ship Dt", "quantity"], ["Ship Dt"], None, cte_type="shipping")
+    assert state == {
+        "csv_headers": ["Ship Dt", "quantity"],
+        "columns_to_map": [{"index": 0, "header": "Ship Dt"}],
+        "file_cte_type": "shipping",
+    }
+
+
+def test_questions_explain_file_cte_type_and_the_version_says_so():
+    # The task text is what auditors read back from QUESTIONS_VERSION: a
+    # change to it must come with a new version.
+    assert QUESTIONS_VERSION == "csv-header-mapping.v2"
+    task = build_questions(["Ship Dt"])["col_0"]["instructions"]["task"]
+    assert task == (
+        "Decide which canonical FSMA 204 traceability field the CSV column described in "
+        "`column` represents. Use `csv_headers` in the state for context about the file. "
+        "When the state has `file_cte_type`, it names the FSMA 204 critical tracking event "
+        "that every row in the file records."
+    )
+
+
 # ---------------------------------------------------------------------------
 # suggest_header_mappings: request shape and policy
 # ---------------------------------------------------------------------------
@@ -145,6 +190,116 @@ def test_request_sends_header_row_and_only_unrecognized_columns():
     assert result.evidence.purpose == PURPOSE
     assert result.evidence.questions_version == QUESTIONS_VERSION
     assert result.evidence.request_id == "req_hm"
+    assert set(body["state"]) == {"csv_headers", "columns_to_map"}
+
+
+def test_declared_cte_type_reaches_the_request_state():
+    seen: dict = {}
+    result = suggest_header_mappings(
+        HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS, seen)), cte_type="shipping"
+    )
+
+    assert result.ok
+    assert seen["body"]["state"]["file_cte_type"] == "shipping"
+    assert seen["body"]["state"]["csv_headers"] == HEADERS
+    assert result.evidence.questions_version == "csv-header-mapping.v2"
+    assert result.file_cte_type == "shipping"
+    assert result.file_cte_type_dropped is None
+
+
+def _rationales(result: HeaderMappingResult) -> list[str]:
+    artifacts = build_field_mapping_artifacts(result, tenant_id=str(uuid.uuid4()), source_hash=SOURCE_HASH)
+    assert artifacts
+    return [artifact.payload.rationale for artifact in artifacts]
+
+
+@pytest.mark.parametrize(
+    "cte_type,dropped,expected",
+    [
+        ("shipping", None, "State file_cte_type: shipping."),
+        (None, None, "State file_cte_type: none (no CTE declared for the file)."),
+        (
+            None,
+            "file has a per-row CTE column: cte_type",
+            "State file_cte_type: none (declared CTE withheld: file has a per-row CTE column: cte_type).",
+        ),
+    ],
+    ids=["sent", "not-declared", "withheld"],
+)
+def test_artifact_rationale_records_what_jev_was_told_about_the_file_cte(cte_type, dropped, expected):
+    # The artifact and payload contracts are closed (extra="forbid", checked-in
+    # JSON schema), so the value travels in the rationale next to the version.
+    result = suggest_header_mappings(
+        HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS)), cte_type=cte_type
+    )
+    assert result.file_cte_type == cte_type
+    if dropped:
+        result = dataclasses.replace(result, file_cte_type_dropped=dropped)
+
+    for rationale in _rationales(result):
+        assert rationale.startswith(
+            f"TypeSafe Jev Choice question ({QUESTIONS_VERSION}) over the canonical FSMA 204 field vocabulary. "
+            f"{expected} "
+        )
+
+
+CTE_ANSWERS = {"Activity": _choice("cte_type", 0.97, no_match=0.03)}
+CTE_HEADERS = ["Activity", "quantity"]
+
+
+FALLBACK = (
+    "remains the fallback for rows where this column is blank or not a known CTE; "
+    "per-row values from this column override it."
+)
+
+
+@pytest.mark.parametrize(
+    "cte_type,dropped,note",
+    [
+        ("shipping", None, f"The declared file CTE shipping {FALLBACK}"),
+        (None, "column Activity holds per-row CTE values", f"The declared file CTE {FALLBACK}"),
+        (None, None, None),
+        ("", None, None),
+    ],
+    ids=["declared-and-sent", "declared-and-withheld", "not-declared", "empty"],
+)
+def test_cte_type_mapping_applies_as_before_and_says_the_declared_cte_is_only_a_fallback(cte_type, dropped, note):
+    # A row's own CTE beats the declared one in the parser, so the policy
+    # applies a cte_type mapping whether or not a file CTE was declared.
+    decider = _decider(_transport(CTE_ANSWERS), apply_header_mappings=True)
+    result = suggest_header_mappings(CTE_HEADERS, recognized=RECOGNIZED, decider=decider, cte_type=cte_type)
+    if dropped:
+        result = dataclasses.replace(result, file_cte_type_dropped=dropped)
+
+    assert result.applied_mapping == {"activity": "cte_type"}
+    (suggestion,) = result.suggestions
+    assert suggestion.band is ConfidenceBand.AUTO_APPLY and suggestion.blocked_reason is None
+    (rationale,) = _rationales(result)
+    assert "Applied to the upload's rows by deterministic code." in rationale
+    if note:
+        assert note in rationale
+    else:
+        assert "remains the fallback" not in rationale
+
+
+def test_fallback_note_is_only_for_applied_cte_type_mappings():
+    answers = {"Activity": _choice("cte_type", 0.70, no_match=0.30), "Lot #": _choice("traceability_lot_code", 0.97)}
+    decider = _decider(_transport(answers), apply_header_mappings=True)
+    result = suggest_header_mappings(
+        ["Activity", "Lot #", "quantity"], recognized=RECOGNIZED, decider=decider, cte_type="shipping"
+    )
+
+    assert result.applied_mapping == {"lot_#": "traceability_lot_code"}
+    assert all("remains the fallback" not in rationale for rationale in _rationales(result))
+
+
+def test_empty_cte_type_is_treated_as_not_declared():
+    seen: dict = {}
+    result = suggest_header_mappings(
+        HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS, seen)), cte_type=""
+    )
+    assert "file_cte_type" not in seen["body"]["state"]
+    assert result.file_cte_type is None
 
 
 def test_advisory_mode_never_applies_even_at_full_confidence():
@@ -269,6 +424,61 @@ def test_unknown_choice_label_is_treated_as_no_match():
     )
     assert result.suggestions[0].canonical_field is None
     assert result.suggestions[0].blocked_reason == "no_match"
+
+
+# ---------------------------------------------------------------------------
+# Malformed header rows: row data must never leave as a "header"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "header,reason",
+    [
+        ("Lot #", None),
+        ("x" * MAX_HEADER_CHARS, None),
+        ("  " + "x" * MAX_HEADER_CHARS + "  ", None),  # measured after stripping, as build_state sends it
+        (
+            "x" * (MAX_HEADER_CHARS + 1),
+            f"a header is {MAX_HEADER_CHARS + 1} characters long (limit {MAX_HEADER_CHARS})",
+        ),
+        ("Ship\nDate", "a header contains a line break"),
+        ("Ship\rDate", "a header contains a line break"),
+        (None, None),
+    ],
+    ids=["normal", "at-cap", "padded-at-cap", "over-cap", "newline", "carriage-return", "blank"],
+)
+def test_malformed_header_reason(header, reason):
+    assert malformed_header_reason(["quantity", header]) == reason
+
+
+def test_header_cap_leaves_headroom_over_every_known_column_name():
+    known = [name for name in CANONICAL_FIELDS] + [e for d in CANONICAL_FIELDS.values() for e in d["examples"]]
+    assert max(len(name) for name in known) * 4 < MAX_HEADER_CHARS
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        ["Lot #,product_description,Notes\nTLC-1,Kale,call 555-123-4567 jane@example.com\nTLC-2,Chard,x\n"],
+        ["Lot #", "quantity", "Notes " + "x" * 200],
+    ],
+    ids=["unterminated-quote", "over-cap"],
+)
+def test_malformed_header_row_is_never_sent(headers):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx2.Response(500)
+
+    result = suggest_header_mappings(
+        headers, recognized=RECOGNIZED, decider=_decider(httpx2.MockTransport(handler)), cte_type="shipping"
+    )
+
+    assert calls == []
+    assert result.status == MALFORMED_HEADER
+    assert result.suggestions == () and result.evidence is None and result.file_cte_type is None
+    assert build_field_mapping_artifacts(result, tenant_id=str(uuid.uuid4()), source_hash=SOURCE_HASH) == []
 
 
 def test_disabled_and_nothing_to_map_short_circuit_without_a_request():
