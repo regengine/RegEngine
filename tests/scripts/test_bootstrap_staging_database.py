@@ -718,8 +718,11 @@ def test_timeout_kills_the_whole_process_group(tmp_path, monkeypatch):
         except ProcessLookupError:
             return
         stat_file = Path(f"/proc/{pid}/stat")
-        if stat_file.exists() and stat_file.read_text().split()[2] == "Z":
-            return  # killed; waiting to be reaped by init
+        try:
+            if stat_file.exists() and stat_file.read_text().split()[2] == "Z":
+                return  # killed; waiting to be reaped by init
+        except (FileNotFoundError, ProcessLookupError):
+            return  # reaped between the kill probe and the read: gone
         time.sleep(0.1)
     pytest.fail("grandchild of the timed-out railway call survived")
 
