@@ -352,7 +352,10 @@ def test_stale_kept_password_is_refused_before_any_superuser_step(fake, monkeypa
     monkeypatch.setattr(boot, "role_psql", _fake_role_psql(logins, failing={boot.ADMIN_ROLE}))
     assert boot.main(["--apply"]) == boot.EXIT_REFUSED
     err = capsys.readouterr().err
-    assert "stored URL password for regengine_sysadmin does not log in; re-run with --apply --rotate-passwords" in err
+    assert (
+        "stored URL password for regengine_sysadmin does not log in; re-run with: "
+        "bash scripts/railway/bootstrap_staging_database.sh --apply --rotate-passwords"
+    ) in err
     assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)
     assert fake.sets() == []
     assert boot.main(["--dry-run"]) == boot.EXIT_REFUSED  # the dry run reports it too
@@ -579,6 +582,38 @@ def test_failure_partway_leaves_migrations_url_unset(fake, capsys):
     err = capsys.readouterr().err
     assert "MIGRATIONS_DATABASE_URL was not updated (unset, or still holding the old password)" in err
     assert "gunicorn never starts" in err and "--rotate-passwords" in err
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["--apply"], "bash scripts/railway/bootstrap_staging_database.sh --apply --rotate-passwords"),
+        (
+            ["--apply", "--adopt-existing-roles", "--rotate-passwords"],
+            "bash scripts/railway/bootstrap_staging_database.sh --apply --adopt-existing-roles --rotate-passwords",
+        ),
+        (
+            ["--apply", "--adopt-existing-roles", "--rotate-passwords", "--database", "regengine_staging_b"],
+            "bash scripts/railway/bootstrap_staging_database.sh --apply --adopt-existing-roles --rotate-passwords "
+            "--database regengine_staging_b",
+        ),
+    ],
+)
+def test_recovery_hint_repeats_the_options_the_run_needs(fake, capsys, argv, expected):
+    """A failed run's hint names a command that can work.
+
+    Adoption leaves the pre-existing roles' grants and policies in the archive
+    database, so a re-run without --adopt-existing-roles is refused again. The
+    hint must carry it (and a non-default --database) instead of printing a
+    bare --apply --rotate-passwords.
+    """
+    if "--adopt-existing-roles" in argv:
+        _existing_roles(fake, managed=False)
+    fake.fail_set = "REGENGINE_ENV"
+    assert boot.main(argv) == boot.EXIT_FAILED
+    err = capsys.readouterr().err
+    assert "gunicorn never starts" in err
+    assert err.rstrip().endswith(expected)
 
 
 def test_every_run_variable_and_redeploy_call_is_scoped(fake):

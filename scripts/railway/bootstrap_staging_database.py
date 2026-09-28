@@ -100,6 +100,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -361,6 +362,25 @@ class Context:
     @property
     def scope(self) -> List[str]:
         return ["-p", self.project, "-e", self.environment]
+
+    @property
+    def rotate_command(self) -> str:
+        """The re-run that sets new passwords, keeping the options this run used.
+
+        Adoption does not remove the pre-existing roles' grants and policies in
+        the archive database, so a re-run without --adopt-existing-roles is
+        refused again; a hint that dropped it would name a command that cannot
+        work.
+        """
+        parts = ["bash", "scripts/railway/bootstrap_staging_database.sh", "--apply"]
+        if self.adopt_existing_roles:
+            parts.append("--adopt-existing-roles")
+        parts.append("--rotate-passwords")
+        if self.database != DEFAULT_DATABASE:
+            parts += ["--database", self.database]
+        if self.project != DEFAULT_PROJECT_ID:
+            parts += ["--project", self.project]
+        return " ".join(shlex.quote(part) for part in parts)
 
 
 def _fail_command(what: str, result: subprocess.CompletedProcess) -> BootstrapError:
@@ -1187,7 +1207,7 @@ def plan(ctx: Context, values: Mapping[str, Optional[str]]) -> List[str]:
             if identity[:3] != [role, role, ctx.database]:
                 raise BootstrapError(f"login resolved to {identity[:3]!r}")
         except BootstrapError:
-            blockers.append(f"stored URL password for {role} does not log in; re-run with --apply --rotate-passwords.")
+            blockers.append(f"stored URL password for {role} does not log in; re-run with: {ctx.rotate_command}")
             continue
         print(f"    stored password for {role}: logs in to {ctx.database} (kept)")
     return blockers
@@ -1342,7 +1362,7 @@ def _login(ctx: Context, role: str, password: str, sql: str) -> List[List[str]]:
             raise
         ctx.rotate_hint = True
         raise BootstrapError(
-            f"stored URL password for {role} does not log in; re-run with --apply --rotate-passwords"
+            f"stored URL password for {role} does not log in; re-run with: {ctx.rotate_command}"
         ) from None
 
 
@@ -1486,14 +1506,12 @@ def _run(ctx: Context) -> int:
 
 def _print_recovery_hint(ctx: Context) -> None:
     if ctx.rotate_hint:
-        print(
-            "Only new passwords can fix this: re-run with --apply --rotate-passwords, then redeploy.", file=sys.stderr
-        )
+        print(f"Only new passwords can fix this. Re-run, then redeploy: {ctx.rotate_command}", file=sys.stderr)
     elif ctx.passwords_changed and not ctx.migrations_url_written:
         print(
             "Passwords were changed but MIGRATIONS_DATABASE_URL was not updated (unset, or still holding the old "
-            "password), so any deploy stops at run-migrations.sh and gunicorn never starts. Fix the cause and re-run "
-            "with --apply --rotate-passwords.",
+            "password), so any deploy stops at run-migrations.sh and gunicorn never starts. Fix the cause and re-run: "
+            f"{ctx.rotate_command}",
             file=sys.stderr,
         )
     else:

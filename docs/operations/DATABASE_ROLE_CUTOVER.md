@@ -320,7 +320,9 @@ The script refuses a run, before writing anything, in each of these cases:
   re-runs tell its roles from foreign ones.
 - A role whose password would be kept cannot log in with its stored URL.
   This is tested before anything is written. The refusal says
-  `stored URL password for <role> does not log in; re-run with --apply --rotate-passwords`.
+  `stored URL password for <role> does not log in; re-run with:` followed by
+  the full command. That command keeps the options the run used, such as
+  `--adopt-existing-roles` and a non-default `--database`.
 
 `--apply` then does the following:
 
@@ -399,7 +401,10 @@ written. If the variable is missing, sealed, points elsewhere, or its password
 no longer logs in, the run refuses (exit 2) until `--rotate-passwords` is
 given. After any rotation, redeploy. Once you seal the URLs, a re-run
 therefore needs `--rotate-passwords`. If a run fails after changing
-passwords, it says so; re-run with `--apply --rotate-passwords`.
+passwords, it says so and prints the command to re-run. Run that command as
+printed. If the first run needed `--adopt-existing-roles`, every re-run needs
+it too: adoption leaves the old roles' grants and policies in the archive
+database, so a re-run without it is refused.
 
 Afterwards, seal the six secret variables in the dashboard and deploy once.
 The first deploy logs `DB state: FRESH`, migrates to head, then logs
