@@ -9,6 +9,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
+import shutil
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -18,6 +21,7 @@ import pytest
 from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore
 from shared.tenant_context import set_rls_tenant_id
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
@@ -1654,6 +1658,18 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("public", "seed_obligations_for_tenant"),
             ("fsma", "get_active_portal_link_by_token"),
             ("fsma", "get_team_roster"),
+            # v126: pure helpers the invoker-rights artifact/receipt triggers
+            # and the agent_artifacts CHECK evaluate as the inserting role.
+            ("fsma", "compute_agent_artifact_hash"),
+            ("fsma", "sha256_text_array_is_valid"),
+            ("fsma", "compute_ingestion_run_receipt_payload_hash"),
+            ("fsma", "compute_ingestion_run_receipt_hash"),
+            # email_ingest (v121/v122): created after v111, granted when
+            # scripts/run-migrations.sh reapplies the cutover at head.
+            ("fsma", "get_tenant_by_inbound_address"),
+            ("fsma", "get_inbound_email_audit_by_message_id"),
+            ("fsma", "claim_inbound_email_audit"),
+            ("fsma", "finalize_inbound_email_audit"),
         },
         "regengine_sysadmin": {
             ("public", "get_tenant_context"),
@@ -1661,9 +1677,26 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("public", "set_admin_context"),
         },
     }
+    # role_routine_grants is keyed by name, which cannot tell the granted
+    # sender-allowlisted lookup from the denied recipient-only overload.
+    email_ingest_signatures = (
+        "fsma.get_tenant_by_inbound_address(text, text)",
+        "fsma.get_inbound_email_audit_by_message_id(text)",
+        "fsma.claim_inbound_email_audit(uuid, text, text, text, text, integer)",
+        "fsma.finalize_inbound_email_audit(text, uuid, text, text, integer, integer, integer, jsonb)",
+    )
     with owner_engine.connect() as connection:
         if connection.execute(text("SELECT to_regprocedure('public.get_invite_tenant_by_token_hash(text)')")).scalar():
             expected_direct["regengine_sysadmin"].add(("public", "get_invite_tenant_by_token_hash"))
+        for signature in email_ingest_signatures:
+            assert connection.execute(
+                text("SELECT has_function_privilege('regengine', :signature, 'EXECUTE')"),
+                {"signature": signature},
+            ).scalar_one(), signature
+            assert not connection.execute(
+                text("SELECT has_function_privilege('regengine_sysadmin', :signature, 'EXECUTE')"),
+                {"signature": signature},
+            ).scalar_one(), signature
         for role, expected in expected_direct.items():
             actual = set(
                 connection.execute(
@@ -1687,16 +1720,154 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
         assert "regengine_sysadmin" in function_body
 
 
+def test_digest_helpers_are_pinned_owner_definers(owner_engine, migration_owner_engine):
+    """v126: the three pgcrypto callers run as the migration owner.
+
+    Production keeps pgcrypto in a provider-owned schema the runtime role has
+    no USAGE on. The helpers read no table, so definer rights only reach
+    digest(); the runtime role keeps EXECUTE on the helper and nothing else.
+    """
+    with migration_owner_engine.connect() as connection:
+        migration_role = connection.execute(text("SELECT current_user")).scalar_one()
+    with owner_engine.connect() as connection:
+        pgcrypto_schema = connection.execute(
+            text(
+                "SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace "
+                "WHERE e.extname = 'pgcrypto'"
+            )
+        ).scalar_one()
+        rows = connection.execute(
+            text(
+                """
+                SELECT p.proname, p.prosecdef, p.proconfig, pg_get_userbyid(p.proowner) AS owner,
+                       p.prosrc,
+                       has_function_privilege('regengine', p.oid, 'EXECUTE') AS runtime_execute,
+                       EXISTS (SELECT 1 FROM aclexplode(p.proacl) AS acl WHERE acl.grantee = 0)
+                           AS public_execute
+                  FROM pg_proc AS p
+                  JOIN pg_namespace AS n ON n.oid = p.pronamespace
+                 WHERE n.nspname = 'fsma'
+                   AND p.proname IN (
+                       'compute_agent_artifact_hash',
+                       'compute_ingestion_run_receipt_payload_hash',
+                       'compute_ingestion_run_receipt_hash',
+                       'sha256_text_array_is_valid'
+                   )
+                """
+            )
+        ).all()
+    helpers = {row.proname: row for row in rows}
+    assert set(helpers) == {
+        "compute_agent_artifact_hash",
+        "compute_ingestion_run_receipt_payload_hash",
+        "compute_ingestion_run_receipt_hash",
+        "sha256_text_array_is_valid",
+    }
+    for name in (
+        "compute_agent_artifact_hash",
+        "compute_ingestion_run_receipt_payload_hash",
+        "compute_ingestion_run_receipt_hash",
+    ):
+        helper = helpers[name]
+        assert helper.prosecdef, name
+        assert helper.proconfig == ["search_path=pg_catalog, pg_temp"], name
+        assert helper.owner == migration_role, name
+        assert f"{pgcrypto_schema}.digest(" in helper.prosrc, name
+        assert not re.search(r"\bfrom\b", helper.prosrc, re.IGNORECASE), name
+    # No extension call: stays invoker, evaluated by the CHECK as the writer.
+    assert not helpers["sha256_text_array_is_valid"].prosecdef
+    for helper in helpers.values():
+        assert helper.runtime_execute and not helper.public_execute, helper.proname
+
+
+_RUNBOOKS = Path(__file__).resolve().parents[2] / "runbooks"
+
+
+def _run_runbook(url: str, runbook: str, *, search_path: str | None = None) -> subprocess.CompletedProcess:
+    """Execute an operator runbook with psql exactly as documented.
+
+    Credentials travel in the child's environment, never on the command line,
+    and assertion output below carries only psql's own stdout/stderr.
+    """
+    psql = shutil.which("psql")
+    if psql is None:
+        pytest.fail("psql is required to execute the operator runbooks")
+    target = make_url(url)
+    env = {
+        **os.environ,
+        "PGHOST": target.host or str(target.query.get("host", "")),
+        "PGPORT": str(target.port or target.query.get("port", 5432)),
+        "PGUSER": target.username or "",
+        "PGPASSWORD": target.password or "",
+        "PGDATABASE": target.database or "",
+        "PGOPTIONS": f"-c search_path={search_path}" if search_path else "",
+    }
+    return subprocess.run(
+        [psql, "-X", "-q", "-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=1", "-f", str(_RUNBOOKS / runbook)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize("search_path", [None, "public,fsma,extensions"])
+def test_v126_verify_runbook_reports_ready_for_the_migration_owner(search_path):
+    """runbooks/verify-v126-runtime-grants.sql is READY at head from any search_path.
+
+    Migration sessions use public,fsma,extensions; the runbook must not read
+    schema-dependent catalog text (a false NOT READY after a correct deploy).
+    """
+    result = _run_runbook(OWNER_URL, "verify-v126-runtime-grants.sql", search_path=search_path)
+    assert result.returncode == 0, result.stderr
+    checks = [line.split("|") for line in result.stdout.splitlines() if line.count("|") == 3]
+    assert len(checks) > 30
+    assert [check for check in checks if check[3] != "t"] == []
+    assert checks[-1][0].startswith("== READY") and checks[-1][3] == "t"
+
+
+def test_v126_predeploy_runbook_needs_a_session_that_sees_every_row():
+    """The pre-deploy listing runs for the provider and refuses the plain owner.
+
+    Under FORCE RLS the NOBYPASSRLS owner would see no ingestion runs and
+    report every blob as misattached, so the runbook stops instead.
+    """
+    provider = _run_runbook(ROLE_ADMIN_URL, "predeploy-v126-misattached-blobs.sql")
+    assert provider.returncode == 0, provider.stderr
+    # The composite key at head admits no misattached blob.
+    assert provider.stdout.strip() == ""
+
+    owner = _run_runbook(OWNER_URL, "predeploy-v126-misattached-blobs.sql", search_path="public,fsma,extensions")
+    assert owner.returncode != 0
+    assert "provider superuser or BYPASSRLS session" in owner.stderr
+
+
 def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
     disabled_tables = (
         "public.compliance_notifications",
         "public.compliance_status_log",
+        # inbound_email router (8301f3cad96a): recipient-only tenant mapping.
+        "fsma.tenant_inbound_email_addresses",
     )
-    disabled_functions = (
+    disabled_functions = [
         "fsma.get_remediation_token_by_hash(text)",
         "fsma.get_remediation_token_by_session_hash(text)",
-    )
+    ]
+    runtime_statements = [
+        "SELECT * FROM public.compliance_notifications LIMIT 1",
+        "SELECT * FROM public.compliance_status_log LIMIT 1",
+        "SELECT * FROM fsma.tenant_inbound_email_addresses LIMIT 1",
+        "SELECT fsma.get_remediation_token_by_hash('disabled')",
+        "SELECT fsma.get_remediation_token_by_session_hash('disabled')",
+    ]
     with owner_engine.connect() as connection:
+        # The recipient-only overload exists only when 8301f3cad96a ran after
+        # v122 (incremental upgrades); a fresh chain drops it. Where it exists,
+        # it must stay denied: it resolves a tenant without v122's sender check.
+        if connection.execute(text("SELECT to_regprocedure('fsma.get_tenant_by_inbound_address(text)')")).scalar():
+            disabled_functions.append("fsma.get_tenant_by_inbound_address(text)")
+            runtime_statements.append("SELECT * FROM fsma.get_tenant_by_inbound_address('disabled@example.test')")
         for table_name in disabled_tables:
             for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                 assert not connection.execute(
@@ -1711,12 +1882,7 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
 
     runtime = create_engine(_sync_url(RUNTIME_URL), pool_pre_ping=True)
     try:
-        for statement in (
-            "SELECT * FROM public.compliance_notifications LIMIT 1",
-            "SELECT * FROM public.compliance_status_log LIMIT 1",
-            "SELECT fsma.get_remediation_token_by_hash('disabled')",
-            "SELECT fsma.get_remediation_token_by_session_hash('disabled')",
-        ):
+        for statement in runtime_statements:
             with (
                 runtime.connect() as connection,
                 pytest.raises(

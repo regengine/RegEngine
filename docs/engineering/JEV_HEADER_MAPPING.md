@@ -40,17 +40,31 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
 
 ## Request flow
 
-1. The route reads the header row. Headers the parser recognises
+1. The route reads the header row. If it is malformed (it spans more than
+   one physical line, a header contains a line break, or a header is longer
+   than 128 characters after stripping), nothing is sent, not even the
+   header row, and the status is `malformed_header`; see
+   [Failure modes](#failure-modes). An unterminated quote is the usual
+   cause: the reader then takes the rest of the file as one "header", so
+   sending it would send whole rows. Headers the parser recognises
    (`_RECOGNIZED_COLUMNS` in `csv_templates.py`: every column
    `parse_csv_rows`, the templates, the required-KDE table and the canonical
    normalizer read by name) are skipped. Blank and duplicate headers are
    skipped. If nothing is left, no request is made.
 2. One request goes to `https://api.typesafe.ai/v1/systemone` (or
    `TYPESAFE_BASE_URL`) with state
-   `{"csv_headers": [...], "columns_to_map": [{"index", "header", "sample_values"?}]}`
+   `{"csv_headers": [...], "columns_to_map": [{"index", "header", "sample_values"?}], "file_cte_type"?}`
    and one `Choice` question per column over the canonical vocabulary plus
-   `no_match`. The call runs in a worker thread so the event loop is not
-   blocked. At most 48 columns are asked about per upload.
+   `no_match`. `file_cte_type` is present only when the upload passes the
+   `cte_type` form field **and** no row can contradict it (see
+   [Declare the CTE on single-type uploads](#declare-the-cte-on-single-type-uploads)):
+   it carries the canonical CTE the route normalised it to (`Shipping` and
+   `ship` both become `shipping`). Otherwise the key is absent, not null,
+   so the state is exactly what it was before the key existed.
+   Reading the upload for the request (header row, sample values, the CTE
+   value scan below) and the call itself both run in the threadpool
+   (`_read_upload_for_jev`, then `suggest_header_mappings`), so the event
+   loop is not blocked. At most 48 columns are asked about per upload.
 3. Each answer is banded by confidence and passed through the apply policy
    below. Rows are then parsed exactly as before, with any applied mapping
    copied under the canonical key (source column left in place).
@@ -60,25 +74,96 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
    persists it to `fsma.agent_artifacts` and appends a receipt to the
    ingestion run's ledger. The artifact carries `model_name`
    (`typesafe/<model>`), `agent_version` (the question-set version), the
-   vendor request id, the top probabilities and thresholds in its rationale,
-   and whether code applied it.
+   vendor request id, and in its rationale the question-set version, what
+   the state said about the file's CTE (`State file_cte_type: shipping.`, or
+   `none` with the reason), the top probabilities and thresholds, and
+   whether code applied it. The CTE note is in the rationale text rather
+   than a field of its own because the artifact and payload contracts are
+   closed (`extra="forbid"`, `data-schemas/events/agent.artifact.schema.json`
+   with `additionalProperties: false`) and the payload is copied into the
+   hashed ledger receipt; a new field would change both.
 5. The response gains `header_mapping_suggestions` (one entry per asked
    column) and `header_mapping_engine` (status, model, request id,
    thresholds, artifacts queued). Both are null/empty when Jev is not
    configured, so existing clients see no change.
 
+### Declare the CTE on single-type uploads
+
+Jev reads headers literally. `Ship Dt` or `Qty Shpd` is easier to place
+when it knows every row is a shipment. For a file that records one CTE,
+pass the `cte_type` form field on `POST /api/v1/ingest/csv` (and
+`--cte-type` in the [preview](#preview-suggestions-on-your-own-files)).
+The route already uses it as the fallback CTE for rows; the same
+normalised value is what Jev sees as `file_cte_type`. Leave it out for
+mixed-type files.
+
+**Precedence follows the parser.** The form field is only a fallback:
+`_detect_row_cte_type` reads a row's own CTE first and uses the declared one
+only when the row has none (blank, or not a known CTE). A row's own CTE can
+come from two places, and `_file_cte_type_for_jev` (the one helper the route
+and the preview share) withholds `file_cte_type` whenever either could
+contradict the declared CTE:
+
+| Source of a per-row CTE | Withheld when | Reason |
+| --- | --- | --- |
+| A per-row CTE column the parser reads: `cte_type`, `event_type`, `type` or `cte` after the parser's header normalisation (so `Event Type` and `CTE` count, `Event-Type` does not) | the header is present, whatever its values | `file has a per-row CTE column: Event Type` |
+| An unrecognised column that Jev may map onto `cte_type` (`Activity`, `Event Kind`, `Event-Type`, `Transaction Type`, ...) | any non-empty value, normalised the way `_detect_row_cte_type` normalises values, resolves through `_CTE_TYPE_ALIASES` to a different CTE | `column Activity holds per-row CTE values` |
+
+The value scan reads exactly the rows `parse_csv_rows` reads: the first
+`MAX_CSV_ROWS` (500) rows the same `csv.DictReader` yields, where comment
+rows and all-empty rows count and blank lines do not. A value in a row the
+parser discards cannot become a row's CTE, so it never withholds. It skips
+comment rows exactly as the parser does, ignores recognised columns (never
+sent to Jev, so never mapped), normalises the header row once rather than
+per cell, and stops at the first contradiction. It errs on withholding, which only costs Jev a hint: `_CTE_TYPE_ALIASES` maps
+single letters (`S`, `R`, `H`, `C`, `P`, `T`), so a `Grade` column of `S`
+and `R` withholds a declared `shipping`. A file whose rows cannot be read
+withholds too.
+
+The result is an invariant the tests pin: whenever `file_cte_type=X` is
+sent, every row the parser produces has CTE `X`, with or without an
+applied `cte_type` mapping. Values that agree with `X` (`shipping`, `S`,
+`Ship`) or are not a CTE at all (`load dock 4`) keep it sent.
+
+The rows always get the form field as their fallback, exactly as before.
+The preview report and the artifact rationale say when a declared CTE was
+withheld and why, and the route logs `csv_header_mapping_file_cte_withheld`.
+An auto-apply `cte_type` mapping is applied exactly as it is without a
+declared CTE. When a CTE was declared, its rationale adds that the declared
+CTE remains the fallback for rows where the column is blank or not a known
+CTE, and that per-row values from the column override it.
+
+### Question-set version
+
+`QUESTIONS_VERSION` in `services/shared/jev/header_mapping.py` is recorded
+with every answer (`header_mapping_engine.questions_version`, the Jev
+evidence) and as `agent_version` on every `field_mapping_suggestion`
+artifact. Bump it whenever the question text, the vocabulary or the meaning
+of a state key changes.
+
+| Version | Change |
+| --- | --- |
+| `csv-header-mapping.v1` | Initial question set. |
+| `csv-header-mapping.v2` | The task text adds: "When the state has `file_cte_type`, it names the FSMA 204 critical tracking event that every row in the file records." Asked on every upload, with or without `file_cte_type`. |
+
+Nothing in RegEngine compares the version string: it is free text on the
+response, the evidence and `fsma.agent_artifacts.agent_version`, so v1 and
+v2 artifacts sit side by side and each says which question set produced it.
+
 ## Apply policy (single source: `services/shared/jev/header_mapping.py`)
 
 | Band | Condition | What code does |
 | --- | --- | --- |
-| `auto_apply` | `confidence >= REGENGINE_JEV_AUTO_APPLY_CONFIDENCE` (0.90) | Artifact queued. Applied to rows **only if** all of: `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`; `confidence >= 0.85` (agent-artifact human-review threshold); target column not already in the file; no column the parser reads *after* the target is in the file either (`tlc` for `traceability_lot_code`, `qty` for `quantity`, any later date column for `event_date`, ...: a mapped column must never outrank a value the file carries); no other column in the same band names the same target. |
+| `auto_apply` | `confidence >= REGENGINE_JEV_AUTO_APPLY_CONFIDENCE` (0.90) | Artifact queued. Applied to rows **only if** all of: `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`; `confidence >= 0.85` (agent-artifact human-review threshold); target column not already in the file; no column the parser reads *after* the target is in the file either (`tlc` for `traceability_lot_code`, `qty` for `quantity`, any later date column for `event_date`, ...: a mapped column must never outrank a value the file carries); no other column in the same band names the same target. A declared file CTE never blocks a `cte_type` mapping: rows keep the parser's precedence (their own CTE first, the declared one as fallback). |
 | `review` | `REGENGINE_JEV_REVIEW_CONFIDENCE` (0.50) `<= confidence <` auto-apply | Artifact queued with `requires_human_review=true`. Never applied. |
 | `reject` | below the review bound | Returned on the response only. No artifact, never applied. |
 | `no_match` | the model picked the no-match option | Returned on the response only. |
 
 `blocked_reason` on each suggestion names which condition stopped an apply:
 `apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`,
-`target_present`, `shadows_existing_column`, `conflict`, `no_match`. The
+`target_present`, `shadows_existing_column`, `conflict`, `no_match`. It is a
+free string on the response (`HeaderMappingSuggestionResult`)
+and appears in the artifact only inside the rationale text. The
 parser's fallback chains (`_COLUMN_PRECEDENCE` in
 `services/ingestion/app/csv_templates.py`) are the single source for
 `shadows_existing_column`; the artifact rationale names the column that
@@ -91,7 +176,16 @@ Applied mappings are also written to the application log as
 
 ## What leaves the process
 
-- Always (when configured): the CSV header row.
+- Always (when configured): the CSV header row, but only a well-formed one:
+  a single physical line, no line breaks inside a header, and no header
+  over 128 characters after stripping (`MAX_HEADER_CHARS` in
+  `services/shared/jev/header_mapping.py`; RegEngine's own longest column
+  name is 25 characters). Otherwise nothing at all is sent
+  (`malformed_header`), so row data can never leave as a "header".
+- Only when the upload passes the `cte_type` form field and no row can
+  contradict it: its canonical CTE name (for example `shipping`) as
+  `file_cte_type`. Listed in the TypeSafe entry of
+  `frontend/src/lib/trust-subprocessors.ts` (rendered on `/dpa` and `/trust`).
 - Only with `REGENGINE_JEV_HEADER_SAMPLE_VALUES` set to 1-5: that many
   distinct cell values per unrecognised column from the first 50 rows,
   passed through `shared.pii.redact_pii` (SSN, phone, email, street
@@ -132,8 +226,9 @@ request path never fails on configuration.
 (`_suggest_header_mappings_for_upload`) on a local CSV. It needs no running
 service, database or tenant, and it ingests, persists and queues nothing. It
 reads the variables in [Configuration](#configuration) and sends what the
-route sends: the header row, redacted sample values only if asked, never
-rows. Run it from the repo root in the Python environment used for the
+route sends: the header row, the declared CTE name only with `--cte-type`
+and only when no row can contradict it, redacted sample values only if
+asked, never rows. Run it from the repo root in the Python environment used for the
 ingestion tests, because it imports `services/ingestion`. Without one, create
 it from the root lock file (the same install CI uses):
 
@@ -166,6 +261,7 @@ thresholds in force. The values shown are illustrative.
 | `--sample-values N` | Send N (0-5) redacted sample values per unrecognised column. Overrides `REGENGINE_JEV_HEADER_SAMPLE_VALUES`. |
 | `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`. Nothing else changes. |
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
+| `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation, same withholding rule. An empty value (`--cte-type ""`) means not declared, like an empty form field; a blank-but-not-empty one is a usage error, as the route rejects it. When sent, it is shown on the `Sent:` line and as `request.file_cte_type` in `--json`. When withheld, `request.file_cte_type` is null, `request.file_cte_type_dropped` gives the reason, and the table prints a `CTE:` line. `request.file_cte_type` comes from the route helper's result: what was sent on `ok`, what was attempted on `unavailable:*` and `error` (the request may never have left), and null when nothing was built (for example without a key). Without a key the reason is still computed from the file with the same helper (`_file_cte_type_for_jev`), so the report says the `--cte-type` would be withheld. An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
 
 ### Demo file
 
@@ -189,6 +285,10 @@ asked about; the intended answers are:
 python3 scripts/jev_header_preview.py docs/engineering/examples/jev_demo_shipping.csv --prompt-key
 ```
 
+The demo file names each row's CTE in its own `cte_type` column, so it is
+a per-row file: adding `--cte-type shipping` sends no `file_cte_type` and
+the report shows `file has a per-row CTE column: cte_type`.
+
 With `--simulate-apply` and answers in the `auto_apply` band, the four
 headers whose canonical column is already in the file (`Lot #`, `Item Desc`,
 `Qty Shpd`, `Ship Dt`) stay blocked with `target_present`, and `Ship-To GLN`
@@ -196,8 +296,11 @@ and `Trucking Co` show `would_apply: yes`, since the file has no
 `ship_to_gln` or `carrier` column. `Internal Notes` is never applied.
 
 Exit codes: `0` suggestions received, or no unrecognised headers (no request
-made); `1` bad usage, an unreadable, oversized (over 5 MB) or non-UTF-8
-file (stdout stays empty, the message goes to stderr), or an unexpected error
+made); `1` bad usage (including an unknown `--cte-type`), an unreadable, oversized (over 5 MB) or non-UTF-8
+file (stdout stays empty, the message goes to stderr), a malformed header
+row (status `malformed_header`, with or without a key: the report on stdout
+names the problem, never the header's content, says `Sent: nothing`, and a
+hint goes to stderr), or an unexpected error
 (status `error`, for example a malformed `TYPESAFE_BASE_URL`); `2` not configured (`TYPESAFE_API_KEY` unset) or switched off
 (`REGENGINE_JEV_ENABLED=0`); `3` vendor unavailable. For `2` and `3` the
 status (for example `unavailable:auth`) and a one-line hint go to stderr.
@@ -235,6 +338,7 @@ repository. (`.env` is excluded from commits but is still plaintext on disk.)
 | --- | --- |
 | `ok` | Answers received and recorded. |
 | `no_unrecognized_headers` | Every column was already known; no request made. |
+| `malformed_header` | The header row spans lines, contains a line break, or has a header over 128 characters (usually an unterminated quote). No request made, no sample values collected, no artifacts; `csv_header_mapping_malformed_header` is logged with the reason, never the header. Such a file usually fails row parsing too (400); if its rows parse, they ingest exactly as without Jev. |
 | `unavailable:disabled` | Kill switch or no key (engine field is null in this case). |
 | `unavailable:auth` | 401/403 from the vendor: check the key. |
 | `unavailable:rate_limited` | 429 after retries. |

@@ -35,19 +35,31 @@ What ``--apply`` does
    and the migrator's ``search_path``/``timezone`` inside that database only.
    The superuser URL is used only inside the process that ``railway run``
    starts. A small launcher there turns it into libpq environment variables
-   (PGPASSWORD, PGSSLMODE=require) and execs psql. The URL and password never
-   appear in any command line, in the output, or in a file, and this script's
-   own process never holds them. Every psql child gets a private empty HOME,
-   so a personal ~/.postgresql/root.crt cannot turn sslmode=require into CA
-   verification against Railway's self-signed proxy certificate.
+   (PGPASSWORD, PGSSLMODE=require, PGCHANNELBINDING=require) and execs psql.
+   The URL and password never appear in any command line, in the output, or in
+   a file, and this script's own process never holds them.
+   Every psql connection requires TLS and SCRAM-SHA-256 with channel binding
+   (SCRAM-SHA-256-PLUS over tls-server-end-point). That is what protects the
+   passwords on the wire: psql refuses cleartext, MD5, or unbound SCRAM
+   authentication. An interceptor presenting its own certificate therefore
+   gets no password and cannot relay the login. Railway's proxy certificate is
+   self-signed, so the certificate itself is not CA-verified. The preflight
+   refuses psql older than 13, because older libpq silently ignores
+   PGCHANNELBINDING. Every psql child gets a private empty HOME, so a personal
+   ~/.postgresql/root.crt cannot turn sslmode=require into CA verification,
+   which would fail against that self-signed certificate.
 3. Log in AS ``regengine_migrator`` and create ``get_tenant_context()``
    exactly as the backend-ci live-db-suite does for a fresh chain (only if it
    is absent).
 4. Log in as ``regengine`` and ``regengine_sysadmin`` to prove each password.
 5. Write the RegEngine variables. ``MIGRATIONS_DATABASE_URL`` is written LAST.
    Railway CLI writes take effect immediately (they are not staged) and
-   staging deploys on every push, so any deploy that starts before the run
-   completes stops harmlessly at run-migrations.sh's exit 64. The order is:
+   staging deploys on every push, so a deploy can start before the run
+   completes. Such a deploy stops at run-migrations.sh and gunicorn never
+   starts. On a first run it exits 64 because ``MIGRATIONS_DATABASE_URL`` is
+   still unset. On a ``--rotate-passwords`` re-run the variable still holds
+   the old password, so the migration login fails password authentication.
+   The order is:
    ``DATABASE_URL``, ``ADMIN_DATABASE_URL``, then ``AUTH_OTP_HMAC_SECRET``,
    ``AUDIT_INTEGRITY_KEY`` and ``TOOL_ACCESS_SECRET`` (each only when
    missing), then ``REGENGINE_ENV=staging``,
@@ -88,6 +100,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -112,6 +125,7 @@ MANAGED_ROLE_COMMENT = MANAGED_ROLE_PREFIX + " created or adopted by scripts/rai
 # check would then regenerate sealed secrets and rotate passwords.
 MIN_CLI_VERSION = (5, 47, 2)
 MIN_SERVER_VERSION_NUM = 150000  # pg_database_owner-owned public schema, as v111 expects
+MIN_LIBPQ_MAJOR = 13  # first libpq that honours channel_binding / PGCHANNELBINDING
 
 APP_SERVICE = "RegEngine"
 POSTGRES_SERVICE = "Postgres"
@@ -293,7 +307,8 @@ env = {{k: v for k, v in os.environ.items() if k in keep or k.startswith("LC_")}
 env.update(HOME=sys.argv[1],
            PGHOST=p.hostname or "", PGPORT=str(p.port or 5432), PGUSER=u.unquote(p.username or ""),
            PGPASSWORD=u.unquote(p.password or ""), PGDATABASE=u.unquote(p.path.lstrip("/")),
-           PGSSLMODE="require", PGAPPNAME="regengine-staging-bootstrap", PGCONNECT_TIMEOUT="15",
+           PGSSLMODE="require", PGCHANNELBINDING="require",
+           PGAPPNAME="regengine-staging-bootstrap", PGCONNECT_TIMEOUT="15",
            PGOPTIONS={SERVER_OPTIONS!r})
 os.execve(sys.argv[2], sys.argv[2:], env)
 """
@@ -337,6 +352,7 @@ class Context:
     existing_roles: Set[str] = field(default_factory=set)
     managed_roles: Set[str] = field(default_factory=set)
     outside_usage: List[Tuple[str, str]] = field(default_factory=list)
+    blocked_grants: List[Tuple[str, str, str]] = field(default_factory=list)  # (grantor, granted, member)
     password_plan: Dict[str, str] = field(default_factory=dict)  # role -> new | rotate | keep
     kept_passwords: Dict[str, str] = field(default_factory=dict)
     passwords_changed: bool = False
@@ -346,6 +362,25 @@ class Context:
     @property
     def scope(self) -> List[str]:
         return ["-p", self.project, "-e", self.environment]
+
+    @property
+    def rotate_command(self) -> str:
+        """The re-run that sets new passwords, keeping the options this run used.
+
+        Adoption does not remove the pre-existing roles' grants and policies in
+        the archive database, so a re-run without --adopt-existing-roles is
+        refused again; a hint that dropped it would name a command that cannot
+        work.
+        """
+        parts = ["bash", "scripts/railway/bootstrap_staging_database.sh", "--apply"]
+        if self.adopt_existing_roles:
+            parts.append("--adopt-existing-roles")
+        parts.append("--rotate-passwords")
+        if self.database != DEFAULT_DATABASE:
+            parts += ["--database", self.database]
+        if self.project != DEFAULT_PROJECT_ID:
+            parts += ["--project", self.project]
+        return " ".join(shlex.quote(part) for part in parts)
 
 
 def _fail_command(what: str, result: subprocess.CompletedProcess) -> BootstrapError:
@@ -392,6 +427,7 @@ def role_psql(ctx: Context, role: str, password: str, sql: str, sentinel: str, w
         PGUSER=role,
         PGPASSWORD=password,
         PGSSLMODE="require",
+        PGCHANNELBINDING="require",
         PGAPPNAME="regengine-staging-bootstrap",
         PGCONNECT_TIMEOUT="15",
         PGOPTIONS=SERVER_OPTIONS,
@@ -466,17 +502,31 @@ SELECT r.rolname::text, format('has settings pinned in database %s', d.datname)
   JOIN pg_database AS d ON d.oid = s.setdatabase
  WHERE r.rolname = ANY ({roles}) AND d.datname IS DISTINCT FROM {target}
 UNION ALL
-SELECT member.rolname::text, format('is a member of role %s', granted.rolname)
+SELECT member.rolname::text,
+       format('is a member of role %s (granted by %s%s)', granted.rolname, grantor.rolname,
+              CASE WHEN am.admin_option THEN ', WITH ADMIN OPTION' ELSE '' END)
   FROM pg_auth_members AS am
   JOIN pg_roles AS granted ON granted.oid = am.roleid
   JOIN pg_roles AS member ON member.oid = am.member
+  JOIN pg_roles AS grantor ON grantor.oid = am.grantor
  WHERE member.rolname = ANY ({roles})
 UNION ALL
-SELECT granted.rolname::text, format('is granted to role %s', member.rolname)
+SELECT granted.rolname::text,
+       format('is granted to role %s (granted by %s%s)', member.rolname, grantor.rolname,
+              CASE WHEN am.admin_option THEN ', WITH ADMIN OPTION' ELSE '' END)
   FROM pg_auth_members AS am
   JOIN pg_roles AS granted ON granted.oid = am.roleid
   JOIN pg_roles AS member ON member.oid = am.member
+  JOIN pg_roles AS grantor ON grantor.oid = am.grantor
  WHERE granted.rolname = ANY ({roles}) AND NOT member.rolname = ANY ({roles})
+UNION ALL
+SELECT grantor.rolname::text,
+       format('used its ADMIN OPTION to grant role %s to role %s', granted.rolname, member.rolname)
+  FROM pg_auth_members AS am
+  JOIN pg_roles AS granted ON granted.oid = am.roleid
+  JOIN pg_roles AS member ON member.oid = am.member
+  JOIN pg_roles AS grantor ON grantor.oid = am.grantor
+ WHERE grantor.rolname = ANY ({roles}) AND NOT granted.rolname = ANY ({roles})
 UNION ALL
 SELECT rolname::text,
        format('has elevated attributes (%s)',
@@ -485,6 +535,113 @@ SELECT rolname::text,
                         CASE WHEN rolreplication THEN 'REPLICATION' END))
   FROM pg_roles
  WHERE rolname = ANY ({roles}) AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
+"""
+
+
+def blocked_grants_sql() -> str:
+    """(grantor, granted, member) grants that --adopt-existing-roles cannot undo.
+
+    A RegEngine role that is a member of a foreign role WITH ADMIN OPTION and
+    used it to grant that foreign role to another foreign role: revoking the
+    RegEngine role's membership would need CASCADE, which would reach a
+    membership outside RegEngine. Those are refused, never cascaded.
+    """
+    roles = _roles_array()
+    return f"""
+SELECT grantor.rolname::text AS grantor_name, granted.rolname::text AS granted_name,
+       member.rolname::text AS member_name
+  FROM pg_auth_members AS am
+  JOIN pg_roles AS granted ON granted.oid = am.roleid
+  JOIN pg_roles AS member ON member.oid = am.member
+  JOIN pg_roles AS grantor ON grantor.oid = am.grantor
+ WHERE grantor.rolname = ANY ({roles})
+   AND NOT granted.rolname = ANY ({roles})
+   AND NOT member.rolname = ANY ({roles})
+"""
+
+
+def membership_sql() -> str:
+    """Revoke every membership involving the RegEngine roles (v111 forbids them).
+
+    * Incoming (a RegEngine role granted to someone): REVOKE ... CASCADE. Every
+      dependent of such a grant is itself a membership in the same RegEngine
+      role, so the cascade stays inside the scope the dry run listed.
+    * Outgoing (a RegEngine role is a member of a foreign role): never CASCADE.
+      If a RegEngine role used that membership's ADMIN OPTION to grant the
+      foreign role to a foreign role, refuse. A dependent grant that is itself
+      in scope is revoked first on a later pass.
+    * Each row is re-checked just before its REVOKE, so a grant already removed
+      by an earlier CASCADE is skipped: no WARNING and no false "revoked" line.
+    """
+    roles = _roles_array()
+    scope = f"granted.rolname = ANY ({roles}) OR member.rolname = ANY ({roles})"
+    return f"""
+DO $bootstrap_memberships$
+DECLARE
+    m record;
+    blocked text;
+    before_count integer;
+    pending integer;
+    progressed boolean;
+BEGIN
+    SELECT string_agg(format('%s granted role %s to %s', b.grantor_name, b.granted_name, b.member_name), '; ')
+      INTO blocked
+      FROM ({blocked_grants_sql()}) AS b;
+    IF blocked IS NOT NULL THEN
+        RAISE EXCEPTION 'cannot revoke outgoing RegEngine memberships without cascading outside RegEngine (%); revoke those grants by hand after review, then re-run', blocked;
+    END IF;
+    SELECT count(*) INTO before_count
+      FROM pg_auth_members AS am
+      JOIN pg_roles AS granted ON granted.oid = am.roleid
+      JOIN pg_roles AS member ON member.oid = am.member
+     WHERE {scope};
+    LOOP
+        progressed := false;
+        FOR m IN
+            SELECT am.roleid, am.member, am.grantor, granted.rolname AS granted_name,
+                   member.rolname AS member_name, grantor.rolname AS grantor_name,
+                   granted.rolname = ANY ({roles}) AS incoming
+              FROM pg_auth_members AS am
+              JOIN pg_roles AS granted ON granted.oid = am.roleid
+              JOIN pg_roles AS member ON member.oid = am.member
+              JOIN pg_roles AS grantor ON grantor.oid = am.grantor
+             WHERE {scope}
+             ORDER BY granted.rolname, member.rolname, grantor.rolname
+        LOOP
+            CONTINUE WHEN NOT EXISTS (
+                SELECT 1 FROM pg_auth_members
+                 WHERE roleid = m.roleid AND member = m.member AND grantor = m.grantor);
+            BEGIN
+                IF m.incoming THEN
+                    EXECUTE format('REVOKE %I FROM %I GRANTED BY %I CASCADE',
+                                   m.granted_name, m.member_name, m.grantor_name);
+                ELSE
+                    EXECUTE format('REVOKE %I FROM %I GRANTED BY %I', m.granted_name, m.member_name, m.grantor_name);
+                END IF;
+                progressed := true;
+                RAISE NOTICE 'revoked membership: % from % (granted by %)%', m.granted_name, m.member_name,
+                    m.grantor_name, CASE WHEN m.incoming THEN ' with CASCADE' ELSE '' END;
+            -- SQLSTATE 2BP01 ("dependent privileges exist"): an in-scope grant still
+            -- depends on this one; it is revoked first and this one retried next pass.
+            EXCEPTION WHEN dependent_objects_still_exist THEN
+                NULL;
+            END;
+        END LOOP;
+        SELECT count(*) INTO pending
+          FROM pg_auth_members AS am
+          JOIN pg_roles AS granted ON granted.oid = am.roleid
+          JOIN pg_roles AS member ON member.oid = am.member
+         WHERE {scope};
+        EXIT WHEN pending = 0;
+        IF NOT progressed THEN
+            RAISE EXCEPTION '% RegEngine role membership(s) could not be revoked', pending;
+        END IF;
+    END LOOP;
+    IF before_count > 0 THEN
+        RAISE NOTICE 'memberships involving RegEngine roles removed: % (including any removed by CASCADE)', before_count;
+    END IF;
+END
+$bootstrap_memberships$;
 """
 
 
@@ -501,6 +658,7 @@ SELECT 'database', datname, pg_get_userbyid(datdba) FROM pg_database WHERE datna
 SELECT 'outside', role_name, detail FROM ({outside_usage_sql(database)}) AS outside ORDER BY 2, 3;
 SELECT 'target-sessions', count(*) FROM pg_stat_activity
  WHERE usename = ANY ({_roles_array()}) AND datname = {quote_literal(database)};
+SELECT 'blocked-grant', grantor_name, granted_name, member_name FROM ({blocked_grants_sql()}) AS blocked ORDER BY 2, 3, 4;
 SELECT {quote_literal(INVENTORY_SENTINEL)};
 """
 
@@ -574,24 +732,7 @@ END
 $bootstrap_roles$;
 
 -- v111 rejects any incoming or outgoing membership on these roles.
-DO $bootstrap_memberships$
-DECLARE
-    m record;
-BEGIN
-    FOR m IN
-        SELECT granted.rolname AS granted_name, member.rolname AS member_name, grantor.rolname AS grantor_name
-          FROM pg_auth_members AS am
-          JOIN pg_roles AS granted ON granted.oid = am.roleid
-          JOIN pg_roles AS member ON member.oid = am.member
-          JOIN pg_roles AS grantor ON grantor.oid = am.grantor
-         WHERE granted.rolname = ANY ({roles}) OR member.rolname = ANY ({roles})
-    LOOP
-        EXECUTE format('REVOKE %I FROM %I GRANTED BY %I', m.granted_name, m.member_name, m.grantor_name);
-        RAISE NOTICE 'revoked membership: % from %', m.granted_name, m.member_name;
-    END LOOP;
-END
-$bootstrap_memberships$;
-
+{membership_sql()}
 {password_lines}
 COMMIT;
 
@@ -794,6 +935,18 @@ def set_variable(ctx: Context, name: str, value: str) -> None:
 # ---------------------------------------------------------------------------
 # Guards and planning (all read-only).
 # ---------------------------------------------------------------------------
+def parse_psql_major(text: str) -> Optional[int]:
+    """Major version from ``psql --version`` ("psql (PostgreSQL) 16.13 (Ubuntu ...)")."""
+    match = re.search(r"\(PostgreSQL\)\s+(\d+)", text or "")
+    return int(match.group(1)) if match else None
+
+
+def read_psql_major(psql: str) -> Optional[int]:
+    """``psql --version`` (no connection, no config files read)."""
+    result = run_process([psql, "--version"], env=_child_base_env())
+    return parse_psql_major(result.stdout) if result.returncode == 0 else None
+
+
 def parse_cli_version(text: str) -> Optional[Tuple[int, int, int]]:
     match = re.search(r"(\d+)\.(\d+)\.(\d+)", text or "")
     return tuple(int(part) for part in match.groups()) if match else None  # type: ignore[return-value]
@@ -824,7 +977,20 @@ def preflight(ctx: Context) -> None:
     psql = shutil.which(os.environ.get("PSQL", "psql"))
     if psql is None:
         raise BootstrapError("psql not found (macOS: brew install libpq, then add its bin/ to PATH or set PSQL)")
+    # PGCHANNELBINDING=require is what keeps passwords off the wire (see
+    # PSQL_LAUNCHER); libpq before 13 silently ignores it. This relies on psql
+    # being linked against the libpq of its own major version, as the PGDG,
+    # Homebrew (libpq / postgresql@N) and Debian/Ubuntu packages are.
+    major = read_psql_major(psql)
+    if major is None or major < MIN_LIBPQ_MAJOR:
+        raise Refused(
+            f"REFUSED: psql {major if major is not None else 'of unknown version'} is older than "
+            f"{MIN_LIBPQ_MAJOR}; channel binding (PGCHANNELBINDING=require) needs psql/libpq {MIN_LIBPQ_MAJOR}+ "
+            "and older clients would silently send passwords without it. Install a newer psql "
+            "(macOS: brew install libpq)."
+        )
     ctx.psql = psql
+    print(f"    psql {major}: channel binding enforced (PGCHANNELBINDING=require)")
 
     version = railway(["--version"])
     parsed = parse_cli_version(version.stdout if version.returncode == 0 else "")
@@ -859,7 +1025,10 @@ def preflight(ctx: Context) -> None:
         ctx.private_hosts.add((str(info["pghost"]).lower(), str(info["pgport"])))
     print(f"    stdin forwarding through `railway run`: ok{' (with --no-local)' if ctx.run_flags else ''}")
     print(f"    railway run resolved project {info['project']} environment {info['environment']}")
-    print(f"    provider login: {info.get('user')} via the service's own TCP proxy {info['host']}:{info['port']} (TLS)")
+    print(
+        f"    provider login: {info.get('user')} via the service's own TCP proxy {info['host']}:{info['port']} "
+        "(TLS + SCRAM channel binding)"
+    )
     print(f"    existing database (archive, left untouched): {info.get('database')}")
     print(
         f"    private endpoint for stored URLs: {PGHOST_REF}:{PGPORT_REF} = {info.get('pghost')}:{info.get('pgport')}"
@@ -876,8 +1045,8 @@ def preflight(ctx: Context) -> None:
     if personal_tls:
         print(
             f"    note: ignoring {', '.join(personal_tls)}. psql runs with a private empty HOME and no inherited PG* "
-            "settings; TLS is required (sslmode=require), but Railway's proxy certificate is self-signed and is not "
-            "CA-verified."
+            "settings. Railway's proxy certificate is self-signed and is not CA-verified; passwords are protected "
+            "by SCRAM-SHA-256 with channel binding (PGCHANNELBINDING=require), never sent in cleartext."
         )
 
     rows = provider_psql(ctx, inventory_sql(ctx.database), INVENTORY_SENTINEL, "read-only inventory")
@@ -939,6 +1108,9 @@ def record_inventory(ctx: Context, rows: Sequence[Sequence[str]]) -> None:
         elif tag == "outside":
             ctx.outside_usage.append((row[1], row[2]))
             print(f"    OUTSIDE USE: role {row[1]} {row[2]}")
+        elif tag == "blocked-grant":
+            ctx.blocked_grants.append((row[1], row[2], row[3]))
+            print(f"    BLOCKING GRANT: {row[1]} used its ADMIN OPTION to grant foreign role {row[2]} to {row[3]}")
         elif tag == "target-sessions" and row[1] != "0":
             print(f"    {row[1]} open session(s) by RegEngine roles in {ctx.database} (a running deployment)")
     if not any(row[0] == "database" for row in rows):
@@ -989,6 +1161,15 @@ def plan(ctx: Context, values: Mapping[str, Optional[str]]) -> List[str]:
     logging in before anything is written.
     """
     blockers: List[str] = []
+    if ctx.blocked_grants:
+        detail = "; ".join(
+            f"{grantor} granted role {granted} to {member}" for grantor, granted, member in ctx.blocked_grants
+        )
+        blockers.append(
+            f"these grants depend on a RegEngine role's membership of a foreign role and would have to be cascaded "
+            f"away outside RegEngine ({detail}). --adopt-existing-roles never does that: revoke them by hand after "
+            "review, then re-run."
+        )
     if ctx.outside_usage and not ctx.adopt_existing_roles:
         detail = "; ".join(f"{role} {what}" for role, what in ctx.outside_usage)
         blockers.append(
@@ -1026,7 +1207,7 @@ def plan(ctx: Context, values: Mapping[str, Optional[str]]) -> List[str]:
             if identity[:3] != [role, role, ctx.database]:
                 raise BootstrapError(f"login resolved to {identity[:3]!r}")
         except BootstrapError:
-            blockers.append(f"stored URL password for {role} does not log in; re-run with --apply --rotate-passwords.")
+            blockers.append(f"stored URL password for {role} does not log in; re-run with: {ctx.rotate_command}")
             continue
         print(f"    stored password for {role}: logs in to {ctx.database} (kept)")
     return blockers
@@ -1181,7 +1362,7 @@ def _login(ctx: Context, role: str, password: str, sql: str) -> List[List[str]]:
             raise
         ctx.rotate_hint = True
         raise BootstrapError(
-            f"stored URL password for {role} does not log in; re-run with --apply --rotate-passwords"
+            f"stored URL password for {role} does not log in; re-run with: {ctx.rotate_command}"
         ) from None
 
 
@@ -1325,13 +1506,12 @@ def _run(ctx: Context) -> int:
 
 def _print_recovery_hint(ctx: Context) -> None:
     if ctx.rotate_hint:
-        print(
-            "Only new passwords can fix this: re-run with --apply --rotate-passwords, then redeploy.", file=sys.stderr
-        )
+        print(f"Only new passwords can fix this. Re-run, then redeploy: {ctx.rotate_command}", file=sys.stderr)
     elif ctx.passwords_changed and not ctx.migrations_url_written:
         print(
-            "Passwords were changed but MIGRATIONS_DATABASE_URL was not written, so any deploy stops harmlessly "
-            "at run-migrations.sh. Fix the cause and re-run with --apply --rotate-passwords.",
+            "Passwords were changed but MIGRATIONS_DATABASE_URL was not updated (unset, or still holding the old "
+            "password), so any deploy stops at run-migrations.sh and gunicorn never starts. Fix the cause and re-run: "
+            f"{ctx.rotate_command}",
             file=sys.stderr,
         )
     else:

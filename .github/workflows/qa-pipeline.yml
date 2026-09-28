@@ -87,7 +87,13 @@ jobs:
   # ── Stage 4: Decision Gate ─────────────────────────────
   decision:
     name: Deploy Decision
-    if: always()
+    # Still runs when a stage failed, so decision.js can block deploy.
+    # Skip only when the workflow itself was cancelled (a newer push on the
+    # same ref). `cancelled()` is the workflow-cancel signal, not a failed
+    # dependency: a timed-out or otherwise cancelled stage still reaches
+    # decision.js and blocks. A superseded run must not post BLOCK DEPLOY
+    # for a stage that never finished.
+    if: always() && !cancelled()
     needs: [fast-gate, system-sim]
     runs-on: ubuntu-latest
     timeout-minutes: 2
