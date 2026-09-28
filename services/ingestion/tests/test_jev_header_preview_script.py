@@ -616,3 +616,147 @@ def test_unparseable_base_url_host_does_not_break_the_report(script):
     assert script._host("http://[::1") is None
     assert script._host("https://gw.example.test:8443/v1") == "gw.example.test"
     assert script._host(None) is None
+
+
+# ---------------------------------------------------------------------------
+# --file-cte: the question the route asks of an upload that declares no CTE
+# ---------------------------------------------------------------------------
+
+# RegEngine's harvesting template shape: every column known, no CTE column.
+TEMPLATE_CSV_TEXT = (
+    "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document\n"
+    "TLC-001,Kale,10,lbs,2026-04-17,Farm A,REF-1\n"
+)
+
+
+def _file_cte_transport(seen: dict, file_cte: Optional[dict], status: int = 200) -> httpx2.MockTransport:
+    """Answer ``file_cte`` with ``file_cte`` and column questions from ``ANSWERS``."""
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        seen.setdefault("bodies", []).append(body)
+        if status != 200:
+            return httpx2.Response(status, json={"error": "down"})
+        answered = {}
+        for question_id in body["questions"]:
+            if question_id == "file_cte":
+                answered[question_id] = file_cte
+            else:
+                index = int(question_id.split("_")[1])
+                answered[question_id] = ANSWERS[body["state"]["columns_to_map"][index]["header"]]
+        return httpx2.Response(
+            200,
+            headers={"x-typesafe-request-id": "req_file_cte"},
+            json={"model": "jev-1.13.0", "answers": answered, "usage": {"input_tokens": 60, "output_tokens": 1}},
+        )
+
+    return httpx2.MockTransport(handler)
+
+
+def _run_file_cte(script, capsys, argv, *, env, seen, file_cte, status=200):
+    with structlog.testing.capture_logs() as logs:
+        code = script.main(argv, env=env, transport=_file_cte_transport(seen, file_cte, status))
+    out, err = capsys.readouterr()
+    return code, out, err, logs
+
+
+def test_file_cte_asks_the_template_question_and_reports_it(script, capsys, tmp_path):
+    seen: dict = {}
+    argv = [str(_csv(tmp_path, TEMPLATE_CSV_TEXT)), "--file-cte", "--json"]
+    code, out, err, logs = _run_file_cte(
+        script, capsys, argv, env=BASE_ENV, seen=seen, file_cte=_choice("harvesting", 0.96, cooling=0.03)
+    )
+
+    assert code == 0, err
+    report = json.loads(out)
+    # Every column is known, so only the file-CTE question left: one request, header row only.
+    (body,) = seen["bodies"]
+    assert list(body["questions"]) == ["file_cte"]
+    assert body["state"] == {"csv_headers": TEMPLATE_CSV_TEXT.splitlines()[0].split(",")}
+    assert "TLC-001" not in json.dumps(body)
+    assert report["status"] == "no_unrecognized_headers"
+    file_cte = report["file_cte"]
+    assert file_cte["status"] == "ok" and file_cte["exit_code"] == 0
+    assert file_cte["cte_type"] == "harvesting"
+    assert file_cte["confidence"] == pytest.approx(0.96)
+    assert file_cte["band"] == "auto_apply"
+    assert file_cte["would_apply"] is False and file_cte["blocked_reason"] == "apply_disabled"
+    assert file_cte["request_id"] == "req_file_cte"
+    assert file_cte["questions_version"] == "csv-file-cte.v1"
+    _assert_key_hidden(out, err, logs)
+
+
+def test_file_cte_table_line_and_simulated_apply(script, capsys, tmp_path):
+    seen: dict = {}
+    argv = [str(_csv(tmp_path, TEMPLATE_CSV_TEXT)), "--file-cte", "--simulate-apply"]
+    code, out, err, _ = _run_file_cte(
+        script, capsys, argv, env=BASE_ENV, seen=seen, file_cte=_choice("harvesting", 0.96)
+    )
+
+    assert code == 0, err
+    line = next(line for line in out.splitlines() if line.startswith("File CTE:"))
+    assert line.startswith("File CTE: harvesting (confidence 0.960, band auto_apply), would apply: yes;")
+
+
+def test_file_cte_runs_beside_the_header_mapping(script, capsys, tmp_path):
+    seen: dict = {}
+    argv = [str(_csv(tmp_path)), "--file-cte", "--json"]
+    code, out, err, _ = _run_file_cte(
+        script, capsys, argv, env=BASE_ENV, seen=seen, file_cte=_choice("harvesting", 0.7)
+    )
+
+    assert code == 0, err
+    report = json.loads(out)
+    assert sorted(list(b["questions"]) for b in seen["bodies"]) == [["col_0", "col_1"], ["file_cte"]]
+    assert report["status"] == "ok" and len(report["suggestions"]) == 2
+    assert report["file_cte"]["band"] == "review"
+    assert report["file_cte"]["blocked_reason"] == "below_auto_apply_threshold"
+
+
+def test_file_cte_is_not_asked_when_rows_name_their_cte(script, capsys, tmp_path):
+    seen: dict = {}
+    text = "cte_type," + TEMPLATE_CSV_TEXT.splitlines()[0] + "\nharvesting," + TEMPLATE_CSV_TEXT.splitlines()[1] + "\n"
+    argv = [str(_csv(tmp_path, text)), "--file-cte", "--json"]
+    code, out, err, _ = _run_file_cte(script, capsys, argv, env=BASE_ENV, seen=seen, file_cte=_choice("shipping", 0.99))
+
+    assert code == 0, err
+    assert "bodies" not in seen
+    assert json.loads(out)["file_cte"]["status"] == "per_row_cte_column"
+
+
+def test_file_cte_with_a_declared_cte_is_a_usage_error_and_sends_nothing(script, capsys, tmp_path):
+    seen: dict = {}
+    argv = [str(_csv(tmp_path, TEMPLATE_CSV_TEXT)), "--file-cte", "--cte-type", "harvesting"]
+    code, out, err, _ = _run_file_cte(script, capsys, argv, env=BASE_ENV, seen=seen, file_cte=_choice("shipping", 0.99))
+
+    assert code == 1
+    assert "bodies" not in seen
+    assert "drop --cte-type" in err
+
+
+def test_file_cte_vendor_failure_exits_3_and_names_the_question(script, capsys, tmp_path):
+    seen: dict = {}
+    argv = [str(_csv(tmp_path, TEMPLATE_CSV_TEXT)), "--file-cte"]
+    code, out, err, logs = _run_file_cte(script, capsys, argv, env=BASE_ENV, seen=seen, file_cte=None, status=503)
+
+    assert code == 3
+    assert "File CTE: unavailable:server_error" in out
+    assert "jev_header_preview: file_cte unavailable:server_error: Vendor-side 5xx" in err
+    _assert_key_hidden(out, err, logs)
+
+
+def test_file_cte_without_a_key_exits_2_and_sends_nothing(script, capsys, tmp_path):
+    seen: dict = {}
+    argv = [str(_csv(tmp_path, TEMPLATE_CSV_TEXT)), "--file-cte", "--json"]
+    code, out, err, _ = _run_file_cte(script, capsys, argv, env={}, seen=seen, file_cte=_choice("harvesting", 0.99))
+
+    assert code == 2
+    assert "bodies" not in seen
+    assert json.loads(out)["file_cte"]["status"] == "disabled"
+
+
+def test_without_file_cte_the_report_has_no_file_cte_section(script, capsys, tmp_path):
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path)), "--json"], env=BASE_ENV)
+
+    assert code == 0, err
+    assert "file_cte" not in json.loads(out)
