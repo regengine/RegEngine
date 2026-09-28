@@ -17,14 +17,19 @@ What ``--apply`` does
    resolves exactly this project and environment. It checks that the Postgres
    service's ``DATABASE_PUBLIC_URL`` is that service's own TCP proxy. It then
    takes a read-only inventory of the three roles, the target database, and
-   any use of a pre-existing role outside the target database.
+   any use of a pre-existing role outside the target database. For a role it
+   would keep, it tests the stored password by logging in before anything is
+   written.
 2. As the Railway Postgres template superuser: create or pin
    ``regengine``, ``regengine_sysadmin`` and ``regengine_migrator`` (LOGIN
    NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION, VALID
-   UNTIL infinity, no connection limit, no role-level settings) and revoke
-   memberships involving them. A pre-existing role that is used outside the
-   target database (owned objects, privileges, sessions, settings or
-   memberships) is only changed with ``--adopt-existing-roles``. Then
+   UNTIL infinity, no connection limit, no role-level settings), revoke
+   memberships involving them, and mark each with a ``COMMENT ON ROLE``. A
+   pre-existing role is only changed with ``--adopt-existing-roles`` when it
+   is used outside the target database (owned objects, privileges, sessions,
+   settings, memberships) or has elevated attributes, or when this bootstrap
+   did not create it and its URL variable does not already point at
+   role@target on the staging private endpoint. Then
    ``CREATE DATABASE <db> OWNER regengine_migrator TEMPLATE template0`` if it
    is absent, ``REVOKE ALL ... FROM PUBLIC`` plus explicit ``CONNECT`` grants,
    and the migrator's ``search_path``/``timezone`` inside that database only.
@@ -32,7 +37,9 @@ What ``--apply`` does
    starts. A small launcher there turns it into libpq environment variables
    (PGPASSWORD, PGSSLMODE=require) and execs psql. The URL and password never
    appear in any command line, in the output, or in a file, and this script's
-   own process never holds them.
+   own process never holds them. Every psql child gets a private empty HOME,
+   so a personal ~/.postgresql/root.crt cannot turn sslmode=require into CA
+   verification against Railway's self-signed proxy certificate.
 3. Log in AS ``regengine_migrator`` and create ``get_tenant_context()``
    exactly as the backend-ci live-db-suite does for a fresh chain (only if it
    is absent).
@@ -53,9 +60,11 @@ What ``--apply`` does
 
 Passwords are set only for roles this run creates, or for every role with
 ``--rotate-passwords``. An existing role keeps its password when its URL
-variable is readable, names that role and the target database, and logs in.
-Otherwise, including when the URL variable is sealed, the run refuses until
-``--rotate-passwords`` is given. After any rotation, redeploy.
+variable is readable, names that role and the target database on the staging
+private endpoint, and logs in (tested before any write). Otherwise, including
+when the URL variable is sealed or its password no longer logs in, the run
+refuses (exit 2) until ``--rotate-passwords`` is given. After any rotation,
+redeploy.
 
 Every value travels over stdin to ``railway variable set NAME --stdin
 --skip-deploys``. ``--skip-deploys`` only stops the CLI from starting a
@@ -83,14 +92,21 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Set, Tuple
 from urllib.parse import unquote, urlsplit
 
 DEFAULT_PROJECT_ID = "4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51"  # RegEngine-Prod project (an identifier, not a secret)
 REQUIRED_ENVIRONMENT = "staging"
 DEFAULT_DATABASE = "regengine_staging"
-DATABASE_NAME = re.compile(r"^regengine_[a-z0-9_]{1,53}$")
+DATABASE_NAME = re.compile(r"regengine_[a-z0-9_]{1,53}")  # always used with fullmatch()
+
+# COMMENT ON ROLE marker for roles this bootstrap created (or the operator
+# adopted with --adopt-existing-roles). Any other pre-existing role is foreign.
+MANAGED_ROLE_PREFIX = "regengine-staging-bootstrap:"
+MANAGED_ROLE_COMMENT = MANAGED_ROLE_PREFIX + " created or adopted by scripts/railway/bootstrap_staging_database.py"
 
 # Older CLIs omit sealed variables from `variable list --json`; the presence
 # check would then regenerate sealed secrets and rotate passwords.
@@ -268,16 +284,18 @@ def railway(args: Sequence[str], *, stdin: str = "") -> subprocess.CompletedProc
 # Runs inside `railway run -s Postgres`: turns DATABASE_PUBLIC_URL into libpq
 # environment variables and execs psql, so neither the URL nor the password
 # is ever part of any argv. stdin (the SQL) passes straight through.
+# argv: <isolated HOME> <psql> <psql flags...>
 PSQL_LAUNCHER = f"""\
 import os, sys, urllib.parse as u
 p = u.urlsplit(os.environ["DATABASE_PUBLIC_URL"])
 keep = {_CHILD_ENV_KEEP!r}
 env = {{k: v for k, v in os.environ.items() if k in keep or k.startswith("LC_")}}
-env.update(PGHOST=p.hostname or "", PGPORT=str(p.port or 5432), PGUSER=u.unquote(p.username or ""),
+env.update(HOME=sys.argv[1],
+           PGHOST=p.hostname or "", PGPORT=str(p.port or 5432), PGUSER=u.unquote(p.username or ""),
            PGPASSWORD=u.unquote(p.password or ""), PGDATABASE=u.unquote(p.path.lstrip("/")),
            PGSSLMODE="require", PGAPPNAME="regengine-staging-bootstrap", PGCONNECT_TIMEOUT="15",
            PGOPTIONS={SERVER_OPTIONS!r})
-os.execve(sys.argv[1], sys.argv[1:], env)
+os.execve(sys.argv[2], sys.argv[2:], env)
 """
 
 PROBE_CODE = f"""\
@@ -286,7 +304,9 @@ out = {{"stdin_ok": sys.stdin.read() == {STDIN_PROBE!r},
        "environment": os.environ.get("RAILWAY_ENVIRONMENT_NAME", ""),
        "project": os.environ.get("RAILWAY_PROJECT_ID", ""),
        "proxy_domain": os.environ.get("RAILWAY_TCP_PROXY_DOMAIN", ""),
-       "proxy_port": os.environ.get("RAILWAY_TCP_PROXY_PORT", "")}}
+       "proxy_port": os.environ.get("RAILWAY_TCP_PROXY_PORT", ""),
+       "pghost": os.environ.get("PGHOST", ""),
+       "pgport": os.environ.get("PGPORT", "")}}
 raw = os.environ.get("DATABASE_PUBLIC_URL", "")
 if raw:
     try:
@@ -310,13 +330,18 @@ class Context:
     rotate_passwords: bool = False
     run_flags: List[str] = field(default_factory=list)  # e.g. ["--no-local"]
     psql: str = "psql"
+    psql_home: str = ""  # private empty HOME for every psql child (no ~/.postgresql, no ~/.psqlrc)
     endpoint: Dict[str, str] = field(default_factory=dict)
+    private_hosts: Set[Tuple[str, str]] = field(default_factory=set)  # accepted host:port in stored URLs
+    target_exists: bool = False
     existing_roles: Set[str] = field(default_factory=set)
+    managed_roles: Set[str] = field(default_factory=set)
     outside_usage: List[Tuple[str, str]] = field(default_factory=list)
     password_plan: Dict[str, str] = field(default_factory=dict)  # role -> new | rotate | keep
     kept_passwords: Dict[str, str] = field(default_factory=dict)
     passwords_changed: bool = False
     migrations_url_written: bool = False
+    rotate_hint: bool = False
 
     @property
     def scope(self) -> List[str]:
@@ -341,7 +366,7 @@ def provider_psql(ctx: Context, sql: str, sentinel: str, what: str) -> List[List
     and psql's environment. A missing sentinel means psql did not receive the
     whole script, which is fatal.
     """
-    command = [sys.executable, "-c", PSQL_LAUNCHER, ctx.psql, *PSQL_FLAGS]
+    command = [sys.executable, "-c", PSQL_LAUNCHER, ctx.psql_home, ctx.psql, *PSQL_FLAGS]
     result = railway_run(ctx, POSTGRES_SERVICE, command, stdin=sql)
     if result.returncode != 0:
         raise _fail_command(what, result)
@@ -360,6 +385,7 @@ def role_psql(ctx: Context, role: str, password: str, sql: str, sentinel: str, w
     """
     env = _child_base_env()
     env.update(
+        HOME=ctx.psql_home,
         PGHOST=ctx.endpoint["host"],
         PGPORT=str(ctx.endpoint["port"]),
         PGDATABASE=ctx.database,
@@ -451,6 +477,14 @@ SELECT granted.rolname::text, format('is granted to role %s', member.rolname)
   JOIN pg_roles AS granted ON granted.oid = am.roleid
   JOIN pg_roles AS member ON member.oid = am.member
  WHERE granted.rolname = ANY ({roles}) AND NOT member.rolname = ANY ({roles})
+UNION ALL
+SELECT rolname::text,
+       format('has elevated attributes (%s)',
+              concat_ws(', ', CASE WHEN rolsuper THEN 'SUPERUSER' END, CASE WHEN rolbypassrls THEN 'BYPASSRLS' END,
+                        CASE WHEN rolcreaterole THEN 'CREATEROLE' END, CASE WHEN rolcreatedb THEN 'CREATEDB' END,
+                        CASE WHEN rolreplication THEN 'REPLICATION' END))
+  FROM pg_roles
+ WHERE rolname = ANY ({roles}) AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
 """
 
 
@@ -460,7 +494,8 @@ SELECT 'whoami', current_user, (SELECT rolsuper FROM pg_roles WHERE rolname = cu
        current_database(), current_setting('server_version_num'),
        coalesce((SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid())::text, 'false');
 SELECT 'role', rolname, rolcanlogin::text, rolsuper::text, rolbypassrls::text, rolcreatedb::text,
-       rolcreaterole::text, rolreplication::text
+       rolcreaterole::text, rolreplication::text,
+       starts_with(coalesce(shobj_description(oid, 'pg_authid'), ''), {quote_literal(MANAGED_ROLE_PREFIX)})::text
   FROM pg_roles WHERE rolname = ANY ({_roles_array()}) ORDER BY rolname;
 SELECT 'database', datname, pg_get_userbyid(datdba) FROM pg_database WHERE datname = {quote_literal(database)};
 SELECT 'outside', role_name, detail FROM ({outside_usage_sql(database)}) AS outside ORDER BY 2, 3;
@@ -533,6 +568,7 @@ BEGIN
             EXECUTE format('ALTER ROLE %I RESET ALL', role_name);
             RAISE NOTICE 'pinned attributes and reset role-wide settings on existing role %', role_name;
         END IF;
+        EXECUTE format('COMMENT ON ROLE %I IS %L', role_name, {quote_literal(MANAGED_ROLE_COMMENT)});
     END LOOP;
 END
 $bootstrap_roles$;
@@ -771,9 +807,9 @@ def validate_target(environment: str, database: str) -> None:
         )
     if environment != REQUIRED_ENVIRONMENT:
         raise Refused(f"REFUSED: environment must be exactly '{REQUIRED_ENVIRONMENT}' (got {environment!r}).")
-    if not DATABASE_NAME.match(database):
+    if not DATABASE_NAME.fullmatch(database):
         raise Refused(
-            f"REFUSED: --database {database!r} must match {DATABASE_NAME.pattern} (for example regengine_staging)."
+            f"REFUSED: --database {database!r} must match ^{DATABASE_NAME.pattern}$ (for example regengine_staging)."
         )
 
 
@@ -816,10 +852,33 @@ def preflight(ctx: Context) -> None:
         raise BootstrapError("could not read the Postgres service probe output") from exc
     check_probe(ctx, info)
     ctx.endpoint = {k: str(info[k]) for k in ("host", "port", "user", "database")}
+    # A kept URL must point at the Postgres service's private endpoint, either as
+    # the reference form this script writes or as Railway's rendered value.
+    ctx.private_hosts = {(PGHOST_REF, PGPORT_REF)}
+    if info.get("pghost") and info.get("pgport"):
+        ctx.private_hosts.add((str(info["pghost"]).lower(), str(info["pgport"])))
     print(f"    stdin forwarding through `railway run`: ok{' (with --no-local)' if ctx.run_flags else ''}")
     print(f"    railway run resolved project {info['project']} environment {info['environment']}")
     print(f"    provider login: {info.get('user')} via the service's own TCP proxy {info['host']}:{info['port']} (TLS)")
     print(f"    existing database (archive, left untouched): {info.get('database')}")
+    print(
+        f"    private endpoint for stored URLs: {PGHOST_REF}:{PGPORT_REF} = {info.get('pghost')}:{info.get('pgport')}"
+    )
+    personal_tls = [
+        name
+        for name, present in (
+            ("~/.postgresql/root.crt", (Path.home() / ".postgresql" / "root.crt").exists()),
+            ("PGSSLROOTCERT", bool(os.environ.get("PGSSLROOTCERT"))),
+            ("PGSSLMODE", bool(os.environ.get("PGSSLMODE"))),
+        )
+        if present
+    ]
+    if personal_tls:
+        print(
+            f"    note: ignoring {', '.join(personal_tls)}. psql runs with a private empty HOME and no inherited PG* "
+            "settings; TLS is required (sslmode=require), but Railway's proxy certificate is self-signed and is not "
+            "CA-verified."
+        )
 
     rows = provider_psql(ctx, inventory_sql(ctx.database), INVENTORY_SENTINEL, "read-only inventory")
     record_inventory(ctx, rows)
@@ -865,11 +924,15 @@ def record_inventory(ctx: Context, rows: Sequence[Sequence[str]]) -> None:
                 raise Refused(f"REFUSED: PostgreSQL server_version_num {row[4]} is older than 15")
         elif tag == "role":
             ctx.existing_roles.add(row[1])
+            if row[8] == "true":
+                ctx.managed_roles.add(row[1])
             print(
                 f"    existing role {row[1]}: login={row[2]} super={row[3]} bypassrls={row[4]} createdb={row[5]} "
-                f"createrole={row[6]} replication={row[7]}"
+                f"createrole={row[6]} replication={row[7]} "
+                f"({'created by this bootstrap' if row[8] == 'true' else 'NOT created by this bootstrap'})"
             )
         elif tag == "database":
+            ctx.target_exists = True
             print(f"    target database {row[1]} exists, owner={row[2]}")
             if row[2] != MIGRATOR_ROLE:
                 raise Refused(f"REFUSED: database {row[1]} exists but is owned by {row[2]}; refusing to adopt it")
@@ -885,46 +948,87 @@ def record_inventory(ctx: Context, rows: Sequence[Sequence[str]]) -> None:
             print(f"    role {role}: absent (will be created)")
 
 
-def _url_matches(value: str, role: str, database: str) -> Optional[str]:
-    """Return the password when ``value`` is a URL for ``role`` on ``database``; never prints it."""
+def _url_matches(value: str, role: str, database: str, private_hosts: Set[Tuple[str, str]]) -> Optional[str]:
+    """Return the password when ``value`` is a URL for role@database on the staging private endpoint.
+
+    The host:port must be the ``${{Postgres.PGHOST}}:${{Postgres.PGPORT}}``
+    reference form or its rendered value. The password is never printed.
+    """
     try:
         parts = urlsplit(value)
         user, password = unquote(parts.username or ""), unquote(parts.password or "")
         dbname = unquote(parts.path.lstrip("/"))
     except ValueError:
         return None
+    host, _, port = parts.netloc.rpartition("@")[2].rpartition(":")
+    host_port = (host if host.startswith("${{") else host.lower(), port)
     if parts.scheme not in ("postgresql", "postgres") or user != role or dbname != database or not password:
+        return None
+    if host_port not in private_hosts:
         return None
     return password
 
 
+def _url_problem(values: Mapping[str, Optional[str]], variable: str, role: str, ctx: Context) -> Optional[str]:
+    """None when ``variable`` points at role@target on the staging private endpoint, else why not."""
+    if variable not in values:
+        return f"{variable} is missing"
+    if values[variable] is None:
+        return f"{variable} is sealed, so it cannot be verified"
+    password = _url_matches(values[variable] or "", role, ctx.database, ctx.private_hosts)
+    if password is None:
+        return f"{variable} does not point at {role}@{ctx.database} on the staging Postgres private endpoint"
+    ctx.kept_passwords[role] = _register_secret(password)
+    return None
+
+
 def plan(ctx: Context, values: Mapping[str, Optional[str]]) -> List[str]:
-    """Decide adoption and password handling; return blockers (reasons --apply must refuse)."""
+    """Decide adoption and password handling; return blockers (reasons --apply must refuse).
+
+    Read-only. A role this run would keep has its stored password tested by
+    logging in before anything is written.
+    """
     blockers: List[str] = []
     if ctx.outside_usage and not ctx.adopt_existing_roles:
         detail = "; ".join(f"{role} {what}" for role, what in ctx.outside_usage)
         blockers.append(
             f"pre-existing roles are used outside {ctx.database} ({detail}). Review, then pass --adopt-existing-roles."
         )
+    foreign: List[str] = []
     needs_rotation: List[str] = []
     for variable, role in ROLE_URL_VARIABLES:
         if role not in ctx.existing_roles:
             ctx.password_plan[role] = "new"
-        elif ctx.rotate_passwords:
+            continue
+        problem = _url_problem(values, variable, role, ctx)
+        if problem and role not in ctx.managed_roles and not ctx.adopt_existing_roles:
+            foreign.append(f"{role} was not created by this bootstrap and {problem}")
+        if ctx.rotate_passwords:
             ctx.password_plan[role] = "rotate"
-        elif variable not in values:
-            needs_rotation.append(f"{variable} is missing for existing role {role}")
-        elif values[variable] is None:
-            needs_rotation.append(f"{variable} is sealed, so its password cannot be verified")
+        elif problem:
+            needs_rotation.append(problem)
+        elif not ctx.target_exists:
+            needs_rotation.append(
+                f"{ctx.database} does not exist yet, so the stored password for {role} cannot be tested"
+            )
         else:
-            password = _url_matches(values[variable] or "", role, ctx.database)
-            if password is None:
-                needs_rotation.append(f"{variable} does not point at {role}@{ctx.database}")
-            else:
-                ctx.password_plan[role] = "keep"
-                ctx.kept_passwords[role] = _register_secret(password)
+            ctx.password_plan[role] = "keep"
+    if foreign:
+        blockers.append("; ".join(foreign) + ". Review, then pass --adopt-existing-roles.")
     if needs_rotation:
         blockers.append("; ".join(needs_rotation) + ". Pass --rotate-passwords to set new passwords (then redeploy).")
+    for role in ALL_ROLES:
+        if ctx.password_plan.get(role) != "keep":
+            continue
+        try:
+            rows = role_psql(ctx, role, ctx.kept_passwords[role], runtime_login_sql(), LOGIN_SENTINEL, f"{role} login")
+            identity = next((row[1:] for row in rows if row[0] == "identity"), [])
+            if identity[:3] != [role, role, ctx.database]:
+                raise BootstrapError(f"login resolved to {identity[:3]!r}")
+        except BootstrapError:
+            blockers.append(f"stored URL password for {role} does not log in; re-run with --apply --rotate-passwords.")
+            continue
+        print(f"    stored password for {role}: logs in to {ctx.database} (kept)")
     return blockers
 
 
@@ -1035,7 +1139,7 @@ def apply_database(ctx: Context) -> Dict[str, str]:
     print("    PUBLIC privileges revoked on the database; CONNECT granted to the three roles")
 
     step(3, f"Seed get_tenant_context() logged in as {MIGRATOR_ROLE}")
-    rows = role_psql(ctx, MIGRATOR_ROLE, passwords[MIGRATOR_ROLE], migrator_sql(), LOGIN_SENTINEL, "migrator login")
+    rows = _login(ctx, MIGRATOR_ROLE, passwords[MIGRATOR_ROLE], migrator_sql())
     facts = {row[0]: row[1:] for row in rows}
     identity = facts.get("identity", [])
     if identity[:3] != [MIGRATOR_ROLE, MIGRATOR_ROLE, ctx.database]:
@@ -1060,12 +1164,25 @@ def apply_database(ctx: Context) -> Dict[str, str]:
 
     step(4, f"Prove {RUNTIME_ROLE} and {ADMIN_ROLE} can log in to {ctx.database}")
     for role in (RUNTIME_ROLE, ADMIN_ROLE):
-        rows = role_psql(ctx, role, passwords[role], runtime_login_sql(), LOGIN_SENTINEL, f"{role} login")
+        rows = _login(ctx, role, passwords[role], runtime_login_sql())
         identity = next((row[1:] for row in rows if row[0] == "identity"), [])
         if identity[:3] != [role, role, ctx.database]:
             raise BootstrapError(f"{role} login resolved to {identity[:3]!r}")
         print(f"    {role}: login ok (ssl={identity[3]}, password {ctx.password_plan[role]})")
     return passwords
+
+
+def _login(ctx: Context, role: str, password: str, sql: str) -> List[List[str]]:
+    """Log in as ``role``. A kept password that stopped working can only be fixed by rotating."""
+    try:
+        return role_psql(ctx, role, password, sql, LOGIN_SENTINEL, f"{role} login")
+    except BootstrapError:
+        if ctx.password_plan.get(role) != "keep":
+            raise
+        ctx.rotate_hint = True
+        raise BootstrapError(
+            f"stored URL password for {role} does not log in; re-run with --apply --rotate-passwords"
+        ) from None
 
 
 def apply_variables(
@@ -1122,7 +1239,9 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser.add_argument(
         "--adopt-existing-roles",
         action="store_true",
-        help="allow changing pre-existing roles that are used outside the target database (after review)",
+        help="allow changing pre-existing roles that are used outside the target database or have elevated "
+        "attributes, or that this bootstrap did not create and whose URL variable does not point at them "
+        "(after review)",
     )
     parser.add_argument("--environment", default=REQUIRED_ENVIRONMENT, help="must be exactly 'staging'")
     parser.add_argument("--project", default=DEFAULT_PROJECT_ID, help="Railway project ID (default: RegEngine-Prod)")
@@ -1151,6 +1270,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     mode = "APPLY" if ctx.apply else "DRY RUN"
     print(f"RegEngine staging database bootstrap [{mode}] project={ctx.project} environment={ctx.environment}")
+    ctx.psql_home = tempfile.mkdtemp(prefix="regengine-bootstrap-psql-home-")  # 0700, empty
+    try:
+        return _run(ctx)
+    finally:
+        shutil.rmtree(ctx.psql_home, ignore_errors=True)
+
+
+def _run(ctx: Context) -> int:
     try:
         preflight(ctx)
         values = parse_variable_values(read_app_variables(ctx))
@@ -1197,7 +1324,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 def _print_recovery_hint(ctx: Context) -> None:
-    if ctx.passwords_changed and not ctx.migrations_url_written:
+    if ctx.rotate_hint:
+        print(
+            "Only new passwords can fix this: re-run with --apply --rotate-passwords, then redeploy.", file=sys.stderr
+        )
+    elif ctx.passwords_changed and not ctx.migrations_url_written:
         print(
             "Passwords were changed but MIGRATIONS_DATABASE_URL was not written, so any deploy stops harmlessly "
             "at run-migrations.sh. Fix the cause and re-run with --apply --rotate-passwords.",

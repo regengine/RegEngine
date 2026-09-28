@@ -57,6 +57,8 @@ class FakeRailway:
             "port": "15432",
             "user": "postgres",
             "database": "railway",
+            "pghost": "postgres.railway.internal",
+            "pgport": "5432",
         }
         self.inventory_rows = ["whoami|postgres|true|railway|180006|true"]
         self.fail_set: str | None = None
@@ -93,10 +95,12 @@ class FakeRailway:
         return [call[2] for call in self.calls if call[:2] == ["variable", "set"]]
 
 
-def _fake_role_psql(logins):
+def _fake_role_psql(logins, failing: set | None = None):
     def fake(ctx, role, password, sql, sentinel, what):
         logins.append((role, password))
-        if role == boot.MIGRATOR_ROLE:
+        if failing and role in failing:
+            raise boot.BootstrapError(f"{what} failed (exit 2): password authentication failed")
+        if "need_seed" in sql:
             return [
                 ["identity", role, role, ctx.database, "public, fsma, extensions", "UTC", "true"],
                 ["seed", "created"],
@@ -130,8 +134,12 @@ def fake(monkeypatch):
     return railway
 
 
-def _existing_roles(fake: FakeRailway, *extra_rows: str) -> None:
-    fake.inventory_rows += [f"role|{role}|true|false|false|false|false|false" for role in boot.ALL_ROLES]
+def _existing_roles(fake: FakeRailway, *extra_rows: str, managed: bool = True, target: bool = True) -> None:
+    """Roles already on the cluster; managed=True means an earlier bootstrap run created them."""
+    flag = "true" if managed else "false"
+    fake.inventory_rows += [f"role|{role}|true|false|false|false|false|false|{flag}" for role in boot.ALL_ROLES]
+    if target:
+        fake.inventory_rows.append("database|regengine_staging|regengine_migrator")
     fake.inventory_rows += list(extra_rows)
 
 
@@ -152,7 +160,7 @@ def test_refuses_every_environment_except_exact_staging_before_any_railway_call(
 @pytest.mark.parametrize(
     "database",
     ["railway", "postgres", "template1", "user", "regengine", "regengine_", "Regengine_x", "regengine-staging",
-     "regengine_x;drop", 'regengine_"x', ""],
+     "regengine_x;drop", 'regengine_"x', "", "regengine_nl\n", "regengine_nl\n\n", " regengine_x"],
 )  # fmt: skip
 def test_refuses_database_names_outside_the_regengine_namespace(fake, database):
     assert boot.main(["--apply", "--database", database]) == boot.EXIT_REFUSED
@@ -293,6 +301,136 @@ def test_existing_roles_with_missing_sealed_or_foreign_urls_require_rotate_passw
     assert fake.sets()[-1] == "MIGRATIONS_DATABASE_URL"
 
 
+def test_elevated_existing_role_is_outside_use_even_without_objects_or_sessions(fake, capsys):
+    """R1: a SUPERUSER regengine with no detectable objects/sessions is not silently demoted."""
+    _existing_roles(fake, "outside|regengine|has elevated attributes (SUPERUSER)")
+    assert boot.main(["--dry-run"]) == boot.EXIT_REFUSED
+    assert "OUTSIDE USE: role regengine has elevated attributes (SUPERUSER)" in capsys.readouterr().out
+    assert boot.main(["--apply", "--rotate-passwords"]) == boot.EXIT_REFUSED
+    assert fake.sets() == []
+    assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)
+    # The same rule is part of the server-side guard, not only the client check.
+    usage_sql = boot.outside_usage_sql("regengine_staging")
+    assert "rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication" in usage_sql
+    assert "has elevated attributes" in boot.provider_sql("regengine_staging", {}, adopt_existing_roles=False)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda f: f.variables.pop("MIGRATIONS_DATABASE_URL"),
+        lambda f: f.sealed.add("DATABASE_URL"),
+        lambda f: f.variables.update(ADMIN_DATABASE_URL="postgresql://postgres:x@host:5432/railway"),
+    ],
+)
+def test_foreign_existing_role_without_matching_url_requires_adoption(fake, capsys, mutate):
+    """R1: roles this bootstrap did not create need --adopt-existing-roles unless their URL already points at them."""
+    _existing_roles(fake, managed=False)
+    fake.variables.update(_stored_urls())
+    mutate(fake)
+    assert boot.main(["--apply", "--rotate-passwords"]) == boot.EXIT_REFUSED
+    assert "was not created by this bootstrap" in capsys.readouterr().err
+    assert fake.sets() == []
+    assert boot.main(["--apply", "--rotate-passwords", "--adopt-existing-roles"]) == 0
+    provisioning = next(sql for sql in fake.provider_sql if boot.PROVIDER_SENTINEL in sql)
+    assert "COMMENT ON ROLE %I IS %L" in provisioning and boot.MANAGED_ROLE_PREFIX in provisioning
+
+
+def test_foreign_existing_roles_whose_urls_already_point_at_them_are_kept_without_adoption(fake):
+    _existing_roles(fake, managed=False)
+    fake.variables.update(_stored_urls())
+    assert boot.main(["--apply"]) == 0
+    assert not {"DATABASE_URL", "ADMIN_DATABASE_URL", "MIGRATIONS_DATABASE_URL"} & set(fake.sets())
+
+
+def test_stale_kept_password_is_refused_before_any_superuser_step(fake, monkeypatch, capsys):
+    """R2: a stored password that no longer logs in is caught before provisioning, with a non-looping hint."""
+    _existing_roles(fake)
+    fake.variables.update(_stored_urls())
+    logins: list = []
+    monkeypatch.setattr(boot, "role_psql", _fake_role_psql(logins, failing={boot.ADMIN_ROLE}))
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    err = capsys.readouterr().err
+    assert "stored URL password for regengine_sysadmin does not log in; re-run with --apply --rotate-passwords" in err
+    assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)
+    assert fake.sets() == []
+    assert boot.main(["--dry-run"]) == boot.EXIT_REFUSED  # the dry run reports it too
+
+
+def test_kept_password_needs_an_existing_target_database_to_be_tested(fake, capsys):
+    _existing_roles(fake, target=False)
+    fake.variables.update(_stored_urls())
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    assert "cannot be tested" in capsys.readouterr().err
+    assert fake.role_logins == []
+
+
+@pytest.mark.parametrize(
+    "host_port,accepted",
+    [
+        ("${{Postgres.PGHOST}}:${{Postgres.PGPORT}}", True),
+        ("postgres.railway.internal:5432", True),
+        ("Postgres.Railway.Internal:5432", True),
+        ("postgres.railway.internal:6543", False),
+        ("other-db.railway.internal:5432", False),
+        ("proxy.example.invalid:15432", False),  # the public proxy is not the private endpoint
+        ("${{Other.PGHOST}}:${{Postgres.PGPORT}}", False),
+    ],
+)
+def test_kept_url_must_point_at_the_staging_private_endpoint(host_port, accepted):
+    """R3: host:port must be the Postgres reference form or its rendered private endpoint."""
+    hosts = {(boot.PGHOST_REF, boot.PGPORT_REF), ("postgres.railway.internal", "5432")}
+    url = f"postgresql://regengine:{'b' * 64}@{host_port}/regengine_staging"
+    result = boot._url_matches(url, "regengine", "regengine_staging", hosts)
+    assert (result == "b" * 64) is accepted
+
+
+def test_role_psql_runs_with_a_private_home_and_no_inherited_libpq_settings(tmp_path, monkeypatch):
+    """R5: a personal ~/.postgresql/root.crt or PGSSLROOTCERT cannot change TLS behaviour."""
+    capture = tmp_path / "env.json"
+    fake_psql = tmp_path / "psql"
+    fake_psql.write_text(
+        "#!" + sys.executable + "\nimport json, os, sys\n"
+        f"sys.stdin.read(); json.dump(dict(os.environ), open({str(capture)!r}, 'w'))\n"
+        "print('identity|regengine|regengine|regengine_staging|true'); print('bootstrap-login-sql-complete')\n"
+    )
+    fake_psql.chmod(0o755)
+    personal = tmp_path / "personal"
+    (personal / ".postgresql").mkdir(parents=True)
+    (personal / ".postgresql" / "root.crt").write_text("not a real CA\n")
+    monkeypatch.setenv("HOME", str(personal))
+    monkeypatch.setenv("PGSSLROOTCERT", str(personal / ".postgresql" / "root.crt"))
+    monkeypatch.setenv("PGSSLMODE", "verify-full")
+    private_home = tmp_path / "private"
+    private_home.mkdir()
+    ctx = boot.Context(project=PROJECT, environment="staging", database="regengine_staging", apply=True)
+    ctx.psql, ctx.psql_home = str(fake_psql), str(private_home)
+    ctx.endpoint = {"host": "proxy.example.invalid", "port": "15432", "user": "postgres", "database": "railway"}
+    boot.role_psql(ctx, "regengine", "c" * 64, boot.runtime_login_sql(), boot.LOGIN_SENTINEL, "login")
+    env = json.loads(capture.read_text())
+    assert env["HOME"] == str(private_home)
+    assert env["PGSSLMODE"] == "require"
+    assert "PGSSLROOTCERT" not in env
+
+
+def test_main_creates_and_removes_the_private_psql_home(fake):
+    seen = []
+    original = boot.preflight
+
+    def spy(ctx):
+        seen.append(ctx.psql_home)
+        assert os.path.isdir(ctx.psql_home) and not os.listdir(ctx.psql_home)
+        assert stat.S_IMODE(os.stat(ctx.psql_home).st_mode) == 0o700
+        return original(ctx)
+
+    boot.preflight, saved = spy, boot.preflight
+    try:
+        assert boot.main([]) == 0
+    finally:
+        boot.preflight = saved
+    assert seen and not os.path.exists(seen[0])
+
+
 # --- dry run and apply -----------------------------------------------------
 
 
@@ -426,15 +564,25 @@ def test_psql_launcher_moves_the_url_into_the_environment(tmp_path):
     )
     fake_psql.chmod(0o755)
     url = "postgresql://postgres:" + SENTINEL_SECRET + "@proxy.example.invalid:15432/railway"
+    private_home = tmp_path / "private-home"
+    private_home.mkdir()
     subprocess.run(
-        [sys.executable, "-c", boot.PSQL_LAUNCHER, str(fake_psql), *boot.PSQL_FLAGS],
-        env={"PATH": os.environ["PATH"], "DATABASE_PUBLIC_URL": url, "PGOPTIONS": "-c search_path=evil"},
+        [sys.executable, "-c", boot.PSQL_LAUNCHER, str(private_home), str(fake_psql), *boot.PSQL_FLAGS],
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path / "personal-home"),
+            "DATABASE_PUBLIC_URL": url,
+            "PGOPTIONS": "-c search_path=evil",
+            "PGSSLROOTCERT": "/personal/root.crt",
+        },
         check=True,
     )
     seen = json.loads(capture.read_text())
     assert SENTINEL_SECRET not in " ".join(seen["argv"])
     assert seen["argv"][1:] == list(boot.PSQL_FLAGS)
     env = seen["env"]
+    assert env["HOME"] == str(private_home)  # no personal ~/.postgresql/root.crt or ~/.psqlrc
+    assert "PGSSLROOTCERT" not in env
     assert env["PGPASSWORD"] == SENTINEL_SECRET
     assert (env["PGHOST"], env["PGPORT"], env["PGUSER"], env["PGDATABASE"]) == (
         "proxy.example.invalid",

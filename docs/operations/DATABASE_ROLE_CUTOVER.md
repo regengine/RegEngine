@@ -267,7 +267,7 @@ bash scripts/railway/bootstrap_staging_database.sh --apply --redeploy   # execut
 The script refuses a run, before writing anything, in each of these cases:
 
 - The environment is not exactly `staging`. Production is always refused.
-- `--database` does not match `^regengine_[a-z0-9_]+$`.
+- `--database` does not fully match `^regengine_[a-z0-9_]{1,53}$`.
 - The Railway CLI is older than 5.47.2. Older CLIs hide sealed variables, so
   existing secrets would be regenerated.
 - `railway run` does not report exactly this project
@@ -278,8 +278,21 @@ The script refuses a run, before writing anything, in each of these cases:
 - The server is older than PostgreSQL 15.
 - A pre-existing `regengine*` role is used outside the target database. That
   covers objects, privileges or settings in other databases, open sessions
-  there, and role memberships. Roles are cluster-wide, so changing such a role
-  needs `--adopt-existing-roles` after review. The dry run lists what it found.
+  there, role memberships, and any elevated attribute (SUPERUSER, BYPASSRLS,
+  CREATEROLE, CREATEDB or REPLICATION). The same check also runs on the server
+  inside the provisioning transaction. Roles are cluster-wide, so changing
+  such a role needs `--adopt-existing-roles` after review. The dry run lists
+  what it found.
+- A pre-existing role that this bootstrap did not create has a URL variable
+  that is missing, sealed, or not pointing at that role on
+  `regengine_staging`. The URL must use the staging private endpoint:
+  `${{Postgres.PGHOST}}:${{Postgres.PGPORT}}` or its rendered value. This
+  case also needs `--adopt-existing-roles`. The bootstrap marks every role
+  it creates or adopts with a `COMMENT ON ROLE`. That marker lets its own
+  re-runs tell its roles from foreign ones.
+- A role whose password would be kept cannot log in with its stored URL.
+  This is tested before anything is written. The refusal says
+  `stored URL password for <role> does not log in; re-run with --apply --rotate-passwords`.
 
 `--apply` then does the following:
 
@@ -299,6 +312,17 @@ The script refuses a run, before writing anything, in each of these cases:
    child process group, including psql. Every session sets
    `client_connection_check_interval`, so the server also drops the session
    and rolls back its open transaction.
+   Every psql the script starts gets a private, empty `HOME` and no inherited
+   `PG*` settings. A personal `~/.postgresql/root.crt`, `PGSSLROOTCERT` or
+   `PGSSLMODE` would otherwise turn `sslmode=require` into CA verification,
+   and that fails against Railway's self-signed proxy certificate. The dry run
+   notes when such a file or variable exists. The connection is encrypted but
+   the proxy certificate is not CA-verified.
+   `REVOKE ALL ... FROM PUBLIC` also removes the default `TEMP` privilege, so
+   the runtime roles cannot create temporary tables. That makes staging
+   stricter than CI, whose scratch databases keep PUBLIC's defaults. No
+   runtime code path creates temporary objects: v119's temporary tables live
+   inside a `SECURITY DEFINER` function owned by the migrator.
 2. It logs in as `regengine_migrator` and creates `get_tenant_context()` with
    the same body the backend-ci live-db-suite seeds for a fresh chain.
 3. It logs in as `regengine` and `regengine_sysadmin` to prove their passwords.
@@ -321,12 +345,13 @@ never values.
 
 Passwords change only for roles the run creates, or for all three roles with
 `--rotate-passwords`. An existing role keeps its password only when its URL
-variable is readable, names that role and `regengine_staging`, and actually
-logs in. If the variable is missing, sealed, or points elsewhere, the run
-refuses until `--rotate-passwords` is given. After any rotation, redeploy.
-Once you seal the URLs, a re-run therefore needs `--rotate-passwords`. If a run
-fails after changing passwords, it says so; re-run with
-`--apply --rotate-passwords`.
+variable is readable, names that role and `regengine_staging` on the staging
+private endpoint, and logs in. That login is tested before anything is
+written. If the variable is missing, sealed, points elsewhere, or its password
+no longer logs in, the run refuses (exit 2) until `--rotate-passwords` is
+given. After any rotation, redeploy. Once you seal the URLs, a re-run
+therefore needs `--rotate-passwords`. If a run fails after changing
+passwords, it says so; re-run with `--apply --rotate-passwords`.
 
 Afterwards, seal the six secret variables in the dashboard and deploy once.
 The first deploy logs `DB state: FRESH`, migrates to head, then logs
