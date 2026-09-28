@@ -178,7 +178,7 @@ describe('CSV import results on /ingest', () => {
 
     expect(await screen.findByText('CSV processed')).toBeInTheDocument();
     expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
-    expect(mocks.ingestFile.mock.calls[1][0]).toMatchObject({ apiKey: 'cookie-managed', cteType: 'receiving' });
+    expect(mocks.ingestFile.mock.calls[1][0]).toMatchObject({ apiKey: 'cookie-managed', cteType: 'receiving' }); // pragma: allowlist secret
     expect(mocks.ingestFile.mock.calls[1][0].file).toBe(mocks.ingestFile.mock.calls[0][0].file);
     expect(screen.queryByRole('button', { name: 'Import as Receiving' })).not.toBeInTheDocument();
   });
