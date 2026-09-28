@@ -457,6 +457,38 @@ the cases file.
 Exit codes: 0 ran, 1 bad usage or cases file, 2 not configured, 3 vendor
 unavailable for at least one request.
 
+## Ask Jev from the command line (agent sidecar)
+
+`scripts/jev_ask.py` asks Jev any typed question about a state you give it.
+Coding agents use it to get a second opinion alongside a user's request. The
+procedure is in `.claude/skills/jev-sidecar/SKILL.md`, and `AGENTS.md` points
+every agent to it.
+
+```bash
+venv/bin/python scripts/jev_ask.py \
+  --state '{"headers": ["Ship Dte", "Cust Name", "Lot No."]}' \
+  --choice cte "Which FSMA 204 CTE do rows with these headers record?" \
+    "shipping=goods leaving the sender" "receiving=goods arriving" "unclear" \
+  --noul has_lot "Does one of the headers name a traceability lot code column?" \
+  --score risk "How likely is this file to be rejected as-is?" low medium high
+```
+
+- **Question kinds:** `--choice ID TEXT OPTION...`, where an option is `name`
+  or `name=description`; `--noul ID TEXT`; `--score ID TEXT LEVEL...`, with 2
+  to 10 levels, lowest first.
+- **Questions file:** `--questions-file` takes questions in the API's format.
+- **State:** `--state`, `--state-file`, or stdin with `--state-file -`. The
+  value is JSON, or plain text when it does not parse as JSON.
+- **Output:** one line per answer with its confidence, or `--json`.
+- **Key:** it reads `TYPESAFE_API_KEY`, or with `--prompt-key` a hidden prompt.
+  The key is never printed.
+- **What is sent:** the state goes to `api.typesafe.ai`. It must never hold
+  secrets or customer data.
+- **Logs:** the client logs only metadata under the purpose `agent_sidecar`.
+- **Exit codes:** 0 answered, 1 bad usage, 2 not configured, 3 Jev unavailable.
+  With 1 or 2 nothing is sent. Code 2 covers no key, Jev switched off, or
+  missing packages.
+
 ## Rollout
 
 1. Set `TYPESAFE_API_KEY` on staging. Upload representative supplier files.

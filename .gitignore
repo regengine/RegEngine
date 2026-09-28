@@ -130,11 +130,13 @@ audit-findings-*.md
 !.claude/commands/
 !.claude/commands/sentinel-*.md
 !.claude/sentinel_anchors.json
-# Vendored TypeSafe AI agent skill (MIT) for Jev integration work; other
+# Vendored TypeSafe AI agent skill (MIT) for Jev integration work, and the
+# Jev sidecar skill agents follow to consult Jev alongside requests; other
 # local skills stay untracked. See docs/engineering/JEV_HEADER_MAPPING.md.
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/typesafe-ai/
+!.claude/skills/jev-sidecar/
 .gemini/
 .swarm_memory/
 
