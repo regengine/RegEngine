@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import json
 from pathlib import Path
@@ -98,7 +99,7 @@ def test_success_uses_get_and_emits_only_sanitized_evidence() -> None:
     rendered = json.dumps(evidence)
     assert credential not in rendered
     assert "private-customer-csv" not in rendered
-    assert "\"csv\"" not in rendered
+    assert '"csv"' not in rendered
 
 
 def test_missing_environment_key_fails_before_network() -> None:
@@ -113,6 +114,66 @@ def test_missing_environment_key_fails_before_network() -> None:
         mod.verify_runtime(env={}, open_request=open_request)
 
     assert called is False
+
+
+@pytest.mark.parametrize("control_character", ["\r", "\n", "\x00", "\x1f", "\x7f"])
+def test_api_key_control_characters_fail_closed_without_disclosure(
+    control_character: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sentinel = f"sensitive-control-sentinel{control_character}payload"
+    called = False
+
+    def open_request(_request: Request, *, timeout: float):
+        nonlocal called
+        called = True
+        raise AssertionError(timeout)
+
+    exit_code = mod.main(
+        [],
+        env=credential_env(sentinel),
+        open_request=open_request,
+    )
+
+    captured = capsys.readouterr()
+    rendered = captured.out + captured.err
+    assert exit_code == 1
+    assert called is False
+    assert "sensitive-control-sentinel" not in rendered
+    assert "Traceback" not in rendered
+    assert captured.out == ""
+    assert captured.err == ("Verification failed: REGENGINE_API_KEY contains invalid characters\n")
+
+
+@pytest.mark.parametrize(
+    "transport_error",
+    [
+        http.client.HTTPException("private-server-sentinel"),
+        http.client.BadStatusLine("private-server-sentinel"),
+        ValueError("private-server-sentinel"),
+    ],
+)
+def test_transport_protocol_errors_fail_closed_without_disclosure(
+    transport_error: Exception,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def open_request(_request: Request, *, timeout: float):
+        assert timeout > 0
+        raise transport_error
+
+    exit_code = mod.main(
+        [],
+        env=credential_env(),
+        open_request=open_request,
+    )
+
+    captured = capsys.readouterr()
+    rendered = captured.out + captured.err
+    assert exit_code == 1
+    assert "private-server-sentinel" not in rendered
+    assert "Traceback" not in rendered
+    assert captured.out == ""
+    assert captured.err == ("Verification failed: production scenarios endpoint request failed\n")
 
 
 @pytest.mark.parametrize(
@@ -147,9 +208,7 @@ def test_non_200_response_fails_without_body_disclosure() -> None:
     with pytest.raises(mod.VerificationError, match="HTTP 503") as exc_info:
         mod.verify_runtime(
             env=credential_env(),
-            open_request=opener_returning(
-                FakeResponse(b'{"detail":"private-provider-error"}', status=503)
-            ),
+            open_request=opener_returning(FakeResponse(b'{"detail":"private-provider-error"}', status=503)),
         )
 
     assert "private-provider-error" not in str(exc_info.value)
