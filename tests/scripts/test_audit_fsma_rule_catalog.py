@@ -93,6 +93,32 @@ def test_catalog_fails_for_unknown_cte_type():
     )
 
 
+def test_catalog_accepts_explicit_all_cte_type():
+    mod = _load_module()
+    rules = deepcopy(FSMA_RULE_SEEDS)
+    rules[0]["applicability_conditions"]["cte_types"] = ["all"]
+
+    report = mod.build_report(rules)
+
+    assert report["status"] == "pass"
+    assert all(count > 0 for count in report["cte_coverage"].values())
+
+
+def test_catalog_fails_for_invalid_severity_and_duplicate_title():
+    mod = _load_module()
+    rules = deepcopy(FSMA_RULE_SEEDS)
+    rules[0]["severity"] = "critcal"
+    rules[1]["title"] = rules[0]["title"]
+
+    report = mod.build_report(rules)
+
+    assert report["status"] == "fail"
+    assert {finding["code"] for finding in report["findings"]} == {
+        "duplicate_title",
+        "invalid_severity",
+    }
+
+
 def test_cli_writes_deterministic_json_and_markdown(tmp_path):
     mod = _load_module()
     json_out = tmp_path / "catalog.json"
