@@ -32,7 +32,8 @@ for coding-agent sessions.
 | Question set, vocabulary, apply policy, artifact builder | `services/shared/jev/header_mapping.py` |
 | Integration point | `services/ingestion/app/csv_templates.py` (`_suggest_header_mappings_for_upload`, `_record_header_mapping_evidence`, `parse_csv_rows(header_mapping=...)`) |
 | Response fields | `services/ingestion/app/webhook_models.py` (`HeaderMappingSuggestionResult`, `HeaderMappingEngineResult`) |
-| Tests | `services/shared/tests/test_jev_client.py`, `services/shared/tests/test_jev_header_mapping.py`, `services/ingestion/tests/test_csv_jev_header_mapping.py` |
+| Operator preview CLI | `scripts/jev_header_preview.py` (see [Preview suggestions on your own files](#preview-suggestions-on-your-own-files)) |
+| Tests | `services/shared/tests/test_jev_client.py`, `services/shared/tests/test_jev_header_mapping.py`, `services/ingestion/tests/test_csv_jev_header_mapping.py`, `services/ingestion/tests/test_jev_header_preview_script.py` |
 
 Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
 `parse_csv_rows` but passes no mapping, so it is unchanged.
@@ -125,12 +126,97 @@ a where-configured subprocessor in `frontend/src/lib/trust-subprocessors.ts`.
 Invalid values fall back to the default with a `jev.settings.*` warning; the
 request path never fails on configuration.
 
+## Preview suggestions on your own files
+
+`scripts/jev_header_preview.py` runs the route's own suggestion step
+(`_suggest_header_mappings_for_upload`) on a local CSV. It needs no running
+service, database or tenant, and it ingests, persists and queues nothing. It
+reads the variables in [Configuration](#configuration) and sends what the
+route sends: the header row, redacted sample values only if asked, never
+rows. Run it from the repo root in the Python environment used for the
+ingestion tests, because it imports `services/ingestion`. Without one, create
+it from the root lock file (the same install CI uses):
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install --require-hashes -r requirements.lock
+.venv/bin/python3 scripts/jev_header_preview.py path/to/supplier.csv --prompt-key
+```
+
+With the environment active, the short form is:
+
+```bash
+python3 scripts/jev_header_preview.py path/to/supplier.csv
+```
+
+```text
+column   suggested_field        confidence  band        would_apply  blocked_reason
+-------  ---------------------  ----------  ----------  -----------  --------------------------
+Lot #    traceability_lot_code  0.970       auto_apply  no           apply_disabled
+Ship Dt  ship_date              0.710       review      no           below_auto_apply_threshold
+Notes    (no match)             0.980       auto_apply  no           no_match
+```
+
+Above the table it prints the status, model, request id, latency and the
+thresholds in force. The values shown are illustrative.
+
+| Flag | Effect |
+| --- | --- |
+| `--json` | Machine-readable report on stdout. Logs go to stderr. |
+| `--sample-values N` | Send N (0-5) redacted sample values per unrecognised column. Overrides `REGENGINE_JEV_HEADER_SAMPLE_VALUES`. |
+| `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`. Nothing else changes. |
+| `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
+
+### Demo file
+
+`docs/engineering/examples/jev_demo_shipping.csv` is a synthetic shipping
+file (fictional companies marked "(demo)", lot codes `DEMO-JEV-*`). It
+carries every column the parser needs, so it is valid on its own, plus seven
+extra headers the parser does not recognise. Those seven are what Jev is
+asked about; the intended answers are:
+
+| Header | Intended field |
+| --- | --- |
+| `Lot #` | `traceability_lot_code` |
+| `Item Desc` | `product_description` |
+| `Qty Shpd` | `quantity` |
+| `Ship Dt` | `ship_date` |
+| `Ship-To GLN` | `ship_to_gln` |
+| `Trucking Co` | `carrier` |
+| `Internal Notes` | `no_match` |
+
+```bash
+python3 scripts/jev_header_preview.py docs/engineering/examples/jev_demo_shipping.csv --prompt-key
+```
+
+With `--simulate-apply` and answers in the `auto_apply` band, the four
+headers whose canonical column is already in the file (`Lot #`, `Item Desc`,
+`Qty Shpd`, `Ship Dt`) stay blocked with `target_present`, and `Ship-To GLN`
+and `Trucking Co` show `would_apply: yes`, since the file has no
+`ship_to_gln` or `carrier` column. `Internal Notes` is never applied.
+
+Exit codes: `0` suggestions received, or no unrecognised headers (no request
+made); `1` bad usage, an unreadable, oversized (over 5 MB) or non-UTF-8
+file (stdout stays empty, the message goes to stderr), or an unexpected error
+(status `error`, for example a malformed `TYPESAFE_BASE_URL`); `2` not configured (`TYPESAFE_API_KEY` unset) or switched off
+(`REGENGINE_JEV_ENABLED=0`); `3` vendor unavailable. For `2` and `3` the
+status (for example `unavailable:auth`) and a one-line hint go to stderr.
+
+Keep the key out of shell history and tracked files. Use `--prompt-key`, or
+enter it silently for the current shell with
+`read -rs TYPESAFE_API_KEY && export TYPESAFE_API_KEY`. Keep the stored copy
+in a password manager or the environment's secret variables, not in the
+repository. (`.env` is excluded from commits but is still plaintext on disk.)
+
 ## Rollout
 
 1. Set `TYPESAFE_API_KEY` on staging. Upload representative supplier files.
    Suggestions appear on the response and in Agent Reviews (filter: Field
    mapping). Nothing changes in the rows.
-2. Compare suggestions against the intended mappings. If `auto_apply`-band
+2. Compare suggestions against the intended mappings. To check a file before
+   (or without) uploading it, run the
+   [preview](#preview-suggestions-on-your-own-files) on it; add
+   `--simulate-apply` to see what apply mode would change. If `auto_apply`-band
    answers are wrong for your data, raise
    `REGENGINE_JEV_AUTO_APPLY_CONFIDENCE`; if good answers sit in `review`,
    consider lowering it (never below 0.85: the artifact contract still forces
@@ -176,7 +262,7 @@ reports `artifacts_recorded: 0`; it does not reject the upload.
 
 ```bash
 python3 -m pytest services/shared/tests/test_jev_client.py services/shared/tests/test_jev_header_mapping.py -q --no-cov
-python3 -m pytest services/ingestion/tests/test_csv_jev_header_mapping.py -q --no-cov
+python3 -m pytest services/ingestion/tests/test_csv_jev_header_mapping.py services/ingestion/tests/test_jev_header_preview_script.py -q --no-cov
 ```
 
 All tests run offline against `httpx2.MockTransport`; no test contacts the
