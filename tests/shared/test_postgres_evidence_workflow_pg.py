@@ -6,10 +6,12 @@ socket or the explicitly designated CI live_suite database is accepted.
 """
 
 import copy
+import hashlib
 import importlib.util
 import json
 import os
 import socket
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +23,7 @@ import psycopg2
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 
 ROOT = Path(__file__).resolve().parents[2]
 DATABASE = os.getenv("REGENGINE_EVIDENCE_TEST_DATABASE_URL")
@@ -280,3 +283,250 @@ def test_canonical_single_and_batch_writers_need_no_chain_update_privilege(workf
         db.commit()
         store.set_tenant_context(workflow.tenant)
         assert store.verify_chain_canonical(workflow.tenant).valid
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/ingest/csv retains the upload in fsma.manifest_blobs (#3122),
+# and the agent-artifact worker writes fsma.agent_artifacts plus a
+# needs_review receipt. Both ran as the restricted role without the grants
+# they need (v126), so every upload 500'd and every artifact task failed.
+# Jev is answered by an in-process mock transport; nothing leaves the host.
+# ---------------------------------------------------------------------------
+
+_JEV_ANSWERS = {
+    "Lot #": {
+        "type": "choice",
+        "choice": "traceability_lot_code",
+        "confidence": 0.97,
+        "probabilities": {"traceability_lot_code": 0.97, "no_match": 0.03},
+    },
+    "Shipped On": {
+        "type": "choice",
+        "choice": "ship_date",
+        "confidence": 0.8,
+        "probabilities": {"ship_date": 0.8, "no_match": 0.2},
+    },
+}
+
+
+def _offline_jev_decider():
+    import httpx2
+    from shared.jev import JevDecider, JevSettings
+
+    def answer(request):
+        body = json.loads(request.content)
+        columns = body["state"]["columns_to_map"]
+        answers = {qid: _JEV_ANSWERS[columns[int(qid.split("_")[1])]["header"]] for qid in body["questions"]}
+        return httpx2.Response(
+            200,
+            headers={"x-typesafe-request-id": "req_pg_regression"},
+            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 1, "output_tokens": 1}},
+        )
+
+    settings = JevSettings(api_key="offline-synthetic", max_retries=0, timeout_seconds=1.0)
+    return JevDecider(settings, transport=httpx2.MockTransport(answer))
+
+
+def _upload_csv(monkeypatch, tenant):
+    """Drive the real CSV route; only the API-key lookup and Jev HTTP are stubbed."""
+    from app import csv_templates
+    from app.authz import IngestionPrincipal, get_ingestion_principal
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(csv_templates, "get_jev_decider", _offline_jev_decider)
+    app = FastAPI()
+    app.include_router(csv_templates.router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="pg-csv-regression", scopes=["*"], tenant_id=tenant
+    )
+    day = (datetime.now(timezone.utc).date() - timedelta(days=2)).isoformat()
+    body = (
+        "Lot #,tlc,Shipped On,product_description,quantity,unit_of_measure,harvest_date,location_name,"
+        "reference_document\n"
+        f"LOT-1,PG-CSV-{tenant[:8]}-1,{day},Kale,10,lbs,{day},Farm A,REF-1\n"
+        f"LOT-2,PG-CSV-{tenant[:8]}-2,{day},Chard,5,lbs,{day},Farm A,REF-2\n"
+    ).encode()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/ingest/csv",
+            files={"file": ("supplier.csv", body, "text/csv")},
+            data={"cte_type": "harvesting"},
+            headers={"X-RegEngine-API-Key": os.environ["API_KEY"], "X-Tenant-ID": tenant},
+        )
+    assert response.status_code == 200, response.text[:1000]
+    return response.json(), body
+
+
+def _run_queued_agent_tasks(workflow, tenant):
+    """Hand every queued artifact task to the real TaskWorker handler (runtime role)."""
+    from shared.agent_task_bridge import AGENT_ARTIFACT_TASK_TYPE, handle_agent_artifact_task
+
+    rows = workflow.query(
+        f"SELECT payload FROM fsma.task_queue WHERE task_type = '{AGENT_ARTIFACT_TASK_TYPE}' ORDER BY id", tenant
+    )
+    payloads = [row[0] for row in rows]
+    for payload in payloads:
+        handle_agent_artifact_task(**payload)
+    return payloads
+
+
+def test_csv_upload_and_agent_worker_persist_as_runtime_role(workflow, monkeypatch):
+    from shared.agent_task_bridge import handle_agent_artifact_task
+
+    w = workflow
+    result, body = _upload_csv(monkeypatch, w.tenant)
+    run_id = result["ingestion_run_id"]
+    assert run_id and result["accepted"] == 2 and result["rejected"] == 0
+    assert result["header_mapping_engine"]["artifacts_recorded"] == 2
+    sha256 = hashlib.sha256(body).hexdigest()
+    assert [
+        tuple(r)
+        for r in w.query(f"SELECT source_file_hash, record_count FROM fsma.ingestion_runs WHERE id = '{run_id}'")
+    ] == [(sha256, 2)]
+    assert w.query(f"SELECT COUNT(*) FROM fsma.traceability_events WHERE ingestion_run_id = '{run_id}'")[0][0] == 2
+    with w.admin.cursor() as cur:
+        # INSERT-only: the runtime role retains the upload but cannot read it back.
+        cur.execute(
+            "SELECT tenant_id::text, sha256, raw_bytes FROM fsma.manifest_blobs WHERE ingestion_run_id = %s", (run_id,)
+        )
+        assert [(t, s, bytes(b)) for t, s, b in cur.fetchall()] == [(w.tenant, sha256, body)]
+
+    payloads = _run_queued_agent_tasks(w, w.tenant)
+    assert len(payloads) == 2
+    # Redelivery: ON CONFLICT (artifact_id) keeps one artifact; the ledger appends one more receipt.
+    handle_agent_artifact_task(**payloads[0])
+    with w.admin.cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*), bool_and(artifact_hash = fsma.compute_agent_artifact_hash(artifact)),
+                      bool_and(requires_human_review)
+                 FROM fsma.agent_artifacts WHERE tenant_id = %s AND ingestion_run_id = %s""",
+            (w.tenant, run_id),
+        )
+        assert cur.fetchone() == (2, True, True)
+        cur.execute(
+            """SELECT sequence_num, state, previous_receipt_hash, receipt_hash,
+                      receipt_hash = fsma.compute_ingestion_run_receipt_hash(
+                          tenant_id, ingestion_run_id, sequence_num, state, occurred_at, actor, request_id,
+                          canonical_event_id, evidence_attachment_id, rule_evaluation_id, export_log_id,
+                          payload_hash, previous_receipt_hash)
+                 FROM fsma.ingestion_run_receipts
+                WHERE tenant_id = %s AND ingestion_run_id = %s ORDER BY sequence_num""",
+            (w.tenant, run_id),
+        )
+        receipts = cur.fetchall()
+    assert [r[0] for r in receipts] == [1, 2, 3]
+    assert {r[1] for r in receipts} == {"needs_review"} and all(r[4] for r in receipts)
+    assert [r[2] for r in receipts] == [None, receipts[0][3], receipts[1][3]]
+
+
+def test_first_receipt_appends_to_one_run_serialize(workflow, monkeypatch):
+    from shared.agent_task_bridge import append_agent_artifact_receipt, persist_agent_artifact
+    from shared.database import SessionLocal
+    from shared.tenant_context import set_tenant_guc
+
+    w = workflow
+    run_id = _upload_csv(monkeypatch, w.tenant)[0]["ingestion_run_id"]
+    first_payload, second_payload = (
+        row[0]
+        for row in w.query(
+            f"SELECT payload FROM fsma.task_queue WHERE payload->>'ingestion_run_id' = '{run_id}' ORDER BY id"
+        )
+    )
+
+    def append(db, payload):
+        set_tenant_guc(db, w.tenant)
+        persist_agent_artifact(db, payload)
+        return append_agent_artifact_receipt(db, payload)
+
+    def runtime_backend_waiting_on_lock():
+        with w.admin.cursor() as cur:
+            cur.execute(
+                """SELECT COUNT(*) FROM pg_stat_activity
+                    WHERE datname = current_database() AND usename = 'regengine' AND wait_event_type = 'Lock'"""
+            )
+            return cur.fetchone()[0] > 0
+
+    # The run's first append holds the parent-run lock uncommitted. The second
+    # must wait for it and chain on as sequence 2; locking the latest receipt
+    # (v079) had no row to lock here, so both took sequence 1 and one failed
+    # on the unique key.
+    with SessionLocal() as first, SessionLocal() as second, ThreadPoolExecutor(max_workers=1) as pool:
+        append(first, first_payload)
+        pending = pool.submit(append, second, second_payload)
+        deadline = time.monotonic() + 10
+        while not runtime_backend_waiting_on_lock():
+            assert not pending.done() and time.monotonic() < deadline, "second append never waited"
+            time.sleep(0.05)
+        first.commit()
+        assert pending.result(timeout=10).ledger_state == "needs_review"
+        second.commit()
+    with w.admin.cursor() as cur:
+        cur.execute(
+            """SELECT sequence_num, previous_receipt_hash, receipt_hash FROM fsma.ingestion_run_receipts
+                WHERE ingestion_run_id = %s ORDER BY sequence_num""",
+            (run_id,),
+        )
+        receipts = cur.fetchall()
+    assert [r[0] for r in receipts] == [1, 2] and receipts[1][1] == receipts[0][2]
+
+
+def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypatch):
+    from shared.agent_task_bridge import append_agent_artifact_receipt, persist_agent_artifact
+    from shared.database import SessionLocal
+    from shared.tenant_context import set_tenant_guc
+
+    w = workflow
+    other_run = _upload_csv(monkeypatch, w.other)[0]["ingestion_run_id"]
+    other_payload = _run_queued_agent_tasks(w, w.other)[0]
+    _upload_csv(monkeypatch, w.tenant)
+    _run_queued_agent_tasks(w, w.tenant)
+
+    # The narrow SELECT grants still pass through RLS: the other tenant's rows are invisible.
+    assert (
+        w.query(f"SELECT artifact_id FROM fsma.agent_artifacts WHERE artifact_id = '{other_payload['artifact_id']}'")
+        == []
+    )
+    assert w.query(f"SELECT receipt_id FROM fsma.ingestion_run_receipts WHERE ingestion_run_id = '{other_run}'") == []
+    assert len(w.query("SELECT artifact_id FROM fsma.agent_artifacts")) == 2
+
+    def rejected(match, statement, params=None, call=None):
+        with SessionLocal() as db:
+            set_tenant_guc(db, w.tenant)
+            with pytest.raises(DBAPIError, match=match):
+                call(db) if call else db.execute(text(statement), params or {})
+
+    for statement in (
+        "SELECT COUNT(*) FROM fsma.manifest_blobs",
+        "SELECT artifact FROM fsma.agent_artifacts",
+        "SELECT metadata FROM fsma.ingestion_run_receipts",
+        "UPDATE fsma.manifest_blobs SET storage_url = 'x'",
+        "UPDATE fsma.agent_artifacts SET suggestion = 'x'",
+        "UPDATE fsma.ingestion_run_receipts SET actor = 'x'",
+        "DELETE FROM fsma.manifest_blobs",
+        "DELETE FROM fsma.agent_artifacts",
+        "DELETE FROM fsma.ingestion_run_receipts",
+    ):
+        rejected("permission denied", statement)
+    rejected(
+        "row-level security",
+        """INSERT INTO fsma.manifest_blobs (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename)
+           VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv')""",
+        {"run": other_run, "tenant": w.other, "sha": "0" * 64},
+    )
+    rejected("row-level security", None, call=lambda db: persist_agent_artifact(db, other_payload))
+    rejected("row-level security", None, call=lambda db: append_agent_artifact_receipt(db, other_payload))
+    rejected(
+        "foreign key",
+        """INSERT INTO fsma.ingestion_run_receipts (tenant_id, ingestion_run_id, state)
+           VALUES (CAST(:tenant AS uuid), CAST(:run AS uuid), 'needs_review')""",
+        {"tenant": w.tenant, "run": other_run},
+    )
+    with w.admin.cursor() as cur:
+        cur.execute(
+            """SELECT (SELECT COUNT(*) FROM fsma.manifest_blobs WHERE tenant_id = %(t)s),
+                      (SELECT COUNT(*) FROM fsma.agent_artifacts WHERE tenant_id = %(t)s),
+                      (SELECT COUNT(*) FROM fsma.ingestion_run_receipts WHERE tenant_id = %(t)s)""",
+            {"t": w.other},
+        )
+        assert cur.fetchone() == (1, 2, 2)

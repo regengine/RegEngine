@@ -401,6 +401,13 @@ TARGET_SCHEMAS = ("public", "fsma", "audit", "dlq", "ingestion")
 # and the direct-role CI matrix classifies it.  ``alembic_version`` (and a
 # legacy ``schema_migrations`` table, if drift created one) are deployment
 # metadata and are always denied to both runtime roles.
+#
+# scripts/run-migrations.sh reapplies CUTOVER_STATEMENTS after EVERY deploy
+# (scripts/apply_runtime_role_cutover.py), which revokes every runtime table,
+# column, sequence and function privilege in TARGET_SCHEMAS and rebuilds only
+# what these inventories and _FUNCTION_GRANTS list. A later migration's GRANT
+# on an object in these schemas therefore lasts until the next deploy unless
+# it is also registered here (see v121 label_charges, v126).
 APPLICATION_TABLES = {
     "audit": (
         "rls_policy_restoration_log",
@@ -618,6 +625,11 @@ REGENGINE_TABLE_GRANTS.update(
         # CONFLICT DO NOTHING (SELECT to read back an existing claim,
         # UPDATE to record the Stripe outcome); never deleted.
         "fsma.label_charges": ("SELECT", "INSERT", "UPDATE"),
+        # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload
+        # verbatim in the ingest transaction. INSERT only: the statement has
+        # no RETURNING, ON CONFLICT or sub-select, and the disabled
+        # remediation surface keeps its no-read/no-update contract.
+        "fsma.manifest_blobs": ("INSERT",),
         "fsma.notification_outbox": ("SELECT", "UPDATE"),
         "fsma.products": ("SELECT", "INSERT", "UPDATE"),
         "fsma.remediation_tokens": ("SELECT", "INSERT", "UPDATE"),
@@ -644,6 +656,20 @@ REGENGINE_COLUMN_GRANTS = {
     # but tenant names, settings, and webhook configuration remain control-
     # plane data.
     "public.tenants": {"SELECT": ("id",)},
+    # v126 -- the agent-artifact worker (shared.agent_task_bridge) reads only
+    # what its statements need: the ON CONFLICT (artifact_id) arbiter, and
+    # the receipt trigger's chain-head lookup plus the bridge's RETURNING.
+    # Both tables stay append-only for this role (no UPDATE/DELETE).
+    "fsma.agent_artifacts": {"SELECT": ("artifact_id",)},
+    "fsma.ingestion_run_receipts": {
+        "SELECT": (
+            "receipt_id",
+            "tenant_id",
+            "ingestion_run_id",
+            "sequence_num",
+            "receipt_hash",
+        )
+    },
 }
 
 REGENGINE_SEQUENCE_GRANTS = {
@@ -1143,6 +1169,18 @@ BEGIN
     GRANT EXECUTE ON FUNCTION public.seed_obligations_for_tenant(uuid) TO regengine;
     GRANT EXECUTE ON FUNCTION fsma.get_active_portal_link_by_token(text) TO regengine;
     GRANT EXECUTE ON FUNCTION fsma.get_team_roster(uuid) TO regengine;
+    -- v126: pure hash/validation helpers evaluated as the inserting role by
+    -- the SECURITY INVOKER agent-artifact and receipt triggers and by the
+    -- agent_artifacts source_hashes CHECK. They read no table and cannot
+    -- arm tenant or admin context.
+    GRANT EXECUTE ON FUNCTION fsma.compute_agent_artifact_hash(jsonb) TO regengine;
+    GRANT EXECUTE ON FUNCTION fsma.sha256_text_array_is_valid(text[]) TO regengine;
+    GRANT EXECUTE ON FUNCTION fsma.compute_ingestion_run_receipt_payload_hash(jsonb)
+        TO regengine;
+    GRANT EXECUTE ON FUNCTION fsma.compute_ingestion_run_receipt_hash(
+        uuid, uuid, bigint, text, timestamptz, text, text,
+        uuid, uuid, uuid, uuid, text, text
+    ) TO regengine;
 
     -- Admin sessions still use tenant context for tenant-scoped operations,
     -- but only the exact sysadmin role may arm the global policy branch.

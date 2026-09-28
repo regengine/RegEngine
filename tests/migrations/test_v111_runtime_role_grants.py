@@ -1654,6 +1654,12 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("public", "seed_obligations_for_tenant"),
             ("fsma", "get_active_portal_link_by_token"),
             ("fsma", "get_team_roster"),
+            # v126: pure helpers the invoker-rights artifact/receipt triggers
+            # and the agent_artifacts CHECK evaluate as the inserting role.
+            ("fsma", "compute_agent_artifact_hash"),
+            ("fsma", "sha256_text_array_is_valid"),
+            ("fsma", "compute_ingestion_run_receipt_payload_hash"),
+            ("fsma", "compute_ingestion_run_receipt_hash"),
         },
         "regengine_sysadmin": {
             ("public", "get_tenant_context"),

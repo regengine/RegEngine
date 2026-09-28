@@ -16,7 +16,10 @@ from server.router_policy import PRODUCTION_ENABLED_ROUTERS, RouterPolicy
 from tests.migrations.rls_db import guarded_live_database_url
 
 PROHIBITED_TABLE_PRIVILEGES = {
-    "fsma.manifest_blobs": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    # The enabled CSV upload route retains each file here (INSERT, v126).
+    # Reading, re-pointing (storage_url) or deleting a retained manifest is
+    # remediation work and stays denied.
+    "fsma.manifest_blobs": ("SELECT", "UPDATE", "DELETE"),
     "fsma.manifest_records": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "fsma.remediation_cases": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     # Existing background token/outbox work has narrower positive grants.
