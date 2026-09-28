@@ -243,3 +243,60 @@ ID, Alembic head, enabled-router set, commands, results, and verification date.
 Never include secret values or connection URLs. A bypass-RLS credential,
 schema-owner runtime, shared admin key, disabled posture gate, or wider router
 set is not an acceptable rollback.
+
+## 6. Staging: one-command fresh-database bootstrap
+
+Staging never had the dedicated-owner topology, so every staging deploy since
+`scripts/run-migrations.sh` began requiring `MIGRATIONS_DATABASE_URL` exits
+before gunicorn starts. Staging uses the FRESH path. The script creates a new
+database, `regengine_staging`, owned by `regengine_migrator`. The existing
+staging database (the one `DATABASE_PUBLIC_URL` names, normally `railway`) is
+left untouched as an archive, and the script refuses to target it. This avoids
+transferring ownership, recreating extensions, and running the irreversible
+old-revision data migrations (v088, v090, v091, v094).
+
+From the repository root on a machine with the Railway CLI (logged in), `psql`
+and `python3`:
+
+```bash
+bash scripts/railway/bootstrap_staging_database.sh            # dry run: read-only checks + full plan
+bash scripts/railway/bootstrap_staging_database.sh --apply    # execute
+bash scripts/railway/bootstrap_staging_database.sh --apply --redeploy   # execute, then redeploy RegEngine
+```
+
+The script refuses any environment other than exactly `staging` (production is
+always refused). It targets project `4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51` unless
+`--project` says otherwise. `--apply` does the following:
+
+1. As the Postgres template superuser, reached only inside
+   `railway run -s Postgres`, it creates or pins the three roles with the
+   attributes in section 1 and revokes any membership involving them. It sets
+   fresh random passwords, sent to the server as SCRAM verifiers. It creates
+   the database from `template0` if it is absent and grants `CONNECT`. It pins
+   `search_path = public, fsma, extensions` and `timezone = UTC` for the
+   migrator in that database only; these are the session defaults CI passes
+   through `PGOPTIONS`.
+2. It logs in as `regengine_migrator` and creates `get_tenant_context()` with
+   the same body the backend-ci live-db-suite seeds for a fresh chain.
+3. It proves that `regengine` and `regengine_sysadmin` can log in.
+4. It stores `MIGRATIONS_DATABASE_URL`, `DATABASE_URL` and `ADMIN_DATABASE_URL`
+   on RegEngine, pointing at the new database through `${{Postgres.PGHOST}}`
+   and `${{Postgres.PGPORT}}`.
+5. It generates `AUTH_OTP_HMAC_SECRET`, `AUDIT_INTEGRITY_KEY` and
+   `TOOL_ACCESS_SECRET` only when missing. It always sets `REGENGINE_ENV=staging`,
+   `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` and
+   `REGENGINE_MIGRATIONS_ROLE=regengine_migrator`. It sets
+   `REDIS_URL=${{Redis.REDIS_URL}}` only when missing.
+
+Every value goes to `railway variable set NAME --stdin --skip-deploys`, never
+into argv or output. Presence checks read variable names only. Afterwards,
+seal the six secret variables in the dashboard and deploy once. The first
+deploy logs `DB state: FRESH`, migrates to head, then logs
+`runtime role cutover applied as role=regengine_migrator database=regengine_staging`
+before gunicorn starts. `/readiness` should then return 200.
+
+Every step converges, so re-run the same command after a partial failure. Each
+`--apply` rotates the three database passwords and re-stores the matching URLs,
+so redeploy after any re-run. `tests/scripts/test_bootstrap_staging_database.py`
+covers the refusal, dry-run, stdin-only and presence-parsing behavior without
+Docker.
