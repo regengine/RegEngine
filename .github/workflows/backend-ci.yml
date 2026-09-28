@@ -1321,6 +1321,7 @@ jobs:
           export PYTHONPATH="${PWD}:${PWD}/services:${PWD}/services/ingestion:${PYTHONPATH}"
           set -o pipefail
           pytest tests/shared/test_postgres_evidence_workflow_pg.py \
+            tests/shared/test_email_ingest_restricted_role_pg.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/evidence-workflow.log
           if grep -qE '[0-9]+ skipped' /tmp/evidence-workflow.log; then
             echo "::error::restricted-role evidence workflow skipped"

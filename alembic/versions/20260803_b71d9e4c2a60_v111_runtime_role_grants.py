@@ -618,6 +618,11 @@ REGENGINE_TABLE_GRANTS.update(
         # CONFLICT DO NOTHING (SELECT to read back an existing claim,
         # UPDATE to record the Stripe outcome); never deleted.
         "fsma.label_charges": ("SELECT", "INSERT", "UPDATE"),
+        # /ingest/csv retains each upload verbatim (webhook_compat
+        # ._open_ingestion_run, #3122). INSERT only, bound to the caller's
+        # tenant by FORCE RLS; reading or rewriting a retained file stays
+        # denied, as the disabled remediation contract requires.
+        "fsma.manifest_blobs": ("INSERT",),
         "fsma.notification_outbox": ("SELECT", "UPDATE"),
         "fsma.products": ("SELECT", "INSERT", "UPDATE"),
         "fsma.remediation_tokens": ("SELECT", "INSERT", "UPDATE"),
@@ -1143,6 +1148,24 @@ BEGIN
     GRANT EXECUTE ON FUNCTION public.seed_obligations_for_tenant(uuid) TO regengine;
     GRANT EXECUTE ON FUNCTION fsma.get_active_portal_link_by_token(text) TO regengine;
     GRANT EXECUTE ON FUNCTION fsma.get_team_roster(uuid) TO regengine;
+
+    -- email_ingest (v121 ccaa01e4fd7c / v122 d14f8a2b9c31) SECURITY DEFINER
+    -- boundary. Absent on the first pass, present when the supported runner
+    -- reapplies this cutover at head. Only the v122 sender-allowlisted lookup
+    -- is granted: the recipient-only get_tenant_by_inbound_address(text)
+    -- overload and fsma.tenant_inbound_email_addresses (8301f3cad96a, used
+    -- by the inbound_email router) stay denied, because resolving a tenant
+    -- from the recipient address alone is the cross-tenant write v122 closed.
+    FOREACH function_signature IN ARRAY ARRAY[
+        'fsma.get_tenant_by_inbound_address(text, text)',
+        'fsma.get_inbound_email_audit_by_message_id(text)',
+        'fsma.claim_inbound_email_audit(uuid, text, text, text, text, integer)',
+        'fsma.finalize_inbound_email_audit(text, uuid, text, text, integer, integer, integer, jsonb)'
+    ] LOOP
+        IF to_regprocedure(function_signature) IS NOT NULL THEN
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO regengine', function_signature);
+        END IF;
+    END LOOP;
 
     -- Admin sessions still use tenant context for tenant-scoped operations,
     -- but only the exact sysadmin role may arm the global policy branch.
