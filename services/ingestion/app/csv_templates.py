@@ -11,11 +11,12 @@ from __future__ import annotations
 import csv
 import dataclasses
 import io
+import itertools
 import logging
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from dateutil import parser as _dateutil_parser
 from dateutil.parser import ParserError as _DateParserError
@@ -309,6 +310,12 @@ _DATE_FIELDS = [
 
 # Columns that might hold the CTE type in a mixed-type CSV
 _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
+
+# Data rows parse_csv_rows reads: the first MAX_CSV_ROWS rows csv.DictReader
+# yields after the header. DictReader skips completely blank lines, so they
+# do not count; comment rows and all-empty rows do. The next row is an error
+# and parsing stops. _file_cte_type_for_jev scans exactly these rows.
+MAX_CSV_ROWS = 500
 
 # Fallback chains: when several columns can supply the same field, the first
 # present, non-empty one wins. ``parse_csv_rows`` reads through these tuples
@@ -719,9 +726,9 @@ def parse_csv_rows(
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
     kde_warnings: list[str] = []
-    MAX_CSV_ROWS = 500
 
     for row_num, row in enumerate(reader, start=2):
+        # _file_cte_type_for_jev reads exactly the rows before this cut-off.
         if row_num - 1 > MAX_CSV_ROWS:
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
             break
@@ -929,13 +936,18 @@ def _file_cte_type_for_jev(text: str, cte_type: Optional[str]) -> tuple[Optional
       way ``_detect_row_cte_type`` normalises them, resolves through
       ``_CTE_TYPE_ALIASES`` to a different CTE.
 
-    Comment rows are skipped exactly as ``parse_csv_rows`` skips them.
-    Recognised columns are never sent to Jev, so they cannot be mapped and
-    are not scanned. The scan is one linear pass over text the route has
-    already size-capped, and stops at the first contradiction. It errs on
-    withholding, which only costs Jev a hint: a single-letter alias (``S``,
-    ``R``, ``H``, ...) in any unrecognised column counts, and so does a file
-    whose rows cannot be read.
+    It reads exactly the rows ``parse_csv_rows`` reads (the first
+    :data:`MAX_CSV_ROWS` the same ``csv.DictReader`` yields) and skips comment
+    rows exactly as it does; a value in a row the parser discards cannot
+    become a row's CTE. Recognised columns are never sent to Jev, so they
+    cannot be mapped and are not scanned. Headers are normalised once per
+    file, not per cell, and the scan stops at the first contradiction. It
+    errs on withholding, which only costs Jev a hint: a single-letter alias
+    (``S``, ``R``, ``H``, ...) in any unrecognised column counts, and so does
+    a file whose rows cannot be read.
+
+    Synchronous CPU work: the route runs it in the threadpool
+    (``_read_upload_for_jev``).
     """
     if not cte_type:
         return None, None
@@ -948,29 +960,58 @@ def _file_cte_type_for_jev(text: str, cte_type: Optional[str]) -> tuple[Optional
         column = _per_row_cte_column(headers)
         if column is not None:
             return None, f"file has a per-row CTE column: {column}"
-        unrecognized = {normalize_csv_header(header) for header in headers} - _RECOGNIZED_COLUMNS - {""}
-        if not unrecognized:
+        # The keys every DictReader row carries, normalised once.
+        raw_keys = list(dict.fromkeys(reader.fieldnames or []))
+        normalized = {key: normalize_csv_header(key) for key in raw_keys}
+        # Every raw column whose normalised form is unrecognised, including
+        # both of two headers that normalise alike: the parser keeps only the
+        # later one, so scanning both only errs on withholding.
+        scan_keys = [key for key in raw_keys if normalized[key] and normalized[key] not in _RECOGNIZED_COLUMNS]
+        if not scan_keys:
             return cte_type, None
-        for raw_row in reader:
-            # The parser's row: normalised keys, stripped values. Its first
-            # value decides whether the row is a comment (``parse_csv_rows``).
-            row = {
-                normalize_csv_header(key): value.strip() if isinstance(value, str) else ""
-                for key, value in raw_row.items()
-            }
-            if next(iter(row.values()), "").startswith("#"):
+        # parse_csv_rows tests the first value of {normalize(key): value}: the
+        # first key's normalised form, holding the value of the last raw key
+        # that normalises the same way.
+        comment_key = [key for key in raw_keys if normalized[key] == normalized[raw_keys[0]]][-1]
+        for raw_row in itertools.islice(reader, MAX_CSV_ROWS):
+            first = raw_row.get(comment_key)
+            if isinstance(first, str) and first.strip().startswith("#"):
                 continue
-            # Every raw column, not just the one a duplicate header leaves in
-            # ``row``: scanning a superset only errs on withholding.
-            for key, value in raw_row.items():
-                if not isinstance(value, str) or normalize_csv_header(key) not in unrecognized:
+            for key in scan_keys:
+                value = raw_row.get(key)
+                if not value or not isinstance(value, str):
                     continue
                 row_cte = _CTE_TYPE_ALIASES.get(value.strip().lower().replace(" ", "_"))
                 if row_cte and row_cte != cte_type:
-                    return None, f"column {(key or '').strip()} holds per-row CTE values"
+                    return None, f"column {key.strip()} holds per-row CTE values"
     except csv.Error:
         return None, "rows could not be read to rule out per-row CTE values"
     return cte_type, None
+
+
+class _UploadRead(NamedTuple):
+    """What the Jev request needs from the upload (see ``_read_upload_for_jev``)."""
+
+    headers: list[str]
+    samples: dict[str, list[str]]
+    malformed: Optional[str]
+    file_cte_type: Optional[str]
+    file_cte_type_dropped: Optional[str]
+
+
+def _read_upload_for_jev(text: str, sample_limit: int, cte_type: Optional[str]) -> _UploadRead:
+    """Read the header row, sample values and the file-CTE decision in one synchronous call.
+
+    All the CPU work on the upload's text (the header row, up to 50 rows of
+    samples, and up to ``MAX_CSV_ROWS`` rows of CTE scan) happens here, so the
+    route can run it in the threadpool instead of on the event loop. A
+    malformed header row stops before anything else reads the file.
+    """
+    headers, samples, malformed = _csv_headers_and_samples(text, sample_limit)
+    if malformed or not headers:
+        return _UploadRead(headers, samples, malformed, None, None)
+    file_cte_type, dropped = _file_cte_type_for_jev(text, cte_type)
+    return _UploadRead(headers, samples, None, file_cte_type, dropped)
 
 
 async def _suggest_header_mappings_for_upload(
@@ -991,31 +1032,33 @@ async def _suggest_header_mappings_for_upload(
     if not decider.enabled:
         return HeaderMappingResult(status="disabled", thresholds=decider.settings.thresholds)
     try:
-        headers, samples, malformed = _csv_headers_and_samples(text, decider.settings.header_sample_values)
-        if malformed:
+        # Off the event loop: reading a 5 MiB upload is CPU work.
+        upload = await run_in_threadpool(_read_upload_for_jev, text, decider.settings.header_sample_values, cte_type)
+        if upload.malformed:
             # Checked before anything else reads the file for Jev: the "header"
             # may be whole rows, so nothing about it may leave the process.
-            logger.warning("csv_header_mapping_malformed_header reason=%s", malformed)
+            logger.warning("csv_header_mapping_malformed_header reason=%s", upload.malformed)
             return HeaderMappingResult(
                 status=MALFORMED_HEADER,
                 thresholds=decider.settings.thresholds,
                 apply_enabled=decider.settings.apply_header_mappings,
             )
-        if not headers:
+        if not upload.headers:
             return HeaderMappingResult(status="no_headers", thresholds=decider.settings.thresholds)
-        file_cte_type, dropped = _file_cte_type_for_jev(text, cte_type)
         result = await run_in_threadpool(
             suggest_header_mappings,
-            headers,
+            upload.headers,
             recognized=_RECOGNIZED_COLUMNS,
-            samples=samples,
+            samples=upload.samples,
             decider=decider,
             precedence=_COLUMN_PRECEDENCE,
-            cte_type=file_cte_type,
+            cte_type=upload.file_cte_type,
         )
-        if dropped:
-            logger.info("csv_header_mapping_file_cte_withheld declared=%s reason=%s", cte_type, dropped)
-            result = dataclasses.replace(result, file_cte_type_dropped=dropped)
+        if upload.file_cte_type_dropped:
+            logger.info(
+                "csv_header_mapping_file_cte_withheld declared=%s reason=%s", cte_type, upload.file_cte_type_dropped
+            )
+            result = dataclasses.replace(result, file_cte_type_dropped=upload.file_cte_type_dropped)
         return result
     except Exception:  # noqa: BLE001 - a suggestion failure must never reject an upload.
         logger.exception("csv_header_mapping_failed")

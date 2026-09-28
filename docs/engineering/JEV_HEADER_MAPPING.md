@@ -61,8 +61,10 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
    it carries the canonical CTE the route normalised it to (`Shipping` and
    `ship` both become `shipping`). Otherwise the key is absent, not null,
    so the state is exactly what it was before the key existed.
-   The call runs in a worker thread so the event loop is not blocked. At
-   most 48 columns are asked about per upload.
+   Reading the upload for the request (header row, sample values, the CTE
+   value scan below) and the call itself both run in the threadpool
+   (`_read_upload_for_jev`, then `suggest_header_mappings`), so the event
+   loop is not blocked. At most 48 columns are asked about per upload.
 3. Each answer is banded by confidence and passed through the apply policy
    below. Rows are then parsed exactly as before, with any applied mapping
    copied under the canonical key (source column left in place).
@@ -107,10 +109,13 @@ contradict the declared CTE:
 | A per-row CTE column the parser reads: `cte_type`, `event_type`, `type` or `cte` after the parser's header normalisation (so `Event Type` and `CTE` count, `Event-Type` does not) | the header is present, whatever its values | `file has a per-row CTE column: Event Type` |
 | An unrecognised column that Jev may map onto `cte_type` (`Activity`, `Event Kind`, `Event-Type`, `Transaction Type`, ...) | any non-empty value, normalised the way `_detect_row_cte_type` normalises values, resolves through `_CTE_TYPE_ALIASES` to a different CTE | `column Activity holds per-row CTE values` |
 
-The value scan skips comment rows exactly as `parse_csv_rows` does, ignores
-recognised columns (never sent to Jev, so never mapped), and is one linear
-pass over the size-capped upload that stops at the first contradiction. It
-errs on withholding, which only costs Jev a hint: `_CTE_TYPE_ALIASES` maps
+The value scan reads exactly the rows `parse_csv_rows` reads: the first
+`MAX_CSV_ROWS` (500) rows the same `csv.DictReader` yields, where comment
+rows and all-empty rows count and blank lines do not. A value in a row the
+parser discards cannot become a row's CTE, so it never withholds. It skips
+comment rows exactly as the parser does, ignores recognised columns (never
+sent to Jev, so never mapped), normalises the header row once rather than
+per cell, and stops at the first contradiction. It errs on withholding, which only costs Jev a hint: `_CTE_TYPE_ALIASES` maps
 single letters (`S`, `R`, `H`, `C`, `P`, `T`), so a `Grade` column of `S`
 and `R` withholds a declared `shipping`. A file whose rows cannot be read
 withholds too.

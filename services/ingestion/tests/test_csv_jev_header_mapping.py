@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import csv
 import json
+import threading
 import uuid
 from typing import Optional
 
@@ -499,6 +501,126 @@ def test_a_sent_file_cte_is_the_cte_of_every_parsed_row(harness, case, apply):
 def test_file_cte_type_for_jev_value_scan(text, expected):
     assert ct._file_cte_type_for_jev(text, "shipping") == expected
     assert ct._file_cte_type_for_jev(text, None) == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# The scan reads exactly the rows the parser reads, off the event loop
+# ---------------------------------------------------------------------------
+
+
+def _row_limit_body(position: int, *, comments: int = 0, blanks: int = 0, empties: int = 0) -> str:
+    """502 DictReader rows; the one at ``position`` (1-based) says receiving, every data row shipping.
+
+    Comment rows (which also say receiving) and all-empty rows count towards
+    the parser's row limit; blank lines are skipped by DictReader and do not.
+    They all come first, so they shift where the limit falls.
+    """
+    rows: list[str] = ["\n"] * blanks
+    rows += ["# note,,,,,,,,,receiving\n"] * comments
+    rows += [",,,,,,,,,\n"] * empties
+    for index in range(comments + empties + 1, ct.MAX_CSV_ROWS + 3):
+        activity = "receiving" if index == position else "shipping"
+        rows.append(f"TLC-{index},Romaine,1,cases,2026-09-21,Packhouse A,DC B,BOL-{index},PACK-{index},{activity}\n")
+    return f"{_SHIP_COLUMNS},Activity\n" + "".join(rows)
+
+
+@pytest.mark.parametrize(
+    "position,comments,blanks,empties,withheld",
+    [
+        (ct.MAX_CSV_ROWS, 0, 0, 0, True),
+        (ct.MAX_CSV_ROWS + 1, 0, 0, 0, False),
+        (ct.MAX_CSV_ROWS, 3, 0, 0, True),
+        (ct.MAX_CSV_ROWS + 1, 3, 0, 0, False),
+        (ct.MAX_CSV_ROWS, 0, 5, 0, True),
+        (ct.MAX_CSV_ROWS + 1, 0, 5, 0, False),
+        (ct.MAX_CSV_ROWS, 0, 0, 2, True),
+        (ct.MAX_CSV_ROWS + 1, 0, 0, 2, False),
+    ],
+    ids=["500", "501", "500-comments", "501-comments", "500-blanks", "501-blanks", "500-empties", "501-empties"],
+)
+def test_scan_stops_exactly_where_the_parser_stops(position, comments, blanks, empties, withheld):
+    text = _row_limit_body(position, comments=comments, blanks=blanks, empties=empties)
+
+    file_cte_type, reason = ct._file_cte_type_for_jev(text, "shipping")
+
+    # Ground truth: does the parser, with Jev's mapping applied, ingest a receiving row?
+    events, errors, _ = ct.parse_csv_rows(text, "shipping", header_mapping={"activity": "cte_type"})
+    parser_ingests_receiving = any(event.cte_type.value == "receiving" for event in events)
+    assert errors[-1].endswith(f"CSV exceeds maximum row limit of {ct.MAX_CSV_ROWS}")
+    assert (file_cte_type is None) is parser_ingests_receiving is withheld
+    assert reason == ("column Activity holds per-row CTE values" if withheld else None)
+
+
+def test_scan_reads_at_most_max_csv_rows(monkeypatch):
+    pulled = collections.Counter()
+
+    class CountingDictReader(csv.DictReader):
+        def __next__(self):
+            row = super().__next__()
+            pulled["rows"] += 1
+            return row
+
+    monkeypatch.setattr(ct.csv, "DictReader", CountingDictReader)
+    text = f"{_SHIP_COLUMNS},Activity\n" + "T1,Romaine,1,cases,2026-09-21,A,B,C,D,shipping\n" * (ct.MAX_CSV_ROWS * 4)
+
+    assert ct._file_cte_type_for_jev(text, "shipping") == ("shipping", None)
+    assert pulled["rows"] == ct.MAX_CSV_ROWS
+
+
+@pytest.mark.parametrize(
+    "text,withheld",
+    [
+        # {normalize(k): v} keeps the first key's slot but the last same-named
+        # key's value: "TLC-1" is tested, so this is not a comment row.
+        ("Lot,lot,Activity\n# x,TLC-1,receiving\n", True),
+        # ...and here the tested value is "# x": a comment row, skipped.
+        ("lot,Lot,Activity\nTLC-1,# x,receiving\n", False),
+    ],
+    ids=["value-of-last-duplicate-is-data", "value-of-last-duplicate-is-comment"],
+)
+def test_comment_rows_are_the_ones_the_parser_skips(text, withheld):
+    events, errors, _ = ct.parse_csv_rows(text, "shipping")
+    parser_skipped_it = not events and not errors
+    assert parser_skipped_it is not withheld
+    assert (ct._file_cte_type_for_jev(text, "shipping")[0] is None) is withheld
+
+
+def test_reading_the_upload_happens_in_the_threadpool(monkeypatch):
+    on_loop_thread: dict[str, bool] = {}
+    for name in ("_csv_headers_and_samples", "_file_cte_type_for_jev"):
+
+        def wrapper(*args, _original=getattr(ct, name), _name=name, **kwargs):
+            on_loop_thread[_name] = threading.current_thread() is threading.main_thread()
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(ct, name, wrapper)
+    seen: dict = {}
+    decider = _decider(_transport(SHIPPING_ANSWERS, seen), header_sample_values=2)
+
+    # asyncio.run drives the loop on this (main) thread.
+    assert threading.current_thread() is threading.main_thread()
+    result = asyncio.run(
+        ct._suggest_header_mappings_for_upload(SHIPPING_CSV_BODY.decode(), decider=decider, cte_type="shipping")
+    )
+
+    assert result.ok and seen["bodies"][0]["state"]["file_cte_type"] == "shipping"
+    assert on_loop_thread == {"_csv_headers_and_samples": False, "_file_cte_type_for_jev": False}
+
+
+def test_reading_the_upload_never_raises_into_the_route(monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("scan failed")
+
+    monkeypatch.setattr(ct, "_file_cte_type_for_jev", boom)
+    seen: dict = {}
+    decider = _decider(_transport(SHIPPING_ANSWERS, seen))
+
+    result = asyncio.run(
+        ct._suggest_header_mappings_for_upload(SHIPPING_CSV_BODY.decode(), decider=decider, cte_type="shipping")
+    )
+
+    assert result.status == "error"
+    assert "bodies" not in seen
 
 
 @pytest.mark.parametrize(
