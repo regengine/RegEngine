@@ -101,6 +101,15 @@ def build_report(rules: Sequence[dict[str, Any]]) -> dict[str, Any]:
         applicability = rule.get("applicability_conditions") or {}
         configured_cte_types = list(applicability.get("cte_types") or [])
         covered_types = REQUIRED_CTE_TYPES if not configured_cte_types else set(configured_cte_types)
+        for cte_type in sorted(set(configured_cte_types) - REQUIRED_CTE_TYPES):
+            findings.append(
+                _finding(
+                    "unknown_cte_type",
+                    title,
+                    f"Configured CTE type is not recognized: {cte_type}",
+                    cte_type=cte_type,
+                )
+            )
         for cte_type in covered_types & REQUIRED_CTE_TYPES:
             coverage[cte_type] += 1
 
