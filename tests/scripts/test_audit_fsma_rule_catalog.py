@@ -80,6 +80,19 @@ def test_catalog_fails_when_a_required_cte_type_has_no_rule():
     )
 
 
+def test_catalog_fails_for_unknown_cte_type():
+    mod = _load_module()
+    rules = deepcopy(FSMA_RULE_SEEDS)
+    rules[0]["applicability_conditions"]["cte_types"] = ["recieving"]
+
+    report = mod.build_report(rules)
+
+    assert report["status"] == "fail"
+    assert any(
+        finding["code"] == "unknown_cte_type" and finding["cte_type"] == "recieving" for finding in report["findings"]
+    )
+
+
 def test_cli_writes_deterministic_json_and_markdown(tmp_path):
     mod = _load_module()
     json_out = tmp_path / "catalog.json"
@@ -96,6 +109,12 @@ def test_cli_writes_deterministic_json_and_markdown(tmp_path):
     assert "# FSMA 204 Rule Catalog Audit" in first_markdown
     assert "It does not verify the legal accuracy or completeness of citations." in first_markdown
     assert "Legal requirement" in first_markdown
+
+
+def test_committed_artifacts_are_current():
+    mod = _load_module()
+
+    assert mod.main(["--check"]) == 0
 
 
 def test_check_mode_detects_stale_artifacts_without_rewriting(tmp_path):
