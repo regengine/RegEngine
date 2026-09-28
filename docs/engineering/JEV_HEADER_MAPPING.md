@@ -50,10 +50,11 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
    `{"csv_headers": [...], "columns_to_map": [{"index", "header", "sample_values"?}], "file_cte_type"?}`
    and one `Choice` question per column over the canonical vocabulary plus
    `no_match`. `file_cte_type` is present only when the upload passes the
-   `cte_type` form field: it carries the canonical CTE the route normalised
-   it to (`Shipping` and `ship` both become `shipping`). A mixed-type upload
-   (no form field, a `cte_type` column per row) sends no `file_cte_type`
-   key at all, so its state is exactly what it was before the key existed.
+   `cte_type` form field **and** the file has no per-row CTE column (see
+   [Declare the CTE on single-type uploads](#declare-the-cte-on-single-type-uploads)):
+   it carries the canonical CTE the route normalised it to (`Shipping` and
+   `ship` both become `shipping`). Otherwise the key is absent, not null,
+   so the state is exactly what it was before the key existed.
    The call runs in a worker thread so the event loop is not blocked. At
    most 48 columns are asked about per upload.
 3. Each answer is banded by confidence and passed through the apply policy
@@ -65,8 +66,14 @@ Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
    persists it to `fsma.agent_artifacts` and appends a receipt to the
    ingestion run's ledger. The artifact carries `model_name`
    (`typesafe/<model>`), `agent_version` (the question-set version), the
-   vendor request id, the top probabilities and thresholds in its rationale,
-   and whether code applied it.
+   vendor request id, and in its rationale the question-set version, what
+   the state said about the file's CTE (`State file_cte_type: shipping.`, or
+   `none` with the reason), the top probabilities and thresholds, and
+   whether code applied it. The CTE note is in the rationale text rather
+   than a field of its own because the artifact and payload contracts are
+   closed (`extra="forbid"`, `data-schemas/events/agent.artifact.schema.json`
+   with `additionalProperties: false`) and the payload is copied into the
+   hashed ledger receipt; a new field would change both.
 5. The response gains `header_mapping_suggestions` (one entry per asked
    column) and `header_mapping_engine` (status, model, request id,
    thresholds, artifacts queued). Both are null/empty when Jev is not
@@ -81,6 +88,18 @@ pass the `cte_type` form field on `POST /api/v1/ingest/csv` (and
 The route already uses it as the fallback CTE for rows; the same
 normalised value is what Jev sees as `file_cte_type`. Leave it out for
 mixed-type files.
+
+The form field is only a fallback: a row with a known CTE in a per-row CTE
+column (`cte_type`, `event_type`, `type` or `cte` after the parser's header
+normalisation, so `Event Type` and `CTE` count) overrides it
+(`_detect_row_cte_type`). When the file has such a column, "every row
+records `<cte_type>`" may be false, so `_suggest_header_mappings_for_upload`
+withholds `file_cte_type` (`_file_cte_type_for_jev`). The rows still get
+the form field as their fallback, exactly as before. The preview runs the
+same helper, so it withholds exactly when the route does. The preview
+report and the artifact rationale say when a declared CTE was withheld and
+why (`file has a per-row CTE column: Event Type`), and the route logs
+`csv_header_mapping_file_cte_withheld`.
 
 ### Question-set version
 
@@ -124,8 +143,9 @@ Applied mappings are also written to the application log as
 ## What leaves the process
 
 - Always (when configured): the CSV header row.
-- Only when the upload passes the `cte_type` form field: its canonical CTE
-  name (for example `shipping`) as `file_cte_type`.
+- Only when the upload passes the `cte_type` form field and has no per-row
+  CTE column: its canonical CTE name (for example `shipping`) as
+  `file_cte_type`.
 - Only with `REGENGINE_JEV_HEADER_SAMPLE_VALUES` set to 1-5: that many
   distinct cell values per unrecognised column from the first 50 rows,
   passed through `shared.pii.redact_pii` (SSN, phone, email, street
@@ -200,7 +220,7 @@ thresholds in force. The values shown are illustrative.
 | `--sample-values N` | Send N (0-5) redacted sample values per unrecognised column. Overrides `REGENGINE_JEV_HEADER_SAMPLE_VALUES`. |
 | `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`. Nothing else changes. |
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
-| `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation. Sent to Jev as `file_cte_type` and shown on the `Sent:` line and as `request.file_cte_type` in `--json`. An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
+| `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation, same per-row-column rule. When sent, it is shown on the `Sent:` line and as `request.file_cte_type` in `--json`. When withheld, `request.file_cte_type` is null, `request.file_cte_type_dropped` gives the reason, and the table prints a `CTE:` line. Both come from the route helper's result, so they show what was actually sent (null when nothing was sent, for example without a key). An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
 
 ### Demo file
 
@@ -221,11 +241,12 @@ asked about; the intended answers are:
 | `Internal Notes` | `no_match` |
 
 ```bash
-python3 scripts/jev_header_preview.py docs/engineering/examples/jev_demo_shipping.csv --cte-type shipping --prompt-key
+python3 scripts/jev_header_preview.py docs/engineering/examples/jev_demo_shipping.csv --prompt-key
 ```
 
-Every row is a shipment, so `--cte-type shipping` gives Jev the same
-context an upload with `cte_type=shipping` would.
+The demo file names each row's CTE in its own `cte_type` column, so it is
+a per-row file: adding `--cte-type shipping` sends no `file_cte_type` and
+the report shows `file has a per-row CTE column: cte_type`.
 
 With `--simulate-apply` and answers in the `auto_apply` band, the four
 headers whose canonical column is already in the file (`Lot #`, `Item Desc`,

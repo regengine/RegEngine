@@ -285,6 +285,74 @@ def test_declared_cte_type_is_sent_to_jev_normalised(harness, declared):
     assert sent["state"]["file_cte_type"] == "shipping"
     assert [c["header"] for c in sent["state"]["columns_to_map"]] == ["Ship Dt", "Qty Shpd"]
     assert resp.json()["header_mapping_engine"]["questions_version"] == "csv-header-mapping.v2"
+    # The evidence records what Jev was told, next to the question-set version.
+    assert len(harness["artifacts"]) == 2
+    for artifact in harness["artifacts"]:
+        assert "(csv-header-mapping.v2)" in artifact.payload.rationale
+        assert "State file_cte_type: shipping." in artifact.payload.rationale
+
+
+def _per_row_cte_body(cte_header: str) -> bytes:
+    """A shipping upload that also names each row's CTE in ``cte_header``.
+
+    Row 1 says ``receiving``; row 2 leaves it blank and falls back to the
+    declared CTE. The declared CTE is therefore false for row 1.
+    """
+    return (
+        f"{cte_header},traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+        "ship_from_location,ship_to_location,reference_document,tlc_source_reference,Ship Dt,Qty Shpd\n"
+        "receiving,TLC-R1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1,09/21/2026,120\n"
+        ",TLC-S1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-2,PACK-2,09/21/2026,120\n"
+    ).encode()
+
+
+@pytest.mark.parametrize("cte_header", ["cte_type", "Event Type", "CTE", " Type "])
+def test_declared_cte_type_is_withheld_when_rows_carry_their_own(harness, cte_header):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(SHIPPING_ANSWERS, seen)))
+
+    resp = _post(_client(), _per_row_cte_body(cte_header), data={"cte_type": "Shipping"})
+
+    assert resp.status_code == 200, resp.text
+    (sent,) = seen["bodies"]
+    assert set(sent["state"]) == {"csv_headers", "columns_to_map"}
+    # Why it was withheld: the parser really does let the row win.
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["receiving", "shipping"]
+    assert harness["artifacts"]
+    reason = f"file has a per-row CTE column: {cte_header.strip()}"
+    for artifact in harness["artifacts"]:
+        assert f"State file_cte_type: none (declared CTE withheld: {reason})." in artifact.payload.rationale
+
+
+@pytest.mark.parametrize(
+    "header,parser_reads_it",
+    [
+        ("cte_type", True),
+        ("CTE", True),
+        ("Event Type", True),
+        (" type ", True),
+        ("EVENT_TYPE", True),
+        ("cte type", True),
+        ("Event-Type", False),
+        ("event  type", False),
+        ("Transaction Type", False),
+        ("cte_type_code", False),
+    ],
+)
+def test_per_row_cte_column_matches_exactly_what_the_parser_reads(header, parser_reads_it):
+    text = (
+        f"{header},traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,location_name\n"
+        "receiving,TLC-1,Kale,1,cases,2026-09-21,Farm A\n"
+    )
+    (event,), errors, _ = ct.parse_csv_rows(text, "shipping")
+    assert errors == []
+    assert (event.cte_type.value == "receiving") is parser_reads_it
+    assert (ct._per_row_cte_column([header, "quantity"]) is not None) is parser_reads_it
+    assert ct._file_cte_type_for_jev([header, "quantity"], "shipping") == (
+        (None, f"file has a per-row CTE column: {header.strip()}") if parser_reads_it else ("shipping", None)
+    )
+    assert ct._file_cte_type_for_jev([header, "quantity"], None) == (None, None)
 
 
 def test_mixed_type_upload_without_the_form_field_sends_no_file_cte_type(harness):

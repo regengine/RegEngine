@@ -9,6 +9,7 @@ Provides:
 from __future__ import annotations
 
 import csv
+import dataclasses
 import io
 import logging
 import re
@@ -878,6 +879,37 @@ def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], d
     return headers, collect_sample_values(data_rows, unknown, sample_limit)
 
 
+def _per_row_cte_column(headers: Sequence[Optional[str]]) -> Optional[str]:
+    """The first header ``_detect_row_cte_type`` reads a row's CTE from, or ``None``.
+
+    Headers are normalised with ``normalize_csv_header``, exactly as
+    ``parse_csv_rows`` normalises row keys before ``_detect_row_cte_type``
+    looks up ``_CTE_TYPE_COLUMNS``, so ``Event Type`` or ``CTE`` match here
+    precisely when the parser would read them.
+    """
+    for header in headers:
+        if normalize_csv_header(header) in _CTE_TYPE_COLUMNS:
+            return (header or "").strip()
+    return None
+
+
+def _file_cte_type_for_jev(
+    headers: Sequence[Optional[str]], cte_type: Optional[str]
+) -> tuple[Optional[str], Optional[str]]:
+    """``(file_cte_type to send, reason a declared one was withheld)``.
+
+    The declared ``cte_type`` is only the parser's fallback: a row whose
+    per-row CTE column holds a known CTE overrides it. When the file has such
+    a column, "every row records <cte_type>" may be false, so Jev is not told.
+    """
+    if not cte_type:
+        return None, None
+    column = _per_row_cte_column(headers)
+    if column is not None:
+        return None, f"file has a per-row CTE column: {column}"
+    return cte_type, None
+
+
 async def _suggest_header_mappings_for_upload(
     text: str, *, decider: Optional[JevDecider] = None, cte_type: Optional[str] = None
 ) -> HeaderMappingResult:
@@ -887,8 +919,10 @@ async def _suggest_header_mappings_for_upload(
     ``scripts/jev_header_preview.py`` passes its own so operators can preview
     this exact path against a local file without running the service.
     ``cte_type`` is the canonical CTE declared for the whole file (the
-    route's normalised ``cte_type`` form field), or ``None``; Jev sees it as
-    ``file_cte_type`` in the state.
+    route's normalised ``cte_type`` form field), or ``None``. Jev sees it as
+    ``file_cte_type`` only when the file has no per-row CTE column
+    (``_file_cte_type_for_jev``); otherwise the result's
+    ``file_cte_type_dropped`` says why it was withheld.
     """
     decider = decider if decider is not None else get_jev_decider()
     if not decider.enabled:
@@ -897,15 +931,20 @@ async def _suggest_header_mappings_for_upload(
         headers, samples = _csv_headers_and_samples(text, decider.settings.header_sample_values)
         if not headers:
             return HeaderMappingResult(status="no_headers", thresholds=decider.settings.thresholds)
-        return await run_in_threadpool(
+        file_cte_type, dropped = _file_cte_type_for_jev(headers, cte_type)
+        result = await run_in_threadpool(
             suggest_header_mappings,
             headers,
             recognized=_RECOGNIZED_COLUMNS,
             samples=samples,
             decider=decider,
             precedence=_COLUMN_PRECEDENCE,
-            cte_type=cte_type,
+            cte_type=file_cte_type,
         )
+        if dropped:
+            logger.info("csv_header_mapping_file_cte_withheld declared=%s reason=%s", cte_type, dropped)
+            result = dataclasses.replace(result, file_cte_type_dropped=dropped)
+        return result
     except Exception:  # noqa: BLE001 - a suggestion failure must never reject an upload.
         logger.exception("csv_header_mapping_failed")
         return HeaderMappingResult(status="error", thresholds=decider.settings.thresholds)

@@ -357,6 +357,13 @@ class HeaderMappingResult:
     thresholds: ConfidenceThresholds = field(default_factory=ConfidenceThresholds)
     apply_enabled: bool = False
     truncated_columns: int = 0
+    # What Jev was told about the file's CTE: the ``file_cte_type`` put in the
+    # request state (``None`` when absent or when no request was built), and,
+    # when the uploader declared a CTE that was withheld, why. The route sets
+    # the reason (``_suggest_header_mappings_for_upload``); both reach the
+    # artifact rationale so the evidence records what was asked.
+    file_cte_type: Optional[str] = None
+    file_cte_type_dropped: Optional[str] = None
 
     @property
     def applied_mapping(self) -> dict[str, str]:
@@ -532,10 +539,11 @@ def suggest_header_mappings(
     truncated = max(0, len(columns) - MAX_COLUMNS_PER_UPLOAD)
     columns = columns[:MAX_COLUMNS_PER_UPLOAD]
     present_keys = {normalize_csv_header(header) for header in all_headers}
+    file_cte_type = cte_type or None
 
     try:
         answers = decider.ask(
-            build_state(list(all_headers), columns, samples, cte_type=cte_type),  # type: ignore[arg-type]
+            build_state(list(all_headers), columns, samples, cte_type=file_cte_type),  # type: ignore[arg-type]
             build_questions(columns),
             purpose=PURPOSE,
             questions_version=QUESTIONS_VERSION,
@@ -546,11 +554,16 @@ def suggest_header_mappings(
             thresholds=thresholds,
             apply_enabled=apply_enabled,
             truncated_columns=truncated,
+            file_cte_type=file_cte_type,
         )
     except Exception:  # noqa: BLE001 - the upload must not fail because a suggestion did.
         logger.exception("jev.header_mapping.error", column_count=len(columns))
         return HeaderMappingResult(
-            status="error", thresholds=thresholds, apply_enabled=apply_enabled, truncated_columns=truncated
+            status="error",
+            thresholds=thresholds,
+            apply_enabled=apply_enabled,
+            truncated_columns=truncated,
+            file_cte_type=file_cte_type,
         )
 
     suggestions = _decide(
@@ -579,6 +592,7 @@ def suggest_header_mappings(
         thresholds=thresholds,
         apply_enabled=apply_enabled,
         truncated_columns=truncated,
+        file_cte_type=file_cte_type,
     )
 
 
@@ -589,10 +603,26 @@ def _blocked_detail(suggestion: HeaderMappingSuggestion) -> str:
     return f"; the file already carries {columns}, which the parser reads only after {suggestion.canonical_field}"
 
 
+def _file_cte_note(result: HeaderMappingResult) -> str:
+    """What the request state said about the file's CTE, for the artifact rationale.
+
+    The artifact and payload contracts are closed (``extra="forbid"``, a
+    checked-in JSON schema, and the payload is hashed into the run ledger),
+    so this travels in the free-text rationale next to the question-set
+    version instead of as a new field.
+    """
+    if result.file_cte_type:
+        return f"State file_cte_type: {result.file_cte_type}."
+    if result.file_cte_type_dropped:
+        return f"State file_cte_type: none (declared CTE withheld: {result.file_cte_type_dropped})."
+    return "State file_cte_type: none (no CTE declared for the file)."
+
+
 def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult) -> str:
     evidence = result.evidence
     parts = [
         f"TypeSafe Jev Choice question ({QUESTIONS_VERSION}) over the canonical FSMA 204 field vocabulary.",
+        _file_cte_note(result),
         f"Top probabilities: {suggestion.probabilities}.",
         f"Confidence {suggestion.confidence:.3f} falls in band '{suggestion.band.value}' "
         f"(auto_apply >= {result.thresholds.auto_apply}, review >= {result.thresholds.review}).",

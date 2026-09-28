@@ -166,6 +166,7 @@ def test_json_output_and_simulated_apply(script, capsys, tmp_path, simulate):
     assert isinstance(report["engine"]["latency_ms"], int)
     assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
     assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] is None
     assert report["policy"] == {
         "auto_apply_confidence": 0.9,
         "review_confidence": 0.5,
@@ -229,8 +230,35 @@ def test_cte_type_is_normalised_like_the_route_and_sent_as_context(script, capsy
     assert body["state"]["file_cte_type"] == "harvesting"
     report = json.loads(out)
     assert report["request"]["file_cte_type"] == "harvesting"
+    assert report["request"]["file_cte_type_dropped"] is None
     assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
     _assert_key_hidden(out, err, logs)
+
+
+# The same upload with a per-row CTE column: rows can override --cte-type.
+PER_ROW_CTE_CSV_TEXT = (
+    "Event Type,Lot #,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document,Notes\n"
+    "harvesting,TLC-001,Kale,10,lbs,2026-04-17,Farm A,REF-1,\n"
+)
+
+
+def test_cte_type_is_withheld_when_the_file_has_a_per_row_cte_column(script, capsys, tmp_path):
+    seen: dict = {}
+    path = str(_csv(tmp_path, PER_ROW_CTE_CSV_TEXT))
+    code, out, err, _ = _run(script, capsys, [path, "--json", "--cte-type", "harvesting"], env=BASE_ENV, seen=seen)
+
+    assert code == 0, err
+    (body,) = seen["bodies"]
+    assert set(body["state"]) == {"csv_headers", "columns_to_map"}
+    report = json.loads(out)
+    assert report["request"]["unrecognized_headers"] == ["Lot #", "Notes"]
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] == "file has a per-row CTE column: Event Type"
+
+    code, out, err, _ = _run(script, capsys, [path, "--cte-type", "harvesting"], env=BASE_ENV)
+    assert code == 0, err
+    assert "CTE:     --cte-type not sent to Jev: file has a per-row CTE column: Event Type" in out
+    assert "file_cte_type harvesting" not in out
 
 
 def test_cte_type_appears_on_the_sent_line_of_the_table(script, capsys, tmp_path):

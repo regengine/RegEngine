@@ -22,8 +22,9 @@ prints, logs or writes the key.
 
 What leaves the process is what production sends: the header row, the
 declared CTE when ``--cte-type`` is given (the route's ``cte_type`` form
-field, accepting the same values), plus PII-redacted sample values per
-unrecognised column only when ``--sample-values`` (or
+field, accepting the same values) and the file has no per-row CTE column
+(the report says when it was withheld and why), plus PII-redacted sample
+values per unrecognised column only when ``--sample-values`` (or
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0. Rows are never sent.
 
 Exit codes:
@@ -279,7 +280,6 @@ def _build_report(
     *,
     simulated: bool,
     prompted: bool,
-    cte_type: str | None = None,
 ) -> dict[str, Any]:
     evidence = result.evidence
     suggestions = []
@@ -313,7 +313,10 @@ def _build_report(
         "request": {
             "header_count": len(headers),
             "unrecognized_headers": list(unknown),
-            "file_cte_type": cte_type,
+            # From the result, not from --cte-type: what the route's own helper
+            # put in the request, and why a declared CTE was withheld.
+            "file_cte_type": result.file_cte_type,
+            "file_cte_type_dropped": result.file_cte_type_dropped,
             "truncated_columns": result.truncated_columns,
             "sample_values_per_column": settings.header_sample_values,
             "rows_sent": 0,
@@ -375,6 +378,8 @@ def _render_text(report: dict[str, Any]) -> str:
         )
     elif report["status"] in ("disabled", "no_unrecognized_headers"):
         lines.append("Sent:    nothing")
+    if request["file_cte_type_dropped"]:
+        lines.append(f"CTE:     --cte-type not sent to Jev: {request['file_cte_type_dropped']}")
     if unknown and not report["suggestions"]:
         lines.append("Unrecognised: " + ", ".join(unknown))
     if report["suggestions"]:
@@ -430,7 +435,6 @@ def main(
         unknown,
         simulated=args.simulate_apply,
         prompted=args.prompt_key,
-        cte_type=args.cte_type,
     )
 
     if args.json:

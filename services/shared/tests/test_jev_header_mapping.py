@@ -15,6 +15,7 @@ The policy under test, in one place:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import uuid
 
@@ -199,6 +200,53 @@ def test_declared_cte_type_reaches_the_request_state():
     assert seen["body"]["state"]["file_cte_type"] == "shipping"
     assert seen["body"]["state"]["csv_headers"] == HEADERS
     assert result.evidence.questions_version == "csv-header-mapping.v2"
+    assert result.file_cte_type == "shipping"
+    assert result.file_cte_type_dropped is None
+
+
+def _rationales(result: HeaderMappingResult) -> list[str]:
+    artifacts = build_field_mapping_artifacts(result, tenant_id=str(uuid.uuid4()), source_hash=SOURCE_HASH)
+    assert artifacts
+    return [artifact.payload.rationale for artifact in artifacts]
+
+
+@pytest.mark.parametrize(
+    "cte_type,dropped,expected",
+    [
+        ("shipping", None, "State file_cte_type: shipping."),
+        (None, None, "State file_cte_type: none (no CTE declared for the file)."),
+        (
+            None,
+            "file has a per-row CTE column: cte_type",
+            "State file_cte_type: none (declared CTE withheld: file has a per-row CTE column: cte_type).",
+        ),
+    ],
+    ids=["sent", "not-declared", "withheld"],
+)
+def test_artifact_rationale_records_what_jev_was_told_about_the_file_cte(cte_type, dropped, expected):
+    # The artifact and payload contracts are closed (extra="forbid", checked-in
+    # JSON schema), so the value travels in the rationale next to the version.
+    result = suggest_header_mappings(
+        HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS)), cte_type=cte_type
+    )
+    assert result.file_cte_type == cte_type
+    if dropped:
+        result = dataclasses.replace(result, file_cte_type_dropped=dropped)
+
+    for rationale in _rationales(result):
+        assert rationale.startswith(
+            f"TypeSafe Jev Choice question ({QUESTIONS_VERSION}) over the canonical FSMA 204 field vocabulary. "
+            f"{expected} "
+        )
+
+
+def test_empty_cte_type_is_treated_as_not_declared():
+    seen: dict = {}
+    result = suggest_header_mappings(
+        HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS, seen)), cte_type=""
+    )
+    assert "file_cte_type" not in seen["body"]["state"]
+    assert result.file_cte_type is None
 
 
 def test_advisory_mode_never_applies_even_at_full_confidence():
