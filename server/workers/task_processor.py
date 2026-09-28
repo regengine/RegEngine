@@ -925,7 +925,7 @@ def enqueue_task(
                         INSERT INTO fsma.task_queue
                             (task_type, payload, tenant_id, priority, idempotency_key)
                         VALUES
-                            (:task_type, :payload::jsonb, :tenant_id, :priority, :key)
+                            (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority, :key)
                         ON CONFLICT (tenant_id, idempotency_key)
                             WHERE idempotency_key IS NOT NULL
                             DO NOTHING
@@ -979,7 +979,7 @@ def enqueue_task(
             row = db.execute(
                 text("""
                     INSERT INTO fsma.task_queue (task_type, payload, tenant_id, priority)
-                    VALUES (:task_type, :payload::jsonb, :tenant_id, :priority)
+                    VALUES (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority)
                     RETURNING id
                 """),
                 {
