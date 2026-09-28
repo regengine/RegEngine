@@ -374,3 +374,70 @@ def test_script_runs_from_repo_root_without_pythonpath(tmp_path):
     assert report["status"] == "disabled"
     assert report["request"]["unrecognized_headers"] == ["Lot #", "Notes"]
     assert "jev_header_preview: disabled: TYPESAFE_API_KEY is not set" in result.stderr
+
+
+def _subprocess_env(**extra: str) -> dict[str, str]:
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if name != "PYTHONPATH" and not name.startswith(("TYPESAFE_", "REGENGINE_JEV_"))
+    }
+    env.update(extra)
+    return env
+
+
+def test_unexpected_error_never_prints_the_key_and_keeps_stdout_json(tmp_path):
+    """A malformed base URL raises a non-SDK exception inside the Jev call.
+
+    The wrapper logs it with a traceback. The CLI's renderer must print a plain
+    traceback without frame locals: the frames hold the settings object and the
+    request, so a locals-printing renderer would put the key on stderr.
+    """
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(_csv(tmp_path)), "--json"],
+        cwd=ROOT,
+        env=_subprocess_env(
+            TYPESAFE_API_KEY=FAKE_KEY,
+            TYPESAFE_BASE_URL="https://api.example.com:abc",
+            REGENGINE_JEV_MAX_RETRIES="0",
+        ),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == "error"
+    assert FAKE_KEY not in result.stdout
+    assert FAKE_KEY not in result.stderr
+    assert "jev.header_mapping.error" in result.stderr
+
+
+def test_connection_failure_logs_to_stderr_and_exits_3(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(_csv(tmp_path)), "--json"],
+        cwd=ROOT,
+        env=_subprocess_env(
+            TYPESAFE_API_KEY=FAKE_KEY,
+            TYPESAFE_BASE_URL="http://127.0.0.1:1",
+            REGENGINE_JEV_MAX_RETRIES="0",
+            REGENGINE_JEV_TIMEOUT_SECONDS="2",
+        ),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 3, result.stderr
+    # The wrapper's warning goes to stderr; stdout is the JSON document only.
+    report = json.loads(result.stdout)
+    assert report["status"] == "unavailable:connection"
+    assert "jev.unavailable" in result.stderr
+    assert FAKE_KEY not in result.stdout + result.stderr
+
+
+def test_unparseable_base_url_host_does_not_break_the_report(script):
+    assert script._host("http://[::1") is None
+    assert script._host("https://gw.example.test:8443/v1") == "gw.example.test"
+    assert script._host(None) is None

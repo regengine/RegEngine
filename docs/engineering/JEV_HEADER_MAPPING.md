@@ -134,7 +134,16 @@ service, database or tenant, and it ingests, persists and queues nothing. It
 reads the variables in [Configuration](#configuration) and sends what the
 route sends: the header row, redacted sample values only if asked, never
 rows. Run it from the repo root in the Python environment used for the
-ingestion tests, because it imports `services/ingestion`:
+ingestion tests, because it imports `services/ingestion`. Without one, create
+it from the root lock file (the same install CI uses):
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install --require-hashes -r requirements.lock
+.venv/bin/python3 scripts/jev_header_preview.py path/to/supplier.csv --prompt-key
+```
+
+With the environment active, the short form is:
 
 ```bash
 python3 scripts/jev_header_preview.py path/to/supplier.csv
@@ -159,8 +168,9 @@ thresholds in force. The values shown are illustrative.
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
 
 Exit codes: `0` suggestions received, or no unrecognised headers (no request
-made); `1` bad usage, or an unreadable, oversized (over 5 MB) or non-UTF-8
-file; `2` not configured (`TYPESAFE_API_KEY` unset) or switched off
+made); `1` bad usage, an unreadable, oversized (over 5 MB) or non-UTF-8
+file (stdout stays empty, the message goes to stderr), or an unexpected error
+(status `error`, for example a malformed `TYPESAFE_BASE_URL`); `2` not configured (`TYPESAFE_API_KEY` unset) or switched off
 (`REGENGINE_JEV_ENABLED=0`); `3` vendor unavailable. For `2` and `3` the
 status (for example `unavailable:auth`) and a one-line hint go to stderr.
 

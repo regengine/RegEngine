@@ -74,8 +74,19 @@ def _configure_cli_logging() -> None:
     wrapper's ``jev.unavailable`` line still show. Only called when run as a
     script: importing this module (tests) changes no global logging state.
     """
+    # An explicit chain, not structlog's defaults: the default ConsoleRenderer
+    # uses rich tracebacks with local variables, which would print every
+    # frame's locals (settings, request bodies) on an unexpected exception.
+    # format_exc_info renders a plain traceback, as the services' own logging
+    # configuration does.
     structlog.configure(
-        processors=[_drop_irrelevant_import_notices, *structlog.get_config()["processors"]],
+        processors=[
+            _drop_irrelevant_import_notices,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=True),
+            structlog.processors.format_exc_info,
+            structlog.dev.ConsoleRenderer(colors=False, exception_formatter=structlog.dev.plain_traceback),
+        ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING),
         logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
     )
@@ -104,7 +115,7 @@ EXIT_NOT_CONFIGURED = 2
 EXIT_UNAVAILABLE = 3
 
 PROG = "jev_header_preview"
-KEY_PROMPT = "TypeSafe API key (input hidden): "
+KEY_PROMPT = "TypeSafe API key (hidden when typed at a terminal): "
 
 _UNAVAILABLE_HINTS = {
     "auth": f"The vendor rejected the key (401/403): check {API_KEY_ENV}.",
@@ -272,7 +283,7 @@ def _build_report(
             "questions_version": evidence.questions_version if evidence else None,
             "input_tokens": evidence.input_tokens if evidence else None,
             "output_tokens": evidence.output_tokens if evidence else None,
-            "base_url_host": urlsplit(settings.base_url).hostname if settings.base_url else None,
+            "base_url_host": _host(settings.base_url),
         },
         "policy": {
             "auto_apply_confidence": settings.auto_apply_confidence,
@@ -289,6 +300,16 @@ def _build_report(
         },
         "suggestions": suggestions,
     }
+
+
+def _host(url: str | None) -> str | None:
+    """Hostname of ``url`` for the report; ``None`` when absent or unparseable."""
+    if not url:
+        return None
+    try:
+        return urlsplit(url).hostname
+    except ValueError:
+        return None
 
 
 def _table(rows: Sequence[Sequence[str]]) -> list[str]:
@@ -324,8 +345,11 @@ def _render_text(report: dict[str, Any]) -> str:
         columns += f" ({request['truncated_columns']} over the per-upload cap, not asked)"
     lines.append(columns)
     if report["status"] == "ok" or report["status"].startswith("unavailable:"):
+        # On an unavailable status the request may never have left (connection
+        # refused, SDK-side refusal), so say what was attempted, not what was sent.
+        label = "Sent:   " if report["status"] == "ok" else "Attempted:"
         lines.append(
-            f"Sent:    header row; {request['sample_values_per_column']} redacted sample value(s) per "
+            f"{label} header row; {request['sample_values_per_column']} redacted sample value(s) per "
             "unrecognised column; no rows"
         )
     elif report["status"] in ("disabled", "no_unrecognized_headers"):
