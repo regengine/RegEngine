@@ -565,11 +565,6 @@ if _router_enabled("portal"):
 
     include_owned_router(app, portal_router, owner="portal", tags=["Supplier Portal"])
 
-if _router_enabled("inbound_email"):
-    from services.ingestion.app.routes_inbound_email import router as inbound_email_router
-
-    include_owned_router(app, inbound_email_router, owner="inbound_email", tags=["Inbound Email Webhook"])
-
 if _router_enabled("audit"):
     from services.ingestion.app.mock_audit import router as audit_router
 
