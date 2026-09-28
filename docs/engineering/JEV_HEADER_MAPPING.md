@@ -42,6 +42,7 @@ for coding-agent sessions.
 | Upload UI ("Import as <CTE>") | `frontend/src/lib/cte-suggestion.ts`, `frontend/src/components/fsma/CteSuggestionPrompt.tsx`, used by `/ingest` and the Data Import Hub |
 | Startup log | `server/main.py`: `jev_configured enabled=... key_present=... apply_header_mappings=... apply_file_cte_type=...` (never the key) |
 | Operator preview CLI | `scripts/jev_header_preview.py` (see [Preview suggestions on your own files](#preview-suggestions-on-your-own-files)) |
+| Evaluation on labelled data | `scripts/jev_eval.py` with `docs/engineering/examples/jev_eval_cases.json` (see [Measure Jev on RegEngine data](#measure-jev-on-regengine-data)) |
 | Tests | `services/shared/tests/test_jev_client.py`, `services/shared/tests/test_jev_header_mapping.py`, `services/shared/tests/test_jev_cte_classification.py`, `services/ingestion/tests/test_csv_jev_header_mapping.py`, `services/ingestion/tests/test_csv_jev_file_cte.py`, `services/ingestion/tests/test_jev_header_preview_script.py`, `frontend/src/__tests__/lib/cte-suggestion.test.ts` |
 
 Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email path
@@ -398,12 +399,62 @@ enter it silently for the current shell with
 in a password manager or the environment's secret variables, not in the
 repository. (`.env` is excluded from commits but is still plaintext on disk.)
 
+## Measure Jev on RegEngine data
+
+`scripts/jev_eval.py` scores both questions on labelled header rows before
+any apply switch goes on. The cases are:
+
+- RegEngine's seven CSV templates, built from `CTE_COLUMNS` and labelled with
+  their own CTE;
+- `docs/engineering/examples/jev_eval_cases.json`: 15 supplier-style header
+  rows (shipping, receiving, harvesting, cooling, initial packing,
+  transformation, first land-based receiving, two mixed or unclear files,
+  one with a per-row CTE column) with the acceptable CTE and about 100
+  acceptable canonical fields for unrecognised columns.
+
+Labels list every acceptable answer (`["quantity", "unit_of_measure"]` for
+`Pallets`). The headers are spelled as supplier exports spell them, not
+copied from the example headers in the question vocabulary, so the prompt
+does not grade itself. The loader rejects unknown labels, and a test fails
+if a labelled header is one the parser already reads (it would never be
+asked).
+
+```bash
+python3 scripts/jev_eval.py --prompt-key            # table
+python3 scripts/jev_eval.py --prompt-key --json     # machine-readable
+python3 scripts/jev_eval.py --cases mine.json --no-templates
+```
+
+Only header rows are sent (the cases hold no values; sample values are
+forced off). About 22 requests per question set, four at a time.
+
+For each question set the report gives:
+
+- accuracy over the answers;
+- mean confidence of right and wrong answers;
+- for thresholds 0.50 to 0.98: how many answers would be applied (they name
+  a CTE or a field; `mixed_or_unclear` and `no_match` apply nothing), how
+  many of those are wrong, precision and coverage;
+- every answer that would be applied at the current threshold and is wrong;
+- the recommended auto-apply threshold.
+
+The recommendation is the lowest swept threshold at or above 0.85 (the
+agent-artifact review floor) at which nothing applied was wrong. It is a
+starting floor on this data, not a guarantee: a set this size can show
+errors, never prove their absence. Add every real file that goes wrong to
+the cases file.
+
+Exit codes: 0 ran, 1 bad usage or cases file, 2 not configured, 3 vendor
+unavailable for at least one request.
+
 ## Rollout
 
 1. Set `TYPESAFE_API_KEY` on staging. Upload representative supplier files.
    Suggestions appear on the response and in Agent Reviews (filter: Field
    mapping). Nothing changes in the rows.
-2. Compare suggestions against the intended mappings. To check a file before
+2. Run `python3 scripts/jev_eval.py --prompt-key` and read the
+   recommendation and the wrong answers for both question sets. Compare
+   suggestions against the intended mappings. To check a file before
    (or without) uploading it, run the
    [preview](#preview-suggestions-on-your-own-files) on it; add
    `--simulate-apply` to see what apply mode would change. If `auto_apply`-band
@@ -457,7 +508,8 @@ reports `artifacts_recorded: 0`; it does not reject the upload.
 - 48 unrecognised columns per upload; more are ignored and counted in the
   log (`truncated_columns`).
 - Thresholds are the vendor's published starting points and have not been
-  validated on RegEngine data yet; that is step 2 of the rollout.
+  validated on RegEngine data yet; that is step 2 of the rollout
+  (`scripts/jev_eval.py`).
 - The file CTE question is skipped whenever a header is a per-row CTE
   column the parser reads, even if its values are blank or are not CTEs
   (a `Type` column of pallet types): those rows are still rejected with
@@ -467,7 +519,7 @@ reports `artifacts_recorded: 0`; it does not reject the upload.
 
 ```bash
 python3 -m pytest services/shared/tests/test_jev_client.py services/shared/tests/test_jev_header_mapping.py services/shared/tests/test_jev_cte_classification.py -q --no-cov
-python3 -m pytest services/ingestion/tests/test_csv_jev_header_mapping.py services/ingestion/tests/test_csv_jev_file_cte.py services/ingestion/tests/test_jev_header_preview_script.py -q --no-cov
+python3 -m pytest services/ingestion/tests/test_csv_jev_header_mapping.py services/ingestion/tests/test_csv_jev_file_cte.py services/ingestion/tests/test_jev_header_preview_script.py services/ingestion/tests/test_jev_eval_script.py -q --no-cov
 cd frontend && npx vitest run src/__tests__/lib/cte-suggestion.test.ts src/__tests__/pages/ingest-csv.test.tsx src/__tests__/pages/data-import.test.tsx
 ```
 
