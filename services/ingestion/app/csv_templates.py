@@ -23,7 +23,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from shared.agent_task_bridge import enqueue_agent_artifact_task
 from shared.database import SessionLocal
-from shared.jev import get_jev_decider
+from shared.jev import JevDecider, get_jev_decider
 from shared.jev.header_mapping import (
     QUESTIONS_VERSION as _JEV_QUESTIONS_VERSION,
     HeaderMappingResult,
@@ -878,9 +878,16 @@ def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], d
     return headers, collect_sample_values(data_rows, unknown, sample_limit)
 
 
-async def _suggest_header_mappings_for_upload(text: str) -> HeaderMappingResult:
-    """Ask Jev about the upload's unrecognised headers, off the event loop. Never raises."""
-    decider = get_jev_decider()
+async def _suggest_header_mappings_for_upload(
+    text: str, *, decider: Optional[JevDecider] = None
+) -> HeaderMappingResult:
+    """Ask Jev about the upload's unrecognised headers, off the event loop. Never raises.
+
+    ``decider`` defaults to the process-wide one (what the route uses).
+    ``scripts/jev_header_preview.py`` passes its own so operators can preview
+    this exact path against a local file without running the service.
+    """
+    decider = decider if decider is not None else get_jev_decider()
     if not decider.enabled:
         return HeaderMappingResult(status="disabled", thresholds=decider.settings.thresholds)
     try:
