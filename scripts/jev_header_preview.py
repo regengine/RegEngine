@@ -12,6 +12,7 @@ policy. Nothing is ingested, persisted or queued, and no database is used.
     python3 scripts/jev_header_preview.py supplier.csv --sample-values 2 --simulate-apply
     python3 scripts/jev_header_preview.py supplier.csv --prompt-key
     python3 scripts/jev_header_preview.py supplier.csv --cte-type shipping
+    python3 scripts/jev_header_preview.py receiving_template.csv --file-cte
 
 Configuration comes from the environment through ``shared.jev.JevSettings``
 (``TYPESAFE_API_KEY``, ``TYPESAFE_DEFAULT_MODEL``, ``TYPESAFE_BASE_URL`` and
@@ -27,12 +28,21 @@ report says when it was withheld and why), plus PII-redacted sample
 values per unrecognised column only when ``--sample-values`` (or
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0. Rows are never sent.
 
+``--file-cte`` also asks the question the route asks of an upload that
+declares no CTE (``_suggest_file_cte_for_upload``: which CTE every row
+records, from the header row), in a second request concurrent with the
+first, and adds a ``file_cte`` section to the report. It cannot be combined
+with ``--cte-type``: the route never asks when a CTE is declared.
+
 Exit codes:
-    0  suggestions received, or no unrecognised headers (no request made)
+    0  suggestions received, or no unrecognised headers (no request made); with
+       --file-cte, also the file-CTE answer received or the question not asked
     1  bad usage; unreadable, oversized or non-UTF-8 file; no header row; malformed header
        row (status malformed_header: nothing is sent, with or without a key); unexpected error
     2  Jev not configured (no TYPESAFE_API_KEY) or switched off (REGENGINE_JEV_ENABLED)
     3  Jev unavailable (auth, rate limit, timeout, connection, server error, ...)
+With --file-cte the exit code is the more severe of the two questions' codes
+(3, then 2, then 1).
 """
 
 from __future__ import annotations
@@ -102,9 +112,11 @@ if __name__ == "__main__":  # before the imports below can log anything
 from app import csv_templates as route  # noqa: E402
 from app.shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES  # noqa: E402
 from shared.jev import JevDecider, JevSettings  # noqa: E402
+from shared.jev.cte_classification import CteClassificationResult  # noqa: E402
 from shared.jev.header_mapping import MALFORMED_HEADER, HeaderMappingResult, unrecognized_headers  # noqa: E402
 from shared.jev.settings import (  # noqa: E402
     API_KEY_ENV,
+    APPLY_FILE_CTE_TYPE_ENV,
     APPLY_HEADER_MAPPINGS_ENV,
     ENABLED_ENV,
     HEADER_SAMPLE_VALUES_ENV,
@@ -188,7 +200,8 @@ def _parser() -> _Parser:
     parser.add_argument(
         "--simulate-apply",
         action="store_true",
-        help=f"compute would_apply as if {APPLY_HEADER_MAPPINGS_ENV}=1",
+        help=f"compute would_apply as if {APPLY_HEADER_MAPPINGS_ENV}=1 "
+        f"(and {APPLY_FILE_CTE_TYPE_ENV}=1 with --file-cte)",
     )
     parser.add_argument(
         "--prompt-key",
@@ -201,6 +214,12 @@ def _parser() -> _Parser:
         metavar="CTE",
         help="the CTE every row of the file records (for example shipping), as the route's cte_type "
         "form field; omit for mixed-type files",
+    )
+    parser.add_argument(
+        "--file-cte",
+        action="store_true",
+        help="also ask which CTE the file records, as the route does for an upload that declares none "
+        "(not with --cte-type)",
     )
     return parser
 
@@ -251,11 +270,13 @@ def _resolve_settings(
         overrides["header_sample_values"] = args.sample_values
     if args.simulate_apply:
         overrides["apply_header_mappings"] = True
+        if args.file_cte:
+            overrides["apply_file_cte_type"] = True
     return dataclasses.replace(settings, **overrides) if overrides else settings
 
 
 def _exit_code(status: str) -> int:
-    if status in ("ok", "no_unrecognized_headers"):
+    if status in ("ok", "no_unrecognized_headers", "per_row_cte_column"):
         return EXIT_OK
     if status == "disabled":
         return EXIT_NOT_CONFIGURED
@@ -278,9 +299,49 @@ def _hint(status: str, settings: JevSettings, prompted: bool, malformed: str | N
         return f"{ENABLED_ENV} switches Jev off: unset it or set it to 1."
     if status.startswith("unavailable:"):
         return _UNAVAILABLE_HINTS.get(status.split(":", 1)[1], "See the jev.unavailable line above.")
-    if status in ("ok", "no_unrecognized_headers"):
+    if status in ("ok", "no_unrecognized_headers", "per_row_cte_column"):
         return None
+    if status == "no_answer":
+        return "The response carried no answer for the question: re-run, or check the SDK version."
     return "Unexpected error while preparing the request: see the log lines above."
+
+
+# Most severe first: a report's exit code is the worst of its questions'.
+_EXIT_SEVERITY = (EXIT_UNAVAILABLE, EXIT_NOT_CONFIGURED, EXIT_USAGE, EXIT_OK)
+
+
+def _combined_exit_code(*codes: int) -> int:
+    return next(code for code in _EXIT_SEVERITY if code in codes)
+
+
+def _file_cte_report(
+    result: CteClassificationResult,
+    settings: JevSettings,
+    *,
+    simulated: bool,
+    prompted: bool,
+    malformed_header_reason: str | None,
+) -> dict[str, Any]:
+    """The ``file_cte`` section: what the route would report as ``cte_type_suggestion``, plus evidence."""
+    suggestion, evidence = result.suggestion, result.evidence
+    return {
+        "status": result.status,
+        "exit_code": _exit_code(result.status),
+        "hint": _hint(result.status, settings, prompted, malformed_header_reason),
+        "cte_type": suggestion.cte_type if suggestion else None,
+        "confidence": suggestion.confidence if suggestion else None,
+        "band": suggestion.band.value if suggestion else None,
+        "probabilities": dict(suggestion.probabilities) if suggestion else {},
+        # A preview applies nothing: ``would_apply`` means the route would use it for rows without a CTE.
+        "would_apply": suggestion.applied if suggestion else False,
+        "blocked_reason": suggestion.blocked_reason if suggestion else None,
+        "apply_enabled": result.apply_enabled,
+        "simulated_apply": simulated,
+        "model": evidence.model if evidence else None,
+        "request_id": evidence.request_id if evidence else None,
+        "latency_ms": evidence.latency_ms if evidence else None,
+        "questions_version": evidence.questions_version if evidence else None,
+    }
 
 
 def _build_report(
@@ -400,6 +461,9 @@ def _render_text(report: dict[str, Any]) -> str:
         lines.append(f"CTE:     --cte-type {verdict}: {request['file_cte_type_dropped']}")
     if unknown and not report["suggestions"]:
         lines.append("Unrecognised: " + ", ".join(unknown))
+    file_cte = report.get("file_cte")
+    if file_cte is not None:
+        lines.append(_render_file_cte(file_cte))
     if report["suggestions"]:
         rows = [["column", "suggested_field", "confidence", "band", "would_apply", "blocked_reason"]]
         for item in report["suggestions"]:
@@ -421,6 +485,32 @@ def _render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_file_cte(file_cte: dict[str, Any]) -> str:
+    status = file_cte["status"]
+    if status == "per_row_cte_column":
+        return "File CTE: not asked: the file has a per-row CTE column, so rows name their own CTE"
+    if status != "ok":
+        return f"File CTE: {status}"
+    if file_cte["cte_type"] is None:
+        verdict = "mixed or unclear, nothing to suggest"
+    else:
+        apply_note = "yes" if file_cte["would_apply"] else f"no ({file_cte['blocked_reason']})"
+        verdict = (
+            f"{file_cte['cte_type']} (confidence {file_cte['confidence']:.3f}, band {file_cte['band']}), "
+            f"would apply: {apply_note}"
+        )
+    return f"File CTE: {verdict}; request id {file_cte['request_id'] or 'n/a'}, latency {file_cte['latency_ms']} ms"
+
+
+async def _suggest_both(text: str, decider: JevDecider) -> tuple[HeaderMappingResult, CteClassificationResult]:
+    """Both questions the route asks of an upload that declares no CTE, concurrently as it does."""
+    header_mapping, file_cte = await asyncio.gather(
+        route._suggest_header_mappings_for_upload(text, decider=decider),
+        route._suggest_file_cte_for_upload(text, decider=decider),
+    )
+    return header_mapping, file_cte
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -431,6 +521,8 @@ def main(
     """Run the preview. ``env``, ``transport`` and ``read_key`` exist for offline tests."""
     try:
         args = _parser().parse_args(argv)
+        if args.file_cte and args.cte_type:
+            raise _UsageError("--file-cte asks what the route asks when no CTE is declared: drop --cte-type")
         text = _read_csv_text(args.csv_file)
         headers, malformed = _header_row(args.csv_file, text)
     except _UsageError as exc:
@@ -440,6 +532,7 @@ def main(
     settings = _resolve_settings(args, env, read_key)
     unknown: list[str] = []
     dropped: str | None = None
+    file_cte: CteClassificationResult | None = None
     if malformed:
         # The route's own check (_csv_headers_and_samples) says the "headers"
         # may be row data. The route sends nothing for such a file; the
@@ -447,12 +540,19 @@ def main(
         result = HeaderMappingResult(
             status=MALFORMED_HEADER, thresholds=settings.thresholds, apply_enabled=settings.apply_header_mappings
         )
+        if args.file_cte:
+            file_cte = CteClassificationResult(
+                status=MALFORMED_HEADER, thresholds=settings.thresholds, apply_enabled=settings.apply_file_cte_type
+            )
     else:
         decider = JevDecider(settings, transport=transport)
         try:
-            result = asyncio.run(
-                route._suggest_header_mappings_for_upload(text, decider=decider, cte_type=args.cte_type)
-            )
+            if args.file_cte:
+                result, file_cte = asyncio.run(_suggest_both(text, decider))
+            else:
+                result = asyncio.run(
+                    route._suggest_header_mappings_for_upload(text, decider=decider, cte_type=args.cte_type)
+                )
         finally:
             decider.close()
         unknown = unrecognized_headers(headers, route._RECOGNIZED_COLUMNS)
@@ -474,13 +574,27 @@ def main(
         file_cte_type_dropped=dropped,
         malformed_header_reason=malformed,
     )
+    if file_cte is not None:
+        # Only with --file-cte: without it the report is exactly what it was.
+        report["file_cte"] = _file_cte_report(
+            file_cte,
+            settings,
+            simulated=args.simulate_apply,
+            prompted=args.prompt_key,
+            malformed_header_reason=malformed,
+        )
+        report["exit_code"] = _combined_exit_code(report["exit_code"], report["file_cte"]["exit_code"])
 
     if args.json:
         print(json.dumps(report, indent=2))
     else:
         print(_render_text(report))
     if report["exit_code"] != EXIT_OK:
-        print(f"{PROG}: {report['status']}: {report['hint']}", file=sys.stderr)
+        if _exit_code(report["status"]) != EXIT_OK:
+            print(f"{PROG}: {report['status']}: {report['hint']}", file=sys.stderr)
+        file_report = report.get("file_cte")
+        if file_report is not None and file_report["exit_code"] != EXIT_OK:
+            print(f"{PROG}: file_cte {file_report['status']}: {file_report['hint']}", file=sys.stderr)
     return report["exit_code"]
 
 

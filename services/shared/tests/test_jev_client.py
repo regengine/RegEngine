@@ -197,6 +197,27 @@ def test_answers_convert_to_plain_results_with_evidence():
     assert dumped["scores"]["severity"]["legend"] == {"0": "low", "1": "medium", "2": "high"}
 
 
+def test_out_of_range_confidences_and_probabilities_are_clamped():
+    body = json.loads(json.dumps(GOOD_BODY))
+    body["answers"]["field"].update(confidence=1.0000001, probabilities={"lot_code": 1.2, "no_match": -0.2})
+    body["answers"]["is_date"]["noul"] = 1.5
+    body["answers"]["severity"]["confidence"] = -0.01
+
+    answers = _decider(lambda request: httpx2.Response(200, json=body)).ask(STATE, QUESTIONS, purpose="p")
+
+    assert answers.choices["field"].confidence == 1.0
+    assert answers.choices["field"].probabilities == {"lot_code": 1.0, "no_match": 0.0}
+    assert answers.nouls["is_date"].probability == 1.0
+    assert answers.scores["severity"].confidence == 0.0
+
+
+@pytest.mark.parametrize("value,expected", [(float("nan"), 0.0), (float("inf"), 0.0), (float("-inf"), 0.0), (0.5, 0.5)])
+def test_non_finite_values_read_as_no_confidence(value, expected):
+    from shared.jev.client import _unit
+
+    assert _unit(value) == expected
+
+
 def test_missing_request_id_header_is_tolerated():
     def handler(request):
         return httpx2.Response(200, json=GOOD_BODY)
@@ -352,6 +373,27 @@ def test_settings_parse_overrides_and_strip_whitespace():
     assert settings.timeout_seconds == 2.5
     assert settings.max_retries == 3
     assert settings.thresholds == ConfidenceThresholds(auto_apply=0.95, review=0.6)
+
+
+def test_public_summary_says_whether_a_key_is_set_never_the_key():
+    secret = "ts-summary-key-4c1d"  # pragma: allowlist secret
+    summary = JevSettings.from_env(
+        {"TYPESAFE_API_KEY": secret, "REGENGINE_JEV_APPLY_FILE_CTE_TYPE": "1"}
+    ).public_summary()
+
+    assert summary == {
+        "enabled": True,
+        "key_present": True,
+        "kill_switch": False,
+        "model": "jev-1.13.0",
+        "apply_header_mappings": False,
+        "apply_file_cte_type": True,
+        "header_sample_values": 0,
+    }
+    assert secret not in repr(summary)
+    off = JevSettings.from_env({"TYPESAFE_API_KEY": secret, "REGENGINE_JEV_ENABLED": "0"}).public_summary()
+    assert off["enabled"] is False and off["key_present"] is True and off["kill_switch"] is True
+    assert JevSettings.from_env({}).public_summary()["key_present"] is False
 
 
 def test_settings_repr_never_contains_the_api_key():

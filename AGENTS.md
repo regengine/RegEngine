@@ -59,6 +59,15 @@ Use plain work lanes such as backend, frontend, security, QA, infra, or docs whe
 - The repo has no `Makefile`, so do not suggest `make` commands.
 - Agents do not decide product direction. They execute scoped engineering tasks against the FSMA production spine.
 
+## Jev Sidecar
+
+Consult TypeSafe Jev alongside the user's requests.
+
+- When a request contains a judgment (which of these, is this true, how much), run `scripts/jev_ask.py` and report Jev's answer and confidence next to your own.
+- Run it with a Python that has `requirements.lock` installed. In Claude Code sessions that is `venv/bin/python`.
+- Follow `.claude/skills/jev-sidecar/SKILL.md` for when to ask, what never to send, and how to report.
+- It needs `TYPESAFE_API_KEY` in the environment. Without the key the script exits 2 and sends nothing: say so once and continue.
+
 ## Verification
 
 Choose the smallest useful verification for the changed surface:

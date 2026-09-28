@@ -123,6 +123,42 @@ export interface IngestCSVEventResult {
     errors: string[];
 }
 
+/**
+ * Jev's answer to "which CTE does every row of this CSV record?", sent when an
+ * upload declares no cte_type (CteTypeSuggestionResult in
+ * services/ingestion/app/webhook_models.py). Also carried in the 400 detail
+ * when no row parsed.
+ */
+export interface CteTypeSuggestion {
+    provider: string;
+    status: string;
+    cte_type: string | null;
+    confidence: number | null;
+    band: string | null;
+    applied: boolean;
+    blocked_reason: string | null;
+    model: string | null;
+    request_id: string | null;
+    questions_version: string | null;
+    apply_enabled: boolean;
+    artifacts_recorded: number;
+}
+
+/**
+ * Jev's reading of one CSV column the parser did not recognise
+ * (HeaderMappingSuggestionResult in services/ingestion/app/webhook_models.py).
+ * Also carried in the 400 detail when no row parsed.
+ */
+export interface HeaderMappingSuggestion {
+    source_header: string;
+    source_key: string;
+    canonical_field: string | null;
+    confidence: number;
+    band: string;
+    applied: boolean;
+    blocked_reason: string | null;
+}
+
 export interface IngestCSVResponse {
     total: number;
     accepted: number;
@@ -131,6 +167,8 @@ export interface IngestCSVResponse {
     ingestion_timestamp: string;
     kde_warnings?: string[];
     kde_warning_count?: number;
+    cte_type_suggestion?: CteTypeSuggestion | null;
+    header_mapping_suggestions?: HeaderMappingSuggestion[];
 }
 
 // Compliance

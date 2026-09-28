@@ -119,6 +119,9 @@ audit-findings-*.md
 # Agent / AI tool config (local-only)
 .agent/
 .agents/
+# Codex regenerates this per checkout from .mcp.json, .claude/settings.json and
+# .claude/agents/sentinel-*.md (external-agent-import-sync); those stay canonical.
+.codex/
 .claude/*
 !.claude/settings.json
 # Sentinel infrastructure travels with the repo (auditable, version-controlled).
@@ -127,11 +130,13 @@ audit-findings-*.md
 !.claude/commands/
 !.claude/commands/sentinel-*.md
 !.claude/sentinel_anchors.json
-# Vendored TypeSafe AI agent skill (MIT) for Jev integration work; other
+# Vendored TypeSafe AI agent skill (MIT) for Jev integration work, and the
+# Jev sidecar skill agents follow to consult Jev alongside requests; other
 # local skills stay untracked. See docs/engineering/JEV_HEADER_MAPPING.md.
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/typesafe-ai/
+!.claude/skills/jev-sidecar/
 .gemini/
 .swarm_memory/
 
