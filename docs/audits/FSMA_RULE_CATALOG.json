@@ -1,0 +1,596 @@
+{
+  "schema_version": 1,
+  "source": "services/shared/rules/seeds.py:FSMA_RULE_SEEDS",
+  "status": "pass",
+  "limitations": [
+    "This is a static structural audit of the built-in seed catalog.",
+    "It does not verify the legal accuracy or completeness of citations.",
+    "It does not compare seeds with rule definitions in a live database.",
+    "It does not verify runtime enforcement mode or deployed behavior."
+  ],
+  "summary": {
+    "total_rules": 37,
+    "legal_requirements": 28,
+    "operational_controls": 8,
+    "industry_standards": 1,
+    "unclassified_citations": 0,
+    "supported_evaluators": 37
+  },
+  "cte_coverage": {
+    "cooling": 13,
+    "first_land_based_receiving": 11,
+    "harvesting": 11,
+    "initial_packing": 14,
+    "receiving": 14,
+    "shipping": 15,
+    "transformation": 11
+  },
+  "findings": [],
+  "rules": [
+    {
+      "position": 1,
+      "title": "Receiving: TLC Source Reference Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "receiving"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1345(a)(7)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Request the traceability lot code source reference (GLN or business name) from your immediate supplier"
+    },
+    {
+      "position": 2,
+      "title": "Receiving: Immediate Previous Source Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "receiving"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1345(a)(4)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the business name and location of the entity that shipped this food to you"
+    },
+    {
+      "position": 3,
+      "title": "Receiving: Reference Document Required",
+      "severity": "warning",
+      "category": "source_reference",
+      "cte_types": [
+        "receiving"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1345(a)(8)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the reference document type and number (e.g., BOL #12345, Invoice #INV-2026-001)"
+    },
+    {
+      "position": 4,
+      "title": "Receiving: Receive Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "receiving"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1345(a)(6)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date the food was received at your facility"
+    },
+    {
+      "position": 5,
+      "title": "Shipping: Ship-From Location Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "shipping"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1340(a)(5)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the ship-from location (GLN preferred, or location description)"
+    },
+    {
+      "position": 6,
+      "title": "Shipping: Ship-To Location Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "shipping"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1340(a)(4)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the ship-to location (GLN preferred, or location description)"
+    },
+    {
+      "position": 7,
+      "title": "Shipping: Ship Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "shipping"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1340(a)(6)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date the food was shipped"
+    },
+    {
+      "position": 8,
+      "title": "Shipping: Reference Document Required",
+      "severity": "warning",
+      "category": "source_reference",
+      "cte_types": [
+        "shipping"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1340(a)(8)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the reference document type and number (BOL, invoice, or PO)"
+    },
+    {
+      "position": 9,
+      "title": "Harvesting: Harvest Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "harvesting"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1325(a)(1)(vii)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date of harvest"
+    },
+    {
+      "position": 10,
+      "title": "Harvesting: Farm Location Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "harvesting"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1325(a)(1)(iv)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the farm location description where food was harvested"
+    },
+    {
+      "position": 11,
+      "title": "Initial Packing: Packing Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "initial_packing"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1330(a)(15)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date of initial packing"
+    },
+    {
+      "position": 12,
+      "title": "Transformation: Transformation Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "transformation"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1350(a)(2)(iii)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date of transformation"
+    },
+    {
+      "position": 13,
+      "title": "Cooling: Cooling Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "cooling"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1325(b)(1)(v)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date of cooling"
+    },
+    {
+      "position": 14,
+      "title": "Cooling: Cooling Location Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "cooling"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1325(b)(1)(iv)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the description or GLN of the location where the food was cooled"
+    },
+    {
+      "position": 15,
+      "title": "Cooling: Temperature Reading Required",
+      "severity": "warning",
+      "category": "operational_quality",
+      "cte_types": [
+        "cooling"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "Operational cold-chain check",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Record the temperature achieved during cooling in °F or °C"
+    },
+    {
+      "position": 16,
+      "title": "Cooling: Temperature Within Cold-Chain Window",
+      "severity": "warning",
+      "category": "operational_quality",
+      "cte_types": [
+        "cooling"
+      ],
+      "evaluator_type": "numeric_range",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "Operational cold-chain check",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Verify whether the reading is in °C or °F, correct the unit if needed, and document the deviation/corrective action when the reading is truly outside the operator's accepted range."
+    },
+    {
+      "position": 17,
+      "title": "Initial Packing: Packing Location Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "initial_packing"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1330(a)(14)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the description or GLN of the initial-packing location"
+    },
+    {
+      "position": 18,
+      "title": "Initial Packing: Harvest Location Reference Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "initial_packing"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1330(a)(4)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the harvest location reference (GLN, farm name, or field identifier) this lot came from"
+    },
+    {
+      "position": 19,
+      "title": "First Land-Based Receiving: Entry Point Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "first_land_based_receiving"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1335(e)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the port or land-based entry point where the food was received"
+    },
+    {
+      "position": 20,
+      "title": "First Land-Based Receiving: Source Vessel / Origin Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "first_land_based_receiving"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "Operational source-vessel identification (supports 21 CFR §1.1335(d) harvest provenance)",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Record the source vessel name (for marine catch) or upstream origin reference for the incoming lot"
+    },
+    {
+      "position": 21,
+      "title": "TLC Must Be Present",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "Operational lot linkage (supports 21 CFR §1.1320; harvesting and cooling precede TLC assignment)",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Assign a traceability lot code to this event"
+    },
+    {
+      "position": 22,
+      "title": "Product Description Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §§1.1325(a)(1)(ii), 1.1325(b)(1)(ii), 1.1330(a)(12), 1.1335(b), 1.1340(a)(3), 1.1345(a)(3), 1.1350(a)(2)(iv)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the commodity and variety of the food (e.g., 'Romaine Lettuce, Whole Head')"
+    },
+    {
+      "position": 23,
+      "title": "Quantity and Unit of Measure Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §§1.1325(a)(1)(iii), 1.1325(b)(1)(iii), 1.1330(a)(13), 1.1335(c), 1.1340(a)(2), 1.1345(a)(2), 1.1350(a)(2)(v)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the quantity and unit of measure for this event"
+    },
+    {
+      "position": 24,
+      "title": "Location Identifier Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §§1.1325(a)(1)(iv), 1.1325(b)(1)(iv), 1.1330(a)(14), 1.1335(e), 1.1340(a)(5), 1.1345(a)(5), 1.1350(a)(2)(ii)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Provide at least one location identifier: GLN (preferred) or location description"
+    },
+    {
+      "position": 25,
+      "title": "GLN Format Validation",
+      "severity": "warning",
+      "category": "identifier_format",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "gs1_check_digit",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "GS1 General Specifications (GS1 check digit)",
+      "citation_class": "industry_standard",
+      "remediation_suggestion": "Verify the GLN is exactly 13 digits with a valid GS1 check digit"
+    },
+    {
+      "position": 26,
+      "title": "Shipping: TLC Source Reference Required",
+      "severity": "warning",
+      "category": "lot_linkage",
+      "cte_types": [
+        "shipping"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1340(a)(7)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the GLN or business name of the entity that assigned the traceability lot code"
+    },
+    {
+      "position": 27,
+      "title": "Transformation: Input TLCs Required",
+      "severity": "critical",
+      "category": "lot_linkage",
+      "cte_types": [
+        "transformation"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1350(a)(1)(i)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "List all input traceability lot codes that were combined or transformed into this new lot"
+    },
+    {
+      "position": 28,
+      "title": "Reference Document Required for All CTEs",
+      "severity": "warning",
+      "category": "source_reference",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §§1.1325(a)(1)(viii), 1.1325(b)(1)(vii), 1.1330(a)(16), 1.1335(g), 1.1340(a)(8), 1.1345(a)(8), 1.1350(a)(2)(vi)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record at least one reference document: bill of lading, invoice, purchase order, or production record"
+    },
+    {
+      "position": 29,
+      "title": "First Land-Based Receiving: Landing Date Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "first_land_based_receiving"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1335(f)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the date the seafood was landed (date vessel arrived at port)"
+    },
+    {
+      "position": 30,
+      "title": "Harvesting: Commodity and Variety Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "harvesting"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1325(a)(1)(ii)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the commodity and variety of the food harvested (e.g., 'Romaine Lettuce')"
+    },
+    {
+      "position": 31,
+      "title": "Receiving: Receiving Location Required",
+      "severity": "critical",
+      "category": "kde_presence",
+      "cte_types": [
+        "receiving"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1345(a)(5)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the location description where food was received (GLN preferred)"
+    },
+    {
+      "position": 32,
+      "title": "Initial Packing: Harvester Business Name Required",
+      "severity": "warning",
+      "category": "kde_presence",
+      "cte_types": [
+        "initial_packing"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1330(a)(7)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the harvester's business name and phone number"
+    },
+    {
+      "position": 33,
+      "title": "Initial Packing: Harvester Phone Required",
+      "severity": "warning",
+      "category": "kde_presence",
+      "cte_types": [
+        "initial_packing"
+      ],
+      "evaluator_type": "field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "21 CFR §1.1330(a)(7)",
+      "citation_class": "legal_requirement",
+      "remediation_suggestion": "Record the harvester's phone number"
+    },
+    {
+      "position": 34,
+      "title": "Temporal Order: CTE Chronology Must Be Causal",
+      "severity": "critical",
+      "category": "temporal_ordering",
+      "cte_types": [
+        "shipping",
+        "receiving",
+        "transformation",
+        "initial_packing",
+        "cooling"
+      ],
+      "evaluator_type": "temporal_order",
+      "evaluator_kind": "relational",
+      "evaluator_supported": true,
+      "citation_reference": "Operational integrity control (supports 21 CFR §§1.1325–1.1350 date KDE accuracy)",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Verify event timestamps — a later-stage CTE cannot occur before an earlier-stage CTE for the same traceability lot code"
+    },
+    {
+      "position": 35,
+      "title": "Identity Consistency: Product Must Not Change for Same TLC",
+      "severity": "warning",
+      "category": "lot_linkage",
+      "cte_types": [
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving"
+      ],
+      "evaluator_type": "identity_consistency",
+      "evaluator_kind": "relational",
+      "evaluator_supported": true,
+      "citation_reference": "Operational product identity consistency (supports 21 CFR §1.1320 lot linkage)",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Verify the product description matches across all events for this traceability lot code. If the product was legitimately transformed, use a transformation event"
+    },
+    {
+      "position": 36,
+      "title": "Mass Balance: Output Cannot Exceed Input for Same TLC",
+      "severity": "warning",
+      "category": "quantity_consistency",
+      "cte_types": [
+        "shipping",
+        "transformation"
+      ],
+      "evaluator_type": "mass_balance",
+      "evaluator_kind": "relational",
+      "evaluator_supported": true,
+      "citation_reference": "Operational integrity control (supports 21 CFR §1.1350(a)(1) quantity linkage)",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Verify quantities — you cannot ship more than was received/harvested for the same traceability lot code. Check for data entry errors or missing input events"
+    },
+    {
+      "position": 37,
+      "title": "FTL Classification: Product Must Be Classified",
+      "severity": "critical",
+      "category": "ftl_scoping",
+      "cte_types": [
+        "all"
+      ],
+      "evaluator_type": "multi_field_presence",
+      "evaluator_kind": "stateless",
+      "evaluator_supported": true,
+      "citation_reference": "Operational FTL classification (supports 21 CFR §1.1300 scope determination)",
+      "citation_class": "operational_control",
+      "remediation_suggestion": "Record ftl_covered (true/false) or the product's FTL category on every CTE so the compliance stamp only applies where required"
+    }
+  ]
+}
