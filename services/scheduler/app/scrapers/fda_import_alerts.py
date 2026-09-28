@@ -10,7 +10,7 @@ import hashlib
 import re
 import time
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import httpx
@@ -196,22 +196,7 @@ class FDAImportAlertsScraper(BaseScraper):
         items: List[EnforcementItem] = []
         seen_alert_numbers: set[str] = set()
 
-        for anchor in soup.find_all("a"):
-            href = anchor.get("href")
-            if not href:
-                continue
-
-            # get_text collapses nested markup (bold, spans) that
-            # historically broke the hand-rolled regex.
-            text = anchor.get_text(" ", strip=True)
-            if not text:
-                continue
-
-            parsed = self._extract_alert_from_anchor(text)
-            if parsed is None:
-                continue
-
-            alert_number, title = parsed
+        for alert_number, title, href in self._iter_alert_candidates(soup):
             if alert_number in seen_alert_numbers:
                 continue
             seen_alert_numbers.add(alert_number)
@@ -260,6 +245,56 @@ class FDAImportAlertsScraper(BaseScraper):
             )
 
         return items, warnings
+
+    @classmethod
+    def _iter_alert_candidates(cls, soup: BeautifulSoup) -> Iterator[Tuple[str, str, str]]:
+        """Yield ``(alert_number, title, href)`` from both known layouts.
+
+        Layout A (current, observed 2026-09): a table where the alert number
+        sits in its own ``<td>`` and the anchor text is only the title::
+
+            <tr><td>16-120</td><td>DWPE</td><td>09/15/2026</td>
+                <td><a href="importalert_25.html">"Detention …"</a></td></tr>
+
+        Layout B (legacy): the anchor text itself starts with the number,
+        e.g. ``<a href="…">16-120 - Detention …</a>``.
+        """
+        # Layout A — table rows keyed by a leading alert-number cell.
+        for row in soup.find_all("tr"):
+            cells = row.find_all("td")
+            if not cells:
+                continue
+            match = _ALERT_NUMBER_PATTERN.match(cells[0].get_text(" ", strip=True))
+            if not match:
+                continue
+            anchor = row.find("a", href=True)
+            if anchor is None:
+                continue
+            title = cls._clean_title(anchor.get_text(" ", strip=True))
+            yield match.group(1), title, anchor["href"]
+
+        # Layout B — number embedded in the anchor text.
+        for anchor in soup.find_all("a"):
+            href = anchor.get("href")
+            if not href:
+                continue
+            # get_text collapses nested markup (bold, spans) that
+            # historically broke the hand-rolled regex.
+            text = anchor.get_text(" ", strip=True)
+            if not text:
+                continue
+            parsed = cls._extract_alert_from_anchor(text)
+            if parsed is None:
+                continue
+            yield parsed[0], parsed[1], href
+
+    @staticmethod
+    def _clean_title(title: str) -> str:
+        """Strip FDA's wrapping quotes and ``***emphasis***`` markers."""
+        title = title.replace("***", "").strip().strip('"').strip()
+        if len(title) > 400:
+            title = title[:400].rstrip() + "…"
+        return title
 
     @staticmethod
     def _extract_alert_from_anchor(text: str) -> Optional[Tuple[str, str]]:

@@ -42,6 +42,11 @@ flowchart LR
 - The worker applies the tenant RLS context before touching the ledger.
 - The worker persists the validated artifact in `fsma.agent_artifacts` before
   recording ledger metadata.
+- Redelivery is idempotent: the insert arbitrates on
+  `ON CONFLICT (artifact_id, tenant_id)` and a task whose artifact is already
+  recorded appends no second receipt (`skip_reason='artifact_already_recorded'`).
+  An `artifact_id` that belongs to another tenant fails on the primary key
+  instead of being dropped silently.
 - Ledger receipts are advisory only. They do not apply the suggestion, alter
   canonical events, mutate evidence attachments, or change export artifacts.
 

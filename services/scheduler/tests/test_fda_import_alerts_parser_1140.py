@@ -333,3 +333,43 @@ class TestFDAImportAlertsParser_Issue1140:
             assert result.warnings == []
         finally:
             scraper.close()
+
+
+# ---------------------------------------------------------------------------
+# 2026-09 layout: alert number in its own <td>, anchor text is title only.
+# Before this fix the live page parsed to zero items for 35+ runs.
+# ---------------------------------------------------------------------------
+
+TABLE_LAYOUT_HTML = f"""\
+<html><head><title>Import Alerts by Number</title></head><body>
+{_PLAUSIBLE_PADDING}
+<table><tbody>
+  <tr><td>03-05</td><td>DWPE</td><td>07/28/2025</td>
+      <td><a href="importalert_3.html">"Detention Without Physical Examination of Papad and Farfar Wafers From India"</a></td></tr>
+  <tr><td>09/15/2026</td>
+      <td><a href="importalert_23.html">"Detention Without Physical Examination of Fish (no number row)"</a></td></tr>
+  <tr><td>16-120</td><td>DWPE</td><td>09/15/2026</td>
+      <td><a href="importalert_25.html">"Detention Without Physical Examination of ***Fish and Fishery*** Products"</a></td></tr>
+</tbody></table>
+<p>Import Alert listing</p>
+</body></html>
+"""
+
+
+class TestFDAImportAlertsTableLayout:
+    def setup_method(self):
+        self.scraper = FDAImportAlertsScraper()
+
+    def test_table_rows_parsed(self):
+        items, warnings = self.scraper.parse_html(TABLE_LAYOUT_HTML)
+        numbers = [i.raw_data["alert_number"] for i in items]
+        assert numbers == ["03-05", "16-120"]
+        assert warnings == []
+
+    def test_title_cleaned_and_url_resolved(self):
+        items, _ = self.scraper.parse_html(TABLE_LAYOUT_HTML)
+        by_num = {i.raw_data["alert_number"]: i for i in items}
+        assert by_num["16-120"].raw_data["raw_title"] == (
+            "Detention Without Physical Examination of Fish and Fishery Products"
+        )
+        assert by_num["03-05"].url == "https://www.accessdata.fda.gov/cms_ia/importalert_3.html"
