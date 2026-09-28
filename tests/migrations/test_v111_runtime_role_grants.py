@@ -1664,6 +1664,12 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("fsma", "sha256_text_array_is_valid"),
             ("fsma", "compute_ingestion_run_receipt_payload_hash"),
             ("fsma", "compute_ingestion_run_receipt_hash"),
+            # email_ingest (v121/v122): created after v111, granted when
+            # scripts/run-migrations.sh reapplies the cutover at head.
+            ("fsma", "get_tenant_by_inbound_address"),
+            ("fsma", "get_inbound_email_audit_by_message_id"),
+            ("fsma", "claim_inbound_email_audit"),
+            ("fsma", "finalize_inbound_email_audit"),
         },
         "regengine_sysadmin": {
             ("public", "get_tenant_context"),
@@ -1671,9 +1677,26 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("public", "set_admin_context"),
         },
     }
+    # role_routine_grants is keyed by name, which cannot tell the granted
+    # sender-allowlisted lookup from the denied recipient-only overload.
+    email_ingest_signatures = (
+        "fsma.get_tenant_by_inbound_address(text, text)",
+        "fsma.get_inbound_email_audit_by_message_id(text)",
+        "fsma.claim_inbound_email_audit(uuid, text, text, text, text, integer)",
+        "fsma.finalize_inbound_email_audit(text, uuid, text, text, integer, integer, integer, jsonb)",
+    )
     with owner_engine.connect() as connection:
         if connection.execute(text("SELECT to_regprocedure('public.get_invite_tenant_by_token_hash(text)')")).scalar():
             expected_direct["regengine_sysadmin"].add(("public", "get_invite_tenant_by_token_hash"))
+        for signature in email_ingest_signatures:
+            assert connection.execute(
+                text("SELECT has_function_privilege('regengine', :signature, 'EXECUTE')"),
+                {"signature": signature},
+            ).scalar_one(), signature
+            assert not connection.execute(
+                text("SELECT has_function_privilege('regengine_sysadmin', :signature, 'EXECUTE')"),
+                {"signature": signature},
+            ).scalar_one(), signature
         for role, expected in expected_direct.items():
             actual = set(
                 connection.execute(
@@ -1824,12 +1847,27 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
     disabled_tables = (
         "public.compliance_notifications",
         "public.compliance_status_log",
+        # inbound_email router (8301f3cad96a): recipient-only tenant mapping.
+        "fsma.tenant_inbound_email_addresses",
     )
-    disabled_functions = (
+    disabled_functions = [
         "fsma.get_remediation_token_by_hash(text)",
         "fsma.get_remediation_token_by_session_hash(text)",
-    )
+    ]
+    runtime_statements = [
+        "SELECT * FROM public.compliance_notifications LIMIT 1",
+        "SELECT * FROM public.compliance_status_log LIMIT 1",
+        "SELECT * FROM fsma.tenant_inbound_email_addresses LIMIT 1",
+        "SELECT fsma.get_remediation_token_by_hash('disabled')",
+        "SELECT fsma.get_remediation_token_by_session_hash('disabled')",
+    ]
     with owner_engine.connect() as connection:
+        # The recipient-only overload exists only when 8301f3cad96a ran after
+        # v122 (incremental upgrades); a fresh chain drops it. Where it exists,
+        # it must stay denied: it resolves a tenant without v122's sender check.
+        if connection.execute(text("SELECT to_regprocedure('fsma.get_tenant_by_inbound_address(text)')")).scalar():
+            disabled_functions.append("fsma.get_tenant_by_inbound_address(text)")
+            runtime_statements.append("SELECT * FROM fsma.get_tenant_by_inbound_address('disabled@example.test')")
         for table_name in disabled_tables:
             for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                 assert not connection.execute(
@@ -1844,12 +1882,7 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
 
     runtime = create_engine(_sync_url(RUNTIME_URL), pool_pre_ping=True)
     try:
-        for statement in (
-            "SELECT * FROM public.compliance_notifications LIMIT 1",
-            "SELECT * FROM public.compliance_status_log LIMIT 1",
-            "SELECT fsma.get_remediation_token_by_hash('disabled')",
-            "SELECT fsma.get_remediation_token_by_session_hash('disabled')",
-        ):
+        for statement in runtime_statements:
             with (
                 runtime.connect() as connection,
                 pytest.raises(
