@@ -167,6 +167,34 @@ thresholds in force. The values shown are illustrative.
 | `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`. Nothing else changes. |
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
 
+### Demo file
+
+`docs/engineering/examples/jev_demo_shipping.csv` is a synthetic shipping
+file (fictional companies marked "(demo)", lot codes `DEMO-JEV-*`). It
+carries every column the parser needs, so it is valid on its own, plus seven
+extra headers the parser does not recognise. Those seven are what Jev is
+asked about; the intended answers are:
+
+| Header | Intended field |
+| --- | --- |
+| `Lot #` | `traceability_lot_code` |
+| `Item Desc` | `product_description` |
+| `Qty Shpd` | `quantity` |
+| `Ship Dt` | `ship_date` |
+| `Ship-To GLN` | `ship_to_gln` |
+| `Trucking Co` | `carrier` |
+| `Internal Notes` | `no_match` |
+
+```bash
+python3 scripts/jev_header_preview.py docs/engineering/examples/jev_demo_shipping.csv --prompt-key
+```
+
+With `--simulate-apply` and answers in the `auto_apply` band, the four
+headers whose canonical column is already in the file (`Lot #`, `Item Desc`,
+`Qty Shpd`, `Ship Dt`) stay blocked with `target_present`, and `Ship-To GLN`
+and `Trucking Co` show `would_apply: yes`, since the file has no
+`ship_to_gln` or `carrier` column. `Internal Notes` is never applied.
+
 Exit codes: `0` suggestions received, or no unrecognised headers (no request
 made); `1` bad usage, an unreadable, oversized (over 5 MB) or non-UTF-8
 file (stdout stays empty, the message goes to stderr), or an unexpected error
