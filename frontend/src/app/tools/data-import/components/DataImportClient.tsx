@@ -28,6 +28,8 @@ import { apiClient } from '@/lib/api-client';
 import type { IngestCSVResponse } from '@/types/api';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { toast } from '@/components/ui/use-toast';
+import { CteSuggestionPrompt } from '@/components/fsma/CteSuggestionPrompt';
+import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -96,7 +98,11 @@ export function DataImportClient() {
     // Real file upload state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadState, setUploadState] = useState<UploadState>('idle');
-    const [uploadResult, setUploadResult] = useState<{ data?: IngestCSVResponse; error?: string } | null>(null);
+    const [uploadResult, setUploadResult] = useState<{
+        data?: IngestCSVResponse;
+        error?: string;
+        cteSuggestion?: ActionableCteSuggestion | null;
+    } | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
 
@@ -140,17 +146,23 @@ export function DataImportClient() {
         setUploadResult(null);
     }, []);
 
-    const handleUpload = useCallback(async () => {
+    // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
+    // confirming the CTE Jev suggested for a file the server rejected.
+    const handleUpload = useCallback(async (cteType?: string) => {
         if (!selectedFile) return;
         setUploadState('uploading');
         setUploadResult(null);
         try {
             const effectiveKey = apiKey || '';
-            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub');
+            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub', cteType);
             setUploadResult({ data: result });
             setUploadState(result.accepted === 0 ? 'error' : result.rejected > 0 ? 'partial' : 'success');
         } catch (err: unknown) {
-            setUploadResult({ error: err instanceof Error ? err.message : 'Upload failed' });
+            setUploadResult({
+                error: err instanceof Error ? err.message : 'Upload failed',
+                // A declared CTE is never second-guessed.
+                cteSuggestion: cteType ? null : cteSuggestionFromUploadError(err),
+            });
             setUploadState('error');
         }
     }, [selectedFile, apiKey]);
@@ -360,7 +372,7 @@ export function DataImportClient() {
                                 {/* Upload button */}
                                 {selectedFile && (
                                     <Button
-                                        onClick={handleUpload}
+                                        onClick={() => void handleUpload()}
                                         disabled={uploadState === 'uploading'}
                                         size="lg"
                                         className="w-full"
@@ -407,6 +419,12 @@ export function DataImportClient() {
                                                 )}
                                                 {uploadResult.error && (
                                                     <div className="text-small">{uploadResult.error}</div>
+                                                )}
+                                                {uploadResult.cteSuggestion && (
+                                                    <CteSuggestionPrompt
+                                                        suggestion={uploadResult.cteSuggestion}
+                                                        onImport={(cte) => void handleUpload(cte)}
+                                                    />
                                                 )}
                                             </Callout>
                                         </motion.div>

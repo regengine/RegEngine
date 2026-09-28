@@ -150,6 +150,26 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("connector_registration_skipped", error=str(exc))
 
+    # Whether the optional TypeSafe Jev integration is live, so an operator
+    # can confirm a newly added TYPESAFE_API_KEY from the deploy logs without
+    # reading the variable. Logs switches only, never the key.
+    try:
+        from shared.jev import JevSettings
+
+        jev = JevSettings.from_env()
+        logger.info(
+            "jev_configured",
+            enabled=jev.enabled,
+            key_present=bool(jev.api_key),
+            kill_switch=not jev.enabled_flag,
+            model=jev.model,
+            apply_header_mappings=jev.apply_header_mappings,
+            apply_file_cte_type=jev.apply_file_cte_type,
+            header_sample_values=jev.header_sample_values,
+        )
+    except Exception as exc:
+        logger.warning("jev_config_probe_failed", error=str(exc))
+
     # Runtime DB-role gate. Production always fails closed if either role is
     # unknown, unexpected, SUPERUSER/BYPASSRLS, or connected to a different
     # PostgreSQL database. REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 keeps the same

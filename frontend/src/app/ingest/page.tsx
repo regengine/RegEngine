@@ -34,6 +34,8 @@ import {
   Landmark,
   Scale
 } from 'lucide-react';
+import { CteSuggestionPrompt } from '@/components/fsma/CteSuggestionPrompt';
+import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 import { NormalizedDocumentViewer } from './NormalizedDocumentViewer';
 import { readSandboxHandoffFromSession } from './sandbox-handoff';
 
@@ -106,6 +108,7 @@ export default function IngestPage() {
   const [file, setFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
+  const [cteSuggestion, setCteSuggestion] = useState<ActionableCteSuggestion | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
 
@@ -118,6 +121,7 @@ export default function IngestPage() {
       setFile(e.target.files[0]);
       setCsvResult(null);
       setCsvError(null);
+      setCteSuggestion(null);
     }
   };
 
@@ -151,8 +155,10 @@ export default function IngestPage() {
     return () => window.clearInterval(intervalId);
   }, [jobId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
+  // confirming the CTE Jev suggested for a file the server rejected.
+  const handleSubmit = async (e?: React.FormEvent, cteType?: string) => {
+    e?.preventDefault();
     if (!apiKey) return;
     if (activeTab === 'url' && !url) return;
     if (activeTab === 'file' && !file) return;
@@ -180,6 +186,7 @@ export default function IngestPage() {
       setStatusError(null);
       setCsvResult(null);
       setCsvError(null);
+      setCteSuggestion(null);
 
       // Demonstration Override for the Sales Demo flow
       if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
@@ -195,7 +202,7 @@ export default function IngestPage() {
       try {
         if (activeTab === 'file') {
           if (!file) return;
-          const result = await ingestFileMutation.mutateAsync({ apiKey, file });
+          const result = await ingestFileMutation.mutateAsync({ apiKey, file, cteType });
           setCsvResult(result);
           if (result.accepted > 0) notifyDashboardRefresh();
           return;
@@ -212,6 +219,9 @@ export default function IngestPage() {
       } catch (error) {
         if (activeTab === 'file') {
           setCsvError(error instanceof Error ? error.message : 'CSV upload failed');
+          // Only offered when the server rejected an undeclared file: a
+          // declared CTE is never second-guessed.
+          setCteSuggestion(cteType ? null : cteSuggestionFromUploadError(error));
         } else {
           console.error('Ingestion failed:', error);
         }
@@ -589,6 +599,13 @@ export default function IngestPage() {
                       <p className="mt-1">
                         {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
                       </p>
+                      {activeTab === 'file' && cteSuggestion && (
+                        <CteSuggestionPrompt
+                          suggestion={cteSuggestion}
+                          disabled={isPending}
+                          onImport={(cte) => void handleSubmit(undefined, cte)}
+                        />
+                      )}
                       <p className="mt-2">
                         Common issues:
                       </p>
