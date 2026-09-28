@@ -718,10 +718,39 @@ def parse_csv_rows(
     kde_warnings: list[str] = []
     MAX_CSV_ROWS = 500
 
-    for row_num, row in enumerate(reader, start=2):
+    # Read the header and every record the loop below can reach before
+    # touching any row: a file the csv module cannot read (CR-only line
+    # endings, a field over csv.field_size_limit(), usually from an unclosed
+    # quote) is rejected whole with its line named, never partially ingested.
+    records: list[dict] = []
+    try:
+        header = reader.fieldnames
+        for record in reader:
+            records.append(record)
+            if len(records) > MAX_CSV_ROWS:
+                break
+    except csv.Error as exc:
+        line = reader.reader.line_num
+        logger.warning("csv_unreadable line=%s error=%s", line, exc)
+        return (
+            [],
+            [
+                f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
+                f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
+            ],
+            [],
+        )
+    if header is not None and not any(name.strip() for name in header):
+        return [], ["CSV has no header row: the first line must list the column names"], []
+
+    for row_num, row in enumerate(records, start=2):
         if row_num - 1 > MAX_CSV_ROWS:
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
             break
+        # DictReader files values past the last header column under the None
+        # restkey. A non-blank one rejects the row below rather than being
+        # dropped; blank ones (a trailing comma) carry nothing and are ignored.
+        extra_values = row.pop(None, None) or []
         row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
         if header_mapping:
             for source_key, canonical_field in header_mapping.items():
@@ -730,6 +759,12 @@ def parse_csv_rows(
                     row[canonical_field] = value
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
+            continue
+        if any(value.strip() for value in extra_values):
+            parse_errors.append(
+                f"Row {row_num}: has more fields than the header "
+                f"({len(header) + len(extra_values)} fields, header has {len(header)})"
+            )
             continue
         if not any(row.values()):
             continue
