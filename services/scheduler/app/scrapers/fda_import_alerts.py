@@ -60,6 +60,7 @@ _PLAUSIBILITY_KEYWORDS: Tuple[str, ...] = ("Import Alert", "import alert")
 #   "16-120-01"   — with numeric subcategory
 # So: <1-3 digits>-<1-4 digits>(-<alnum>)?
 _ALERT_NUMBER_PATTERN = re.compile(r"^\s*(\d{1,3}-\d{1,4}(?:-[A-Za-z0-9]+)?)\b")
+_ALERT_NUMBER_ONLY_PATTERN = re.compile(r"(\d{1,3}-\d{1,4}(?:-[A-Za-z0-9]+)?)")
 
 # Separator between alert number and title. FDA has used ASCII hyphen, en-dash,
 # em-dash, and colon at various times.
@@ -264,7 +265,10 @@ class FDAImportAlertsScraper(BaseScraper):
             cells = row.find_all("td")
             if not cells:
                 continue
-            match = _ALERT_NUMBER_PATTERN.match(cells[0].get_text(" ", strip=True))
+            # The first cell must be ONLY an alert number. A legacy row that
+            # puts "16-120 - Title" in one cell is left to Layout B, which
+            # splits number from title correctly.
+            match = _ALERT_NUMBER_ONLY_PATTERN.fullmatch(cells[0].get_text(" ", strip=True))
             if not match:
                 continue
             anchor = row.find("a", href=True)
