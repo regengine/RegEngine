@@ -380,7 +380,12 @@ jobs:
       - preflight
       - changes
       - contract
-    if: always()
+    # Run when a needed job failed so this gate still posts failure. Skip only
+    # when the workflow itself was cancelled by a newer push. In that case the
+    # replacement run owns the gate; this run must not fail the SHA for
+    # jobs that were aborted mid-flight. `!cancelled()` does not relax the
+    # script below: every dependency still has to be success or skipped.
+    if: always() && !cancelled()
 
     steps:
       - name: Require contract decision
