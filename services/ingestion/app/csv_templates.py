@@ -732,6 +732,10 @@ def parse_csv_rows(
         if row_num - 1 > MAX_CSV_ROWS:
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
             break
+        # DictReader files values past the last header column under the None
+        # restkey. A non-blank one rejects the row below rather than being
+        # dropped; blank ones (a trailing comma) carry nothing and are ignored.
+        extra_values = row.pop(None, None) or []
         row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
         if header_mapping:
             for source_key, canonical_field in header_mapping.items():
@@ -740,6 +744,12 @@ def parse_csv_rows(
                     row[canonical_field] = value
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
+            continue
+        if any(value.strip() for value in extra_values):
+            parse_errors.append(
+                f"Row {row_num}: has more fields than the header "
+                f"({len(header) + len(extra_values)} fields, header has {len(header)})"
+            )
             continue
         if not any(row.values()):
             continue
