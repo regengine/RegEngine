@@ -255,8 +255,8 @@ left untouched as an archive, and the script refuses to target it. This avoids
 transferring ownership, recreating extensions, and running the irreversible
 old-revision data migrations (v088, v090, v091, v094).
 
-From the repository root on a machine with the Railway CLI (logged in), `psql`
-and `python3`:
+Run it from the repository root. It needs the Railway CLI 5.47.2 or newer
+(logged in), `psql` and `python3`:
 
 ```bash
 bash scripts/railway/bootstrap_staging_database.sh            # dry run: read-only checks + full plan
@@ -264,39 +264,74 @@ bash scripts/railway/bootstrap_staging_database.sh --apply    # execute
 bash scripts/railway/bootstrap_staging_database.sh --apply --redeploy   # execute, then redeploy RegEngine
 ```
 
-The script refuses any environment other than exactly `staging` (production is
-always refused). It targets project `4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51` unless
-`--project` says otherwise. `--apply` does the following:
+The script refuses a run, before writing anything, in each of these cases:
 
-1. As the Postgres template superuser, reached only inside
-   `railway run -s Postgres`, it creates or pins the three roles with the
-   attributes in section 1 and revokes any membership involving them. It sets
-   fresh random passwords, sent to the server as SCRAM verifiers. It creates
-   the database from `template0` if it is absent and grants `CONNECT`. It pins
-   `search_path = public, fsma, extensions` and `timezone = UTC` for the
-   migrator in that database only; these are the session defaults CI passes
-   through `PGOPTIONS`.
+- The environment is not exactly `staging`. Production is always refused.
+- `--database` does not match `^regengine_[a-z0-9_]+$`.
+- The Railway CLI is older than 5.47.2. Older CLIs hide sealed variables, so
+  existing secrets would be regenerated.
+- `railway run` does not report exactly this project
+  (`4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51` unless `--project` says otherwise)
+  and environment.
+- The Postgres service's `DATABASE_PUBLIC_URL` is not that service's own
+  `RAILWAY_TCP_PROXY_DOMAIN:RAILWAY_TCP_PROXY_PORT`.
+- The server is older than PostgreSQL 15.
+- A pre-existing `regengine*` role is used outside the target database. That
+  covers objects, privileges or settings in other databases, open sessions
+  there, and role memberships. Roles are cluster-wide, so changing such a role
+  needs `--adopt-existing-roles` after review. The dry run lists what it found.
+
+`--apply` then does the following:
+
+1. As the Postgres template superuser, it pins the three roles with the
+   attributes in section 1 and revokes their memberships. The pinned
+   attributes add VALID UNTIL `infinity`, no connection limit, and no
+   role-level settings. It then creates the database from `template0` if it
+   is absent, runs `REVOKE ALL ... FROM PUBLIC`, and grants `CONNECT` to the
+   three roles. It pins `search_path = public, fsma, extensions` and
+   `timezone = UTC` for the migrator in that database only; these are the
+   session defaults CI passes through `PGOPTIONS`.
+   The superuser URL is used only inside the process that
+   `railway run -s Postgres` starts. A launcher there turns the URL into libpq
+   environment variables with `PGSSLMODE=require`. The URL and password never
+   appear in a command line, in the output, or in a file. Every connection
+   through the public proxy requires TLS. A timeout or Ctrl-C kills the whole
+   child process group, including psql. Every session sets
+   `client_connection_check_interval`, so the server also drops the session
+   and rolls back its open transaction.
 2. It logs in as `regengine_migrator` and creates `get_tenant_context()` with
    the same body the backend-ci live-db-suite seeds for a fresh chain.
-3. It proves that `regengine` and `regengine_sysadmin` can log in.
-4. It stores `MIGRATIONS_DATABASE_URL`, `DATABASE_URL` and `ADMIN_DATABASE_URL`
-   on RegEngine, pointing at the new database through `${{Postgres.PGHOST}}`
-   and `${{Postgres.PGPORT}}`.
-5. It generates `AUTH_OTP_HMAC_SECRET`, `AUDIT_INTEGRITY_KEY` and
-   `TOOL_ACCESS_SECRET` only when missing. It always sets `REGENGINE_ENV=staging`,
+3. It logs in as `regengine` and `regengine_sysadmin` to prove their passwords.
+4. It writes the RegEngine variables in this order: `DATABASE_URL`,
+   `ADMIN_DATABASE_URL` (both through `${{Postgres.PGHOST}}` and
+   `${{Postgres.PGPORT}}`), then `AUTH_OTP_HMAC_SECRET`, `AUDIT_INTEGRITY_KEY`
+   and `TOOL_ACCESS_SECRET` (only when missing), then `REGENGINE_ENV=staging`,
    `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` and
-   `REGENGINE_MIGRATIONS_ROLE=regengine_migrator`. It sets
-   `REDIS_URL=${{Redis.REDIS_URL}}` only when missing.
+   `REGENGINE_MIGRATIONS_ROLE=regengine_migrator`, then
+   `REDIS_URL=${{Redis.REDIS_URL}}` (only when missing). `MIGRATIONS_DATABASE_URL`
+   goes last.
 
-Every value goes to `railway variable set NAME --stdin --skip-deploys`, never
-into argv or output. Presence checks read variable names only. Afterwards,
-seal the six secret variables in the dashboard and deploy once. The first
-deploy logs `DB state: FRESH`, migrates to head, then logs
+Railway CLI writes are not staged. They are live at once, and the next deploy,
+including one triggered by a push, uses them. `--skip-deploys` only stops the
+CLI itself from starting one. Writing `MIGRATIONS_DATABASE_URL` last means a
+deploy that starts mid-run stops harmlessly at `run-migrations.sh` (exit 64).
+Every value goes to `railway variable set NAME --stdin`. To check what exists,
+the script reads the raw variable values into memory. It prints names only,
+never values.
+
+Passwords change only for roles the run creates, or for all three roles with
+`--rotate-passwords`. An existing role keeps its password only when its URL
+variable is readable, names that role and `regengine_staging`, and actually
+logs in. If the variable is missing, sealed, or points elsewhere, the run
+refuses until `--rotate-passwords` is given. After any rotation, redeploy.
+Once you seal the URLs, a re-run therefore needs `--rotate-passwords`. If a run
+fails after changing passwords, it says so; re-run with
+`--apply --rotate-passwords`.
+
+Afterwards, seal the six secret variables in the dashboard and deploy once.
+The first deploy logs `DB state: FRESH`, migrates to head, then logs
 `runtime role cutover applied as role=regengine_migrator database=regengine_staging`
 before gunicorn starts. `/readiness` should then return 200.
-
-Every step converges, so re-run the same command after a partial failure. Each
-`--apply` rotates the three database passwords and re-stores the matching URLs,
-so redeploy after any re-run. `tests/scripts/test_bootstrap_staging_database.py`
-covers the refusal, dry-run, stdin-only and presence-parsing behavior without
-Docker.
+`tests/scripts/test_bootstrap_staging_database.py` covers the guards, the
+write order, stdin-only values, password handling and process cleanup, all
+without Docker.

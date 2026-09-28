@@ -4,8 +4,10 @@
 #   bash scripts/railway/bootstrap_staging_database.sh            # dry run (default)
 #   bash scripts/railway/bootstrap_staging_database.sh --apply    # execute
 #   bash scripts/railway/bootstrap_staging_database.sh --apply --redeploy
+#   ... --rotate-passwords        set new passwords for existing roles (then redeploy)
+#   ... --adopt-existing-roles    change pre-existing roles used outside the target DB
 #
-# Requires: Railway CLI (logged in), psql, python3 (stdlib only).
+# Requires: Railway CLI >= 5.47.2 (logged in), psql, python3 (stdlib only).
 # Refuses any environment other than exactly `staging`.
 # Thin wrapper: the logic and its docs live in bootstrap_staging_database.py;
 # the procedure is described in docs/operations/DATABASE_ROLE_CUTOVER.md.

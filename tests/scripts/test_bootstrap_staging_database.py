@@ -18,6 +18,7 @@ import re
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,7 @@ sys.modules[_SPEC.name] = boot  # dataclasses resolve annotations through sys.mo
 _SPEC.loader.exec_module(boot)
 
 SENTINEL_SECRET = "sentinel-existing-secret-value-must-never-print"  # pragma: allowlist secret
+PROJECT = boot.DEFAULT_PROJECT_ID
 
 
 class FakeRailway:
@@ -40,45 +42,72 @@ class FakeRailway:
 
     def __init__(self, variables: dict):
         self.variables = dict(variables)
+        self.sealed: set[str] = set()
         self.calls: list[list[str]] = []
         self.stdins: list[str] = []
         self.provider_sql: list[str] = []
+        self.version = "railway 5.62.1"
+        self.probe = {
+            "stdin_ok": True,
+            "environment": "staging",
+            "project": PROJECT,
+            "proxy_domain": "proxy.example.invalid",
+            "proxy_port": "15432",
+            "host": "proxy.example.invalid",
+            "port": "15432",
+            "user": "postgres",
+            "database": "railway",
+        }
+        self.inventory_rows = ["whoami|postgres|true|railway|180006|true"]
+        self.fail_set: str | None = None
 
     def __call__(self, args, *, stdin=""):
         args = list(args)
         self.calls.append(args)
         self.stdins.append(stdin)
-        out = ""
-        if args == ["whoami"]:
+        out, code = "", 0
+        if args == ["--version"]:
+            out = self.version
+        elif args == ["whoami"]:
             out = "Logged in as Test"
         elif args[:2] == ["run", "--help"]:
             out = "Options:\n      --no-local   Skip local develop overrides\n"
         elif args[0] == "run":
-            child = args[args.index("--") + 1 :]
-            if "-c" in child and child[0] == sys.executable:
-                out = json.dumps(
-                    {
-                        "stdin_ok": stdin == boot.STDIN_PROBE,
-                        "environment": "staging",
-                        "project": boot.DEFAULT_PROJECT_ID,
-                        "host": "proxy.example.invalid",
-                        "port": 15432,
-                        "user": "postgres",
-                        "database": "railway",
-                        "sslmode": "",
-                    }
-                )
-            elif child[:2] == ["sh", "-c"]:
+            if stdin == boot.STDIN_PROBE:
+                out = json.dumps(self.probe)
+            elif boot.INVENTORY_SENTINEL in stdin:
                 self.provider_sql.append(stdin)
-                if boot.INVENTORY_SENTINEL in stdin:
-                    out = f"whoami|postgres|true|railway|180006\n{boot.INVENTORY_SENTINEL}\n"
-                elif boot.PROVIDER_SENTINEL in stdin:
-                    out = f"{boot.PROVIDER_SENTINEL}\n"
+                out = "\n".join(self.inventory_rows + [boot.INVENTORY_SENTINEL]) + "\n"
+            elif boot.PROVIDER_SENTINEL in stdin:
+                self.provider_sql.append(stdin)
+                out = f"{boot.PROVIDER_SENTINEL}\n"
         elif args[:2] == ["variable", "list"]:
-            out = json.dumps(self.variables)
+            out = json.dumps({k: (None if k in self.sealed else v) for k, v in self.variables.items()})
         elif args[:2] == ["variable", "set"]:
+            if args[2] == self.fail_set:
+                return subprocess.CompletedProcess(args, 1, stdout="", stderr="simulated Railway API error")
             self.variables[args[2]] = stdin
-        return subprocess.CompletedProcess(args, 0, stdout=out, stderr="")
+        return subprocess.CompletedProcess(args, code, stdout=out, stderr="")
+
+    def sets(self) -> list[str]:
+        return [call[2] for call in self.calls if call[:2] == ["variable", "set"]]
+
+
+def _fake_role_psql(logins):
+    def fake(ctx, role, password, sql, sentinel, what):
+        logins.append((role, password))
+        if role == boot.MIGRATOR_ROLE:
+            return [
+                ["identity", role, role, ctx.database, "public, fsma, extensions", "UTC", "true"],
+                ["seed", "created"],
+                ["function-owner", role],
+                ["alembic", ""],
+                ["fsma-tables", "false"],
+                [sentinel],
+            ]
+        return [["identity", role, role, ctx.database, "true"], [sentinel]]
+
+    return fake
 
 
 @pytest.fixture
@@ -87,31 +116,30 @@ def fake(monkeypatch):
         {
             "AUTH_SECRET_KEY": SENTINEL_SECRET,
             "DATABASE_URL": "postgresql://postgres:" + SENTINEL_SECRET + "@postgres.railway.internal:5432/railway",
-            "AUTH_OTP_HMAC_SECRET": None,  # sealed: present, value hidden
+            "AUTH_OTP_HMAC_SECRET": SENTINEL_SECRET,
             "REDIS_URL": "redis://default:" + SENTINEL_SECRET + "@redis.railway.internal:6379",
             "REGENGINE_ENV": "development",
         }
     )
-    role_logins: list[tuple[str, str]] = []
-
-    def fake_role_psql(ctx, role, password, sql, sentinel, what):
-        role_logins.append((role, password))
-        if role == boot.MIGRATOR_ROLE:
-            return [
-                ["identity", role, role, ctx.database, "public, fsma, extensions", "UTC"],
-                ["seed", "created"],
-                ["function-owner", role],
-                ["alembic", ""],
-                ["fsma-tables", "false"],
-                [sentinel],
-            ]
-        return [["identity", role, role, ctx.database], [sentinel]]
-
+    railway.sealed.add("AUTH_OTP_HMAC_SECRET")  # sealed: present, value hidden
+    logins: list[tuple[str, str]] = []
     monkeypatch.setattr(boot, "railway", railway)
-    monkeypatch.setattr(boot, "role_psql", fake_role_psql)
+    monkeypatch.setattr(boot, "role_psql", _fake_role_psql(logins))
     monkeypatch.setattr(boot.shutil, "which", lambda name: "/usr/bin/" + os.path.basename(name))
-    railway.role_logins = role_logins
+    railway.role_logins = logins
     return railway
+
+
+def _existing_roles(fake: FakeRailway, *extra_rows: str) -> None:
+    fake.inventory_rows += [f"role|{role}|true|false|false|false|false|false" for role in boot.ALL_ROLES]
+    fake.inventory_rows += list(extra_rows)
+
+
+def _stored_urls(password: str = "a" * 64) -> dict:
+    return {name: boot.database_url(role, password, "regengine_staging") for name, role in boot.ROLE_URL_VARIABLES}
+
+
+# --- target guards ---------------------------------------------------------
 
 
 @pytest.mark.parametrize("environment", ["production", "Production", " production ", "prod", "Staging", "", "dev"])
@@ -121,8 +149,12 @@ def test_refuses_every_environment_except_exact_staging_before_any_railway_call(
     assert "REFUSED" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("database", ["railway", "postgres", "template1", "Regengine", "drop;table", ""])
-def test_refuses_archive_system_or_invalid_database_names(fake, database):
+@pytest.mark.parametrize(
+    "database",
+    ["railway", "postgres", "template1", "user", "regengine", "regengine_", "Regengine_x", "regengine-staging",
+     "regengine_x;drop", 'regengine_"x', ""],
+)  # fmt: skip
+def test_refuses_database_names_outside_the_regengine_namespace(fake, database):
     assert boot.main(["--apply", "--database", database]) == boot.EXIT_REFUSED
     assert fake.calls == []
 
@@ -152,6 +184,118 @@ def test_redeploy_requires_apply(fake):
     assert fake.calls == []
 
 
+@pytest.mark.parametrize("version,allowed", [("railway 5.47.1", False), ("railway 4.9.0", False), ("garbage", False),
+                                             ("railway 5.47.2", True), ("railway 5.62.1", True)])  # fmt: skip
+def test_refuses_railway_cli_older_than_5_47_2(fake, version, allowed):
+    fake.version = version
+    code = boot.main(["--apply"])
+    if allowed:
+        assert code == 0
+    else:
+        assert code == boot.EXIT_REFUSED
+        assert not any(call[0] == "run" for call in fake.calls)  # refused before any railway run
+        assert fake.sets() == []
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"environment": "production"},
+        {"environment": ""},  # marker missing: fail closed
+        {"project": "00000000-0000-0000-0000-000000000000"},
+        {"project": ""},
+        {"proxy_domain": "attacker.example.invalid"},
+        {"proxy_port": "5432"},
+        {"proxy_domain": "", "proxy_port": ""},
+        {"database": "regengine_staging"},  # DATABASE_PUBLIC_URL already names the target
+    ],
+)
+def test_probe_mismatch_refuses_before_any_sql_or_write(fake, override):
+    fake.probe.update(override)
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    assert fake.provider_sql == []
+    assert fake.sets() == []
+
+
+def test_missing_stdin_forwarding_is_fatal_before_any_change(fake):
+    fake.probe["stdin_ok"] = False
+    assert boot.main(["--apply"]) == boot.EXIT_FAILED
+    assert fake.provider_sql == []
+    assert fake.sets() == []
+
+
+def test_refuses_old_server_and_foreign_owned_target(fake):
+    fake.inventory_rows = ["whoami|postgres|true|railway|140011|true"]
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    fake.inventory_rows = ["whoami|postgres|true|railway|180006|true", "database|regengine_staging|postgres"]
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    assert fake.sets() == []
+    assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)
+
+
+# --- pre-existing roles (cluster-wide) --------------------------------------
+
+
+def test_existing_role_used_outside_target_is_refused_without_adoption(fake, capsys):
+    _existing_roles(fake, "outside|regengine|owns 3 object(s) in database railway",
+                    "outside|regengine|has 1 open session(s) in database railway")  # fmt: skip
+    fake.variables.update(_stored_urls())
+    assert boot.main(["--dry-run"]) == boot.EXIT_REFUSED
+    captured = capsys.readouterr()
+    assert "OUTSIDE USE: role regengine owns 3 object(s) in database railway" in captured.out
+    assert "--adopt-existing-roles" in captured.err
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    assert fake.sets() == []
+    assert not any(boot.PROVIDER_SENTINEL in sql for sql in fake.provider_sql)  # no write reached the server
+
+
+def test_adopt_existing_roles_proceeds_and_arms_server_side_guard_only_when_asked(fake):
+    _existing_roles(fake, "outside|regengine_sysadmin|is a member of role pg_read_all_data")
+    fake.variables.update(_stored_urls())
+    assert boot.main(["--apply", "--adopt-existing-roles"]) == 0
+    provisioning = next(sql for sql in fake.provider_sql if boot.PROVIDER_SENTINEL in sql)
+    assert "IF true THEN\n        RETURN;" in provisioning
+    assert "RESET ALL" in provisioning and "VALID UNTIL %L" in provisioning
+
+    guarded = boot.provider_sql("regengine_staging", {}, adopt_existing_roles=False)
+    assert "IF false THEN\n        RETURN;" in guarded
+    assert "pre-existing RegEngine roles are used outside" in guarded
+
+
+def test_existing_roles_keep_verified_passwords_and_write_no_urls(fake):
+    _existing_roles(fake)
+    fake.variables.update(_stored_urls())
+    assert boot.main(["--apply"]) == 0
+    provisioning = next(sql for sql in fake.provider_sql if boot.PROVIDER_SENTINEL in sql)
+    assert "PASSWORD" not in provisioning
+    assert not {"DATABASE_URL", "ADMIN_DATABASE_URL", "MIGRATIONS_DATABASE_URL"} & set(fake.sets())
+    assert {role for role, _ in fake.role_logins} == set(boot.ALL_ROLES)
+    assert {password for _, password in fake.role_logins} == {"a" * 64}  # logged in with the stored passwords
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda f: f.variables.pop("MIGRATIONS_DATABASE_URL"),
+        lambda f: f.sealed.add("DATABASE_URL"),
+        lambda f: f.variables.update(ADMIN_DATABASE_URL="postgresql://postgres:x@host:5432/railway"),
+    ],
+)
+def test_existing_roles_with_missing_sealed_or_foreign_urls_require_rotate_passwords(fake, mutate):
+    _existing_roles(fake)
+    fake.variables.update(_stored_urls())
+    mutate(fake)
+    assert boot.main(["--apply"]) == boot.EXIT_REFUSED
+    assert fake.sets() == []
+    assert boot.main(["--apply", "--rotate-passwords"]) == 0
+    provisioning = next(sql for sql in fake.provider_sql if boot.PROVIDER_SENTINEL in sql)
+    assert provisioning.count("PASSWORD 'SCRAM-SHA-256$4096:") == 3
+    assert fake.sets()[-1] == "MIGRATIONS_DATABASE_URL"
+
+
+# --- dry run and apply -----------------------------------------------------
+
+
 def test_dry_run_changes_nothing_and_prints_no_secret(fake, capsys):
     assert boot.main([]) == 0  # dry run is the default
     out = capsys.readouterr().out
@@ -159,15 +303,18 @@ def test_dry_run_changes_nothing_and_prints_no_secret(fake, capsys):
     mutating = [c for c in fake.calls if c[:2] == ["variable", "set"] or c[0] == "redeploy"]
     assert mutating == []
     assert fake.role_logins == []
-    # Only the read-only inventory reached psql; the provisioning SQL was printed, not run.
     assert len(fake.provider_sql) == 1 and boot.INVENTORY_SENTINEL in fake.provider_sql[0]
     assert "DRY RUN: nothing was changed" in out
     assert "${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/regengine_staging" in out
-    assert "AUTH_OTP_HMAC_SECRET: present: keep" in out
-    assert "AUDIT_INTEGRITY_KEY: missing: generate" in out
+    assert "AUDIT_INTEGRITY_KEY = <generated token_urlsafe(48)>" in out
+    assert "AUTH_OTP_HMAC_SECRET = <present: kept>" in out
+    write_section = out.split("[5]")[1].split("Next steps")[0]
+    planned = [line.split(" = ")[0].strip() for line in write_section.splitlines() if " = " in line]
+    planned = [name for name in planned if name != "AUTH_OTP_HMAC_SECRET" and name != "REDIS_URL"]  # kept
+    assert planned[-1] == "MIGRATIONS_DATABASE_URL"
 
 
-def test_apply_sends_values_over_stdin_only_and_keeps_existing_secrets(fake, capsys):
+def test_apply_writes_values_over_stdin_only_in_the_safe_order(fake, capsys):
     assert boot.main(["--apply"]) == 0
     out = capsys.readouterr().out
 
@@ -176,16 +323,21 @@ def test_apply_sends_values_over_stdin_only_and_keeps_existing_secrets(fake, cap
     for call, _ in sets:
         assert "--stdin" in call and "--skip-deploys" in call
         assert not any("=" in arg for arg in call), call  # no KEY=VALUE argv form
-        assert call[call.index("-e") + 1] == "staging"
-        assert call[call.index("-s") + 1] == boot.APP_SERVICE
+    assert [call[2] for call, _ in sets] == [
+        "DATABASE_URL",
+        "ADMIN_DATABASE_URL",
+        "AUDIT_INTEGRITY_KEY",
+        "TOOL_ACCESS_SECRET",
+        "REGENGINE_ENV",
+        "REGENGINE_REQUIRE_RLS_ENFORCEMENT",
+        "REGENGINE_MIGRATIONS_ROLE",
+        "MIGRATIONS_DATABASE_URL",
+    ]
 
-    # Sealed/present secret kept; missing ones generated; literals pinned.
-    assert "AUTH_OTP_HMAC_SECRET" not in stored
+    assert "AUTH_OTP_HMAC_SECRET" not in stored  # sealed: present, kept
     assert len(stored["AUDIT_INTEGRITY_KEY"]) >= 32
     assert len(stored["TOOL_ACCESS_SECRET"]) >= 64
-    assert stored["TOOL_ACCESS_SECRET"] != SENTINEL_SECRET
     assert stored["REGENGINE_ENV"] == "staging"
-    assert stored["REGENGINE_REQUIRE_RLS_ENFORCEMENT"] == "1"
     assert "REDIS_URL" not in stored  # present, so never overwritten
 
     passwords = {}
@@ -208,20 +360,47 @@ def test_apply_sends_values_over_stdin_only_and_keeps_existing_secrets(fake, cap
         assert value not in provisioning  # the server only ever receives SCRAM verifiers
     assert provisioning.count("PASSWORD 'SCRAM-SHA-256$4096:") == 3
     assert "CREATE DATABASE %I OWNER %I TEMPLATE template0" in provisioning
-    assert "IN DATABASE regengine_staging SET search_path = public, fsma, extensions" in provisioning
+    assert 'REVOKE ALL ON DATABASE "regengine_staging" FROM PUBLIC;' in provisioning
+    assert 'GRANT CONNECT ON DATABASE "regengine_staging" TO "regengine", "regengine_sysadmin"' in provisioning
+    assert 'IN DATABASE "regengine_staging" SET search_path = public, fsma, extensions' in provisioning
     assert not any(call[0] == "redeploy" for call in fake.calls)
 
 
-def test_apply_with_redeploy_targets_staging_app_only(fake):
+def test_failure_partway_leaves_migrations_url_unset(fake, capsys):
+    fake.fail_set = "REGENGINE_ENV"
+    assert boot.main(["--apply"]) == boot.EXIT_FAILED
+    assert "MIGRATIONS_DATABASE_URL" not in fake.variables
+    assert "DATABASE_URL" in fake.sets()
+    assert "--rotate-passwords" in capsys.readouterr().err
+
+
+def test_every_run_variable_and_redeploy_call_is_scoped(fake):
     assert boot.main(["--apply", "--redeploy"]) == 0
+    scoped = [c for c in fake.calls if c[0] in ("run", "redeploy", "variable") and c[:2] != ["run", "--help"]]
+    assert scoped
+    for call in scoped:
+        assert call[call.index("-p") + 1] == PROJECT, call
+        assert call[call.index("-e") + 1] == "staging", call
+        assert call[call.index("-s") + 1] in (boot.APP_SERVICE, boot.POSTGRES_SERVICE), call
+    for call in (c for c in scoped if c[0] == "run"):
+        assert call[call.index("-s") + 1] == boot.POSTGRES_SERVICE
     redeploys = [call for call in fake.calls if call[0] == "redeploy"]
-    assert redeploys == [["redeploy", "-p", boot.DEFAULT_PROJECT_ID, "-e", "staging", "-s", "RegEngine", "--yes"]]
+    assert redeploys == [["redeploy", "-p", PROJECT, "-e", "staging", "-s", "RegEngine", "--yes"]]
+
+
+def test_provider_psql_argv_never_carries_the_connection_url(fake):
+    assert boot.main(["--apply"]) == 0
+    runs = [call for call in fake.calls if call[0] == "run" and "--" in call]
+    for call in runs:
+        child = call[call.index("--") + 1 :]
+        assert "DATABASE_PUBLIC_URL" not in " ".join(child[3:])  # only the launcher source mentions it
+        assert not any(arg.startswith("postgres") and "://" in arg for arg in child)
 
 
 def test_apply_refuses_unversioned_schema_in_existing_target(fake, monkeypatch):
     def unversioned(ctx, role, password, sql, sentinel, what):
         return [
-            ["identity", role, role, ctx.database, "public", "UTC"],
+            ["identity", role, role, ctx.database, "public", "UTC", "true"],
             ["seed", "already-present"],
             ["function-owner", role],
             ["alembic", ""],
@@ -231,19 +410,67 @@ def test_apply_refuses_unversioned_schema_in_existing_target(fake, monkeypatch):
 
     monkeypatch.setattr(boot, "role_psql", unversioned)
     assert boot.main(["--apply"]) == boot.EXIT_FAILED
-    assert not any(call[:2] == ["variable", "set"] for call in fake.calls)
+    assert fake.sets() == []
 
 
-def test_missing_stdin_forwarding_is_fatal_before_any_change(fake, monkeypatch):
-    original = fake.__call__
+# --- process handling -------------------------------------------------------
 
-    def no_stdin(args, *, stdin=""):
-        return original(args, stdin="" if list(args)[:1] == ["run"] else stdin)
 
-    monkeypatch.setattr(boot, "railway", no_stdin)
-    assert boot.main(["--apply"]) == boot.EXIT_FAILED
-    assert fake.provider_sql == []
-    assert not any(call[:2] == ["variable", "set"] for call in fake.calls)
+def test_psql_launcher_moves_the_url_into_the_environment(tmp_path):
+    capture = tmp_path / "capture.json"
+    fake_psql = tmp_path / "psql"
+    fake_psql.write_text(
+        "#!" + sys.executable + "\n"
+        "import json, os, sys\n"
+        f"json.dump({{'argv': sys.argv, 'env': dict(os.environ)}}, open({str(capture)!r}, 'w'))\n"
+    )
+    fake_psql.chmod(0o755)
+    url = "postgresql://postgres:" + SENTINEL_SECRET + "@proxy.example.invalid:15432/railway"
+    subprocess.run(
+        [sys.executable, "-c", boot.PSQL_LAUNCHER, str(fake_psql), *boot.PSQL_FLAGS],
+        env={"PATH": os.environ["PATH"], "DATABASE_PUBLIC_URL": url, "PGOPTIONS": "-c search_path=evil"},
+        check=True,
+    )
+    seen = json.loads(capture.read_text())
+    assert SENTINEL_SECRET not in " ".join(seen["argv"])
+    assert seen["argv"][1:] == list(boot.PSQL_FLAGS)
+    env = seen["env"]
+    assert env["PGPASSWORD"] == SENTINEL_SECRET
+    assert (env["PGHOST"], env["PGPORT"], env["PGUSER"], env["PGDATABASE"]) == (
+        "proxy.example.invalid",
+        "15432",
+        "postgres",
+        "railway",
+    )
+    assert env["PGSSLMODE"] == "require"
+    assert "DATABASE_PUBLIC_URL" not in env
+    assert env["PGOPTIONS"] == boot.SERVER_OPTIONS  # the inherited PGOPTIONS is replaced
+
+
+def test_timeout_kills_the_whole_process_group(tmp_path, monkeypatch):
+    pidfile = tmp_path / "grandchild.pid"
+    fake_bin = tmp_path / "railway"
+    fake_bin.write_text(f"#!/bin/sh\nsleep 60 &\necho $! > {pidfile}\nwait\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("RAILWAY_BIN", str(fake_bin))
+    monkeypatch.setattr(boot, "COMMAND_TIMEOUT_S", 1)
+    with pytest.raises(subprocess.TimeoutExpired):
+        boot.railway(["run", "--", "psql"])
+    pid = int(pidfile.read_text().strip())
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        stat_file = Path(f"/proc/{pid}/stat")
+        if stat_file.exists() and stat_file.read_text().split()[2] == "Z":
+            return  # killed; waiting to be reaped by init
+        time.sleep(0.1)
+    pytest.fail("grandchild of the timed-out railway call survived")
+
+
+# --- parsing and fixtures ---------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -264,8 +491,9 @@ def test_parse_variable_presence_rejects_garbage():
 
 
 def test_posture_warnings_never_echo_values():
-    raw = json.dumps({"AUTH_OTP_HMAC_SECRET": "otp-xyz", "TOOL_ACCESS_SECRET": "dup-xyz", "AUTH_SECRET_KEY": "dup-xyz"})
-    warnings = boot.posture_warnings(raw)
+    short, duplicate = "otp-xyz", "dup-xyz"
+    values = {"AUTH_OTP_HMAC_SECRET": short, "TOOL_ACCESS_SECRET": duplicate, "AUTH_SECRET_KEY": duplicate}
+    warnings = boot.posture_warnings(values)
     assert len(warnings) == 2
     assert not any("otp-xyz" in w or "dup-xyz" in w for w in warnings)
 
@@ -279,6 +507,11 @@ def test_scram_verifier_matches_postgresql_known_answer():
     )
     salt = base64.b64decode("CAU4fHeGOVwwuzSZA8HGzA==")
     assert boot.scram_sha256_verifier(password, salt=salt) == expected
+
+
+def test_quoting_helpers():
+    assert boot.quote_ident('a"b') == '"a""b"'
+    assert boot.quote_literal("it's") == "'it''s'"
 
 
 def _normalize(sql: str) -> str:
