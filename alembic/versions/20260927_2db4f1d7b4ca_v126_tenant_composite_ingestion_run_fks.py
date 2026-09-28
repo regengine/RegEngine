@@ -14,6 +14,14 @@ v079/v080 already use for receipts and agent artifacts. ON DELETE actions are
 kept. Runtime FK checks run as the referenced table's owner with RLS
 bypassed, so no runtime grant changes (v111 inventory untouched).
 
+``fsma.manifest_blobs`` gets the same key from v126 c51d4898e0a2 on the
+sibling branch (joined by the merge ed902d03df45): that revision drops its
+single-column key and adds ``fk_manifest_blobs_run_tenant`` with ON DELETE
+CASCADE. Dropping ``manifest_blobs_ingestion_run_id_fkey`` by name here would
+fail on every database c51d4898e0a2 reached first, production included, so
+this revision leaves manifest_blobs alone and each key has one owner in
+either branch order.
+
 Validation runs as the schema owner, which is NOBYPASSRLS outside a
 superuser deploy. PostgreSQL's bulk FK check applies that owner's RLS
 policies under FORCE, so it raises ("app.tenant_id not set") or, with a
@@ -48,11 +56,11 @@ depends_on = None
 # reader fails the deploy instead of queueing all traffic behind it.
 LOCK_TIMEOUT = "10s"
 
-# child table -> (row id column, ON DELETE clause, pre-v126 FK name)
+# child table -> (row id column, ON DELETE clause, pre-v126 FK name).
+# fsma.manifest_blobs is c51d4898e0a2's (see the docstring).
 CHILDREN = {
     "traceability_events": ("event_id", "", "traceability_events_ingestion_run_id_fkey"),
     "manifest_records": ("id", " ON DELETE CASCADE", "manifest_records_ingestion_run_id_fkey"),
-    "manifest_blobs": ("ingestion_run_id", " ON DELETE CASCADE", "manifest_blobs_ingestion_run_id_fkey"),
 }
 
 

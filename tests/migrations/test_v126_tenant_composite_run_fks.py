@@ -21,7 +21,11 @@ from tests.migrations.rls_db import _normalize_psycopg, guarded_live_database_ur
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "alembic/versions/20260927_2db4f1d7b4ca_v126_tenant_composite_ingestion_run_fks.py"
-CHILDREN = ("traceability_events", "manifest_records", "manifest_blobs")
+# The keys this revision replaces. manifest_blobs has the same key at head,
+# but from v126 c51d4898e0a2 on the sibling branch, so this revision's
+# downgrade/upgrade must leave it untouched.
+CHILDREN = ("traceability_events", "manifest_records")
+HEAD_CHILDREN = (*CHILDREN, "manifest_blobs")
 ON_DELETE = {"traceability_events": "a", "manifest_records": "c", "manifest_blobs": "c"}  # NO ACTION / CASCADE
 
 INSERT_CHILD = {
@@ -104,7 +108,7 @@ def lock_timeout(conn):
 
 
 def child_fks(conn):
-    return {row.relname: row for row in run_fks(conn) if row.relname in CHILDREN}
+    return {row.relname: row for row in run_fks(conn) if row.relname in HEAD_CHILDREN}
 
 
 def add_run(conn, tenant):
@@ -130,7 +134,7 @@ def test_head_carries_composite_keys(db, migration):
         assert fk.columns == ["ingestion_run_id", "tenant_id"]
         assert fk.backing_index == "ux_ingestion_runs_id_tenant"
         assert (fk.convalidated, fk.confdeltype, fk.confmatchtype) == (True, ON_DELETE[table], "s")
-    assert set(child_fks(conn)) == set(CHILDREN)
+    assert set(child_fks(conn)) == set(HEAD_CHILDREN)
 
 
 def test_downgrade_then_upgrade_is_exact_over_populated_tables(db, migration):
@@ -138,14 +142,16 @@ def test_downgrade_then_upgrade_is_exact_over_populated_tables(db, migration):
     # Rows in every tenant make validation scan real data, not an empty table.
     for tenant in (uuid4(), uuid4()):
         run = add_run(conn, tenant)
-        for table in CHILDREN:
+        for table in HEAD_CHILDREN:
             add_child(conn, table, tenant, run)
     at_head = run_fks(conn)
+    blob_key_at_head = child_fks(conn)["manifest_blobs"]
     act_as(conn, owner)
     before_posture, before_timeout = posture(conn), lock_timeout(conn)
 
     migration.downgrade()
     legacy = child_fks(conn)
+    assert legacy.pop("manifest_blobs") == blob_key_at_head
     for table, fk in legacy.items():
         assert fk.conname == f"{table}_ingestion_run_id_fkey"
         assert fk.columns == ["ingestion_run_id"]

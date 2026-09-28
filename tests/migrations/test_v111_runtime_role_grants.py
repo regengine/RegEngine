@@ -1847,8 +1847,6 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
     disabled_tables = (
         "public.compliance_notifications",
         "public.compliance_status_log",
-        # inbound_email router (8301f3cad96a): recipient-only tenant mapping.
-        "fsma.tenant_inbound_email_addresses",
     )
     disabled_functions = [
         "fsma.get_remediation_token_by_hash(text)",
@@ -1857,17 +1855,20 @@ def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):
     runtime_statements = [
         "SELECT * FROM public.compliance_notifications LIMIT 1",
         "SELECT * FROM public.compliance_status_log LIMIT 1",
-        "SELECT * FROM fsma.tenant_inbound_email_addresses LIMIT 1",
         "SELECT fsma.get_remediation_token_by_hash('disabled')",
         "SELECT fsma.get_remediation_token_by_session_hash('disabled')",
     ]
     with owner_engine.connect() as connection:
-        # The recipient-only overload exists only when 8301f3cad96a ran after
-        # v122 (incremental upgrades); a fresh chain drops it. Where it exists,
-        # it must stay denied: it resolves a tenant without v122's sender check.
-        if connection.execute(text("SELECT to_regprocedure('fsma.get_tenant_by_inbound_address(text)')")).scalar():
-            disabled_functions.append("fsma.get_tenant_by_inbound_address(text)")
-            runtime_statements.append("SELECT * FROM fsma.get_tenant_by_inbound_address('disabled@example.test')")
+        # The inbound_email router's recipient-only tenant mapping (8301f3cad96a)
+        # resolved a tenant without v122's sender check. 486eb6809921 drops its
+        # table and one-arg lookup wherever they exist (and refuses a non-empty
+        # table), so at head there is nothing left to grant.
+        assert connection.execute(
+            text(
+                "SELECT to_regclass('fsma.tenant_inbound_email_addresses'), "
+                "to_regprocedure('fsma.get_tenant_by_inbound_address(text)')"
+            )
+        ).one() == (None, None)
         for table_name in disabled_tables:
             for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                 assert not connection.execute(
