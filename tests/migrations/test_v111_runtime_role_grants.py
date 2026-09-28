@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -1691,6 +1692,66 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
         ).scalar_one()
         assert "current_user" in function_body
         assert "regengine_sysadmin" in function_body
+
+
+def test_digest_helpers_are_pinned_owner_definers(owner_engine, migration_owner_engine):
+    """v126: the three pgcrypto callers run as the migration owner.
+
+    Production keeps pgcrypto in a provider-owned schema the runtime role has
+    no USAGE on. The helpers read no table, so definer rights only reach
+    digest(); the runtime role keeps EXECUTE on the helper and nothing else.
+    """
+    with migration_owner_engine.connect() as connection:
+        migration_role = connection.execute(text("SELECT current_user")).scalar_one()
+    with owner_engine.connect() as connection:
+        pgcrypto_schema = connection.execute(
+            text(
+                "SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace "
+                "WHERE e.extname = 'pgcrypto'"
+            )
+        ).scalar_one()
+        rows = connection.execute(
+            text(
+                """
+                SELECT p.proname, p.prosecdef, p.proconfig, pg_get_userbyid(p.proowner) AS owner,
+                       p.prosrc,
+                       has_function_privilege('regengine', p.oid, 'EXECUTE') AS runtime_execute,
+                       EXISTS (SELECT 1 FROM aclexplode(p.proacl) AS acl WHERE acl.grantee = 0)
+                           AS public_execute
+                  FROM pg_proc AS p
+                  JOIN pg_namespace AS n ON n.oid = p.pronamespace
+                 WHERE n.nspname = 'fsma'
+                   AND p.proname IN (
+                       'compute_agent_artifact_hash',
+                       'compute_ingestion_run_receipt_payload_hash',
+                       'compute_ingestion_run_receipt_hash',
+                       'sha256_text_array_is_valid'
+                   )
+                """
+            )
+        ).all()
+    helpers = {row.proname: row for row in rows}
+    assert set(helpers) == {
+        "compute_agent_artifact_hash",
+        "compute_ingestion_run_receipt_payload_hash",
+        "compute_ingestion_run_receipt_hash",
+        "sha256_text_array_is_valid",
+    }
+    for name in (
+        "compute_agent_artifact_hash",
+        "compute_ingestion_run_receipt_payload_hash",
+        "compute_ingestion_run_receipt_hash",
+    ):
+        helper = helpers[name]
+        assert helper.prosecdef, name
+        assert helper.proconfig == ["search_path=pg_catalog, pg_temp"], name
+        assert helper.owner == migration_role, name
+        assert f"{pgcrypto_schema}.digest(" in helper.prosrc, name
+        assert not re.search(r"\bfrom\b", helper.prosrc, re.IGNORECASE), name
+    # No extension call: stays invoker, evaluated by the CHECK as the writer.
+    assert not helpers["sha256_text_array_is_valid"].prosecdef
+    for helper in helpers.values():
+        assert helper.runtime_execute and not helper.public_execute, helper.proname
 
 
 def test_disabled_or_admin_only_surfaces_have_no_runtime_grants(owner_engine):

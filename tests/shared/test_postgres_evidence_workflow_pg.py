@@ -309,6 +309,33 @@ _JEV_ANSWERS = {
 }
 
 
+@pytest.fixture
+def production_search_path():
+    """Runtime connections get the server-default search_path, as in production.
+
+    CI's job-level PGOPTIONS puts fsma and extensions on every connection,
+    which would hide an unqualified pgcrypto call behind wherever the
+    migrations happened to install the extension. The pool is dropped on
+    both sides so no other test inherits or leaks the setting.
+    """
+    from shared.database import engine
+    from sqlalchemy import event
+
+    def pin(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute('SET search_path TO "$user", public')
+        cursor.close()
+        dbapi_connection.commit()
+
+    engine.dispose()
+    event.listen(engine, "connect", pin)
+    try:
+        yield '"$user", public'
+    finally:
+        event.remove(engine, "connect", pin)
+        engine.dispose()
+
+
 def _offline_jev_decider():
     import httpx2
     from shared.jev import JevDecider, JevSettings
@@ -371,10 +398,11 @@ def _run_queued_agent_tasks(workflow, tenant):
     return payloads
 
 
-def test_csv_upload_and_agent_worker_persist_as_runtime_role(workflow, monkeypatch):
+def test_csv_upload_and_agent_worker_persist_as_runtime_role(workflow, monkeypatch, production_search_path):
     from shared.agent_task_bridge import handle_agent_artifact_task
 
     w = workflow
+    assert w.query("SHOW search_path")[0][0] == production_search_path
     result, body = _upload_csv(monkeypatch, w.tenant)
     run_id = result["ingestion_run_id"]
     assert run_id and result["accepted"] == 2 and result["rejected"] == 0
@@ -394,8 +422,10 @@ def test_csv_upload_and_agent_worker_persist_as_runtime_role(workflow, monkeypat
 
     payloads = _run_queued_agent_tasks(w, w.tenant)
     assert len(payloads) == 2
-    # Redelivery: ON CONFLICT (artifact_id) keeps one artifact; the ledger appends one more receipt.
-    handle_agent_artifact_task(**payloads[0])
+    # Redelivery is a no-op: ON CONFLICT (artifact_id, tenant_id) keeps one
+    # artifact and, since nothing was inserted, no second receipt is appended.
+    for payload in payloads:
+        handle_agent_artifact_task(**payload)
     with w.admin.cursor() as cur:
         cur.execute(
             """SELECT COUNT(*), bool_and(artifact_hash = fsma.compute_agent_artifact_hash(artifact)),
@@ -415,12 +445,12 @@ def test_csv_upload_and_agent_worker_persist_as_runtime_role(workflow, monkeypat
             (w.tenant, run_id),
         )
         receipts = cur.fetchall()
-    assert [r[0] for r in receipts] == [1, 2, 3]
+    assert [r[0] for r in receipts] == [1, 2]
     assert {r[1] for r in receipts} == {"needs_review"} and all(r[4] for r in receipts)
-    assert [r[2] for r in receipts] == [None, receipts[0][3], receipts[1][3]]
+    assert [r[2] for r in receipts] == [None, receipts[0][3]]
 
 
-def test_first_receipt_appends_to_one_run_serialize(workflow, monkeypatch):
+def test_first_receipt_appends_to_one_run_serialize(workflow, monkeypatch, production_search_path):
     from shared.agent_task_bridge import append_agent_artifact_receipt, persist_agent_artifact
     from shared.database import SessionLocal
     from shared.tenant_context import set_tenant_guc
@@ -471,7 +501,7 @@ def test_first_receipt_appends_to_one_run_serialize(workflow, monkeypatch):
     assert [r[0] for r in receipts] == [1, 2] and receipts[1][1] == receipts[0][2]
 
 
-def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypatch):
+def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypatch, production_search_path):
     from shared.agent_task_bridge import append_agent_artifact_receipt, persist_agent_artifact
     from shared.database import SessionLocal
     from shared.tenant_context import set_tenant_guc
@@ -479,8 +509,16 @@ def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypat
     w = workflow
     other_run = _upload_csv(monkeypatch, w.other)[0]["ingestion_run_id"]
     other_payload = _run_queued_agent_tasks(w, w.other)[0]
-    _upload_csv(monkeypatch, w.tenant)
-    _run_queued_agent_tasks(w, w.tenant)
+    own_run = _upload_csv(monkeypatch, w.tenant)[0]["ingestion_run_id"]
+    own_payload = _run_queued_agent_tasks(w, w.tenant)[0]
+    with w.admin.cursor() as cur:
+        # Another tenant's run that has no blob yet: only the composite
+        # (ingestion_run_id, tenant_id) key stops a blob from attaching to it.
+        cur.execute(
+            "INSERT INTO fsma.ingestion_runs (tenant_id, source_system) VALUES (%s, 'csv_upload') RETURNING id",
+            (w.other,),
+        )
+        other_blobless_run = str(cur.fetchone()[0])
 
     # The narrow SELECT grants still pass through RLS: the other tenant's rows are invisible.
     assert (
@@ -508,13 +546,31 @@ def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypat
         "DELETE FROM fsma.ingestion_run_receipts",
     ):
         rejected("permission denied", statement)
+    blob_insert = """INSERT INTO fsma.manifest_blobs (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename)
+           VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv')"""
+    rejected("row-level security", blob_insert, {"run": other_run, "tenant": w.other, "sha": "0" * 64})
+    # Own tenant id on another tenant's run passes the tenant policy; the
+    # composite foreign key rejects it.
     rejected(
-        "row-level security",
-        """INSERT INTO fsma.manifest_blobs (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename)
-           VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv')""",
-        {"run": other_run, "tenant": w.other, "sha": "0" * 64},
+        "fk_manifest_blobs_run_tenant",
+        blob_insert,
+        {"run": other_blobless_run, "tenant": w.tenant, "sha": "0" * 64},
     )
+    # INSERT is column-scoped: retention metadata cannot be forged.
+    for forged_column, forged_value in (("storage_url", "https://attacker.example/x"), ("created_at", "1990-01-01")):
+        rejected(
+            "permission denied",
+            f"""INSERT INTO fsma.manifest_blobs
+                    (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename, {forged_column})
+                VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv', :value)""",
+            {"run": own_run, "tenant": w.tenant, "sha": "0" * 64, "value": forged_value},
+        )
     rejected("row-level security", None, call=lambda db: persist_agent_artifact(db, other_payload))
+    # Reusing another tenant's artifact id under the own tenant is a loud
+    # primary-key violation, never a silent ON CONFLICT no-op.
+    reused_id = copy.deepcopy(own_payload)
+    reused_id["artifact_id"] = reused_id["artifact"]["artifact_id"] = other_payload["artifact_id"]
+    rejected("agent_artifacts_pkey", None, call=lambda db: persist_agent_artifact(db, reused_id))
     rejected("row-level security", None, call=lambda db: append_agent_artifact_receipt(db, other_payload))
     rejected(
         "foreign key",
