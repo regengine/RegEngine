@@ -565,7 +565,7 @@ class TestComplianceControlPlaneE2E:
         assert canonical_1.event_id != canonical_2.event_id
 
     def test_step10_full_chain_rule_coverage(self):
-        """Step 10: All 25 FSMA rule seeds cover the 7 CTE types."""
+        """Step 10: The built-in FSMA rule seeds cover all 7 CTE types."""
         cte_types_covered = set()
         for rule in FSMA_RULE_SEEDS:
             cte_types = rule.get("applicability_conditions", {}).get("cte_types", [])
