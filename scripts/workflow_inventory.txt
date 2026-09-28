@@ -34,6 +34,7 @@ api-surface-issue.yml
 backend-ci.yml
 bundle-analysis.yml
 demo-smoke.yml
+dependabot-lock-sync.yml
 deploy.yml
 frontend-ci.yml
 inflow-contract-ci.yml
