@@ -727,7 +727,32 @@ def parse_csv_rows(
     parse_errors: list[str] = []
     kde_warnings: list[str] = []
 
-    for row_num, row in enumerate(reader, start=2):
+    # Read the header and every record the loop below can reach before
+    # touching any row: a file the csv module cannot read (CR-only line
+    # endings, a field over csv.field_size_limit(), usually from an unclosed
+    # quote) is rejected whole with its line named, never partially ingested.
+    records: list[dict] = []
+    try:
+        header = reader.fieldnames
+        for record in reader:
+            records.append(record)
+            if len(records) > MAX_CSV_ROWS:
+                break
+    except csv.Error as exc:
+        line = reader.reader.line_num
+        logger.warning("csv_unreadable line=%s error=%s", line, exc)
+        return (
+            [],
+            [
+                f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
+                f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
+            ],
+            [],
+        )
+    if header is not None and not any(name.strip() for name in header):
+        return [], ["CSV has no header row: the first line must list the column names"], []
+
+    for row_num, row in enumerate(records, start=2):
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
         if row_num - 1 > MAX_CSV_ROWS:
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
