@@ -1,4 +1,4 @@
-"""v126 — make the v122 inbound-address lookup work under a NOBYPASSRLS owner.
+"""v127 — make the v122 inbound-address lookup work under a NOBYPASSRLS owner.
 
 ``fsma.get_tenant_by_inbound_address(text, text)`` (v122) is SECURITY DEFINER
 with ``SET row_security = off``, and ``fsma.tenant_inbound_addresses`` is
@@ -21,14 +21,14 @@ table (v111 closed-grant model), and for both of them the tenant predicate is
 unchanged. No ``app.tenant_id`` pinning is introduced (#1091/#2935).
 
 Revision ID: d2e7a7319b33
-Revises: 22a278f6dc78
-Create Date: 2026-09-27
+Revises: c51d4898e0a2
+Create Date: 2026-09-28
 """
 
 from alembic import op
 
 revision = "d2e7a7319b33"  # pragma: allowlist secret
-down_revision = "22a278f6dc78"  # pragma: allowlist secret
+down_revision = "c51d4898e0a2"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
