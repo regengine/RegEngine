@@ -151,6 +151,18 @@ class JevSettings:
     def thresholds(self) -> ConfidenceThresholds:
         return ConfidenceThresholds(auto_apply=self.auto_apply_confidence, review=self.review_confidence)
 
+    def public_summary(self) -> dict[str, object]:
+        """The switches, safe to log or display: whether a key is set, never the key."""
+        return {
+            "enabled": self.enabled,
+            "key_present": bool(self.api_key),
+            "kill_switch": not self.enabled_flag,
+            "model": self.model,
+            "apply_header_mappings": self.apply_header_mappings,
+            "apply_file_cte_type": self.apply_file_cte_type,
+            "header_sample_values": self.header_sample_values,
+        }
+
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> JevSettings:
         """Build settings from ``env`` (defaults to ``os.environ``) without raising."""

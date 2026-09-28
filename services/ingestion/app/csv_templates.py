@@ -1160,6 +1160,22 @@ def _record_header_mapping_evidence(
     return len(artifacts)
 
 
+def _header_mapping_suggestion_results(result: HeaderMappingResult) -> list[HeaderMappingSuggestionResult]:
+    """The response's ``header_mapping_suggestions``, also sent in the 400 body when no row parses."""
+    return [
+        HeaderMappingSuggestionResult(
+            source_header=suggestion.source_header,
+            source_key=suggestion.source_key,
+            canonical_field=suggestion.canonical_field,
+            confidence=suggestion.confidence,
+            band=suggestion.band.value,
+            applied=suggestion.applied,
+            blocked_reason=suggestion.blocked_reason,
+        )
+        for suggestion in result.suggestions
+    ]
+
+
 def _header_mapping_engine_result(
     result: HeaderMappingResult, artifacts_recorded: int
 ) -> Optional[HeaderMappingEngineResult]:
@@ -1384,6 +1400,12 @@ async def ingest_csv(
         if suggestion is not None:
             # The uploader can re-upload with this CTE in one step.
             detail["cte_type_suggestion"] = suggestion.model_dump()
+        if header_mapping.suggestions:
+            # Which unrecognised column holds a missing field: the uploader can
+            # rename it and upload again. Nothing was applied that is not listed.
+            detail["header_mapping_suggestions"] = [
+                item.model_dump() for item in _header_mapping_suggestion_results(header_mapping)
+            ]
         raise HTTPException(status_code=400, detail=detail)
     if not events:
         raise HTTPException(status_code=400, detail="CSV contained no data rows")
@@ -1460,18 +1482,7 @@ async def ingest_csv(
         **response.model_dump(),
         kde_warnings=kde_warnings,
         kde_warning_count=len(kde_warnings),
-        header_mapping_suggestions=[
-            HeaderMappingSuggestionResult(
-                source_header=suggestion.source_header,
-                source_key=suggestion.source_key,
-                canonical_field=suggestion.canonical_field,
-                confidence=suggestion.confidence,
-                band=suggestion.band.value,
-                applied=suggestion.applied,
-                blocked_reason=suggestion.blocked_reason,
-            )
-            for suggestion in header_mapping.suggestions
-        ],
+        header_mapping_suggestions=_header_mapping_suggestion_results(header_mapping),
         header_mapping_engine=_header_mapping_engine_result(header_mapping, artifacts_recorded),
         cte_type_suggestion=_cte_type_suggestion_result(file_cte, file_cte_artifacts),
     )
