@@ -152,19 +152,26 @@ def test_enqueue_agent_artifact_task_prioritizes_required_human_review(monkeypat
 
 
 class _FakeInsertResult:
+    def __init__(self, row=("receipt-001", "d" * 64)):
+        self.row = row
+
     def fetchone(self):
-        return ("receipt-001", "d" * 64)
+        return self.row
 
 
 class _FakeSession:
-    def __init__(self):
+    def __init__(self, artifact_already_recorded=False):
         self.executed = []
         self.committed = False
         self.rolled_back = False
         self.closed = False
+        self.artifact_already_recorded = artifact_already_recorded
 
     def execute(self, statement, params=None):
         self.executed.append((str(statement), params or {}))
+        if "INSERT INTO fsma.agent_artifacts" in str(statement) and self.artifact_already_recorded:
+            # ON CONFLICT ... DO NOTHING RETURNING yields no row.
+            return _FakeInsertResult(None)
         return _FakeInsertResult()
 
     def commit(self):
@@ -207,11 +214,15 @@ def test_persist_agent_artifact_inserts_flattened_operator_fields():
     payload = build_agent_artifact_task_payload(artifact)
     session = _FakeSession()
 
-    persist_agent_artifact(session, payload)
+    assert persist_agent_artifact(session, payload) is True
 
     assert len(session.executed) == 1
     sql, params = session.executed[0]
     assert "INSERT INTO fsma.agent_artifacts" in sql
+    # Tenant-scoped arbiter: another tenant's id raises on the primary key
+    # instead of being dropped silently; RETURNING reports whether it landed.
+    assert "ON CONFLICT (artifact_id, tenant_id) DO NOTHING" in sql
+    assert "RETURNING artifact_id" in sql
     assert params["artifact_id"] == str(artifact.artifact_id)
     assert params["tenant_id"] == str(artifact.tenant_id)
     assert params["artifact_type"] == artifact.artifact_type
@@ -262,6 +273,23 @@ def test_handle_agent_artifact_task_applies_tenant_context_and_commits(monkeypat
     assert any("INSERT INTO fsma.ingestion_run_receipts" in sql for sql, _ in session.executed)
     assert session.committed is True
     assert session.rolled_back is False
+    assert session.closed is True
+
+
+def test_redelivered_task_records_no_second_receipt(monkeypatch):
+    artifact = _artifact(confidence=0.7, requires_human_review=True)
+    payload = build_agent_artifact_task_payload(artifact).model_dump(mode="json")
+    session = _FakeSession(artifact_already_recorded=True)
+
+    monkeypatch.setattr(bridge, "_get_session", lambda: session)
+    monkeypatch.setattr(bridge, "set_tenant_guc", lambda db_session, tenant_id: None)
+
+    handle_agent_artifact_task(**payload)
+
+    assert persist_agent_artifact(_FakeSession(artifact_already_recorded=True), payload) is False
+    assert any("INSERT INTO fsma.agent_artifacts" in sql for sql, _ in session.executed)
+    assert not any("INSERT INTO fsma.ingestion_run_receipts" in sql for sql, _ in session.executed)
+    assert session.committed is True
     assert session.closed is True
 
 

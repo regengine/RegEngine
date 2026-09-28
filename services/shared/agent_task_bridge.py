@@ -133,7 +133,7 @@ class AgentLedgerBridgeResult(StrictAgentTaskModel):
     ledger_state: Optional[Literal["needs_review", "rule_evaluated"]] = None
     receipt_id: Optional[str] = None
     receipt_hash: Optional[str] = None
-    skip_reason: Optional[Literal["missing_ingestion_run_id"]] = None
+    skip_reason: Optional[Literal["missing_ingestion_run_id", "artifact_already_recorded"]] = None
 
 
 def build_agent_artifact_task_payload(
@@ -203,14 +203,21 @@ def enqueue_agent_artifact_task(
 def persist_agent_artifact(
     db_session: Any,
     payload: AgentArtifactTaskPayload | Mapping[str, Any],
-) -> None:
-    """Persist the validated advisory artifact for operator review."""
+) -> bool:
+    """Persist the validated advisory artifact for operator review.
+
+    Returns True when this call recorded the artifact and False when the
+    same tenant already had it (a redelivered task). The arbiter is
+    (artifact_id, tenant_id): an id that belongs to another tenant still
+    collides on the primary key and raises, instead of being dropped
+    silently.
+    """
 
     parsed = (
         payload if isinstance(payload, AgentArtifactTaskPayload) else AgentArtifactTaskPayload.model_validate(payload)
     )
     artifact = parsed.artifact
-    db_session.execute(
+    row = db_session.execute(
         text(
             """
             INSERT INTO fsma.agent_artifacts (
@@ -231,7 +238,8 @@ def persist_agent_artifact(
                 :rule_id, :rule_version, :citation_reference, :request_id,
                 CAST(:artifact AS jsonb), CAST(:payload AS jsonb)
             )
-            ON CONFLICT (artifact_id) DO NOTHING
+            ON CONFLICT (artifact_id, tenant_id) DO NOTHING
+            RETURNING artifact_id
             """
         ),
         {
@@ -257,7 +265,8 @@ def persist_agent_artifact(
             "artifact": json.dumps(artifact.model_dump(mode="json"), sort_keys=True),
             "payload": json.dumps(artifact.payload.model_dump(mode="json"), sort_keys=True),
         },
-    )
+    ).fetchone()
+    return row is not None
 
 
 def append_agent_artifact_receipt(
@@ -320,8 +329,17 @@ def handle_agent_artifact_task(**payload: Any) -> None:
     db_session = _get_session()
     try:
         set_tenant_guc(db_session, str(parsed.tenant_id))
-        persist_agent_artifact(db_session, parsed)
-        result = append_agent_artifact_receipt(db_session, parsed)
+        if persist_agent_artifact(db_session, parsed):
+            result = append_agent_artifact_receipt(db_session, parsed)
+        else:
+            # Redelivery. The first delivery committed the artifact and its
+            # receipt together, so appending again would duplicate the ledger.
+            result = AgentLedgerBridgeResult(
+                artifact_id=parsed.artifact_id,
+                tenant_id=parsed.tenant_id,
+                ledger_receipt_appended=False,
+                skip_reason="artifact_already_recorded",
+            )
         db_session.commit()
         logger.info(
             "agent_artifact_task_processed",
