@@ -1294,8 +1294,11 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
         run: |
           export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
+          # v126 runs its real upgrade/downgrade as this job's NOBYPASSRLS
+          # schema owner over populated, FORCE-RLS tables, then rolls back.
           pytest tests/migrations/test_rule_backfill_owner_rls.py \
             tests/migrations/test_v120_rule_citations.py \
+            tests/migrations/test_v126_tenant_composite_run_fks.py \
             -v -rs --no-cov -o "testpaths=tests"
 
       - name: Run live-DB suite (skips are failures)
