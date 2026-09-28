@@ -8,6 +8,7 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import dataclasses
 import io
@@ -26,6 +27,12 @@ from fastapi.responses import StreamingResponse
 from shared.agent_task_bridge import enqueue_agent_artifact_task
 from shared.database import SessionLocal
 from shared.jev import JevDecider, get_jev_decider
+from shared.jev.cte_classification import (
+    QUESTIONS_VERSION as _JEV_CTE_QUESTIONS_VERSION,
+    CteClassificationResult,
+    build_cte_type_artifacts,
+    suggest_file_cte_type,
+)
 from shared.jev.header_mapping import (
     MALFORMED_HEADER,
     QUESTIONS_VERSION as _JEV_QUESTIONS_VERSION,
@@ -48,6 +55,7 @@ from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
     CsvIngestResponse,
+    CteTypeSuggestionResult,
     HeaderMappingEngineResult,
     HeaderMappingSuggestionResult,
     IngestEvent,
@@ -1171,6 +1179,146 @@ def _header_mapping_engine_result(
     )
 
 
+# ---------------------------------------------------------------------------
+# Jev file-CTE suggestion (shared.jev.cte_classification)
+#
+# The upload UI never sends ``cte_type``, and RegEngine's own templates carry
+# no CTE column, so without a declared CTE every row is rejected with "No
+# CTE type". When the upload declares none and no column gives rows their
+# own CTE, Jev is asked once which CTE the file records, concurrently with
+# the header mapping. The answer is returned (in the 400 body too, so the
+# uploader can re-upload with it) and, only with
+# REGENGINE_JEV_APPLY_FILE_CTE_TYPE, used as the file's fallback CTE. Like
+# the header mapping, no failure here can fail the upload.
+# ---------------------------------------------------------------------------
+
+# Fixed reason: the scan's own reason names a column, which may be row data.
+_ROW_VALUES_CONTRADICT = "row_values_contradict"
+
+
+def _file_cte_result(decider: JevDecider, status: str) -> CteClassificationResult:
+    return CteClassificationResult(
+        status=status,
+        thresholds=decider.settings.thresholds,
+        apply_enabled=decider.settings.apply_file_cte_type,
+    )
+
+
+async def _suggest_file_cte_for_upload(text: str, *, decider: Optional[JevDecider] = None) -> CteClassificationResult:
+    """Ask Jev which CTE a file that declares none records, off the event loop. Never raises.
+
+    Call it only when the upload declared no ``cte_type``. A file with a
+    column the parser reads a row's CTE from (``_per_row_cte_column``) is
+    not asked about (status ``per_row_cte_column``): the rows name their
+    own CTE. An answer that passed the apply policy is kept only when no
+    row can contradict it, checked with the same scan that withholds a
+    declared CTE from the header mapping (``_file_cte_type_for_jev``);
+    otherwise it is blocked with ``row_values_contradict``.
+    """
+    decider = decider if decider is not None else get_jev_decider()
+    if not decider.enabled:
+        return _file_cte_result(decider, "disabled")
+    try:
+        # Off the event loop: reading a 5 MiB upload is CPU work.
+        headers, samples, malformed = await run_in_threadpool(
+            _csv_headers_and_samples, text, decider.settings.header_sample_values
+        )
+        if malformed:
+            # The "header" may be whole rows: nothing about it may leave the process.
+            logger.warning("csv_file_cte_malformed_header reason=%s", malformed)
+            return _file_cte_result(decider, MALFORMED_HEADER)
+        if not any(header.strip() for header in headers):
+            return _file_cte_result(decider, "no_headers")
+        if _per_row_cte_column(headers) is not None:
+            return _file_cte_result(decider, "per_row_cte_column")
+        result = await run_in_threadpool(suggest_file_cte_type, headers, samples=samples, decider=decider)
+        applied = result.applied_cte_type
+        if applied is not None and result.suggestion is not None:
+            kept, reason = await run_in_threadpool(_file_cte_type_for_jev, text, applied)
+            if kept is None:
+                logger.info("csv_file_cte_not_applied cte_type=%s reason=%s", applied, reason)
+                result = dataclasses.replace(
+                    result,
+                    suggestion=dataclasses.replace(
+                        result.suggestion, applied=False, blocked_reason=_ROW_VALUES_CONTRADICT
+                    ),
+                )
+        return result
+    except Exception:  # noqa: BLE001 - a suggestion failure must never reject an upload.
+        logger.exception("csv_file_cte_failed")
+        return _file_cte_result(decider, "error")
+
+
+def _record_file_cte_evidence(
+    result: CteClassificationResult,
+    *,
+    tenant_id: str,
+    source_hash: str,
+    ingestion_run_id: Optional[str],
+) -> int:
+    """Queue the advisory ``field_mapping_suggestion`` artifact for the file CTE.
+
+    Same queue, bridge and failure policy as ``_record_header_mapping_evidence``:
+    best-effort, synchronous psycopg I/O the route runs in the threadpool.
+    """
+    try:
+        artifacts = build_cte_type_artifacts(
+            result, tenant_id=tenant_id, source_hash=source_hash, ingestion_run_id=ingestion_run_id
+        )
+    except ValueError as exc:
+        logger.warning("csv_file_cte_evidence_skipped reason=%s", exc)
+        return 0
+    if not artifacts:
+        return 0
+    session = SessionLocal()
+    try:
+        set_tenant_guc(session, str(tenant_id))
+        for artifact in artifacts:
+            enqueue_agent_artifact_task(session, artifact)
+        session.commit()
+    except Exception:  # noqa: BLE001 - evidence queueing is best-effort; the run itself is already retained.
+        session.rollback()
+        logger.exception(
+            "csv_file_cte_evidence_failed source_hash=%s ingestion_run_id=%s applied=%s",
+            source_hash,
+            ingestion_run_id,
+            result.applied_cte_type,
+        )
+        return 0
+    finally:
+        session.close()
+    logger.info(
+        "csv_file_cte_evidence_queued artifacts=%d applied=%s ingestion_run_id=%s",
+        len(artifacts),
+        result.applied_cte_type,
+        ingestion_run_id,
+    )
+    return len(artifacts)
+
+
+def _cte_type_suggestion_result(
+    result: Optional[CteClassificationResult], artifacts_recorded: int = 0
+) -> Optional[CteTypeSuggestionResult]:
+    """The response's ``cte_type_suggestion``; ``None`` when Jev was not asked to consider the file."""
+    if result is None or result.status == "disabled":
+        return None
+    suggestion = result.suggestion
+    evidence = result.evidence
+    return CteTypeSuggestionResult(
+        status=result.status,
+        cte_type=suggestion.cte_type if suggestion else None,
+        confidence=suggestion.confidence if suggestion else None,
+        band=suggestion.band.value if suggestion else None,
+        applied=suggestion.applied if suggestion else False,
+        blocked_reason=suggestion.blocked_reason if suggestion else None,
+        model=evidence.model if evidence else None,
+        request_id=evidence.request_id if evidence else None,
+        questions_version=_JEV_CTE_QUESTIONS_VERSION if evidence else None,
+        apply_enabled=result.apply_enabled,
+        artifacts_recorded=artifacts_recorded,
+    )
+
+
 @router.post(
     "/ingest/csv",
     response_model=CsvIngestResponse,
@@ -1205,7 +1353,21 @@ async def ingest_csv(
     # Read and parse CSV
     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
     text = content.decode("utf-8-sig")  # Handle BOM
-    header_mapping = await _suggest_header_mappings_for_upload(text, cte_type=fallback_cte)
+    file_cte: Optional[CteClassificationResult] = None
+    if fallback_cte is None:
+        # Independent questions over the same upload: ask both at once.
+        header_mapping, file_cte = await asyncio.gather(
+            _suggest_header_mappings_for_upload(text), _suggest_file_cte_for_upload(text)
+        )
+    else:
+        header_mapping = await _suggest_header_mappings_for_upload(text, cte_type=fallback_cte)
+    if file_cte is not None and file_cte.applied_cte_type:
+        fallback_cte = file_cte.applied_cte_type
+        logger.info(
+            "csv_file_cte_applied cte_type=%s confidence=%.3f",
+            fallback_cte,
+            file_cte.suggestion.confidence if file_cte.suggestion else 0.0,
+        )
     if header_mapping.applied_mapping:
         logger.info(
             "csv_header_mappings_applied count=%d mapping=%s",
@@ -1217,7 +1379,12 @@ async def ingest_csv(
     )
 
     if not events and parse_errors:
-        raise HTTPException(status_code=400, detail={"message": "No valid rows found", "errors": parse_errors})
+        detail: dict = {"message": "No valid rows found", "errors": parse_errors}
+        suggestion = _cte_type_suggestion_result(file_cte)
+        if suggestion is not None:
+            # The uploader can re-upload with this CTE in one step.
+            detail["cte_type_suggestion"] = suggestion.model_dump()
+        raise HTTPException(status_code=400, detail=detail)
     if not events:
         raise HTTPException(status_code=400, detail="CSV contained no data rows")
 
@@ -1245,6 +1412,15 @@ async def ingest_csv(
         artifacts_recorded = await run_in_threadpool(
             _record_header_mapping_evidence,
             header_mapping,
+            tenant_id=tenant_id,
+            source_hash=receipt.sha256,
+            ingestion_run_id=response.ingestion_run_id,
+        )
+    file_cte_artifacts = 0
+    if file_cte is not None and file_cte.ok:
+        file_cte_artifacts = await run_in_threadpool(
+            _record_file_cte_evidence,
+            file_cte,
             tenant_id=tenant_id,
             source_hash=receipt.sha256,
             ingestion_run_id=response.ingestion_run_id,
@@ -1297,4 +1473,5 @@ async def ingest_csv(
             for suggestion in header_mapping.suggestions
         ],
         header_mapping_engine=_header_mapping_engine_result(header_mapping, artifacts_recorded),
+        cte_type_suggestion=_cte_type_suggestion_result(file_cte, file_cte_artifacts),
     )

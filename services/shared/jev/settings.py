@@ -30,6 +30,12 @@ Environment variables
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``  Number of PII-redacted sample values per unrecognised
                                         column to include in the request (0-5, default 0:
                                         only column headers leave the process).
+``REGENGINE_JEV_APPLY_FILE_CTE_TYPE``   ``1``/``true`` lets ``/ingest/csv`` use Jev's answer to
+                                        "which CTE does this file record" as the file's fallback
+                                        CTE when the upload declares none and has no per-row CTE
+                                        column. Only AUTO_APPLY-band answers naming one CTE are
+                                        used. Default off: the answer is returned in the response
+                                        (and the 400 body) and recorded as an advisory artifact.
 """
 
 from __future__ import annotations
@@ -60,6 +66,7 @@ AUTO_APPLY_CONFIDENCE_ENV = "REGENGINE_JEV_AUTO_APPLY_CONFIDENCE"
 REVIEW_CONFIDENCE_ENV = "REGENGINE_JEV_REVIEW_CONFIDENCE"
 APPLY_HEADER_MAPPINGS_ENV = "REGENGINE_JEV_APPLY_HEADER_MAPPINGS"
 HEADER_SAMPLE_VALUES_ENV = "REGENGINE_JEV_HEADER_SAMPLE_VALUES"
+APPLY_FILE_CTE_TYPE_ENV = "REGENGINE_JEV_APPLY_FILE_CTE_TYPE"
 
 DEFAULT_HEADER_SAMPLE_VALUES = 0
 MAX_HEADER_SAMPLE_VALUES = 5
@@ -74,6 +81,12 @@ def _read(env: Mapping[str, str], name: str) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def _read_switch(env: Mapping[str, str], name: str) -> bool:
+    """An opt-in switch: on only for an explicit true value, off for anything else."""
+    raw = _read(env, name)
+    return raw is not None and raw.lower() in _TRUE_VALUES
 
 
 def _read_float(env: Mapping[str, str], name: str, default: float, *, minimum: float, maximum: float) -> float:
@@ -122,6 +135,7 @@ class JevSettings:
     review_confidence: float = DEFAULT_REVIEW_CONFIDENCE
     apply_header_mappings: bool = False
     header_sample_values: int = DEFAULT_HEADER_SAMPLE_VALUES
+    apply_file_cte_type: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -158,9 +172,6 @@ class JevSettings:
             )
             auto_apply, review = DEFAULT_AUTO_APPLY_CONFIDENCE, DEFAULT_REVIEW_CONFIDENCE
 
-        apply_raw = _read(source, APPLY_HEADER_MAPPINGS_ENV)
-        apply_header_mappings = apply_raw is not None and apply_raw.lower() in _TRUE_VALUES
-
         return cls(
             api_key=_read(source, API_KEY_ENV),
             model=_read(source, MODEL_ENV) or DEFAULT_MODEL,
@@ -170,7 +181,7 @@ class JevSettings:
             max_retries=_read_int(source, MAX_RETRIES_ENV, DEFAULT_MAX_RETRIES, minimum=0, maximum=5),
             auto_apply_confidence=auto_apply,
             review_confidence=review,
-            apply_header_mappings=apply_header_mappings,
+            apply_header_mappings=_read_switch(source, APPLY_HEADER_MAPPINGS_ENV),
             header_sample_values=_read_int(
                 source,
                 HEADER_SAMPLE_VALUES_ENV,
@@ -178,4 +189,5 @@ class JevSettings:
                 minimum=0,
                 maximum=MAX_HEADER_SAMPLE_VALUES,
             ),
+            apply_file_cte_type=_read_switch(source, APPLY_FILE_CTE_TYPE_ENV),
         )

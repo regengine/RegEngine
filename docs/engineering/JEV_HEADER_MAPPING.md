@@ -2,6 +2,13 @@
 
 Decision record: `docs/architecture/decisions/ADR-005-jev-header-mapping-suggestions.md`.
 
+Jev answers two questions about a CSV upload, both from its header row:
+
+1. Which canonical FSMA 204 field is each unrecognised column? (header
+   mapping, most of this document)
+2. For a file that declares no CTE, which critical tracking event do its
+   rows record? ([File CTE suggestion](#file-cte-suggestion-uploads-that-declare-no-cte))
+
 ## What Jev is
 
 Jev is TypeSafe AI's "System One" model. It does not generate text. One
@@ -29,14 +36,18 @@ for coding-agent sessions.
 | Piece | Path |
 | --- | --- |
 | SDK wrapper: settings, fail-open client, evidence, confidence bands | `services/shared/jev/settings.py`, `services/shared/jev/client.py`, `services/shared/jev/routing.py` |
-| Question set, vocabulary, apply policy, artifact builder | `services/shared/jev/header_mapping.py` |
-| Integration point | `services/ingestion/app/csv_templates.py` (`_suggest_header_mappings_for_upload`, `_record_header_mapping_evidence`, `parse_csv_rows(header_mapping=...)`) |
-| Response fields | `services/ingestion/app/webhook_models.py` (`HeaderMappingSuggestionResult`, `HeaderMappingEngineResult`) |
+| Question set, vocabulary, apply policy, artifact builder | `services/shared/jev/header_mapping.py` (header mapping), `services/shared/jev/cte_classification.py` (file CTE) |
+| Integration point | `services/ingestion/app/csv_templates.py` (`_suggest_header_mappings_for_upload`, `_record_header_mapping_evidence`, `parse_csv_rows(header_mapping=...)`; `_suggest_file_cte_for_upload`, `_record_file_cte_evidence`) |
+| Response fields | `services/ingestion/app/webhook_models.py` (`HeaderMappingSuggestionResult`, `HeaderMappingEngineResult`, `CteTypeSuggestionResult`) |
+| Upload UI ("Import as <CTE>") | `frontend/src/lib/cte-suggestion.ts`, `frontend/src/components/fsma/CteSuggestionPrompt.tsx`, used by `/ingest` and the Data Import Hub |
+| Startup log | `server/main.py`: `jev_configured enabled=... key_present=... apply_header_mappings=... apply_file_cte_type=...` (never the key) |
 | Operator preview CLI | `scripts/jev_header_preview.py` (see [Preview suggestions on your own files](#preview-suggestions-on-your-own-files)) |
-| Tests | `services/shared/tests/test_jev_client.py`, `services/shared/tests/test_jev_header_mapping.py`, `services/ingestion/tests/test_csv_jev_header_mapping.py`, `services/ingestion/tests/test_jev_header_preview_script.py` |
+| Tests | `services/shared/tests/test_jev_client.py`, `services/shared/tests/test_jev_header_mapping.py`, `services/shared/tests/test_jev_cte_classification.py`, `services/ingestion/tests/test_csv_jev_header_mapping.py`, `services/ingestion/tests/test_csv_jev_file_cte.py`, `services/ingestion/tests/test_jev_header_preview_script.py`, `frontend/src/__tests__/lib/cte-suggestion.test.ts` |
 
-Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email CSV path shares
-`parse_csv_rows` but passes no mapping, so it is unchanged.
+Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email path
+(`services/ingestion/app/email_ingest/service.py`) calls the same route
+function (`ingest_csv`) for each CSV attachment with no `cte_type`, so its
+attachments get both questions and the same apply switches.
 
 ## Request flow
 
@@ -174,9 +185,79 @@ nor a later column in its chain filled in.
 Applied mappings are also written to the application log as
 `csv_header_mappings_applied` (column names only).
 
+## File CTE suggestion (uploads that declare no CTE)
+
+**Why.** The upload UI (`/ingest`, the Data Import Hub) never sends the
+`cte_type` form field, and RegEngine's own templates
+(`GET /api/v1/templates/{cte_type}`) have no CTE column. So a filled-in
+template uploaded from the UI has every row rejected with `No CTE type`:
+all seven templates fail this way
+(`test_every_template_without_a_declared_cte_is_rejected_today`). The same
+holds for supplier exports that record one kind of event per file.
+
+**When it is asked.** Once per upload, when the upload declares no
+`cte_type` and no header is a column the parser reads a row's CTE from
+(`cte_type`, `event_type`, `type`, `cte` after normalisation). With a
+declared CTE nothing is asked and `cte_type_suggestion` is null. With a
+per-row CTE column nothing is asked and the status is `per_row_cte_column`.
+When the header mapping also asks (the file has unrecognised columns), the
+two requests run concurrently, each with its own question set and version,
+so the slower one bounds the added latency. Either way a request is
+bounded by `REGENGINE_JEV_TIMEOUT_SECONDS` per attempt and
+`REGENGINE_JEV_MAX_RETRIES`, and a failure never changes the outcome.
+
+**The question** (`services/shared/jev/cte_classification.py`,
+`csv-file-cte.v1`): one `Choice` over the seven FDA CTEs plus
+`mixed_or_unclear`, each described with what it is, what it is not, and
+typical headers. The state is `{"csv_headers": [...]}` plus
+`sample_values` only when `REGENGINE_JEV_HEADER_SAMPLE_VALUES` is set (the
+same redacted values the header mapping sends for unrecognised columns).
+`growing` is never offered: it is not an FDA CTE.
+
+**Policy.**
+
+| Answer | What code does |
+| --- | --- |
+| One CTE, `auto_apply` band, `confidence >= 0.85`, `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`, and no row names a different CTE | Used as the file's fallback CTE (`applied: true`). A row's own CTE still wins. Artifact recorded with `requires_human_review=false`; `csv_file_cte_applied` logged. |
+| One CTE, any other case | Advisory: returned on the response and in the 400 body with `blocked_reason` (`apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`, `row_values_contradict`). Artifact recorded with `requires_human_review=true` unless the band is `reject`. |
+| `mixed_or_unclear`, or a label outside the vocabulary | `cte_type: null`, `blocked_reason: mixed_or_unclear`. Nothing offered, no artifact. |
+
+`row_values_contradict` reuses the scan that withholds a declared CTE from
+the header mapping (`_file_cte_type_for_jev`): if any unrecognised column
+holds a value that resolves through `_CTE_TYPE_ALIASES` to a different CTE
+in the rows the parser reads, the answer is not applied. The reason on the
+response is fixed; the column name is only logged
+(`csv_file_cte_not_applied`).
+
+**Where the uploader sees it.** When no row parses, the 400 detail
+(`{"message": "No valid rows found", "errors": [...]}`) gains
+`cte_type_suggestion` (`CteTypeSuggestionResult`: `status`, `cte_type`,
+`confidence`, `band`, `applied`, `blocked_reason`, `model`, `request_id`,
+`questions_version`, `apply_enabled`, `artifacts_recorded`). The upload
+pages show "These rows look like Receiving events (97% confidence)" with an
+**Import as Receiving** button that re-uploads the same file with
+`cte_type=receiving`; the server then treats it as declared. Nothing is
+imported until the click, and a re-upload that still fails offers nothing
+again. A successful upload carries the same object as
+`cte_type_suggestion` on the response.
+
+**Evidence.** An actionable answer is queued as a
+`field_mapping_suggestion` artifact after the run is retained:
+`source_field: "csv_file"`, `source_value` the header row,
+`target_canonical_field: "cte_type"`, `normalized_value` the CTE,
+`agent_name: jev-csv-cte-classifier`, `agent_version: csv-file-cte.v1`. A
+400 retains no run, so it records no artifact.
+
+**Statuses** (`cte_type_suggestion.status`): `ok`, `per_row_cte_column`,
+`no_headers`, `malformed_header` (nothing sent), `unavailable:<reason>`,
+`no_answer`, `error`. In every non-`ok` case the upload is processed
+exactly as without Jev.
+
 ## What leaves the process
 
-- Always (when configured): the CSV header row, but only a well-formed one:
+- Always (when configured), for header mapping when a column is
+  unrecognised and for the file CTE question when the upload declares no
+  CTE: the CSV header row, but only a well-formed one:
   a single physical line, no line breaks inside a header, and no header
   over 128 characters after stripping (`MAX_HEADER_CHARS` in
   `services/shared/jev/header_mapping.py`; RegEngine's own longest column
@@ -216,9 +297,14 @@ a where-configured subprocessor in `frontend/src/lib/trust-subprocessors.ts`.
 | `REGENGINE_JEV_REVIEW_CONFIDENCE` | `0.50` | Lower bound of the `review` band. |
 | `REGENGINE_JEV_APPLY_HEADER_MAPPINGS` | `0` | `1` lets `auto_apply`-band answers change rows. |
 | `REGENGINE_JEV_HEADER_SAMPLE_VALUES` | `0` | 0-5 redacted sample values per unrecognised column. |
+| `REGENGINE_JEV_APPLY_FILE_CTE_TYPE` | `0` | `1` lets an `auto_apply`-band file CTE become the fallback CTE of an upload that declares none. Independent of the header-mapping switch. |
 
 Invalid values fall back to the default with a `jev.settings.*` warning; the
 request path never fails on configuration.
+
+To confirm a deployment picked up the key without reading the variable,
+search its startup logs for `jev_configured`: `enabled=True
+key_present=True` means the key is set and the kill switch is off.
 
 ## Preview suggestions on your own files
 
@@ -329,6 +415,9 @@ repository. (`.env` is excluded from commits but is still plaintext on disk.)
    log, and `requires_human_review=false` artifacts on the run ledger.
 4. Roll back at any time with `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=0`
    (suggestions continue) or `REGENGINE_JEV_ENABLED=0` (no calls).
+5. File CTE: upload each RegEngine template with no `cte_type` and check
+   `cte_type_suggestion` on the 400 (advisory mode). When the answers are
+   right, turn on `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`; roll back with `0`.
 
 ## Failure modes
 
@@ -346,7 +435,11 @@ repository. (`.env` is excluded from commits but is still plaintext on disk.)
 | `unavailable:server_error`, `unavailable:invalid_response` | Vendor-side; upload proceeds unmapped. |
 | `error` | Unexpected exception in RegEngine code; see `csv_header_mapping_failed` in the log. |
 
-In every non-`ok` case the upload is processed exactly as without Jev. A
+In every non-`ok` case the upload is processed exactly as without Jev.
+The SDK types confidences and probabilities as unbounded floats; the
+wrapper clamps them to `[0, 1]` and reads a non-finite value as `0.0`
+(`_unit` in `services/shared/jev/client.py`), so vendor float noise can
+never fail the bounded response models after rows were stored. A
 failure to queue evidence after a successful call is logged as
 `csv_header_mapping_evidence_failed` with the upload hash and run id and
 reports `artifacts_recorded: 0`; it does not reject the upload.
@@ -361,12 +454,19 @@ reports `artifacts_recorded: 0`; it does not reject the upload.
   log (`truncated_columns`).
 - Thresholds are the vendor's published starting points and have not been
   validated on RegEngine data yet; that is step 2 of the rollout.
+- The file CTE question is skipped whenever a header is a per-row CTE
+  column the parser reads, even if its values are blank or are not CTEs
+  (a `Type` column of pallet types): those rows are still rejected with
+  `No CTE type`.
+- The preview CLI shows header-mapping suggestions only; it does not ask
+  the file CTE question yet.
 
 ## Verification
 
 ```bash
-python3 -m pytest services/shared/tests/test_jev_client.py services/shared/tests/test_jev_header_mapping.py -q --no-cov
-python3 -m pytest services/ingestion/tests/test_csv_jev_header_mapping.py services/ingestion/tests/test_jev_header_preview_script.py -q --no-cov
+python3 -m pytest services/shared/tests/test_jev_client.py services/shared/tests/test_jev_header_mapping.py services/shared/tests/test_jev_cte_classification.py -q --no-cov
+python3 -m pytest services/ingestion/tests/test_csv_jev_header_mapping.py services/ingestion/tests/test_csv_jev_file_cte.py services/ingestion/tests/test_jev_header_preview_script.py -q --no-cov
+cd frontend && npx vitest run src/__tests__/lib/cte-suggestion.test.ts src/__tests__/pages/ingest-csv.test.tsx src/__tests__/pages/data-import.test.tsx
 ```
 
 All tests run offline against `httpx2.MockTransport`; no test contacts the

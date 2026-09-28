@@ -152,6 +152,56 @@ describe('CSV import results on /ingest', () => {
     expect(mocks.ingestFile).not.toHaveBeenCalled();
   });
 
+  it('offers the CTE Jev suggested and re-uploads with it only on confirmation', async () => {
+    const rejected = Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: No CTE type'],
+            cte_type_suggestion: {
+              status: 'ok', cte_type: 'receiving', confidence: 0.97, band: 'auto_apply', applied: false,
+            },
+          },
+        },
+      },
+    });
+    mocks.ingestFile.mockRejectedValueOnce(rejected).mockResolvedValueOnce(csvResult(1, 0));
+    await uploadCsv();
+
+    expect(await screen.findByText('These rows look like Receiving events (97% confidence).')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(1);
+    expect(mocks.ingestFile.mock.calls[0][0].cteType).toBeUndefined();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Import as Receiving' }));
+
+    expect(await screen.findByText('CSV processed')).toBeInTheDocument();
+    expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
+    expect(mocks.ingestFile.mock.calls[1][0]).toMatchObject({ apiKey: 'cookie-managed', cteType: 'receiving' });
+    expect(mocks.ingestFile.mock.calls[1][0].file).toBe(mocks.ingestFile.mock.calls[0][0].file);
+    expect(screen.queryByRole('button', { name: 'Import as Receiving' })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing when Jev found the file mixed or unclear', async () => {
+    mocks.ingestFile.mockRejectedValue(Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: 'No valid rows found',
+            errors: ['Row 2: No CTE type'],
+            cte_type_suggestion: { status: 'ok', cte_type: null, confidence: 0.9, band: 'auto_apply', applied: false },
+          },
+        },
+      },
+    }));
+    await uploadCsv();
+
+    expect(await screen.findByText('No valid rows found: Row 2: No CTE type')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Import as/ })).not.toBeInTheDocument();
+  });
+
   it('limits the chooser to the CSV contract', async () => {
     render(<IngestPage />);
     await userEvent.click(screen.getByRole('tab', { name: /file upload/i }));

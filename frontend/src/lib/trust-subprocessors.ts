@@ -94,12 +94,12 @@ export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
   },
   {
     name: 'TypeSafe AI',
-    purpose: 'Calibrated classification of unrecognised CSV column headers into canonical FSMA 204 fields during CSV ingestion (Jev System One model).',
+    purpose: 'Calibrated classification of CSV column headers during CSV ingestion (Jev System One model): which canonical FSMA 204 field an unrecognised column holds, and, for a file that declares no critical tracking event, which one its rows record.',
     dataProcessed: 'CSV column headers; when the uploader declares a single CTE for the file, that canonical CTE name (for example "shipping"); and, only where sample values are explicitly enabled, PII-redacted sample cell values for unrecognised columns. Never whole rows or files.',
     location: 'United States',
     link: 'https://typesafe.ai/legal/privacy',
     availability: 'where_configured',
-    availabilityLabel: 'Where AI header mapping is enabled',
+    availabilityLabel: 'Where AI CSV suggestions are enabled',
   },
   {
     name: 'Cloudflare R2',
