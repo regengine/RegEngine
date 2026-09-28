@@ -105,7 +105,7 @@ f6c2537615ab730e34c95a57e65f06a9bf94eb07:.agent/CONSTITUTION.md:curl-auth-header
 # ── 2026-09-28 triage (remaining 20 findings; #3080 closed out) ─────
 # curl examples with the literal YOUR_API_KEY placeholder (frontend docs
 # pages, launch_orchestrator quick-start) and generic-api-key false positives
-# on FSMA fact keys ("key": "FSMA_204_TLC_ASSIGNMENT" etc.) in
+# on FSMA_204_* fact-key names (dict entries in the seed facts) in
 # kernel/reporting/worker/main.py.
 8f0069f6c5f60e36378144708930f009ebb9f213:frontend/src/app/admin/api-console/page.tsx:curl-auth-header:367
 8f0069f6c5f60e36378144708930f009ebb9f213:frontend/src/app/api-keys/page.tsx:curl-auth-header:236
@@ -127,3 +127,9 @@ f6c2537615ab730e34c95a57e65f06a9bf94eb07:.agent/CONSTITUTION.md:curl-auth-header
 a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:15
 a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:18
 a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:37
+
+# #3165 landed a comment in this file that quoted a seed-fact dict entry and
+# tripped generic-api-key on itself; the wording is fixed above, and these pin
+# the historical line (squash commit on main + the pre-squash branch commit).
+db6df3d2c2f25e395ef6f66204eb55af893f674a:.gitleaksignore:generic-api-key:108
+7020a8d88edbc8791e16f242cf1187204fb527bc:.gitleaksignore:generic-api-key:108
