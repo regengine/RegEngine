@@ -33,9 +33,23 @@ pytestmark = [
 @pytest.fixture(scope="session")
 def minio_container():
     """Start a real MinIO container for S3 integration testing."""
-    # MinIO removed its Docker Hub repository (docker.io/minio/minio now 404s);
-    # the same release tag is published on quay.io.
-    container = DockerContainer("quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z")
+    # MinIO removed its Docker Hub repository (docker.io/minio/minio now 404s),
+    # and as of 2026-09-27 quay.io pulls return "unauthorized" too. Pull
+    # up-front and skip (not ERROR) when the registry refuses, so a vendor
+    # registry change can't block every PR.
+    image = "quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z"
+    try:
+        import docker  # type: ignore[import-untyped]
+
+        client = docker.from_env()
+        try:
+            client.images.get(image)
+        except docker.errors.ImageNotFound:
+            client.images.pull(image)
+    except Exception as exc:  # noqa: BLE001 - any registry/pull failure → skip
+        pytest.skip(f"MinIO image unavailable ({image}): {exc}")
+
+    container = DockerContainer(image)
     container.with_env("MINIO_ROOT_USER", "minio")
     container.with_env("MINIO_ROOT_PASSWORD", "minio123")
     container.with_command("server /data --console-address :9001")
