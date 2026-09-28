@@ -244,41 +244,50 @@ CTE_ANSWERS = {"Activity": _choice("cte_type", 0.97, no_match=0.03)}
 CTE_HEADERS = ["Activity", "quantity"]
 
 
-def test_declared_file_cte_blocks_an_auto_apply_mapping_onto_the_row_cte_column():
-    decider = _decider(_transport(CTE_ANSWERS), apply_header_mappings=True)
-    result = suggest_header_mappings(CTE_HEADERS, recognized=RECOGNIZED, decider=decider, cte_type="shipping")
-
-    (suggestion,) = result.suggestions
-    assert suggestion.band is ConfidenceBand.AUTO_APPLY
-    assert suggestion.applied is False
-    assert suggestion.blocked_reason == "declared_file_cte"
-    assert result.applied_mapping == {}
-    (artifact,) = build_field_mapping_artifacts(result, tenant_id=str(uuid.uuid4()), source_hash=SOURCE_HASH)
-    assert artifact.requires_human_review is True
-    assert "the upload declared the file CTE shipping, which takes precedence" in artifact.payload.rationale
+FALLBACK = (
+    "remains the fallback for rows where this column is blank or not a known CTE; "
+    "per-row values from this column override it."
+)
 
 
 @pytest.mark.parametrize(
-    "cte_type,row_cte_columns",
-    [(None, ("cte_type",)), ("", ("cte_type",)), ("shipping", ())],
-    ids=["not-declared", "empty", "no-row-cte-columns"],
+    "cte_type,dropped,note",
+    [
+        ("shipping", None, f"The declared file CTE shipping {FALLBACK}"),
+        (None, "column Activity holds per-row CTE values", f"The declared file CTE {FALLBACK}"),
+        (None, None, None),
+        ("", None, None),
+    ],
+    ids=["declared-and-sent", "declared-and-withheld", "not-declared", "empty"],
 )
-def test_cte_mapping_applies_as_before_when_no_file_cte_is_sent(cte_type, row_cte_columns):
+def test_cte_type_mapping_applies_as_before_and_says_the_declared_cte_is_only_a_fallback(cte_type, dropped, note):
+    # A row's own CTE beats the declared one in the parser, so the policy
+    # applies a cte_type mapping whether or not a file CTE was declared.
     decider = _decider(_transport(CTE_ANSWERS), apply_header_mappings=True)
-    result = suggest_header_mappings(
-        CTE_HEADERS, recognized=RECOGNIZED, decider=decider, cte_type=cte_type, row_cte_columns=row_cte_columns
-    )
+    result = suggest_header_mappings(CTE_HEADERS, recognized=RECOGNIZED, decider=decider, cte_type=cte_type)
+    if dropped:
+        result = dataclasses.replace(result, file_cte_type_dropped=dropped)
 
     assert result.applied_mapping == {"activity": "cte_type"}
-    assert result.suggestions[0].blocked_reason is None
+    (suggestion,) = result.suggestions
+    assert suggestion.band is ConfidenceBand.AUTO_APPLY and suggestion.blocked_reason is None
+    (rationale,) = _rationales(result)
+    assert "Applied to the upload's rows by deterministic code." in rationale
+    if note:
+        assert note in rationale
+    else:
+        assert "remains the fallback" not in rationale
 
 
-def test_declared_file_cte_does_not_block_other_targets():
-    answers = {**DEFAULT_ANSWERS, "Lot #": _choice("traceability_lot_code", 0.97)}
+def test_fallback_note_is_only_for_applied_cte_type_mappings():
+    answers = {"Activity": _choice("cte_type", 0.70, no_match=0.30), "Lot #": _choice("traceability_lot_code", 0.97)}
     decider = _decider(_transport(answers), apply_header_mappings=True)
-    result = suggest_header_mappings(HEADERS, recognized=RECOGNIZED, decider=decider, cte_type="shipping")
+    result = suggest_header_mappings(
+        ["Activity", "Lot #", "quantity"], recognized=RECOGNIZED, decider=decider, cte_type="shipping"
+    )
 
     assert result.applied_mapping == {"lot_#": "traceability_lot_code"}
+    assert all("remains the fallback" not in rationale for rationale in _rationales(result))
 
 
 def test_empty_cte_type_is_treated_as_not_declared():

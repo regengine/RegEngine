@@ -6,7 +6,8 @@ tests; nothing reaches the network):
 * The script goes through the route's own helper
   (``_suggest_header_mappings_for_upload``), so it sends exactly what
   ``POST /api/v1/ingest/csv`` sends: the header row, only unrecognised
-  columns as questions, redacted sample values only when asked, never rows.
+  columns as questions, the declared CTE name (``--cte-type``) only when no
+  row can contradict it, redacted sample values only when asked, never rows.
 * Output: a table (default) or JSON (``--json``) with column, suggested
   field, confidence, band, would-apply and blocked reason, plus model,
   request id and latency.
@@ -279,6 +280,19 @@ def test_not_configured_still_says_a_cte_type_would_be_withheld(script, capsys, 
     assert "CTE:     --cte-type would be withheld from Jev: file has a per-row CTE column: Event Type" in out
 
 
+def test_not_configured_also_reports_the_value_scan(script, capsys, tmp_path):
+    # "Activity" is unrecognised, so only Jev could map it; its "receiving"
+    # would still beat a declared harvesting, so the preview says so.
+    text = CSV_TEXT.replace("Notes\n", "Activity\n", 1).replace("call 555-123-4567", "receiving", 1)
+    path = str(_csv(tmp_path, text))
+    code, out, err, _ = _run(script, capsys, [path, "--json", "--cte-type", "harvesting"], env={})
+
+    assert code == 2
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] == "column Activity holds per-row CTE values"
+
+
 @pytest.mark.parametrize(
     "text,argv_extra",
     [(CSV_TEXT, ["--cte-type", "harvesting"]), (PER_ROW_CTE_CSV_TEXT, [])],
@@ -288,6 +302,17 @@ def test_not_configured_reports_no_drop_when_nothing_would_be_withheld(script, c
     code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path, text)), "--json", *argv_extra], env={})
 
     assert code == 2
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] is None
+
+
+def test_empty_cte_type_means_not_declared_like_the_route(script, capsys, tmp_path):
+    seen: dict = {}
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path)), "--json", "--cte-type", ""], env=BASE_ENV, seen=seen)
+
+    assert code == 0, err
+    assert "file_cte_type" not in seen["bodies"][0]["state"]
     report = json.loads(out)
     assert report["request"]["file_cte_type"] is None
     assert report["request"]["file_cte_type_dropped"] is None
@@ -428,6 +453,7 @@ def test_usage_and_file_errors_exit_1(script, capsys, tmp_path):
         [good, "--sample-values", "9"],
         [good, "--sample-values", "x"],
         [good, "--cte-type", "bogus"],
+        [good, "--cte-type", "  "],  # the route rejects a blank-but-not-empty form field too
         [good, "--cte-type"],
         [good, "--unknown-flag"],
         [],

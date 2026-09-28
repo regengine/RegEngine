@@ -893,20 +893,59 @@ def _per_row_cte_column(headers: Sequence[Optional[str]]) -> Optional[str]:
     return None
 
 
-def _file_cte_type_for_jev(
-    headers: Sequence[Optional[str]], cte_type: Optional[str]
-) -> tuple[Optional[str], Optional[str]]:
+def _file_cte_type_for_jev(text: str, cte_type: Optional[str]) -> tuple[Optional[str], Optional[str]]:
     """``(file_cte_type to send, reason a declared one was withheld)``.
 
-    The declared ``cte_type`` is only the parser's fallback: a row whose
-    per-row CTE column holds a known CTE overrides it. When the file has such
-    a column, "every row records <cte_type>" may be false, so Jev is not told.
+    Jev is told "every row in the file records <cte_type>" only when no row
+    can contradict it. The declared ``cte_type`` is only the parser's
+    fallback: ``_detect_row_cte_type`` reads a row's own CTE first, and that
+    can come from two places.
+
+    * A per-row CTE column the parser reads (``_CTE_TYPE_COLUMNS`` after
+      ``normalize_csv_header``): withheld on the header alone.
+    * An unrecognised column that Jev may map onto ``cte_type`` (``Activity``,
+      ``Event Kind``, ...): withheld when any of its values, normalised the
+      way ``_detect_row_cte_type`` normalises them, resolves through
+      ``_CTE_TYPE_ALIASES`` to a different CTE.
+
+    Comment rows are skipped exactly as ``parse_csv_rows`` skips them.
+    Recognised columns are never sent to Jev, so they cannot be mapped and
+    are not scanned. The scan is one linear pass over text the route has
+    already size-capped, and stops at the first contradiction. It errs on
+    withholding, which only costs Jev a hint: a single-letter alias (``S``,
+    ``R``, ``H``, ...) in any unrecognised column counts, and so does a file
+    whose rows cannot be read.
     """
     if not cte_type:
         return None, None
-    column = _per_row_cte_column(headers)
-    if column is not None:
-        return None, f"file has a per-row CTE column: {column}"
+    reader = csv.DictReader(io.StringIO(text))
+    try:
+        headers = [header or "" for header in (reader.fieldnames or [])]
+        column = _per_row_cte_column(headers)
+        if column is not None:
+            return None, f"file has a per-row CTE column: {column}"
+        unrecognized = {normalize_csv_header(header) for header in headers} - _RECOGNIZED_COLUMNS - {""}
+        if not unrecognized:
+            return cte_type, None
+        for raw_row in reader:
+            # The parser's row: normalised keys, stripped values. Its first
+            # value decides whether the row is a comment (``parse_csv_rows``).
+            row = {
+                normalize_csv_header(key): value.strip() if isinstance(value, str) else ""
+                for key, value in raw_row.items()
+            }
+            if next(iter(row.values()), "").startswith("#"):
+                continue
+            # Every raw column, not just the one a duplicate header leaves in
+            # ``row``: scanning a superset only errs on withholding.
+            for key, value in raw_row.items():
+                if not isinstance(value, str) or normalize_csv_header(key) not in unrecognized:
+                    continue
+                row_cte = _CTE_TYPE_ALIASES.get(value.strip().lower().replace(" ", "_"))
+                if row_cte and row_cte != cte_type:
+                    return None, f"column {(key or '').strip()} holds per-row CTE values"
+    except csv.Error:
+        return None, "rows could not be read to rule out per-row CTE values"
     return cte_type, None
 
 
@@ -920,7 +959,7 @@ async def _suggest_header_mappings_for_upload(
     this exact path against a local file without running the service.
     ``cte_type`` is the canonical CTE declared for the whole file (the
     route's normalised ``cte_type`` form field), or ``None``. Jev sees it as
-    ``file_cte_type`` only when the file has no per-row CTE column
+    ``file_cte_type`` only when no row can contradict it
     (``_file_cte_type_for_jev``); otherwise the result's
     ``file_cte_type_dropped`` says why it was withheld.
     """
@@ -931,7 +970,7 @@ async def _suggest_header_mappings_for_upload(
         headers, samples = _csv_headers_and_samples(text, decider.settings.header_sample_values)
         if not headers:
             return HeaderMappingResult(status="no_headers", thresholds=decider.settings.thresholds)
-        file_cte_type, dropped = _file_cte_type_for_jev(headers, cte_type)
+        file_cte_type, dropped = _file_cte_type_for_jev(text, cte_type)
         result = await run_in_threadpool(
             suggest_header_mappings,
             headers,
@@ -940,7 +979,6 @@ async def _suggest_header_mappings_for_upload(
             decider=decider,
             precedence=_COLUMN_PRECEDENCE,
             cte_type=file_cte_type,
-            row_cte_columns=_CTE_TYPE_COLUMNS,
         )
         if dropped:
             logger.info("csv_header_mapping_file_cte_withheld declared=%s reason=%s", cte_type, dropped)

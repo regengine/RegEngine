@@ -22,8 +22,8 @@ prints, logs or writes the key.
 
 What leaves the process is what production sends: the header row, the
 declared CTE when ``--cte-type`` is given (the route's ``cte_type`` form
-field, accepting the same values) and the file has no per-row CTE column
-(the report says when it was withheld and why), plus PII-redacted sample
+field, accepting the same values) and no row can contradict it (the
+report says when it was withheld and why), plus PII-redacted sample
 values per unrecognised column only when ``--sample-values`` (or
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0. Rows are never sent.
 
@@ -152,8 +152,13 @@ def _sample_count(raw: str) -> int:
     return value
 
 
-def _cte_type(raw: str) -> str:
-    """Normalise ``--cte-type`` the way the route normalises its ``cte_type`` form field."""
+def _cte_type(raw: str) -> str | None:
+    """Normalise ``--cte-type`` the way the route normalises its ``cte_type`` form field.
+
+    An empty value means "not declared", as an empty form field does.
+    """
+    if not raw:
+        return None
     canonical = route._CTE_TYPE_ALIASES.get(raw.strip().lower().replace(" ", "_"))
     if not canonical:
         valid = ", ".join(sorted(set(route._CTE_TYPE_ALIASES.values())))
@@ -166,7 +171,8 @@ def _parser() -> _Parser:
         prog=PROG,
         description=(
             "Preview Jev header-mapping suggestions for a local CSV, using the same code path as "
-            "POST /api/v1/ingest/csv. Sends the header row only (plus redacted samples if asked)."
+            "POST /api/v1/ingest/csv. Sends the header row only, plus the declared CTE name if --cte-type "
+            "is given and no row contradicts it, and redacted samples if asked."
         ),
     )
     parser.add_argument("csv_file", type=Path, help="CSV file to preview")
@@ -280,17 +286,9 @@ def _build_report(
     *,
     simulated: bool,
     prompted: bool,
-    cte_type: str | None = None,
+    file_cte_type_dropped: str | None = None,
 ) -> dict[str, Any]:
     evidence = result.evidence
-    # What the route's own helper put in the request, and why a declared CTE
-    # was withheld. Without Jev configured the helper returns before reading
-    # the header row, so ask the same rule directly: the operator still learns
-    # that --cte-type would be withheld. Nothing was sent, so file_cte_type
-    # stays null.
-    dropped = result.file_cte_type_dropped
-    if dropped is None and result.status == "disabled":
-        _, dropped = route._file_cte_type_for_jev(headers, cte_type)
     suggestions = []
     for suggestion in result.suggestions:
         item = suggestion.to_dict()
@@ -323,7 +321,7 @@ def _build_report(
             "header_count": len(headers),
             "unrecognized_headers": list(unknown),
             "file_cte_type": result.file_cte_type,
-            "file_cte_type_dropped": dropped,
+            "file_cte_type_dropped": file_cte_type_dropped,
             "truncated_columns": result.truncated_columns,
             "sample_values_per_column": settings.header_sample_values,
             "rows_sent": 0,
@@ -435,6 +433,13 @@ def main(
         decider.close()
 
     unknown = unrecognized_headers(headers, route._RECOGNIZED_COLUMNS)
+    # What the route's own helper withheld, and why. Without Jev configured
+    # it returns before looking at the file, so ask the same rule directly:
+    # the operator still learns that --cte-type would be withheld. Nothing
+    # was sent, so request.file_cte_type stays null.
+    dropped = result.file_cte_type_dropped
+    if dropped is None and result.status == "disabled":
+        _, dropped = route._file_cte_type_for_jev(text, args.cte_type)
     report = _build_report(
         args.csv_file,
         result,
@@ -443,7 +448,7 @@ def main(
         unknown,
         simulated=args.simulate_apply,
         prompted=args.prompt_key,
-        cte_type=args.cte_type,
+        file_cte_type_dropped=dropped,
     )
 
     if args.json:

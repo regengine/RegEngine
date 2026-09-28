@@ -26,9 +26,7 @@ How it works
    the operator enabled ``REGENGINE_JEV_APPLY_HEADER_MAPPINGS``, the answer
    is in the ``AUTO_APPLY`` band, the confidence clears the agent-artifact
    human-review threshold, the target field is not already present in the
-   file, no other column competes for the same target, and the target is not
-   a per-row CTE column while a declared file CTE was sent (the declared CTE
-   takes precedence: ``declared_file_cte``). Applying copies
+   file, and no other column competes for the same target. Applying copies
    the value under the canonical key; the source column is left untouched so
    nothing is lost from the evidence trail.
 
@@ -411,15 +409,8 @@ def _decide(
     apply_enabled: bool,
     samples: Mapping[str, Sequence[str]] | None,
     precedence: Sequence[Sequence[str]] = (),
-    declared_cte_targets: Collection[str] = (),
 ) -> list[HeaderMappingSuggestion]:
-    """Turn Choice answers into suggestions and apply the policy deterministically.
-
-    ``declared_cte_targets`` are the keys the parser reads a row's CTE from,
-    passed only when the upload declared a file CTE and Jev was told it. A
-    mapping onto one of them is never applied: it would let each row override
-    the CTE the uploader declared for the whole file.
-    """
+    """Turn Choice answers into suggestions and apply the policy deterministically."""
     provisional: list[dict[str, Any]] = []
     for index, header in enumerate(columns):
         answer = answers.get(f"col_{index}")
@@ -459,8 +450,6 @@ def _decide(
             blocked = "below_human_review_threshold"
         elif not apply_enabled:
             blocked = "apply_disabled"
-        elif canonical in declared_cte_targets:
-            blocked = "declared_file_cte"
         elif canonical in present_keys:
             blocked = "target_present"
         elif shadowed:
@@ -524,16 +513,14 @@ def suggest_header_mappings(
     decider: JevDecider | None = None,
     precedence: Sequence[Sequence[str]] = (),
     cte_type: str | None = None,
-    row_cte_columns: Collection[str] = ("cte_type",),
 ) -> HeaderMappingResult:
     """Ask Jev about every unrecognised header. Never raises.
 
     ``recognized`` is the parser's set of normalised column names.
     ``cte_type`` is the canonical CTE declared for the whole file, or
     ``None`` for a mixed-type or undeclared file (see :func:`build_state`).
-    ``row_cte_columns`` are the keys the parser reads a row's CTE from. When
-    ``cte_type`` is sent, a mapping onto one of them is never applied
-    (``declared_file_cte``): the declared file CTE takes precedence.
+    The caller must only pass it when no row can contradict it; the route
+    enforces that in ``_file_cte_type_for_jev``.
     ``precedence`` lists the parser's fallback chains (see
     :func:`outranked_columns`) so a mapping is never applied where it would
     outrank a column the file already carries. The decider's settings supply
@@ -589,7 +576,6 @@ def suggest_header_mappings(
         apply_enabled=apply_enabled,
         samples=samples,
         precedence=precedence,
-        declared_cte_targets=frozenset(row_cte_columns) if file_cte_type else frozenset(),
     )
     logger.info(
         "jev.header_mapping.suggested",
@@ -612,12 +598,7 @@ def suggest_header_mappings(
     )
 
 
-def _blocked_detail(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult) -> str:
-    if suggestion.blocked_reason == "declared_file_cte":
-        return (
-            f"; the upload declared the file CTE {result.file_cte_type}, which takes precedence: "
-            "applying this column would let each row override it"
-        )
+def _blocked_detail(suggestion: HeaderMappingSuggestion) -> str:
     if not suggestion.shadowed_columns:
         return ""
     columns = ", ".join(suggestion.shadowed_columns)
@@ -639,6 +620,25 @@ def _file_cte_note(result: HeaderMappingResult) -> str:
     return "State file_cte_type: none (no CTE declared for the file)."
 
 
+def _declared_cte_precedence_note(result: HeaderMappingResult) -> str | None:
+    """How an applied ``cte_type`` mapping relates to a CTE the uploader declared.
+
+    The parser reads a row's own CTE first and falls back to the declared one
+    (``_detect_row_cte_type``), so the mapped column wins wherever it holds a
+    known CTE. ``None`` when no CTE was declared.
+    """
+    if result.file_cte_type:
+        declared = f"The declared file CTE {result.file_cte_type}"
+    elif result.file_cte_type_dropped:
+        declared = "The declared file CTE"
+    else:
+        return None
+    return (
+        f"{declared} remains the fallback for rows where this column is blank or not a known CTE; "
+        "per-row values from this column override it."
+    )
+
+
 def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult) -> str:
     evidence = result.evidence
     parts = [
@@ -649,8 +649,12 @@ def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult)
         f"(auto_apply >= {result.thresholds.auto_apply}, review >= {result.thresholds.review}).",
         "Applied to the upload's rows by deterministic code."
         if suggestion.applied
-        else f"Not applied to rows (reason: {suggestion.blocked_reason}{_blocked_detail(suggestion, result)}).",
+        else f"Not applied to rows (reason: {suggestion.blocked_reason}{_blocked_detail(suggestion)}).",
     ]
+    if suggestion.applied and suggestion.canonical_field == "cte_type":
+        declared = _declared_cte_precedence_note(result)
+        if declared:
+            parts.append(declared)
     if evidence is not None:
         parts.append(
             f"Model {evidence.model}, request {evidence.request_id or 'n/a'}, latency {evidence.latency_ms} ms."

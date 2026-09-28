@@ -18,6 +18,7 @@ Contract pinned here:
 
 from __future__ import annotations
 
+import collections
 import json
 import uuid
 from typing import Optional
@@ -32,7 +33,7 @@ from app.webhook_models import EventResult, IngestResponse
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.jev import JevDecider, JevSettings
-from shared.jev.header_mapping import CANONICAL_FIELD_NAMES, NO_MATCH, outranked_columns
+from shared.jev.header_mapping import CANONICAL_FIELD_NAMES, NO_MATCH, normalize_csv_header, outranked_columns
 
 TENANT = str(uuid.uuid4())
 RUN_ID = str(uuid.uuid4())
@@ -325,49 +326,108 @@ def test_declared_cte_type_is_withheld_when_rows_carry_their_own(harness, cte_he
         assert f"State file_cte_type: none (declared CTE withheld: {reason})." in artifact.payload.rationale
 
 
-# A shipping upload with an extra "Activity" column Jev may read as a per-row
-# CTE. Row 1 says receiving; the uploader may declare shipping for the file.
-ACTIVITY_CSV_BODY = (
-    "Activity,traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
-    "ship_from_location,ship_to_location,reference_document,tlc_source_reference\n"
-    "receiving,TLC-A1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1\n"
-    "shipping,TLC-A2,Romaine,80,cases,2026-09-21,Packhouse A,DC B,BOL-2,PACK-2\n"
-).encode()
+# ---------------------------------------------------------------------------
+# A row's own CTE beats the declared file CTE (parser precedence)
+# ---------------------------------------------------------------------------
 
-ACTIVITY_ANSWERS = {"Activity": _choice("cte_type", 0.97, no_match=0.03)}
+_SHIP_COLUMNS = (
+    "traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+    "ship_from_location,ship_to_location,reference_document,tlc_source_reference"
+)
 
 
-def test_declared_file_cte_is_not_overridden_by_an_applied_cte_mapping(harness):
+def _extra_column_body(header: str, *values: str) -> bytes:
+    """A shipping upload with one unrecognised ``header`` column holding ``values``, one per row."""
+    rows = "".join(
+        f"{value},TLC-A{index},Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-{index},PACK-{index}\n"
+        for index, value in enumerate(values, start=1)
+    )
+    return f"{header},{_SHIP_COLUMNS}\n{rows}".encode()
+
+
+# The worst case for the invariant: Jev maps every column it is asked about
+# onto cte_type with auto-apply confidence.
+EVERYTHING_IS_CTE = collections.defaultdict(lambda: _choice("cte_type", 0.97, no_match=0.03))
+
+FALLBACK_NOTE = "remains the fallback for rows where this column is blank or not a known CTE; per-row values"
+
+
+@pytest.mark.parametrize("header", ["Activity", "Event Kind", "Event-Type", "Transaction Type"])
+def test_other_cte_values_in_an_unrecognised_column_withhold_the_declared_cte(harness, header):
     seen: dict = {}
-    harness["use_decider"](_decider(_transport(ACTIVITY_ANSWERS, seen), apply_header_mappings=True))
+    harness["use_decider"](_decider(_transport(EVERYTHING_IS_CTE, seen), apply_header_mappings=True))
 
-    resp = _post(_client(), ACTIVITY_CSV_BODY, data={"cte_type": "Shipping"})
+    resp = _post(_client(), _extra_column_body(header, "receiving", "shipping"), data={"cte_type": "Shipping"})
+
+    assert resp.status_code == 200, resp.text
+    assert "file_cte_type" not in seen["bodies"][0]["state"]
+    # The mapping applies exactly as it does without a declared CTE: each
+    # row's own CTE wins, as it would under an "Event Type" header.
+    (suggestion,) = resp.json()["header_mapping_suggestions"]
+    assert suggestion["canonical_field"] == "cte_type"
+    assert suggestion["applied"] is True and suggestion["blocked_reason"] is None
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["receiving", "shipping"]
+    (artifact,) = harness["artifacts"]
+    rationale = artifact.payload.rationale
+    assert f"declared CTE withheld: column {header} holds per-row CTE values" in rationale
+    assert f"The declared file CTE {FALLBACK_NOTE} from this column override it." in rationale
+
+
+def test_unrecognised_column_agreeing_with_the_declared_cte_keeps_it(harness):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(EVERYTHING_IS_CTE, seen), apply_header_mappings=True))
+
+    resp = _post(_client(), _extra_column_body("Activity", "shipping", "S", "Ship"), data={"cte_type": "Shipping"})
 
     assert resp.status_code == 200, resp.text
     assert seen["bodies"][0]["state"]["file_cte_type"] == "shipping"
     (suggestion,) = resp.json()["header_mapping_suggestions"]
-    assert suggestion["canonical_field"] == "cte_type"
-    assert suggestion["band"] == "auto_apply"
-    assert suggestion["applied"] is False
-    assert suggestion["blocked_reason"] == "declared_file_cte"
-    # Every row keeps the CTE the uploader declared.
+    assert suggestion["applied"] is True
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["shipping", "shipping", "shipping"]
+    (artifact,) = harness["artifacts"]
+    assert "State file_cte_type: shipping." in artifact.payload.rationale
+    assert f"The declared file CTE shipping {FALLBACK_NOTE} from this column override it." in artifact.payload.rationale
+
+
+def test_free_text_in_an_unrecognised_column_keeps_the_declared_cte_as_fallback(harness):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(EVERYTHING_IS_CTE, seen), apply_header_mappings=True))
+
+    resp = _post(_client(), _extra_column_body("Activity", "load dock 4", ""), data={"cte_type": "Shipping"})
+
+    assert resp.status_code == 200, resp.text
+    assert seen["bodies"][0]["state"]["file_cte_type"] == "shipping"
+    (suggestion,) = resp.json()["header_mapping_suggestions"]
+    assert suggestion["applied"] is True
+    # "load dock 4" is copied under cte_type but is not a known CTE, so the
+    # parser falls back to the declared one; the source column stays in kdes.
     (payload,) = harness["payloads"]
     assert [e.cte_type.value for e in payload.events] == ["shipping", "shipping"]
-    # Recorded for review, saying why.
-    (artifact,) = harness["artifacts"]
-    assert artifact.requires_human_review is True
-    assert artifact.payload.target_canonical_field == "cte_type"
-    assert (
-        "Not applied to rows (reason: declared_file_cte; the upload declared the file CTE shipping, "
-        "which takes precedence: applying this column would let each row override it)."
-    ) in artifact.payload.rationale
+    assert payload.events[0].kdes["activity"] == "load dock 4"
+
+
+def test_single_letter_aliases_withhold_the_declared_cte_conservatively(harness):
+    # "R" is an alias of receiving in _CTE_TYPE_ALIASES, so a "Grade" column of
+    # S and R could become per-row CTEs if Jev mapped it. Withholding costs Jev
+    # only a hint, so the scan errs that way.
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport({"Grade": _choice(NO_MATCH, 0.95)}, seen)))
+
+    resp = _post(_client(), _extra_column_body("Grade", "S", "R"), data={"cte_type": "Shipping"})
+
+    assert resp.status_code == 200, resp.text
+    assert "file_cte_type" not in seen["bodies"][0]["state"]
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["shipping", "shipping"]
 
 
 def test_without_a_declared_cte_the_cte_mapping_applies_as_before(harness):
     seen: dict = {}
-    harness["use_decider"](_decider(_transport(ACTIVITY_ANSWERS, seen), apply_header_mappings=True))
+    harness["use_decider"](_decider(_transport(EVERYTHING_IS_CTE, seen), apply_header_mappings=True))
 
-    resp = _post(_client(), ACTIVITY_CSV_BODY, data={})
+    resp = _post(_client(), _extra_column_body("Activity", "receiving", "shipping"), data={})
 
     assert resp.status_code == 200, resp.text
     assert "file_cte_type" not in seen["bodies"][0]["state"]
@@ -377,25 +437,67 @@ def test_without_a_declared_cte_the_cte_mapping_applies_as_before(harness):
     assert [e.cte_type.value for e in payload.events] == ["receiving", "shipping"]
     (artifact,) = harness["artifacts"]
     assert artifact.requires_human_review is False
+    assert "remains the fallback" not in artifact.payload.rationale
 
 
-def test_withheld_declared_cte_leaves_the_apply_policy_unchanged(harness):
-    # The file also has an (empty) per-row CTE column, so the declared CTE is
-    # withheld and the pre-existing rule decides: Activity would outrank event_type.
-    body = (
-        "Activity,Event Type,traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
-        "ship_from_location,ship_to_location,reference_document,tlc_source_reference\n"
-        "receiving,,TLC-A1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1\n"
-    ).encode()
+# A comment row (first value starts with "#") is skipped by the parser, so
+# its "receiving" can never become a row's CTE and must not withhold.
+COMMENT_ROW_BODY = (
+    f"{_SHIP_COLUMNS},Activity\n"
+    "# example,Romaine,1,cases,2026-09-21,Packhouse A,DC B,BOL-0,PACK-0,receiving\n"
+    "TLC-A1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1,shipping\n"
+).encode()
+
+INVARIANT_CASES = {
+    "mixed": (_extra_column_body("Activity", "receiving", "shipping"), False),
+    "event-kind-alias": (_extra_column_body("Event Kind", "Receipt", ""), False),
+    "grade-letters": (_extra_column_body("Grade", "S", "R"), False),
+    "agreeing-aliases": (_extra_column_body("Activity", "shipping", "S", "Ship"), True),
+    "free-text": (_extra_column_body("Activity", "load dock 4", ""), True),
+    "blank": (_extra_column_body("Activity", "", ""), True),
+    "comment-row": (COMMENT_ROW_BODY, True),
+}
+
+
+@pytest.mark.parametrize("apply", [True, False], ids=["apply-on", "apply-off"])
+@pytest.mark.parametrize("case", sorted(INVARIANT_CASES))
+def test_a_sent_file_cte_is_the_cte_of_every_parsed_row(harness, case, apply):
+    """Invariant: whenever file_cte_type=X is sent, every row the parser produces has CTE X."""
+    body, expect_sent = INVARIANT_CASES[case]
     seen: dict = {}
-    harness["use_decider"](_decider(_transport(ACTIVITY_ANSWERS, seen), apply_header_mappings=True))
+    harness["use_decider"](_decider(_transport(EVERYTHING_IS_CTE, seen), apply_header_mappings=apply))
 
     resp = _post(_client(), body, data={"cte_type": "Shipping"})
 
     assert resp.status_code == 200, resp.text
-    assert "file_cte_type" not in seen["bodies"][0]["state"]
-    (suggestion,) = resp.json()["header_mapping_suggestions"]
-    assert suggestion["blocked_reason"] == "shadows_existing_column"
+    state = seen["bodies"][0]["state"]
+    assert ("file_cte_type" in state) is expect_sent
+    (payload,) = harness["payloads"]
+    if "file_cte_type" in state:
+        assert {e.cte_type.value for e in payload.events} == {state["file_cte_type"]}
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # Recognised columns are never sent to Jev, so they cannot be mapped.
+        (f"{_SHIP_COLUMNS},location_name\nT1,R,1,cases,2026-09-21,A,B,C,D,receiving\n", ("shipping", None)),
+        ("Activity,quantity\nS,1\nship,2\n,3\n", ("shipping", None)),
+        ("Activity,quantity\nS,1\nH,2\n", (None, "column Activity holds per-row CTE values")),
+        (" Activity ,quantity\nreceiving,1\n", (None, "column Activity holds per-row CTE values")),
+        # Duplicate headers: every raw column is scanned, not just the one the parser keeps.
+        ("Activity,activity,quantity\nreceiving,shipping,1\n", (None, "column Activity holds per-row CTE values")),
+        ("Activity,quantity\n# receiving,1\nshipping,2\n", ("shipping", None)),
+        (
+            "Activity,quantity\n" + '"' + "x" * 200_000 + '",1\n',
+            (None, "rows could not be read to rule out per-row CTE values"),
+        ),
+    ],
+    ids=["recognised", "agreeing", "letter-alias", "padded-header", "duplicate-header", "comment", "unreadable"],
+)
+def test_file_cte_type_for_jev_value_scan(text, expected):
+    assert ct._file_cte_type_for_jev(text, "shipping") == expected
+    assert ct._file_cte_type_for_jev(text, None) == (None, None)
 
 
 @pytest.mark.parametrize(
@@ -422,10 +524,19 @@ def test_per_row_cte_column_matches_exactly_what_the_parser_reads(header, parser
     assert errors == []
     assert (event.cte_type.value == "receiving") is parser_reads_it
     assert (ct._per_row_cte_column([header, "quantity"]) is not None) is parser_reads_it
-    assert ct._file_cte_type_for_jev([header, "quantity"], "shipping") == (
-        (None, f"file has a per-row CTE column: {header.strip()}") if parser_reads_it else ("shipping", None)
+    # Either way the declared CTE is withheld: by the header rule when the
+    # parser reads the column, by the value scan when only Jev could map it.
+    reason = (
+        f"file has a per-row CTE column: {header.strip()}"
+        if parser_reads_it
+        else f"column {header.strip()} holds per-row CTE values"
     )
-    assert ct._file_cte_type_for_jev([header, "quantity"], None) == (None, None)
+    assert ct._file_cte_type_for_jev(text, "shipping") == (None, reason)
+    assert ct._file_cte_type_for_jev(text, None) == (None, None)
+    if not parser_reads_it:
+        # ...and if Jev maps it, the row's own value wins over the declared CTE.
+        (mapped,), _, _ = ct.parse_csv_rows(text, "shipping", header_mapping={normalize_csv_header(header): "cte_type"})
+        assert mapped.cte_type.value == "receiving"
 
 
 def test_mixed_type_upload_without_the_form_field_sends_no_file_cte_type(harness):
