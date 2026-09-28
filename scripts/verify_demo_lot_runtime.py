@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
+from http.client import HTTPException
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -98,6 +99,8 @@ def verify_runtime(
     api_key = env.get("REGENGINE_API_KEY")
     if not isinstance(api_key, str) or not api_key.strip():
         raise VerificationError("REGENGINE_API_KEY is required")
+    if any(not character.isprintable() for character in api_key):
+        raise VerificationError("REGENGINE_API_KEY contains invalid characters")
 
     _validate_endpoint(endpoint)
     request = Request(
@@ -116,8 +119,8 @@ def verify_runtime(
         raise
     except HTTPError as exc:
         raise VerificationError(f"production scenarios endpoint returned HTTP {exc.code}") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise VerificationError("production scenarios endpoint request failed") from exc
+    except (URLError, TimeoutError, OSError, ValueError, HTTPException):
+        raise VerificationError("production scenarios endpoint request failed") from None
 
     try:
         payload = json.loads(body)
