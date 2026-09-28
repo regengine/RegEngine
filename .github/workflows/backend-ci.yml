@@ -1281,8 +1281,11 @@ jobs:
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
           set -o pipefail
+          # The cutover lock-timeout test runs last: it drifts a grant, holds
+          # a lock on public.api_keys, and restores both before it returns.
           pytest tests/migrations/test_v111_runtime_role_grants.py \
             tests/security/test_account_erasure_identity_isolation_pg.py \
+            tests/migrations/test_runtime_role_cutover_lock_timeout.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/v111-role-cutover.log
           if grep -qE '[0-9]+ skipped' /tmp/v111-role-cutover.log; then
             echo "::error::v111 role-cutover proof skipped with all four direct credentials configured"
@@ -1316,6 +1319,25 @@ jobs:
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/live-db-suite.log
           if grep -qE '[0-9]+ skipped' /tmp/live-db-suite.log; then
             echo "::error::live-DB tests skipped — this job exists so they always RUN (check the #2646 guard env contract)"
+            exit 1
+          fi
+
+      - name: RLS deny-all guard + tenantless enqueue idempotency (skips are failures)
+        env:
+          # Provider credential: v104 inspects every role's grants/policies
+          # and probes with a temp table; #2852 creates a disposable
+          # database on this server. Both ran in no workflow until now, so
+          # v104 went stale against v111's closed-grant tables and #2852 hid
+          # a broken enqueue_task insert.
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+        run: |
+          export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
+          set -o pipefail
+          pytest tests/migrations/test_v104_no_deny_all_rls_tables.py \
+            tests/migrations/test_task_queue_tenantless_idempotency_2852.py \
+            -v -rs --no-cov -o "testpaths=tests" | tee /tmp/rls-guard.log
+          if grep -qE '[0-9]+ skipped' /tmp/rls-guard.log; then
+            echo "::error::RLS deny-all guard or #2852 idempotency suite skipped"
             exit 1
           fi
 

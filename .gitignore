@@ -119,6 +119,9 @@ audit-findings-*.md
 # Agent / AI tool config (local-only)
 .agent/
 .agents/
+# Codex regenerates this per checkout from .mcp.json, .claude/settings.json and
+# .claude/agents/sentinel-*.md (external-agent-import-sync); those stay canonical.
+.codex/
 .claude/*
 !.claude/settings.json
 # Sentinel infrastructure travels with the repo (auditable, version-controlled).
