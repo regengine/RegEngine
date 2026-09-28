@@ -110,6 +110,11 @@ and the vendor call can neither block nor reject an upload.
   PII-redacted sample values) leave the process. TypeSafe AI is listed as a
   where-configured subprocessor; the DPA question is the operator's before
   turning it on for a customer tenant.
+  - *Amended 2026-09-28:* when the uploader declares a single CTE for the
+    file (the `cte_type` form field) and no row can contradict it, that
+    canonical CTE name (for example `shipping`) is also sent, as
+    `file_cte_type` (question set `csv-header-mapping.v2`). The subprocessor
+    disclosure in `frontend/src/lib/trust-subprocessors.ts` says so.
 - Jev reads instructions literally and does no arithmetic or date
   comparison (vendor's published limitations). The question set therefore
   asks only "which field is this column", never "what is this value".

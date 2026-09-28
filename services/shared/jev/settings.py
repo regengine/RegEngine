@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import structlog
 
@@ -110,7 +110,9 @@ def _read_int(env: Mapping[str, str], name: str, default: int, *, minimum: int, 
 class JevSettings:
     """Resolved configuration for one :class:`~shared.jev.client.JevDecider`."""
 
-    api_key: str | None = None
+    # repr=False keeps the credential out of reprs, tracebacks and any log
+    # line that formats the settings object.
+    api_key: str | None = field(default=None, repr=False)
     model: str = DEFAULT_MODEL
     base_url: str | None = None
     enabled_flag: bool = True

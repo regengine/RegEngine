@@ -169,6 +169,24 @@ ownership drift. It intentionally fails for a superuser/BYPASSRLS credential,
 role membership, mismatched database/schema/object ownership, or an identity
 pin mismatch until the provider administrator corrects the posture.
 
+### v126 (`c51d4898e0a2`): CSV retention and agent-worker grants
+
+v126 grants the runtime role what `POST /api/v1/ingest/csv` and the
+agent-artifact worker write, and pins each `fsma.manifest_blobs` row to its own
+tenant's run with an `(ingestion_run_id, tenant_id)` foreign key.
+
+- Before the deploy, run `runbooks/predeploy-v126-misattached-blobs.sql` from a
+  provider superuser or BYPASSRLS session. It must return no rows; otherwise
+  v126 refuses with the row count and changes nothing. Do not review those rows
+  from a plain schema-owner session: under FORCE RLS it errors without a
+  tenant, and with one it sees no `fsma.ingestion_runs` rows and flags every
+  blob of that tenant. The runbook header shows the schema-owner alternative
+  (NO FORCE inside a transaction that is rolled back).
+- After the deploy, and again after the next one, run
+  `runbooks/verify-v126-runtime-grants.sql` as the migration owner. Every row,
+  including `== READY`, must report `ok = t`. It pins its own search_path, so a
+  session with `search_path=public,fsma,extensions` gives the same result.
+
 ## 4. Configure and verify runtime boot
 
 The consolidated Railway service requires:
@@ -243,3 +261,155 @@ ID, Alembic head, enabled-router set, commands, results, and verification date.
 Never include secret values or connection URLs. A bypass-RLS credential,
 schema-owner runtime, shared admin key, disabled posture gate, or wider router
 set is not an acceptable rollback.
+
+## 6. Staging: one-command fresh-database bootstrap
+
+Staging never had the dedicated-owner topology, so every staging deploy since
+`scripts/run-migrations.sh` began requiring `MIGRATIONS_DATABASE_URL` exits
+before gunicorn starts. Staging uses the FRESH path. The script creates a new
+database, `regengine_staging`, owned by `regengine_migrator`. The existing
+staging database (the one `DATABASE_PUBLIC_URL` names, normally `railway`) is
+left untouched as an archive, and the script refuses to target it. This avoids
+transferring ownership, recreating extensions, and running the irreversible
+old-revision data migrations (v088, v090, v091, v094).
+
+Run it from the repository root. It needs the Railway CLI 5.47.2 or newer
+(logged in), `psql` and `python3`:
+
+```bash
+bash scripts/railway/bootstrap_staging_database.sh            # dry run: read-only checks + full plan
+bash scripts/railway/bootstrap_staging_database.sh --apply    # execute
+bash scripts/railway/bootstrap_staging_database.sh --apply --redeploy   # execute, then redeploy RegEngine
+```
+
+The script refuses a run, before writing anything, in each of these cases:
+
+- The environment is not exactly `staging`. Production is always refused.
+- `--database` does not fully match `^regengine_[a-z0-9_]{1,53}$`.
+- The Railway CLI is older than 5.47.2. Older CLIs hide sealed variables, so
+  existing secrets would be regenerated.
+- `railway run` does not report exactly this project
+  (`4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51` unless `--project` says otherwise)
+  and environment.
+- The Postgres service's `DATABASE_PUBLIC_URL` is not that service's own
+  `RAILWAY_TCP_PROXY_DOMAIN:RAILWAY_TCP_PROXY_PORT`.
+- The server is older than PostgreSQL 15.
+- `psql --version` reports a major version older than 13. libpq before 13
+  silently ignores `PGCHANNELBINDING`, and that setting is what protects the
+  passwords (see step 1). The check relies on psql being linked against the
+  libpq of its own major version, as the PGDG, Homebrew and Debian/Ubuntu
+  packages are.
+- A RegEngine role is a member of a foreign role and used that membership's
+  ADMIN OPTION to grant the foreign role to another role outside RegEngine.
+  Revoking that membership would cascade outside RegEngine, and
+  `--adopt-existing-roles` never does that. Revoke those grants by hand after
+  review, then re-run. The dry run lists them as `BLOCKING GRANT`.
+- A pre-existing `regengine*` role is used outside the target database. That
+  covers objects, privileges or settings in other databases, open sessions
+  there, role memberships, and any elevated attribute (SUPERUSER, BYPASSRLS,
+  CREATEROLE, CREATEDB or REPLICATION). The same check also runs on the server
+  inside the provisioning transaction. Roles are cluster-wide, so changing
+  such a role needs `--adopt-existing-roles` after review. The dry run lists
+  what it found.
+- A pre-existing role that this bootstrap did not create has a URL variable
+  that is missing, sealed, or not pointing at that role on
+  `regengine_staging`. The URL must use the staging private endpoint:
+  `${{Postgres.PGHOST}}:${{Postgres.PGPORT}}` or its rendered value. This
+  case also needs `--adopt-existing-roles`. The bootstrap marks every role
+  it creates or adopts with a `COMMENT ON ROLE`. That marker lets its own
+  re-runs tell its roles from foreign ones.
+- A role whose password would be kept cannot log in with its stored URL.
+  This is tested before anything is written. The refusal says
+  `stored URL password for <role> does not log in; re-run with:` followed by
+  the full command. That command keeps the options the run used, such as
+  `--adopt-existing-roles` and a non-default `--database`.
+
+`--apply` then does the following:
+
+1. As the Postgres template superuser, it pins the three roles with the
+   attributes in section 1 and revokes their memberships. The pinned
+   attributes add VALID UNTIL `infinity`, no connection limit, and no
+   role-level settings. A grant of a RegEngine role is revoked with
+   `CASCADE`; every grant that depends on it is itself a grant of that
+   RegEngine role, so the cascade stays within what the dry run listed. This
+   covers a membership re-granted by another member through its ADMIN OPTION.
+   A RegEngine role's own membership of a foreign role is never cascaded.
+   Each grant is re-checked just before it is revoked, so one an earlier
+   cascade already removed is skipped silently.
+   It then creates the database from `template0` if it
+   is absent, runs `REVOKE ALL ... FROM PUBLIC`, and grants `CONNECT` to the
+   three roles. It pins `search_path = public, fsma, extensions` and
+   `timezone = UTC` for the migrator in that database only; these are the
+   session defaults CI passes through `PGOPTIONS`.
+   The superuser URL is used only inside the process that
+   `railway run -s Postgres` starts. A launcher there turns the URL into libpq
+   environment variables with `PGSSLMODE=require` and
+   `PGCHANNELBINDING=require`. The URL and password never appear in a command
+   line, in the output, or in a file.
+   Every connection through the public proxy, superuser and role logins
+   alike, requires TLS and SCRAM-SHA-256 with channel binding
+   (SCRAM-SHA-256-PLUS over `tls-server-end-point`). Channel binding, not the
+   certificate, is what protects the passwords. psql refuses to send a
+   cleartext or MD5 password, or to finish SCRAM without binding it to the
+   TLS channel it actually sees. An interceptor presenting its own
+   certificate therefore gets no password and cannot relay the login. Railway's
+   proxy certificate is self-signed, so the certificate itself is not
+   CA-verified. The Railway server must allow SCRAM for these logins; if it
+   does not, psql refuses to connect and the run stops.
+   A timeout or Ctrl-C kills the whole
+   child process group, including psql. Every session sets
+   `client_connection_check_interval`, so the server also drops the session
+   and rolls back its open transaction.
+   Every psql the script starts gets a private, empty `HOME` and no inherited
+   `PG*` settings. A personal `~/.postgresql/root.crt`, `PGSSLROOTCERT` or
+   `PGSSLMODE` would otherwise turn `sslmode=require` into CA verification,
+   and that fails against Railway's self-signed proxy certificate. The dry run
+   notes when such a file or variable exists.
+   `REVOKE ALL ... FROM PUBLIC` also removes the default `TEMP` privilege, so
+   the runtime roles cannot create temporary tables. That makes staging
+   stricter than CI, whose scratch databases keep PUBLIC's defaults. No
+   runtime code path creates temporary objects: v119's temporary tables live
+   inside a `SECURITY DEFINER` function owned by the migrator.
+2. It logs in as `regengine_migrator` and creates `get_tenant_context()` with
+   the same body the backend-ci live-db-suite seeds for a fresh chain.
+3. It logs in as `regengine` and `regengine_sysadmin` to prove their passwords.
+4. It writes the RegEngine variables in this order: `DATABASE_URL`,
+   `ADMIN_DATABASE_URL` (both through `${{Postgres.PGHOST}}` and
+   `${{Postgres.PGPORT}}`), then `AUTH_OTP_HMAC_SECRET`, `AUDIT_INTEGRITY_KEY`
+   and `TOOL_ACCESS_SECRET` (only when missing), then `REGENGINE_ENV=staging`,
+   `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` and
+   `REGENGINE_MIGRATIONS_ROLE=regengine_migrator`, then
+   `REDIS_URL=${{Redis.REDIS_URL}}` (only when missing). `MIGRATIONS_DATABASE_URL`
+   goes last.
+
+Railway CLI writes are not staged. They are live at once, and the next deploy,
+including one triggered by a push, uses them. `--skip-deploys` only stops the
+CLI itself from starting one. Because `MIGRATIONS_DATABASE_URL` is written
+last, a deploy that starts mid-run stops at `run-migrations.sh` and gunicorn
+never starts. On a first run it exits 64 because `MIGRATIONS_DATABASE_URL` is
+still unset. On a `--rotate-passwords` re-run the variable still holds the
+old password, so the migration login fails password authentication.
+Every value goes to `railway variable set NAME --stdin`. To check what exists,
+the script reads the raw variable values into memory. It prints names only,
+never values.
+
+Passwords change only for roles the run creates, or for all three roles with
+`--rotate-passwords`. An existing role keeps its password only when its URL
+variable is readable, names that role and `regengine_staging` on the staging
+private endpoint, and logs in. That login is tested before anything is
+written. If the variable is missing, sealed, points elsewhere, or its password
+no longer logs in, the run refuses (exit 2) until `--rotate-passwords` is
+given. After any rotation, redeploy. Once you seal the URLs, a re-run
+therefore needs `--rotate-passwords`. If a run fails after changing
+passwords, it says so and prints the command to re-run. Run that command as
+printed. If the first run needed `--adopt-existing-roles`, every re-run needs
+it too: adoption leaves the old roles' grants and policies in the archive
+database, so a re-run without it is refused.
+
+Afterwards, seal the six secret variables in the dashboard and deploy once.
+The first deploy logs `DB state: FRESH`, migrates to head, then logs
+`runtime role cutover applied as role=regengine_migrator database=regengine_staging`
+before gunicorn starts. `/readiness` should then return 200.
+`tests/scripts/test_bootstrap_staging_database.py` covers the guards, the
+write order, stdin-only values, password handling and process cleanup, all
+without Docker.

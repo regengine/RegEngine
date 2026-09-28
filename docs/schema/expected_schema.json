@@ -2818,11 +2818,13 @@
     "foreign_keys": [
       {
         "constrained_columns": [
-          "ingestion_run_id"
+          "ingestion_run_id",
+          "tenant_id"
         ],
-        "name": "manifest_blobs_ingestion_run_id_fkey",
+        "name": "fk_manifest_blobs_run_tenant",
         "referred_columns": [
-          "id"
+          "id",
+          "tenant_id"
         ],
         "referred_schema": "fsma",
         "referred_table": "ingestion_runs"

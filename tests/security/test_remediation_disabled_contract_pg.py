@@ -16,9 +16,11 @@ from server.router_policy import PRODUCTION_ENABLED_ROUTERS, RouterPolicy
 from tests.migrations.rls_db import guarded_live_database_url
 
 PROHIBITED_TABLE_PRIVILEGES = {
-    # The enabled /ingest/csv receipt INSERTs its own tenant's upload (#3122);
-    # reading or rewriting any retained file remains remediation-only.
-    "fsma.manifest_blobs": ("SELECT", "UPDATE", "DELETE"),
+    # The enabled CSV upload route retains each file here through a v126
+    # column-scoped INSERT that excludes storage_url and created_at. No
+    # table-wide privilege exists: reading, re-pointing or deleting a
+    # retained manifest is remediation work and stays denied.
+    "fsma.manifest_blobs": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "fsma.manifest_records": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "fsma.remediation_cases": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     # Existing background token/outbox work has narrower positive grants.
