@@ -214,32 +214,12 @@ AWS_SECRET_ACCESS_KEY=test
 ## Inbound Email Ingestion (Postmark)
 
 Lets a supplier email a CSV of FSMA 204 traceability data instead of using
-the `/api/v1/ingest/csv` upload endpoint. Behind the `inbound_email` router
-flag (see `docs/engineering/ROUTER_SURFACE.md` — mounted in dev/test/staging,
-**not yet in the production `ENABLED_ROUTERS` allowlist** pending a deliberate
-security review; see `server/router_policy.py::PRODUCTION_ENABLED_ROUTERS`).
-
-Required env vars:
-```bash
-POSTMARK_INBOUND_WEBHOOK_USER=your-webhook-username
-POSTMARK_INBOUND_WEBHOOK_PASSWORD=your-high-entropy-webhook-password
-```
-
-Manual operator steps outside application code (not covered by this repo):
-1. Add/verify an inbound domain or address in Postmark, and point its MX
-   records at Postmark per Postmark's inbound-domain setup instructions.
-2. In the Postmark server's "Inbound" settings, set the webhook URL to
-   `https://<user>:<password>@yourapp.com/api/v1/webhooks/inbound-email`,
-   embedding the same credentials as the two env vars above (Postmark's
-   supported way to attach HTTP Basic Auth to an inbound webhook).
-3. For each tenant that should receive email ingestion, register their
-   inbound address via `POST /api/v1/webhooks/inbound-email/addresses`
-   (authenticated with that tenant's normal API key) — this is what maps an
-   arriving email's recipient address to a tenant.
-
-A quarantined/unparseable email is never dropped silently: it's recorded via
-`inbound_email_rejection_log` and visible per-tenant at
-`GET /api/v1/webhooks/inbound-email/rejections`.
+the `/api/v1/ingest/csv` upload endpoint. Served by the `email_ingest`
+router (`POST /webhooks/email/inbound`), which is **not** in
+`server/router_policy.py::PRODUCTION_ENABLED_ROUTERS`. Configuration,
+tenant onboarding (recipient address + `allowed_senders` allowlist in
+`fsma.tenant_inbound_addresses`), and known limitations are in
+[docs/engineering/EMAIL_INGESTION.md](../engineering/EMAIL_INGESTION.md).
 
 ---
 
