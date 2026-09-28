@@ -17,6 +17,7 @@ const results = { fastGate, systemSim };
 const allPassed = Object.values(results).every(r => r === 'success');
 const anyFailed = Object.values(results).some(r => r === 'failure');
 const anySkipped = Object.values(results).some(r => r === 'skipped');
+const anyCancelled = Object.values(results).some(r => r === 'cancelled');
 
 console.log('');
 
@@ -54,6 +55,18 @@ if (allPassed) {
   for (const [stage, result] of Object.entries(results)) {
     if (result === 'skipped') {
       console.error(`  \u2717 ${stage}: skipped`);
+    }
+  }
+  process.exit(1);
+} else if (anyCancelled) {
+  // A stage cancelled inside a workflow that is still running (timeout,
+  // or a dependency aborted without cancelling the workflow) is not a
+  // pass. Workflow-level cancellation never reaches this process: the
+  // job's `if` skips it when `cancelled()` is true.
+  console.error('\u274c BLOCK DEPLOY: A required stage was cancelled.');
+  for (const [stage, result] of Object.entries(results)) {
+    if (result === 'cancelled') {
+      console.error(`  \u2717 ${stage}: cancelled`);
     }
   }
   process.exit(1);

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Idempotently reapply the v111 runtime-role cutover as schema owner.
 
-Normal deploys receive the same statements through ``alembic upgrade head``.
-This command exists for an audited repair after privilege drift or a migration
-schema-owner change; it never prints a connection URL or credential.
+Normal deploys receive the same statements through ``alembic upgrade head``,
+and ``scripts/run-migrations.sh`` reruns this command after every migration
+run, so v111's closed inventory is the whole runtime grant surface: a grant
+applied only by a later migration is revoked here. It also serves an audited
+repair after privilege drift or a migration schema-owner change; it never
+prints a connection URL or credential.
 """
 
 from __future__ import annotations

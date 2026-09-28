@@ -373,3 +373,13 @@ class TestFDAImportAlertsTableLayout:
             "Detention Without Physical Examination of Fish and Fishery Products"
         )
         assert by_num["03-05"].url == "https://www.accessdata.fda.gov/cms_ia/importalert_3.html"
+
+    def test_legacy_single_cell_row_title_excludes_number(self):
+        """Bugbot on #3147: "16-120 - Title" in one cell must not keep the number."""
+        html = f"""<html><body>{_PLAUSIBLE_PADDING}<table><tr>
+          <td><a href="importalert_25.html">16-120 - Shrimp from India</a></td>
+        </tr></table><p>Import Alert</p></body></html>"""
+        items, _ = self.scraper.parse_html(html)
+        assert len(items) == 1
+        assert items[0].raw_data["alert_number"] == "16-120"
+        assert items[0].raw_data["raw_title"] == "Shrimp from India"

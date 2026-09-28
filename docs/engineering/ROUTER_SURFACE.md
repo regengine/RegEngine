@@ -58,7 +58,6 @@ These routers belong closest to the FSMA production story:
 - `epcis_ingestion`
 - `score`
 - `portal`
-- `inbound_email` (Postmark inbound-parse webhook ingestion; disable-by-default — pending an explicit production-allowlist security review, not in the recommended `ENABLED_ROUTERS` string)
 - `billing`
 - `onboarding`
 - `recall`

@@ -13,7 +13,10 @@ How it works
    misses required fields.
 2. For each unrecognised column, one ``Choice`` question asks Jev which
    canonical field the column represents, or ``no_match``. All questions for
-   an upload go in a single request and are evaluated in parallel.
+   an upload go in a single request and are evaluated in parallel. When the
+   uploader declares one CTE for the whole file (the route's ``cte_type``
+   form field), the state carries it as ``file_cte_type`` so a header such as
+   ``Ship Dt`` is read knowing the file records shipping events.
 3. Every answer is banded by confidence (:mod:`shared.jev.routing`) and
    recorded as an advisory ``field_mapping_suggestion`` agent artifact
    (:mod:`shared.agent_artifacts`), anchored to the upload's SHA-256 and its
@@ -29,7 +32,10 @@ How it works
 
 What leaves the process: the CSV header row and, only when
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES`` is set, up to that many PII-redacted
-sample values per unrecognised column. Never whole rows.
+sample values per unrecognised column. Never whole rows: a header row that
+spans lines, contains a line break or has a header over
+:data:`MAX_HEADER_CHARS` characters is refused (``malformed_header``) and
+nothing is sent.
 """
 
 from __future__ import annotations
@@ -57,12 +63,23 @@ from .routing import ConfidenceBand, ConfidenceThresholds, band_for_confidence
 
 logger = structlog.get_logger("jev.header_mapping")
 
-QUESTIONS_VERSION = "csv-header-mapping.v1"
+# Recorded with every answer and artifact. Bump it whenever the question text,
+# the vocabulary or the meaning of a state key changes, so the evidence says
+# exactly what was asked. v2: the task text explains ``file_cte_type``.
+QUESTIONS_VERSION = "csv-header-mapping.v2"
 AGENT_NAME = "jev-csv-header-mapper"
 PURPOSE = "csv_header_mapping"
 NO_MATCH = "no_match"
 MAX_COLUMNS_PER_UPLOAD = 48
 MAX_SAMPLE_VALUE_CHARS = 64
+# Longest header, after stripping, that can be a real column name. The
+# longest name RegEngine itself uses is 25 characters
+# (``immediate_previous_source``) and the longest vocabulary example is 21
+# (``Ingredient Quantities``); descriptive ERP export headers run to 40-60.
+# 128 leaves that 2x headroom. Anything longer is almost certainly row data
+# swallowed into the header (an unterminated quote), so it is never sent.
+MAX_HEADER_CHARS = 128
+MALFORMED_HEADER = "malformed_header"
 
 # Canonical vocabulary. Keys are the exact column names the CSV parser and
 # the FSMA validators consume. Descriptions follow the vendor guidance for
@@ -237,6 +254,23 @@ def normalize_csv_header(header: str | None) -> str:
     return (header or "").strip().lower().replace(" ", "_")
 
 
+def malformed_header_reason(headers: Iterable[str | None]) -> str | None:
+    """Why this cannot be a real header row, or ``None`` when it can.
+
+    An unterminated quote makes the CSV reader take the rest of the file as
+    one header, so whole rows would leave the process as a "column name". A
+    header with a line break, or longer than :data:`MAX_HEADER_CHARS`, is
+    refused. The reason names the problem, never the header's content.
+    """
+    for header in headers:
+        text = (header or "").strip()
+        if "\r" in text or "\n" in text:
+            return "a header contains a line break"
+        if len(text) > MAX_HEADER_CHARS:
+            return f"a header is {len(text)} characters long (limit {MAX_HEADER_CHARS})"
+    return None
+
+
 def unrecognized_headers(headers: Iterable[str | None], recognized: Collection[str]) -> list[str]:
     """Return the original headers whose normalised form the parser does not recognise.
 
@@ -255,9 +289,19 @@ def unrecognized_headers(headers: Iterable[str | None], recognized: Collection[s
 
 
 def build_state(
-    all_headers: Sequence[str], columns: Sequence[str], samples: Mapping[str, Sequence[str]] | None
+    all_headers: Sequence[str],
+    columns: Sequence[str],
+    samples: Mapping[str, Sequence[str]] | None,
+    *,
+    cte_type: str | None = None,
 ) -> dict[str, Any]:
-    """Assemble the state object: the whole header row for context plus the columns to map."""
+    """Assemble the state object: the whole header row for context plus the columns to map.
+
+    ``cte_type`` is the canonical CTE (for example ``shipping``) the uploader
+    declared for every row of the file. It is added as ``file_cte_type`` only
+    when given, so the state for a file without one is exactly what it was
+    before the key existed.
+    """
     to_map: list[dict[str, Any]] = []
     for index, header in enumerate(columns):
         entry: dict[str, Any] = {"index": index, "header": header}
@@ -265,7 +309,13 @@ def build_state(
         if values:
             entry["sample_values"] = values
         to_map.append(entry)
-    return {"csv_headers": [(header or "").strip() for header in all_headers], "columns_to_map": to_map}
+    state: dict[str, Any] = {
+        "csv_headers": [(header or "").strip() for header in all_headers],
+        "columns_to_map": to_map,
+    }
+    if cte_type:
+        state["file_cte_type"] = cte_type
+    return state
 
 
 def build_questions(columns: Sequence[str]) -> dict[str, dict[str, Any]]:
@@ -281,7 +331,9 @@ def build_questions(columns: Sequence[str]) -> dict[str, dict[str, Any]]:
             "instructions": {
                 "task": (
                     "Decide which canonical FSMA 204 traceability field the CSV column described in "
-                    "`column` represents. Use `csv_headers` in the state for context about the file."
+                    "`column` represents. Use `csv_headers` in the state for context about the file. "
+                    "When the state has `file_cte_type`, it names the FSMA 204 critical tracking event "
+                    "that every row in the file records."
                 ),
                 "column": {"path": f"columns_to_map[{index}]", "header": header},
                 "guidance": (
@@ -333,6 +385,13 @@ class HeaderMappingResult:
     thresholds: ConfidenceThresholds = field(default_factory=ConfidenceThresholds)
     apply_enabled: bool = False
     truncated_columns: int = 0
+    # What Jev was told about the file's CTE: the ``file_cte_type`` put in the
+    # request state (``None`` when absent or when no request was built), and,
+    # when the uploader declared a CTE that was withheld, why. The route sets
+    # the reason (``_suggest_header_mappings_for_upload``); both reach the
+    # artifact rationale so the evidence records what was asked.
+    file_cte_type: Optional[str] = None
+    file_cte_type_dropped: Optional[str] = None
 
     @property
     def applied_mapping(self) -> dict[str, str]:
@@ -481,10 +540,15 @@ def suggest_header_mappings(
     samples: Mapping[str, Sequence[str]] | None = None,
     decider: JevDecider | None = None,
     precedence: Sequence[Sequence[str]] = (),
+    cte_type: str | None = None,
 ) -> HeaderMappingResult:
     """Ask Jev about every unrecognised header. Never raises.
 
     ``recognized`` is the parser's set of normalised column names.
+    ``cte_type`` is the canonical CTE declared for the whole file, or
+    ``None`` for a mixed-type or undeclared file (see :func:`build_state`).
+    The caller must only pass it when no row can contradict it; the route
+    enforces that in ``_file_cte_type_for_jev``.
     ``precedence`` lists the parser's fallback chains (see
     :func:`outranked_columns`) so a mapping is never applied where it would
     outrank a column the file already carries. The decider's settings supply
@@ -498,6 +562,11 @@ def suggest_header_mappings(
     if not decider.enabled:
         return HeaderMappingResult(status="disabled", thresholds=thresholds, apply_enabled=apply_enabled)
 
+    # Defence in depth for any caller: the CSV route also refuses a header
+    # row that spans lines before it gets here (``_csv_headers_and_samples``).
+    if malformed_header_reason(all_headers):
+        return HeaderMappingResult(status=MALFORMED_HEADER, thresholds=thresholds, apply_enabled=apply_enabled)
+
     columns = unrecognized_headers(all_headers, recognized)
     if not columns:
         return HeaderMappingResult(status="no_unrecognized_headers", thresholds=thresholds, apply_enabled=apply_enabled)
@@ -505,10 +574,11 @@ def suggest_header_mappings(
     truncated = max(0, len(columns) - MAX_COLUMNS_PER_UPLOAD)
     columns = columns[:MAX_COLUMNS_PER_UPLOAD]
     present_keys = {normalize_csv_header(header) for header in all_headers}
+    file_cte_type = cte_type or None
 
     try:
         answers = decider.ask(
-            build_state(list(all_headers), columns, samples),  # type: ignore[arg-type]
+            build_state(list(all_headers), columns, samples, cte_type=file_cte_type),  # type: ignore[arg-type]
             build_questions(columns),
             purpose=PURPOSE,
             questions_version=QUESTIONS_VERSION,
@@ -519,11 +589,16 @@ def suggest_header_mappings(
             thresholds=thresholds,
             apply_enabled=apply_enabled,
             truncated_columns=truncated,
+            file_cte_type=file_cte_type,
         )
     except Exception:  # noqa: BLE001 - the upload must not fail because a suggestion did.
         logger.exception("jev.header_mapping.error", column_count=len(columns))
         return HeaderMappingResult(
-            status="error", thresholds=thresholds, apply_enabled=apply_enabled, truncated_columns=truncated
+            status="error",
+            thresholds=thresholds,
+            apply_enabled=apply_enabled,
+            truncated_columns=truncated,
+            file_cte_type=file_cte_type,
         )
 
     suggestions = _decide(
@@ -552,6 +627,7 @@ def suggest_header_mappings(
         thresholds=thresholds,
         apply_enabled=apply_enabled,
         truncated_columns=truncated,
+        file_cte_type=file_cte_type,
     )
 
 
@@ -562,10 +638,45 @@ def _blocked_detail(suggestion: HeaderMappingSuggestion) -> str:
     return f"; the file already carries {columns}, which the parser reads only after {suggestion.canonical_field}"
 
 
+def _file_cte_note(result: HeaderMappingResult) -> str:
+    """What the request state said about the file's CTE, for the artifact rationale.
+
+    The artifact and payload contracts are closed (``extra="forbid"``, a
+    checked-in JSON schema, and the payload is hashed into the run ledger),
+    so this travels in the free-text rationale next to the question-set
+    version instead of as a new field.
+    """
+    if result.file_cte_type:
+        return f"State file_cte_type: {result.file_cte_type}."
+    if result.file_cte_type_dropped:
+        return f"State file_cte_type: none (declared CTE withheld: {result.file_cte_type_dropped})."
+    return "State file_cte_type: none (no CTE declared for the file)."
+
+
+def _declared_cte_precedence_note(result: HeaderMappingResult) -> str | None:
+    """How an applied ``cte_type`` mapping relates to a CTE the uploader declared.
+
+    The parser reads a row's own CTE first and falls back to the declared one
+    (``_detect_row_cte_type``), so the mapped column wins wherever it holds a
+    known CTE. ``None`` when no CTE was declared.
+    """
+    if result.file_cte_type:
+        declared = f"The declared file CTE {result.file_cte_type}"
+    elif result.file_cte_type_dropped:
+        declared = "The declared file CTE"
+    else:
+        return None
+    return (
+        f"{declared} remains the fallback for rows where this column is blank or not a known CTE; "
+        "per-row values from this column override it."
+    )
+
+
 def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult) -> str:
     evidence = result.evidence
     parts = [
         f"TypeSafe Jev Choice question ({QUESTIONS_VERSION}) over the canonical FSMA 204 field vocabulary.",
+        _file_cte_note(result),
         f"Top probabilities: {suggestion.probabilities}.",
         f"Confidence {suggestion.confidence:.3f} falls in band '{suggestion.band.value}' "
         f"(auto_apply >= {result.thresholds.auto_apply}, review >= {result.thresholds.review}).",
@@ -573,6 +684,10 @@ def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult)
         if suggestion.applied
         else f"Not applied to rows (reason: {suggestion.blocked_reason}{_blocked_detail(suggestion)}).",
     ]
+    if suggestion.applied and suggestion.canonical_field == "cte_type":
+        declared = _declared_cte_precedence_note(result)
+        if declared:
+            parts.append(declared)
     if evidence is not None:
         parts.append(
             f"Model {evidence.model}, request {evidence.request_id or 'n/a'}, latency {evidence.latency_ms} ms."
