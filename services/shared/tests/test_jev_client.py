@@ -354,6 +354,15 @@ def test_settings_parse_overrides_and_strip_whitespace():
     assert settings.thresholds == ConfidenceThresholds(auto_apply=0.95, review=0.6)
 
 
+def test_settings_repr_never_contains_the_api_key():
+    secret = "ts-live-SENTINEL-0123456789abcdef"  # pragma: allowlist secret
+    settings = JevSettings.from_env({"TYPESAFE_API_KEY": secret})
+    assert settings.enabled is True
+    assert secret not in repr(settings)
+    assert secret not in str(settings)
+    assert "api_key" not in repr(settings)
+
+
 @pytest.mark.parametrize(
     "env",
     [
