@@ -516,3 +516,34 @@ def test_confidence_float_noise_never_turns_the_response_into_a_500(harness):
     suggestion = resp.json()["cte_type_suggestion"]
     assert suggestion["confidence"] == 1.0
     assert suggestion["applied"] is True
+
+
+def test_column_suggestions_ride_the_400_too(harness):
+    # "Lot #" hides the lot code from the parser: the uploader needs to know
+    # which column Jev thinks it is, as well as which CTE the file records.
+    header, example, _ = ct._generate_csv_template("receiving").splitlines()[:3]
+    body = (header.replace("traceability_lot_code", "Lot #") + "\n" + example + "\n").encode()
+    columns = {"Lot #": _choice("traceability_lot_code", 0.97, no_match=0.03)}
+    harness["use_decider"](_decider(_transport(_choice("receiving", 0.97), columns)))
+
+    resp = _post(body, data={"cte_type": "receiving"})
+
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert "cte_type_suggestion" not in detail
+    (suggestion,) = detail["header_mapping_suggestions"]
+    assert suggestion["source_header"] == "Lot #"
+    assert suggestion["canonical_field"] == "traceability_lot_code"
+    assert suggestion["band"] == "auto_apply"
+    assert suggestion["applied"] is False and suggestion["blocked_reason"] == "apply_disabled"
+
+
+def test_no_column_suggestions_key_without_jev(harness):
+    header, example, _ = ct._generate_csv_template("receiving").splitlines()[:3]
+    body = (header.replace("traceability_lot_code", "Lot #") + "\n" + example + "\n").encode()
+    harness["use_decider"](_decider(_transport(_choice("receiving", 0.97)), api_key=None))
+
+    resp = _post(body, data={"cte_type": "receiving"})
+
+    assert resp.status_code == 400
+    assert "header_mapping_suggestions" not in resp.json()["detail"]

@@ -28,7 +28,13 @@ import { apiClient } from '@/lib/api-client';
 import type { IngestCSVResponse } from '@/types/api';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { toast } from '@/components/ui/use-toast';
+import { ColumnSuggestionList } from '@/components/fsma/ColumnSuggestionList';
 import { CteSuggestionPrompt } from '@/components/fsma/CteSuggestionPrompt';
+import {
+    columnSuggestions,
+    columnSuggestionsFromUploadError,
+    type ColumnSuggestion,
+} from '@/lib/column-suggestions';
 import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 
 const CTE_TYPES = [
@@ -102,6 +108,7 @@ export function DataImportClient() {
         data?: IngestCSVResponse;
         error?: string;
         cteSuggestion?: ActionableCteSuggestion | null;
+        columnSuggestions?: ColumnSuggestion[];
     } | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -168,6 +175,7 @@ export function DataImportClient() {
                 error: err instanceof Error ? err.message : 'Upload failed',
                 // A declared CTE is never second-guessed.
                 cteSuggestion: cteType ? null : cteSuggestionFromUploadError(err),
+                columnSuggestions: columnSuggestionsFromUploadError(err),
             });
             setUploadState('error');
         } finally {
@@ -423,10 +431,16 @@ export function DataImportClient() {
                                                         {uploadResult.data.kde_warnings?.map((warning, index) => (
                                                             <p key={index} className="mt-2 text-small">{warning}</p>
                                                         ))}
+                                                        <ColumnSuggestionList
+                                                            suggestions={columnSuggestions(uploadResult.data.header_mapping_suggestions)}
+                                                        />
                                                     </>
                                                 )}
                                                 {uploadResult.error && (
                                                     <div className="text-small">{uploadResult.error}</div>
+                                                )}
+                                                {uploadResult.columnSuggestions && (
+                                                    <ColumnSuggestionList suggestions={uploadResult.columnSuggestions} />
                                                 )}
                                                 {uploadResult.cteSuggestion && (
                                                     <CteSuggestionPrompt

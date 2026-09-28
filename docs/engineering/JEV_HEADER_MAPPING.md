@@ -97,7 +97,17 @@ attachments get both questions and the same apply switches.
 5. The response gains `header_mapping_suggestions` (one entry per asked
    column) and `header_mapping_engine` (status, model, request id,
    thresholds, artifacts queued). Both are null/empty when Jev is not
-   configured, so existing clients see no change.
+   configured, so existing clients see no change. When no row parses, the
+   400 detail carries the same `header_mapping_suggestions` list (only when
+   there are suggestions), so the uploader learns which column to rename.
+6. The upload pages (`/ingest`, Data Import Hub) list each unapplied
+   suggestion that names a field and is not in the `reject` band:
+   "“Lot #” looks like Traceability Lot Code (97% confidence). Rename the
+   column to “Traceability Lot Code” and upload again." The labels live in
+   `frontend/src/lib/column-suggestions.ts`; each normalises to the field
+   name, so the renamed column parses. A test pins that the labels cover the
+   vocabulary exactly. Nothing is applied from the page: renaming is the
+   uploader's decision.
 
 ### Declare the CTE on single-type uploads
 

@@ -34,7 +34,13 @@ import {
   Landmark,
   Scale
 } from 'lucide-react';
+import { ColumnSuggestionList } from '@/components/fsma/ColumnSuggestionList';
 import { CteSuggestionPrompt } from '@/components/fsma/CteSuggestionPrompt';
+import {
+  columnSuggestions,
+  columnSuggestionsFromUploadError,
+  type ColumnSuggestion,
+} from '@/lib/column-suggestions';
 import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 import { NormalizedDocumentViewer } from './NormalizedDocumentViewer';
 import { readSandboxHandoffFromSession } from './sandbox-handoff';
@@ -109,6 +115,7 @@ export default function IngestPage() {
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
   const [cteSuggestion, setCteSuggestion] = useState<ActionableCteSuggestion | null>(null);
+  const [errorColumnSuggestions, setErrorColumnSuggestions] = useState<ColumnSuggestion[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
 
@@ -122,6 +129,7 @@ export default function IngestPage() {
       setCsvResult(null);
       setCsvError(null);
       setCteSuggestion(null);
+      setErrorColumnSuggestions([]);
     }
   };
 
@@ -187,6 +195,7 @@ export default function IngestPage() {
       setCsvResult(null);
       setCsvError(null);
       setCteSuggestion(null);
+      setErrorColumnSuggestions([]);
 
       // Demonstration Override for the Sales Demo flow
       if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
@@ -222,6 +231,7 @@ export default function IngestPage() {
           // Only offered when the server rejected an undeclared file: a
           // declared CTE is never second-guessed.
           setCteSuggestion(cteType ? null : cteSuggestionFromUploadError(error));
+          setErrorColumnSuggestions(columnSuggestionsFromUploadError(error));
         } else {
           console.error('Ingestion failed:', error);
         }
@@ -532,6 +542,7 @@ export default function IngestPage() {
                       {csvResult.kde_warnings?.map((warning, index) => (
                         <p key={index} className="mt-2">{warning}</p>
                       ))}
+                      <ColumnSuggestionList suggestions={columnSuggestions(csvResult.header_mapping_suggestions)} />
                     </Callout>
                   )}
 
@@ -599,6 +610,9 @@ export default function IngestPage() {
                       <p className="mt-1">
                         {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
                       </p>
+                      {activeTab === 'file' && (
+                        <ColumnSuggestionList suggestions={errorColumnSuggestions} />
+                      )}
                       {activeTab === 'file' && cteSuggestion && (
                         <CteSuggestionPrompt
                           suggestion={cteSuggestion}

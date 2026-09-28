@@ -168,6 +168,27 @@ describe('Data Import Hub CSV results', () => {
     expect(mocks.ingestFile).toHaveBeenLastCalledWith('cookie-managed', expect.any(File), 'data_import_hub', 'receiving');
   });
 
+  it('lists Jev column suggestions when rows were rejected', async () => {
+    const result = csvResult(1, 1);
+    mocks.ingestFile.mockResolvedValue({
+      ...result,
+      header_mapping_suggestions: [
+        {
+          source_header: 'Qty Shpd', source_key: 'qty_shpd', canonical_field: 'quantity',
+          confidence: 0.91, band: 'auto_apply', applied: false, blocked_reason: 'apply_disabled',
+        },
+        {
+          source_header: 'Notes', source_key: 'notes', canonical_field: null,
+          confidence: 0.99, band: 'auto_apply', applied: false, blocked_reason: 'no_match',
+        },
+      ],
+    });
+    await uploadCsv();
+
+    expect(await screen.findByText(/.Qty Shpd. looks like Quantity \(91% confidence\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Notes. looks like/)).not.toBeInTheDocument();
+  });
+
   it('rejects TSV before calling the CSV endpoint', async () => {
     render(<DataImportClient />);
     fireEvent.change(screen.getByLabelText('Upload CSV file'), {
