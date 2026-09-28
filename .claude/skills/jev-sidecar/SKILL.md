@@ -107,6 +107,14 @@ Exit codes: 0 answered. 1 bad usage, nothing sent. 2 not configured (no key,
 switched off, or packages missing), nothing sent. 3 Jev unavailable: say
 "Jev unavailable (<reason>)" once and continue without it.
 
+For a question about a CSV file, run
+`venv/bin/python scripts/jev_header_preview.py FILE --file-cte` instead.
+
+- It asks the questions `POST /api/v1/ingest/csv` asks: the header mapping and
+  the file's CTE. It uses the same question sets and confidence bands.
+- It sends only the header row.
+- Do not add `--sample-values` for a customer file.
+
 ## Writing questions
 
 - Jev reads literally. State the exact condition. Put boundary cases in the
