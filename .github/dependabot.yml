@@ -41,11 +41,22 @@ updates:
       #                 API (scopeManager.addGlobals); `eslint .` crashes outright.
       #   jsdom 30    — requires Node >=22.22.2; CI runs Node 20.
       #   jest-dom 7  — requires Node >=22 and a new @testing-library/dom peer.
+      #   typescript 7 — typescript-eslint 8.x (via eslint-config-next) peers
+      #                 typescript <6.1.0; `npm run lint` crashes in
+      #                 typescript-estree ("reading 'Cjs'"). Backed out in
+      #                 #3113 and #3145; the major group re-proposed it in #3157.
+      #   @vitest/coverage-v8 5 — must share vitest's major, and vitest majors
+      #                 are ignored above; a lone bump leaves the lock off
+      #                 package.json's range and `npm ci` fails (#3138, #3157).
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
       - dependency-name: "jsdom"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@testing-library/jest-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
 
   # Python services — security-critical packages get solo PRs (no group entry
