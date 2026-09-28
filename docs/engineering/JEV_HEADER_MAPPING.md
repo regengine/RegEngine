@@ -345,7 +345,8 @@ thresholds in force. The values shown are illustrative.
 | --- | --- |
 | `--json` | Machine-readable report on stdout. Logs go to stderr. |
 | `--sample-values N` | Send N (0-5) redacted sample values per unrecognised column. Overrides `REGENGINE_JEV_HEADER_SAMPLE_VALUES`. |
-| `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`. Nothing else changes. |
+| `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1` (and, with `--file-cte`, `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`). Nothing else changes. |
+| `--file-cte` | Also ask the [file CTE question](#file-cte-suggestion-uploads-that-declare-no-cte) the route asks of an upload that declares no CTE, through the route's own helper (`_suggest_file_cte_for_upload`), concurrently with the header mapping. Adds a `File CTE:` line to the table and a `file_cte` section to `--json` (`status`, `cte_type`, `confidence`, `band`, `probabilities`, `would_apply`, `blocked_reason`, model, request id, latency, question-set version); without the flag the report is unchanged. The exit code is the more severe of the two questions'. Not with `--cte-type`: the route never asks when a CTE is declared. |
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
 | `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation, same withholding rule. An empty value (`--cte-type ""`) means not declared, like an empty form field; a blank-but-not-empty one is a usage error, as the route rejects it. When sent, it is shown on the `Sent:` line and as `request.file_cte_type` in `--json`. When withheld, `request.file_cte_type` is null, `request.file_cte_type_dropped` gives the reason, and the table prints a `CTE:` line. `request.file_cte_type` comes from the route helper's result: what was sent on `ok`, what was attempted on `unavailable:*` and `error` (the request may never have left), and null when nothing was built (for example without a key). Without a key the reason is still computed from the file with the same helper (`_file_cte_type_for_jev`), so the report says the `--cte-type` would be withheld. An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
 
@@ -415,9 +416,12 @@ repository. (`.env` is excluded from commits but is still plaintext on disk.)
    log, and `requires_human_review=false` artifacts on the run ledger.
 4. Roll back at any time with `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=0`
    (suggestions continue) or `REGENGINE_JEV_ENABLED=0` (no calls).
-5. File CTE: upload each RegEngine template with no `cte_type` and check
-   `cte_type_suggestion` on the 400 (advisory mode). When the answers are
-   right, turn on `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`; roll back with `0`.
+5. File CTE: for each RegEngine template (`GET /api/v1/templates/{cte}`)
+   and representative supplier exports, run
+   `python3 scripts/jev_header_preview.py FILE --file-cte` (or upload the
+   file with no `cte_type` and read `cte_type_suggestion` on the 400).
+   When the answers are right, turn on
+   `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`; roll back with `0`.
 
 ## Failure modes
 
@@ -458,8 +462,6 @@ reports `artifacts_recorded: 0`; it does not reject the upload.
   column the parser reads, even if its values are blank or are not CTEs
   (a `Type` column of pallet types): those rows are still rejected with
   `No CTE type`.
-- The preview CLI shows header-mapping suggestions only; it does not ask
-  the file CTE question yet.
 
 ## Verification
 
