@@ -1334,7 +1334,13 @@ jobs:
     # specifically — a shared "CI Status Gate" name previously let a
     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
     name: Backend CI Status Gate
-    if: always()
+    # Run when a needed job failed so this gate still posts failure (#2537:
+    # cancelled or skipped dependencies must not look green). Skip only when
+    # the workflow itself was cancelled by a newer push. In that case the
+    # replacement run owns the gate; this run must not fail the SHA for
+    # jobs that were aborted mid-flight. `!cancelled()` does not relax the
+    # script below: every dependency still has to be success.
+    if: always() && !cancelled()
     needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     steps:
