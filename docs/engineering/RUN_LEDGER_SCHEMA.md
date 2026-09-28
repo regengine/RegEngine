@@ -28,7 +28,12 @@ Receipts are tenant-scoped and append-only. The database computes:
 
 The insert trigger enforces contiguous `sequence_num` values per ingestion run
 and rejects caller-provided `previous_receipt_hash` values that do not match the
-current chain head.
+current chain head. It runs with the caller's rights and serialises appends by
+locking the parent `fsma.ingestion_runs` row (v126), so the runtime role needs
+no UPDATE privilege on the append-only ledger. The two hash helpers it calls
+are SECURITY DEFINER with `search_path = pg_catalog, pg_temp` and a
+schema-qualified pgcrypto `digest()`: they read no table, and the runtime role
+needs no USAGE on the extension schema.
 
 ## Evidence Links
 

@@ -6,12 +6,14 @@ tests; nothing reaches the network):
 * The script goes through the route's own helper
   (``_suggest_header_mappings_for_upload``), so it sends exactly what
   ``POST /api/v1/ingest/csv`` sends: the header row, only unrecognised
-  columns as questions, redacted sample values only when asked, never rows.
+  columns as questions, the declared CTE name (``--cte-type``) only when no
+  row can contradict it, redacted sample values only when asked, never rows.
 * Output: a table (default) or JSON (``--json``) with column, suggested
   field, confidence, band, would-apply and blocked reason, plus model,
   request id and latency.
 * Exit codes: 0 ok / no unrecognised headers (no request), 1 usage or file
-  error, 2 not configured or switched off, 3 vendor unavailable.
+  error (including a malformed header row, which is never sent), 2 not
+  configured or switched off, 3 vendor unavailable.
 * The API key never appears on stdout, stderr or in log events.
 """
 
@@ -134,6 +136,7 @@ def test_table_output_sends_only_the_header_row(script, capsys, tmp_path):
     (body,) = seen["bodies"]
     assert body["state"]["csv_headers"] == CSV_TEXT.splitlines()[0].split(",")
     assert [c["header"] for c in body["state"]["columns_to_map"]] == ["Lot #", "Notes"]
+    assert "file_cte_type" not in body["state"]
     assert all("sample_values" not in c for c in body["state"]["columns_to_map"])
     assert "TLC-001" not in json.dumps(body) and "555-123-4567" not in json.dumps(body)
     (request,) = seen["requests"]
@@ -163,7 +166,9 @@ def test_json_output_and_simulated_apply(script, capsys, tmp_path, simulate):
     assert report["engine"]["model"] == "jev-1.13.0"
     assert report["engine"]["request_id"] == "req_preview"
     assert isinstance(report["engine"]["latency_ms"], int)
-    assert report["engine"]["questions_version"] == "csv-header-mapping.v1"
+    assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] is None
     assert report["policy"] == {
         "auto_apply_confidence": 0.9,
         "review_confidence": 0.5,
@@ -213,6 +218,126 @@ def test_sample_values_are_opt_in_and_redacted_like_production(script, capsys, t
     assert columns["Notes"]["sample_values"] == ["call [PHONE_REDACTED]"]
     assert "555-123-4567" not in json.dumps(seen["bodies"][0])
     assert json.loads(out)["request"]["sample_values_per_column"] == 2
+
+
+@pytest.mark.parametrize("declared", ["harvesting", "Harvest", " GROWING "])
+def test_cte_type_is_normalised_like_the_route_and_sent_as_context(script, capsys, tmp_path, declared):
+    seen: dict = {}
+    code, out, err, logs = _run(
+        script, capsys, [str(_csv(tmp_path)), "--json", "--cte-type", declared], env=BASE_ENV, seen=seen
+    )
+
+    assert code == 0, err
+    (body,) = seen["bodies"]
+    assert body["state"]["file_cte_type"] == "harvesting"
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] == "harvesting"
+    assert report["request"]["file_cte_type_dropped"] is None
+    assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
+    _assert_key_hidden(out, err, logs)
+
+
+# The same upload with a per-row CTE column: rows can override --cte-type.
+PER_ROW_CTE_CSV_TEXT = (
+    "Event Type,Lot #,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document,Notes\n"
+    "harvesting,TLC-001,Kale,10,lbs,2026-04-17,Farm A,REF-1,\n"
+)
+
+
+def test_cte_type_is_withheld_when_the_file_has_a_per_row_cte_column(script, capsys, tmp_path):
+    seen: dict = {}
+    path = str(_csv(tmp_path, PER_ROW_CTE_CSV_TEXT))
+    code, out, err, _ = _run(script, capsys, [path, "--json", "--cte-type", "harvesting"], env=BASE_ENV, seen=seen)
+
+    assert code == 0, err
+    (body,) = seen["bodies"]
+    assert set(body["state"]) == {"csv_headers", "columns_to_map"}
+    report = json.loads(out)
+    assert report["request"]["unrecognized_headers"] == ["Lot #", "Notes"]
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] == "file has a per-row CTE column: Event Type"
+
+    code, out, err, _ = _run(script, capsys, [path, "--cte-type", "harvesting"], env=BASE_ENV)
+    assert code == 0, err
+    assert "CTE:     --cte-type not sent to Jev: file has a per-row CTE column: Event Type" in out
+    assert "file_cte_type harvesting" not in out
+
+
+def test_not_configured_still_says_a_cte_type_would_be_withheld(script, capsys, tmp_path):
+    seen: dict = {}
+    path = str(_csv(tmp_path, PER_ROW_CTE_CSV_TEXT))
+    code, out, err, _ = _run(script, capsys, [path, "--json", "--cte-type", "harvesting"], env={}, seen=seen)
+
+    assert code == 2
+    assert "requests" not in seen
+    report = json.loads(out)
+    assert report["status"] == "disabled"
+    assert report["request"]["file_cte_type"] is None  # nothing was sent
+    assert report["request"]["file_cte_type_dropped"] == "file has a per-row CTE column: Event Type"
+
+    code, out, err, _ = _run(script, capsys, [path, "--cte-type", "harvesting"], env={})
+    assert code == 2
+    assert "Sent:    nothing" in out
+    assert "CTE:     --cte-type would be withheld from Jev: file has a per-row CTE column: Event Type" in out
+
+
+def test_not_configured_also_reports_the_value_scan(script, capsys, tmp_path):
+    # "Activity" is unrecognised, so only Jev could map it; its "receiving"
+    # would still beat a declared harvesting, so the preview says so.
+    text = CSV_TEXT.replace("Notes\n", "Activity\n", 1).replace("call 555-123-4567", "receiving", 1)
+    path = str(_csv(tmp_path, text))
+    code, out, err, _ = _run(script, capsys, [path, "--json", "--cte-type", "harvesting"], env={})
+
+    assert code == 2
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] == "column Activity holds per-row CTE values"
+
+
+@pytest.mark.parametrize(
+    "text,argv_extra",
+    [(CSV_TEXT, ["--cte-type", "harvesting"]), (PER_ROW_CTE_CSV_TEXT, [])],
+    ids=["no-per-row-column", "nothing-declared"],
+)
+def test_not_configured_reports_no_drop_when_nothing_would_be_withheld(script, capsys, tmp_path, text, argv_extra):
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path, text)), "--json", *argv_extra], env={})
+
+    assert code == 2
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] is None
+
+
+def test_empty_cte_type_means_not_declared_like_the_route(script, capsys, tmp_path):
+    seen: dict = {}
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path)), "--json", "--cte-type", ""], env=BASE_ENV, seen=seen)
+
+    assert code == 0, err
+    assert "file_cte_type" not in seen["bodies"][0]["state"]
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] is None
+
+
+def test_cte_type_appears_on_the_sent_line_of_the_table(script, capsys, tmp_path):
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path)), "--cte-type", "harvesting"], env=BASE_ENV)
+
+    assert code == 0, err
+    assert "Sent:    header row; file_cte_type harvesting; 0 redacted sample value(s)" in out
+
+
+def test_unknown_cte_type_is_a_usage_error_and_sends_nothing(script, capsys, tmp_path):
+    seen: dict = {}
+    code, out, err, _ = _run(
+        script, capsys, [str(_csv(tmp_path)), "--cte-type", "teleporting"], env=BASE_ENV, seen=seen
+    )
+
+    # Exit 1 like every other bad argument; 2 means "not configured" in this script.
+    assert code == 1
+    assert out == ""
+    assert "requests" not in seen
+    assert err.startswith("jev_header_preview: error: argument --cte-type: unknown CTE type 'teleporting'; valid: ")
+    assert "shipping" in err and "first_land_based_receiving" in err
 
 
 def test_no_unrecognized_headers_makes_no_request(script, capsys, tmp_path):
@@ -328,6 +453,9 @@ def test_usage_and_file_errors_exit_1(script, capsys, tmp_path):
         [str(latin1)],
         [good, "--sample-values", "9"],
         [good, "--sample-values", "x"],
+        [good, "--cte-type", "bogus"],
+        [good, "--cte-type", "  "],  # the route rejects a blank-but-not-empty form field too
+        [good, "--cte-type"],
         [good, "--unknown-flag"],
         [],
     ]
@@ -338,6 +466,53 @@ def test_usage_and_file_errors_exit_1(script, capsys, tmp_path):
         assert out == "", argv
         assert err.startswith("jev_header_preview: error: "), argv
         assert "requests" not in seen, argv
+
+
+# The review's reproduction: an unterminated quote makes the reader take the
+# rest of the file, PII included, as a single "header".
+OPEN_QUOTE_CSV_TEXT = '"Lot #,product_description,Notes\nTLC-1,Kale,call 555-123-4567 jane@example.com\nTLC-2,Chard,x\n'
+
+
+@pytest.mark.parametrize("env", [BASE_ENV, {}], ids=["configured", "not-configured"])
+def test_unterminated_quote_header_is_never_sent_or_called_no_rows(script, capsys, tmp_path, env):
+    path = str(_csv(tmp_path, OPEN_QUOTE_CSV_TEXT))
+    argv = [path, "--json", "--sample-values", "2", "--cte-type", "harvesting"]
+    seen: dict = {}
+    code, out, err, logs = _run(script, capsys, argv, env=env, seen=seen)
+
+    assert "requests" not in seen  # zero requests reached the transport
+    assert code == 1
+    report = json.loads(out)
+    assert report["status"] == "malformed_header" and report["exit_code"] == 1
+    assert report["request"]["malformed_header_reason"] == "the header row spans 3 lines"
+    assert report["request"]["unrecognized_headers"] == []
+    assert report["request"]["file_cte_type"] is None and report["request"]["file_cte_type_dropped"] is None
+    assert report["suggestions"] == []
+    assert err.startswith(
+        "jev_header_preview: malformed_header: The header row is malformed (the header row spans 3 lines)"
+    )
+    for text in (out, err, json.dumps(logs, default=str)):
+        assert "555-123-4567" not in text and "jane@example.com" not in text
+
+    code, out, err, _ = _run(script, capsys, [path], env=env, seen=seen)
+    assert code == 1
+    assert "requests" not in seen
+    assert "Columns: the header row is malformed: the header row spans 3 lines" in out
+    assert "Sent:    nothing" in out
+    assert "no rows" not in out  # never claim rows were withheld from a request that did not happen
+    assert "555-123-4567" not in out + err
+
+
+def test_over_long_header_is_never_sent(script, capsys, tmp_path):
+    text = CSV_TEXT.replace("Notes\n", "Notes " + "x" * 200 + "\n", 1)
+    seen: dict = {}
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path, text)), "--json"], env=BASE_ENV, seen=seen)
+
+    assert "requests" not in seen
+    assert code == 1
+    report = json.loads(out)
+    assert report["status"] == "malformed_header"
+    assert report["request"]["malformed_header_reason"] == "a header is 206 characters long (limit 128)"
 
 
 def test_oversized_file_is_rejected_like_the_route(script, capsys, tmp_path, monkeypatch):
