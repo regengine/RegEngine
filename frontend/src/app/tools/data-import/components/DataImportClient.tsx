@@ -146,10 +146,16 @@ export function DataImportClient() {
         setUploadResult(null);
     }, []);
 
+    // One upload at a time. The result panel animates out, so its buttons stay
+    // mounted and clickable for a moment after a click: state alone cannot stop
+    // a second click from storing the same file twice.
+    const uploadInFlightRef = useRef(false);
+
     // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
     // confirming the CTE Jev suggested for a file the server rejected.
     const handleUpload = useCallback(async (cteType?: string) => {
-        if (!selectedFile) return;
+        if (!selectedFile || uploadInFlightRef.current) return;
+        uploadInFlightRef.current = true;
         setUploadState('uploading');
         setUploadResult(null);
         try {
@@ -164,6 +170,8 @@ export function DataImportClient() {
                 cteSuggestion: cteType ? null : cteSuggestionFromUploadError(err),
             });
             setUploadState('error');
+        } finally {
+            uploadInFlightRef.current = false;
         }
     }, [selectedFile, apiKey]);
 
@@ -423,6 +431,7 @@ export function DataImportClient() {
                                                 {uploadResult.cteSuggestion && (
                                                     <CteSuggestionPrompt
                                                         suggestion={uploadResult.cteSuggestion}
+                                                        disabled={uploadState === 'uploading'}
                                                         onImport={(cte) => void handleUpload(cte)}
                                                     />
                                                 )}
