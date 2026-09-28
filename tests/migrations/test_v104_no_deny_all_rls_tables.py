@@ -16,10 +16,21 @@ obligation-driven KDE enforcement entirely in webhook validation
 return []``). It only became reachable when the #2461 cutover moved the app
 off a superuser connection that had been bypassing RLS.
 
-The first test is the generalizable guard: ANY table with RLS enabled and no
-policy applicable to ``regengine``/``regengine_sysadmin`` is deny-all for the
-application and is almost certainly a bug, not a deliberate lockout. It would
-have caught this the moment v051 ran against a non-Supabase database.
+The first test is the generalizable guard: an app role that holds a DML
+privilege on an RLS table to which no policy applies for that role is
+deny-all for the application, and the denial is silent. It would have caught
+this the moment v051 ran against a non-Supabase database.
+
+A role with NO privilege on such a table is not flagged: Postgres raises
+``permission denied`` before RLS is consulted, so the lockout is loud. That
+is the deliberate closed-grant posture v111 (b71d9e4c2a60) gives the
+release-disabled ``fsma.incidents``, ``fsma.exchange_packages`` and
+``fsma.organizations`` — also asserted by test_v111_runtime_role_grants.py
+(``test_disabled_fsma_surfaces_are_unreachable_by_both_roles``) and required
+by the runtime canary in services/shared/database.py. This guard predated
+v111 and, never running in CI, flagged those tables until it was taught the
+difference; ``test_guard_flags_silent_lockout_but_not_closed_grant`` proves it
+still bites on the v051/v056 shape.
 """
 
 from __future__ import annotations
@@ -43,29 +54,36 @@ MIGRATION = (
 
 APP_ROLES = ("regengine", "regengine_sysadmin")
 
-# polroles = '{0}' means the policy applies to PUBLIC (every role).
+# One row per (table, app role) where the role can reach the table's rows —
+# any table/column DML privilege, directly, via PUBLIC or via membership —
+# yet no policy applies to it, so RLS filters every row without an error.
+# A policy role oid of 0 means PUBLIC (every role).
 _DENY_ALL_TABLES = """
-SELECT n.nspname || '.' || c.relname
+SELECT n.nspname || '.' || c.relname, r.rolname
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind = 'r'
+CROSS JOIN pg_roles r
+WHERE c.relkind IN ('r', 'p')
   AND c.relrowsecurity
   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND r.rolname = ANY (%(app_roles)s)
+  AND (
+      has_any_column_privilege(r.oid, c.oid, 'SELECT, INSERT, UPDATE')
+      OR has_table_privilege(r.oid, c.oid, 'DELETE')
+  )
   AND NOT EXISTS (
       SELECT 1
-      FROM pg_policy p
+      FROM pg_policy p, unnest(p.polroles) AS policy_role
       WHERE p.polrelid = c.oid
-        AND (
-            p.polroles = '{0}'
-            OR EXISTS (
-                SELECT 1 FROM pg_roles r
-                WHERE r.oid = ANY (p.polroles)
-                  AND r.rolname = ANY (%(app_roles)s)
-            )
-        )
+        AND (policy_role = 0 OR pg_has_role(r.oid, policy_role, 'MEMBER'))
   )
-ORDER BY 1
+ORDER BY 1, 2
 """
+
+
+def _silent_deny_all(conn) -> list[str]:
+    rows = conn.execute(_DENY_ALL_TABLES, {"app_roles": list(APP_ROLES)}).fetchall()
+    return [f"{table} ({role})" for table, role in rows]
 
 
 @pytest.mark.skipif(
@@ -73,18 +91,50 @@ ORDER BY 1
     reason="no designated live test DB (CI DATABASE_URL or REGENGINE_MIGRATION_TEST_DB) — live DB required",
 )
 def test_no_rls_table_is_deny_all_for_app_roles():
-    """RLS + no applicable policy = the app silently sees zero rows."""
+    """RLS + a grant + no applicable policy = the app silently sees zero rows."""
     with psycopg.connect(DATABASE_URL) as conn:
-        rows = conn.execute(_DENY_ALL_TABLES, {"app_roles": list(APP_ROLES)}).fetchall()
+        offenders = _silent_deny_all(conn)
 
-    offenders = [r[0] for r in rows]
     assert not offenders, (
-        "RLS is enabled on these tables but no policy applies to "
-        f"{'/'.join(APP_ROLES)}, so the application reads zero rows from them "
-        f"with no error raised: {offenders}. Either add a policy (see v104 for "
-        "the parent-scoped pattern) or, if the lockout is deliberate, grant no "
-        "table privileges instead so failures are loud."
+        "RLS is enabled on these tables and the listed app role holds privileges "
+        "on them, but no policy applies to that role, so the application reads "
+        f"zero rows from them with no error raised: {offenders}. Either add a "
+        "policy (see v104 for the parent-scoped pattern) or, if the lockout is "
+        "deliberate, grant no table privileges instead so failures are loud."
     )
+
+
+@pytest.mark.skipif(
+    not DATABASE_URL,
+    reason="no designated live test DB (CI DATABASE_URL or REGENGINE_MIGRATION_TEST_DB) — live DB required",
+)
+def test_guard_flags_silent_lockout_but_not_closed_grant():
+    """The guard must still bite on the v051/v056 shape (RLS + a grant + no
+    policy) while exempting the deliberate closed-grant shape (RLS + no grant
+    + no policy). Uses a temp table in a rolled-back transaction."""
+    probe = "v104_guard_probe"
+    with psycopg.connect(DATABASE_URL) as conn:
+        conn.execute(f"CREATE TEMP TABLE {probe} (id int)")
+        conn.execute(f"ALTER TABLE {probe} ENABLE ROW LEVEL SECURITY")
+
+        conn.execute(f"GRANT SELECT ON {probe} TO regengine")
+        silent = [o for o in _silent_deny_all(conn) if probe in o]
+        assert len(silent) == 1 and silent[0].endswith(f".{probe} (regengine)"), (
+            f"RLS + SELECT grant + no policy was not flagged: {silent}"
+        )
+
+        conn.execute(f"REVOKE ALL ON {probe} FROM regengine")
+        assert not [o for o in _silent_deny_all(conn) if probe in o], (
+            "RLS + no grant + no policy is a loud lockout and must not be flagged"
+        )
+
+        conn.execute(f"GRANT SELECT ON {probe} TO regengine")
+        conn.execute(f"CREATE POLICY {probe}_p ON {probe} FOR SELECT TO regengine USING (true)")
+        assert not [o for o in _silent_deny_all(conn) if probe in o], (
+            "a policy applying to the granted role must clear the finding"
+        )
+
+        conn.rollback()
 
 
 @pytest.mark.skipif(
