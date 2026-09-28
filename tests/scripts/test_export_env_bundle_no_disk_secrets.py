@@ -30,7 +30,7 @@ SCRIPT = REPO_ROOT / "scripts" / "export_env_bundle.py"
 FAKE_ENV = {
     "POSTGRES_PASSWORD": "fake-pg-pw-not-a-real-secret",
     "NEO4J_PASSWORD": "fake-neo4j-pw-not-a-real-secret",
-    "ADMIN_MASTER_KEY": "fake-admin-key-not-a-real-secret",
+    "ADMIN_MASTER_KEY": "fake-admin-key-not-a-real-secret",  # retired; set to prove it is ignored
     "OBJECT_STORAGE_ACCESS_KEY_ID": "fake-akid-not-a-real-secret",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY": "fake-sak-not-a-real-secret",
 }
@@ -99,7 +99,8 @@ def test_validation_run_writes_no_file_and_prints_no_values(tmp_path):
     assert list(tmp_path.iterdir()) == [], f"script created files: {list(tmp_path.iterdir())}"
 
     combined = proc.stdout + proc.stderr
-    assert "ADMIN_MASTER_KEY" in combined, "should confirm the key name was validated"
+    assert "POSTGRES_PASSWORD" in combined, "should confirm the key name was validated"
+    assert "ADMIN_MASTER_KEY" not in combined, "the retired admin key is still validated"
     for value in FAKE_ENV.values():
         assert value not in combined, "a credential value was printed"
 
@@ -115,7 +116,10 @@ def test_emit_bundle_goes_to_stdout_only(tmp_path):
     assert list(tmp_path.iterdir()) == [], "emitting a bundle must not create a file"
 
     bundle = json.loads(proc.stdout)
-    assert bundle["ADMIN_MASTER_KEY"] == FAKE_ENV["ADMIN_MASTER_KEY"]
+    assert bundle["POSTGRES_PASSWORD"] == FAKE_ENV["POSTGRES_PASSWORD"]
+    # The app no longer reads ADMIN_MASTER_KEY; the bundle must not push it
+    # to the platform even when it is still set locally.
+    assert "ADMIN_MASTER_KEY" not in bundle
     assert bundle["ENVIRONMENT"] == "production"
     # Diagnostics must stay off stdout so the pipe carries only JSON.
     assert "RegEngine" not in proc.stdout
@@ -127,11 +131,11 @@ def test_missing_required_secret_fails_without_emitting(tmp_path):
         ["--environment", "production", "--env-file", str(tmp_path / "absent.env"),
          "--emit-bundle"],
         cwd=tmp_path,
-        extra_env={"ADMIN_MASTER_KEY": ""},
+        extra_env={"POSTGRES_PASSWORD": ""},
     )
     assert proc.returncode == 1
     assert proc.stdout.strip() == "", "emitted a bundle despite failing validation"
-    assert "ADMIN_MASTER_KEY" in proc.stderr
+    assert "POSTGRES_PASSWORD" in proc.stderr
 
 
 @pytest.mark.parametrize("candidate", ["secrets.json", "prod.secrets.json"])

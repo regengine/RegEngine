@@ -24,7 +24,9 @@ back to the in-memory store otherwise).
 
 Refuses to run when REGENGINE_ENV=production or when DATABASE_URL points at
 a Supabase host, unless --allow-production is passed. Test keys do not
-belong in production — use POST /v1/admin/keys with ADMIN_MASTER_KEY there.
+belong in production. There, an authenticated high-assurance sysadmin
+(WebAuthn or SSO session) creates keys through POST /v1/admin/keys, or the
+"Create New API Key" card on the /admin page.
 """
 
 from __future__ import annotations
@@ -121,8 +123,9 @@ def _guard_against_production(args: argparse.Namespace, database_url: str) -> No
         sys.exit(
             "Refusing to mint a test key: "
             + " and ".join(problems)
-            + ". Use POST /v1/admin/keys (ADMIN_MASTER_KEY) for real environments, "
-            "or pass --allow-production if you are certain."
+            + ". In real environments an authenticated high-assurance sysadmin "
+            "creates keys via POST /v1/admin/keys or the /admin page. "
+            "Pass --allow-production only if you are certain."
         )
 
 
