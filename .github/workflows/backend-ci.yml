@@ -861,6 +861,22 @@ jobs:
             tests/test_logging_binding_guard.py \
             -v --no-cov -o "testpaths=tests"
 
+      - name: Operator database tooling invariants (no DB)
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # These scripts change database roles, credentials and grants, so
+          # their tests must block a merge. The only other workflow that
+          # collects tests/scripts is test-suite-check.yml, which is not a
+          # required check and does not trigger on scripts/** changes.
+          # test_bootstrap_staging_database drives the staging bootstrap with
+          # fake railway and psql binaries (no network, no DB).
+          # test_v126_operator_guidance pins the v126 refusal message and the
+          # read-only, search_path-pinned verify and pre-deploy runbooks.
+          pytest tests/scripts/test_bootstrap_staging_database.py \
+            tests/scripts/test_v126_operator_guidance.py \
+            -v --no-cov -o "testpaths=tests"
+
       - name: In-process security & FSMA-204 contract suites (#2503)
         run: |
           repo_root="$(pwd)"
