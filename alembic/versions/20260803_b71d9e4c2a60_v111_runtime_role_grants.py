@@ -401,6 +401,13 @@ TARGET_SCHEMAS = ("public", "fsma", "audit", "dlq", "ingestion")
 # and the direct-role CI matrix classifies it.  ``alembic_version`` (and a
 # legacy ``schema_migrations`` table, if drift created one) are deployment
 # metadata and are always denied to both runtime roles.
+#
+# scripts/run-migrations.sh reapplies CUTOVER_STATEMENTS after EVERY deploy
+# (scripts/apply_runtime_role_cutover.py), which revokes every runtime table,
+# column, sequence and function privilege in TARGET_SCHEMAS and rebuilds only
+# what these inventories and _FUNCTION_GRANTS list. A later migration's GRANT
+# on an object in these schemas therefore lasts until the next deploy unless
+# it is also registered here (see v121 label_charges, v126).
 APPLICATION_TABLES = {
     "audit": (
         "rls_policy_restoration_log",
@@ -644,6 +651,39 @@ REGENGINE_COLUMN_GRANTS = {
     # but tenant names, settings, and webhook configuration remain control-
     # plane data.
     "public.tenants": {"SELECT": ("id",)},
+    # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
+    # in the ingest transaction (webhook_compat._open_ingestion_run). INSERT
+    # is limited to the columns that statement writes, so storage_url and
+    # created_at cannot be forged; reads, updates and deletes stay denied
+    # (the disabled remediation surface keeps its contract). The composite
+    # (ingestion_run_id, tenant_id) foreign key pins a blob to its own
+    # tenant's run.
+    "fsma.manifest_blobs": {
+        "INSERT": (
+            "ingestion_run_id",
+            "tenant_id",
+            "raw_bytes",
+            "sha256",
+            "original_filename",
+            "content_type",
+            "uploaded_by",
+        )
+    },
+    # v126 -- the agent-artifact worker (shared.agent_task_bridge) reads only
+    # what its statements need: the ON CONFLICT (artifact_id, tenant_id)
+    # arbiter plus RETURNING artifact_id, and the receipt trigger's
+    # chain-head lookup plus the bridge's RETURNING. Both tables stay
+    # append-only for this role (no UPDATE/DELETE).
+    "fsma.agent_artifacts": {"SELECT": ("artifact_id", "tenant_id")},
+    "fsma.ingestion_run_receipts": {
+        "SELECT": (
+            "receipt_id",
+            "tenant_id",
+            "ingestion_run_id",
+            "sequence_num",
+            "receipt_hash",
+        )
+    },
 }
 
 REGENGINE_SEQUENCE_GRANTS = {
@@ -1057,13 +1097,19 @@ $seed_policy$;
 """
 
 
-_AGENT_ARTIFACT_HASH_REPAIR = """
--- v080 installed pgcrypto in whichever schema happened to lead the migration
--- search_path, then created an unqualified digest() call.  Fresh databases
--- where pgcrypto landed in fsma therefore could not insert agent artifacts
--- from a normal public-first application search_path.  Resolve the trusted
--- extension's catalog-owned namespace once at migration time and persist a
--- schema-qualified call in the function body.
+_HASH_HELPER_REPAIR = """
+-- These three helpers are the only application code that calls pgcrypto.
+-- v079/v080 created them with an unqualified digest(), resolved from the
+-- caller's search_path, and production keeps pgcrypto in a provider-owned
+-- ``extensions`` schema that the runtime roles cannot use. Reapplied on every
+-- deploy, this repair (1) resolves the extension's catalog-owned namespace,
+-- so a relocated pgcrypto heals on the next deploy, and (2) runs each helper
+-- as its migration-owned definer with search_path pinned to pg_catalog then
+-- pg_temp. The helpers read no table and have no side effects; definer
+-- rights only let them reach digest() without granting the runtime roles
+-- USAGE on the extension schema, which would expose every other function
+-- installed there. Hash inputs and outputs are unchanged, so existing
+-- artifacts and receipts still verify.
 DO $repair$
 DECLARE
     pgcrypto_schema name;
@@ -1081,10 +1127,84 @@ BEGIN
         ) RETURNS text
         LANGUAGE sql
         IMMUTABLE
+        SECURITY DEFINER
+        SET search_path = pg_catalog, pg_temp
         AS $function$
             SELECT pg_catalog.encode(
                 %I.digest(
                     COALESCE(p_artifact, '{}'::jsonb)::text,
+                    'sha256'::text
+                ),
+                'hex'::text
+            )
+        $function$
+        $ddl$,
+        pgcrypto_schema
+    );
+
+    EXECUTE format(
+        $ddl$
+        CREATE OR REPLACE FUNCTION fsma.compute_ingestion_run_receipt_payload_hash(
+            p_metadata jsonb
+        ) RETURNS text
+        LANGUAGE sql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, pg_temp
+        AS $function$
+            SELECT pg_catalog.encode(
+                %I.digest(
+                    COALESCE(p_metadata, '{}'::jsonb)::text,
+                    'sha256'::text
+                ),
+                'hex'::text
+            )
+        $function$
+        $ddl$,
+        pgcrypto_schema
+    );
+
+    EXECUTE format(
+        $ddl$
+        CREATE OR REPLACE FUNCTION fsma.compute_ingestion_run_receipt_hash(
+            p_tenant_id uuid,
+            p_ingestion_run_id uuid,
+            p_sequence_num bigint,
+            p_state text,
+            p_occurred_at timestamptz,
+            p_actor text,
+            p_request_id text,
+            p_canonical_event_id uuid,
+            p_evidence_attachment_id uuid,
+            p_rule_evaluation_id uuid,
+            p_export_log_id uuid,
+            p_payload_hash text,
+            p_previous_receipt_hash text
+        ) RETURNS text
+        LANGUAGE sql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, pg_temp
+        AS $function$
+            SELECT pg_catalog.encode(
+                %I.digest(
+                    pg_catalog.jsonb_build_object(
+                        'tenant_id', p_tenant_id::text,
+                        'ingestion_run_id', p_ingestion_run_id::text,
+                        'sequence_num', p_sequence_num,
+                        'state', p_state,
+                        'occurred_at_utc',
+                            pg_catalog.to_char(
+                                p_occurred_at AT TIME ZONE 'UTC',
+                                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                            ),
+                        'actor', p_actor,
+                        'request_id', p_request_id,
+                        'canonical_event_id', p_canonical_event_id::text,
+                        'evidence_attachment_id', p_evidence_attachment_id::text,
+                        'rule_evaluation_id', p_rule_evaluation_id::text,
+                        'export_log_id', p_export_log_id::text,
+                        'payload_hash', p_payload_hash,
+                        'previous_receipt_hash', p_previous_receipt_hash
+                    )::text,
                     'sha256'::text
                 ),
                 'hex'::text
@@ -1143,6 +1263,19 @@ BEGIN
     GRANT EXECUTE ON FUNCTION public.seed_obligations_for_tenant(uuid) TO regengine;
     GRANT EXECUTE ON FUNCTION fsma.get_active_portal_link_by_token(text) TO regengine;
     GRANT EXECUTE ON FUNCTION fsma.get_team_roster(uuid) TO regengine;
+    -- v126: pure hash/validation helpers called by the SECURITY INVOKER
+    -- agent-artifact and receipt triggers and by the agent_artifacts
+    -- source_hashes CHECK, so the inserting role needs EXECUTE. They read no
+    -- table and cannot arm tenant or admin context; the three digest()
+    -- helpers are pinned definers (_HASH_HELPER_REPAIR).
+    GRANT EXECUTE ON FUNCTION fsma.compute_agent_artifact_hash(jsonb) TO regengine;
+    GRANT EXECUTE ON FUNCTION fsma.sha256_text_array_is_valid(text[]) TO regengine;
+    GRANT EXECUTE ON FUNCTION fsma.compute_ingestion_run_receipt_payload_hash(jsonb)
+        TO regengine;
+    GRANT EXECUTE ON FUNCTION fsma.compute_ingestion_run_receipt_hash(
+        uuid, uuid, bigint, text, timestamptz, text, text,
+        uuid, uuid, uuid, uuid, text, text
+    ) TO regengine;
 
     -- Admin sessions still use tenant context for tenant-scoped operations,
     -- but only the exact sysadmin role may arm the global policy branch.
@@ -2056,7 +2189,7 @@ CUTOVER_STATEMENTS = (
     _ROLE_POSTURE,
     _OBJECT_GRANTS,
     _SEED_FUNCTION,
-    _AGENT_ARTIFACT_HASH_REPAIR,
+    _HASH_HELPER_REPAIR,
     _FUNCTION_GRANTS,
     _API_KEY_RLS,
     _CONTROL_PLANE_RLS,
