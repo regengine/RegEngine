@@ -101,6 +101,14 @@ report and the artifact rationale say when a declared CTE was withheld and
 why (`file has a per-row CTE column: Event Type`), and the route logs
 `csv_header_mapping_file_cte_withheld`.
 
+When the declared CTE *is* sent, it also takes precedence over Jev: a
+mapping whose target is a per-row CTE key (`cte_type` is the one in the
+vocabulary; the route passes all of `_CTE_TYPE_COLUMNS`) is never applied,
+because it would let each row override the declared CTE. It is recorded
+for review with `blocked_reason: declared_file_cte`, and the rationale says
+the declared CTE takes precedence. With no form field, or with the CTE
+withheld, the apply policy is unchanged.
+
 ### Question-set version
 
 `QUESTIONS_VERSION` in `services/shared/jev/header_mapping.py` is recorded
@@ -122,14 +130,16 @@ v2 artifacts sit side by side and each says which question set produced it.
 
 | Band | Condition | What code does |
 | --- | --- | --- |
-| `auto_apply` | `confidence >= REGENGINE_JEV_AUTO_APPLY_CONFIDENCE` (0.90) | Artifact queued. Applied to rows **only if** all of: `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`; `confidence >= 0.85` (agent-artifact human-review threshold); target column not already in the file; no column the parser reads *after* the target is in the file either (`tlc` for `traceability_lot_code`, `qty` for `quantity`, any later date column for `event_date`, ...: a mapped column must never outrank a value the file carries); no other column in the same band names the same target. |
+| `auto_apply` | `confidence >= REGENGINE_JEV_AUTO_APPLY_CONFIDENCE` (0.90) | Artifact queued. Applied to rows **only if** all of: `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`; `confidence >= 0.85` (agent-artifact human-review threshold); target column not already in the file; no column the parser reads *after* the target is in the file either (`tlc` for `traceability_lot_code`, `qty` for `quantity`, any later date column for `event_date`, ...: a mapped column must never outrank a value the file carries); no other column in the same band names the same target; the target is not a per-row CTE key while a declared file CTE was sent. |
 | `review` | `REGENGINE_JEV_REVIEW_CONFIDENCE` (0.50) `<= confidence <` auto-apply | Artifact queued with `requires_human_review=true`. Never applied. |
 | `reject` | below the review bound | Returned on the response only. No artifact, never applied. |
 | `no_match` | the model picked the no-match option | Returned on the response only. |
 
 `blocked_reason` on each suggestion names which condition stopped an apply:
 `apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`,
-`target_present`, `shadows_existing_column`, `conflict`, `no_match`. The
+`declared_file_cte`, `target_present`, `shadows_existing_column`, `conflict`,
+`no_match`. It is a free string on the response (`HeaderMappingSuggestionResult`)
+and appears in the artifact only inside the rationale text. The
 parser's fallback chains (`_COLUMN_PRECEDENCE` in
 `services/ingestion/app/csv_templates.py`) are the single source for
 `shadows_existing_column`; the artifact rationale names the column that
@@ -220,7 +230,7 @@ thresholds in force. The values shown are illustrative.
 | `--sample-values N` | Send N (0-5) redacted sample values per unrecognised column. Overrides `REGENGINE_JEV_HEADER_SAMPLE_VALUES`. |
 | `--simulate-apply` | Compute `would_apply` as if `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`. Nothing else changes. |
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
-| `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation, same per-row-column rule. When sent, it is shown on the `Sent:` line and as `request.file_cte_type` in `--json`. When withheld, `request.file_cte_type` is null, `request.file_cte_type_dropped` gives the reason, and the table prints a `CTE:` line. Both come from the route helper's result, so they show what was actually sent (null when nothing was sent, for example without a key). An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
+| `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation, same per-row-column rule. When sent, it is shown on the `Sent:` line and as `request.file_cte_type` in `--json`. When withheld, `request.file_cte_type` is null, `request.file_cte_type_dropped` gives the reason, and the table prints a `CTE:` line. `request.file_cte_type` comes from the route helper's result, so it shows what was actually sent (null when nothing was sent, for example without a key). Without a key the reason is still computed from the header row with the same helper (`_file_cte_type_for_jev`), so the report says the `--cte-type` would be withheld. An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
 
 ### Demo file
 

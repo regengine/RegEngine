@@ -261,6 +261,38 @@ def test_cte_type_is_withheld_when_the_file_has_a_per_row_cte_column(script, cap
     assert "file_cte_type harvesting" not in out
 
 
+def test_not_configured_still_says_a_cte_type_would_be_withheld(script, capsys, tmp_path):
+    seen: dict = {}
+    path = str(_csv(tmp_path, PER_ROW_CTE_CSV_TEXT))
+    code, out, err, _ = _run(script, capsys, [path, "--json", "--cte-type", "harvesting"], env={}, seen=seen)
+
+    assert code == 2
+    assert "requests" not in seen
+    report = json.loads(out)
+    assert report["status"] == "disabled"
+    assert report["request"]["file_cte_type"] is None  # nothing was sent
+    assert report["request"]["file_cte_type_dropped"] == "file has a per-row CTE column: Event Type"
+
+    code, out, err, _ = _run(script, capsys, [path, "--cte-type", "harvesting"], env={})
+    assert code == 2
+    assert "Sent:    nothing" in out
+    assert "CTE:     --cte-type would be withheld from Jev: file has a per-row CTE column: Event Type" in out
+
+
+@pytest.mark.parametrize(
+    "text,argv_extra",
+    [(CSV_TEXT, ["--cte-type", "harvesting"]), (PER_ROW_CTE_CSV_TEXT, [])],
+    ids=["no-per-row-column", "nothing-declared"],
+)
+def test_not_configured_reports_no_drop_when_nothing_would_be_withheld(script, capsys, tmp_path, text, argv_extra):
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path, text)), "--json", *argv_extra], env={})
+
+    assert code == 2
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] is None
+    assert report["request"]["file_cte_type_dropped"] is None
+
+
 def test_cte_type_appears_on_the_sent_line_of_the_table(script, capsys, tmp_path):
     code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path)), "--cte-type", "harvesting"], env=BASE_ENV)
 

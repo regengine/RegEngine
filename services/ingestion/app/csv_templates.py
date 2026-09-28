@@ -940,6 +940,7 @@ async def _suggest_header_mappings_for_upload(
             decider=decider,
             precedence=_COLUMN_PRECEDENCE,
             cte_type=file_cte_type,
+            row_cte_columns=_CTE_TYPE_COLUMNS,
         )
         if dropped:
             logger.info("csv_header_mapping_file_cte_withheld declared=%s reason=%s", cte_type, dropped)

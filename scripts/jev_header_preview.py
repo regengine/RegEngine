@@ -280,8 +280,17 @@ def _build_report(
     *,
     simulated: bool,
     prompted: bool,
+    cte_type: str | None = None,
 ) -> dict[str, Any]:
     evidence = result.evidence
+    # What the route's own helper put in the request, and why a declared CTE
+    # was withheld. Without Jev configured the helper returns before reading
+    # the header row, so ask the same rule directly: the operator still learns
+    # that --cte-type would be withheld. Nothing was sent, so file_cte_type
+    # stays null.
+    dropped = result.file_cte_type_dropped
+    if dropped is None and result.status == "disabled":
+        _, dropped = route._file_cte_type_for_jev(headers, cte_type)
     suggestions = []
     for suggestion in result.suggestions:
         item = suggestion.to_dict()
@@ -313,10 +322,8 @@ def _build_report(
         "request": {
             "header_count": len(headers),
             "unrecognized_headers": list(unknown),
-            # From the result, not from --cte-type: what the route's own helper
-            # put in the request, and why a declared CTE was withheld.
             "file_cte_type": result.file_cte_type,
-            "file_cte_type_dropped": result.file_cte_type_dropped,
+            "file_cte_type_dropped": dropped,
             "truncated_columns": result.truncated_columns,
             "sample_values_per_column": settings.header_sample_values,
             "rows_sent": 0,
@@ -379,7 +386,8 @@ def _render_text(report: dict[str, Any]) -> str:
     elif report["status"] in ("disabled", "no_unrecognized_headers"):
         lines.append("Sent:    nothing")
     if request["file_cte_type_dropped"]:
-        lines.append(f"CTE:     --cte-type not sent to Jev: {request['file_cte_type_dropped']}")
+        verdict = "would be withheld from Jev" if report["status"] == "disabled" else "not sent to Jev"
+        lines.append(f"CTE:     --cte-type {verdict}: {request['file_cte_type_dropped']}")
     if unknown and not report["suggestions"]:
         lines.append("Unrecognised: " + ", ".join(unknown))
     if report["suggestions"]:
@@ -435,6 +443,7 @@ def main(
         unknown,
         simulated=args.simulate_apply,
         prompted=args.prompt_key,
+        cte_type=args.cte_type,
     )
 
     if args.json:

@@ -325,6 +325,79 @@ def test_declared_cte_type_is_withheld_when_rows_carry_their_own(harness, cte_he
         assert f"State file_cte_type: none (declared CTE withheld: {reason})." in artifact.payload.rationale
 
 
+# A shipping upload with an extra "Activity" column Jev may read as a per-row
+# CTE. Row 1 says receiving; the uploader may declare shipping for the file.
+ACTIVITY_CSV_BODY = (
+    "Activity,traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+    "ship_from_location,ship_to_location,reference_document,tlc_source_reference\n"
+    "receiving,TLC-A1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1\n"
+    "shipping,TLC-A2,Romaine,80,cases,2026-09-21,Packhouse A,DC B,BOL-2,PACK-2\n"
+).encode()
+
+ACTIVITY_ANSWERS = {"Activity": _choice("cte_type", 0.97, no_match=0.03)}
+
+
+def test_declared_file_cte_is_not_overridden_by_an_applied_cte_mapping(harness):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(ACTIVITY_ANSWERS, seen), apply_header_mappings=True))
+
+    resp = _post(_client(), ACTIVITY_CSV_BODY, data={"cte_type": "Shipping"})
+
+    assert resp.status_code == 200, resp.text
+    assert seen["bodies"][0]["state"]["file_cte_type"] == "shipping"
+    (suggestion,) = resp.json()["header_mapping_suggestions"]
+    assert suggestion["canonical_field"] == "cte_type"
+    assert suggestion["band"] == "auto_apply"
+    assert suggestion["applied"] is False
+    assert suggestion["blocked_reason"] == "declared_file_cte"
+    # Every row keeps the CTE the uploader declared.
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["shipping", "shipping"]
+    # Recorded for review, saying why.
+    (artifact,) = harness["artifacts"]
+    assert artifact.requires_human_review is True
+    assert artifact.payload.target_canonical_field == "cte_type"
+    assert (
+        "Not applied to rows (reason: declared_file_cte; the upload declared the file CTE shipping, "
+        "which takes precedence: applying this column would let each row override it)."
+    ) in artifact.payload.rationale
+
+
+def test_without_a_declared_cte_the_cte_mapping_applies_as_before(harness):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(ACTIVITY_ANSWERS, seen), apply_header_mappings=True))
+
+    resp = _post(_client(), ACTIVITY_CSV_BODY, data={})
+
+    assert resp.status_code == 200, resp.text
+    assert "file_cte_type" not in seen["bodies"][0]["state"]
+    (suggestion,) = resp.json()["header_mapping_suggestions"]
+    assert suggestion["applied"] is True and suggestion["blocked_reason"] is None
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["receiving", "shipping"]
+    (artifact,) = harness["artifacts"]
+    assert artifact.requires_human_review is False
+
+
+def test_withheld_declared_cte_leaves_the_apply_policy_unchanged(harness):
+    # The file also has an (empty) per-row CTE column, so the declared CTE is
+    # withheld and the pre-existing rule decides: Activity would outrank event_type.
+    body = (
+        "Activity,Event Type,traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+        "ship_from_location,ship_to_location,reference_document,tlc_source_reference\n"
+        "receiving,,TLC-A1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1\n"
+    ).encode()
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(ACTIVITY_ANSWERS, seen), apply_header_mappings=True))
+
+    resp = _post(_client(), body, data={"cte_type": "Shipping"})
+
+    assert resp.status_code == 200, resp.text
+    assert "file_cte_type" not in seen["bodies"][0]["state"]
+    (suggestion,) = resp.json()["header_mapping_suggestions"]
+    assert suggestion["blocked_reason"] == "shadows_existing_column"
+
+
 @pytest.mark.parametrize(
     "header,parser_reads_it",
     [
