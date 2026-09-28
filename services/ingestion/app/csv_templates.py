@@ -879,13 +879,16 @@ def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], d
 
 
 async def _suggest_header_mappings_for_upload(
-    text: str, *, decider: Optional[JevDecider] = None
+    text: str, *, decider: Optional[JevDecider] = None, cte_type: Optional[str] = None
 ) -> HeaderMappingResult:
     """Ask Jev about the upload's unrecognised headers, off the event loop. Never raises.
 
     ``decider`` defaults to the process-wide one (what the route uses).
     ``scripts/jev_header_preview.py`` passes its own so operators can preview
     this exact path against a local file without running the service.
+    ``cte_type`` is the canonical CTE declared for the whole file (the
+    route's normalised ``cte_type`` form field), or ``None``; Jev sees it as
+    ``file_cte_type`` in the state.
     """
     decider = decider if decider is not None else get_jev_decider()
     if not decider.enabled:
@@ -901,6 +904,7 @@ async def _suggest_header_mappings_for_upload(
             samples=samples,
             decider=decider,
             precedence=_COLUMN_PRECEDENCE,
+            cte_type=cte_type,
         )
     except Exception:  # noqa: BLE001 - a suggestion failure must never reject an upload.
         logger.exception("csv_header_mapping_failed")
@@ -1012,7 +1016,7 @@ async def ingest_csv(
     # Read and parse CSV
     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
     text = content.decode("utf-8-sig")  # Handle BOM
-    header_mapping = await _suggest_header_mappings_for_upload(text)
+    header_mapping = await _suggest_header_mappings_for_upload(text, cte_type=fallback_cte)
     if header_mapping.applied_mapping:
         logger.info(
             "csv_header_mappings_applied count=%d mapping=%s",

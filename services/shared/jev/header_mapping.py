@@ -13,7 +13,10 @@ How it works
    misses required fields.
 2. For each unrecognised column, one ``Choice`` question asks Jev which
    canonical field the column represents, or ``no_match``. All questions for
-   an upload go in a single request and are evaluated in parallel.
+   an upload go in a single request and are evaluated in parallel. When the
+   uploader declares one CTE for the whole file (the route's ``cte_type``
+   form field), the state carries it as ``file_cte_type`` so a header such as
+   ``Ship Dt`` is read knowing the file records shipping events.
 3. Every answer is banded by confidence (:mod:`shared.jev.routing`) and
    recorded as an advisory ``field_mapping_suggestion`` agent artifact
    (:mod:`shared.agent_artifacts`), anchored to the upload's SHA-256 and its
@@ -57,7 +60,10 @@ from .routing import ConfidenceBand, ConfidenceThresholds, band_for_confidence
 
 logger = structlog.get_logger("jev.header_mapping")
 
-QUESTIONS_VERSION = "csv-header-mapping.v1"
+# Recorded with every answer and artifact. Bump it whenever the question text,
+# the vocabulary or the meaning of a state key changes, so the evidence says
+# exactly what was asked. v2: the task text explains ``file_cte_type``.
+QUESTIONS_VERSION = "csv-header-mapping.v2"
 AGENT_NAME = "jev-csv-header-mapper"
 PURPOSE = "csv_header_mapping"
 NO_MATCH = "no_match"
@@ -255,9 +261,19 @@ def unrecognized_headers(headers: Iterable[str | None], recognized: Collection[s
 
 
 def build_state(
-    all_headers: Sequence[str], columns: Sequence[str], samples: Mapping[str, Sequence[str]] | None
+    all_headers: Sequence[str],
+    columns: Sequence[str],
+    samples: Mapping[str, Sequence[str]] | None,
+    *,
+    cte_type: str | None = None,
 ) -> dict[str, Any]:
-    """Assemble the state object: the whole header row for context plus the columns to map."""
+    """Assemble the state object: the whole header row for context plus the columns to map.
+
+    ``cte_type`` is the canonical CTE (for example ``shipping``) the uploader
+    declared for every row of the file. It is added as ``file_cte_type`` only
+    when given, so the state for a file without one is exactly what it was
+    before the key existed.
+    """
     to_map: list[dict[str, Any]] = []
     for index, header in enumerate(columns):
         entry: dict[str, Any] = {"index": index, "header": header}
@@ -265,7 +281,13 @@ def build_state(
         if values:
             entry["sample_values"] = values
         to_map.append(entry)
-    return {"csv_headers": [(header or "").strip() for header in all_headers], "columns_to_map": to_map}
+    state: dict[str, Any] = {
+        "csv_headers": [(header or "").strip() for header in all_headers],
+        "columns_to_map": to_map,
+    }
+    if cte_type:
+        state["file_cte_type"] = cte_type
+    return state
 
 
 def build_questions(columns: Sequence[str]) -> dict[str, dict[str, Any]]:
@@ -281,7 +303,9 @@ def build_questions(columns: Sequence[str]) -> dict[str, dict[str, Any]]:
             "instructions": {
                 "task": (
                     "Decide which canonical FSMA 204 traceability field the CSV column described in "
-                    "`column` represents. Use `csv_headers` in the state for context about the file."
+                    "`column` represents. Use `csv_headers` in the state for context about the file. "
+                    "When the state has `file_cte_type`, it names the FSMA 204 critical tracking event "
+                    "that every row in the file records."
                 ),
                 "column": {"path": f"columns_to_map[{index}]", "header": header},
                 "guidance": (
@@ -481,10 +505,13 @@ def suggest_header_mappings(
     samples: Mapping[str, Sequence[str]] | None = None,
     decider: JevDecider | None = None,
     precedence: Sequence[Sequence[str]] = (),
+    cte_type: str | None = None,
 ) -> HeaderMappingResult:
     """Ask Jev about every unrecognised header. Never raises.
 
     ``recognized`` is the parser's set of normalised column names.
+    ``cte_type`` is the canonical CTE declared for the whole file, or
+    ``None`` for a mixed-type or undeclared file (see :func:`build_state`).
     ``precedence`` lists the parser's fallback chains (see
     :func:`outranked_columns`) so a mapping is never applied where it would
     outrank a column the file already carries. The decider's settings supply
@@ -508,7 +535,7 @@ def suggest_header_mappings(
 
     try:
         answers = decider.ask(
-            build_state(list(all_headers), columns, samples),  # type: ignore[arg-type]
+            build_state(list(all_headers), columns, samples, cte_type=cte_type),  # type: ignore[arg-type]
             build_questions(columns),
             purpose=PURPOSE,
             questions_version=QUESTIONS_VERSION,

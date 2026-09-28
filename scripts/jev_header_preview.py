@@ -11,6 +11,7 @@ policy. Nothing is ingested, persisted or queued, and no database is used.
     python3 scripts/jev_header_preview.py supplier.csv --json
     python3 scripts/jev_header_preview.py supplier.csv --sample-values 2 --simulate-apply
     python3 scripts/jev_header_preview.py supplier.csv --prompt-key
+    python3 scripts/jev_header_preview.py supplier.csv --cte-type shipping
 
 Configuration comes from the environment through ``shared.jev.JevSettings``
 (``TYPESAFE_API_KEY``, ``TYPESAFE_DEFAULT_MODEL``, ``TYPESAFE_BASE_URL`` and
@@ -19,10 +20,11 @@ the ``REGENGINE_JEV_*`` variables; see docs/engineering/JEV_HEADER_MAPPING.md).
 terminal; read from stdin otherwise), for this run only. The script never
 prints, logs or writes the key.
 
-What leaves the process is what production sends: the header row, plus
-PII-redacted sample values per unrecognised column only when
-``--sample-values`` (or ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0.
-Rows are never sent.
+What leaves the process is what production sends: the header row, the
+declared CTE when ``--cte-type`` is given (the route's ``cte_type`` form
+field, accepting the same values), plus PII-redacted sample values per
+unrecognised column only when ``--sample-values`` (or
+``REGENGINE_JEV_HEADER_SAMPLE_VALUES``) is above 0. Rows are never sent.
 
 Exit codes:
     0  suggestions received, or no unrecognised headers (no request made)
@@ -149,6 +151,15 @@ def _sample_count(raw: str) -> int:
     return value
 
 
+def _cte_type(raw: str) -> str:
+    """Normalise ``--cte-type`` the way the route normalises its ``cte_type`` form field."""
+    canonical = route._CTE_TYPE_ALIASES.get(raw.strip().lower().replace(" ", "_"))
+    if not canonical:
+        valid = ", ".join(sorted(set(route._CTE_TYPE_ALIASES.values())))
+        raise argparse.ArgumentTypeError(f"unknown CTE type '{raw}'; valid: {valid}")
+    return canonical
+
+
 def _parser() -> _Parser:
     parser = _Parser(
         prog=PROG,
@@ -175,6 +186,13 @@ def _parser() -> _Parser:
         "--prompt-key",
         action="store_true",
         help=f"read the API key from a hidden prompt for this run instead of {API_KEY_ENV}",
+    )
+    parser.add_argument(
+        "--cte-type",
+        type=_cte_type,
+        metavar="CTE",
+        help="the CTE every row of the file records (for example shipping), as the route's cte_type "
+        "form field; omit for mixed-type files",
     )
     return parser
 
@@ -261,6 +279,7 @@ def _build_report(
     *,
     simulated: bool,
     prompted: bool,
+    cte_type: str | None = None,
 ) -> dict[str, Any]:
     evidence = result.evidence
     suggestions = []
@@ -294,6 +313,7 @@ def _build_report(
         "request": {
             "header_count": len(headers),
             "unrecognized_headers": list(unknown),
+            "file_cte_type": cte_type,
             "truncated_columns": result.truncated_columns,
             "sample_values_per_column": settings.header_sample_values,
             "rows_sent": 0,
@@ -348,8 +368,9 @@ def _render_text(report: dict[str, Any]) -> str:
         # On an unavailable status the request may never have left (connection
         # refused, SDK-side refusal), so say what was attempted, not what was sent.
         label = "Sent:   " if report["status"] == "ok" else "Attempted:"
+        cte = f"file_cte_type {request['file_cte_type']}; " if request["file_cte_type"] else ""
         lines.append(
-            f"{label} header row; {request['sample_values_per_column']} redacted sample value(s) per "
+            f"{label} header row; {cte}{request['sample_values_per_column']} redacted sample value(s) per "
             "unrecognised column; no rows"
         )
     elif report["status"] in ("disabled", "no_unrecognized_headers"):
@@ -396,7 +417,7 @@ def main(
     settings = _resolve_settings(args, env, read_key)
     decider = JevDecider(settings, transport=transport)
     try:
-        result = asyncio.run(route._suggest_header_mappings_for_upload(text, decider=decider))
+        result = asyncio.run(route._suggest_header_mappings_for_upload(text, decider=decider, cte_type=args.cte_type))
     finally:
         decider.close()
 
@@ -409,6 +430,7 @@ def main(
         unknown,
         simulated=args.simulate_apply,
         prompted=args.prompt_key,
+        cte_type=args.cte_type,
     )
 
     if args.json:

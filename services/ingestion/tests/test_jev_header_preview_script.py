@@ -134,6 +134,7 @@ def test_table_output_sends_only_the_header_row(script, capsys, tmp_path):
     (body,) = seen["bodies"]
     assert body["state"]["csv_headers"] == CSV_TEXT.splitlines()[0].split(",")
     assert [c["header"] for c in body["state"]["columns_to_map"]] == ["Lot #", "Notes"]
+    assert "file_cte_type" not in body["state"]
     assert all("sample_values" not in c for c in body["state"]["columns_to_map"])
     assert "TLC-001" not in json.dumps(body) and "555-123-4567" not in json.dumps(body)
     (request,) = seen["requests"]
@@ -163,7 +164,8 @@ def test_json_output_and_simulated_apply(script, capsys, tmp_path, simulate):
     assert report["engine"]["model"] == "jev-1.13.0"
     assert report["engine"]["request_id"] == "req_preview"
     assert isinstance(report["engine"]["latency_ms"], int)
-    assert report["engine"]["questions_version"] == "csv-header-mapping.v1"
+    assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
+    assert report["request"]["file_cte_type"] is None
     assert report["policy"] == {
         "auto_apply_confidence": 0.9,
         "review_confidence": 0.5,
@@ -213,6 +215,43 @@ def test_sample_values_are_opt_in_and_redacted_like_production(script, capsys, t
     assert columns["Notes"]["sample_values"] == ["call [PHONE_REDACTED]"]
     assert "555-123-4567" not in json.dumps(seen["bodies"][0])
     assert json.loads(out)["request"]["sample_values_per_column"] == 2
+
+
+@pytest.mark.parametrize("declared", ["harvesting", "Harvest", " GROWING "])
+def test_cte_type_is_normalised_like_the_route_and_sent_as_context(script, capsys, tmp_path, declared):
+    seen: dict = {}
+    code, out, err, logs = _run(
+        script, capsys, [str(_csv(tmp_path)), "--json", "--cte-type", declared], env=BASE_ENV, seen=seen
+    )
+
+    assert code == 0, err
+    (body,) = seen["bodies"]
+    assert body["state"]["file_cte_type"] == "harvesting"
+    report = json.loads(out)
+    assert report["request"]["file_cte_type"] == "harvesting"
+    assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
+    _assert_key_hidden(out, err, logs)
+
+
+def test_cte_type_appears_on_the_sent_line_of_the_table(script, capsys, tmp_path):
+    code, out, err, _ = _run(script, capsys, [str(_csv(tmp_path)), "--cte-type", "harvesting"], env=BASE_ENV)
+
+    assert code == 0, err
+    assert "Sent:    header row; file_cte_type harvesting; 0 redacted sample value(s)" in out
+
+
+def test_unknown_cte_type_is_a_usage_error_and_sends_nothing(script, capsys, tmp_path):
+    seen: dict = {}
+    code, out, err, _ = _run(
+        script, capsys, [str(_csv(tmp_path)), "--cte-type", "teleporting"], env=BASE_ENV, seen=seen
+    )
+
+    # Exit 1 like every other bad argument; 2 means "not configured" in this script.
+    assert code == 1
+    assert out == ""
+    assert "requests" not in seen
+    assert err.startswith("jev_header_preview: error: argument --cte-type: unknown CTE type 'teleporting'; valid: ")
+    assert "shipping" in err and "first_land_based_receiving" in err
 
 
 def test_no_unrecognized_headers_makes_no_request(script, capsys, tmp_path):
@@ -328,6 +367,8 @@ def test_usage_and_file_errors_exit_1(script, capsys, tmp_path):
         [str(latin1)],
         [good, "--sample-values", "9"],
         [good, "--sample-values", "x"],
+        [good, "--cte-type", "bogus"],
+        [good, "--cte-type"],
         [good, "--unknown-flag"],
         [],
     ]

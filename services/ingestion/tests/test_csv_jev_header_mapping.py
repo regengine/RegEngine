@@ -161,11 +161,11 @@ def _client(tenant: Optional[str] = TENANT) -> TestClient:
     return TestClient(app)
 
 
-def _post(client: TestClient, body: bytes = CSV_BODY):
+def _post(client: TestClient, body: bytes = CSV_BODY, data: Optional[dict] = None):
     return client.post(
         "/api/v1/ingest/csv",
         files={"file": ("supplier.csv", body, "text/csv")},
-        data={"cte_type": "harvesting"},
+        data={"cte_type": "harvesting"} if data is None else data,
     )
 
 
@@ -246,6 +246,70 @@ def test_advisory_mode_suggests_records_and_leaves_rows_alone(harness):
     assert body["accepted"] == 1 and body["rejected"] == 2
     (payload,) = harness["payloads"]
     assert [e.traceability_lot_code for e in payload.events] == ["TLC-003"]
+
+
+# ---------------------------------------------------------------------------
+# Declared CTE as context
+# ---------------------------------------------------------------------------
+
+# A single-type shipping file whose extra headers only make sense once you
+# know every row is a shipment.
+SHIPPING_CSV_BODY = (
+    "traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+    "ship_from_location,ship_to_location,reference_document,tlc_source_reference,Ship Dt,Qty Shpd\n"
+    "TLC-S1,Romaine,120,cases,2026-09-21,Packhouse A,DC B,BOL-1,PACK-1,09/21/2026,120\n"
+).encode()
+
+SHIPPING_ANSWERS = {
+    "Ship Dt": _choice("ship_date", 0.95, event_date=0.05),
+    "Qty Shpd": _choice("quantity", 0.93, no_match=0.07),
+}
+
+# No form field: each row names its own CTE.
+MIXED_CSV_BODY = (
+    "cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,event_date,location_name,Notes\n"
+    "harvesting,TLC-H1,Kale,10,lbs,2026-04-17,Farm A,\n"
+    "shipping,TLC-S1,Kale,10,lbs,2026-04-18,Farm A,\n"
+).encode()
+
+
+@pytest.mark.parametrize("declared", ["Shipping", " ship ", "SHIPPING"])
+def test_declared_cte_type_is_sent_to_jev_normalised(harness, declared):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(SHIPPING_ANSWERS, seen)))
+
+    resp = _post(_client(), SHIPPING_CSV_BODY, data={"cte_type": declared})
+
+    assert resp.status_code == 200, resp.text
+    (sent,) = seen["bodies"]
+    assert sent["state"]["file_cte_type"] == "shipping"
+    assert [c["header"] for c in sent["state"]["columns_to_map"]] == ["Ship Dt", "Qty Shpd"]
+    assert resp.json()["header_mapping_engine"]["questions_version"] == "csv-header-mapping.v2"
+
+
+def test_mixed_type_upload_without_the_form_field_sends_no_file_cte_type(harness):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(DEFAULT_ANSWERS, seen)))
+
+    resp = _post(_client(), MIXED_CSV_BODY, data={})
+
+    assert resp.status_code == 200, resp.text
+    (sent,) = seen["bodies"]
+    # Exactly the pre-v2 state shape: the key is absent, not null.
+    assert set(sent["state"]) == {"csv_headers", "columns_to_map"}
+    assert [c["header"] for c in sent["state"]["columns_to_map"]] == ["Notes"]
+    (payload,) = harness["payloads"]
+    assert [e.cte_type.value for e in payload.events] == ["harvesting", "shipping"]
+
+
+def test_unknown_declared_cte_type_is_rejected_before_jev_is_asked(harness):
+    seen: dict = {}
+    harness["use_decider"](_decider(_transport(SHIPPING_ANSWERS, seen)))
+
+    resp = _post(_client(), SHIPPING_CSV_BODY, data={"cte_type": "teleporting"})
+
+    assert resp.status_code == 400
+    assert "bodies" not in seen
 
 
 # ---------------------------------------------------------------------------

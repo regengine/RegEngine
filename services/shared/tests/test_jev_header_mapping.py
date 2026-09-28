@@ -124,6 +124,47 @@ def test_build_state_only_includes_samples_when_present():
     assert build_state(["Lot #"], ["Lot #"], None)["columns_to_map"] == [{"index": 0, "header": "Lot #"}]
 
 
+def test_build_state_without_cte_type_is_the_v1_shape_byte_for_byte():
+    # A file without a declared CTE must send exactly what it sent before
+    # ``file_cte_type`` existed: no key, not a null.
+    expected = {
+        "csv_headers": ["Lot #", "quantity"],
+        "columns_to_map": [{"index": 0, "header": "Lot #", "sample_values": ["L1"]}],
+    }
+    for state in (
+        build_state([" Lot # ", "quantity"], ["Lot #"], {"Lot #": ["L1"]}),
+        build_state([" Lot # ", "quantity"], ["Lot #"], {"Lot #": ["L1"]}, cte_type=None),
+    ):
+        assert state == expected
+        assert "file_cte_type" not in state
+        assert json.dumps(state) == (
+            '{"csv_headers": ["Lot #", "quantity"], '
+            '"columns_to_map": [{"index": 0, "header": "Lot #", "sample_values": ["L1"]}]}'
+        )
+
+
+def test_build_state_with_cte_type_names_the_file_cte():
+    state = build_state(["Ship Dt", "quantity"], ["Ship Dt"], None, cte_type="shipping")
+    assert state == {
+        "csv_headers": ["Ship Dt", "quantity"],
+        "columns_to_map": [{"index": 0, "header": "Ship Dt"}],
+        "file_cte_type": "shipping",
+    }
+
+
+def test_questions_explain_file_cte_type_and_the_version_says_so():
+    # The task text is what auditors read back from QUESTIONS_VERSION: a
+    # change to it must come with a new version.
+    assert QUESTIONS_VERSION == "csv-header-mapping.v2"
+    task = build_questions(["Ship Dt"])["col_0"]["instructions"]["task"]
+    assert task == (
+        "Decide which canonical FSMA 204 traceability field the CSV column described in "
+        "`column` represents. Use `csv_headers` in the state for context about the file. "
+        "When the state has `file_cte_type`, it names the FSMA 204 critical tracking event "
+        "that every row in the file records."
+    )
+
+
 # ---------------------------------------------------------------------------
 # suggest_header_mappings: request shape and policy
 # ---------------------------------------------------------------------------
@@ -145,6 +186,19 @@ def test_request_sends_header_row_and_only_unrecognized_columns():
     assert result.evidence.purpose == PURPOSE
     assert result.evidence.questions_version == QUESTIONS_VERSION
     assert result.evidence.request_id == "req_hm"
+    assert set(body["state"]) == {"csv_headers", "columns_to_map"}
+
+
+def test_declared_cte_type_reaches_the_request_state():
+    seen: dict = {}
+    result = suggest_header_mappings(
+        HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS, seen)), cte_type="shipping"
+    )
+
+    assert result.ok
+    assert seen["body"]["state"]["file_cte_type"] == "shipping"
+    assert seen["body"]["state"]["csv_headers"] == HEADERS
+    assert result.evidence.questions_version == "csv-header-mapping.v2"
 
 
 def test_advisory_mode_never_applies_even_at_full_confidence():
