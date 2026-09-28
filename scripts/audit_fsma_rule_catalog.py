@@ -29,6 +29,8 @@ REQUIRED_CTE_TYPES = {
     "receiving",
     "transformation",
 }
+ALLOWED_CTE_TYPES = REQUIRED_CTE_TYPES | {"all"}
+ALLOWED_SEVERITIES = {"critical", "warning", "info"}
 REQUIRED_RULE_FIELDS = ("title", "severity", "category", "failure_reason_template")
 LIMITATIONS = (
     "This is a static structural audit of the built-in seed catalog.",
@@ -59,14 +61,29 @@ def build_report(rules: Sequence[dict[str, Any]]) -> dict[str, Any]:
     findings: list[dict[str, str]] = []
     rendered_rules: list[dict[str, Any]] = []
     coverage = {cte_type: 0 for cte_type in sorted(REQUIRED_CTE_TYPES)}
+    seen_titles: set[str] = set()
 
     for index, rule in enumerate(rules, start=1):
         title = str(rule.get("title") or f"rule_at_index_{index}")
+        if rule.get("title"):
+            if title in seen_titles:
+                findings.append(_finding("duplicate_title", title, "Rule titles must be unique for idempotent seeding"))
+            seen_titles.add(title)
         for field in REQUIRED_RULE_FIELDS:
             if not rule.get(field):
                 findings.append(
                     _finding("missing_required_field", title, f"Required field is empty: {field}", field=field)
                 )
+        severity = str(rule.get("severity") or "")
+        if severity and severity not in ALLOWED_SEVERITIES:
+            findings.append(
+                _finding(
+                    "invalid_severity",
+                    title,
+                    f"Severity must be one of {sorted(ALLOWED_SEVERITIES)}: {severity}",
+                    severity=severity,
+                )
+            )
 
         citation = str(rule.get("citation_reference") or "")
         citation_class = classify_citation(citation)
@@ -100,8 +117,13 @@ def build_report(rules: Sequence[dict[str, Any]]) -> dict[str, Any]:
 
         applicability = rule.get("applicability_conditions") or {}
         configured_cte_types = list(applicability.get("cte_types") or [])
-        covered_types = REQUIRED_CTE_TYPES if not configured_cte_types else set(configured_cte_types)
-        for cte_type in sorted(set(configured_cte_types) - REQUIRED_CTE_TYPES):
+        configured_cte_type_set = set(configured_cte_types)
+        covered_types = (
+            REQUIRED_CTE_TYPES
+            if not configured_cte_types or "all" in configured_cte_type_set
+            else configured_cte_type_set
+        )
+        for cte_type in sorted(configured_cte_type_set - ALLOWED_CTE_TYPES):
             findings.append(
                 _finding(
                     "unknown_cte_type",
