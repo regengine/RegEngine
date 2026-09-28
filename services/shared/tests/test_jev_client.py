@@ -375,6 +375,27 @@ def test_settings_parse_overrides_and_strip_whitespace():
     assert settings.thresholds == ConfidenceThresholds(auto_apply=0.95, review=0.6)
 
 
+def test_public_summary_says_whether_a_key_is_set_never_the_key():
+    secret = "ts-summary-key-4c1d"  # pragma: allowlist secret
+    summary = JevSettings.from_env(
+        {"TYPESAFE_API_KEY": secret, "REGENGINE_JEV_APPLY_FILE_CTE_TYPE": "1"}
+    ).public_summary()
+
+    assert summary == {
+        "enabled": True,
+        "key_present": True,
+        "kill_switch": False,
+        "model": "jev-1.13.0",
+        "apply_header_mappings": False,
+        "apply_file_cte_type": True,
+        "header_sample_values": 0,
+    }
+    assert secret not in repr(summary)
+    off = JevSettings.from_env({"TYPESAFE_API_KEY": secret, "REGENGINE_JEV_ENABLED": "0"}).public_summary()
+    assert off["enabled"] is False and off["key_present"] is True and off["kill_switch"] is True
+    assert JevSettings.from_env({}).public_summary()["key_present"] is False
+
+
 def test_settings_repr_never_contains_the_api_key():
     secret = "ts-live-SENTINEL-0123456789abcdef"  # pragma: allowlist secret
     settings = JevSettings.from_env({"TYPESAFE_API_KEY": secret})

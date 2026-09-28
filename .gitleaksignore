@@ -8,12 +8,11 @@
 # URL path). A fingerprint pins commit:file:rule:line, so nothing new is
 # exempted by these lines.
 #
-# The three .env.production findings at a130816b (ADMIN_MASTER_KEY,
-# AUTH_SECRET_KEY, REDIS_PASSWORD) were real generated values. Rotation was
-# confirmed on 2026-09-28 by SHA-256 comparison (values never printed):
-# none of the leaked values is present in any variable of the RegEngine,
-# Redis or Postgres services in either Railway environment (production,
-# staging). Their fingerprints are listed at the end of this file.
+# Deliberately ABSENT: the three .env.production findings at a130816b
+# (ADMIN_MASTER_KEY, AUTH_SECRET_KEY, REDIS_PASSWORD). Those are generated
+# values, not placeholders — per #3080 they need rotation, not an ignore
+# line. Add their fingerprints only once rotation (or never-used status)
+# is confirmed.
 4b44d0bb27d6196ba7e4de913f8772ab67c0028b:frontend/src/app/api-keys/page.tsx:curl-auth-header:245
 55716a3134ebeff7d4b6ec0e46790cb6bef04bd9:.agent/CONSTITUTION.md:curl-auth-header:264
 899f6ceda8821437831f0db99d00a29327e57a89:frontend/src/app/tools/data-import/components/DataImportClient.tsx:curl-auth-header:31
@@ -122,11 +121,6 @@ f6c2537615ab730e34c95a57e65f06a9bf94eb07:.agent/CONSTITUTION.md:curl-auth-header
 8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:69
 8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:88
 8f0069f6c5f60e36378144708930f009ebb9f213:launch_orchestrator/design_partners/QUICK_START_CHECKLIST.md:curl-auth-header:97
-
-# Rotated production secrets from the initial commit — see the header note.
-a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:15
-a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:18
-a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:37
 
 # #3165 landed a comment in this file that quoted a seed-fact dict entry and
 # tripped generic-api-key on itself; the wording is fixed above, and these pin
