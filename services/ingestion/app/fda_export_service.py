@@ -730,7 +730,8 @@ def _build_fda_package(
         "- Read verification_status in chain_verification_*.json.\n"
         "- VERIFIED means the persisted chain check passed and row hashes are present.\n"
         "- PARTIAL means the persisted chain check passed but one or more row hashes are missing.\n"
-        "- UNVERIFIED means the chain check failed; do not treat this package as verified.\n"
+        "- UNVERIFIED means the chain check failed or verification evidence is insufficient "
+        "for the exported source; do not treat this package as verified.\n"
     ).encode("utf-8")
 
     manifest_file_payloads = [
