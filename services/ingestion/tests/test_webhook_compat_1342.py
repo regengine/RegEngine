@@ -16,8 +16,8 @@ Locks:
     * ``_validate_event_kdes`` returning errors → rejected.
     * store_event raising (ValueError / TypeError / RuntimeError) →
       savepoint.rollback, event rejected, errors include "Storage".
-    * Canonical block raising (ImportError / ValueError / TypeError /
-      RuntimeError) → canon_sp.rollback, primary result unchanged.
+    * Canonical/rules execution failure or missing summary → whole
+      transaction rollback and an opaque HTTP 500, even in OFF mode.
     * Exception during iteration → db_session.rollback + re-raise.
     * Finally block always drains db_gen (close) even on error.
 
@@ -37,6 +37,9 @@ from app import webhook_compat as wc
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
+
+
+_DEFAULT_RULES_SUMMARY = object()
 
 
 class _FakeSavepoint:
@@ -62,9 +65,14 @@ class _FakeSession:
         self.commit_count = 0
         self.rollback_count = 0
         self.begin_nested_raises: Exception | None = None
+        self.begin_nested_raises_on_call: int | None = None
+        self.begin_nested_call_count = 0
 
     def begin_nested(self):
-        if self.begin_nested_raises is not None:
+        self.begin_nested_call_count += 1
+        if self.begin_nested_raises is not None and (
+            self.begin_nested_raises_on_call is None or self.begin_nested_call_count == self.begin_nested_raises_on_call
+        ):
             raise self.begin_nested_raises
         # Name savepoints in call order (primary, canonical, primary, canonical, ...)
         name = f"sp-{len(self.savepoints)}"
@@ -135,6 +143,9 @@ def _install_stubs(
     validate_tenant_id_raises: Exception | None = None,
     session_none: bool = False,
     canonical_raises: Exception | None = None,
+    canonical_raises_on_call: int | None = None,
+    rules_raises: Exception | None = None,
+    rules_summary: object = _DEFAULT_RULES_SUMMARY,
     engine_compliant: bool = True,
 ):
     """Install the full dependency web for ``ingest_events``.
@@ -253,7 +264,9 @@ def _install_stubs(
 
         def persist_event(self, canonical):
             captured["canonical_store_calls"].append(canonical.event_id)
-            if canonical_raises is not None:
+            if canonical_raises is not None and (
+                canonical_raises_on_call is None or len(captured["canonical_store_calls"]) == canonical_raises_on_call
+            ):
                 raise canonical_raises
 
     cps_mod = ModuleType("shared.canonical_persistence")
@@ -266,6 +279,10 @@ def _install_stubs(
 
         def evaluate_event(self, event_data, persist, tenant_id):
             captured["rules_evaluate_calls"].append(tenant_id)
+            if rules_raises is not None:
+                raise rules_raises
+            if rules_summary is not _DEFAULT_RULES_SUMMARY:
+                return rules_summary
             return SimpleNamespace(compliant=engine_compliant)
 
     re_mod = ModuleType("shared.rules_engine")
@@ -615,37 +632,176 @@ class TestEventProcessing:
         assert sess.commit_count == 1
 
     @pytest.mark.parametrize("exc_cls", [ImportError, ValueError, TypeError, RuntimeError])
-    def test_canonical_block_error_rolls_only_canonical_savepoint(self, monkeypatch, exc_cls):
-        """A failure in the canonical/rules block must NOT reject the event.
+    def test_canonical_persistence_failure_rolls_back_whole_import_when_enforcement_off(self, monkeypatch, exc_cls):
+        """A canonical write failure cannot leave the primary event accepted."""
+        from fastapi import HTTPException
 
-        The primary savepoint already committed; only the canonical
-        savepoint rolls back, and the result status stays "accepted".
-        """
-        sess = _FakeSession()
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        sensitive_detail = "raw canonical storage detail must not escape"
+        sess, _, cap = _install_stubs(
+            monkeypatch,
+            canonical_raises=exc_cls(sensitive_detail),
+        )
+        close_run = MagicMock()
+        monkeypatch.setattr(wc, "_open_ingestion_run", lambda *_args: "run-1")
+        monkeypatch.setattr(wc, "_close_ingestion_run", close_run)
 
-        class _FailingStore:
-            def __init__(self, db_session, dual_write):
-                pass
+        payload = _make_payload([_make_event()], tenant_id="t", source="csv_upload")
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                wc.ingest_events(
+                    payload=payload,
+                    principal_tenant_id=payload.tenant_id,
+                    x_regengine_api_key="k",
+                    source_file=wc.SourceFileReceipt(
+                        filename="lots.csv",
+                        raw_bytes=b"traceability_lot_code\nTLC-1\n",
+                        record_count=1,
+                    ),
+                )
+            )
 
-            def persist_event(self, canonical):
-                raise exc_cls("canonical fail")
+        assert exc.value.status_code == 500
+        assert sensitive_detail not in str(exc.value.detail)
+        assert sess.commit_count == 0
+        assert sess.rollback_count == 1
+        assert sess.savepoints[0].committed is False
+        assert sess.savepoints[1].rolled_back is True
+        assert cap["publish_graph_calls"] == []
+        close_run.assert_not_called()
 
-        # Install base stubs, then override CanonicalEventStore
-        _, persist, _ = _install_stubs(monkeypatch, session=sess)
-        cps_mod = sys.modules["shared.canonical_persistence"]
-        monkeypatch.setattr(cps_mod, "CanonicalEventStore", _FailingStore)
+    def test_rules_evaluation_exception_rolls_back_whole_import_when_enforcement_off(self, monkeypatch):
+        """A rules-engine crash cannot be treated as an advisory violation."""
+        from fastapi import HTTPException
 
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        sensitive_detail = "raw rules backend detail must not escape"
+        sess, _, cap = _install_stubs(
+            monkeypatch,
+            rules_raises=RuntimeError(sensitive_detail),
+        )
         payload = _make_payload([_make_event()], tenant_id="t")
-        resp = asyncio.run(
-            wc.ingest_events(payload=payload, principal_tenant_id=payload.tenant_id, x_regengine_api_key="k")
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                wc.ingest_events(
+                    payload=payload,
+                    principal_tenant_id=payload.tenant_id,
+                    x_regengine_api_key="k",
+                )
+            )
+
+        assert exc.value.status_code == 500
+        assert sensitive_detail not in str(exc.value.detail)
+        assert sess.commit_count == 0
+        assert sess.rollback_count == 1
+        assert sess.savepoints[0].committed is False
+        assert sess.savepoints[1].rolled_back is True
+        assert cap["publish_graph_calls"] == []
+
+    def test_later_canonical_failure_does_not_publish_earlier_event(self, monkeypatch):
+        """Graph publication must wait until the whole DB transaction commits."""
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        sess, _, cap = _install_stubs(
+            monkeypatch,
+            canonical_raises=RuntimeError("second canonical write failed"),
+            canonical_raises_on_call=2,
+        )
+        payload = _make_payload(
+            [_make_event(tlc="TLC-1"), _make_event(tlc="TLC-2")],
+            tenant_id="t",
         )
 
-        assert resp.accepted == 1
-        assert resp.rejected == 0
-        assert resp.events[0].status == "accepted"
-        # Primary savepoint committed, canonical savepoint rolled back
-        assert sess.savepoints[0].committed is True
+        with pytest.raises(HTTPException):
+            asyncio.run(
+                wc.ingest_events(
+                    payload=payload,
+                    principal_tenant_id=payload.tenant_id,
+                    x_regengine_api_key="k",
+                )
+            )
+
+        assert sess.commit_count == 0
+        assert sess.rollback_count == 1
+        assert cap["publish_graph_calls"] == []
+
+    def test_canonical_savepoint_failure_rolls_back_whole_import(self, monkeypatch):
+        """Failure to open the canonical savepoint is a pipeline failure."""
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        sensitive_detail = "raw canonical savepoint detail must not escape"
+        sess = _FakeSession()
+        sess.begin_nested_raises = RuntimeError(sensitive_detail)
+        sess.begin_nested_raises_on_call = 2
+        _, _, cap = _install_stubs(monkeypatch, session=sess)
+        payload = _make_payload([_make_event()], tenant_id="t")
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                wc.ingest_events(
+                    payload=payload,
+                    principal_tenant_id=payload.tenant_id,
+                    x_regengine_api_key="k",
+                )
+            )
+
+        assert exc.value.status_code == 500
+        assert sensitive_detail not in str(exc.value.detail)
+        assert sess.commit_count == 0
+        assert sess.rollback_count == 1
+        assert sess.savepoints[0].committed is False
+        assert cap["publish_graph_calls"] == []
+
+    def test_graph_publication_failure_after_commit_does_not_change_acceptance(self, monkeypatch):
+        """The non-authoritative graph queue remains best-effort after commit."""
+        sess, _, _ = _install_stubs(monkeypatch)
+
+        def _fail_graph_publish(*_args):
+            assert sess.commit_count == 1
+            raise RuntimeError("graph unavailable")
+
+        monkeypatch.setattr(wc, "_publish_graph_sync", _fail_graph_publish)
+        payload = _make_payload([_make_event()], tenant_id="t")
+
+        response = asyncio.run(
+            wc.ingest_events(
+                payload=payload,
+                principal_tenant_id=payload.tenant_id,
+                x_regengine_api_key="k",
+            )
+        )
+
+        assert response.accepted == 1
+        assert response.rejected == 0
+        assert sess.commit_count == 1
+        assert sess.rollback_count == 0
+
+    def test_missing_rules_summary_rolls_back_whole_import_when_enforcement_off(self, monkeypatch):
+        """Returning no evaluation summary is execution failure, not no-verdict."""
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+        sess, _, cap = _install_stubs(monkeypatch, rules_summary=None)
+        payload = _make_payload([_make_event()], tenant_id="t")
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                wc.ingest_events(
+                    payload=payload,
+                    principal_tenant_id=payload.tenant_id,
+                    x_regengine_api_key="k",
+                )
+            )
+
+        assert exc.value.status_code == 500
+        assert sess.commit_count == 0
+        assert sess.rollback_count == 1
+        assert sess.savepoints[0].committed is False
         assert sess.savepoints[1].rolled_back is True
+        assert cap["publish_graph_calls"] == []
 
 
 # ---------------------------------------------------------------------------

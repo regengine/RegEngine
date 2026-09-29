@@ -249,6 +249,7 @@ async def ingest_events(
     accepted = 0
     rejected = 0
     seen_in_batch: set[str] = set()
+    pending_graph_sync: list[tuple[str, Any]] = []
 
     try:
         if source_file is not None:
@@ -288,9 +289,9 @@ async def ingest_events(
 
             alerts = _generate_alerts(event)
 
-            # Each event gets its own savepoint so a failure on one
-            # event (storage, canonical write, or rule evaluation)
-            # never poisons the DB transaction for subsequent events.
+            # Each event gets its own savepoint for storage failures and
+            # policy rejections. Canonical/rules execution failures abort the
+            # whole transaction: no primary event may outlive missing evidence.
             savepoint = db_session.begin_nested()
             try:
                 store_result = persistence.store_event(
@@ -308,16 +309,14 @@ async def ingest_events(
                     alerts=alerts,
                 )
 
-                # Canonical normalization + rule evaluation (best-effort).
+                # Canonical normalization + rule evaluation.
                 # Runs BEFORE the primary savepoint commits so a rule
                 # rejection (under RULES_ENGINE_ENFORCE=cte_only|all) can
                 # roll back the primary CTE write along with it.
-                # Canonical/rules internal errors are swallowed: the
-                # primary write still commits, preserving the prior
-                # best-effort behavior for tenants without seeded rules.
                 summary = None
-                canon_sp = db_session.begin_nested()
+                canon_sp = None
                 try:
+                    canon_sp = db_session.begin_nested()
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
 
@@ -341,27 +340,38 @@ async def ingest_events(
                         "kdes": canonical.kdes,
                     }
                     summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                    if summary is None:
+                        raise RuntimeError("Rules engine returned no evaluation summary")
                     canon_sp.commit()
-                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
-                    canon_sp.rollback()
-                    summary = None
-                    # Finding A — under enforcement modes (cte_only/all)
-                    # a canonical/rules crash must not silently accept.
-                    # ``handle_preeval_exception`` raises HTTPException(500)
-                    # in those modes; under OFF it warns and returns
-                    # so the legacy best-effort accept path remains.
-                    from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
-
-                    handle_preeval_exception(canon_err, where="webhook_compat")
-                    logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
+                except Exception as canon_err:  # noqa: BLE001
+                    if canon_sp is not None:
+                        try:
+                            canon_sp.rollback()
+                        except Exception as rollback_err:  # noqa: BLE001
+                            logger.error(
+                                "compat_canonical_savepoint_rollback_failed error_type=%s",
+                                type(rollback_err).__name__,
+                            )
+                    correlation_id = str(uuid.uuid4())
+                    logger.error(
+                        "compat_canonical_pipeline_failed correlation_id=%s error_type=%s",
+                        correlation_id,
+                        type(canon_err).__name__,
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail={
+                            "error": "RULES_ENGINE_EVAL_FAILED",
+                            "message": "Canonical persistence or rules evaluation did not complete.",
+                            "where": "webhook_compat",
+                            "correlation_id": correlation_id,
+                        },
+                    ) from None
 
                 # Enforcement: if RULES_ENGINE_ENFORCE is set and the
                 # summary meets the reject policy, roll back the outer
                 # savepoint (undoes primary CTE + committed canonical +
                 # persisted eval rows) and emit a rejected result.
-                # Summary=None (canonical/rules skipped) never rejects —
-                # preserves prior behavior for every tenant when the
-                # flag is off or the rules path fails best-effort.
                 reject_reason: Optional[str] = None
                 if summary is not None:
                     from shared.rules.enforcement import current_mode, should_reject
@@ -427,7 +437,7 @@ async def ingest_events(
                     )
                 )
                 accepted += 1
-                _publish_graph_sync(store_result.event_id, event, tenant_id)
+                pending_graph_sync.append((store_result.event_id, event))
 
                 # Non-blocking failures → exception queue. Separate
                 # savepoint so an exception-queue write failure doesn't
@@ -477,6 +487,15 @@ async def ingest_events(
             )
         if db_session:
             db_session.commit()
+        for event_id, event in pending_graph_sync:
+            try:
+                _publish_graph_sync(event_id, event, tenant_id)
+            except Exception as graph_err:  # noqa: BLE001
+                logger.warning(
+                    "compat_graph_sync_publish_failed_after_commit event_id=%s error_type=%s",
+                    event_id,
+                    type(graph_err).__name__,
+                )
     except Exception:
         if db_session:
             db_session.rollback()
