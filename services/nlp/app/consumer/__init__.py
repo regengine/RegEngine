@@ -274,6 +274,15 @@ def _run_fsma_extractor(
         "doc_hash": doc_hash,
         **routing["payload"],
     }
+    if topic == FSMA_TOPIC_NEEDS_REVIEW:
+        # The review consumer persists extraction, not top-level CTE fields.
+        # Keep text/confidence defaults unchanged, including text-based dedup.
+        payload["extraction"] = {
+            "attributes": {
+                "extractor": "fsma_extractor",
+                "fsma_envelope": routing["payload"],
+            },
+        }
     # Sign the event so downstream consumers (graph, review UI) can
     # verify it came from this service and refuse forgeries (#1078).
     try:

@@ -493,7 +493,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     _expect(score["last_chain_hash"], "Compliance score did not expose the latest chain hash.")
 
     export_response = client.get(
-        "/api/v1/fda/export/all"
+        "/api/v1/fda/export/v2"
         f"?tenant_id={tenant_id}"
         f"&start_date={EXPORT_START_DATE}"
         f"&end_date={EXPORT_END_DATE}"

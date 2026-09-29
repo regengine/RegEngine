@@ -12,6 +12,7 @@ import json
 import os
 import socket
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -113,9 +114,10 @@ def workflow(monkeypatch):
             set_tenant_guc(db, tid)
             return db.execute(text(statement)).fetchall()
 
-    def package():
+    def package(*, legacy=False):
+        endpoint = "/api/v1/fda/export/all" if legacy else "/api/v1/fda/export/v2"
         return client.get(
-            f"/api/v1/fda/export/all?tenant_id={tenant}&start_date={start}&end_date={end}&format=package",
+            f"{endpoint}?tenant_id={tenant}&start_date={start}&end_date={end}&format=package",
             headers=headers,
         )
 
@@ -135,13 +137,27 @@ def workflow(monkeypatch):
     admin.close()
 
 
-def _assert_package(workflow, tmp_path, *, verified):
-    response = workflow.package()
+def _assert_package(workflow, tmp_path, *, verified, legacy=False):
+    response = workflow.package(legacy=legacy)
     assert response.status_code == 200, response.text[:300]
-    path = tmp_path / "package.zip"
+    expected_status = "VERIFIED" if verified else "UNVERIFIED"
+    assert response.headers["X-Chain-Integrity"] == expected_status
+    path = tmp_path / ("legacy-package.zip" if legacy else "package.zip")
     path.write_bytes(response.content)
+    with zipfile.ZipFile(path) as package:
+        manifest = json.loads(package.read("manifest.json"))
+        chain_name = next(name for name in package.namelist() if name.startswith("chain_verification_"))
+        chain_payload = json.loads(package.read(chain_name))
+    assert manifest["verification"]["status"] == expected_status
+    assert chain_payload["verification_status"] == expected_status
+    assert chain_payload["chain_verification"]["valid"] is verified
+    if not legacy:
+        assert response.headers["X-Export-Version"] == "2.0"
+        assert chain_payload["data_source"] == "fsma.traceability_events (canonical model)"
+        assert chain_payload["provenance"]["source_table"] == "fsma.traceability_events"
     verifier = _load("pg_evidence_verifier", ROOT / "frontend/public/sdk/verify_chain.py")
     assert verifier.verify_bundle(str(path)) == (0 if verified else 1)
+    return chain_payload
 
 
 def test_full_500_event_request_retry_alerts_and_verified_export(workflow, tmp_path):
@@ -174,6 +190,17 @@ def test_full_500_event_request_retry_alerts_and_verified_export(workflow, tmp_p
     assert w.query("SELECT COUNT(*) FROM fsma.hash_chain")[0][0] == 500
     assert w.query("SELECT COUNT(*) FROM fsma.compliance_alerts")[0][0] == 100
     _assert_package(w, tmp_path, verified=True)
+    legacy = _assert_package(w, tmp_path, verified=False, legacy=True)
+    assert legacy["record_count"] == 500
+    assert legacy["row_hash_coverage"] == {
+        "records_with_hash": 500,
+        "records_with_chain_hash": 500,
+        "missing_record_hashes": 0,
+        "missing_chain_hashes": 0,
+    }
+    assert legacy["chain_verification"]["errors"] == [
+        "Exported content was not independently verified for this source; chain diagnostics alone are insufficient."
+    ]
 
 
 def test_concurrent_replays_keep_one_event_and_chain_population(workflow, tmp_path):
