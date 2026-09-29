@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Scope | Railway project `RegEngine-Prod` (`4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51`), environments `production` (`37be1945-0c0c-4aa5-b151-fbb4b7548abd`) and `staging` (`42a820d5-755e-45a2-9cdd-dba1624d703b`) |
-| Last verified against Railway | 2026-09-28: read-only inventory, plus a backup-and-restore drill of the staging database (section 9) |
+| Last verified against Railway | 2026-09-29 00:02 UTC: inventory, backup schedules and PITR enabled (section 3), and a backup-and-restore drill of the staging database (section 9) |
 | Owner | Christopher Sellers |
 | Replaces | The AWS plan previously in this file and `docs/runbooks/disaster-recovery.md`. Neither described production. See section 10. |
 
@@ -11,49 +11,49 @@ This is the single disaster-recovery document. The incident process, severity
 tiers, communication templates and postmortem template are in
 [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md).
 
-## Read this first: backup state on 2026-09-28
+## Read this first: backup state
 
-| Service | Backup schedule | PITR | Backups that exist (production) |
+As of 2026-09-29 00:02 UTC, in both `production` and `staging`:
+
+| Service | Backup schedule | PITR | On-demand backup (production) |
 |---|---|---|---|
-| `Postgres` | none | off | 1 manual, `Pre-Security-Patch Backup`, 2026-08-22 17:17 UTC, 322 MB, listed expiry 2026-09-21 |
-| `neo4j` | none | n/a | none |
-| `Redis` | none | n/a | 1 manual, `Pre-Security-Patch Backup`, 2026-09-12 10:14 UTC, 18 MB, expiry 2026-10-12 |
+| `Postgres` | daily, weekly, monthly | on, restorable from 2026-09-28 23:57 UTC | `pre-pitr-enable-20260928`, 2026-09-28 23:54 UTC, never expires |
+| `Redis` | daily, weekly, monthly | n/a | `pre-pitr-enable-20260928`, 2026-09-28 23:54 UTC, never expires |
+| `neo4j` | daily, weekly, monthly | n/a | `pre-pitr-enable-20260928`, 2026-09-28 23:54 UTC, never expires |
 
-Staging is the same: no schedules, one expiring manual backup each for
-`Postgres` and `Redis`, none for `neo4j`.
-
-- **Production has no current PostgreSQL backup.** The only one is five weeks
-  old and past its listed expiry. If the data is corrupted, the only restore
-  point is 2026-08-22, and only if that expired backup still restores. If the
-  volume itself is wiped, Railway deletes its backups with it, and nothing
-  remains.
-- **Redis holds the only copy of Stripe subscription state** (section 6.5),
-  and its one backup expires 2026-10-12. Losing Redis puts every tenant's paid
-  routes on HTTP 402, and nothing exists to rebuild that state.
-- Both manual backups were created about one second before a security-patch
-  redeploy of the same service. They appear to come from Railway's image
-  auto-update, not from anything RegEngine set up (not verified).
+- **Postgres RPO is about one minute.** The restore window grows to about four
+  weeks. The WAL archive is in a Railway bucket, `Postgres-PITR`, in region
+  `sjc`; the database volume is in `us-west2`.
+- **Redis and Neo4j RPO is 24 hours** (the daily backup). Redis holds the only
+  copy of Stripe subscription state (section 6.5).
+- **Not yet covered:** a copy outside Railway (section 3, step 5), and object
+  storage (open question 3). RTO has never been measured.
+- **Before these changes (until 2026-09-28 23:55 UTC):** there were no
+  schedules and PITR was off. The only backups were Railway's own
+  `Pre-Security-Patch Backup` snapshots, taken before image auto-updates and
+  kept for 30 days. The production Postgres one, from 2026-08-22, was already
+  past its expiry.
 - No GitHub workflow, Railway cron service, or scheduler job runs
   `scripts/backup_postgres.sh` or `scripts/backup_neo4j.sh`.
-- Current RPO: unbounded. Current RTO: never measured.
 
-Section 3 lists the changes that close this gap. They change production and
-add cost, so they need the owner's approval.
-
-Checked with:
+Check the current state with these commands; the first two also answer for
+`-s Redis` and `-s neo4j`:
 
 ```bash
 railway postgres pitr schedule list -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s Postgres
 railway postgres pitr backup list -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s Postgres
+railway postgres pitr status -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s Postgres
 ```
 
-The same two commands answer for `-s neo4j` and `-s Redis`.
+`pitr status` should show `Archiver: enabled`, a recent `Last archived at`,
+and a `Restorable up to` within the last few minutes.
 
 ## 1. Open questions (not verified)
 
-1. Whether the expired manual Postgres backup (`191e5479-36a7-4f51-af5e-e92cff2be367`)
-   can still be restored. The CLI still lists it a week after its expiry. Nobody
-   has tried to restore it.
+1. Whether the expired manual Postgres backup (`191e5479-36a7-4f51-af5e-e92cff2be367`,
+   2026-08-22) can still be restored. The CLI still lists it a week after its
+   expiry. Nobody has tried to restore it. Since 2026-09-28 newer backups
+   exist, so this matters only for data from before then.
 2. The Railway plan tier, what backups and PITR cost on it, and how many days
    of deployment images it keeps. That retention sets how far back a rollback
    can go (section 7).
@@ -78,9 +78,9 @@ The same two commands answer for `-s neo4j` and `-s Redis`.
    `DATABASE_URL` and `DATABASE_PUBLIC_URL` variables reference each other, and
    therefore the exact steps to rotate the template superuser password
    (section 8.1).
-9. Whether `railway postgres pitr schedule set` works for the `neo4j` and
-   `Redis` services. `schedule list` and `backup list` answered for both on
-   2026-09-28; `set` was not run.
+9. Answered 2026-09-28: `railway postgres pitr schedule set`,
+   `schedule list`, `backup create` and `backup list` all work for the `Redis`
+   and `neo4j` services. `backup restore` has not been tried on them.
 10. The exact Neo4j version running in production. The service builds from the
     upstream template `sukrutnrvd/neo4j-template`, whose Dockerfile today uses
     `neo4j:2026.04-community`. Production's last build was 2026-05-26.
@@ -89,8 +89,8 @@ The same two commands answer for `-s neo4j` and `-s Redis`.
     `ENABLED_ROUTERS` allowlist.
 12. How to rebuild a tenant's Redis billing record from Stripe. No tool or
     procedure exists (section 6.5).
-13. Whether any Stripe subscriptions are live today, which determines how
-    urgent the Redis backup is.
+13. Whether any Stripe subscriptions are live today, and therefore how much
+    billing state a 24-hour Redis RPO can lose.
 
 ## 2. Inventory
 
@@ -144,37 +144,46 @@ use it in production; the frontend uses it for the developer portal, lead
 capture and legacy Supabase sessions. This document does not cover the
 recovery of these services.
 
-## 3. Close the backup gap (owner decision; changes production)
+## 3. Backup configuration
 
-Recommended, in this order. None of these has been run.
+Steps 1 to 4 were done on 2026-09-28, approved by the owner, staging first and
+then production. Step 5 is still open. Re-run a command here only to rebuild
+a lost service or environment.
 
-1. **Scheduled Postgres volume backups.** RPO becomes at most 24 hours, and
-   the oldest restorable point is about 89 days.
+1. **Scheduled volume backups on all three services (done).** Railway
+   retention: daily backups kept 6 days, weekly 27 days, monthly 89 days. Cost
+   is the incremental size at volume pricing.
 
    ```bash
    railway postgres pitr schedule set --daily --weekly --monthly -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s Postgres
+   railway postgres pitr schedule set --daily --weekly --monthly -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s Redis
+   railway postgres pitr schedule set --daily --weekly --monthly -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s neo4j
    ```
 
-   Railway retention: daily backups kept 6 days, weekly 27 days, monthly 89
-   days. Cost is the incremental size at volume pricing.
-
-2. **Point-in-time recovery for Postgres.** RPO becomes about one minute
-   (`archive_timeout=60`), with a window of about four weeks.
+2. **Point-in-time recovery for Postgres (done).** RPO is about one minute
+   (`archive_timeout=60`). pgBackRest takes a weekly full and a daily
+   differential backup, and keeps 4 fulls, which gives about four weeks of
+   window. Storage and egress are billed at bucket rates.
 
    ```bash
    railway postgres pitr enable -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s Postgres
    ```
 
-   This redeploys Postgres, which causes a brief outage, and creates a
-   `Postgres-PITR` bucket billed for storage and egress. The service qualifies:
-   its image is on the major tag `:18` and it has no custom start command.
-   Coverage starts at the first base backup taken after enabling; it is not
-   retroactive.
+   Enabling redeploys Postgres. In production, `/readiness` returned 503 for
+   about 15 to 20 seconds (23:56:32–23:56:46 UTC). The first base backup
+   completed at 23:56:58. Coverage is not retroactive.
 
-3. **`Redis` and `neo4j` schedules.** Use the service's Backups tab in the
-   dashboard (Daily, optionally Weekly). Redis comes first: it holds the only
-   copy of Stripe subscription state. A Redis restore has security
-   side-effects; read section 6.5 first.
+   **After any Postgres restart, check the scheduler.** Enabling PITR, a
+   restore, and Railway's security auto-updates all restart Postgres. This
+   restart left the `Remediation Notification Outbox Drain` job hung on a dead
+   connection: every later run logged `skipped: maximum number of running
+   instances reached (1)` until `RegEngine` was redeployed. The shared engine
+   sets no connect timeout or TCP keepalives. After any Postgres restart,
+   search the `RegEngine` logs for that message; if it appears, run
+   `railway redeploy -p 4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51 -e production -s RegEngine --yes`.
+
+3. **`Redis` and `neo4j` schedules (done, in step 1).** A Redis restore has
+   security side-effects; read section 6.5 first.
 
 4. **Before any risky migration or data repair,** take an on-demand backup and
    keep it:
@@ -187,16 +196,18 @@ Recommended, in this order. None of these has been run.
    A manual backup can be at most 50% of the volume size (25 GB for
    `postgres-volume`).
 
-5. **A copy outside Railway.** Railway backups live with the volume: wiping a
-   volume deletes all of its backups, and they restore only into the same
-   project and environment. For a copy that survives losing the project, run
-   the logical dump in section 6.3 on a schedule to storage you control.
-   Nothing does this today. Decide where the copies go (`S3_BUCKET` for
-   `backup_postgres.sh`) and what runs the job.
+5. **A copy outside Railway (open; owner decision).** Volume backups live with
+   the volume: wiping a volume deletes all of its backups, and they restore
+   only into the same project and environment. The PITR archive is in a
+   Railway bucket in the same project. For a copy that survives losing the
+   project, run the logical dump in section 6.3 on a schedule to storage you
+   control. Nothing does this today. Decide where the copies go (`S3_BUCKET`
+   for `backup_postgres.sh`) and what runs the job.
 
 ## 4. What is and is not backed up
 
-This assumes section 3 is done. Today, nothing in this table is scheduled.
+"Volume backup" means the schedules in section 3, step 1. Nothing outside
+Railway is covered yet (section 3, step 5).
 
 | Data | Lives in | Covered by | Not covered, or notes |
 |---|---|---|---|
@@ -217,14 +228,15 @@ This assumes section 3 is done. Today, nothing in this table is scheduled.
 
 Stated only as far as the backups support them:
 
-| State | Postgres RPO | Postgres RTO |
-|---|---|---|
-| Today | Unbounded (last backup 2026-08-22, past its listed expiry) | Not measured |
-| After section 3, step 1 | At most 24 h | Not measured |
-| After section 3, step 2 | About 1 min, within the last ~4 weeks | Not measured |
+| Datastore | RPO | Mechanism | RTO |
+|---|---|---|---|
+| Postgres | About 1 min, back to 2026-09-28 23:57 UTC (window grows to ~4 weeks) | PITR (section 6.2) | Not measured |
+| Postgres, older than the PITR window | 24 h, back 89 days | Volume backups (section 6.1) | Not measured |
+| Redis | 24 h | Volume backups (section 6.5) | Not measured |
+| Neo4j | 24 h | Volume backups (section 6.4) | Not measured |
 
-For `Redis` and `neo4j`, RPO is unbounded today and becomes the schedule
-interval (24 h for Daily) after section 3, step 3.
+Until 2026-09-28 23:55 UTC there were no schedules and no PITR, so RPO was
+unbounded.
 
 The previous targets in this file (RTO 4 h, RPO 15 min) were never backed by
 any backup mechanism, and have been removed. Set an RTO only after a timed
@@ -296,7 +308,7 @@ Writes made after the backup are lost. The unmounted previous volume still
 holds them; recovering rows from it means mounting it on a temporary service,
 which has not been tested.
 
-### 6.2 Postgres point-in-time restore (only after section 3, step 2)
+### 6.2 Postgres point-in-time restore
 
 ```bash
 railway postgres pitr restore --at 2026-10-01T12:00:00Z -p $P -e production -s Postgres
@@ -424,7 +436,7 @@ If Neo4j is up but **empty**, that route returns empty categories and CTEs
 and does not fall back. FDA export and CTE ingestion read Postgres and are
 unaffected.
 
-**Restore from a Railway volume backup** (after section 3, step 3):
+**Restore from a Railway volume backup:**
 `neo4j` → Backups → the backup → Restore → Deploy. The CLI form,
 `railway postgres pitr backup restore <BACKUP_ID> -p $P -e production -s neo4j`,
 has not been tried on a non-Postgres service (open question 9). Afterwards:
@@ -464,7 +476,7 @@ holds state that exists nowhere else.
 | `idempotency:*` (24 h), `bulk_upload:*` (1 h), `edi:interchange:*` (7 d) | Yes, but short-lived | Retried POSTs, in-flight bulk uploads and EDI retransmissions can run again or must be redone | Stale idempotency reservations can return 409 until they expire |
 | Rate-limit and throttle counters | No | Counters reset | — |
 
-**Restore from a Railway volume backup** (after section 3, step 3):
+**Restore from a Railway volume backup:**
 
 1. `Redis` → Backups → the backup → Restore → Deploy. The CLI form,
    `railway postgres pitr backup restore <BACKUP_ID> -p $P -e production -s Redis`,
@@ -510,6 +522,10 @@ meantime; it also disables billing enforcement, so it is an owner decision.
 
 5. The audit hash chain verifies for each tenant (`POST /api/v1/chain/verify-all`,
    if that router is enabled; open question 11).
+6. No scheduler job is stuck: the `RegEngine` logs show
+   `Remediation Notification Outbox Drain ... executed successfully` every 30
+   seconds, and no `maximum number of running instances reached` (section 3,
+   step 2).
 
 ## 7. Service recovery (the `RegEngine` app)
 
@@ -615,11 +631,13 @@ section 6.
 | `STRIPE_SECRET_KEY`, `RESEND_API_KEY` (shared variable), `OBJECT_STORAGE_ACCESS_KEY_ID` / `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Provider consoles | Roll at the provider, set the new value from stdin, redeploy `RegEngine` |
 | `AUTH_SECRET_KEY`, `AUDIT_INTEGRITY_KEY`, `AUTH_OTP_HMAC_SECRET`, `TOOL_ACCESS_SECRET`, `WEBHOOK_HMAC_SECRET`, `KAFKA_EVENT_SIGNING_KEY`, `REGENGINE_PROXY_IP_HMAC_KEY`, `SCHEDULER_API_KEY`, `API_KEY`, `REGENGINE_API_KEY` | `RegEngine` variables | Not documented. Some of these sign or fingerprint stored data (for example, `AUTH_OTP_HMAC_SECRET` feeds `user_emails.email_fingerprint`), so rotating them can invalidate existing records. Review each one's readers before rotating |
 
-## 9. Drills
+## 9. Drills and backup changes
 
 | Date | What | Result |
 |---|---|---|
 | 2026-09-28 | Staging `railway` database (alembic v079, 94 tables, 236 rows). Dumped with the section 6.3 command (`-e staging`). Restored as `regengine_migrator` into a local PostgreSQL 18.6 with the three roles created per section 6.3, step 2. Then ran `scripts/run-migrations.sh` as the migrator. | Dump 52 KB in about 10 s. Restore exited 0 with `ON_ERROR_STOP`. Per-table row counts identical to the source, 94 of 94 tables. Every restored object owned by `regengine_migrator`. RLS flags and all 102 policies present. `run-migrations.sh` ran 62 revisions (v079 to head) and logged `runtime role cutover applied`. Posture: `regengine\|regengine\|f\|f\|f\|f\|f` and `regengine_sysadmin\|regengine_sysadmin\|f\|f\|f\|f\|f`. `verify-v126-runtime-grants.sql`: `READY: every check ok (failing: 0)` |
+| 2026-09-28 | Staging: enabled backup schedules on all three volumes, then PITR on `Postgres`. | Postgres redeployed and was ready about 1 minute after the deploy started (Railway stops the old container without a clean shutdown; crash recovery was immediate). Stanza created, first WAL pushed, first full backup at 23:54:22, restorable to 23:54:23 |
+| 2026-09-28 | Production: on-demand backups `pre-pitr-enable-20260928` of all three volumes, schedules on all three, then PITR on `Postgres`. | `/readiness` 503 for about 15–20 s (23:56:32–23:56:46). First full backup at 23:56:58, restorable to 23:57:00. The scheduler's outbox-drain job hung on a dead connection until `RegEngine` was redeployed at 23:59:51 (no downtime, `/readiness` 200 throughout); the job then ran every 30 s |
 
 Not yet drilled: any restore of a production backup, any Railway-side restore
 step, and timing at production size. Rehearse a production restore with
