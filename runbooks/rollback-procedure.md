@@ -1,4 +1,4 @@
-> **LEGACY:** this runbook describes the retired k8s/6-service topology. Production is a single Railway monolith + Vercel frontend — see `docs/CODEBASE_MAP.md` (project level).
+> **LEGACY:** this runbook describes the retired k8s/6-service topology. Production is a single Railway monolith + Vercel frontend — see `docs/CODEBASE_MAP.md` (project level). The current Railway rollback procedure is in `docs/operations/DISASTER_RECOVERY.md`.
 
 # Rollback Procedure Runbook
 

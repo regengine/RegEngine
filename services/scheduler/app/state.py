@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Set
 
 import structlog
+from shared.db_liveness import postgres_liveness_connect_args
 from sqlalchemy import Column, DateTime, String, Text, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -67,6 +68,7 @@ class StateManager:
                 pool_pre_ping=True,
                 pool_size=5,
                 max_overflow=10,
+                connect_args=postgres_liveness_connect_args(self.database_url),
             )
             self.SessionLocal = sessionmaker(bind=self.engine)
 

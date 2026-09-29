@@ -5,7 +5,7 @@ but the only documented Neo4j restore in the repo is
 
     neo4j-admin database load neo4j --from-path=<dir> --overwrite-destination=true
 
-(docs/runbooks/disaster-recovery.md), which reads a binary `neo4j-admin`
+(docs/operations/DISASTER_RECOVERY.md), which reads a binary `neo4j-admin`
 dump and cannot ingest Cypher text at all.  The generated Cypher was also
 unsound on its own terms:
 
@@ -31,7 +31,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "backup_neo4j.sh"
-RUNBOOK = REPO_ROOT / "docs" / "runbooks" / "disaster-recovery.md"
+RUNBOOK = REPO_ROOT / "docs" / "operations" / "DISASTER_RECOVERY.md"
 
 # Stub that mirrors the real tool's contract: `dump` writes <database>.dump
 # into --to-path; `load` reads <database>.dump from --from-path and fails on
@@ -103,9 +103,9 @@ def test_produces_a_neo4j_admin_dump_not_a_cypher_export(tmp_path):
     proc, backup_dir = _run(tmp_path)
     assert proc.returncode == 0, proc.stderr
 
-    assert not list(
-        backup_dir.rglob("*.cypher.gz")
-    ), "script still emits a Cypher export the documented restore cannot read"
+    assert not list(backup_dir.rglob("*.cypher.gz")), (
+        "script still emits a Cypher export the documented restore cannot read"
+    )
 
     dumps = list(backup_dir.rglob("neo4j.dump"))
     assert len(dumps) == 1, f"expected one neo4j.dump, found {dumps}"
@@ -120,8 +120,12 @@ def test_documented_restore_command_consumes_the_artifact(tmp_path):
     """
     env, backup_dir = _harness(tmp_path)
     proc = subprocess.run(
-        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
-        cwd=tmp_path, timeout=120,
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
     )
     assert proc.returncode == 0, proc.stderr
 
@@ -130,14 +134,19 @@ def test_documented_restore_command_consumes_the_artifact(tmp_path):
 
     restore = subprocess.run(
         [
-            "neo4j-admin", "database", "load", "neo4j",
-            f"--from-path={run_dirs[0]}", "--overwrite-destination=true",
+            "neo4j-admin",
+            "database",
+            "load",
+            "neo4j",
+            f"--from-path={run_dirs[0]}",
+            "--overwrite-destination=true",
         ],
-        env=env, capture_output=True, text=True, timeout=120,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
-    assert restore.returncode == 0, (
-        f"documented restore rejected the backup: {restore.stderr}"
-    )
+    assert restore.returncode == 0, f"documented restore rejected the backup: {restore.stderr}"
 
 
 def test_no_hand_rolled_cypher_generation_remains(tmp_path):
@@ -158,9 +167,7 @@ def test_failed_dump_leaves_no_decoy(tmp_path):
 
     assert proc.returncode != 0, "script reported success despite a failed dump"
     leftovers = list(backup_dir.rglob("*")) if backup_dir.exists() else []
-    assert not [p for p in leftovers if p.is_file()], (
-        f"failed run left a decoy backup: {leftovers}"
-    )
+    assert not [p for p in leftovers if p.is_file()], f"failed run left a decoy backup: {leftovers}"
 
 
 def test_retention_keeps_only_the_requested_number_of_runs(tmp_path):
@@ -174,8 +181,12 @@ def test_retention_keeps_only_the_requested_number_of_runs(tmp_path):
         (d / "neo4j.dump").write_bytes(b"NEO4JDUMPold")
 
     proc = subprocess.run(
-        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
-        cwd=tmp_path, timeout=120,
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
     )
     assert proc.returncode == 0, proc.stderr
 
@@ -191,9 +202,7 @@ def test_script_and_runbook_agree_on_the_neo4j_format():
     runbook = RUNBOOK.read_text()
 
     assert "neo4j-admin database dump" in script
-    assert "neo4j-admin database load" in runbook, (
-        "runbook restore changed; re-check it still matches the script"
-    )
+    assert "neo4j-admin database load" in runbook, "runbook restore changed; re-check it still matches the script"
     assert ".cypher" not in script.replace("`.cypher.gz`", ""), (
         "script references a Cypher artifact outside its explanatory header"
     )
@@ -210,11 +219,7 @@ def _service_control_harness(tmp_path: Path, *, fail: bool):
 
     log = tmp_path / "docker-calls.log"
     docker = bin_dir / "docker"
-    docker.write_text(
-        "#!/usr/bin/env bash\n"
-        f'echo "$@" >> "{log}"\n'
-        "exit 0\n"
-    )
+    docker.write_text(f'#!/usr/bin/env bash\necho "$@" >> "{log}"\nexit 0\n')
     docker.chmod(0o755)
 
     backup_dir = tmp_path / "backups"
@@ -227,8 +232,12 @@ def _service_control_harness(tmp_path: Path, *, fail: bool):
         env["STUB_FAIL"] = "1"
 
     proc = subprocess.run(
-        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
-        cwd=tmp_path, timeout=120,
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
     )
     calls = log.read_text().splitlines() if log.exists() else []
     return proc, calls

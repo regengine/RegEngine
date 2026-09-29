@@ -24,6 +24,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from shared.db_liveness import postgres_liveness_connect_args
+
 from .models import (
     RecallDrill,
     RecallSeverity,
@@ -56,7 +58,13 @@ def _get_db_engine():
             if db_url.startswith("postgresql://")
             else db_url
         )
-        return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
+        return create_engine(
+            url,
+            pool_pre_ping=True,
+            pool_size=2,
+            max_overflow=4,
+            connect_args=postgres_liveness_connect_args(url),
+        )
     except Exception:
         import logging
 

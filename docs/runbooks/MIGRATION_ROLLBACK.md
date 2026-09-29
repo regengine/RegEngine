@@ -251,7 +251,7 @@ alembic downgrade a43b0fb1edd0
 else raises `RuntimeError` and the downgrade does not run.
 
 **In production or staging the recovery path is a snapshot restore, not a
-destructive downgrade** — see [disaster-recovery.md](disaster-recovery.md).
+destructive downgrade** — see [DISASTER_RECOVERY.md](../operations/DISASTER_RECOVERY.md).
 
 > **Why the guard lives in the revision.** `alembic/env.py:_guard_baseline_downgrade`
 > only covers `downgrade base`. A targeted `alembic downgrade -1` from head reaches
@@ -630,19 +630,14 @@ WHERE tgrelid = 'fsma.hash_chain'::regclass;
 -- Should include immutability trigger(s)
 ```
 
-### Supabase Point-in-Time Recovery
+### Restoring From a Backup
 
-If you need to reverse an irreversible data migration, Supabase provides point-in-time recovery (PITR):
-
-1. Go to Supabase Dashboard → Database → Backups
-2. Select a recovery point **before** the migration was applied
-3. Restore to a new project (does NOT overwrite current)
-4. Extract the needed data from the restored database
-5. Apply it to the current database
-
-**Recovery objectives from `docs/DISASTER_RECOVERY.md`:**
-- RPO: 15 minutes (Supabase WAL archiving)
-- RTO: 4 hours target, 8 hours maximum
+Production PostgreSQL is the Railway `Postgres` service, not Supabase. To
+reverse an irreversible data migration, restore from a Railway backup taken
+before the migration, following
+[DISASTER_RECOVERY.md](../operations/DISASTER_RECOVERY.md). That document also
+states which backups exist today and the recovery point they actually support.
+Take an on-demand backup before any irreversible migration (see its section 3).
 
 ---
 
@@ -727,4 +722,4 @@ DATABASE_URL=<url> ./scripts/run-migrations.sh
 - [BULK_DATA_REPAIR.md](BULK_DATA_REPAIR.md) — Repairing data corrupted by a bad migration
 - [FDA_RECALL_RESPONSE.md](FDA_RECALL_RESPONSE.md) — If migration failure impacts recall capability
 - [incident-response.md](incident-response.md) — Escalation paths
-- [disaster-recovery.md](disaster-recovery.md) — Supabase PITR for irreversible damage
+- [DISASTER_RECOVERY.md](../operations/DISASTER_RECOVERY.md) — Railway backup restore for irreversible damage

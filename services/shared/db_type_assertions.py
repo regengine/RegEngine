@@ -200,6 +200,9 @@ def _normalize_type(sqltype: Any) -> str:
         return "json"
     if any(token in rendered for token in ("timestamp", "datetime")) or "datetime" in type_name:
         return "timestamp"
+    # LargeBinary renders as generic "BLOB"; PostgreSQL reflects the same column as BYTEA.
+    if "binary" in type_name or "bytea" in type_name or any(token in rendered for token in ("blob", "bytea", "binary")):
+        return "binary"
     if "bool" in type_name or "boolean" in rendered:
         return "boolean"
     if "float" in type_name or "double" in rendered or "numeric" in rendered:
