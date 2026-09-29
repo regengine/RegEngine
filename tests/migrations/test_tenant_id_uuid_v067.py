@@ -67,7 +67,7 @@ def pg_engine():
         pytest.skip(f"PostgresContainer unavailable: {exc}")
 
     try:
-        engine = create_engine(pg.get_connection_url(), future=True)
+        engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
         yield engine
         engine.dispose()
     finally:

@@ -69,7 +69,7 @@ def pg_engine():
         reason="PostgresContainer unavailable",
     )
     try:
-        engine = create_engine(pg.get_connection_url(), future=True)
+        engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
         with engine.begin() as conn:
             # Create the ``regengine`` role the policy references.
             # autocommit-style DDL: skip CREATE ROLE if it already exists.

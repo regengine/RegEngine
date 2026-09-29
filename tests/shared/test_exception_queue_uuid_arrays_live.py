@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -38,7 +39,7 @@ def test_create_exception_binds_uuid_arrays() -> None:
 
     from services.shared.exception_queue import ExceptionQueueService
 
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     tenant_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())
     eval_id = str(uuid.uuid4())

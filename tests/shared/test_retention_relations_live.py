@@ -31,6 +31,7 @@ Picked up automatically by the ``live-db-suite`` CI job's
 from __future__ import annotations
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -54,7 +55,7 @@ def test_declared_retention_relations_match_the_migrated_schema() -> None:
     from shared.data_retention import _RESOURCE_RELATIONS
     from sqlalchemy import create_engine
 
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     try:
         with engine.connect() as conn:
             missing = []
@@ -100,7 +101,7 @@ def test_soft_delete_column_state_matches_what_the_module_declares() -> None:
 
     declared = {r: rel for r, rel in _RESOURCE_RELATIONS.items() if rel}
 
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     try:
         with engine.connect() as conn:
             if not declared:

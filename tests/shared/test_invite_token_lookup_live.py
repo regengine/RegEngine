@@ -38,6 +38,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -58,7 +59,7 @@ def _engine():
 
     # Raw engine on purpose: shared.database's begin-hook must not be
     # involved — the point is a connection with NO app.tenant_id GUC at all.
-    return create_engine(DATABASE_URL)
+    return create_engine(sync_postgres_url(DATABASE_URL))
 
 
 def _seed(conn, *, token_hash: str, accepted: bool = False, revoked: bool = False, expired: bool = False):
