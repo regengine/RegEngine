@@ -10,6 +10,7 @@ import time
 from typing import Callable, Generator, Optional
 
 import structlog
+from shared.db_liveness import postgres_liveness_connect_args
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -75,7 +76,10 @@ class DistributedContext:
             # stays open as long as we hold leadership.
             pool_size=2,
             max_overflow=1,
-            connect_args={"keepalives": 1, "keepalives_idle": 30},
+            # Bounded reconnects + ~60s dead-peer detection: on 2026-09-28 the
+            # election and heartbeat reconnects hung on a killed Postgres
+            # container, so a lost lock went unnoticed for ~4 minutes.
+            connect_args=postgres_liveness_connect_args(self.database_url),
         )
         self._is_leader = False
         # #1142: heartbeat state. ``_leader_pid`` is the backend pid we

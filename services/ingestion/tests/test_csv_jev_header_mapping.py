@@ -960,3 +960,20 @@ def test_precedence_chains_pin_the_parser_order_the_policy_relies_on():
     # event_date is read before every CTE-specific date column.
     assert set(outranked_columns("event_date", ct._COLUMN_PRECEDENCE)) == set(ct._DATE_FIELDS) - {"event_date"}
     assert outranked_columns("landing_date", ct._COLUMN_PRECEDENCE) == ()
+
+
+def test_upload_ui_labels_every_field_jev_can_name_with_a_header_the_parser_reads():
+    # The upload pages tell uploaders to rename a column to the label in
+    # frontend/src/lib/column-suggestions.ts. That only works if the labels
+    # cover Jev's vocabulary exactly and each normalises to a parser column.
+    import re
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "column-suggestions.ts").read_text()
+    block = source.split("FIELD_LABELS", 1)[1].split("};", 1)[0]
+    labels = dict(re.findall(r"^\s+([a-z_]+): '([^']+)',$", block, flags=re.MULTILINE))
+
+    assert set(labels) == set(CANONICAL_FIELD_NAMES)
+    for field, label in labels.items():
+        assert normalize_csv_header(label) == field
+        assert field in ct._RECOGNIZED_COLUMNS

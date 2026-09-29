@@ -178,7 +178,7 @@ describe('CSV import results on /ingest', () => {
 
     expect(await screen.findByText('CSV processed')).toBeInTheDocument();
     expect(mocks.ingestFile).toHaveBeenCalledTimes(2);
-    expect(mocks.ingestFile.mock.calls[1][0]).toMatchObject({ apiKey: 'cookie-managed', cteType: 'receiving' });
+    expect(mocks.ingestFile.mock.calls[1][0]).toMatchObject({ apiKey: 'cookie-managed', cteType: 'receiving' }); // pragma: allowlist secret
     expect(mocks.ingestFile.mock.calls[1][0].file).toBe(mocks.ingestFile.mock.calls[0][0].file);
     expect(screen.queryByRole('button', { name: 'Import as Receiving' })).not.toBeInTheDocument();
   });
@@ -200,6 +200,27 @@ describe('CSV import results on /ingest', () => {
 
     expect(await screen.findByText('No valid rows found: Row 2: No CTE type')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Import as/ })).not.toBeInTheDocument();
+  });
+
+  it('lists Jev column suggestions on a rejected upload and on a partial one', async () => {
+    const lotSuggestion = {
+      source_header: 'Lot #', source_key: 'lot_#', canonical_field: 'traceability_lot_code',
+      confidence: 0.97, band: 'auto_apply', applied: false, blocked_reason: 'apply_disabled',
+    };
+    mocks.ingestFile.mockRejectedValueOnce(Object.assign(new Error('No valid rows found: Row 2: missing lot code'), {
+      response: {
+        status: 400,
+        data: { detail: { message: 'No valid rows found', errors: [], header_mapping_suggestions: [lotSuggestion] } },
+      },
+    }));
+    await uploadCsv();
+    expect(await screen.findByText(/looks like Traceability Lot Code \(97% confidence\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Rename the column to .Traceability Lot Code. and upload again/)).toBeInTheDocument();
+
+    mocks.ingestFile.mockResolvedValueOnce({ ...csvResult(1, 1), header_mapping_suggestions: [lotSuggestion] });
+    await userEvent.click(screen.getByRole('button', { name: /upload & process/i }));
+    expect(await screen.findByText('CSV partially accepted')).toBeInTheDocument();
+    expect(screen.getByText(/looks like Traceability Lot Code/)).toBeInTheDocument();
   });
 
   it('limits the chooser to the CSV contract', async () => {

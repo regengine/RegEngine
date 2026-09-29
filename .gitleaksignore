@@ -9,11 +9,10 @@
 # exempted by these lines.
 #
 # The three .env.production findings at a130816b (ADMIN_MASTER_KEY,
-# AUTH_SECRET_KEY, REDIS_PASSWORD) were real generated values. Rotation was
-# confirmed on 2026-09-28 by SHA-256 comparison (values never printed):
-# none of the leaked values is present in any variable of the RegEngine,
-# Redis or Postgres services in either Railway environment (production,
-# staging). Their fingerprints are listed at the end of this file.
+# AUTH_SECRET_KEY, REDIS_PASSWORD) were verified absent from production and
+# staging (RegEngine, Redis, Postgres, neo4j) on 2026-09-28 by exact comparison.
+# They are treated as rotated; their fingerprints are listed at the end of this
+# file.
 4b44d0bb27d6196ba7e4de913f8772ab67c0028b:frontend/src/app/api-keys/page.tsx:curl-auth-header:245
 55716a3134ebeff7d4b6ec0e46790cb6bef04bd9:.agent/CONSTITUTION.md:curl-auth-header:264
 899f6ceda8821437831f0db99d00a29327e57a89:frontend/src/app/tools/data-import/components/DataImportClient.tsx:curl-auth-header:31

@@ -9,6 +9,7 @@ See: alembic/versions/20260329_task_queue_v050.py for Kafka replacement
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -152,20 +153,16 @@ async def lifespan(app: FastAPI):
 
     # Whether the optional TypeSafe Jev integration is live, so an operator
     # can confirm a newly added TYPESAFE_API_KEY from the deploy logs without
-    # reading the variable. Logs switches only, never the key.
+    # reading the variable. Logs switches only, never the key. Through stdlib
+    # logging, like registered_connector: the structlog chain drops INFO
+    # events without a sampled trace when LOG_ALL_SAMPLED_OUT=false
+    # (sampling_aware_filter), and startup has no trace.
     try:
         from shared.jev import JevSettings
 
-        jev = JevSettings.from_env()
-        logger.info(
-            "jev_configured",
-            enabled=jev.enabled,
-            key_present=bool(jev.api_key),
-            kill_switch=not jev.enabled_flag,
-            model=jev.model,
-            apply_header_mappings=jev.apply_header_mappings,
-            apply_file_cte_type=jev.apply_file_cte_type,
-            header_sample_values=jev.header_sample_values,
+        summary = JevSettings.from_env().public_summary()
+        logging.getLogger("jev").info(
+            "jev_configured %s", " ".join(f"{name}={value}" for name, value in summary.items())
         )
     except Exception as exc:
         logger.warning("jev_config_probe_failed", error=str(exc))

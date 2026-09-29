@@ -144,6 +144,21 @@ export interface CteTypeSuggestion {
     artifacts_recorded: number;
 }
 
+/**
+ * Jev's reading of one CSV column the parser did not recognise
+ * (HeaderMappingSuggestionResult in services/ingestion/app/webhook_models.py).
+ * Also carried in the 400 detail when no row parsed.
+ */
+export interface HeaderMappingSuggestion {
+    source_header: string;
+    source_key: string;
+    canonical_field: string | null;
+    confidence: number;
+    band: string;
+    applied: boolean;
+    blocked_reason: string | null;
+}
+
 export interface IngestCSVResponse {
     total: number;
     accepted: number;
@@ -153,6 +168,7 @@ export interface IngestCSVResponse {
     kde_warnings?: string[];
     kde_warning_count?: number;
     cte_type_suggestion?: CteTypeSuggestion | null;
+    header_mapping_suggestions?: HeaderMappingSuggestion[];
 }
 
 // Compliance

@@ -21,7 +21,7 @@ What it *does* do:
 Rotation is done by the platform's own secret manager, not here. To set
 production values, use the platform directly, e.g.::
 
-    railway variables set ADMIN_MASTER_KEY=...
+    railway variables set AUTH_SECRET_KEY=...
 
 Usage:
     python scripts/export_env_bundle.py --environment production
@@ -46,7 +46,6 @@ except ImportError:
 REQUIRED_SECRETS = (
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
-    "ADMIN_MASTER_KEY",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
 )
@@ -93,7 +92,6 @@ def build_secret_payload(environment: str) -> dict[str, str]:
         "OBJECT_STORAGE_SECRET_ACCESS_KEY": os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", ""),
         "OBJECT_STORAGE_REGION": os.getenv("OBJECT_STORAGE_REGION", "us-east-1"),
         "OBJECT_STORAGE_ENDPOINT_URL": os.getenv("OBJECT_STORAGE_ENDPOINT_URL", ""),
-        "ADMIN_MASTER_KEY": os.getenv("ADMIN_MASTER_KEY", ""),
     }
     return payload
 
@@ -146,8 +144,8 @@ def main() -> None:
     if args.output is not None:
         print(
             "\nERROR: --output has been removed (#2938).\n"
-            "It wrote every production credential, including ADMIN_MASTER_KEY, as\n"
-            "plaintext JSON under the operator's default umask, to a path .gitignore\n"
+            "It wrote every production credential as plaintext JSON under the\n"
+            "operator's default umask, to a path .gitignore\n"
             "did not cover. Nothing writes secrets to disk any more.\n"
             "Pipe the bundle instead:\n"
             "  python scripts/export_env_bundle.py --environment production --emit-bundle | \\\n"
