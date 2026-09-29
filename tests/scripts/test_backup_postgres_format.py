@@ -6,7 +6,8 @@ while the only documented PostgreSQL restore procedure in the repo is
 
     gunzip -c backups/postgres/regengine_YYYY-MM-DD.sql.gz | psql ... regengine
 
-(docs/runbooks/disaster-recovery.md).  Every backup the script produced was
+(then docs/runbooks/disaster-recovery.md; now docs/operations/DISASTER_RECOVERY.md).
+Every backup the script produced was
 therefore unrestorable by the documented command.
 
 These tests exercise the script's real shell pipeline with a stubbed `pg_dump`
@@ -29,7 +30,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "backup_postgres.sh"
-RUNBOOK = REPO_ROOT / "docs" / "runbooks" / "disaster-recovery.md"
+RUNBOOK = REPO_ROOT / "docs" / "operations" / "DISASTER_RECOVERY.md"
 
 # What real `pg_dump` writes in plain format; the marker the runbook's
 # `psql` consumer implicitly relies on being SQL text.
@@ -124,7 +125,7 @@ def test_backup_artifact_is_real_gzip_not_a_custom_archive(tmp_path):
 def test_documented_restore_pipeline_recovers_the_sql(tmp_path):
     """`gunzip -c <backup>` must yield the SQL stream psql is fed.
 
-    This is the runbook's restore pipeline (docs/runbooks/disaster-recovery.md)
+    This is the runbook's restore pipeline (docs/operations/DISASTER_RECOVERY.md)
     reduced to the part that does not need a live server: decompress, and check
     that what comes out is the SQL psql would replay.
     """
@@ -183,7 +184,7 @@ def test_script_and_runbook_describe_the_same_format():
         "script emits a custom archive; the runbook restore uses `gunzip -c | psql`"
     )
     assert "| gzip" in script, "script must pipe plain SQL through gzip"
-    assert "gunzip -c backups/postgres/regengine_YYYY-MM-DD.sql.gz" in runbook, (
+    assert "gunzip -c backups/postgres/railway_YYYYMMDD_HHMMSS.sql.gz" in runbook, (
         "runbook restore command changed; re-check it still matches the script"
     )
     assert ".sql.gz" in script

@@ -43,27 +43,3 @@ def postgres_liveness_connect_args(url: str) -> dict[str, int]:
         "keepalives_count": 3,
         "tcp_user_timeout": 60_000,  # milliseconds
     }
-
-
-def asyncpg_liveness_connect_args() -> dict[str, int]:
-    """Return asyncpg ``connect()`` keywords that bound connects and commands.
-
-    asyncpg speaks the wire protocol itself, so the libpq keywords above mean
-    nothing to it, and it has no keepalive or ``tcp_user_timeout`` option
-    (0.31 sets only ``TCP_NODELAY``). Its own timeouts are the bound instead:
-
-    - ``timeout`` bounds the whole connect (TCP, TLS and auth); asyncpg's
-      default is 60s.
-    - ``command_timeout`` is the default deadline for every operation on the
-      connection, including SQLAlchemy's pre-ping, BEGIN and COMMIT; asyncpg's
-      default is none. On expiry the caller gets ``TimeoutError`` and the pool
-      discards the connection. 30s is far above any single-row query and
-      below the app's 120s request timeout, so the DB bound fires first.
-      asyncpg then sends a cancel over a new connection to the same address
-      and the pool's close waits for it, so against a black-holed address the
-      request also waits out the kernel's connect timeout (~127s on Linux).
-    """
-    return {
-        "timeout": 10,
-        "command_timeout": 30,
-    }
