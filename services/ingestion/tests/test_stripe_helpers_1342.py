@@ -447,6 +447,16 @@ class TestEnforceAdminOrOperator:
 
 
 class TestResolveTenantContext:
+    @pytest.fixture(autouse=True)
+    def _restore_tenant_context(self):
+        from shared.tenant_context import reset_rls_tenant_id, set_rls_tenant_id
+
+        token = set_rls_tenant_id(None)
+        try:
+            yield
+        finally:
+            reset_rls_tenant_id(token)
+
     def test_principal_tenant_wins(self):
         principal = _Principal(scopes=[], tenant_id="from-principal")
         assert _resolve_tenant_context(None, None, principal) == "from-principal"

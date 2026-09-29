@@ -306,7 +306,20 @@ def test_retries_are_bounded_by_settings():
 # ---------------------------------------------------------------------------
 
 
-def test_state_never_reaches_regengine_logs():
+def test_state_never_reaches_regengine_logs(monkeypatch):
+    from shared.jev import client as jev_client
+
+    # A cached logger can retain a processor list replaced by another service's
+    # configuration. Capture this call's real events at every logging level.
+    monkeypatch.setattr(
+        jev_client,
+        "logger",
+        structlog.wrap_logger(
+            None,
+            wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+            cache_logger_on_first_use=False,
+        ),
+    )
     secret_state = {"source_header": "Supplier Tax ID", "sample_values": ["SECRET-VALUE-9"]}
 
     def failing(request):

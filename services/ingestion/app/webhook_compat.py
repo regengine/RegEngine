@@ -17,6 +17,7 @@ using the same internal helpers and persistence layer.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -87,6 +88,7 @@ class SourceFileReceipt:
     initiated_by: Optional[str] = None
     record_count: int = 0
     parse_errors: List[str] = field(default_factory=list)
+    source_system: Optional[str] = None
 
     @property
     def sha256(self) -> str:
@@ -111,14 +113,14 @@ def _open_ingestion_run(db_session, tenant_id: str, source: str, receipt: Source
     receipt cannot be written the upload fails, because events without a
     retained source are exactly what the receipt exists to prevent.
     """
-    from shared.canonical_event import IngestionRun
+    from shared.canonical_event import IngestionRun, IngestionSource
     from shared.canonical_persistence import CanonicalEventStore
     from sqlalchemy import text
 
     store = CanonicalEventStore(db_session, dual_write=False)
     run = IngestionRun(
         tenant_id=tenant_id,
-        source_system=_run_source_system(source),
+        source_system=IngestionSource(receipt.source_system) if receipt.source_system else _run_source_system(source),
         source_file_name=receipt.filename,
         source_file_hash=receipt.sha256,
         source_file_size=len(receipt.raw_bytes),
@@ -322,12 +324,17 @@ async def ingest_events(
 
                     canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
-                    canonical_store.persist_event(canonical)
+                    persist_result = canonical_store.persist_event(canonical)
+                    if persist_result.success is not True:
+                        raise RuntimeError("Canonical persistence did not succeed")
+                    # A replay returns the existing ID without mutating the
+                    # freshly normalized candidate or its integrity hash.
+                    persisted_event_id = str(uuid.UUID(str(persist_result.event_id)))
                     from shared.rules_engine import RulesEngine
 
                     engine = RulesEngine(db_session)
                     event_data = {
-                        "event_id": str(canonical.event_id),
+                        "event_id": persisted_event_id,
                         "event_type": canonical.event_type.value,
                         "traceability_lot_code": canonical.traceability_lot_code,
                         "product_reference": canonical.product_reference,
@@ -339,9 +346,26 @@ async def ingest_events(
                         "to_entity_reference": canonical.to_entity_reference,
                         "kdes": canonical.kdes,
                     }
+                    if persist_result.idempotent:
+                        stored = canonical_store.get_event(tenant_id, persisted_event_id)
+                        if (
+                            stored is None
+                            or uuid.UUID(str(stored["event_id"])) != uuid.UUID(persisted_event_id)
+                            or uuid.UUID(str(stored["tenant_id"])) != uuid.UUID(tenant_id)
+                        ):
+                            raise RuntimeError("Persisted canonical replay identity is unavailable")
+                        stored_data = {key: stored[key] for key in event_data}
+                        candidate_data = {
+                            **event_data,
+                            "kdes": json.loads(json.dumps(canonical.kdes, default=str)),
+                        }
+                        if stored_data != candidate_data:
+                            raise RuntimeError("Canonical replay conflicts with persisted rule inputs")
+                        event_data = stored_data
                     summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
                     if summary is None:
                         raise RuntimeError("Rules engine returned no evaluation summary")
+                    summary.event_id = persisted_event_id
                     canon_sp.commit()
                 except Exception as canon_err:  # noqa: BLE001
                     if canon_sp is not None:
@@ -395,18 +419,11 @@ async def ingest_events(
                             )
 
                             _first_crit = (summary.critical_failures or [None])[0]
-                            # ``summary is not None`` implies the try block
-                            # above committed, so ``canonical`` is bound.
-                            _canon_event_id = None
-                            try:
-                                _canon_event_id = str(canonical.event_id)
-                            except (NameError, AttributeError):
-                                _canon_event_id = None
                             record_rejection(
                                 tenant_id=tenant_id,
                                 rule_id=getattr(_first_crit, "rule_id", None),
                                 rule_version=getattr(_first_crit, "rule_version", None),
-                                event_id=_canon_event_id,
+                                event_id=persisted_event_id,
                                 reasons=reasons_from_summary(summary, rejection_reason=reject_reason),
                                 source="webhook_compat",
                                 enforcement_mode=current_mode(),

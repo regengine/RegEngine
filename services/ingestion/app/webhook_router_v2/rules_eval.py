@@ -9,6 +9,7 @@ the package namespace (``_pkg``) at call time so tests that monkeypatch
 
 from __future__ import annotations
 
+import json
 import sys
 from uuid import UUID
 
@@ -157,7 +158,7 @@ def _persist_canonical_and_eval(
     can be unit-tested without mounting the full ``ingest_events`` route.
 
     Routing rules (verified by ``test_webhook_router_v2_canonical_helper``):
-      - ``precomputed_summary`` is non-None AND has results →
+      - For fresh events, ``precomputed_summary`` is non-None AND has results →
         ``RulesEngine.persist_summary`` writes the eval rows. No
         re-evaluation. Fast path under
         ``RULES_ENGINE_ENFORCE=cte_only|all``.
@@ -168,9 +169,11 @@ def _persist_canonical_and_eval(
       - In both paths, ``not summary.compliant`` triggers
         ``ExceptionQueueService.create_exceptions_from_evaluation``
         for non-blocking failure visibility.
+      - Replays must match the stored rule inputs and are re-evaluated
+        from that tenant-qualified stored row, never a candidate summary.
 
-    Anchors the eval rows on the canonical event_id we just persisted
-    (``str(canonical.event_id)``), not on whatever ID the pre-eval
+    Anchors the eval rows on the event_id returned by canonical persistence,
+    not on whatever ID the pre-eval
     canonical happened to have. ``normalize_webhook_event`` mints a
     fresh UUID per call.
 
@@ -195,10 +198,38 @@ def _persist_canonical_and_eval(
         canonical.prepare_for_persistence()
     store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
     persist_result = store.persist_event(canonical)
-    persisted_event_id = str(getattr(persist_result, "event_id", None) or canonical.event_id)
+    if persist_result.success is not True:
+        raise RuntimeError("Canonical persistence did not succeed")
+    persisted_event_id = str(UUID(str(persist_result.event_id)))
+    event_data = {
+        "event_id": persisted_event_id,
+        "event_type": canonical.event_type.value,
+        "traceability_lot_code": canonical.traceability_lot_code,
+        "product_reference": canonical.product_reference,
+        "quantity": canonical.quantity,
+        "unit_of_measure": canonical.unit_of_measure,
+        "from_facility_reference": canonical.from_facility_reference,
+        "to_facility_reference": canonical.to_facility_reference,
+        "from_entity_reference": canonical.from_entity_reference,
+        "to_entity_reference": canonical.to_entity_reference,
+        "kdes": canonical.kdes,
+    }
+    if persist_result.idempotent:
+        stored = store.get_event(tenant_id, persisted_event_id)
+        if (
+            stored is None
+            or UUID(str(stored["event_id"])) != UUID(persisted_event_id)
+            or UUID(str(stored["tenant_id"])) != UUID(tenant_id)
+        ):
+            raise RuntimeError("Persisted canonical replay identity is unavailable")
+        stored_data = {key: stored[key] for key in event_data}
+        candidate_data = {**event_data, "kdes": json.loads(json.dumps(canonical.kdes, default=str))}
+        if stored_data != candidate_data:
+            raise RuntimeError("Canonical replay conflicts with persisted rule inputs")
+        event_data = stored_data
     engine = RulesEngine(db_session)
 
-    if precomputed_summary is not None and precomputed_summary.results:
+    if not persist_result.idempotent and precomputed_summary is not None and precomputed_summary.results:
         engine.persist_summary(
             precomputed_summary,
             tenant_id=tenant_id,
@@ -206,19 +237,6 @@ def _persist_canonical_and_eval(
         )
         summary = precomputed_summary
     else:
-        event_data = {
-            "event_id": persisted_event_id,
-            "event_type": canonical.event_type.value,
-            "traceability_lot_code": canonical.traceability_lot_code,
-            "product_reference": canonical.product_reference,
-            "quantity": canonical.quantity,
-            "unit_of_measure": canonical.unit_of_measure,
-            "from_facility_reference": canonical.from_facility_reference,
-            "to_facility_reference": canonical.to_facility_reference,
-            "from_entity_reference": canonical.from_entity_reference,
-            "to_entity_reference": canonical.to_entity_reference,
-            "kdes": canonical.kdes,
-        }
         summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
 
     # ExceptionQueueService links cases from summary.event_id; idempotent

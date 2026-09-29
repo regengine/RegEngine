@@ -2,12 +2,11 @@
 Admin Service Test Configuration and Fixtures
 """
 
-import os
+import sys
 import uuid
 from datetime import datetime, timezone
 from typing import Generator
 from unittest.mock import MagicMock
-from urllib.parse import urlsplit
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -166,48 +165,11 @@ def auth_headers(tenant_id, user_id):
 
 
 @pytest.fixture(autouse=True)
-def _clear_admin_brute_force_state():
-    """Clear privileged-auth counters before each test.
-
-    ``BruteForceLimiter(namespace="admin_auth")`` in services/admin/app/routes.py
-    is Redis-backed whenever a reachable Redis URL is in the environment (the
-    contract suite exports ``REDIS_URL=redis://localhost:6379/0`` into the
-    process env). Failure counts for ip="testclient" persist across pytest
-    processes, so runs within the 60s window poison each other with 429s.
-
-    Only localhost is flushed -- a remote REDIS_URL must never be touched, and
-    production stays Redis-backed (#1392).
-    """
-    redis_url = os.getenv("REGENGINE_REDIS_URL") or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
-    parsed_redis_url = urlsplit(redis_url)
-    try:
-        import redis
-
-        if parsed_redis_url.hostname not in {"localhost", "127.0.0.1", "::1"}:
-            raise ValueError("refusing to clear a non-local Redis instance")
-        client = redis.Redis.from_url(
-            redis_url,
-            socket_connect_timeout=0.5,
-            socket_timeout=0.5,
-        )
-        keys = list(client.scan_iter("privileged_auth:*"))
-        if keys:
-            client.delete(*keys)
-    except Exception:
-        # No local Redis -> the limiter falls back to in-memory and each
-        # pytest process starts clean; nothing to clear.
-        pass
-
-    # The admin package can be imported under either ``app`` or
-    # ``services.admin.app`` in this suite. Clear the non-production memory
-    # fallback in every loaded instance so intentional 401 tests do not poison
-    # the next test's five-attempt budget.
-    import sys
-
+def _clear_admin_brute_force_state(monkeypatch):
+    """Isolate local auth counters without reading or deleting Redis data."""
     for module_name in ("app.privileged_auth", "services.admin.app.privileged_auth"):
         module = sys.modules.get(module_name)
         throttle = getattr(module, "_privileged_auth_throttle", None) if module else None
         if throttle is None:
             continue
-        with throttle._memory_lock:
-            throttle._memory.clear()
+        monkeypatch.setattr(module, "_privileged_auth_throttle", module.PrivilegedAuthThrottle(redis_client=None))

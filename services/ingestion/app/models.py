@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, ValidationInfo, field_validator
 
 # ---------------------------------------------------------------------------
 # SSRF protection (#549)
@@ -104,6 +105,21 @@ def _reject_if_private_ip(
             raise ValueError(f"Requests to private or reserved IP addresses are not permitted ({detail}).")
 
 
+@dataclass(frozen=True)
+class _ServerDocumentSource:
+    """Exact provenance reference created by a server route, never caller input."""
+
+    url: HttpUrl
+
+
+def _validate_document_source_url(url: str | HttpUrl, context: object = None) -> HttpUrl:
+    validated = HttpUrl(url)
+    if isinstance(context, _ServerDocumentSource) and validated == context.url:
+        return validated
+    _reject_private_host(validated)
+    return validated
+
+
 class IngestRequest(BaseModel):
     """Request payload for URL ingestion."""
 
@@ -162,9 +178,8 @@ class NormalizedDocument(BaseModel):
 
     @field_validator("source_url")
     @classmethod
-    def source_url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
-        _reject_private_host(v)
-        return v
+    def source_url_must_not_be_private(cls, v: HttpUrl, info: ValidationInfo) -> HttpUrl:
+        return _validate_document_source_url(v, info.context)
 
 
 class NormalizedEvent(BaseModel):

@@ -177,12 +177,13 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                     data["reference_document_number"] = data["reference_document_number"] or segment[2]
 
         elif seg_id == "TD5":
-            # Favor carrier name/code if present in routing details.
-            for candidate in segment[2:]:
+            # TD503 is the identification code; TD505 holds free-form
+            # routing/carrier text. TD502 and TD504 are qualifiers, not carriers.
+            for position in (3, 5):
+                candidate = segment[position].strip() if len(segment) > position else ""
                 if candidate:
                     data["carrier"] = data["carrier"] or candidate
-                    if data["carrier"]:
-                        break
+                    break
 
     # #2974: a summed quantity is only meaningful when every SN1 line
     # measures in the same unit. 120 cases + 80 pounds is not 200 of

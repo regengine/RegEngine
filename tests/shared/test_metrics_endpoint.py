@@ -11,8 +11,8 @@ NOTE on test isolation: prometheus_client maintains a *global* registry —
 if test A registers ``http_requests_total`` with labels bound to app A,
 test B's app will increment the same counter but may not surface its
 route template (the instrumentator's middleware captures the route per
-app). The ``_reset_prometheus_registry`` fixture wipes the global
-registry before each test so each build_app call starts clean. In
+app). The ``_reset_prometheus_registry`` fixture temporarily clears the global
+registry for each test so each build_app call starts clean, then restores it. In
 production there's one app per process, so this collision doesn't apply.
 """
 
@@ -25,28 +25,28 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(autouse=True)
 def _reset_prometheus_registry():
-    """Clear the global prometheus registry between tests.
+    """Temporarily clear the global prometheus registry for each test.
 
     Also invalidates the module-level business-counter cache so
     install_metrics re-creates them in the fresh registry.
     """
     from prometheus_client import REGISTRY
-
-    # Unregister everything we can — skip built-in platform collectors
-    collectors = list(REGISTRY._collector_to_names.keys())  # type: ignore[attr-defined]
-    for collector in collectors:
-        try:
-            REGISTRY.unregister(collector)
-        except KeyError:
-            pass
-
-    # Wipe the business-counter cache so install_metrics re-seeds into
-    # the now-clean registry.
     from shared.observability import fastapi_metrics as fm
 
-    fm._BUSINESS_COUNTERS_CACHE.clear()
-
-    yield
+    collectors = list(REGISTRY._collector_to_names.keys())  # type: ignore[attr-defined]
+    business_counters = dict(fm._BUSINESS_COUNTERS_CACHE)
+    try:
+        for collector in collectors:
+            REGISTRY.unregister(collector)
+        fm._BUSINESS_COUNTERS_CACHE.clear()
+        yield
+    finally:
+        for collector in list(REGISTRY._collector_to_names.keys()):  # type: ignore[attr-defined]
+            REGISTRY.unregister(collector)
+        for collector in collectors:
+            REGISTRY.register(collector)
+        fm._BUSINESS_COUNTERS_CACHE.clear()
+        fm._BUSINESS_COUNTERS_CACHE.update(business_counters)
 
 
 def _build_app(require_auth: bool = True, metrics_path: str | object = "/metrics") -> FastAPI:
@@ -83,6 +83,8 @@ def test_metrics_endpoint_requires_auth_by_default(monkeypatch):
 
     import shared.observability.metrics_auth as ma
 
+    # Reload mutates this cache independently of the patched environment.
+    monkeypatch.setattr(ma, "_METRICS_API_KEY", ma._METRICS_API_KEY)
     importlib.reload(ma)
 
     app = _build_app(require_auth=True)

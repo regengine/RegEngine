@@ -123,6 +123,7 @@ async def export_recall_filtered_handler(
         # the dual-write mapping — output proven byte-identical by the
         # golden suite before any environment flips the flag.
         if export_v1_reads_canonical():
+            export_source = "canonical"
             where_clause, params = build_recall_where_clause_canonical(
                 tenant_id=tenant_id,
                 product=product,
@@ -134,6 +135,7 @@ async def export_recall_filtered_handler(
             )
             rows = fetch_recall_events_canonical(db_session, where_clause, params)
         else:
+            export_source = "legacy"
             where_clause, params = build_recall_where_clause(
                 tenant_id=tenant_id,
                 product=product,
@@ -176,7 +178,7 @@ async def export_recall_filtered_handler(
         events = rows_to_event_dicts(rows)
 
         csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
-        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id, source=export_source)
         completeness_summary = _build_completeness_summary(events)
         _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,

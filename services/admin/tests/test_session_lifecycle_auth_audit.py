@@ -19,7 +19,11 @@ for _p in (_repo_root, _service_dir):
 os.environ.setdefault("ADMIN_DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("AUTH_SECRET_KEY", "session-lifecycle-auth-audit-test-secret")
-os.environ.setdefault("SESSION_STORE_BACKEND", "memory")
+
+
+@pytest.fixture(autouse=True)
+def _in_memory_session_backend(monkeypatch):
+    monkeypatch.setenv("SESSION_STORE_BACKEND", "memory")
 
 
 def _request(headers: dict[str, str] | None = None):

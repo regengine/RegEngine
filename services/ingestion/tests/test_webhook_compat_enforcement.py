@@ -160,7 +160,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
             pass
 
         def persist_event(self, canonical):
-            pass
+            return SimpleNamespace(success=True, event_id="33333333-3333-4333-8333-333333333333", idempotent=False)
 
     cps_mod.CanonicalEventStore = _FakeCanonicalStore
     monkeypatch.setitem(sys.modules, "shared.canonical_persistence", cps_mod)

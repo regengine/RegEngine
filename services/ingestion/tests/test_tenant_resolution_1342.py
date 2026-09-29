@@ -38,6 +38,17 @@ _VALID_API_KEY = "rge_test.secret-key-material"  # pragma: allowlist secret
 # ===========================================================================
 
 
+@pytest.fixture(autouse=True)
+def _restore_tenant_context():
+    from shared.tenant_context import reset_rls_tenant_id, set_rls_tenant_id
+
+    token = set_rls_tenant_id(None)
+    try:
+        yield
+    finally:
+        reset_rls_tenant_id(token)
+
+
 class _FakeRow:
     """Minimal stand-in for a SQLAlchemy Row — supports ``row[0]``."""
 

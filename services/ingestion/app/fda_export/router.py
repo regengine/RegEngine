@@ -306,7 +306,7 @@ def export_fda_spreadsheet(
         # content exactly, so ``verify_export`` can reproduce it.
         csv_content = _generate_csv(events, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
-        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id, source="legacy")
         completeness_summary = _build_completeness_summary(events)
 
         # Enforce the KDE coverage gate (#1222). Callers may bypass by
@@ -610,7 +610,7 @@ def export_all_events(
 
         csv_content = _generate_csv(deduped, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
-        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id, source="legacy")
         completeness_summary = _build_completeness_summary(deduped)
 
         # KDE coverage gate (#1222).
@@ -1057,7 +1057,7 @@ def export_fda_spreadsheet_v2(
 
         # ----- Generate CSV with compliance columns -----
         csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
-        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id, source="canonical")
         completeness_summary = _build_completeness_summary(events)
         _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,

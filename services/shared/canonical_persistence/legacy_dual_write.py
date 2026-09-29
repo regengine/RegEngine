@@ -46,6 +46,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import event as sa_event, inspect as sa_inspect, text
@@ -233,6 +234,29 @@ def dual_write_legacy(session: Session, event: "TraceabilityEvent") -> str:
     exception swallowing is no longer available.
     """
     legacy_id = str(event.event_id)
+    facility_reference = event.from_facility_reference or event.to_facility_reference
+    location_name = event.raw_payload.get("location_name")
+    if not isinstance(location_name, str) or not location_name.strip():
+        location_name = facility_reference
+    # Preserve independent source facts. Canonical facility references may be
+    # names, so only identifier-shaped fallbacks belong in the GLN column.
+    # This is projection, not validation; retain GLN extensions and GS1 URIs.
+    location_gln = next(
+        (
+            value
+            for value in (event.raw_payload.get("location_gln"), facility_reference)
+            if isinstance(value, str)
+            and re.fullmatch(
+                r"(?:[0-9]{13}(?:[.:/][^\s]+)?"
+                r"|urn:epc:id:sgln:[0-9]+\.[0-9]+\.[^\s]+"
+                r"|urn:gs1:414:[0-9]{13}(?:[:/][^\s]+)?"
+                r"|https?://[^/\s]+/414/[0-9]{13}(?:/[^\s]+)?)",
+                value,
+                flags=re.IGNORECASE,
+            )
+        ),
+        None,
+    )
     session.execute(
         text("""
             INSERT INTO fsma.cte_events (
@@ -262,18 +286,8 @@ def dual_write_legacy(session: Session, event: "TraceabilityEvent") -> str:
             "product_description": event.product_reference or "",
             "quantity": event.quantity,
             "unit_of_measure": event.unit_of_measure,
-            # #2535: carry the full facility reference verbatim instead of
-            # dropping anything that is not exactly 13 chars. The previous
-            # ``len()==13`` heuristic NULLed out SGLN-URN read points
-            # (urn:epc:id:sgln:...), GLN+extension ids, and every
-            # ``to_facility``-only event — diverging the regulator-facing
-            # FDA export (which reads cte_events.location_gln/location_name)
-            # from the canonical store, which keeps the reference unmodified.
-            # Prefer ``from_facility_reference`` and fall back to
-            # ``to_facility_reference`` so a ``to``-only event still records
-            # its location.
-            "location_gln": event.from_facility_reference or event.to_facility_reference,
-            "location_name": event.from_facility_reference or event.to_facility_reference,
+            "location_gln": location_gln,
+            "location_name": location_name,
             "event_timestamp": event.event_timestamp.isoformat(),
             "source": event.source_system.value,
             "source_event_id": event.source_record_id,

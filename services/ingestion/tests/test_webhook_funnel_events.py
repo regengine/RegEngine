@@ -80,8 +80,8 @@ class _FakeCanonicalStore:
     def __init__(self, *_args, **_kwargs):
         pass
 
-    def persist_event(self, *_args, **_kwargs):
-        return None
+    def persist_event(self, event, **_kwargs):
+        return SimpleNamespace(success=True, event_id=str(event.event_id), idempotent=False)
 
 
 class _FakeRulesSummary:

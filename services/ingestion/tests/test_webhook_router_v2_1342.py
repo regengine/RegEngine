@@ -214,8 +214,8 @@ def _install_shared_stubs(
         def __init__(self, *_a, **_kw):
             pass
 
-        def persist_event(self, *_a, **_kw):
-            return None
+        def persist_event(self, canonical, **_kw):
+            return types.SimpleNamespace(success=True, event_id=str(canonical.event_id), idempotent=False)
 
     fake_canon = types.ModuleType("shared.canonical_persistence")
     fake_canon.CanonicalEventStore = _FakeCanonicalStore

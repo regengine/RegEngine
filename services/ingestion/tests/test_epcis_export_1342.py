@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
 _ingestion_dir = Path(__file__).resolve().parent.parent
@@ -32,7 +32,6 @@ pytest.importorskip("fastapi")
 
 import app.epcis_export as epcis_export
 from app.epcis_export import (
-    SAMPLE_EPCIS_EVENTS,
     _query_tenant_events,
     _validate_epcis_document,
     router as epcis_export_router,
@@ -103,11 +102,7 @@ def _event_row(**overrides: Any) -> _MappingRow:
         "ship_to": "Distributor",
         "ship_to_gln": "0810000000002",
         "carrier": "FedEx",
-        # `temperature_c` is a string here because the CSV writer does not
-        # coerce floats (there's an open production bug on line 335 — see
-        # the spawn_task call in the PR description). Real prod DB rows
-        # return floats, which will crash the CSV export.
-        "temperature_c": "3.5",
+        "temperature_c": 3.5,
     }
     mapping.update(overrides)
     return _MappingRow(mapping)
@@ -146,17 +141,18 @@ class TestQueryTenantEvents:
         assert params == {
             "tenant_id": "tenant-x",
             "lot_code": "LOT-42",
-            "date_from": "2026-01-01",
-            "date_to": "2026-04-19",
+            "date_from": "2026-01-01T00:00:00+00:00",
+            "date_to": "2026-04-20T00:00:00+00:00",
         }
 
-    def test_swallow_exception_returns_empty_list(
+    def test_database_error_refuses_export(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         session = _FakeSession(execute_queue=[RuntimeError("db down")])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        result = _query_tenant_events("tenant-x", None, None, None)
-        assert result == []
+        with pytest.raises(HTTPException) as caught:
+            _query_tenant_events("tenant-x", None, None, None)
+        assert caught.value.status_code == 503
         # ``finally:`` still closes the session.
         assert session.closed is True
 
@@ -260,7 +256,7 @@ def client() -> TestClient:
 
 
 class TestExportEpcisEndpoint:
-    def test_returns_sample_events_when_no_tenant_rows(
+    def test_returns_empty_event_list_when_no_tenant_rows(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
@@ -272,16 +268,15 @@ class TestExportEpcisEndpoint:
         body = response.json()
         assert body["type"] == "EPCISDocument"
         assert body["schemaVersion"] == "2.0"
-        # Sample path.
-        assert body["epcisBody"]["eventList"] == SAMPLE_EPCIS_EVENTS
+        assert body["epcisBody"]["eventList"] == []
         metadata = body["regengine:exportMetadata"]
-        assert metadata["dataSource"] == "sample"
+        assert metadata["dataSource"] == "tenant"
         assert metadata["integrityVerified"] is False
         assert metadata["chainHashVerified"] is False
-        assert "regengine:disclaimer" in metadata
-        assert response.headers["X-RegEngine-Data-Source"] == "sample"
+        assert "regengine:disclaimer" not in metadata
+        assert response.headers["X-RegEngine-Data-Source"] == "tenant"
         assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
-        assert response.headers["X-RegEngine-Events-Count"] == str(len(SAMPLE_EPCIS_EVENTS))
+        assert response.headers["X-RegEngine-Events-Count"] == "0"
         assert "X-RegEngine-Schema-Valid" not in response.headers
 
     def test_returns_tenant_events_when_db_has_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -295,8 +290,8 @@ class TestExportEpcisEndpoint:
         body = response.json()
         metadata = body["regengine:exportMetadata"]
         assert metadata["dataSource"] == "tenant"
-        assert metadata["integrityVerified"] is True
-        assert metadata["chainHashVerified"] is True
+        assert metadata["integrityVerified"] is False
+        assert metadata["chainHashVerified"] is False
         assert "regengine:disclaimer" not in metadata
         event = body["epcisBody"]["eventList"][0]
         assert event["type"] == "ObjectEvent"
@@ -306,7 +301,7 @@ class TestExportEpcisEndpoint:
         # eventTime came from the real timestamp.
         assert event["eventTime"].startswith("2026-04-19T12:00:00")
         assert response.headers["X-RegEngine-Data-Source"] == "tenant"
-        assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
 
     def test_fills_defaults_when_row_fields_are_null(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         row = dict(
@@ -352,16 +347,16 @@ class TestExportEpcisEndpoint:
         )
         assert response.status_code == 200
         body = response.json()
-        # Sample events are valid.
+        # An empty tenant result is never replaced with a valid sample.
         validation = body["regengine:validation"]
-        assert validation["valid"] is True
-        assert validation["errors"] == []
+        assert validation["valid"] is False
+        assert any("eventList" in error for error in validation["errors"])
         assert "checkedAt" in validation
-        assert response.headers["X-RegEngine-Schema-Valid"] == "true"
+        assert response.headers["X-RegEngine-Schema-Valid"] == "false"
 
 
 class TestExportFdaEndpoint:
-    def test_sample_fallback_when_no_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_header_only_when_no_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/fda",
@@ -369,14 +364,13 @@ class TestExportFdaEndpoint:
         )
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/csv")
-        assert response.headers["X-RegEngine-Data-Source"] == "sample"
-        assert response.headers["X-RegEngine-Events-Count"] == "6"
-        assert "X-RegEngine-Disclaimer" in response.headers
+        assert response.headers["X-RegEngine-Data-Source"] == "tenant"
+        assert response.headers["X-RegEngine-Events-Count"] == "0"
+        assert "X-RegEngine-Disclaimer" not in response.headers
         body = response.text
-        assert body.startswith("CTE_Type,")
-        # Sample includes these fixture rows.
-        assert "TOM-0226-F3-001" in body
-        assert "HARVESTING" in body
+        assert "CTE_Type" in body
+        assert len(body.splitlines()) == 1
+        assert "TOM-0226-F3-001" not in body
 
     def test_builds_csv_from_real_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         row1 = dict(_event_row()._mapping)
@@ -416,8 +410,8 @@ class TestExportFdaEndpoint:
         assert "SHIPPING" in lines[1]
         assert "LOT-001" in lines[1]
         assert "Romaine" in lines[1]
-        # Row2: fallbacks + commas replaced with semicolons.
-        assert "Apples; Red" in lines[2]
+        # The source description retains its comma inside a quoted cell.
+        assert '"Apples, Red"' in lines[2]
         # ship_from_location fell back to location_name ("Field 1") and gln to location_gln.
         assert "Field 1" in lines[2]
         assert "0100000000000" in lines[2]

@@ -134,6 +134,21 @@ _CORE_EVENT = {
 
 
 class TestEventToFdaRow:
+    def test_equivalent_timestamp_offsets_produce_identical_utc_csv(self) -> None:
+        utc = dict(_CORE_EVENT, event_timestamp="2026-03-01T00:00:00+00:00")
+        pacific = dict(_CORE_EVENT, event_timestamp="2026-02-28T16:00:00-08:00")
+        utc_csv = svc._generate_csv([utc])
+        pacific_csv = svc._generate_csv([pacific])
+        assert pacific_csv == utc_csv
+        row = next(csv.DictReader(io.StringIO(pacific_csv)))
+        assert row["Event Date"] == "2026-03-01"
+        assert row["Event Time"] == "00:00:00 UTC"
+
+    def test_zero_temperature_is_preserved_in_exported_csv(self) -> None:
+        event = dict(_CORE_EVENT, kdes={"temperature": 0})
+        rows = list(csv.DictReader(io.StringIO(svc._generate_csv([event]))))
+        assert rows[0]["Temperature (°F)"] == "0"
+
     def test_happy_path_has_all_core_columns(self) -> None:
         row = svc._event_to_fda_row(_CORE_EVENT, include_pii=True)
         assert row["Traceability Lot Code (TLC)"] == "TLC-1"

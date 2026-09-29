@@ -21,6 +21,21 @@ from sqlalchemy.exc import (
 )
 
 
+def _start_bound_utc(start_date: str) -> str:
+    """Bind a calendar start date at inclusive UTC midnight, not session time.
+
+    Only the documented YYYY-MM-DD form is normalized. Other inputs retain
+    their existing passthrough behavior for upstream validation.
+    """
+    try:
+        parsed = _date.fromisoformat(start_date)
+    except (TypeError, ValueError):
+        return start_date
+    if parsed.isoformat() != start_date:
+        return start_date
+    return _datetime.combine(parsed, _time(0, 0, 0), tzinfo=_timezone.utc).isoformat()
+
+
 def _end_bound_utc(end_date: str) -> str:
     """Convert a user-supplied ``YYYY-MM-DD`` end-date to a strict
     UTC-based upper bound at the NEXT day 00:00.
@@ -257,7 +272,7 @@ class QueryPathMixin:
 
         if start_date:
             where_clauses.append("event_timestamp >= :start_date")
-            params["start_date"] = start_date
+            params["start_date"] = _start_bound_utc(start_date)
         if end_date:
             # #2817: strict ``<`` against the next-day UTC bound so events
             # ON ``end_date`` are included. See ``_end_bound_utc``.
@@ -508,7 +523,7 @@ class QueryPathMixin:
         ]
         if start_date:
             where_clauses.append("event_timestamp >= :start_date")
-            params["start_date"] = start_date
+            params["start_date"] = _start_bound_utc(start_date)
         if end_date:
             # #2817: strict ``<`` against the next-day UTC bound so events
             # ON ``end_date`` are included. See ``_end_bound_utc``.
@@ -622,7 +637,7 @@ class QueryPathMixin:
         where_clauses = ["tenant_id = :tid"]
         if start_date:
             where_clauses.append("event_timestamp >= :start_date")
-            params["start_date"] = start_date
+            params["start_date"] = _start_bound_utc(start_date)
         if end_date:
             # #2817: strict ``<`` against the next-day UTC bound so events
             # ON ``end_date`` are included. See ``_end_bound_utc``.

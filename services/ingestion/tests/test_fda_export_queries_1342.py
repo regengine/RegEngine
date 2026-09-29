@@ -287,7 +287,7 @@ class TestBuildRecallWhereClause:
     def test_start_date_adds_ge_condition(self):
         where, params = build_recall_where_clause("t", None, None, None, None, "2026-04-01", None)
         assert "e.event_timestamp >= :start" in where
-        assert params["start"] == "2026-04-01"
+        assert params["start"] == "2026-04-01T00:00:00+00:00"
 
     def test_end_date_adds_strict_lt_at_next_day_utc(self):
         # #1224 — must be strict ``<`` with next-day UTC bound.
@@ -310,7 +310,7 @@ class TestBuildRecallWhereClause:
         assert params["loc_exact"] == "%Loc%"
         assert params["tlc"] == "%TLC%"
         assert params["etype"] == "shipping"
-        assert params["start"] == "2026-04-01"
+        assert params["start"] == "2026-04-01T00:00:00+00:00"
         assert params["end"] == "2026-04-11T00:00:00+00:00"
 
     def test_empty_strings_treated_as_unset(self):
@@ -677,7 +677,7 @@ class TestBuildV2WhereClause:
     def test_start_date_filter(self):
         where, params = build_v2_where_clause("t", None, None, "2026-04-01", None)
         assert "e.event_timestamp >= :start" in where
-        assert params["start"] == "2026-04-01"
+        assert params["start"] == "2026-04-01T00:00:00+00:00"
 
     def test_end_date_uses_next_day_utc_bound(self):
         where, params = build_v2_where_clause("t", None, None, None, "2026-04-10")
@@ -694,7 +694,7 @@ class TestBuildV2WhereClause:
             "tid": "t",
             "tlc": "TLC-ABC",
             "etype": "shipping",
-            "start": "2026-04-01",
+            "start": "2026-04-01T00:00:00+00:00",
             "end": "2026-04-11T00:00:00+00:00",
         }
 

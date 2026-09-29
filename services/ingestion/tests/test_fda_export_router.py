@@ -217,7 +217,7 @@ def test_export_default_returns_verifiable_zip_package(client: TestClient) -> No
     assert response.headers["content-type"].startswith("application/zip")
     assert response.headers["x-export-hash"]
     assert response.headers["x-package-hash"]
-    assert response.headers["x-chain-integrity"] == "VERIFIED"
+    assert response.headers["x-chain-integrity"] == "UNVERIFIED"
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as package:
         names = set(package.namelist())
@@ -232,9 +232,10 @@ def test_export_default_returns_verifiable_zip_package(client: TestClient) -> No
 
         assert manifest["export_type"] == "fda_traceability_package"
         assert manifest["summary"]["record_count"] == 1
-        assert manifest["verification"]["chain_valid"] is True
+        assert manifest["verification"]["chain_valid"] is False
         assert manifest["completeness"]["events_with_missing_required_fields"] == 1
-        assert chain_payload["verification_status"] == "VERIFIED"
+        assert chain_payload["verification_status"] == "UNVERIFIED"
+        assert any("exported content" in error.lower() for error in chain_payload["chain_verification"]["errors"])
         assert chain_payload["content_hash"] == response.headers["x-export-hash"]
         assert chain_payload["record_count"] == 1
 

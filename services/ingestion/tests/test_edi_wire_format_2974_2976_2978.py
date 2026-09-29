@@ -140,7 +140,7 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
         auth_mode="test",
     )
 
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None):
         captured_payload["payload"] = payload
         return IngestResponse(
             accepted=len(payload.events),
@@ -161,14 +161,15 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
 
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
 
-    # Neutralize ISA13 interchange dedup — it lives in shared Redis keyed
-    # on envelope IDs, so cross-file test ordering would otherwise 409
-    # these replays. Dedup has its own suite (test_edi_dedup*).
+    # Isolate both dedup reads and completion writes for reused envelope IDs.
+    # Real dedup is covered by test_edi_source_receipt_retry and
+    # test_edi_envelope_integrity.
     monkeypatch.setattr(
         edi_ingestion_routes,
-        "check_and_record_interchange",
+        "check_interchange",
         lambda *a, **kw: (False, None),
     )
+    monkeypatch.setattr(edi_ingestion_routes, "record_interchange", lambda *a, **kw: None)
 
     with TestClient(app) as test_client:
         yield test_client
@@ -270,7 +271,7 @@ def test_2976_mixed_nested_results_report_partial_and_preserve_evidence(
 ) -> None:
     """A mixed canonical batch must not be relabeled as wholly accepted."""
 
-    async def _mixed_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _mixed_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None):
         accepted_event, rejected_event = payload.events
         return IngestResponse(
             accepted=1,

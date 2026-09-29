@@ -34,7 +34,7 @@ from ..authz import IngestionPrincipal, require_permission
 from ..format_extractors import is_edi_content
 from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
-from ..webhook_compat import ingest_events
+from ..webhook_compat import SourceFileReceipt, ingest_events
 from ..webhook_models import (
     IngestEvent,
     IngestResponse,
@@ -48,7 +48,7 @@ from .constants import (
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
 )
-from .dedup import check_and_record_interchange, verify_trading_partner_allowed
+from .dedup import check_interchange, record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import (
@@ -419,10 +419,11 @@ def _enforce_envelope_integrity(
         )
 
     # #1165: retransmission dedup on ISA13.
-    is_duplicate, _prev = check_and_record_interchange(
+    is_duplicate, _prev = check_interchange(
         sender_id=extracted.get("sender_id"),
         receiver_id=extracted.get("receiver_id"),
         isa13=extracted.get("isa13"),
+        tenant_id=sender_tenant_id,
     )
     if is_duplicate:
         logger.info(
@@ -523,6 +524,9 @@ async def ingest_edi_856(
     response: Response,
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tlc_source_reference: Optional[str] = Form(
+        None, description="Partner-supplied reference to the location that assigned the supplied traceability lot code"
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_856_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -659,7 +663,9 @@ async def ingest_edi_856(
         "ship_to_location": ship_to_name,
         "ship_from_gln": ship_from_gln or ship_from_gln_raw,
         "ship_to_gln": ship_to_gln or ship_to_gln_raw,
+        "reference_document": extracted.get("reference_document_number"),
         "reference_document_number": extracted.get("reference_document_number"),
+        "tlc_source_reference": tlc_source_reference,
         "carrier": extracted.get("carrier"),
         "asn_number": extracted.get("asn_number"),
         "edi_transaction_set": "856",
@@ -697,7 +703,23 @@ async def ingest_edi_856(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        source_file=SourceFileReceipt(
+            filename=file.filename or "upload.edi",
+            raw_bytes=raw_bytes,
+            content_type=file.content_type,
+            initiated_by=principal.key_id,
+            record_count=len(payload.events),
+            source_system="edi",
+        ),
     )
+    if ingestion_result.accepted > 0 and ingestion_result.rejected == 0:
+        record_interchange(
+            sender_id=extracted.get("sender_id"),
+            receiver_id=extracted.get("receiver_id"),
+            isa13=extracted.get("isa13"),
+            tenant_id=sender_tenant_id,
+            ingestion_run_id=ingestion_result.ingestion_run_id,
+        )
     wrapper_status, response.status_code = _wrapper_outcome(ingestion_result)
 
     return EDIIngestResponse(
@@ -742,6 +764,7 @@ def _build_ingest_event_for_set(
     unit_override: str | None,
     location_override: str | None,
     segments: list[list[str]] | None = None,
+    tlc_source_reference: str | None = None,
 ) -> IngestEvent:
     """Build an IngestEvent from extracted EDI fields for any supported set."""
     cte_type = _CTE_TYPE_BY_SET.get(transaction_set, WebhookCTEType.SHIPPING)
@@ -847,13 +870,16 @@ def _build_ingest_event_for_set(
         "edi_gs_sender_id": extracted.get("gs_sender_id"),
         "edi_isa13": extracted.get("isa13"),
         "edi_gs_control_number": extracted.get("gs_control_number"),
+        "reference_document": extracted.get("reference_document_number"),
         "reference_document_number": extracted.get("reference_document_number"),
+        "tlc_source_reference": tlc_source_reference,
         "event_date": event_date,
     }
 
     if transaction_set == "856":
         kdes.update(
             {
+                "ship_date": event_date if extracted.get("ship_date_raw") else None,
                 "ship_from_location": extracted.get("ship_from_name"),
                 "ship_to_location": extracted.get("ship_to_name"),
                 "ship_from_gln": extracted.get("ship_from_gln"),
@@ -886,6 +912,7 @@ def _build_ingest_event_for_set(
     elif transaction_set == "861":
         kdes.update(
             {
+                "receive_date": event_date if extracted.get("receive_date_raw") else None,
                 "receiving_advice_number": extracted.get("receiving_advice_number"),
                 "po_number": extracted.get("po_number"),
                 "ship_from_location": extracted.get("ship_from_name"),
@@ -930,6 +957,9 @@ async def ingest_edi_document(
     response: Response,
     file: UploadFile = File(..., description="X12 EDI file"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tlc_source_reference: Optional[str] = Form(
+        None, description="Partner-supplied reference to the location that assigned the supplied traceability lot code"
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -1264,6 +1294,7 @@ async def ingest_edi_document(
             unit_override=unit_of_measure_override,
             location_override=location_override,
             segments=slice_segments,
+            tlc_source_reference=tlc_source_reference,
         )
         for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices)
     ]
@@ -1277,7 +1308,23 @@ async def ingest_edi_document(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        source_file=SourceFileReceipt(
+            filename=file.filename or "upload.edi",
+            raw_bytes=raw_bytes,
+            content_type=file.content_type,
+            initiated_by=principal.key_id,
+            record_count=len(events),
+            source_system="edi",
+        ),
     )
+    if ingestion_result.accepted > 0 and ingestion_result.rejected == 0:
+        record_interchange(
+            sender_id=extracted.get("sender_id"),
+            receiver_id=extracted.get("receiver_id"),
+            isa13=extracted.get("isa13"),
+            tenant_id=sender_tenant_id,
+            ingestion_run_id=ingestion_result.ingestion_run_id,
+        )
     wrapper_status, response.status_code = _wrapper_outcome(ingestion_result)
 
     return EDIIngestResponse(

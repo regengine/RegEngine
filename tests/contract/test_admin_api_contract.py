@@ -8,7 +8,6 @@ Uses OpenAPI spec as the source of truth for contract validation.
 
 import importlib
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -29,44 +28,63 @@ def openapi_spec():
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     """Create an in-process client for Admin API contract checks."""
     from fastapi.testclient import TestClient
 
-    os.environ["ADMIN_DATABASE_URL"] = "sqlite:///:memory:"
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    os.environ["ADMIN_FALLBACK_SQLITE"] = "sqlite:///:memory:"
-    os.environ["AUTH_SECRET_KEY"] = "test-secret-key-long-enough"  # pragma: allowlist secret
-    os.environ["REGENGINE_API_KEY"] = "test-regengine-api-key"  # pragma: allowlist secret
-    os.environ["REDIS_URL"] = "redis://localhost:6379/0"
-    os.environ["LOG_LEVEL"] = "WARNING"
-    os.environ["REGENGINE_ENV"] = "test"
-    os.environ["ENABLE_DB_API_KEYS"] = "false"  # pragma: allowlist secret
+    monkeypatch.setenv("ADMIN_DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///:memory:")
+    monkeypatch.setenv("AUTH_SECRET_KEY", "test-secret-key-long-enough")  # pragma: allowlist secret
+    monkeypatch.setenv("REGENGINE_API_KEY", "test-regengine-api-key")  # pragma: allowlist secret
+    monkeypatch.setenv("AUDIT_INTEGRITY_KEY", "synthetic-admin-contract-audit-key")  # pragma: allowlist secret
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    monkeypatch.delenv("REGENGINE_REDIS_URL", raising=False)
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("REGENGINE_ENV", "test")
+    monkeypatch.setenv("ENABLE_DB_API_KEYS", "false")  # pragma: allowlist secret
 
     admin_service_dir = str(_SERVICES_DIR / "admin")
     sibling_service_dirs = {str(path) for path in _SERVICES_DIR.iterdir() if path.is_dir() and path.name != "admin"}
-    sys.path[:] = [path for path in sys.path if path not in sibling_service_dirs]
-    if admin_service_dir in sys.path:
-        sys.path.remove(admin_service_dir)
-    sys.path.insert(0, admin_service_dir)
+    monkeypatch.setattr(
+        sys,
+        "path",
+        [admin_service_dir] + [path for path in sys.path if path not in sibling_service_dirs | {admin_service_dir}],
+    )
 
-    for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
-            sys.modules.pop(module_name, None)
+    def owns_module(name):
+        return (
+            name == "app" or name.startswith("app.") or name == "services.admin" or name.startswith("services.admin.")
+        )
 
-    for module_name in (
-        "services.admin.main",
-        "services.admin.app.database",
-        "services.admin.app.config",
-        "services.admin.app.routes",
-    ):
-        sys.modules.pop(module_name, None)
+    prior_modules = {name: module for name, module in sys.modules.items() if owns_module(name)}
+    services_package = importlib.import_module("services")
+    missing = object()
+    prior_admin = getattr(services_package, "admin", missing)
+    try:
+        for module_name in prior_modules:
+            sys.modules.pop(module_name)
+        if hasattr(services_package, "admin"):
+            delattr(services_package, "admin")
 
-    admin_main = importlib.import_module("services.admin.main")
-    app = admin_main.app
+        admin_main = importlib.import_module("services.admin.main")
+        from shared import jwt_key_registry
+        from shared.audit_logging import AuditLogger
 
-    with TestClient(app) as test_client:
-        yield test_client
+        monkeypatch.setattr(AuditLogger, "_instance", AuditLogger._instance)
+        monkeypatch.setattr(jwt_key_registry, "_registry", jwt_key_registry._registry)
+        with TestClient(admin_main.app) as test_client:
+            yield test_client
+    finally:
+        for module_name in list(sys.modules):
+            if owns_module(module_name):
+                sys.modules.pop(module_name)
+        sys.modules.update(prior_modules)
+        if prior_admin is missing:
+            if hasattr(services_package, "admin"):
+                delattr(services_package, "admin")
+        else:
+            services_package.admin = prior_admin
 
 
 class TestHealthEndpoint:

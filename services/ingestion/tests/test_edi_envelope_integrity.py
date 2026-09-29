@@ -137,44 +137,44 @@ def test_all_four_extractors_populate_envelope():
 
 
 def test_dedup_key_composition_distinct_per_isa13():
-    k1 = dedup_mod._dedup_key("s1", "r1", "000000001")
-    k2 = dedup_mod._dedup_key("s1", "r1", "000000002")
+    k1 = dedup_mod._dedup_key("tenant-1", "s1", "r1", "000000001")
+    k2 = dedup_mod._dedup_key("tenant-1", "s1", "r1", "000000002")
     assert k1 != k2
 
 
 def test_dedup_key_distinct_across_senders():
-    k1 = dedup_mod._dedup_key("s1", "r1", "000000001")
-    k2 = dedup_mod._dedup_key("s2", "r1", "000000001")
+    k1 = dedup_mod._dedup_key("tenant-1", "s1", "r1", "000000001")
+    k2 = dedup_mod._dedup_key("tenant-1", "s2", "r1", "000000001")
     assert k1 != k2
 
 
-def test_check_and_record_returns_duplicate_on_second_call():
-    """First call -> (False, None). Second call -> (True, ...)."""
+def test_check_returns_duplicate_only_after_recording_completion():
+    """Reads do not reserve; a committed marker makes the next read duplicate."""
     fake = MagicMock()
-    # First SET NX succeeds, second returns falsy.
-    fake.set.side_effect = [True, False]
-    fake.get.return_value = "seen"
+    fake.get.side_effect = [None, "run-1"]
 
     with patch.object(dedup_mod, "_redis_client", return_value=fake):
-        first = dedup_mod.check_and_record_interchange("sender", "receiver", "isa-13-1")
-        second = dedup_mod.check_and_record_interchange("sender", "receiver", "isa-13-1")
+        first = dedup_mod.check_interchange("sender", "receiver", "isa-13-1", tenant_id="tenant-1")
+        fake.set.assert_not_called()
+        dedup_mod.record_interchange("sender", "receiver", "isa-13-1", tenant_id="tenant-1", ingestion_run_id="run-1")
+        second = dedup_mod.check_interchange("sender", "receiver", "isa-13-1", tenant_id="tenant-1")
 
     assert first == (False, None)
-    assert second == (True, "seen")
+    assert second == (True, "run-1")
 
 
-def test_check_and_record_returns_false_without_isa13():
+def test_check_returns_false_without_isa13():
     """Missing isa13 -> dedup skipped (downstream CTE hash handles it)."""
     fake = MagicMock()
     with patch.object(dedup_mod, "_redis_client", return_value=fake):
-        result = dedup_mod.check_and_record_interchange("sender", "receiver", None)
+        result = dedup_mod.check_interchange("sender", "receiver", None, tenant_id="tenant-1")
     assert result == (False, None)
     fake.set.assert_not_called()
 
 
-def test_check_and_record_returns_false_when_redis_unavailable():
+def test_check_returns_false_when_redis_unavailable():
     with patch.object(dedup_mod, "_redis_client", return_value=None):
-        result = dedup_mod.check_and_record_interchange("sender", "receiver", "isa-13-3")
+        result = dedup_mod.check_interchange("sender", "receiver", "isa-13-3", tenant_id="tenant-1")
     assert result == (False, None)
 
 
@@ -237,7 +237,7 @@ def test_enforce_rejects_duplicate_interchange():
         "isa13": "000000001",
     }
 
-    with patch.object(routes_mod, "check_and_record_interchange", return_value=(True, "seen")):
+    with patch.object(routes_mod, "check_interchange", return_value=(True, "seen")):
         with pytest.raises(HTTPException) as exc:
             routes_mod._enforce_envelope_integrity(extracted, "tenant-1", "856")
     assert exc.value.status_code == 409
@@ -257,7 +257,7 @@ def test_enforce_rejects_disallowed_trading_partner(monkeypatch):
         "isa13": "000000001",
     }
 
-    with patch.object(routes_mod, "check_and_record_interchange", return_value=(False, None)):
+    with patch.object(routes_mod, "check_interchange", return_value=(False, None)):
         with pytest.raises(HTTPException) as exc:
             routes_mod._enforce_envelope_integrity(extracted, "tenant-x", "856")
     assert exc.value.status_code == 403
@@ -276,6 +276,6 @@ def test_enforce_passes_on_clean_envelope():
         "isa13": "000000999",
     }
 
-    with patch.object(routes_mod, "check_and_record_interchange", return_value=(False, None)):
+    with patch.object(routes_mod, "check_interchange", return_value=(False, None)):
         # Should NOT raise.
         routes_mod._enforce_envelope_integrity(extracted, "tenant-1", "856")

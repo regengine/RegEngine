@@ -21,6 +21,7 @@ sys.path.insert(0, str(service_dir))
 from app.fda_export.queries import (
     _end_bound_utc,
     build_recall_where_clause,
+    build_recall_where_clause_canonical,
     build_v2_where_clause,
 )
 
@@ -52,7 +53,7 @@ def test_1224_recall_where_clause_uses_strict_lt_upper_bound():
     # New behavior: strict ``<`` with a next-day UTC datetime.
     assert "e.event_timestamp < :end" in where
     assert params["end"] == "2026-04-18T00:00:00+00:00"
-    assert params["start"] == "2026-04-01"
+    assert params["start"] == "2026-04-01T00:00:00+00:00"
 
 
 def test_1224_v2_where_clause_uses_strict_lt_upper_bound():
@@ -65,3 +66,17 @@ def test_1224_v2_where_clause_uses_strict_lt_upper_bound():
     )
     assert "e.event_timestamp < :end" in where
     assert params["end"] == "2026-04-18T00:00:00+00:00"
+    assert params["start"] == "2026-04-01T00:00:00+00:00"
+
+
+def test_canonical_recall_uses_explicit_utc_lower_bound():
+    _, params = build_recall_where_clause_canonical(
+        tenant_id="00000000-0000-0000-0000-000000000111",
+        product=None,
+        location=None,
+        tlc="TLC-001",
+        event_type=None,
+        start_date="2026-03-01",
+        end_date="2026-03-01",
+    )
+    assert params["start"] == "2026-03-01T00:00:00+00:00"

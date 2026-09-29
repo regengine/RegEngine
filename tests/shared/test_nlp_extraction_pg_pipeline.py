@@ -259,6 +259,9 @@ class TestExtractionFailures:
             "hardened_import",
             "fsma_enqueue",
             "regex_enqueue",
+            "fsma_no_graph_sink",
+            "fsma_mixed_no_graph_sink",
+            "fsma_mixed_regex_enqueue",
         ],
     )
     def test_worker_does_not_complete_failed_extraction(self, monkeypatch, failure, attempts):
@@ -277,6 +280,11 @@ class TestExtractionFailures:
             extractor.extract.side_effect = ImportError("extraction dependency missing")
         elif failure == "fsma_enqueue":
             payload["text"] = "hello world"
+        elif failure in {"fsma_no_graph_sink", "fsma_mixed_no_graph_sink", "fsma_mixed_regex_enqueue"}:
+            from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
+
+            extractor = FSMAExtractor()
+            payload["text"] = BOL_WITH_EVENT_DATE if failure == "fsma_no_graph_sink" else MIXED_FSMA_AND_OBLIGATION_TEXT
         elif failure == "extractor_import":
             original_import = builtins.__import__
 
@@ -287,6 +295,7 @@ class TestExtractionFailures:
 
             monkeypatch.setattr(builtins, "__import__", missing_extractor)
 
+        original_payload = dict(payload)
         db = MagicMock()
         db.execute.return_value.rowcount = 1
         fake_database = ModuleType("services.admin.app.database")
@@ -317,6 +326,20 @@ class TestExtractionFailures:
         assert f"status = '{'pending' if attempts < 3 else 'dead'}'" in str(sql)
         assert params["id"] == 71
         assert params["error"]
+        assert task["payload"] == original_payload
+        if failure == "fsma_no_graph_sink":
+            assert "graph sink unavailable" in params["error"]
+            enqueue.assert_not_called()
+        elif failure.startswith("fsma_mixed"):
+            review_calls = _review_item_calls(enqueue)
+            assert len(review_calls) == 1
+            assert review_calls[0].args[1]["entity_type"] == "OBLIGATION"
+            assert review_calls[0].kwargs["tenant_id"] == TENANT_ID
+            assert review_calls[0].kwargs["idempotency_key"] == "review_item:doc-1:OBLIGATION:0"
+            expected_error = (
+                "Failed to enqueue NLP extraction review" if failure.endswith("enqueue") else "graph sink unavailable"
+            )
+            assert expected_error in params["error"]
         if attempts < 3:
             assert params["delay_seconds"] == 60
         db.commit.assert_called_once()
@@ -452,6 +475,57 @@ Lot: L-2025-1105-A
 Quantity: 50 cases
 GTIN: 00012345678901
 """
+BOL_WITH_EVENT_DATE = BOL_MISSING_EVENT_DATE + "\nShip Date: 11/05/2025\n"
+MIXED_FSMA_AND_OBLIGATION_TEXT = OBLIGATION_TEXT + "\n" + BOL_WITH_EVENT_DATE
+
+
+def test_high_confidence_fsma_failure_preserves_independent_review_routing_on_retry():
+    from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
+
+    extractor = FSMAExtractor()
+    result = extractor.extract(MIXED_FSMA_AND_OBLIGATION_TEXT, "doc-1", tenant_id=TENANT_ID)
+    assert len(result.ctes) == 1
+    assert result.ctes[0].confidence == 1.0
+    assert result.review_required is False
+    payload = _payload(text=MIXED_FSMA_AND_OBLIGATION_TEXT, tenant_id="untrusted-payload-tenant")
+    enqueue = MagicMock(return_value=17)
+
+    with (
+        patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
+        patch.object(task_processor, "enqueue_task", enqueue),
+    ):
+        for _ in range(2):
+            with pytest.raises(RuntimeError, match="graph sink unavailable"):
+                task_processor._handle_nlp_extraction(payload, TENANT_ID)
+
+    review_calls = _review_item_calls(enqueue)
+    assert len(review_calls) == 2
+    for call in review_calls:
+        assert call.args[1]["entity_type"] == "OBLIGATION"
+        assert call.args[1]["text"] == "Food facilities on the FTL shall maintain temperature records for 180 days"
+        assert call.args[1]["confidence"] <= 0.60
+        assert call.args[1]["tenant_id"] == TENANT_ID
+        assert call.kwargs["tenant_id"] == TENANT_ID
+        assert call.kwargs["idempotency_key"] == "review_item:doc-1:OBLIGATION:0"
+
+
+def test_real_high_confidence_fsma_result_fails_without_graph_sink():
+    from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
+
+    extractor = FSMAExtractor()
+    result = extractor.extract(BOL_WITH_EVENT_DATE, "doc-1", tenant_id=TENANT_ID)
+    assert len(result.ctes) == 1
+    assert result.ctes[0].confidence == 1.0
+    assert result.review_required is False
+    assert extractor.route_extraction(result)["topic"] == "graph.update"
+
+    with (
+        patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
+        patch.object(task_processor, "enqueue_task") as enqueue,
+    ):
+        with pytest.raises(RuntimeError, match="graph sink unavailable"):
+            task_processor._handle_nlp_extraction(_payload(text=BOL_WITH_EVENT_DATE), TENANT_ID)
+    enqueue.assert_not_called()
 
 
 class TestFSMAReviewEnvelope:

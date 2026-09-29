@@ -47,6 +47,8 @@ class _TenantDocuments:
 def store(monkeypatch):
     objects, writes, events = {}, [], []
     database = _TenantDocuments()
+    # Tenant identity/object ownership is separate from the durable dispatch tests.
+    monkeypatch.setattr(routes_ingest, "dispatch_document", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         socket,
         "getaddrinfo",

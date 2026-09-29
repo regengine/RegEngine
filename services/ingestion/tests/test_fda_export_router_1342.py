@@ -961,6 +961,7 @@ class TestExportV2:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/csv")
         assert resp.headers["x-export-version"] == "2.0"
+        assert resp.headers["x-chain-integrity"] == "VERIFIED"
         assert float(resp.headers["x-compliance-rate"]) == 1.0
 
     def test_package_format_returns_zip(self, monkeypatch):

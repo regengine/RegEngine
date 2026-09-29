@@ -11,6 +11,7 @@ These tests verify:
 from __future__ import annotations
 
 import json
+import socket
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -44,7 +45,7 @@ def mock_s3_client():
 
 
 @pytest.fixture
-def ingestion_client(monkeypatch, mock_kafka_producer, mock_s3_client):
+def ingestion_client(monkeypatch, mock_kafka_producer, mock_s3_client, dns_resolver):
     """Provide a TestClient with mocked dependencies."""
     # Mock dependencies before importing the app
     monkeypatch.setenv("REQUIRE_REDIS", "false")
@@ -155,22 +156,45 @@ class TestIngestUrlEndpoint:
             assert resp.status_code in (400, 422), f"Expected rejection for {url}"
 
 
+@pytest.fixture
+def dns_resolver(monkeypatch):
+    addresses = {"example.com": "93.184.216.34", "localhost": "127.0.0.1", "private.example": "127.0.0.1"}
+
+    def resolve(host, port):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (addresses[host], port or 0))]
+
+    resolver = MagicMock(side_effect=resolve)
+    monkeypatch.setattr(socket, "getaddrinfo", resolver)
+    return resolver
+
+
 class TestUrlValidation:
     """Tests for URL validation helper functions."""
 
-    def test_validate_url_allows_https(self):
+    def test_validate_url_allows_https(self, dns_resolver):
         """Verify https URLs are allowed."""
         from services.ingestion.app.routes import _validate_url
 
         # This should not raise
         _validate_url("https://example.com/document.pdf")
+        dns_resolver.assert_called_once_with("example.com", None)
 
-    def test_validate_url_allows_http(self):
+    def test_validate_url_allows_http(self, dns_resolver):
         """Verify http URLs are allowed."""
         from services.ingestion.app.routes import _validate_url
 
         # This should not raise
         _validate_url("http://example.com/document.pdf")
+        dns_resolver.assert_called_once_with("example.com", None)
+
+    def test_validate_url_rejects_hostname_resolving_to_private_ip(self, dns_resolver):
+        from fastapi import HTTPException
+
+        from services.ingestion.app.routes import _validate_url
+
+        with pytest.raises(HTTPException):
+            _validate_url("http://private.example/document.pdf")
+        dns_resolver.assert_called_once_with("private.example", None)
 
     def test_validate_url_rejects_invalid_format(self):
         """Verify malformed URLs are rejected."""

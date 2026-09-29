@@ -8,12 +8,22 @@ from __future__ import annotations
 
 import logging
 import os
+from copy import copy
 from datetime import date as _date, datetime, time as _time, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import text
 
 logger = logging.getLogger("fda-export")
+
+
+def _start_bound_utc(start_date: str) -> str:
+    """Qualify a calendar date at UTC midnight, independent of session TZ."""
+    try:
+        parsed = _date.fromisoformat(start_date)
+    except (TypeError, ValueError):
+        return start_date
+    return datetime.combine(parsed, _time(0, 0, 0), tzinfo=timezone.utc).isoformat()
 
 
 def _end_bound_utc(end_date: str) -> str:
@@ -116,7 +126,7 @@ def build_recall_where_clause(
 
     if start_date:
         conditions.append("e.event_timestamp >= :start")
-        params["start"] = start_date
+        params["start"] = _start_bound_utc(start_date)
 
     if end_date:
         # Use a strict ``<`` upper bound at the *next day* boundary in
@@ -208,8 +218,10 @@ def rows_to_event_dicts(rows) -> list[dict]:
 #
 #     cte_events.id                  = event_id (verbatim)
 #     product_description            = COALESCE(product_reference, '')
-#     location_gln = location_name   = COALESCE(from_facility_reference,
-#                                               to_facility_reference)  (#2535)
+#     location_name                 = literal raw source name when nonblank,
+#                                      otherwise from/to facility reference
+#     location_gln                  = identifier-shaped raw source GLN,
+#                                      otherwise identifier-shaped facility
 #     source                         = source_system
 #     kdes (cte_kdes agg)            = kdes JSONB minus NULL-valued keys
 #                                      (dual_write skips None values)
@@ -226,6 +238,27 @@ def rows_to_event_dicts(rows) -> list[dict]:
 # release/soak decision — see docs/persistence/dual-write-cutover.md.
 
 FDA_EXPORT_V1_READ_CANONICAL_ENV = "FDA_EXPORT_V1_READ_CANONICAL"
+
+# Match legacy_dual_write's independent source name/identifier projection.
+# A facility reference may be a name and must not manufacture a GLN.
+_FACILITY_REFERENCE_SQL = "COALESCE(NULLIF(e.from_facility_reference, ''), e.to_facility_reference)"
+_LOCATION_IDENTIFIER_PATTERN = (
+    r"^([0-9]{13}([.:/][^\s]+)?"
+    r"|urn:epc:id:sgln:[0-9]+\.[0-9]+\.[^\s]+"
+    r"|urn:gs1:414:[0-9]{13}([:/][^\s]+)?"
+    r"|https?://[^/\s]+/414/[0-9]{13}(/[^\s]+)?)$"
+)
+_LOCATION_NAME_SQL = f"""CASE
+    WHEN jsonb_typeof(e.raw_payload->'location_name') = 'string'
+      AND e.raw_payload->>'location_name' ~ '[^[:space:]]'
+    THEN e.raw_payload->>'location_name'
+    ELSE {_FACILITY_REFERENCE_SQL} END"""
+_LOCATION_GLN_SQL = f"""COALESCE(
+    CASE WHEN jsonb_typeof(e.raw_payload->'location_gln') = 'string'
+          AND e.raw_payload->>'location_gln' ~* '{_LOCATION_IDENTIFIER_PATTERN}'
+         THEN e.raw_payload->>'location_gln' END,
+    CASE WHEN {_FACILITY_REFERENCE_SQL} ~* '{_LOCATION_IDENTIFIER_PATTERN}'
+         THEN {_FACILITY_REFERENCE_SQL} END)"""
 
 
 def export_v1_reads_canonical() -> bool:
@@ -259,14 +292,12 @@ def build_recall_where_clause_canonical(
     conditions = ["e.tenant_id = :tid", "e.status = 'active'"]
     params: dict = {"tid": tenant_id}
 
-    location_expr = "COALESCE(e.from_facility_reference, e.to_facility_reference)"
-
     if product:
         conditions.append("LOWER(COALESCE(e.product_reference, '')) LIKE LOWER(:product)")
         params["product"] = f"%{product}%"
 
     if location:
-        conditions.append(f"(LOWER({location_expr}) LIKE LOWER(:loc) OR {location_expr} LIKE :loc_exact)")
+        conditions.append(f"(LOWER({_LOCATION_NAME_SQL}) LIKE LOWER(:loc) OR {_LOCATION_GLN_SQL} LIKE :loc_exact)")
         params["loc"] = f"%{location}%"
         params["loc_exact"] = f"%{location}%"
 
@@ -280,7 +311,7 @@ def build_recall_where_clause_canonical(
 
     if start_date:
         conditions.append("e.event_timestamp >= :start")
-        params["start"] = start_date
+        params["start"] = _start_bound_utc(start_date)
 
     if end_date:
         conditions.append("e.event_timestamp < :end")
@@ -308,8 +339,8 @@ def fetch_recall_events_canonical(
                 e.event_id, e.event_type, e.traceability_lot_code,
                 COALESCE(e.product_reference, '') AS product_description,
                 e.quantity, e.unit_of_measure, e.event_timestamp,
-                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_gln,
-                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_name,
+                {_LOCATION_GLN_SQL} AS location_gln,
+                {_LOCATION_NAME_SQL} AS location_name,
                 e.source_system AS source, e.sha256_hash,
                 h.chain_hash,
                 (SELECT jsonb_object_agg(kv.key, kv.value)
@@ -327,25 +358,38 @@ def fetch_recall_events_canonical(
     return rows
 
 
-def _verify_chain_for_export(persistence, db_session, tenant_id: str):
-    """Chain verification for export handlers, honoring the WS-1b flag.
+def _verify_chain_for_export(persistence, db_session, tenant_id: str, *, source: str | None = None):
+    """Scope chain evidence to the store the caller actually exported.
 
-    ``CHAIN_VERIFY_READ_CANONICAL`` defaults ON since #3039: the
-    export's X-Chain-Integrity evidence verifies the canonical chain
-    (``verify_chain_canonical``, #2506), which recomputes event digests
-    from row content — the legacy verifier only re-links stored hashes
-    and cannot detect content tampering. Both result types expose
-    ``.valid``/``.errors``, which is all the export handlers consume.
-    ``=0`` remains as an emergency rollback —
-    docs/persistence/dual-write-cutover.md.
+    A valid canonical chain does not verify legacy export content. The
+    legacy verifier only re-links stored hashes, so its rollback flag
+    cannot authorize a content-verification claim for either source.
+    Unknown sources fail closed. Diagnostics from the selected verifier
+    remain available, but only an explicit canonical source can retain
+    its content-recomputing verifier's positive result.
+
+    This is store-level chain evidence, not a binding of the exact export
+    snapshot or every CSV field to a content hash.
     """
     from shared.canonical_persistence.verification import chain_verify_reads_canonical
 
-    if chain_verify_reads_canonical():
+    canonical_verifier = chain_verify_reads_canonical()
+    if canonical_verifier:
         from shared.canonical_persistence import CanonicalEventStore
 
-        return CanonicalEventStore(db_session, dual_write=False).verify_chain_canonical(tenant_id)
-    return persistence.verify_chain(tenant_id=tenant_id)
+        result = CanonicalEventStore(db_session, dual_write=False).verify_chain_canonical(tenant_id)
+    else:
+        result = persistence.verify_chain(tenant_id=tenant_id)
+    if source == "canonical" and canonical_verifier:
+        return result
+
+    scoped_result = copy(result)
+    scoped_result.valid = False
+    scoped_result.errors = [
+        *result.errors,
+        "Exported content was not independently verified for this source; chain diagnostics alone are insufficient.",
+    ]
+    return scoped_result
 
 
 # Row cap for the full-tenant export. Shared so the exporter and
@@ -613,7 +657,7 @@ def build_v2_where_clause(
 
     if start_date:
         conditions.append("e.event_timestamp >= :start")
-        params["start"] = start_date
+        params["start"] = _start_bound_utc(start_date)
 
     if end_date:
         # Strict next-day UTC bound, see :func:`_end_bound_utc`
@@ -655,8 +699,8 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.quantity,
                 e.unit_of_measure,
                 e.event_timestamp,
-                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_gln,
-                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_name,
+                {_LOCATION_GLN_SQL} AS location_gln,
+                {_LOCATION_NAME_SQL} AS location_name,
                 e.source_system AS source,
                 e.sha256_hash,
                 e.chain_hash,
@@ -690,7 +734,7 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.product_reference, e.quantity, e.unit_of_measure,
                 e.event_timestamp, e.from_facility_reference,
                 e.to_facility_reference, e.source_system, e.sha256_hash,
-                e.chain_hash, e.kdes, e.provenance_metadata,
+                e.chain_hash, e.kdes, e.provenance_metadata, e.raw_payload,
                 e.ingested_at, e.evaluation_verdict, e.no_verdict_reason
             ORDER BY e.event_timestamp ASC
             LIMIT 10001

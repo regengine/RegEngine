@@ -19,7 +19,7 @@ const rateLimitHeaders = {
     description: 'Rate-limit bucket scope for this request.',
     schema: { type: 'string', example: 'webhooks.ingest' },
   },
-} as const;
+};
 
 export const publicOpenApiSpec = {
   openapi: '3.0.3',
@@ -282,14 +282,62 @@ export const publicOpenApiSpec = {
         },
       },
       ErrorResponse: {
+        description: 'Shared exception handlers and middleware return distinct error envelopes.',
+        oneOf: [
+          { $ref: '#/components/schemas/ErrorEnvelope' },
+          { $ref: '#/components/schemas/MiddlewareError' },
+          { $ref: '#/components/schemas/IdempotencyError' },
+          { $ref: '#/components/schemas/TenantContextError' },
+        ],
+      },
+      ErrorEnvelope: {
         type: 'object',
+        required: ['error'],
         properties: {
-          detail: { type: 'string' },
-          error: { type: 'string' },
-          request_id: { type: 'string' },
+          error: {
+            type: 'object',
+            required: ['type', 'message'],
+            properties: {
+              type: { type: 'string', minLength: 1 },
+              message: { type: 'string', minLength: 1 },
+            },
+            description: 'Validation details, original error fields such as code, and correlation IDs are preserved here.',
+            additionalProperties: true,
+          },
         },
-        additionalProperties: true,
+        additionalProperties: false,
+      },
+      MiddlewareError: {
+        type: 'object',
+        required: ['error', 'detail'],
+        properties: {
+          error: {
+            type: 'string',
+            enum: ['invalid_content_length', 'payload_too_large', 'request_timeout', 'rate_limit_exceeded', 'rate_limit_backend_unavailable'],
+          },
+          detail: { type: 'string', minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+      IdempotencyError: {
+        type: 'object',
+        required: ['error'],
+        properties: {
+          error: {
+            type: 'string',
+            enum: ['idempotency_key_conflict', 'idempotency_request_in_progress', 'idempotency_backend_unavailable', 'payload_too_large', 'request_timeout'],
+          },
+        },
+        additionalProperties: false,
+      },
+      TenantContextError: {
+        type: 'object',
+        required: ['detail'],
+        properties: {
+          detail: { type: 'string', enum: ['Unable to establish tenant context'] },
+        },
+        additionalProperties: false,
       },
     },
   },
-} as const;
+};

@@ -1,25 +1,29 @@
 """
 FSMA 204 CTE Persistence — End-to-End Integration Test.
 
-Covers the complete traceability chain that RegEngine promises:
+Covers the PostgreSQL persistence/query/export boundary:
     Ingest events → Verify hash chain → Query by TLC → FDA export → Verify export hash
 
-Uses a real Postgres container (testcontainers). Requires Docker.
+Uses the guarded disposable PostgreSQL fixture (explicit scratch URL or
+testcontainers). Builds only the listed Alembic schema components on an empty
+database, not the full migration chain. Runs as the schema owner: tenant-filter
+assertions are application-query coverage, not restricted-role RLS proof.
 
 Run these tests:
     pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
-Skip in CI where Docker is unavailable:
-    pytest -m "not integration"
+Set REGENGINE_MIGRATION_TEST_DB to a disposable PostgreSQL database and
+REGENGINE_REQUIRE_DB=1 to require execution without Docker. Redis, Neo4j,
+HTTP authentication, object storage, and billing are outside this suite.
 """
 
 from __future__ import annotations
 
 import csv
 import hashlib
+import importlib.util
 import io
 import sys
-from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -30,100 +34,21 @@ _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
-# ---------------------------------------------------------------------------
-# Optional-dependency guards — tests are skipped cleanly if Docker/libs absent
-# ---------------------------------------------------------------------------
-
-try:
-    from testcontainers.postgres import PostgresContainer
-
-    _HAS_TESTCONTAINERS = True
-except ImportError:
-    _HAS_TESTCONTAINERS = False
-
-try:
-    import psycopg  # noqa: F401
-
-    _HAS_PSYCOPG = True
-except ImportError:
-    _HAS_PSYCOPG = False
-
-_SKIP_REASON = "testcontainers[postgres] and psycopg required (pip install testcontainers[postgres] psycopg[binary])"
-
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_MIGRATION_V002 = _REPO_ROOT / "migrations" / "V002__fsma_cte_persistence.sql"
-
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG),
-        reason=_SKIP_REASON,
-    ),
-    # V002 migration lives at the repo root in legacy checkouts; when a
-    # fresh clone is structured around the per-service migrations/
-    # directories (admin, ingestion, etc.) the top-level file is
-    # absent. Skip cleanly rather than failing in the fixture.
-    pytest.mark.skipif(
-        not _MIGRATION_V002.exists(),
-        reason=f"Migration file {_MIGRATION_V002} not present in this checkout",
-    ),
-]
-
-# ---------------------------------------------------------------------------
-# Preamble: objects the V002 migration depends on
-# (normally in a V001 base migration; created here for test isolation)
-# ---------------------------------------------------------------------------
-
-_PREAMBLE_STMTS = [
-    # pgcrypto provides gen_random_uuid()
-    "CREATE EXTENSION IF NOT EXISTS pgcrypto",
-    # role referenced in RLS policies (Postgres has no CREATE ROLE IF NOT EXISTS)
-    "DO $$ BEGIN CREATE ROLE regengine; EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    # get_tenant_context() is the RLS policy function
-    """
-    CREATE OR REPLACE FUNCTION get_tenant_context()
-    RETURNS UUID AS $$
-    DECLARE
-        raw TEXT;
-    BEGIN
-        raw := current_setting('regengine.tenant_id', true);
-        IF raw IS NULL OR raw = '' THEN
-            RETURN NULL;
-        END IF;
-        RETURN raw::UUID;
-    EXCEPTION WHEN OTHERS THEN
-        RETURN NULL;
-    END;
-    $$ LANGUAGE plpgsql
-    """,
-]
+pytestmark = pytest.mark.integration
 
 
-def _split_sql_statements(sql_text: str) -> list[str]:
-    """
-    Split a SQL file into individual executable statements.
-
-    Strips comment lines and splits on semicolons. Safe for the V002
-    migration file (no dollar-quoting or embedded semicolons in DDL).
-    Skips bare BEGIN/COMMIT since we manage the transaction ourselves.
-    """
-    lines = [line for line in sql_text.splitlines() if not line.strip().startswith("--")]
-    stmts = []
-    for stmt in "\n".join(lines).split(";"):
-        stmt = stmt.strip()
-        if stmt and stmt.upper() not in ("BEGIN", "COMMIT"):
-            stmts.append(stmt)
-    return stmts
+def _migration(filename: str):
+    path = _REPO_ROOT / "alembic" / "versions" / filename
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 # ---------------------------------------------------------------------------
-# Inline FDA CSV generator
-# (mirrors fda_export_router._generate_csv — intentional duplication so the
-#  test doesn't depend on the production module for column layout assertions)
+# Literal column contract; CSV serialization uses production code below.
 # ---------------------------------------------------------------------------
 
 _FDA_COLUMNS = [
@@ -146,50 +71,27 @@ _FDA_COLUMNS = [
     "Source Document",
     "Record Hash (SHA-256)",
     "Chain Hash",
+    "Reference Document Number",
+    "Receive Date",
+    "Ship Date",
+    "Harvest Date",
+    "Cooling Date",
+    "Packing Date",
+    "Transformation Date",
+    "Landing Date",
+    "Receiving Location",
+    "Temperature (°F)",
+    "Carrier",
+    "Growing Area",
+    "Additional KDEs (JSON)",
+    "System Entry Timestamp",
 ]
 
 
-def _event_to_row(event: dict) -> dict:
-    kdes = event.get("kdes", {})
-    ts = event.get("event_timestamp", "")
-    event_date = event_time = ""
-    if ts:
-        try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            event_date = dt.strftime("%Y-%m-%d")
-            event_time = dt.strftime("%H:%M:%S %Z")
-        except (ValueError, AttributeError):
-            event_date = str(ts)[:10]
-    return {
-        "Traceability Lot Code (TLC)": event.get("traceability_lot_code", ""),
-        "Product Description": event.get("product_description", ""),
-        "Quantity": event.get("quantity", ""),
-        "Unit of Measure": event.get("unit_of_measure", ""),
-        "Event Type (CTE)": event.get("event_type", ""),
-        "Event Date": event_date,
-        "Event Time": event_time,
-        "Location GLN": event.get("location_gln") or "",
-        "Location Name": event.get("location_name") or "",
-        "Ship From GLN": kdes.get("ship_from_gln", ""),
-        "Ship From Name": kdes.get("ship_from_location", ""),
-        "Ship To GLN": kdes.get("ship_to_gln", ""),
-        "Ship To Name": kdes.get("ship_to_location", kdes.get("receiving_location", "")),
-        "Immediate Previous Source": kdes.get("immediate_previous_source", ""),
-        "TLC Source GLN": kdes.get("tlc_source_gln", ""),
-        "TLC Source FDA Registration": kdes.get("tlc_source_fda_reg", ""),
-        "Source Document": event.get("source", ""),
-        "Record Hash (SHA-256)": event.get("sha256_hash", ""),
-        "Chain Hash": event.get("chain_hash", ""),
-    }
-
-
 def _generate_csv(events: list) -> str:
-    out = io.StringIO()
-    writer = csv.DictWriter(out, fieldnames=_FDA_COLUMNS)
-    writer.writeheader()
-    for event in events:
-        writer.writerow(_event_to_row(event))
-    return out.getvalue()
+    from app.fda_export_service import _generate_csv as generate_csv
+
+    return generate_csv(events, include_pii=True)
 
 
 # ---------------------------------------------------------------------------
@@ -197,59 +99,71 @@ def _generate_csv(events: list) -> str:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def postgres_engine():
+    """Create the exact schema subset only on an empty guarded scratch DB.
+
+    Existing schemas are never repaired here: incompatible migrated databases
+    fail the read-only contract check below instead of becoming skipped tests.
+    No Alembic version is stamped; this is not an upgrade-head test.
     """
-    Start a Postgres 15 container, run the FSMA V002 migration, and yield
-    a SQLAlchemy engine. The container is torn down after the module.
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
 
-    Runs as the container's default superuser — superusers bypass RLS
-    automatically, so we can read/write any tenant's data in tests.
-    """
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.exc import OperationalError
+    from tests.migrations.rls_db import rls_engine_or_skip
 
-    assert _MIGRATION_V002.exists(), (
-        f"Migration file not found: {_MIGRATION_V002}\nEnsure the repo root is correct and V002 has been created."
-    )
-
-    with PostgresContainer("postgres:15-alpine") as pg:
-        host = pg.get_container_host_ip()
-        port = pg.get_exposed_port(5432)
-        db = getattr(pg, "dbname", None) or getattr(pg, "POSTGRES_DB", "test")
-        user = getattr(pg, "username", None) or getattr(pg, "POSTGRES_USER", "test")
-        password = getattr(pg, "password", None) or getattr(pg, "POSTGRES_PASSWORD", "test")
-
-        url = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
-        engine = create_engine(url, echo=False)
-
-        # Run preamble + migration using AUTOCOMMIT so each DDL statement
-        # is its own transaction (matches how migrations run in production).
-        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            for stmt in _PREAMBLE_STMTS:
-                try:
-                    conn.execute(text(stmt))
-                except OperationalError as exc:
-                    # Tolerate "already exists" errors (idempotent preamble)
-                    if "already exists" not in str(exc).lower():
-                        raise
-
-            migration_sql = _MIGRATION_V002.read_text()
-            for stmt in _split_sql_statements(migration_sql):
-                conn.execute(text(stmt))
-
-            # V052: replace single-column unique with composite (tenant_id, idempotency_key).
-            # Execute directly (not via _split_sql_statements) because the migration
-            # uses a dollar-quoted DO block which the semicolon-splitter would truncate.
-            conn.execute(text("ALTER TABLE fsma.cte_events DROP CONSTRAINT IF EXISTS cte_events_idempotency_key_key"))
+    with rls_engine_or_skip() as engine:
+        with engine.begin() as conn:
+            if not conn.scalar(text("SELECT to_regnamespace('fsma') IS NOT NULL")):
+                assert not conn.scalar(
+                    text("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_tables
+                            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+                        )
+                    """)
+                ), "CTE fixture requires an empty scratch DB or an already compatible FSMA schema"
+                with Operations.context(MigrationContext.configure(conn)):
+                    # The baseline policies depend on the real fail-hard tenant function.
+                    _migration("20260721_e4d7b2a9c561_v097_pin_get_tenant_context_fail_hard.py").upgrade()
+                    for name in (
+                        "V002__fsma_cte_persistence.sql",
+                        "V043__canonical_traceability_events.sql",
+                        "V044__versioned_rules_engine.sql",
+                    ):
+                        sql = (_REPO_ROOT / "alembic" / "sql" / name).read_text()
+                        # Same transaction-wrapper removal as the Alembic baseline;
+                        # execute whole files, preserving DO blocks and semicolons.
+                        conn.execute(text(sql.replace("BEGIN;", "").replace("COMMIT;", "")))
+                    for name in (
+                        "20260413_add_event_entry_timestamp_v054.py",
+                        "20260415_v057_schema_additions.py",
+                        "20260428_71e79e111c5d_v072_cte_events_tenant_idempotency.py",
+                    ):
+                        _migration(name).upgrade()
+                    v078 = _migration("20260505_5ac9e7b1d402_v078_orphan_migration_forward_ports.py")
+                    v078._cte_kdes_jsonb()
+                    v078._fda_export_fingerprint()
+                    v078._cte_append_only_triggers()
+                    for name in (
+                        "20260629_4c5d6e7f8a9b_v090_hash_chain_drop_cte_events_fk.py",
+                        "20260801_c35358cae7d4_v107_cte_mutation_update_returns_new.py",
+                        "20260827_c4f1a7e93b28_v114_fda_export_log_reproducibility_columns.py",
+                        "20260923_22a278f6dc78_v125_event_level_evaluation_verdict.py",
+                    ):
+                        _migration(name).upgrade()
+            # Resolve every column required beyond V002; missing/old schema fails
+            # as a database error, including when an explicit target is configured.
+            conn.execute(text("SELECT event_entry_timestamp FROM fsma.cte_events LIMIT 0"))
+            conn.execute(text("SELECT kde_value -> 'fixture_probe' FROM fsma.cte_kdes LIMIT 0"))
+            conn.execute(text("SELECT raw_payload, normalized_payload FROM fsma.traceability_events LIMIT 0"))
+            conn.execute(text("SELECT evaluation_verdict, no_verdict_reason FROM fsma.traceability_events LIMIT 0"))
+            conn.execute(text("SELECT event_id, rule_id, result FROM fsma.rule_evaluations LIMIT 0"))
+            conn.execute(text("SELECT input_tlc, output_tlc FROM fsma.transformation_links LIMIT 0"))
             conn.execute(
-                text(
-                    "ALTER TABLE fsma.cte_events "
-                    "ADD CONSTRAINT cte_events_tenant_idempotency_key "
-                    "UNIQUE (tenant_id, idempotency_key)"
-                )
+                text("SELECT export_fingerprint, include_pii, query_event_type FROM fsma.fda_export_log LIMIT 0")
             )
-
         yield engine
 
 
@@ -261,9 +175,14 @@ def db_session(postgres_engine):
     Tests use unique tenant IDs (via _fresh_tenant()) for isolation —
     no rollback needed between tests.
     """
+    from sqlalchemy import text
     from sqlalchemy.orm import Session
 
     with Session(postgres_engine) as sess:
+        # Use a deterministic baseline without changing server/database
+        # settings. The roundtrip suite separately exercises non-UTC sessions.
+        sess.execute(text("SET TIME ZONE 'UTC'"))
+        sess.commit()
         yield sess
 
 
@@ -458,8 +377,10 @@ class TestCTEPersistenceE2E:
             )
         db_session.commit()
 
-        # Surgically corrupt the chain_hash of sequence_num=2
+        # Controlled owner-only corruption; keep the production append-only
+        # trigger installed and use its transaction-local correction gate.
         with postgres_engine.connect() as conn:
+            conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
             conn.execute(
                 text("""
                     UPDATE fsma.hash_chain
@@ -637,7 +558,7 @@ class TestCTEPersistenceE2E:
 
     def test_fda_export_csv_has_correct_columns_and_data(self, db_session):
         """
-        The FDA export CSV must contain all 19 required columns and
+        The FDA export CSV must contain the current literal column contract and
         correctly map event fields to the FDA spreadsheet layout.
         """
         from shared.cte_persistence import CTEPersistence
@@ -668,6 +589,7 @@ class TestCTEPersistenceE2E:
         assert len(rows) == 1, "Expected exactly 1 CSV row"
 
         row = rows[0]
+        assert list(row) == _FDA_COLUMNS
         # Check every required column exists in the output
         for col in _FDA_COLUMNS:
             assert col in row, f"Missing FDA column: {col}"

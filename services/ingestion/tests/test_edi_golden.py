@@ -318,7 +318,7 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
         auth_mode="test",
     )
 
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None):
         captured_payload["payload"] = payload
         event = payload.events[0]
         return IngestResponse(
@@ -339,16 +339,15 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
 
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
 
-    # Neutralize interchange dedup for this test app. The ISA13 dedup
-    # registry lives in shared Redis keyed on the fixture's envelope IDs, so
-    # whichever test file ingests a corpus fixture first claims the key and
-    # this file's replays 409 depending on xdist scheduling. Dedup semantics
-    # have their own suite (test_edi_dedup*); this file freezes KDE mapping.
+    # Isolate both dedup reads and completion writes for reused envelope IDs.
+    # Real dedup is covered by test_edi_source_receipt_retry and
+    # test_edi_envelope_integrity; this file freezes KDE mapping.
     monkeypatch.setattr(
         edi_ingestion_routes,
-        "check_and_record_interchange",
+        "check_interchange",
         lambda *a, **kw: (False, None),
     )
+    monkeypatch.setattr(edi_ingestion_routes, "record_interchange", lambda *a, **kw: None)
 
     with TestClient(app) as test_client:
         yield test_client
@@ -364,6 +363,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # ship_from_gln
         "event_date": "2026-03-10",
+        "timestamp": "2026-03-10T12:00:00+00:00",
     },
     "asn_856_multi_line": {
         "cte_type": "shipping",
@@ -372,6 +372,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # ship_from_gln
         "event_date": "2026-03-10",
+        "timestamp": "2026-03-10T12:00:00+00:00",
     },
     "po_850": {
         "cte_type": "shipping",
@@ -380,6 +381,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # seller_gln
         "event_date": "2026-03-09",  # po_date_raw
+        "timestamp": "2026-03-09T00:00:00+00:00",
     },
     "invoice_810": {
         "cte_type": "shipping",
@@ -388,6 +390,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # seller_gln
         "event_date": "2026-03-11",  # invoice_date_raw
+        "timestamp": "2026-03-11T00:00:00+00:00",
     },
     "receiving_861": {
         "cte_type": "receiving",
@@ -396,6 +399,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000069",  # receiving_location_gln
         "event_date": "2026-03-12",  # receive_date_raw
+        "timestamp": "2026-03-12T00:00:00+00:00",
     },
 }
 
@@ -432,11 +436,9 @@ def test_document_endpoint_maps_kdes_per_set(name: str, client: TestClient, capt
     assert event.unit_of_measure == exp["unit_of_measure"]
     assert event.product_description == exp["product_description"]
     assert event.location_gln == exp["location_gln"]
-    # event_date is preserved as the real EDI date even when the ingest
-    # timestamp snaps to now() for stale-date webhook bounds (#1167).
+    # Both fields preserve source facts, including archival imports.
     assert event.kdes["event_date"] == exp["event_date"]
-    # Timestamp is a non-empty ISO string for every set.
-    assert isinstance(event.timestamp, str) and event.timestamp
+    assert event.timestamp == exp["timestamp"]
 
 
 def test_861_bsn_ordered_bra_is_rejected(client: TestClient) -> None:

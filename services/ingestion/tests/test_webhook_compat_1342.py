@@ -268,6 +268,7 @@ def _install_stubs(
                 canonical_raises_on_call is None or len(captured["canonical_store_calls"]) == canonical_raises_on_call
             ):
                 raise canonical_raises
+            return SimpleNamespace(success=True, event_id="33333333-3333-4333-8333-333333333333", idempotent=False)
 
     cps_mod = ModuleType("shared.canonical_persistence")
     cps_mod.CanonicalEventStore = _FakeCanonicalStore

@@ -32,16 +32,6 @@ sys.path.insert(0, str(service_dir))
 
 # Pre-mock optional dependencies that app.routes transitively imports
 # These are not needed for boundary tests but are required for module load
-_mock_kafka = MagicMock()
-for _ck in [
-    "confluent_kafka",
-    "confluent_kafka.admin",
-    "confluent_kafka.schema_registry",
-    "confluent_kafka.schema_registry.avro",
-    "confluent_kafka.serialization",
-]:
-    sys.modules.setdefault(_ck, _mock_kafka)
-
 for _mod in [
     "feedparser",
     "kafka",

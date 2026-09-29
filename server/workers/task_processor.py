@@ -158,7 +158,7 @@ def _run_hardened_extraction(
          ``nlp.needs_review`` topic. High-tier results auto-approve to
          ``graph.update`` on the Kafka backbone, but the pg worker registers
          no ``graph_update`` handler (an enqueued row would sit unclaimed
-         forever), so they are logged loudly instead.
+         forever), so nonempty FSMA results fail for retry/dead-lettering.
 
     Kafka-only stages (HMAC signing/verification, DLQ topics, offset
     commits, inbound schema validation) have no pg analog: the task queue
@@ -184,6 +184,7 @@ def _run_hardened_extraction(
         "review_items_enqueued": 0,
         "high_confidence": 0,
     }
+    fsma_graph_sink_unavailable = False
 
     # --- FSMA structured pass (#1194) ---
     if tenant_id:
@@ -234,14 +235,16 @@ def _run_hardened_extraction(
             summary["review_items_enqueued"] += 1
         else:
             # High-confidence FSMA result. On the Kafka backbone this is
-            # emitted to graph.update; the pg worker has no graph sink, so
-            # log loudly until a pg graph_update handler exists.
+            # emitted to graph.update. Without a pg graph sink, preserve
+            # nonempty work for retry instead of claiming it completed.
             logger.warning(
                 "fsma_high_confidence_no_graph_sink",
                 document_id=doc_id,
                 tenant_id=str(tenant_id),
                 cte_count=len(result.ctes),
             )
+            if result.ctes:
+                fsma_graph_sink_unavailable = True
     else:
         logger.warning(
             "fsma_extractor_skipped_no_tenant",
@@ -307,6 +310,11 @@ def _run_hardened_extraction(
         if task_id is None:
             raise RuntimeError("Failed to enqueue NLP extraction review")
         summary["review_items_enqueued"] += 1
+
+    # Independent regex reviews remain deliverable; the FSMA work still
+    # requires retry/dead-lettering until a graph sink is available.
+    if fsma_graph_sink_unavailable:
+        raise RuntimeError("FSMA graph sink unavailable")
 
     return summary
 
@@ -394,8 +402,6 @@ def _handle_review_item(payload: Dict[str, Any], tenant_id: Optional[str] = None
             text_raw=sanitized_text,
         )
         logger.info("review_item_recorded", document_id=payload.get("document_id"))
-    except ImportError:
-        logger.debug("hallucination_tracker_unavailable", exc_info=True)
     except Exception:
         logger.exception("review_item_failed")
         raise

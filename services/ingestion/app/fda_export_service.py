@@ -196,6 +196,8 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
         try:
             ts = str(timestamp)
             dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc)
             event_date = dt.strftime("%Y-%m-%d")
             event_time = dt.strftime("%H:%M:%S %Z")
         except (ValueError, AttributeError):
@@ -247,7 +249,7 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
     # that land in _PII_LOCATION_COLUMNS (e.g. "Receiving Location").
     for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
         raw = kdes.get(kde_key)
-        sanitized = sanitize_cell(raw) if raw else ""
+        sanitized = sanitize_cell(raw)
         row[col_name] = _redact_location_value(sanitized, col_name, include_pii)
 
     # Remaining KDEs not in named columns → JSON blob.

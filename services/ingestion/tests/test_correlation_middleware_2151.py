@@ -10,7 +10,6 @@ emitted by upstream services / the gateway.
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
 # Set required env vars BEFORE any app module imports — mirrors test_boundaries.py
 os.environ.setdefault("ADMIN_SERVICE_URL", "http://localhost:8000")
@@ -30,16 +29,6 @@ os.environ.setdefault("ENABLE_DB_API_KEYS", "false")
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
-
-_mock_kafka = MagicMock()
-for _ck in [
-    "confluent_kafka",
-    "confluent_kafka.admin",
-    "confluent_kafka.schema_registry",
-    "confluent_kafka.schema_registry.avro",
-    "confluent_kafka.serialization",
-]:
-    sys.modules.setdefault(_ck, _mock_kafka)
 
 
 def _client():

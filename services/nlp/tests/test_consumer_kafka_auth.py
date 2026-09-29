@@ -217,14 +217,16 @@ class TestIngestionSendSigns:
         captured: dict = {}
 
         class _FakeProducer:
-            def produce(self, topic, key, value, headers):
+            def produce(self, topic, key, value, headers, on_delivery):
                 captured["topic"] = topic
                 captured["key"] = key
                 captured["value"] = value
                 captured["headers"] = list(headers)
+                self.on_delivery = on_delivery
 
             def flush(self, timeout=None):
-                pass
+                self.on_delivery(None, None)
+                return 0
 
         monkeypatch.setattr(kafka_utils, "get_producer", lambda: _FakeProducer())
 

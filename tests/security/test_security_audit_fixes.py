@@ -169,28 +169,12 @@ def bypass_headers(bypass_token, bypass_tenant):
 
 
 @pytest.fixture(autouse=True)
-def _reset_admin_bruteforce(monolith):
-    """Clear the shared privileged-auth failure budget between tests."""
-    import redis
-
-    from services.admin.app import privileged_auth
-
-    client = redis.Redis.from_url(
-        "redis://localhost:6379/0",
-        socket_connect_timeout=0.5,
-        socket_timeout=0.5,
-    )
-    try:
-        keys = list(client.scan_iter("privileged_auth:*"))
-        if keys:
-            client.delete(*keys)
-    except Exception:
-        pass
-    with privileged_auth._privileged_auth_throttle._memory_lock:
-        privileged_auth._privileged_auth_throttle._memory.clear()
-    yield
-    with privileged_auth._privileged_auth_throttle._memory_lock:
-        privileged_auth._privileged_auth_throttle._memory.clear()
+def _reset_admin_bruteforce(monkeypatch, monolith):
+    """Isolate auth counters without reading or deleting shared Redis data."""
+    for module_name in ("app.privileged_auth", "services.admin.app.privileged_auth"):
+        module = sys.modules.get(module_name)
+        if module is not None:
+            monkeypatch.setattr(module, "_privileged_auth_throttle", module.PrivilegedAuthThrottle(redis_client=None))
 
 
 @pytest.fixture()

@@ -79,6 +79,8 @@ class _Database:
 @pytest.fixture
 def harness(monkeypatch):
     database = _Database()
+    # This suite isolates document/job persistence; dispatch has its own boundary tests.
+    monkeypatch.setattr(routes_ingest, "dispatch_document", lambda *args, **kwargs: None)
     monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: database)
     monkeypatch.setattr(routes_ingest, "consume_tenant_rate_limit", lambda **kwargs: (True, 999))
     # All DNS and I/O is synthetic, including upload.internal's legacy source URL.

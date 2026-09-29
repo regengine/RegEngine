@@ -126,19 +126,12 @@ def _valid_gln_or_none(value: Optional[str]) -> Optional[str]:
 def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Optional[str]) -> tuple[str, str]:
     """Normalize an EDI shipment date/time into an ISO timestamp and date.
 
-    #1167: unparseable dates now raise HTTP 400 rather than silently
-    falling back to ``datetime.now()`` — retransmitted archival EDI was
-    being re-stamped as today's shipment. Stale dates (> 90 days old)
-    still snap to "now" for the ingest timestamp to keep webhook model
-    bounds valid, but the original parsed date is preserved separately
-    so downstream FSMA 204 lookback sees the real event date.
+    Missing or unparseable dates raise HTTP 400. Preserve the source
+    timestamp for archival imports and stable replay identity. Match the
+    webhook model's future limit with a client error before construction.
+    Date-only documents retain their source date at UTC midnight.
     """
-    now = datetime.now(timezone.utc)
-
-    if not ship_date_raw:
-        return now.isoformat(), now.date().isoformat()
-
-    clean_date = re.sub(r"\D", "", ship_date_raw)
+    clean_date = re.sub(r"\D", "", ship_date_raw or "")
 
     try:
         parsed = _parse_edi_date_digits(clean_date)
@@ -171,12 +164,14 @@ def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Option
                 },
             ) from exc
 
-    # Keep webhook model bounds to avoid stale/future rejection — the
-    # ingest timestamp snaps to "now" if the EDI claims a shipment
-    # older than 90 days or > 24h in the future. The parsed event_date
-    # is returned unchanged so FSMA 204 traceability sees the real date.
-    if parsed < now - timedelta(days=90) or parsed > now + timedelta(hours=24):
-        return now.isoformat(), parsed.date().isoformat()
+    if parsed > datetime.now(timezone.utc) + timedelta(hours=24):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_edi_date",
+                "message": "EDI event timestamp is more than 24 hours in the future.",
+            },
+        )
 
     return parsed.isoformat(), parsed.date().isoformat()
 

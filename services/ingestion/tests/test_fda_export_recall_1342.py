@@ -56,7 +56,7 @@ class _FakeSession:
 class _FakePersistence:
     def __init__(self, db_session):
         self.db_session = db_session
-        self.verify_return = SimpleNamespace(valid=True)
+        self.verify_return = SimpleNamespace(valid=True, errors=[])
         self.verify_raises: Exception | None = None
 
     def verify_chain(self, *, tenant_id):
@@ -321,6 +321,24 @@ class TestEmptyQuery:
 
 
 class TestCSVExport:
+    @pytest.mark.parametrize("canonical_verifier", [True, False])
+    def test_canonical_recall_declares_its_actual_source(self, monkeypatch, canonical_verifier):
+        from shared.canonical_persistence import CanonicalEventStore
+
+        _, _, captured = _install_stubs(monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}])
+        monkeypatch.setenv("CHAIN_VERIFY_READ_CANONICAL", "1" if canonical_verifier else "0")
+        monkeypatch.setattr(r, "export_v1_reads_canonical", lambda: True)
+        monkeypatch.setattr(r, "fetch_recall_events_canonical", lambda *args: [{"id": 1}])
+        monkeypatch.setattr(
+            CanonicalEventStore,
+            "verify_chain_canonical",
+            lambda *args: SimpleNamespace(valid=True, errors=[]),
+        )
+
+        _call()
+
+        assert captured["csv_response_kwargs"]["chain_valid"] is canonical_verifier
+
     def test_csv_happy_path_full_wiring(self, monkeypatch):
         rows = [{"id": 1}, {"id": 2}]
         events = [{"id": "e1"}, {"id": "e2"}]
@@ -328,7 +346,7 @@ class TestCSVExport:
             monkeypatch,
             rows=rows,
             events=events,
-            verify_return=SimpleNamespace(valid=True),
+            verify_return=SimpleNamespace(valid=True, errors=[]),
         )
         resp = _call(
             tenant_id="T-1",
@@ -383,7 +401,7 @@ class TestCSVExport:
         assert csv_k["filename"] == "fda_recall_export_20260419_120000.csv"
         assert csv_k["export_hash"] == "csv-hash-abc"
         assert csv_k["record_count"] == 2
-        assert csv_k["chain_valid"] is True
+        assert csv_k["chain_valid"] is False
         assert csv_k["extra_headers"]["X-Export-Type"] == "recall"
         assert csv_k["extra_headers"]["X-KDE-Coverage"] == "0.95"
         assert csv_k["include_pii"] is True
@@ -401,7 +419,7 @@ class TestCSVExport:
             monkeypatch,
             rows=[{"id": 1}],
             events=[{"id": "e1"}],
-            verify_return=SimpleNamespace(valid=False),
+            verify_return=SimpleNamespace(valid=False, errors=[]),
         )
         _call()
         assert cap["csv_response_kwargs"]["chain_valid"] is False

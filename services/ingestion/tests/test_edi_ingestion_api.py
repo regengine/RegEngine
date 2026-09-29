@@ -96,7 +96,7 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
         auth_mode="test",
     )
 
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None):
         captured_payload["payload"] = payload
         event = payload.events[0]
         return IngestResponse(
@@ -116,6 +116,11 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
         )
 
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
+    # Keep unit requests independent of completed markers from other tests.
+    # Real dedup is covered by test_edi_source_receipt_retry and
+    # test_edi_envelope_integrity.
+    monkeypatch.setattr(edi_ingestion_routes, "check_interchange", lambda *a, **kw: (False, None))
+    monkeypatch.setattr(edi_ingestion_routes, "record_interchange", lambda *a, **kw: None)
 
     with TestClient(app) as test_client:
         yield test_client
@@ -656,7 +661,7 @@ def test_edi_wrapper_reports_nested_rejection_in_http_and_body_status(
 ) -> None:
     """A canonical rejection must not be relabeled as an accepted EDI upload."""
 
-    async def _reject_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _reject_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None):
         event = payload.events[0]
         return IngestResponse(
             accepted=0,
@@ -715,7 +720,9 @@ def test_edi_wrapper_preserves_nested_http_exception(
 ) -> None:
     """The EDI wrapper must not replace a canonical pipeline error."""
 
-    async def _unavailable_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _unavailable_ingest_events(
+        payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None
+    ):
         raise HTTPException(status_code=503, detail={"error": "rules_unavailable"})
 
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _unavailable_ingest_events)

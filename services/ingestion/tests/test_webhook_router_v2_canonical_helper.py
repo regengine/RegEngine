@@ -28,6 +28,10 @@ import pytest
 from services.ingestion.app import webhook_router_v2 as wrv2
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
+FRESH_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+STORED_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+TENANT_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+
 # ---------------------------------------------------------------------------
 # Fakes — class vars track calls so assertions don't need MagicMock spec.
 # ---------------------------------------------------------------------------
@@ -52,11 +56,34 @@ class _FakeCanonicalEventStore:
         _FakeCanonicalEventStore.persist_call_count += 1
         _FakeCanonicalEventStore.persist_args.append(canonical)
         return SimpleNamespace(
+            success=True,
             event_id=_FakeCanonicalEventStore.result_event_id or canonical.event_id,
             sha256_hash="sha256",
             chain_hash="chain",
             idempotent=_FakeCanonicalEventStore.result_event_id is not None,
         )
+
+    def get_event(self, tenant_id: str, event_id: str) -> dict:
+        canonical = _FakeCanonicalEventStore.persist_args[-1]
+        return {
+            "event_id": event_id,
+            "tenant_id": tenant_id,
+            "event_type": canonical.event_type.value,
+            **{
+                key: getattr(canonical, key)
+                for key in (
+                    "traceability_lot_code",
+                    "product_reference",
+                    "quantity",
+                    "unit_of_measure",
+                    "from_facility_reference",
+                    "to_facility_reference",
+                    "from_entity_reference",
+                    "to_entity_reference",
+                    "kdes",
+                )
+            },
+        }
 
 
 class _FakeEngine:
@@ -105,7 +132,7 @@ class _FakeExceptionQueueService:
 
 class _FakeCanonical:
     def __init__(self, event: Any) -> None:
-        self.event_id = "canonical-uuid-fresh"
+        self.event_id = FRESH_ID
         self.event_type = SimpleNamespace(value=event.cte_type.value)
         self.traceability_lot_code = event.traceability_lot_code
         self.product_reference = None
@@ -124,11 +151,10 @@ class _FakeCanonical:
 
 
 def _fake_normalize_webhook_event(event: Any, tenant_id: str, **_: Any) -> Any:
-    """Stub that returns a fresh canonical with a per-call unique event_id.
+    """Stub that returns a fresh canonical instance with a valid event_id.
 
-    The real ``normalize_webhook_event`` mints a UUID per call. Our tests
-    don't need true UUIDs, but they DO need the event_id to be non-empty
-    so the ``persist_summary`` event_id assertion is meaningful.
+    Use a fixed valid UUID so persistence-result validation matches the
+    production contract and the evidence-anchor assertions are deterministic.
     """
     return _FakeCanonical(event)
 
@@ -256,7 +282,7 @@ class TestFastPathUsingPreComputedSummary:
         assert call["tenant_id"] == "t-1"
         # event_id MUST be the freshly-persisted canonical's event_id,
         # NOT the pre-eval canonical's event_id (``from-pre-eval``).
-        assert call["event_id"] == "canonical-uuid-fresh"
+        assert call["event_id"] == FRESH_ID
         # No re-evaluation.
         assert _FakeEngine.evaluate_event_persist_true_calls == []
         assert _FakeEngine.evaluate_event_persist_false_calls == []
@@ -324,7 +350,7 @@ class TestFallbackPathUsesEvaluateEvent:
         ev_call = _FakeEngine.evaluate_event_persist_true_calls[0]
         assert ev_call["tenant_id"] == "t-1"
         # event_data anchored on the freshly-persisted canonical event_id.
-        assert ev_call["event_data"]["event_id"] == "canonical-uuid-fresh"
+        assert ev_call["event_data"]["event_id"] == FRESH_ID
         # No persist_summary, no exception queue (compliant).
         assert _FakeEngine.persist_summary_calls == []
         assert _FakeExceptionQueueService.create_calls == []
@@ -409,7 +435,7 @@ class TestCommonInvariants:
             precomputed_summary=precomputed,
         )
         call = _FakeEngine.persist_summary_calls[0]
-        assert call["event_id"] == "canonical-uuid-fresh"
+        assert call["event_id"] == FRESH_ID
         assert call["event_id"] != "PRE_EVAL_SENTINEL_DO_NOT_USE"
 
     def test_canonical_reuses_legacy_cte_event_id_without_second_chain_write(self, _make_event):
@@ -441,43 +467,47 @@ class TestCommonInvariants:
         from the freshly normalized in-memory canonical event. Rule evidence
         must point at the persisted row, not the discarded candidate UUID.
         """
-        _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
+        _FakeCanonicalEventStore.result_event_id = STORED_ID
         precomputed = _compliant_summary()
-
-        wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(),
-            event=_make_event,
-            tenant_id="t-1",
-            precomputed_summary=precomputed,
-        )
-
-        assert _FakeEngine.persist_summary_calls[0]["event_id"] == "persisted-canonical-row"
-
-    def test_exception_evidence_uses_idempotent_canonical_store_result(self, _make_event):
-        _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
-        precomputed = _warning_only_summary()
-
-        wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(),
-            event=_make_event,
-            tenant_id="t-1",
-            precomputed_summary=precomputed,
-        )
-
-        assert _FakeEngine.persist_summary_calls[0]["event_id"] == "persisted-canonical-row"
-        assert precomputed.event_id == "persisted-canonical-row"
-        assert _FakeExceptionQueueService.create_calls[0]["summary"].event_id == "persisted-canonical-row"
-
-    def test_fallback_evaluation_uses_idempotent_canonical_store_result(self, _make_event):
-        _FakeCanonicalEventStore.result_event_id = "persisted-canonical-row"
         _FakeEngine.summary_to_return = _compliant_summary()
 
         wrv2._persist_canonical_and_eval(
             db_session=MagicMock(),
             event=_make_event,
-            tenant_id="t-1",
+            tenant_id=TENANT_ID,
+            precomputed_summary=precomputed,
+        )
+
+        assert _FakeEngine.persist_summary_calls == []
+        assert _FakeEngine.evaluate_event_persist_true_calls[0]["event_data"]["event_id"] == STORED_ID
+
+    def test_exception_evidence_uses_idempotent_canonical_store_result(self, _make_event):
+        _FakeCanonicalEventStore.result_event_id = STORED_ID
+        precomputed = _warning_only_summary()
+        _FakeEngine.summary_to_return = _warning_only_summary()
+
+        wrv2._persist_canonical_and_eval(
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id=TENANT_ID,
+            precomputed_summary=precomputed,
+        )
+
+        assert _FakeEngine.persist_summary_calls == []
+        assert _FakeEngine.evaluate_event_persist_true_calls[0]["event_data"]["event_id"] == STORED_ID
+        assert _FakeEngine.summary_to_return.event_id == STORED_ID
+        assert _FakeExceptionQueueService.create_calls[0]["summary"].event_id == STORED_ID
+
+    def test_fallback_evaluation_uses_idempotent_canonical_store_result(self, _make_event):
+        _FakeCanonicalEventStore.result_event_id = STORED_ID
+        _FakeEngine.summary_to_return = _compliant_summary()
+
+        wrv2._persist_canonical_and_eval(
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id=TENANT_ID,
             precomputed_summary=None,
         )
 
         ev_call = _FakeEngine.evaluate_event_persist_true_calls[0]
-        assert ev_call["event_data"]["event_id"] == "persisted-canonical-row"
+        assert ev_call["event_data"]["event_id"] == STORED_ID

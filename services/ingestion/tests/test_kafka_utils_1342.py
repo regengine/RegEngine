@@ -25,11 +25,15 @@ Issue: #1342
 
 from __future__ import annotations
 
+import traceback
 from types import SimpleNamespace
 from typing import Any, List
+from unittest.mock import Mock
 
 import pytest
 from app import kafka_utils as ku
+from confluent_kafka import KafkaError, KafkaException
+from confluent_kafka.error import KeySerializationError, ValueSerializationError
 from fastapi import HTTPException
 from shared.kafka_auth import KafkaAuthError
 
@@ -69,6 +73,9 @@ class _FakeProducer:
         self.produce_calls: List[dict] = []
         self.flush_called = 0
         self.produce_raises: Exception | None = None
+        self.remaining_messages = 0
+        self.delivery_error: Exception | None = None
+        self.notify_delivery = True
 
     def produce(self, **kwargs):
         self.produce_calls.append(kwargs)
@@ -78,6 +85,10 @@ class _FakeProducer:
     def flush(self, timeout: float | None = None):
         self.flush_called += 1
         self.flush_timeout = timeout
+        callback = self.produce_calls[-1].get("on_delivery")
+        if callback is not None and self.notify_delivery and not self.remaining_messages:
+            callback(self.delivery_error, None)
+        return self.remaining_messages
 
 
 # ---------------------------------------------------------------------------
@@ -344,3 +355,91 @@ class TestSend:
         ku.send("events", {"a": 1})
         assert fake.flush_called == 1
         assert fake.flush_timeout is not None and fake.flush_timeout <= 10
+
+    def test_undelivered_message_after_flush_fails(self, monkeypatch):
+        fake = _install_fake(monkeypatch)
+        fake.remaining_messages = 1
+
+        with pytest.raises(HTTPException) as caught:
+            ku.send("events", {"document": "synthetic private content"})
+
+        assert caught.value.status_code == 503
+        assert "synthetic private content" not in caught.value.detail
+
+    def test_delivery_error_fails_even_when_flush_queue_is_empty(self, monkeypatch):
+        fake = _install_fake(monkeypatch)
+        fake.delivery_error = RuntimeError("synthetic private broker diagnostic")
+        logger = Mock()
+        monkeypatch.setattr(ku, "logger", logger)
+
+        with pytest.raises(HTTPException) as caught:
+            ku.send("events", {"document": "synthetic private content"})
+
+        assert caught.value.status_code == 503
+        assert "synthetic private" not in caught.value.detail
+        assert "synthetic private" not in str(logger.mock_calls)
+
+    def test_missing_delivery_report_does_not_confirm_success(self, monkeypatch):
+        fake = _install_fake(monkeypatch)
+        fake.notify_delivery = False
+
+        with pytest.raises(HTTPException) as caught:
+            ku.send("events", {})
+
+        assert caught.value.status_code == 503
+
+    def test_delivery_failure_does_not_poison_next_send(self, monkeypatch):
+        fake = _install_fake(monkeypatch)
+        fake.delivery_error = RuntimeError("synthetic delivery failure")
+        with pytest.raises(HTTPException):
+            ku.send("events", {"attempt": 1})
+
+        fake.delivery_error = None
+        assert ku.send("events", {"attempt": 2}) is None
+
+    def test_acknowledged_message_succeeds_with_unrelated_pending_messages(self, monkeypatch):
+        fake = _install_fake(monkeypatch)
+
+        def flush(timeout):
+            fake.produce_calls[-1]["on_delivery"](None, None)
+            return 1
+
+        monkeypatch.setattr(fake, "flush", flush)
+        assert ku.send("events", {"document": "acknowledged"}) is None
+
+    @pytest.mark.parametrize("error_type", [RuntimeError, OSError])
+    def test_synchronous_failure_omits_private_diagnostics(self, monkeypatch, error_type):
+        _install_fake(monkeypatch, produce_raises=error_type("synthetic private broker diagnostic"))
+        logger = Mock()
+        monkeypatch.setattr(ku, "logger", logger)
+
+        with pytest.raises(HTTPException) as caught:
+            ku.send("events", {"document": "synthetic private content"})
+
+        assert caught.value.status_code in (500, 503)
+        assert "synthetic private" not in caught.value.detail
+        assert "synthetic private" not in str(logger.mock_calls)
+        assert "synthetic private broker diagnostic" not in "".join(traceback.format_exception(caught.value))
+
+    @pytest.mark.parametrize("phase", ["produce", "flush"])
+    @pytest.mark.parametrize("error_kind", ["buffer", "kafka", "key_serialization", "value_serialization"])
+    def test_native_producer_errors_are_safe_at_route_logging_boundary(self, monkeypatch, phase, error_kind):
+        diagnostic = "synthetic private broker diagnostic"
+        errors = {
+            "buffer": BufferError(diagnostic),
+            "kafka": KafkaException(KafkaError(KafkaError._FAIL, diagnostic)),
+            "key_serialization": KeySerializationError(ValueError(diagnostic)),
+            "value_serialization": ValueSerializationError(ValueError(diagnostic)),
+        }
+        fake = _install_fake(monkeypatch)
+
+        def fail(**kwargs):
+            raise errors[error_kind]
+
+        monkeypatch.setattr(fake, phase, fail)
+        with pytest.raises(HTTPException) as caught:
+            ku.send("events", {"document": "synthetic private content"})
+
+        assert caught.value.status_code == 503
+        assert diagnostic not in caught.value.detail
+        assert diagnostic not in "".join(traceback.format_exception(caught.value))

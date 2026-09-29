@@ -79,6 +79,8 @@ def send(
     structlog context) is attached as a Kafka header so downstream
     consumers can re-hydrate the trace context. Callers can pass ``headers``
     to add custom headers alongside correlation metadata (#1318).
+    A successful return requires a successful delivery report for this
+    message; unconfirmed delivery or broker rejection returns a safe 503.
 
     When the event backbone is PostgreSQL (the production default, #1159)
     this is a deliberate no-op: there is no broker to talk to, and blocking
@@ -122,15 +124,34 @@ def send(
             detail="Kafka message signing unavailable",
         ) from sign_exc
 
+    delivery_confirmed = False
+    delivery_error_type = None
+
+    def on_delivery(error, _message):
+        nonlocal delivery_confirmed, delivery_error_type
+        delivery_confirmed = error is None
+        delivery_error_type = type(error).__name__ if error is not None else None
+
     try:
         producer = get_producer()
-        producer.produce(topic=topic, key=key, value=signed_payload, headers=signed_headers)
+        producer.produce(topic=topic, key=key, value=signed_payload, headers=signed_headers, on_delivery=on_delivery)
         # Bound the flush: an unreachable broker must never hold an HTTP
         # request open past the edge proxy timeout (#3087).
-        producer.flush(timeout=10)
+        remaining = producer.flush(timeout=10)
     except RuntimeError as exc:
-        logger.warning("kafka_client_unavailable", topic=topic, error=str(exc))
-        raise HTTPException(status_code=503, detail="Kafka client unavailable") from exc
+        logger.warning("kafka_client_unavailable", topic=topic, error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Kafka client unavailable") from None
     except (OSError, IOError, TypeError, ValueError, AttributeError) as exc:
-        logger.error("kafka_send_failed", topic=topic, error=str(exc))
-        raise HTTPException(status_code=500, detail="Kafka publish failed") from exc
+        logger.error("kafka_send_failed", topic=topic, error_type=type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Kafka publish failed") from None
+    except Exception as exc:
+        # Optional Confluent clients also raise native Kafka/serialization
+        # errors and BufferError. Do not expose their payloads in route logs.
+        logger.error("kafka_send_failed", topic=topic, error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Kafka publish unavailable") from None
+
+    # The cached producer may also contain other requests' messages.
+    # Only this message's delivery report establishes its outcome.
+    if not delivery_confirmed:
+        logger.warning("kafka_delivery_unconfirmed", topic=topic, remaining=remaining, error_type=delivery_error_type)
+        raise HTTPException(status_code=503, detail="Kafka delivery unconfirmed")

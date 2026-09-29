@@ -42,4 +42,26 @@ describe('public OpenAPI spec', () => {
     expect(apiBody).toEqual(publicOpenApiSpec);
     expect(rootBody).toEqual(publicOpenApiSpec);
   });
+
+  it('documents the shared handler and middleware error shapes separately', () => {
+    const schemas = publicOpenApiSpec.components.schemas;
+
+    expect(schemas.ErrorResponse.oneOf).toEqual([
+      { $ref: '#/components/schemas/ErrorEnvelope' },
+      { $ref: '#/components/schemas/MiddlewareError' },
+      { $ref: '#/components/schemas/IdempotencyError' },
+      { $ref: '#/components/schemas/TenantContextError' },
+    ]);
+    expect(schemas.ErrorEnvelope.required).toEqual(['error']);
+    expect(schemas.ErrorEnvelope.properties.error.required).toEqual(['type', 'message']);
+    expect(schemas.ErrorEnvelope.properties.error.additionalProperties).toBe(true);
+    expect(schemas.MiddlewareError.required).toEqual(['error', 'detail']);
+    expect(schemas.MiddlewareError.properties.error.type).toBe('string');
+    expect(schemas.IdempotencyError.required).toEqual(['error']);
+    expect(schemas.IdempotencyError.properties.error.enum).toContain('idempotency_key_conflict');
+    expect(schemas.TenantContextError.required).toEqual(['detail']);
+    for (const name of ['ErrorEnvelope', 'MiddlewareError', 'IdempotencyError', 'TenantContextError'] as const) {
+      expect(schemas[name].additionalProperties).toBe(false);
+    }
+  });
 });

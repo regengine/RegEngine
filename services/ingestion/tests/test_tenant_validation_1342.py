@@ -20,6 +20,17 @@ from app.tenant_validation import (
 from fastapi import HTTPException
 
 
+@pytest.fixture(autouse=True)
+def _restore_tenant_context():
+    from shared.tenant_context import reset_rls_tenant_id, set_rls_tenant_id
+
+    token = set_rls_tenant_id(None)
+    try:
+        yield
+    finally:
+        reset_rls_tenant_id(token)
+
+
 class TestTenantIdPattern:
     """The compiled regex locks the accepted character set."""
 

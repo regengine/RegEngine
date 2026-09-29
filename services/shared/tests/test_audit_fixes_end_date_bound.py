@@ -175,13 +175,13 @@ def test_query_events_by_tlcs_uses_strict_less_than() -> None:
     assert params["end_date"] == "2026-06-16T00:00:00+00:00"
 
 
-def test_start_date_bound_is_untouched() -> None:
-    """Only the END bound changes — the inclusive start must stay ``>=``."""
+def test_start_date_bound_stays_inclusive_in_utc() -> None:
+    """The inclusive start stays ``>=`` and is independent of session time."""
     session = _RecordingSession(results=[[(0,)], []])
     _Queries(session).query_all_events(TENANT_ID, start_date=START_DATE, end_date=END_DATE)
     sql, params = _events_call(session)
     assert "event_timestamp >= :start_date" in sql
-    assert params["start_date"] == START_DATE  # passed through verbatim
+    assert params["start_date"] == "2026-06-01T00:00:00+00:00"
 
 
 def test_no_end_date_emits_no_upper_bound() -> None:
