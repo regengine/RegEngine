@@ -1,288 +1,65 @@
 # RegEngine Frontend
 
-A modern, smooth Next.js frontend for the RegEngine regulatory intelligence platform.
+Next.js 16 interface for RegEngine's FSMA 204 food traceability evidence platform. Operators import supplier data, review traceability records and compliance gaps, and prepare audit/export workflows. Public pages explain the product and expose synthetic proof artifacts.
 
-## Features
+See the [product description](../docs/PRODUCT_DESCRIPTION.md) for capability availability and the [root README](../README.md) for backend setup. UI routes alone do not establish that the associated backend feature is enabled; the [production router policy](../server/router_policy.py) controls API exposure.
 
-✨ **Modern Stack**
-- Next.js 15 with App Router
-- TypeScript for type safety
-- Tailwind CSS for styling
-- Framer Motion for smooth animations
+## Product surfaces
 
-🎨 **Beautiful UI**
-- Custom component library inspired by shadcn/ui
-- Smooth transitions and hover effects
-- Responsive design
-- Dark mode support
+| Surface | Source |
+| --- | --- |
+| Dashboard and operational views | [dashboard](src/app/dashboard/) |
+| CSV intake, import results, and optional Jev column/CTE suggestions | [ingest](src/app/ingest/), [CTE suggestion prompt](src/components/fsma/CteSuggestionPrompt.tsx) |
+| Traceability records, compliance, and exception review | [records](src/app/records/), [compliance](src/app/compliance/), [exceptions](src/app/exceptions/) |
+| Supplier preflight portal | [portal](src/app/portal/) |
+| Buyer manifest remediation and correction actions | [remediation](src/app/remediation/) — requires the remediation API, which is excluded from the production allowlist |
+| Recall reporting and audit views | [recall report](src/app/dashboard/recall-report/), [audit](src/app/audit/) |
+| Email-code/passkey login, invitations, and API keys | [login](src/app/login/), [invite acceptance](src/app/accept-invite/), [API keys](src/app/api-keys/) |
+| Public synthetic proof, bundle verification, and recall drill | [proof](src/app/proof/), [verify](src/app/verify/) |
+| Product documentation and developer portal | [docs](src/app/docs/), [developer portal](src/app/developer/portal/) |
 
-⚡ **Performance**
-- React Query for data fetching and caching
-- Optimistic updates
-- Automatic refetching
-- Loading states and skeletons
+Jev assistance is optional. Suggestions are visible for review; automatic application defaults off. See the [Jev guide](../docs/engineering/JEV_HEADER_MAPPING.md) for configuration, evidence, and data-sharing defaults.
 
-🔐 **Type-Safe API Client**
-- Fully typed API client
-- Custom React hooks for all endpoints
-- Error handling
-- Request/response validation
+## Stack
 
-## Pages
+Next.js App Router, React, TypeScript, Tailwind CSS, TanStack Query, Vitest, and Playwright. Exact dependencies and available scripts are in [package.json](package.json); npm uses the checked-in [package-lock.json](package-lock.json).
 
-### 🏠 Dashboard (`/`)
-- Welcome page with feature overview
-- System health status
-- Quick navigation to all features
-- Industry statistics
+## Local development
 
-### 📄 Document Ingestion (`/ingest`)
-- Submit URLs for regulatory document processing
-- Real-time ingestion status
-- OCR and NLP extraction info
+Use the Node version pinned in [../.nvmrc](../.nvmrc) and npm. Start the consolidated FastAPI backend and PostgreSQL/Redis using the [root setup](../README.md#local-development).
 
-### ✅ Compliance (`/compliance`)
-- Browse compliance checklists
-- Filter by industry
-- Search functionality
-- Multi-industry support (Healthcare, Finance, Gaming, Energy, Technology)
-
-### 📊 Opportunities (`/opportunities`)
-- Regulatory arbitrage discovery
-- Compliance gap analysis
-- Jurisdiction comparison
-- Filterable results
-
-### 🔑 Admin (`/admin`)
-- API key management
-- Create/revoke keys
-- Secure authentication
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- RegEngine backend services running
-
-### Installation
-
-1. **Install dependencies:**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env.local
-   ```
-
-   Edit `.env.local` to match your backend configuration:
-   ```env
-   NEXT_PUBLIC_API_BASE_URL=http://localhost
-   NEXT_PUBLIC_ADMIN_PORT=8400
-   NEXT_PUBLIC_INGESTION_PORT=8000
-   NEXT_PUBLIC_OPPORTUNITY_PORT=8300
-   NEXT_PUBLIC_COMPLIANCE_PORT=8500
-   ```
-
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-4. **Open your browser:**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-## Development
-
-### Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint
-
-### Project Structure
-
-```
-frontend/
-├── src/
-│   ├── app/                    # Next.js App Router pages
-│   │   ├── page.tsx           # Dashboard
-│   │   ├── ingest/            # Document ingestion
-│   │   ├── compliance/        # Compliance checklists
-│   │   ├── opportunities/     # Regulatory opportunities
-│   │   ├── admin/             # API key management
-│   │   ├── layout.tsx         # Root layout
-│   │   └── globals.css        # Global styles
-│   ├── components/
-│   │   ├── ui/                # UI components
-│   │   └── layout/            # Layout components
-│   ├── lib/
-│   │   ├── api-client.ts      # Type-safe API client
-│   │   ├── api-config.ts      # API configuration
-│   │   ├── providers.tsx      # React Query provider
-│   │   └── utils.ts           # Utility functions
-│   ├── hooks/
-│   │   └── use-api.ts         # Custom API hooks
-│   └── types/
-│       └── api.ts             # TypeScript types
-├── public/                     # Static assets
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-└── next.config.js
-```
-
-## API Integration
-
-The frontend integrates with the following RegEngine services:
-
-### Admin Service (Port 8400)
-- Health checks
-- API key management
-
-### Ingestion Service (Port 8000)
-- Document URL submission
-- Ingestion status
-
-### Opportunity Service (Port 8300)
-- Regulatory arbitrage queries
-- Compliance gap analysis
-
-### Compliance Service (Port 8500)
-- Checklist browsing
-- Configuration validation
-- Industry filtering
-
-## Smooth UX Features
-
-### Animations
-- Page transitions with Framer Motion
-- Card hover effects with scale transforms
-- Smooth loading states
-- Fade-in animations for content
-
-### Performance Optimizations
-- React Query caching (60s stale time)
-- Automatic background refetching
-- Optimistic updates for mutations
-- Request deduplication
-
-### User Experience
-- Real-time health monitoring
-- Inline error messages
-- Success notifications
-- Responsive grid layouts
-- Accessibility support
-
-## Customization
-
-### Theme Colors
-Edit `src/app/globals.css` to customize the color scheme:
-
-```css
-:root {
-  --primary: 221.2 83.2% 53.3%;
-  --secondary: 210 40% 96.1%;
-  /* ... more colors */
-}
-```
-
-### API Configuration
-Edit `src/lib/api-config.ts` to change service ports or base URLs.
-
-### Components
-All UI components are in `src/components/ui/` and can be customized.
-
-## Production Build
-
-1. **Build the application:**
-   ```bash
-   npm run build
-   ```
-
-2. **Start production server:**
-   ```bash
-   npm start
-   ```
-
-## Deployment
-
-### Docker
-
-Create a `Dockerfile`:
-
-```dockerfile
-FROM node:18-alpine AS base
-
-# Install dependencies only when needed
-FROM base AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-
-# Build the application
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
-
-# Production image
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
-EXPOSE 3000
-
-ENV PORT 3000
-
-CMD ["node", "server.js"]
-```
-
-### Vercel
-
-The easiest way to deploy is using [Vercel](https://vercel.com):
+From this directory:
 
 ```bash
-npm install -g vercel
-vercel
+npm ci
+INGESTION_SERVICE_URL=http://localhost:8000 \
+ADMIN_SERVICE_URL=http://localhost:8000 \
+COMPLIANCE_SERVICE_URL=http://localhost:8000 \
+GRAPH_SERVICE_URL=http://localhost:8000 \
+NLP_SERVICE_URL=http://localhost:8000 \
+npm run dev
 ```
 
-## Troubleshooting
+Open [localhost:3000](http://localhost:3000). These service names route to the same backend process; they do not require separate deployments. Setting a URL does not enable an experimental backend router. Authentication and protected workflows also require tenant/user provisioning and the appropriate backend configuration.
 
-### Backend Connection Issues
-- Ensure all backend services are running
-- Check `.env.local` has correct service URLs
-- Verify CORS settings on backend
+Keep credentials in the approved local credential store, outside tracked files. Never place secrets in `NEXT_PUBLIC_*` variables: those are exposed to the browser.
 
-### Build Errors
-- Clear Next.js cache: `rm -rf .next`
-- Delete node_modules: `rm -rf node_modules && npm install`
-- Check TypeScript errors: `npm run lint`
+## Validation
 
-## Contributing
+```bash
+npm run lint
+npm run test:run
+npm run build
+```
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+`lint` runs ESLint and design lint. `build` also surfaces TypeScript errors; there is no `typecheck` script. End-to-end checks use `npm run test:e2e` and require the environment specified by the relevant Playwright configuration.
+
+## API routing and deployment
+
+Browser requests use same-origin Next.js API proxies. Server-side upstream resolution lives in [api-config.ts](src/lib/api-config.ts), with routing/build configuration in [next.config.js](next.config.js). The frontend deploys separately to Vercel; the backend is one Railway application. Configure upstream URLs for the target environment before using authenticated workflows.
+
+The [frontend CI workflow](../.github/workflows/frontend-ci.yml) defines automated validation. Build success does not establish that live login, ingestion, or exports work against a deployed backend.
 
 ## License
 
-This project is part of RegEngine and follows the same license.
+Proprietary, source-visible software under the root [LICENSE](../LICENSE). The public bundle verifier at [public/sdk/verify_chain.py](public/sdk/verify_chain.py) is covered by that license's Apache 2.0 exception.

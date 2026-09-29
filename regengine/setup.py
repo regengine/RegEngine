@@ -1,6 +1,6 @@
 """
 RegEngine Python SDK
-Official client library for RegEngine FSMA 204 Compliance Platform.
+Python client for RegEngine FSMA 204 traceability records and verification.
 """
 
 import re
@@ -26,14 +26,14 @@ setup(
     version=_VERSION,
     author="RegEngine",
     author_email="sdk@regengine.co",
-    description="Official Python SDK for RegEngine FSMA 204 Compliance Platform",
+    description="Python SDK for RegEngine FSMA 204 traceability records and verification",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/regengine/python-sdk",
+    url="https://github.com/regengine/RegEngine/tree/main/regengine",
     project_urls={
-        "Documentation": "https://docs.regengine.co/sdks/python",
-        "Bug Tracker": "https://github.com/regengine/python-sdk/issues",
-        "Changelog": "https://github.com/regengine/python-sdk/blob/main/CHANGELOG.md",
+        "Documentation": "https://github.com/regengine/RegEngine/blob/main/regengine/README.md",
+        "Bug Tracker": "https://github.com/regengine/RegEngine/issues",
+        "Changelog": "https://github.com/regengine/RegEngine/blob/main/CHANGELOG.md",
     },
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -90,5 +90,5 @@ setup(
             "regengine-verify=regengine.verify_records:main",
         ],
     },
-    keywords="regengine fsma fda traceability compliance food-safety supply-chain",
+    keywords="regengine fsma-204 fda food-traceability audit-evidence verification supply-chain",
 )
