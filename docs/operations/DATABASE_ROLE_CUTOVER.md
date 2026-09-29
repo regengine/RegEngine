@@ -169,6 +169,24 @@ ownership drift. It intentionally fails for a superuser/BYPASSRLS credential,
 role membership, mismatched database/schema/object ownership, or an identity
 pin mismatch until the provider administrator corrects the posture.
 
+The cutover runs while the previous deployment still serves traffic. Some of
+its statements take ACCESS EXCLUSIVE locks (`ALTER TABLE ... ROW LEVEL
+SECURITY`, `DROP`/`CREATE POLICY`, on `public.api_keys` among others), so each
+lock wait is capped at 10s (`lock_timeout`, set for the cutover's transaction
+only). If a long-running transaction holds one of those tables, the cutover
+stops instead of making every request on that table queue behind it:
+
+```text
+runtime role cutover refused: statement N of M ('ALTER TABLE ...') did not get its table lock within 10s (REGENGINE_CUTOVER_LOCK_TIMEOUT). Nothing was changed: ...
+```
+
+It exits 75, so the deploy fails and the previous deployment keeps serving.
+Nothing is applied, because the cutover is one transaction. Find the long
+transaction in `pg_stat_activity` (oldest `xact_start`), let it finish or end
+it, then redeploy. For a repair in a maintenance window you can raise the cap
+with `REGENGINE_CUTOVER_LOCK_TIMEOUT` (any PostgreSQL `lock_timeout` value,
+for example `30s`).
+
 ### v126 (`c51d4898e0a2`): CSV retention and agent-worker grants
 
 v126 grants the runtime role what `POST /api/v1/ingest/csv` and the

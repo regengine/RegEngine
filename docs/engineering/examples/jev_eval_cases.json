@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "about": "Labelled CSV header rows for scripts/jev_eval.py. Headers only: no row values. RegEngine's seven CSV templates are added by the script from CTE_COLUMNS. Labels list every acceptable answer; a header left unlabelled is asked but not scored. Headers are written as supplier exports spell them, deliberately not copied from the example headers in the question vocabulary, so the score is not inflated by the prompt.",
+  "cases": [
+    {
+      "id": "erp-shipping-log",
+      "headers": ["Ship Dte", "Sales Order", "Cust Name", "Ship-To City", "Item Desc", "Lot No.", "Cases Shipped", "UOM", "BOL No", "Freight Co."],
+      "cte": "shipping",
+      "mappings": {
+        "Ship Dte": "ship_date",
+        "Sales Order": [
+          "reference_document",
+          "no_match"
+        ],
+        "Cust Name": [
+          "ship_to_location",
+          "no_match"
+        ],
+        "Ship-To City": "ship_to_location",
+        "Item Desc": "product_description",
+        "Lot No.": "traceability_lot_code",
+        "Cases Shipped": "quantity",
+        "BOL No": "reference_document",
+        "Freight Co.": "carrier"
+      }
+    },
+    {
+      "id": "distributor-outbound",
+      "headers": ["Dispatch Dt", "Consignee Name", "Deliver-To GLN", "SKU Description", "Batch #", "Pallets", "Sell Unit", "Invoice Number", "Origin Facility"],
+      "cte": "shipping",
+      "mappings": {
+        "Dispatch Dt": "ship_date",
+        "Consignee Name": "ship_to_location",
+        "Deliver-To GLN": "ship_to_gln",
+        "SKU Description": "product_description",
+        "Batch #": "traceability_lot_code",
+        "Pallets": [
+          "quantity",
+          "unit_of_measure"
+        ],
+        "Sell Unit": "unit_of_measure",
+        "Invoice Number": "reference_document",
+        "Origin Facility": "ship_from_location"
+      }
+    },
+    {
+      "id": "shipping-with-order-date",
+      "headers": ["Order Date", "Ship Date", "Customer PO", "ShipTo Name", "Product", "TLC", "Qty", "UOM"],
+      "cte": "shipping",
+      "mappings": {
+        "Order Date": "no_match",
+        "Customer PO": "reference_document",
+        "ShipTo Name": "ship_to_location"
+      }
+    },
+    {
+      "id": "dc-receiving-log",
+      "headers": ["Date Received", "Rec'd From", "PO #", "Product Name", "Supplier Lot", "Qty Rcvd", "Rcv Unit", "Dock Door", "Temp at Receipt (F)"],
+      "cte": "receiving",
+      "mappings": {
+        "Date Received": "receive_date",
+        "Rec'd From": "immediate_previous_source",
+        "PO #": "reference_document",
+        "Product Name": "product_description",
+        "Supplier Lot": "traceability_lot_code",
+        "Qty Rcvd": "quantity",
+        "Rcv Unit": "unit_of_measure",
+        "Dock Door": [
+          "receiving_location",
+          "no_match"
+        ],
+        "Temp at Receipt (F)": "no_match"
+      }
+    },
+    {
+      "id": "restaurant-receiving",
+      "headers": ["Delivered On", "Vendor Name", "Invoice #", "Item Name", "Lot/Batch", "Case Count", "Store Location"],
+      "cte": "receiving",
+      "mappings": {
+        "Delivered On": "receive_date",
+        "Vendor Name": "immediate_previous_source",
+        "Invoice #": "reference_document",
+        "Item Name": "product_description",
+        "Lot/Batch": "traceability_lot_code",
+        "Case Count": "quantity",
+        "Store Location": "receiving_location"
+      }
+    },
+    {
+      "id": "receiving-with-supplier-ship-date",
+      "headers": ["Ship Date", "Received Date", "Shipper Name", "Item Descr.", "Lot Code", "Qty", "Recv Site"],
+      "cte": "receiving",
+      "mappings": {
+        "Received Date": "receive_date",
+        "Shipper Name": "immediate_previous_source",
+        "Item Descr.": "product_description",
+        "Recv Site": "receiving_location"
+      }
+    },
+    {
+      "id": "farm-harvest-log",
+      "headers": ["Pick Dt", "Ranch", "Block #", "Crop", "Harvest Lot", "Bins", "Crew Lead"],
+      "cte": "harvesting",
+      "mappings": {
+        "Pick Dt": "harvest_date",
+        "Ranch": "location_name",
+        "Block #": [
+          "location_name",
+          "no_match"
+        ],
+        "Crop": "product_description",
+        "Harvest Lot": "traceability_lot_code",
+        "Bins": [
+          "quantity",
+          "unit_of_measure"
+        ],
+        "Crew Lead": "no_match"
+      }
+    },
+    {
+      "id": "harvest-template-variant",
+      "headers": ["TLC", "Crop Name", "Qty", "UOM", "Harvest Dt", "Farm Name", "Field #", "Harvest Company"],
+      "cte": "harvesting",
+      "mappings": {
+        "Crop Name": "product_description",
+        "Harvest Dt": "harvest_date",
+        "Farm Name": "location_name",
+        "Field #": [
+          "location_name",
+          "no_match"
+        ],
+        "Harvest Company": "harvester_business_name"
+      }
+    },
+    {
+      "id": "cooler-log",
+      "headers": ["Date Cooled", "Cooler ID", "Produce", "Lot Nbr", "Pallet Count", "Pulp Temp F", "Cooling Method"],
+      "cte": "cooling",
+      "mappings": {
+        "Date Cooled": "cooling_date",
+        "Cooler ID": [
+          "location_name",
+          "no_match"
+        ],
+        "Produce": "product_description",
+        "Lot Nbr": "traceability_lot_code",
+        "Pallet Count": "quantity",
+        "Pulp Temp F": "no_match",
+        "Cooling Method": "no_match"
+      }
+    },
+    {
+      "id": "packhouse-pack-out",
+      "headers": ["Packed Date", "Packinghouse", "Grower/Harvester", "Harvest Lot #", "Pack Lot", "Commodity Desc", "Cartons", "Pack Style"],
+      "cte": "initial_packing",
+      "mappings": {
+        "Packed Date": "packing_date",
+        "Packinghouse": "location_name",
+        "Grower/Harvester": "harvester_business_name",
+        "Pack Lot": "traceability_lot_code",
+        "Commodity Desc": "product_description",
+        "Cartons": "quantity",
+        "Pack Style": [
+          "unit_of_measure",
+          "no_match"
+        ]
+      }
+    },
+    {
+      "id": "fresh-cut-production",
+      "headers": ["Production Dt", "Work Order", "Finished Good", "Output Lot", "Output Qty", "Output UOM", "Component Lots", "Component Qtys", "Line"],
+      "cte": "transformation",
+      "mappings": {
+        "Production Dt": "transformation_date",
+        "Work Order": "reference_document",
+        "Finished Good": "product_description",
+        "Output Lot": "traceability_lot_code",
+        "Output Qty": "quantity",
+        "Output UOM": "unit_of_measure",
+        "Component Lots": "input_lot_codes",
+        "Component Qtys": "input_quantities",
+        "Line": [
+          "location_name",
+          "no_match"
+        ]
+      }
+    },
+    {
+      "id": "seafood-landing",
+      "headers": ["Offload Dt", "Vessel Name", "Dock", "Species", "Landing Lot", "Weight (lbs)", "Harvest Area"],
+      "cte": "first_land_based_receiving",
+      "mappings": {
+        "Offload Dt": "landing_date",
+        "Vessel Name": [
+          "immediate_previous_source",
+          "no_match"
+        ],
+        "Dock": [
+          "receiving_location",
+          "location_name"
+        ],
+        "Species": "product_description",
+        "Landing Lot": "traceability_lot_code",
+        "Weight (lbs)": "quantity",
+        "Harvest Area": "no_match"
+      }
+    },
+    {
+      "id": "mixed-transactions",
+      "headers": ["Trans Date", "Txn Type", "Material", "Lot ID", "Qty", "From", "To"],
+      "cte": "mixed_or_unclear",
+      "mappings": {
+        "Trans Date": "event_date",
+        "Txn Type": "cte_type",
+        "Material": "product_description",
+        "Lot ID": "traceability_lot_code",
+        "From": [
+          "ship_from_location",
+          "immediate_previous_source"
+        ],
+        "To": "ship_to_location"
+      }
+    },
+    {
+      "id": "inventory-snapshot",
+      "headers": ["As Of", "Warehouse", "SKU", "Description", "Lot Ref", "On Hand", "Bin"],
+      "cte": "mixed_or_unclear",
+      "mappings": {
+        "As Of": [
+          "event_date",
+          "no_match"
+        ],
+        "Warehouse": "location_name",
+        "SKU": "no_match",
+        "Lot Ref": "traceability_lot_code",
+        "On Hand": [
+          "quantity",
+          "no_match"
+        ],
+        "Bin": "no_match"
+      }
+    },
+    {
+      "id": "per-row-events",
+      "headers": ["Event Type", "Lot #", "Product", "Qty", "Date", "Site Name"],
+      "cte": null,
+      "mappings": {
+        "Lot #": "traceability_lot_code",
+        "Site Name": "location_name"
+      }
+    }
+  ]
+}

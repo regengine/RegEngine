@@ -35,6 +35,7 @@ vocabularies, not whole uploads.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 import time
@@ -67,6 +68,12 @@ from typesafe_sdk import (
 from .settings import JevSettings
 
 logger = structlog.get_logger("jev")
+# Production drops structlog INFO events that have no sampled trace
+# (sampling_aware_filter with LOG_ALL_SAMPLED_OUT=false), so a successful call
+# would leave no trace there while a failure (a warning) still shows. This
+# stdlib line is what lets an operator see in the deploy log that the key works
+# and Jev is being used. Metadata only, like the structlog event.
+_ops_log = logging.getLogger("jev")
 
 PROVIDER = "typesafe"
 _SDK_LOGGER_NAME = "typesafe_sdk"
@@ -188,6 +195,21 @@ def guard_sdk_logging() -> None:
         logger.info("jev.sdk_logging_capped", sdk_logger=_SDK_LOGGER_NAME, level="INFO")
 
 
+def _unit(value: float) -> float:
+    """A vendor confidence or probability as a finite number in ``[0, 1]``.
+
+    The SDK's response schema types these as plain floats, unbounded. Float
+    noise such as ``1.0000001`` would fail every response model that bounds
+    them (``CsvIngestResponse``: a 500 after the rows were stored), so
+    values are clamped. A non-finite value is no information and reads as
+    0.0, which no confidence band acts on.
+    """
+    value = float(value)
+    if not math.isfinite(value):
+        return 0.0
+    return min(1.0, max(0.0, value))
+
+
 def _convert(
     response: SystemOneResponse,
 ) -> tuple[dict[str, ChoiceResult], dict[str, NoulResult], dict[str, ScoreResult]]:
@@ -198,16 +220,16 @@ def _convert(
         if isinstance(answer, ChoiceAnswer):
             choices[question_id] = ChoiceResult(
                 choice=answer.choice,
-                confidence=float(answer.confidence),
-                probabilities={label: float(p) for label, p in answer.probabilities.items()},
+                confidence=_unit(answer.confidence),
+                probabilities={label: _unit(p) for label, p in answer.probabilities.items()},
             )
         elif isinstance(answer, NoulAnswer):
-            nouls[question_id] = NoulResult(probability=float(answer.noul))
+            nouls[question_id] = NoulResult(probability=_unit(answer.noul))
         elif isinstance(answer, ScoreAnswer):
             scores[question_id] = ScoreResult(
                 score=float(answer.score),
-                confidence=float(answer.confidence),
-                probabilities={int(level): float(p) for level, p in answer.probabilities.items()},
+                confidence=_unit(answer.confidence),
+                probabilities={int(level): _unit(p) for level, p in answer.probabilities.items()},
                 legend={int(level): text for level, text in answer.legend.items()},
             )
     return choices, nouls, scores
@@ -329,6 +351,16 @@ class JevDecider:
             input_tokens=evidence.input_tokens,
             output_tokens=evidence.output_tokens,
             question_count=len(evidence.question_ids),
+        )
+        _ops_log.info(
+            "jev_answered purpose=%s model=%s request_id=%s latency_ms=%s questions=%d input_tokens=%s output_tokens=%s",
+            purpose,
+            evidence.model,
+            evidence.request_id,
+            evidence.latency_ms,
+            len(evidence.question_ids),
+            evidence.input_tokens,
+            evidence.output_tokens,
         )
         return JevAnswers(evidence=evidence, choices=choices, nouls=nouls, scores=scores)
 
