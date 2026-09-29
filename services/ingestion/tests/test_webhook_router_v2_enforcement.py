@@ -14,14 +14,14 @@ Coverage:
   - Helper returns (True, reason) in cte_only mode when critical_failures
     is non-empty
   - Helper returns (False, None) in cte_only mode for warning-only fails
-  - Helper returns (False, None) for no-verdict summaries
-  - Helper swallows canonical/eval errors and returns (False, None)
-    (preserves best-effort semantics for tenants without seeded rules)
+  - Helper rejects no-verdict summaries under active enforcement
+  - Helper surfaces canonical/eval errors under active enforcement
   - Helper returns (True, reason) in ``all`` mode on warning-only fails
 """
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from types import ModuleType, SimpleNamespace
 
@@ -67,8 +67,11 @@ def _warning_only_summary() -> EvaluationSummary:
     )
 
 
-def _no_verdict_summary() -> EvaluationSummary:
-    return EvaluationSummary(total_rules=0, no_verdict_reason="no_rules_loaded")
+def _no_verdict_summary(reason: str = "no_rules_loaded") -> EvaluationSummary:
+    return EvaluationSummary(
+        total_rules=0 if reason == "no_rules_loaded" else 1,
+        no_verdict_reason=reason,
+    )
 
 
 def _compliant_summary() -> EvaluationSummary:
@@ -141,6 +144,72 @@ def _principal(tenant_id: str | None, scopes: list[str] | None = None) -> Ingest
         tenant_id=tenant_id,
         scopes=scopes or ["webhooks.ingest"],
     )
+
+
+def _run_rejected_route(monkeypatch, event, *, summary: EvaluationSummary, reason: str):
+    class _RouteSession:
+        def __init__(self):
+            self.commits = 0
+            self.rollbacks = 0
+            self.closed = False
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
+        def close(self):
+            self.closed = True
+
+    class _NeverStore:
+        def __init__(self, db_session):
+            self.db_session = db_session
+
+        def store_events_batch(self, **_kwargs):
+            raise AssertionError("rejected event must not reach batch persistence")
+
+        def store_event(self, **_kwargs):
+            raise AssertionError("rejected event must not reach fallback persistence")
+
+    cte_mod = ModuleType("shared.cte_persistence")
+    cte_mod.CTEPersistence = _NeverStore
+    monkeypatch.setitem(sys.modules, "shared.cte_persistence", cte_mod)
+
+    async def _resolve_tenant_context(_request):
+        return SimpleNamespace(tenant_id="authenticated-tenant")
+
+    monkeypatch.setattr(wrv2, "resolve_tenant_context", _resolve_tenant_context)
+    monkeypatch.setattr(wrv2, "validate_tenant_id", lambda _tenant_id: None)
+    monkeypatch.setattr(wrv2, "_check_rate_limit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(wrv2, "_validate_event_timestamp_window", lambda _timestamp: None)
+    monkeypatch.setattr(wrv2, "_validate_event_kdes", lambda _event: [])
+    monkeypatch.setattr(wrv2, "_generate_alerts", lambda _event: [])
+    monkeypatch.setattr(
+        wrv2,
+        "_rules_preeval_reject",
+        lambda _event, _db_session, _tenant_id: (True, reason, summary),
+    )
+
+    session = _RouteSession()
+    response = asyncio.run(
+        wrv2.ingest_events(
+            payload=SimpleNamespace(events=[event], source="manual"),
+            request=SimpleNamespace(state=SimpleNamespace()),
+            principal=_principal("authenticated-tenant"),
+            x_regengine_api_key="test-key",  # pragma: allowlist secret
+            x_tenant_id=None,
+            _auth=None,
+            _signature=None,
+            _subscription=None,
+            _idempotency_key="idem-1",
+            db_session=session,
+        )
+    )
+    assert session.commits == 1
+    assert session.rollbacks == 0
+    assert session.closed is True
+    return response
 
 
 @pytest.fixture(autouse=True)
@@ -299,14 +368,23 @@ class TestPreEvalCteOnly:
         assert reject is False
         assert reason is None
 
-    def test_no_verdict_does_not_reject(self, monkeypatch, _make_event):
-        """no_rules_loaded / non-FTL → compliant=None → must never reject.
-        Blocking here would break ingestion for every tenant without
-        seeded rules or non-FTL products."""
+    def test_no_verdict_rejects_and_audits_exact_reason(
+        self,
+        monkeypatch,
+        _make_event,
+        rejection_audit_writer,
+    ):
         _install(monkeypatch, summary=_no_verdict_summary())
-        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
-        assert reject is False
-        assert reason is None
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(
+            _make_event,
+            db_session=None,
+            tenant_id="authenticated-tenant",
+        )
+        assert reject is True
+        assert reason == "no_rules_loaded"
+        audit_kwargs = rejection_audit_writer.call_args.kwargs
+        assert audit_kwargs["tenant_id"] == "authenticated-tenant"
+        assert audit_kwargs["reasons"] == [{"verdict": "no_verdict", "reason": "no_rules_loaded"}]
 
     def test_compliant_does_not_reject(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_compliant_summary())
@@ -328,6 +406,50 @@ class TestPreEvalCteOnly:
         assert exc.value.status_code == 500
         detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
         assert detail.get("error") == "RULES_ENGINE_EVAL_FAILED"
+
+
+class TestRouteRejectionResponse:
+    @pytest.fixture(autouse=True)
+    def _cte_only(self, monkeypatch):
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+
+    @pytest.mark.parametrize(
+        "reason,expected_code",
+        [
+            ("ftl_classification_missing", "rules_no_verdict"),
+            ("no_rules_loaded", "rules_unavailable"),
+        ],
+    )
+    def test_no_verdict_is_a_truthful_per_event_rejection(
+        self,
+        monkeypatch,
+        _make_event,
+        reason,
+        expected_code,
+    ):
+        response = _run_rejected_route(
+            monkeypatch,
+            _make_event,
+            summary=_no_verdict_summary(reason),
+            reason=reason,
+        )
+        assert response.accepted == 0
+        assert response.rejected == 1
+        assert response.total == 1
+        assert response.events[0].status == "rejected"
+        assert response.events[0].errors == [f"{expected_code}: {reason}"]
+
+    def test_real_rule_failure_remains_rule_violation(self, monkeypatch, _make_event):
+        reason = "CTE_REQ_HARVEST_DATE: harvest_date missing"
+        response = _run_rejected_route(
+            monkeypatch,
+            _make_event,
+            summary=_critical_summary(),
+            reason=reason,
+        )
+        assert response.accepted == 0
+        assert response.rejected == 1
+        assert response.events[0].errors == [f"rule_violation: {reason}"]
 
 
 # ---------------------------------------------------------------------------
@@ -353,10 +475,11 @@ class TestPreEvalAll:
         reject, _, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
 
-    def test_no_verdict_still_accepts(self, monkeypatch, _make_event):
+    def test_no_verdict_rejects(self, monkeypatch, _make_event):
         _install(monkeypatch, summary=_no_verdict_summary())
-        reject, _, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
-        assert reject is False
+        reject, reason, _summary_unused = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
+        assert reject is True
+        assert reason == "no_rules_loaded"
 
 
 # ---------------------------------------------------------------------------

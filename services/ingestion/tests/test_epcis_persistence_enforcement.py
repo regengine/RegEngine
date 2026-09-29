@@ -157,8 +157,11 @@ def _warning_only_summary() -> EvaluationSummary:
     )
 
 
-def _no_verdict_summary() -> EvaluationSummary:
-    return EvaluationSummary(total_rules=0, no_verdict_reason="no_rules_loaded")
+def _no_verdict_summary(reason: str = "no_rules_loaded") -> EvaluationSummary:
+    return EvaluationSummary(
+        total_rules=0 if reason == "no_rules_loaded" else 1,
+        no_verdict_reason=reason,
+    )
 
 
 def _compliant_summary() -> EvaluationSummary:
@@ -262,20 +265,37 @@ class TestEnforceCteOnly:
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
 
-    def test_no_verdict_accepts(self) -> None:
-        """Non-FTL / no_rules_loaded → compliant=None → must never reject.
-        Blocking here would break ingestion for tenants without seeded
-        rules and for non-FTL products."""
-        _FakeEngine.summary_to_return = _no_verdict_summary()
+    @pytest.mark.parametrize(
+        "reason,expected_code,expected_status",
+        [
+            ("ftl_classification_missing", "rules_no_verdict", 422),
+            ("no_rules_loaded", "rules_unavailable", 503),
+        ],
+    )
+    def test_no_verdict_rejects_before_store_with_truthful_status_and_audits_exact_reason(
+        self,
+        rejection_audit_writer,
+        reason,
+        expected_code,
+        expected_status,
+    ) -> None:
+        _FakeEngine.summary_to_return = _no_verdict_summary(reason)
         from app.epcis import persistence as persistence_mod
 
-        payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(),
-            tenant_id="t-1",
-            prepared=_make_prepared(),
-        )
-        assert status in (200, 201)
-        assert _FakeCTEPersistence.last_called is True
+        with pytest.raises(HTTPException) as exc_info:
+            persistence_mod._persist_prepared_event_in_session(
+                db_session=MagicMock(),
+                tenant_id="authenticated-tenant",
+                prepared=_make_prepared(),
+            )
+
+        assert exc_info.value.status_code == expected_status
+        assert exc_info.value.detail["error"] == expected_code
+        assert exc_info.value.detail["reason"] == reason
+        assert _FakeCTEPersistence.last_called is False
+        audit_kwargs = rejection_audit_writer.call_args.kwargs
+        assert audit_kwargs["tenant_id"] == "authenticated-tenant"
+        assert audit_kwargs["reasons"] == [{"verdict": "no_verdict", "reason": reason}]
 
     def test_compliant_accepts(self) -> None:
         _FakeEngine.summary_to_return = _compliant_summary()
@@ -395,6 +415,7 @@ class TestEnforceAll:
                 prepared=_make_prepared(),
             )
         assert exc_info.value.status_code == 422
+        assert exc_info.value.detail["error"] == "rule_violation"
         assert "R_WARN" in exc_info.value.detail["reason"]
         assert _FakeCTEPersistence.last_called is False
 
@@ -507,11 +528,9 @@ class TestThreadedBlockReusesPreComputedSummary:
 
 
 class TestThreadedBlockFallbackWhenNoPreComputedSummary:
-    """When pre-eval is skipped (OFF mode) or returns a no-verdict / errored
-    summary, the threaded block must fall back to the pre-Phase-0 behavior
-    of ``evaluate_event(persist=True)``. This branch is the default
-    production path while ``RULES_ENGINE_ENFORCE=off``, so it must remain
-    bit-for-bit identical to the prior implementation."""
+    """When pre-eval is skipped in OFF mode, the canonical block performs
+    the normal persisted evaluation. Active-mode no-verdict never reaches
+    this block because the gate rejects it first."""
 
     def test_off_mode_falls_back_to_evaluate_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OFF mode short-circuits pre-eval (returns summary=None), so the
@@ -535,23 +554,23 @@ class TestThreadedBlockFallbackWhenNoPreComputedSummary:
             "via evaluate_event(persist=True)"
         )
 
-    def test_no_verdict_summary_falls_back_to_evaluate_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """no_verdict_reason summary has empty .results — persist_summary
-        would be a no-op against it. Threaded block falls through to
-        evaluate_event so the eval rows actually get written."""
+    def test_no_verdict_summary_never_reaches_threaded_persistence(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Active enforcement rejects no-verdict before any primary or evidence write."""
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
         _FakeEngine.summary_to_return = _no_verdict_summary()
         from app.epcis import persistence as persistence_mod
 
-        payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(),
-            tenant_id="t-1",
-            prepared=_make_prepared(),
-        )
-        assert status in (200, 201)
-        # Pre-eval ran (1 call) + threaded block re-evaluated to write rows.
-        assert _FakeEngine.evaluate_event_call_count == 2
-        assert _FakeEngine.evaluate_event_persist_true_count == 1
+        with pytest.raises(HTTPException) as exc_info:
+            persistence_mod._persist_prepared_event_in_session(
+                db_session=MagicMock(),
+                tenant_id="t-1",
+                prepared=_make_prepared(),
+            )
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail["error"] == "rules_unavailable"
+        assert _FakeEngine.evaluate_event_call_count == 1
+        assert _FakeEngine.evaluate_event_persist_true_count == 0
         assert len(_FakeEngine.persist_summary_calls) == 0
 
 

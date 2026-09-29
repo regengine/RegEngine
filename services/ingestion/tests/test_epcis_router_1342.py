@@ -172,7 +172,7 @@ class TestBatchIngest:
         assert body["mode"] == "partial"
         assert body["created"] == 1
         assert body["failed"] == 1
-        assert body["errors"] == [{"index": 1, "detail": "bad event"}]
+        assert body["errors"] == [{"index": 1, "status_code": 422, "detail": "bad event"}]
 
     def test_partial_mode_all_failures_returns_400(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 173-174: partial mode with ONLY failures → 400."""
@@ -190,6 +190,30 @@ class TestBatchIngest:
         body = resp.json()
         assert body["created"] == 0
         assert body["failed"] == 1
+
+    def test_partial_mode_preserves_rules_unavailable_status_and_reason(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        detail = {
+            "error": "rules_unavailable",
+            "reason": "no_rules_loaded",
+            "tenant_id": TEST_TENANT_ID,
+        }
+
+        def _reject(tenant_id: str, event: dict) -> tuple[dict, int]:
+            raise HTTPException(status_code=503, detail=detail)
+
+        monkeypatch.setattr(router_mod, "_ingest_single_event", _reject)
+
+        resp = client.post(
+            "/api/v1/epcis/events/batch?mode=partial",
+            json={"events": [{"type": "ObjectEvent"}]},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["errors"] == [{"index": 0, "status_code": 503, "detail": detail}]
 
     def test_partial_mode_all_success_returns_201(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 175: partial mode with ONLY successes → 201."""
@@ -481,6 +505,36 @@ class TestIngestEpcisXml:
             headers={"Content-Type": "application/xml"},
         )
         assert resp.status_code == 400
+
+    def test_partial_xml_preserves_rules_no_verdict_status_and_reason(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            router_mod,
+            "_parse_epcis_xml",
+            lambda raw: [{"type": "ObjectEvent"}],
+        )
+        detail = {
+            "error": "rules_no_verdict",
+            "reason": "not_ftl_scoped",
+            "tenant_id": TEST_TENANT_ID,
+        }
+
+        def _reject(tenant_id: str, event: dict) -> tuple[dict, int]:
+            raise HTTPException(status_code=422, detail=detail)
+
+        monkeypatch.setattr(router_mod, "_ingest_single_event", _reject)
+
+        resp = client.post(
+            "/api/v1/epcis/events/xml?mode=partial",
+            content=_MINIMAL_EPCIS_XML,
+            headers={"Content-Type": "application/xml"},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["errors"] == [{"index": 0, "status_code": 422, "detail": detail}]
 
     def test_empty_body_returns_400(self, client: TestClient) -> None:
         resp = client.post(

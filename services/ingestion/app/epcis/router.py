@@ -163,7 +163,7 @@ async def ingest_epcis_batch(
             if status_code == 201:
                 created.append(payload)
         except HTTPException as exc:
-            failed.append({"index": idx, "detail": exc.detail})
+            failed.append({"index": idx, "status_code": exc.status_code, "detail": exc.detail})
 
     response_payload = {
         "total": len(body.events),
@@ -379,7 +379,7 @@ async def ingest_epcis_xml(
             if status_code == 201:
                 created.append(payload)
         except HTTPException as exc:
-            failed.append({"index": idx, "detail": exc.detail})
+            failed.append({"index": idx, "status_code": exc.status_code, "detail": exc.detail})
 
     response_payload = {
         "total": len(events),

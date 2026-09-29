@@ -564,8 +564,9 @@ class TraceabilityEvent(BaseModel):
         """Derive an FTL classification hint from product text (#1346).
 
         Without a hint in kdes, the rules engine skips the event with
-        no_verdict_reason="ftl_classification_missing" and enforcement
-        (RULES_ENGINE_ENFORCE) is a silent no-op. Constraints:
+        no_verdict_reason="ftl_classification_missing". Active enforcement
+        rejects that no-verdict outcome before persistence; off mode remains
+        advisory. Constraints:
 
         - Must run BEFORE compute_sha256_hash/compute_idempotency_key —
           both cover kdes, and chain verification recomputes from the

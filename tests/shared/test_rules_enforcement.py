@@ -5,9 +5,9 @@ Covers every combination of:
   - EvaluationSummary verdict (compliant=True | False | None)
   - critical_failures present vs empty
 
-The central invariant: ``compliant is None`` is NEVER a reject, in any
-mode. Blocking an event on non-evaluation would silently break ingestion
-for tenants without seeded rules and for non-FTL products.
+The central invariant: ``compliant is None`` stays advisory in ``off`` mode,
+but fails closed whenever enforcement is active. An active compliance gate
+cannot accept an event the rules engine did not actually evaluate.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import pytest
 from services.shared.rules.enforcement import (
     EnforcementMode,
     current_mode,
+    rejection_code,
     should_reject,
 )
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
@@ -77,19 +78,57 @@ def _summary_compliant_false_warning_only() -> EvaluationSummary:
     )
 
 
-def _summary_no_verdict_empty_rules() -> EvaluationSummary:
-    """No rules loaded → compliant=None."""
-    return EvaluationSummary(total_rules=0, no_verdict_reason="no_rules_loaded")
-
-
-def _summary_no_verdict_not_ftl() -> EvaluationSummary:
-    """Non-FTL product → compliant=None even with passing rules."""
+def _summary_warning_failure_with_classification_gap() -> EvaluationSummary:
+    """A warning failed, but FTL classification still has no verdict."""
+    warn = _result(rule_id="R_WARN", severity="warning", result="fail")
     return EvaluationSummary(
-        total_rules=3,
-        not_ftl_scoped=3,
-        no_verdict_reason="not_ftl_scoped",
-        results=[_result(rule_id=f"R{i}", result="not_ftl_scoped") for i in range(3)],
+        total_rules=1,
+        failed=1,
+        results=[warn],
+        critical_failures=[],
+        no_verdict_reason="ftl_classification_missing",
     )
+
+
+def _summary_no_verdict(reason: str) -> EvaluationSummary:
+    """Build each supported no-verdict shape with a literal expected reason."""
+    if reason == "no_rules_loaded":
+        return EvaluationSummary(total_rules=0, no_verdict_reason=reason)
+    if reason == "ftl_classification_missing":
+        return EvaluationSummary(total_rules=1, no_verdict_reason=reason)
+    if reason == "not_ftl_scoped":
+        return EvaluationSummary(
+            total_rules=3,
+            not_ftl_scoped=3,
+            no_verdict_reason=reason,
+            results=[_result(rule_id=f"R{i}", result="not_ftl_scoped") for i in range(3)],
+        )
+    if reason == "all_rules_skipped":
+        return EvaluationSummary(
+            total_rules=2,
+            skipped=2,
+            results=[_result(rule_id=f"R{i}", result="skip") for i in range(2)],
+        )
+    if reason == "nothing_evaluated":
+        return EvaluationSummary(total_rules=0)
+    raise AssertionError(f"unsupported test reason: {reason}")
+
+
+_NO_VERDICT_REASONS = (
+    "no_rules_loaded",
+    "ftl_classification_missing",
+    "not_ftl_scoped",
+    "all_rules_skipped",
+    "nothing_evaluated",
+)
+
+_NO_VERDICT_RESPONSE_CODES = {
+    "ftl_classification_missing": "rules_no_verdict",
+    "not_ftl_scoped": "rules_no_verdict",
+    "no_rules_loaded": "rules_unavailable",
+    "all_rules_skipped": "rules_unavailable",
+    "nothing_evaluated": "rules_unavailable",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -168,16 +207,16 @@ class TestShouldRejectOff:
 
     @pytest.mark.parametrize(
         "summary_factory",
-        [
-            _summary_compliant_true,
-            _summary_compliant_false_critical,
-            _summary_compliant_false_warning_only,
-            _summary_no_verdict_empty_rules,
-            _summary_no_verdict_not_ftl,
-        ],
+        [_summary_compliant_true, _summary_compliant_false_critical, _summary_compliant_false_warning_only],
     )
     def test_never_rejects(self, summary_factory):
         reject, reason = should_reject(summary_factory())
+        assert reject is False
+        assert reason is None
+
+    @pytest.mark.parametrize("no_verdict_reason", _NO_VERDICT_REASONS)
+    def test_no_verdict_stays_advisory(self, no_verdict_reason):
+        reject, reason = should_reject(_summary_no_verdict(no_verdict_reason))
         assert reject is False
         assert reason is None
 
@@ -188,7 +227,7 @@ class TestShouldRejectOff:
 
 
 class TestShouldRejectCteOnly:
-    """CTE_ONLY rejects only when critical_failures is non-empty."""
+    """CTE_ONLY rejects critical failures and every no-verdict outcome."""
 
     @pytest.fixture(autouse=True)
     def _cte_only(self, monkeypatch):
@@ -206,23 +245,15 @@ class TestShouldRejectCteOnly:
         assert reject is False
         assert reason is None
 
+    def test_warning_failure_cannot_hide_classification_gap(self):
+        summary = _summary_warning_failure_with_classification_gap()
+
+        assert summary.compliant is False
+        assert should_reject(summary) == (True, "ftl_classification_missing")
+
     def test_accepts_when_compliant(self):
         reject, _ = should_reject(_summary_compliant_true())
         assert reject is False
-
-    def test_accepts_no_verdict_empty_rules(self):
-        """no_rules_loaded must never reject — would block every tenant
-        without seed data."""
-        reject, reason = should_reject(_summary_no_verdict_empty_rules())
-        assert reject is False
-        assert reason is None
-
-    def test_accepts_no_verdict_not_ftl(self):
-        """Non-FTL products must never reject — would block every
-        non-FTL event even though rules don't apply."""
-        reject, reason = should_reject(_summary_no_verdict_not_ftl())
-        assert reject is False
-        assert reason is None
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +284,30 @@ class TestShouldRejectAll:
         reject, _ = should_reject(_summary_compliant_true())
         assert reject is False
 
-    def test_accepts_no_verdict_empty_rules(self):
-        reject, _ = should_reject(_summary_no_verdict_empty_rules())
-        assert reject is False
 
-    def test_accepts_no_verdict_not_ftl(self):
-        reject, _ = should_reject(_summary_no_verdict_not_ftl())
-        assert reject is False
+@pytest.mark.parametrize("mode", [EnforcementMode.CTE_ONLY, EnforcementMode.ALL])
+@pytest.mark.parametrize("no_verdict_reason", _NO_VERDICT_REASONS)
+def test_active_modes_reject_every_no_verdict_reason(monkeypatch, mode, no_verdict_reason):
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+    assert should_reject(_summary_no_verdict(no_verdict_reason)) == (
+        True,
+        no_verdict_reason,
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (EnforcementMode.OFF, (False, None)),
+        (EnforcementMode.CTE_ONLY, (True, "all_rules_skipped")),
+        (EnforcementMode.ALL, (True, "all_rules_skipped")),
+    ],
+)
+def test_mixed_unevaluated_results_follow_mode(monkeypatch, mode, expected):
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+    summary = EvaluationSummary(total_rules=2, skipped=1, not_ftl_scoped=1)
+    assert summary.verdict_reason == "all_rules_skipped"
+    assert should_reject(summary) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -302,3 +350,38 @@ class TestReasonFormat:
         assert reject is True
         assert "R_ERR" in reason
         assert "evaluator_crash" in reason
+
+
+class TestRejectionCode:
+    @pytest.mark.parametrize("reason,expected_code", _NO_VERDICT_RESPONSE_CODES.items())
+    def test_no_verdict_reasons_have_truthful_codes(self, reason, expected_code):
+        summary = _summary_no_verdict(reason)
+        assert rejection_code(summary, reason) == expected_code
+
+    def test_real_rule_failure_remains_rule_violation(self):
+        summary = _summary_compliant_false_critical()
+        assert rejection_code(summary, "R_CRITICAL: missing_kde") == "rule_violation"
+
+    def test_critical_failure_evidence_remains_rule_violation_when_no_verdict_metadata_is_present(self, monkeypatch):
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+        critical = _result(rule_id="R_CRITICAL", severity="critical", result="fail")
+        summary = EvaluationSummary(
+            total_rules=1,
+            failed=1,
+            results=[critical],
+            critical_failures=[critical],
+            no_verdict_reason="ftl_classification_missing",
+        )
+        reject, reason = should_reject(summary)
+        assert reject is True
+        assert reason == "R_CRITICAL: missing_kde"
+        assert rejection_code(summary, reason) == "rule_violation"
+
+    def test_classification_gap_driving_cte_only_rejection_has_truthful_code(self, monkeypatch):
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+        summary = _summary_warning_failure_with_classification_gap()
+        reject, reason = should_reject(summary)
+
+        assert reject is True
+        assert reason == "ftl_classification_missing"
+        assert rejection_code(summary, reason) == "rules_no_verdict"

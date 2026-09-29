@@ -165,6 +165,75 @@ def test_reasons_from_summary_empty_falls_back_to_generic():
     assert out == [{"reason": "rule_violation"}]
 
 
+def test_reasons_from_summary_preserves_exact_no_verdict_reason():
+    from services.shared.rules.rejection_audit import reasons_from_summary
+    from services.shared.rules.types import EvaluationSummary
+
+    summary = EvaluationSummary(total_rules=0, no_verdict_reason="no_rules_loaded")
+
+    assert reasons_from_summary(summary) == [{"verdict": "no_verdict", "reason": "no_rules_loaded"}]
+
+
+def test_reasons_from_summary_failure_evidence_outranks_no_verdict_metadata():
+    from services.shared.rules.rejection_audit import reasons_from_summary
+    from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
+
+    failed = RuleEvaluationResult(
+        rule_id="R1",
+        rule_version=3,
+        severity="critical",
+        result="fail",
+        why_failed="missing KDE",
+    )
+    summary = EvaluationSummary(
+        total_rules=1,
+        failed=1,
+        results=[failed],
+        critical_failures=[failed],
+        no_verdict_reason="ftl_classification_missing",
+    )
+
+    assert reasons_from_summary(summary) == [
+        {
+            "rule_id": "R1",
+            "rule_version": 3,
+            "severity": "critical",
+            "result": "fail",
+            "why_failed": "missing KDE",
+        }
+    ]
+
+
+def test_reasons_from_summary_preserves_gap_that_drove_warning_rejection():
+    from services.shared.rules.rejection_audit import reasons_from_summary
+    from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
+
+    failed = RuleEvaluationResult(
+        rule_id="R_WARN",
+        rule_version=4,
+        severity="warning",
+        result="fail",
+        why_failed="warning KDE absent",
+    )
+    summary = EvaluationSummary(
+        total_rules=1,
+        failed=1,
+        results=[failed],
+        no_verdict_reason="ftl_classification_missing",
+    )
+
+    assert reasons_from_summary(summary, rejection_reason="ftl_classification_missing") == [
+        {
+            "rule_id": "R_WARN",
+            "rule_version": 4,
+            "severity": "warning",
+            "result": "fail",
+            "why_failed": "warning KDE absent",
+        },
+        {"verdict": "no_verdict", "reason": "ftl_classification_missing"},
+    ]
+
+
 def test_handle_preeval_exception_off_mode_swallows(monkeypatch):
     """Finding A — under OFF mode the helper warns and returns."""
     monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")

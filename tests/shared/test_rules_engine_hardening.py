@@ -212,6 +212,151 @@ class TestIssue1346FTLScoping:
         assert summary.compliant is None
         assert summary.no_verdict_reason == "not_ftl_scoped"
 
+    def test_batch_false_ftl_hint_matches_single_event_enforcement(
+        self,
+        monkeypatch,
+    ):
+        from shared.rules.enforcement import should_reject
+
+        non_ftl_meta_rule = _make_rule(
+            rule_id="NON_FTL_META",
+            applicability_conditions={"cte_types": ["receiving"], "ftl_scope": ["NON_FTL"]},
+        )
+        engine = _engine_with_rules([non_ftl_meta_rule])
+        monkeypatch.setattr(engine, "load_active_rules", lambda: [non_ftl_meta_rule])
+        event = _make_event(
+            kdes={
+                "tlc_source_reference": "0061414100003",
+                "ftl_covered": False,
+            }
+        )
+
+        single = engine.evaluate_event(event, persist=False, tenant_id="authenticated-tenant")
+        [batch] = engine.evaluate_events_batch(
+            [event],
+            persist=False,
+            tenant_id="authenticated-tenant",
+        )
+
+        assert (single.compliant, single.verdict_reason) == (None, "not_ftl_scoped")
+        assert (batch.compliant, batch.verdict_reason) == (None, "not_ftl_scoped")
+        for mode, expected_decision in [
+            ("off", (False, None)),
+            ("cte_only", (True, "not_ftl_scoped")),
+            ("all", (True, "not_ftl_scoped")),
+        ]:
+            monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+            assert should_reject(batch) == expected_decision
+
+    @pytest.mark.parametrize(
+        "ftl_kde",
+        [None, "false"],
+    )
+    def test_unknown_ftl_classification_meta_rule_matches_single_and_batch(
+        self,
+        monkeypatch,
+        ftl_kde,
+    ):
+        from shared.rules.enforcement import should_reject
+
+        non_ftl_meta_rule = _make_rule(
+            rule_id="NON_FTL_META",
+            applicability_conditions={"cte_types": ["receiving"], "ftl_scope": ["NON_FTL"]},
+        )
+        engine = _engine_with_rules([non_ftl_meta_rule])
+        monkeypatch.setattr(engine, "load_active_rules", lambda: [non_ftl_meta_rule])
+        kdes = {"tlc_source_reference": "0061414100003"}
+        if ftl_kde is not None:
+            kdes["ftl_covered"] = ftl_kde
+        event = _make_event(kdes=kdes)
+        event.pop("ftl_covered")
+        event.pop("ftl_category")
+
+        single = engine.evaluate_event(event, persist=False, tenant_id="authenticated-tenant")
+        [batch] = engine.evaluate_events_batch(
+            [event],
+            persist=False,
+            tenant_id="authenticated-tenant",
+        )
+
+        assert (single.compliant, single.verdict_reason) == (
+            None,
+            "ftl_classification_missing",
+        )
+        assert (batch.compliant, batch.verdict_reason) == (
+            None,
+            "ftl_classification_missing",
+        )
+        for mode, expected_decision in [
+            ("off", (False, None)),
+            ("cte_only", (True, "ftl_classification_missing")),
+            ("all", (True, "ftl_classification_missing")),
+        ]:
+            monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+            assert should_reject(single) == expected_decision
+            assert should_reject(batch) == expected_decision
+
+    def test_malformed_ftl_hint_without_applicable_rule_is_classification_missing(self, monkeypatch):
+        ftl_rule = _make_rule()
+        engine = _engine_with_rules([ftl_rule])
+        monkeypatch.setattr(engine, "load_active_rules", lambda: [ftl_rule])
+        event = _make_event(
+            kdes={
+                "tlc_source_reference": "0061414100003",
+                "ftl_covered": "false",
+            }
+        )
+        event.pop("ftl_covered")
+        event.pop("ftl_category")
+
+        single = engine.evaluate_event(event, persist=False, tenant_id="authenticated-tenant")
+        [batch] = engine.evaluate_events_batch(
+            [event],
+            persist=False,
+            tenant_id="authenticated-tenant",
+        )
+
+        assert single.verdict_reason == "ftl_classification_missing"
+        assert batch.verdict_reason == "ftl_classification_missing"
+
+    def test_warning_failure_cannot_hide_missing_classification_in_single_or_batch(self, monkeypatch):
+        """A noncritical failure must not turn a classification gap into an accept."""
+        from shared.rules.enforcement import should_reject
+
+        non_ftl_warning_rule = _make_rule(
+            rule_id="NON_FTL_WARNING",
+            severity="warning",
+            applicability_conditions={"cte_types": ["receiving"], "ftl_scope": ["NON_FTL"]},
+            evaluation_logic={"type": "field_presence", "field": "kdes.missing_warning_field"},
+        )
+        engine = _engine_with_rules([non_ftl_warning_rule])
+        monkeypatch.setattr(engine, "load_active_rules", lambda: [non_ftl_warning_rule])
+        event = _make_event(kdes={"tlc_source_reference": "0061414100003"})
+        event.pop("ftl_covered")
+        event.pop("ftl_category")
+
+        single = engine.evaluate_event(event, persist=False, tenant_id="authenticated-tenant")
+        [batch] = engine.evaluate_events_batch(
+            [event],
+            persist=False,
+            tenant_id="authenticated-tenant",
+        )
+
+        for summary in (single, batch):
+            assert summary.failed == 1
+            assert summary.critical_failures == []
+            assert summary.compliant is False
+            assert summary.no_verdict_reason == "ftl_classification_missing"
+
+            monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+            assert should_reject(summary) == (False, None)
+            monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
+            assert should_reject(summary) == (True, "ftl_classification_missing")
+            monkeypatch.setenv("RULES_ENGINE_ENFORCE", "all")
+            reject, reason = should_reject(summary)
+            assert reject is True
+            assert reason is not None and "NON_FTL_WARNING" in reason
+
     def test_non_ftl_category_skipped(self):
         """An event with a non-FTL category string is not FTL."""
         rules = [_make_rule()]

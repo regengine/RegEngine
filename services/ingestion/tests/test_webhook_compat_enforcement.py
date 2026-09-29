@@ -246,8 +246,11 @@ def _warning_only_summary() -> EvaluationSummary:
     )
 
 
-def _no_verdict_summary() -> EvaluationSummary:
-    return EvaluationSummary(total_rules=0, no_verdict_reason="no_rules_loaded")
+def _no_verdict_summary(reason: str = "no_rules_loaded") -> EvaluationSummary:
+    return EvaluationSummary(
+        total_rules=0 if reason == "no_rules_loaded" else 1,
+        no_verdict_reason=reason,
+    )
 
 
 def _compliant_summary() -> EvaluationSummary:
@@ -336,18 +339,37 @@ class TestEnforceCteOnly:
         assert ("commit", "sp-0") in sess.actions
         assert cap["exc_queue_calls"] == ["t-enforce"]
 
-    def test_no_verdict_never_rejects(self, monkeypatch):
-        """Non-FTL / no_rules_loaded → compliant=None → must accept."""
-        sess, persist, cap = _install(monkeypatch, summary=_no_verdict_summary())
+    @pytest.mark.parametrize(
+        "reason,expected_code",
+        [
+            ("ftl_classification_missing", "rules_no_verdict"),
+            ("no_rules_loaded", "rules_unavailable"),
+        ],
+    )
+    def test_no_verdict_rejects_with_truthful_code_rolls_back_and_audits_exact_reason(
+        self,
+        monkeypatch,
+        rejection_audit_writer,
+        reason,
+        expected_code,
+    ):
+        sess, persist, cap = _install(monkeypatch, summary=_no_verdict_summary(reason))
         resp = asyncio.run(
             wc.ingest_events(
-                payload=_make_payload([_make_event()]),
-                principal_tenant_id="t-enforce",
+                payload=_make_payload([_make_event()], tenant_id="authenticated-tenant"),
+                principal_tenant_id="authenticated-tenant",
                 x_regengine_api_key="k",
             )
         )
-        assert resp.accepted == 1 and resp.rejected == 0
-        assert resp.events[0].status == "accepted"
+        assert resp.accepted == 0 and resp.rejected == 1
+        assert resp.events[0].status == "rejected"
+        assert resp.events[0].errors == [f"{expected_code}: {reason}"]
+        assert ("rollback", "sp-0") in sess.actions
+        assert ("commit", "sp-0") not in sess.actions
+        assert cap["publish_graph_calls"] == []
+        audit_kwargs = rejection_audit_writer.call_args.kwargs
+        assert audit_kwargs["tenant_id"] == "authenticated-tenant"
+        assert audit_kwargs["reasons"] == [{"verdict": "no_verdict", "reason": reason}]
 
     def test_compliant_accepts_without_exception_queue(self, monkeypatch):
         sess, persist, cap = _install(monkeypatch, summary=_compliant_summary())

@@ -34,7 +34,6 @@ from shared.rules.evaluators.relational import (
 )
 from shared.rules.evaluators.stateless import EVALUATORS
 from shared.rules.ftl import (
-    event_has_ftl_hint,
     get_ftl_category,
     is_ftl_food,
     rule_applies_to_ftl_category,
@@ -250,7 +249,6 @@ class RulesEngine:
         # #1346 — FTL classification
         event_is_ftl = is_ftl_food(event_data)
         event_ftl_category = get_ftl_category(event_data)
-        has_ftl_hint = event_has_ftl_hint(event_data)
 
         applicable_rules = self.get_applicable_rules(
             event_type,
@@ -268,7 +266,7 @@ class RulesEngine:
             # The engine has rules but none apply. Distinguish why.
             if event_is_ftl is False:
                 summary.no_verdict_reason = "not_ftl_scoped"
-            elif not has_ftl_hint:
+            elif event_is_ftl is None:
                 summary.no_verdict_reason = "ftl_classification_missing"
             else:
                 summary.no_verdict_reason = "no_rules_loaded"
@@ -309,6 +307,8 @@ class RulesEngine:
         # receive a green compliance stamp. Surface the gap instead.
         if event_is_ftl is False:
             summary.no_verdict_reason = "not_ftl_scoped"
+        elif event_is_ftl is None:
+            summary.no_verdict_reason = "ftl_classification_missing"
 
         if persist and tenant_id:
             self._persist_evaluations(tenant_id, event_id, summary.results)
@@ -392,7 +392,6 @@ class RulesEngine:
 
             event_is_ftl = is_ftl_food(event_data)
             event_ftl_category = get_ftl_category(event_data)
-            has_ftl_hint = event_has_ftl_hint(event_data)
 
             applicable = self.get_applicable_rules(
                 event_type,
@@ -408,7 +407,7 @@ class RulesEngine:
             if not applicable:
                 if event_is_ftl is False:
                     summary.no_verdict_reason = "not_ftl_scoped"
-                elif not has_ftl_hint:
+                elif event_is_ftl is None:
                     summary.no_verdict_reason = "ftl_classification_missing"
                 else:
                     summary.no_verdict_reason = "no_rules_loaded"
@@ -433,6 +432,13 @@ class RulesEngine:
                     result.result = "warn"
                 summary.results.append(result)
                 self._tally_result(summary, result)
+
+            # Match ``evaluate_event``: a caller-supplied non-FTL hint cannot
+            # turn a passing NON_FTL meta-rule into a positive verdict.
+            if event_is_ftl is False:
+                summary.no_verdict_reason = "not_ftl_scoped"
+            elif event_is_ftl is None:
+                summary.no_verdict_reason = "ftl_classification_missing"
 
             summaries.append(summary)
 

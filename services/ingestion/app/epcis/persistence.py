@@ -731,11 +731,9 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
     # Short-circuits on OFF mode (current prod default) to avoid the
     # eval CPU cost on every ingested event. EPCIS is the hot path.
     #
-    # Canonical-normalization / engine errors are swallowed and
-    # treated as no-verdict — a transient bug in the rules subsystem
-    # must not take down ingestion for every tenant. This matches the
-    # best-effort pattern the threaded canonical block below already
-    # uses (#1335).
+    # Canonical-normalization / engine errors fail loud under active
+    # enforcement. A completed evaluation with no verdict is rejected by
+    # the shared policy gate before primary persistence.
     #
     # ``_preeval_summary`` is hoisted to function scope so the threaded
     # canonical-write block below can reuse it via
@@ -746,6 +744,7 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
         EnforcementMode,
         current_mode,
         handle_preeval_exception,
+        rejection_code,
         should_reject,
     )
 
@@ -810,6 +809,7 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
         if _preeval_summary is not None:
             _reject, _reason = should_reject(_preeval_summary)
             if _reject:
+                _error_code = rejection_code(_preeval_summary, _reason)
                 # Finding B — write the durable audit row BEFORE raising
                 # the 422 so it survives the caller's outer rollback.
                 # Uses its own session so commit is independent.
@@ -825,7 +825,7 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
                         rule_id=getattr(_first_crit, "rule_id", None),
                         rule_version=getattr(_first_crit, "rule_version", None),
                         event_id=str(_pre_canonical.event_id),
-                        reasons=reasons_from_summary(_preeval_summary),
+                        reasons=reasons_from_summary(_preeval_summary, rejection_reason=_reason),
                         source="epcis_preeval",
                         enforcement_mode=current_mode(),
                     )
@@ -838,14 +838,15 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
                     raise HTTPException(status_code=503, detail="Rejection audit storage is unavailable") from None
 
                 # Raise HTTPException so the caller's db_session.rollback()
-                # unwinds any in-flight state and the HTTP layer returns
-                # a structured 422. For the atomic-batch caller this
+                # unwinds any in-flight state. The HTTP layer returns 422 for
+                # a no-verdict/violation and 503 when rules are unavailable.
+                # For the atomic-batch caller this
                 # rolls back the entire batch; partial-mode callers use
                 # the single-event path and get per-event semantics.
                 raise HTTPException(
-                    status_code=422,
+                    status_code=503 if _error_code == "rules_unavailable" else 422,
                     detail={
-                        "error": "rule_violation",
+                        "error": _error_code,
                         "reason": _reason,
                         "tenant_id": tenant_id,
                     },
@@ -1064,20 +1065,30 @@ def _ingest_batch_events_db_atomic(tenant_id: str, events: list[dict]) -> list[t
             len(prepared_events),
             str(exc),
         )
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "batch_persistence_failed",
+        batch_detail = {
+            "error": "batch_persistence_failed",
+            "mode": "atomic",
+            "failed_index": failing_index,
+            "message": (
+                "Persistence failed mid-batch. All events in this batch "
+                "were rolled back. Use ?mode=partial for best-effort "
+                "per-event ingest."
+            ),
+            "cause": str(exc),
+        }
+        if (
+            isinstance(exc, HTTPException)
+            and isinstance(exc.detail, dict)
+            and exc.detail.get("error") in {"rule_violation", "rules_no_verdict", "rules_unavailable"}
+        ):
+            batch_detail = {
+                **exc.detail,
                 "mode": "atomic",
                 "failed_index": failing_index,
-                "message": (
-                    "Persistence failed mid-batch. All events in this batch "
-                    "were rolled back. Use ?mode=partial for best-effort "
-                    "per-event ingest."
-                ),
-                "cause": str(exc),
-            },
-        ) from exc
+                "event_status_code": exc.status_code,
+                "message": ("Rules enforcement rejected an event. All events in this atomic batch were rolled back."),
+            }
+        raise HTTPException(status_code=400, detail=batch_detail) from exc
     finally:
         db_session.close()
 

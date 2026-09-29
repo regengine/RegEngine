@@ -374,10 +374,15 @@ async def ingest_events(
                 # persisted eval rows) and emit a rejected result.
                 reject_reason: Optional[str] = None
                 if summary is not None:
-                    from shared.rules.enforcement import current_mode, should_reject
+                    from shared.rules.enforcement import (
+                        current_mode,
+                        rejection_code,
+                        should_reject,
+                    )
 
                     should, reject_reason = should_reject(summary)
                     if should:
+                        reject_code = rejection_code(summary, reject_reason)
                         # Finding B — durable rejection audit row,
                         # written via its own session BEFORE the
                         # outer savepoint rollback wipes the in-flight
@@ -402,7 +407,7 @@ async def ingest_events(
                                 rule_id=getattr(_first_crit, "rule_id", None),
                                 rule_version=getattr(_first_crit, "rule_version", None),
                                 event_id=_canon_event_id,
-                                reasons=reasons_from_summary(summary),
+                                reasons=reasons_from_summary(summary, rejection_reason=reject_reason),
                                 source="webhook_compat",
                                 enforcement_mode=current_mode(),
                             )
@@ -418,7 +423,7 @@ async def ingest_events(
                                 traceability_lot_code=event.traceability_lot_code,
                                 cte_type=event.cte_type.value,
                                 status="rejected",
-                                errors=[f"rule_violation: {reject_reason}"],
+                                errors=[f"{reject_code}: {reject_reason}"],
                             )
                         )
                         rejected += 1

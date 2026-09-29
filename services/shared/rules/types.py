@@ -70,10 +70,11 @@ class EvaluationSummary:
         compliant is tri-state:
             True  — at least one rule ran and all failures are zero
             False — at least one rule failed (or errored — #1354)
-            None  — no rules loaded / all scoped out / nothing evaluated.
+            None  — no rules loaded / all scoped out / all skipped /
+                    nothing evaluated.
                     Callers MUST NOT treat None as compliant. It is an
                     explicit "no verdict" signal that should surface as
-                    'no_rules_loaded' or 'not_ftl_scoped' downstream.
+                    an exact no-verdict reason downstream.
 
         Historically `compliant` was a bool that returned True whenever
         failed == 0 — including when total_rules == 0. That was a
@@ -96,6 +97,10 @@ class EvaluationSummary:
     @property
     def compliant(self) -> Optional[bool]:
         """Tri-state compliance — see class docstring."""
+        # Failure evidence always wins over no-verdict metadata. A classifier
+        # hint must not hide a rule failure or evaluator error.
+        if self.failed > 0 or self.errored > 0:
+            return False
         # #1347 — fail-closed on empty / no-verdict rulesets.
         if self.total_rules == 0:
             return None
@@ -105,11 +110,11 @@ class EvaluationSummary:
         # ran happened to pass.
         if self.no_verdict_reason:
             return None
-        # If every rule was scoped out (non-FTL product), no verdict.
-        if self.not_ftl_scoped >= self.total_rules:
+        # Any mix of skipped/scoped-out/uncounted outcomes asserts nothing
+        # about compliance when no rule produced affirmative evidence.
+        if self.passed == 0 and self.warned == 0:
             return None
-        # #1354 — errors count against compliance, not as skips.
-        return self.failed == 0 and self.errored == 0
+        return True
 
     @property
     def verdict(self) -> str:
@@ -137,4 +142,8 @@ class EvaluationSummary:
             return self.no_verdict_reason
         if self.total_rules == 0:
             return "nothing_evaluated"
-        return "not_ftl_scoped"
+        if self.not_ftl_scoped >= self.total_rules:
+            return "not_ftl_scoped"
+        if self.skipped + self.not_ftl_scoped >= self.total_rules:
+            return "all_rules_skipped"
+        return "nothing_evaluated"

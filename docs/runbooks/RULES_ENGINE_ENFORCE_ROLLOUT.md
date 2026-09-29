@@ -1,5 +1,16 @@
 # Rules Engine Enforcement — Alpha Rollout Runbook
 
+> **BLOCKED — DO NOT EXECUTE**
+>
+> This runbook predates SPINE-003. Its tenant-scoped assumptions and its
+> provider and monitoring commands are unverified. Every remaining section is
+> historical and non-executable.
+>
+> The SPINE-003 code deployment must keep production explicitly
+> ``RULES_ENGINE_ENFORCE=off`` and confirm that value through provider
+> readback. Any future ``cte_only`` flip is a separate, globally scoped,
+> approved provider change that requires a new provider-pinned runbook.
+
 **Feature:** Flip ``RULES_ENGINE_ENFORCE`` from ``off`` (current default) to ``cte_only`` so FSMA 204 CTE-critical rule violations reject ingestion with HTTP 422 instead of being logged in the exception queue.
 
 **Severity if rollback needed:** SEV2 (false-positive rejections block a tenant's compliant events) / SEV1 (rollback fails or rejection logic corrupts state).

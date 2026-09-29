@@ -200,3 +200,46 @@ class TestSummaryVerdictProjection:
     def test_all_not_ftl_scoped_is_no_verdict(self):
         s = EvaluationSummary(event_id="e", total_rules=2, not_ftl_scoped=2)
         assert (s.verdict, s.verdict_reason) == ("no_verdict", "not_ftl_scoped")
+
+    def test_all_skipped_is_no_verdict(self):
+        s = EvaluationSummary(
+            event_id="e",
+            total_rules=2,
+            skipped=2,
+            results=[_res("skip", "R1"), _res("skip", "R2")],
+        )
+        assert s.compliant is None
+        assert (s.verdict, s.verdict_reason) == ("no_verdict", "all_rules_skipped")
+
+    def test_mixed_unevaluated_results_are_no_verdict(self):
+        s = EvaluationSummary(
+            event_id="e",
+            total_rules=2,
+            skipped=1,
+            not_ftl_scoped=1,
+            results=[_res("skip", "R1"), _res("not_ftl_scoped", "R2")],
+        )
+        assert s.compliant is None
+        assert (s.verdict, s.verdict_reason) == ("no_verdict", "all_rules_skipped")
+
+    @pytest.mark.parametrize("counter", ["failed", "errored"])
+    def test_failure_evidence_outranks_no_verdict_metadata(self, counter):
+        result = "fail" if counter == "failed" else "error"
+        s = EvaluationSummary(
+            event_id="e",
+            total_rules=1,
+            results=[_res(result, "R1")],
+            no_verdict_reason="ftl_classification_missing",
+            **{counter: 1},
+        )
+        assert (s.compliant, s.verdict, s.verdict_reason) == (False, "fail", None)
+
+    def test_failure_evidence_is_not_masked_by_inconsistent_skip_count(self):
+        s = EvaluationSummary(
+            event_id="e",
+            total_rules=1,
+            failed=1,
+            skipped=1,
+            results=[_res("fail", "R1")],
+        )
+        assert (s.compliant, s.verdict, s.verdict_reason) == (False, "fail", None)

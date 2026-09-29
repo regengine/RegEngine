@@ -1,6 +1,6 @@
 # Rules Engine Enforcement Model
 
-Last verified: 2026-05-23
+Last verified: 2026-09-28
 
 ## TL;DR
 
@@ -14,7 +14,7 @@ Rule evaluation runs inline with the primary CTE write. A blanket "reject on vio
 
 - Whether to roll back the primary write (data) and on what scope (per event, per batch).
 - What HTTP status the caller gets back, and which routes care about that.
-- What happens for tenants with no rules seeded (no-verdict — explicitly never a reject, even under `ALL`).
+- How to report a no-verdict rejection when no rule produced a boolean decision.
 
 Different ingestion paths answer those differently — EPCIS XML and webhook JSON have different batch semantics; the supplier portal writes into a customer tenant where the customer has authored the rules; CSV import has its own rejection-collection contract. Hard-coding one policy in `cte_persistence` would silently break at least one of those.
 
@@ -27,13 +27,14 @@ Set via `RULES_ENGINE_ENFORCE` (read at call time, no restart needed — flip + 
 | Mode | Behavior |
 |---|---|
 | `off` (default) | Engine runs and persists evaluation rows, but never rejects. "Log and accept." |
-| `cte_only` | Reject when `summary.critical_failures` is non-empty. Warnings/info still accept. |
-| `all` | Reject on any `summary.compliant is False` (including warning-only failures). |
+| `cte_only` | Reject every no-verdict outcome or when `summary.critical_failures` is non-empty. Warning/info failures accept only when no classification/applicability gap coexists. |
+| `all` | Reject every no-verdict outcome or any `summary.compliant is False` (including warning-only failures). |
 
-Two invariants hold in every mode:
+These invariants define the boundary:
 
-1. **No-verdict never rejects.** When `summary.compliant is None` (no rules seeded for the tenant, non-FTL product, evaluator skipped), the event accepts — "we didn't evaluate" is not the same as "the event violates a rule."
-2. **Pre-eval crashes fail loud under enforcement.** If canonical normalization or the rules engine itself raises, `handle_preeval_exception()` surfaces an HTTP 500 + Sentry under `cte_only`/`all`. Under `off` it warns and accepts (preserves the legacy best-effort behavior). See `services/shared/rules/enforcement.py` for the funnel.
+1. **Off mode stays advisory.** When `RULES_ENGINE_ENFORCE=off`, a no-verdict event accepts and the engine does not make a blocking decision.
+2. **Active modes require a verdict.** `cte_only` and `all` reject with the exact no-verdict reason when `summary.compliant is None` or when an explicit classification/applicability gap coexists with a noncritical failure. This includes `no_rules_loaded`, `ftl_classification_missing`, `not_ftl_scoped`, `all_rules_skipped`, and fallback `nothing_evaluated`. A noncritical failure cannot convert the gap into an acceptance, and caller-supplied `ftl_covered=false` is not a trusted bypass. Critical failures remain primary `rule_violation` evidence.
+3. **Pre-eval crashes fail loud under enforcement.** If canonical normalization or the rules engine itself raises, `handle_preeval_exception()` surfaces an HTTP 500 + Sentry under `cte_only`/`all`. Under `off` it warns and accepts (preserves the legacy best-effort behavior). See `services/shared/rules/enforcement.py` for the funnel.
 
 ## Enforcement-aware call sites (the manifest)
 
@@ -43,7 +44,7 @@ The current set is tracked in code at [`ENFORCEMENT_AWARE_CALL_SITES`](../../ser
 |---|---|
 | `services/ingestion/app/webhook_compat.py` | Internal `ingest_events()` helper used by CSV import, sensitech, supplier portal, EDI ingestion |
 | `services/ingestion/app/epcis/persistence.py` | EPCIS XML ingestion persistence path |
-| `services/ingestion/app/webhook_router_v2.py` | `POST /api/v1/webhooks/ingest` HTTP route |
+| `services/ingestion/app/webhook_router_v2/routes.py`, `services/ingestion/app/webhook_router_v2/rules_eval.py` | `POST /api/v1/webhooks/ingest` HTTP route and pre-evaluation gate |
 
 A drift test in [`services/shared/tests/test_rules_enforcement_manifest.py`](../../services/shared/tests/test_rules_enforcement_manifest.py) asserts the manifest matches the actual `should_reject()` importers. Adding a new caller without updating the manifest (or vice versa) fails CI.
 

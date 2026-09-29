@@ -7,21 +7,22 @@ can tighten over time without touching the ingestion hot path.
 
 The flag exists so the rules engine can be switched from "log-and-accept"
 to "reject-on-violation" behind a single env var, with a one-line
-rollback if an alpha tenant hits a false positive:
+global rollback if production hits a false positive:
 
     # Railway / shell
     RULES_ENGINE_ENFORCE=off       # current prod default; engine runs but
                                    # never rejects (exception-queue only)
-    RULES_ENGINE_ENFORCE=cte_only  # reject when any critical_failures is
-                                   # set; warnings/info still pass through
-    RULES_ENGINE_ENFORCE=all       # reject on any ``compliant is False``
+    RULES_ENGINE_ENFORCE=cte_only  # reject no-verdict or critical failures;
+                                   # warning failures pass only when no
+                                   # classification/applicability gap coexists
+    RULES_ENGINE_ENFORCE=all       # reject no-verdict or any non-compliance
 
-In every mode a no-verdict summary (``summary.compliant is None``) is
-NEVER a reject. Blocking an event on non-evaluation would silently break
-ingestion for tenants without seeded rules and for non-FTL products —
-the engine treats those as an explicit "no verdict" signal, not as
-compliance failure. See ``types.EvaluationSummary.compliant`` docstring
-(#1346, #1347).
+In ``off`` mode a no-verdict summary remains advisory. Under active
+enforcement, no-verdict fails closed: the system cannot accept an event as
+enforced when no rule verdict exists. An explicit no-verdict reason remains
+blocking even when a noncritical rule also failed and made ``compliant=False``.
+See
+``types.EvaluationSummary.compliant`` (#1346, #1347).
 """
 
 from __future__ import annotations
@@ -80,47 +81,14 @@ def _safe_counter(name: str, description: str, labelnames: list[str]):
         return Counter(name, description, labelnames, registry=None)
 
 
-# #2710 (enforcement-GA decision): the no-verdict accept contract stays —
-# blocking on non-evaluation would break unseeded tenants and non-FTL
-# products (#1346/#1347) — but under an enforcement mode it must be LOUD:
-# with RULES_ENGINE_ENFORCE=all, a tenant with an empty or unreadable rule
-# set has every event accepted, and this counter is the alarm for that.
+# Legacy metric retained so existing dashboards keep a stable time series.
+# Active modes no longer increment it because no-verdict events now reject;
+# ``off`` remains advisory and intentionally silent.
 rules_no_verdict_accepted_total = _safe_counter(
     "rules_no_verdict_accepted_total",
     "Events accepted with NO rule verdict while an enforcement mode was active",
     ["mode", "tenant_id"],
 )
-
-# Tenants already warned about this process — warn once per (tenant, mode),
-# not once per event (the counter carries the volume).
-_no_verdict_warned: set[tuple[str, str]] = set()
-
-
-def _record_no_verdict_accept(mode: str) -> None:
-    """Metric + once-per-tenant warning for an enforcement-mode no-verdict accept."""
-    tenant = "unknown"
-    try:
-        from shared.tenant_context import get_rls_tenant_id
-
-        tenant = str(get_rls_tenant_id() or "unknown")
-    except Exception:
-        pass
-    try:
-        rules_no_verdict_accepted_total.labels(mode=mode, tenant_id=tenant).inc()
-    except Exception:  # pragma: no cover — metrics must never affect the decision
-        pass
-    key = (tenant, mode)
-    if key not in _no_verdict_warned:
-        _no_verdict_warned.add(key)
-        import logging  # noqa: PLC0415
-
-        logging.getLogger(__name__).warning(
-            "rules_no_verdict_accepted mode=%s tenant_id=%s — event accepted without any rule "
-            "verdict while enforcement is active; empty/unreadable rule sets are invisible to "
-            "enforcement (#1346/#1347, revisit #2710)",
-            mode,
-            tenant,
-        )
 
 
 def current_mode() -> str:
@@ -167,24 +135,32 @@ def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
     mode = current_mode()
     if mode == EnforcementMode.OFF:
         return False, None
-    # No-verdict (compliant is None) is never a reject in any mode —
-    # "we didn't evaluate" is not the same as "the event violates a rule"
-    # (#1346/#1347). Decision recorded in #2710: the accept contract stays,
-    # but under an active enforcement mode the accept is now counted
-    # per-tenant and warned once — the alarm for an empty/unreadable rule
-    # set silently bypassing enforcement.
-    if summary.compliant is None:
-        _record_no_verdict_accept(mode)
-        return False, None
     if mode == EnforcementMode.CTE_ONLY:
         if summary.critical_failures:
             return True, _first_failure_reason(summary)
-        return False, None
-    if mode == EnforcementMode.ALL:
-        if summary.compliant is False:
-            return True, _first_failure_reason(summary)
-        return False, None
+    elif mode == EnforcementMode.ALL and summary.compliant is False:
+        return True, _first_failure_reason(summary)
+    # Active enforcement cannot accept an unresolved classification or
+    # applicability gap. Check the explicit reason even when a noncritical
+    # rule also failed: in cte_only that failure is advisory and must not turn
+    # the classification gap into an acceptance bypass.
+    if summary.no_verdict_reason:
+        return True, summary.no_verdict_reason
+    if summary.compliant is None:
+        return True, summary.verdict_reason or "nothing_evaluated"
     return False, None
+
+
+def rejection_code(summary: EvaluationSummary, reason: Optional[str]) -> str:
+    """Return the truthful public error code for a rejected rule summary."""
+    effective_reason = reason or summary.verdict_reason
+    if effective_reason in {"ftl_classification_missing", "not_ftl_scoped"}:
+        return "rules_no_verdict"
+    if effective_reason in {"no_rules_loaded", "all_rules_skipped", "nothing_evaluated"}:
+        return "rules_unavailable"
+    if summary.compliant is False:
+        return "rule_violation"
+    return "rules_unavailable" if summary.compliant is None else "rule_violation"
 
 
 def handle_preeval_exception(err: BaseException, *, where: str) -> None:

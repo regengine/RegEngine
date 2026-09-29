@@ -22,6 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from shared.database import get_db_session
 from shared.idempotency import IdempotencyDependency
+from shared.rules.enforcement import rejection_code
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
@@ -224,8 +225,8 @@ async def ingest_events(
         # Runs a non-persisting eval per event; decision logic is in
         # ``shared.rules.enforcement.should_reject``. When ENFORCE=off
         # (default) every call returns (False, None) and the loop is a
-        # no-op. No-verdict summaries (no rules loaded, non-FTL, etc.)
-        # never reject — see EvaluationSummary.compliant docstring.
+        # no-op. Under active enforcement, no-verdict summaries reject so
+        # an unevaluated event cannot reach persistence as accepted.
         # ``pre_eval_summaries`` is a parallel list to ``valid_events`` after
         # the filter — same length, same order, ``None`` entries for events
         # whose pre-eval skipped (OFF mode, canonical/eval error). The
@@ -238,12 +239,13 @@ async def ingest_events(
             for _event, _alerts in valid_events:
                 _reject, _reason, _summary = _pkg._rules_preeval_reject(_event, db_session, tenant_id)
                 if _reject:
+                    _code = rejection_code(_summary, _reason)
                     results.append(
                         EventResult(
                             traceability_lot_code=_event.traceability_lot_code,
                             cte_type=_event.cte_type.value,
                             status="rejected",
-                            errors=[f"rule_violation: {_reason}"],
+                            errors=[f"{_code}: {_reason}"],
                         )
                     )
                     rejected += 1
@@ -395,12 +397,13 @@ async def ingest_events(
                     # still honors the enforcement policy.
                     _fb_reject, _fb_reason, _fb_summary = _pkg._rules_preeval_reject(event, db_session, tenant_id)
                     if _fb_reject:
+                        _fb_code = rejection_code(_fb_summary, _fb_reason)
                         results.append(
                             EventResult(
                                 traceability_lot_code=event.traceability_lot_code,
                                 cte_type=event.cte_type.value,
                                 status="rejected",
-                                errors=[f"rule_violation: {_fb_reason}"],
+                                errors=[f"{_fb_code}: {_fb_reason}"],
                             )
                         )
                         rejected += 1

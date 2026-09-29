@@ -895,6 +895,41 @@ class TestIngestBatchEventsDbAtomic:
         sess.rollback.assert_called_once()
         sess.close.assert_called_once()
 
+    @pytest.mark.parametrize(
+        ("event_status", "error_code", "reason"),
+        [
+            (422, "rules_no_verdict", "not_ftl_scoped"),
+            (503, "rules_unavailable", "no_rules_loaded"),
+            (422, "rule_violation", "R_REQUIRED: missing KDE"),
+        ],
+    )
+    def test_rules_rejection_keeps_truthful_detail_inside_atomic_400(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        event_status: int,
+        error_code: str,
+        reason: str,
+    ) -> None:
+        sess = MagicMock()
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        rejection_detail = {"error": error_code, "reason": reason, "tenant_id": "tenant-1"}
+
+        def _reject(*_args, **_kwargs):
+            raise HTTPException(status_code=event_status, detail=rejection_detail)
+
+        monkeypatch.setattr(persistence_mod, "_persist_prepared_event_in_session", _reject)
+
+        with pytest.raises(HTTPException) as exc:
+            persistence_mod._ingest_batch_events_db_atomic("tenant-1", [_VALID_EPCIS])
+
+        assert exc.value.status_code == 400
+        assert exc.value.detail["error"] == error_code
+        assert exc.value.detail["reason"] == reason
+        assert exc.value.detail["event_status_code"] == event_status
+        assert exc.value.detail["failed_index"] == 0
+        sess.rollback.assert_called_once()
+        sess.close.assert_called_once()
+
     def test_happy_path_commits_and_returns_per_event_results(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sess = MagicMock()
         monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)

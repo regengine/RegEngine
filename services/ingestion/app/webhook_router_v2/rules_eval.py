@@ -44,9 +44,8 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     Runs ``engine.evaluate_event(persist=False)`` so the decision is made
     without writing eval rows — a reject can exclude the event from the
     batch without polluting the transaction. Canonical normalization or
-    rule evaluation errors are logged and treated as no-verdict (never
-    reject) so a transient module-level bug can't take down ingestion
-    for every tenant.
+    rule evaluation errors fail loud under active enforcement. A completed
+    evaluation with no verdict is rejected by the shared policy gate.
 
     Short-circuits on OFF mode — skips normalization + eval entirely
     so the default production path pays no added latency. Without this
@@ -130,7 +129,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
                 rule_id=getattr(_first_crit, "rule_id", None),
                 rule_version=getattr(_first_crit, "rule_version", None),
                 event_id=str(canonical.event_id) if canonical is not None else None,
-                reasons=reasons_from_summary(summary),
+                reasons=reasons_from_summary(summary, rejection_reason=reason),
                 source="webhook_router_v2_preeval",
                 enforcement_mode=current_mode(),
             )

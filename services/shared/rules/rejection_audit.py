@@ -164,7 +164,7 @@ def _capture_sentry(message: str, extras: dict) -> None:
         logger.debug("sentry_capture_failed component=rejection_audit")
 
 
-def reasons_from_summary(summary: Any) -> list[dict]:
+def reasons_from_summary(summary: Any, *, rejection_reason: Optional[str] = None) -> list[dict]:
     """Render an ``EvaluationSummary`` to a JSON-friendly reasons list.
 
     Defensive: tolerates duck-typed shapes so a future ``EvaluationSummary``
@@ -193,6 +193,21 @@ def reasons_from_summary(summary: Any) -> list[dict]:
                 "why_failed": getattr(r, "why_failed", None),
             }
         )
+    no_verdict_reasons = {
+        "no_rules_loaded",
+        "ftl_classification_missing",
+        "not_ftl_scoped",
+        "all_rules_skipped",
+        "nothing_evaluated",
+    }
+    if getattr(summary, "verdict", None) == "no_verdict" or rejection_reason in no_verdict_reasons:
+        reason = (
+            rejection_reason
+            or getattr(summary, "verdict_reason", None)
+            or getattr(summary, "no_verdict_reason", None)
+            or "nothing_evaluated"
+        )
+        out.append({"verdict": "no_verdict", "reason": reason})
     if not out:
         out.append({"reason": "rule_violation"})
     return out
