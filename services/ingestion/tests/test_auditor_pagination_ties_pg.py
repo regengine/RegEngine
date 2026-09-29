@@ -41,6 +41,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -76,7 +77,7 @@ def _schema_ready(dsn: str) -> bool:
     from sqlalchemy import create_engine, text
 
     try:
-        engine = create_engine(dsn, pool_pre_ping=True)
+        engine = create_engine(sync_postgres_url(dsn), pool_pre_ping=True)
         with engine.connect() as conn:
             found = conn.execute(
                 text(
@@ -114,7 +115,7 @@ def seeded_tenant():
     """
     from sqlalchemy import create_engine, text
 
-    engine = create_engine(DSN)
+    engine = create_engine(sync_postgres_url(DSN))
     tenant_id = str(uuid.uuid4())
     lot_codes = [f"TIE-LOT-{index:03d}" for index in range(TIED_ROWS)]
 
@@ -146,13 +147,12 @@ def seeded_tenant():
 
 def _paginate(engine, tenant_id: str) -> list[str]:
     """Read every page through the endpoint's own router, collecting lot codes."""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-    from sqlalchemy.orm import sessionmaker
-
     from app import auditor_router
     from app.authz import IngestionPrincipal, get_ingestion_principal
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
     from shared.database import get_db_session
+    from sqlalchemy.orm import sessionmaker
 
     principal = IngestionPrincipal(
         key_id="pagination-test",

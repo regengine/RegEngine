@@ -23,6 +23,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -63,7 +64,7 @@ def chained_corpus(migrated_db):
     from shared.canonical_persistence.writer import CanonicalEventStore
 
     database_url, _ = migrated_db
-    engine = create_engine(database_url, future=True)
+    engine = create_engine(sync_postgres_url(database_url), future=True)
     tenant_id = uuid4()
     with engine.begin() as conn:
         conn.execute(
@@ -211,7 +212,7 @@ class TestChainVerifyGolden:
         from shared.cte_persistence import compute_chain_hash
 
         database_url, _ = migrated_db
-        engine = create_engine(database_url, future=True)
+        engine = create_engine(sync_postgres_url(database_url), future=True)
         tenant_id = uuid4()
         with engine.begin() as conn:
             conn.execute(

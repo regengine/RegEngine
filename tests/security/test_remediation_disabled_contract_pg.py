@@ -8,6 +8,7 @@ inventory. This gate proves the release contract without adding those grants.
 import os
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
@@ -53,7 +54,7 @@ def runtime_connection():
         pytest.fail("REMEDIATION_TEST_APP_DSN is required for direct-role proof")
     target, runtime = make_url(designated), make_url(raw)
     assert (target.host, target.port, target.database) == (runtime.host, runtime.port, runtime.database)
-    engine = create_engine(raw)
+    engine = create_engine(sync_postgres_url(raw))
     try:
         with engine.connect() as conn:
             assert conn.execute(

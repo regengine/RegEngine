@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Iterator, Set
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -137,7 +138,7 @@ PUBLIC_RLS_TABLES: Set[str] = PUBLIC_TENANT_SCOPED_TABLES | PUBLIC_TABLES_SCOPED
 
 def _provision_app_roles(database_url: str) -> None:
     """Create local roles/functions referenced by RLS policies."""
-    engine = create_engine(database_url, future=True)
+    engine = create_engine(sync_postgres_url(database_url), future=True)
     try:
         with engine.begin() as conn:
             conn.execute(
