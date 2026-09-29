@@ -1,6 +1,6 @@
 """#2848 — audit persistence must never run on the event loop.
 
-``FSMAAuditLog.log`` drives synchronous psycopg2 inserts with retry. Called
+``FSMAAuditLog.log`` drives synchronous psycopg inserts with retry. Called
 inline from an ``async def`` handler it blocks the entire Uvicorn event loop —
 every concurrent request in the worker, ``/health`` and ``/readiness``
 included — for as long as Postgres is slow or unreachable. A DB slowdown then
@@ -35,7 +35,7 @@ from app.fsma_audit import FSMAAuditAction, FSMAAuditLog  # noqa: E402
 _APP_DIR = _SERVICE_ROOT / "app"
 
 # The synchronous entry points into audit persistence. Reaching any of these
-# from an ``async def`` puts a psycopg2 round-trip (plus retries) on the loop.
+# from an ``async def`` puts a psycopg round-trip (plus retries) on the loop.
 _BLOCKING_AUDIT_CALLS = frozenset(
     {
         "log_extraction",
@@ -61,7 +61,7 @@ def _no_db(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_alog_runs_the_blocking_write_off_the_loop(monkeypatch):
-    """The psycopg2 insert must land on a worker thread, not the loop."""
+    """The psycopg insert must land on a worker thread, not the loop."""
     loop_thread_id = threading.get_ident()
     persist_thread_ids: list[int] = []
 

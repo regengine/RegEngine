@@ -1536,17 +1536,23 @@ def options_from_args(args: argparse.Namespace) -> Options:
 
 
 def normalize_database_url(url: str) -> str:
-    """Force a psycopg2 driver URL.
+    """Force a psycopg (v3) driver URL, the only sync driver RegEngine ships.
 
-    Railway hands out ``postgres://`` (rejected by SQLAlchemy 2.x) and parts
-    of this repo use ``postgresql+asyncpg://`` (an async driver this
-    synchronous script cannot use).
+    Railway hands out ``postgres://`` (rejected by SQLAlchemy 2.x), a bare
+    ``postgresql://`` would select psycopg2 (not installed), and parts of this
+    repo use ``postgresql+asyncpg://`` (an async driver this synchronous
+    script cannot use). Kept self-contained rather than importing
+    ``shared.db_url`` because ops boxes run this without the repo on sys.path.
     """
-    if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://") :]
-    for async_prefix in ("postgresql+asyncpg://", "postgresql+psycopg_async://"):
-        if url.startswith(async_prefix):
-            url = "postgresql+psycopg2://" + url[len(async_prefix) :]
+    for prefix in (
+        "postgres://",
+        "postgresql://",
+        "postgresql+psycopg2://",
+        "postgresql+asyncpg://",
+        "postgresql+psycopg_async://",
+    ):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
     return url
 
 

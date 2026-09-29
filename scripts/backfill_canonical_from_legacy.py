@@ -186,6 +186,7 @@ from shared.canonical_event import (  # noqa: E402
     TraceabilityEvent,
 )
 from shared.cte_persistence.hashing import compute_event_hash  # noqa: E402
+from shared.db_url import sync_postgres_url  # noqa: E402
 from sqlalchemy import bindparam, create_engine, event as sa_event, text  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
@@ -1347,7 +1348,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("DRY RUN — no writes will be issued. Pass --execute to apply.", flush=True)
 
     try:
-        engine = create_engine(args.database_url, future=True)
+        engine = create_engine(sync_postgres_url(args.database_url), future=True)
 
         # The canonical hash preimage embeds ``event_timestamp.isoformat()``,
         # so the offset the driver renders is part of what we verify against.

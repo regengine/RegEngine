@@ -47,7 +47,7 @@ def get_db_connection():
     connect into a silent (None, None) the caller cannot tell apart.
     """
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import create_engine, make_url, text
     except ImportError as e:
         raise DatabaseUnavailable("sqlalchemy not installed — run: pip install sqlalchemy") from e
 
@@ -56,7 +56,10 @@ def get_db_connection():
         raise DatabaseUnavailable("DATABASE_URL environment variable not set", EXIT_USAGE)
 
     try:
-        engine = create_engine(db_url)
+        # psycopg (v3); psycopg2 is not installed.
+        engine = create_engine(
+            make_url(db_url).set(drivername="postgresql+psycopg") if db_url.startswith("postgres") else db_url
+        )
         conn = engine.connect()
     except Exception as e:
         raise DatabaseUnavailable(f"Could not connect to database: {e}") from e

@@ -386,8 +386,9 @@ class TestVerdict:
 
 class TestCli:
     def test_url_normalization(self):
-        assert vcpl.normalize_database_url("postgres://u:p@h/db").startswith("postgresql://")
-        assert vcpl.normalize_database_url("postgresql+asyncpg://u:p@h/db").startswith("postgresql+psycopg2://")
+        for scheme in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg", "postgresql+psycopg"):
+            assert vcpl.normalize_database_url(f"{scheme}://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+        assert vcpl.normalize_database_url("sqlite:///x.db") == "sqlite:///x.db"
 
     def test_tenant_must_be_uuid(self):
         with pytest.raises(Exception):

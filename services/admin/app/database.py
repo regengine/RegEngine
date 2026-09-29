@@ -39,6 +39,7 @@ from typing import AsyncIterator, Iterator
 import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
 import structlog
 from shared.db_liveness import postgres_liveness_connect_args
+from shared.db_url import sync_postgres_url
 
 # #2512: single shared cloud-marker tuple — keep this in lockstep with the
 # central security gate in shared.env rather than maintaining a divergent copy.
@@ -53,13 +54,7 @@ _LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
 
 
 def _sqlalchemy_url(url: str) -> str:
-    if url.startswith("postgresql+asyncpg://"):
-        return url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql+psycopg2://"):
-        return url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+    return sync_postgres_url(url)
 
 
 def _admin_fallback_environment() -> str:

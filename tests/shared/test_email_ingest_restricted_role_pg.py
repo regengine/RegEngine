@@ -16,7 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-import psycopg2
+import psycopg
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -80,7 +80,7 @@ def email(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    admin = psycopg2.connect(**admin_connect)
+    admin = psycopg.connect(**admin_connect)
     admin.autocommit = True
     tenant, other = str(uuid4()), str(uuid4())
     address, other_address = f"ingest+{tenant}@inbound.test", f"ingest+{other}@inbound.test"

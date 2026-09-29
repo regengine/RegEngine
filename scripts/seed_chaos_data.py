@@ -256,9 +256,13 @@ def seed_postgres():
 
     for attempt in range(max_retries):
         try:
-            from sqlalchemy import create_engine, text
+            from sqlalchemy import create_engine, make_url, text
 
-            engine = create_engine(POSTGRES_URL)
+            engine = create_engine(
+                make_url(POSTGRES_URL).set(drivername="postgresql+psycopg")
+                if POSTGRES_URL.startswith("postgres")
+                else POSTGRES_URL
+            )
 
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -345,9 +349,13 @@ def cleanup_all():
         logger.warning(f"  Neo4j cleanup skipped: {e}")
 
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import create_engine, make_url, text
 
-        engine = create_engine(POSTGRES_URL)
+        engine = create_engine(
+            make_url(POSTGRES_URL).set(drivername="postgresql+psycopg")
+            if POSTGRES_URL.startswith("postgres")
+            else POSTGRES_URL
+        )
         with engine.connect() as conn:
             r1 = conn.execute(text("DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"))
             # Cleanup persistent jobs

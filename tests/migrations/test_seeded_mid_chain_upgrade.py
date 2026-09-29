@@ -247,9 +247,9 @@ def rehearsal() -> Iterator[RehearsalResult]:
             # tables already use FORCE RLS, so the intentionally NOBYPASSRLS
             # migration owner cannot manufacture representative legacy rows.
             # The head upgrade itself still runs only as the migration role.
-            import psycopg2
+            import psycopg
 
-            seed_conn = psycopg2.connect(
+            seed_conn = psycopg.connect(
                 provider_url.replace("postgresql+psycopg://", "postgresql://", 1).replace(
                     "postgresql+psycopg2://", "postgresql://", 1
                 )
