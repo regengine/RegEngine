@@ -79,3 +79,28 @@ def test_existing_connect_args_preserved():
     # … alongside the cache-disabling settings.
     assert ca.get("statement_cache_size") == 0
     assert ca.get("prepared_statement_cache_size") == 0
+
+
+def test_postgres_scheme_url_rewritten_to_asyncpg_with_cache_disabled():
+    """Heroku-style ``postgres://`` gets the asyncpg driver and connect_args.
+
+    ``"postgresql" in url`` is False for ``postgres://``, so the old branch
+    never fired and the URL reached SQLAlchemy unchanged.
+    """
+    cap = _make_store_with_url("postgres://u@db.internal:5432/regengine")
+    assert cap["database_url"] == "postgresql+asyncpg://u@db.internal:5432/regengine"
+    ca = cap["kwargs"].get("connect_args", {})
+    assert ca.get("statement_cache_size") == 0
+    assert ca.get("prepared_statement_cache_size") == 0
+
+
+def test_postgres_scheme_url_builds_real_asyncpg_engine():
+    """SQLAlchemy has no ``postgres`` dialect: an unrewritten URL raises
+    NoSuchModuleError at construction and takes API-key auth down at startup.
+    Engine construction does not connect, so this needs no database.
+    """
+    from shared.api_key_store import DatabaseAPIKeyStore
+
+    store = DatabaseAPIKeyStore(database_url="postgres://probe@127.0.0.1:9/probe")
+    assert store._engine.dialect.name == "postgresql"
+    assert store._engine.dialect.driver == "asyncpg"
