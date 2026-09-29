@@ -317,6 +317,22 @@ To confirm a deployment picked up the key without reading the variable,
 search its startup logs for `jev_configured`: `enabled=True
 key_present=True` means the key is set and the kill switch is off.
 
+`key_present=True` does not prove TypeSafe accepts the key. Upload one CSV
+whose headers the parser does not recognise (a RegEngine template without a
+CTE works), then search the same deployment's logs:
+
+- `jev_answered purpose=... request_id=...` means TypeSafe accepted the key
+  and answered. Look the request id up at TypeSafe to match the call.
+- `jev.unavailable ... reason=auth` means TypeSafe rejected the key. Replace
+  it with the RegEngine Key Drop page or the Railway dashboard.
+- `reason=rate_limited`, `timeout`, `connection` or `server_error` is a
+  TypeSafe or network problem, not a key problem.
+
+Both lines carry metadata only (purpose, model, request id, latency, token
+counts), never the state or the key. `jev_answered` goes through stdlib
+logging because production drops structlog INFO events that have no sampled
+trace; `jev.unavailable` is a warning, which production keeps.
+
 ## Preview suggestions on your own files
 
 `scripts/jev_header_preview.py` runs the route's own suggestion step
@@ -456,6 +472,38 @@ the cases file.
 
 Exit codes: 0 ran, 1 bad usage or cases file, 2 not configured, 3 vendor
 unavailable for at least one request.
+
+## Ask Jev from the command line (agent sidecar)
+
+`scripts/jev_ask.py` asks Jev any typed question about a state you give it.
+Coding agents use it to get a second opinion alongside a user's request. The
+procedure is in `.claude/skills/jev-sidecar/SKILL.md`, and `AGENTS.md` points
+every agent to it.
+
+```bash
+venv/bin/python scripts/jev_ask.py \
+  --state '{"headers": ["Ship Dte", "Cust Name", "Lot No."]}' \
+  --choice cte "Which FSMA 204 CTE do rows with these headers record?" \
+    "shipping=goods leaving the sender" "receiving=goods arriving" "unclear" \
+  --noul has_lot "Does one of the headers name a traceability lot code column?" \
+  --score risk "How likely is this file to be rejected as-is?" low medium high
+```
+
+- **Question kinds:** `--choice ID TEXT OPTION...`, where an option is `name`
+  or `name=description`; `--noul ID TEXT`; `--score ID TEXT LEVEL...`, with 2
+  to 10 levels, lowest first.
+- **Questions file:** `--questions-file` takes questions in the API's format.
+- **State:** `--state`, `--state-file`, or stdin with `--state-file -`. The
+  value is JSON, or plain text when it does not parse as JSON.
+- **Output:** one line per answer with its confidence, or `--json`.
+- **Key:** it reads `TYPESAFE_API_KEY`, or with `--prompt-key` a hidden prompt.
+  The key is never printed.
+- **What is sent:** the state goes to `api.typesafe.ai`. It must never hold
+  secrets or customer data.
+- **Logs:** the client logs only metadata under the purpose `agent_sidecar`.
+- **Exit codes:** 0 answered, 1 bad usage, 2 not configured, 3 Jev unavailable.
+  With 1 or 2 nothing is sent. Code 2 covers no key, Jev switched off, or
+  missing packages.
 
 ## Rollout
 

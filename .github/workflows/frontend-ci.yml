@@ -293,7 +293,13 @@ jobs:
     # specifically. Sharing one "CI Status Gate" name let a frontend-only SHA
     # satisfy the deploy gate without the backend ever being verified (#2537).
     name: Frontend CI Status Gate
-    if: always()
+    # Run when a needed job failed so this gate still posts failure (#2537:
+    # cancelled or skipped dependencies must not look green). Skip only when
+    # the workflow itself was cancelled by a newer push. In that case the
+    # replacement run owns the gate; this run must not fail the SHA for
+    # jobs that were aborted mid-flight. `!cancelled()` does not relax the
+    # script below: every dependency still has to be success.
+    if: always() && !cancelled()
     needs: [promise-audit, build, lint, test, smoke, security, production-readiness, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 10

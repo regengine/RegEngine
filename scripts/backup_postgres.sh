@@ -7,10 +7,10 @@
 # FSMA 204 retention requirement — also upload to S3/MinIO for off-site).
 #
 # FORMAT CONTRACT (#2937): this script emits **plain SQL piped through gzip**,
-# so the restore procedure documented in docs/runbooks/disaster-recovery.md
-#   gunzip -c <backup>.sql.gz | psql -U regengine regengine
+# so the restore procedure documented in docs/operations/DISASTER_RECOVERY.md
+#   gunzip -c <backup>.sql.gz | psql -v ON_ERROR_STOP=1
 # consumes it directly. Do not switch to `pg_dump --format=custom` without
-# also updating that runbook and docs/operations/DISASTER_RECOVERY.md — a
+# also updating that document — a
 # custom-format archive is binary, is not gzip, and only `pg_restore` reads it.
 #
 # Environment:
