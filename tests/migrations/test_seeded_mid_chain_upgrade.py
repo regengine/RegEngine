@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -215,7 +216,7 @@ def rehearsal() -> Iterator[RehearsalResult]:
     """Upgrade to MID_CHAIN_REVISION, seed, upgrade head — once per module."""
     with rls_postgres_or_skip() as (plain_url, engine):
         provider_url = _role_admin_url(plain_url)
-        provider_engine = create_engine(provider_url, future=True)
+        provider_engine = create_engine(sync_postgres_url(provider_url), future=True)
         with engine.connect() as conn:
             already_migrated = conn.execute(
                 text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
