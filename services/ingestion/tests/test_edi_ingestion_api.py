@@ -629,6 +629,7 @@ def test_document_ingest_strict_passes_with_compliant_tlc(client: TestClient, ca
         headers={"X-Partner-ID": "WALMART"},
     )
     assert response.status_code == 201
+    assert response.json()["status"] == "accepted"
     assert response.json()["extracted"]["fsma_validation_status"] == "passed"
 
 
@@ -691,9 +692,26 @@ def test_edi_wrapper_reports_nested_rejection_in_http_and_body_status(
     assert body["ingestion_result"]["events"][0]["errors"] == ["rule_violation"]
 
 
-def test_document_ingest_preserves_nested_http_exception(
+@pytest.mark.parametrize(
+    ("path", "traceability_lot_code"),
+    [
+        pytest.param(
+            "/api/v1/ingest/edi",
+            "LOT-2026-EDI-NESTED-ERROR",
+            id="legacy-856",
+        ),
+        pytest.param(
+            "/api/v1/ingest/edi/document",
+            _VALID_FSMA_TLC,
+            id="unified-document",
+        ),
+    ],
+)
+def test_edi_wrapper_preserves_nested_http_exception(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    traceability_lot_code: str,
 ) -> None:
     """The EDI wrapper must not replace a canonical pipeline error."""
 
@@ -703,9 +721,9 @@ def test_document_ingest_preserves_nested_http_exception(
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _unavailable_ingest_events)
 
     response = client.post(
-        "/api/v1/ingest/edi/document",
+        path,
         data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
+            "traceability_lot_code": traceability_lot_code,
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("asn.edi", _build_856(isa13=_next_isa13()), "application/edi-x12")},
