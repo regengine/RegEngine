@@ -114,3 +114,17 @@ def test_compliance_integration_engine_passes_liveness_args(monkeypatch):
     integration = ci_module.ComplianceIntegration()
 
     assert _liveness_subset(_connect_params(integration.engine)) == EXPECTED_LIVENESS
+
+
+def test_leader_election_engine_passes_liveness_args(monkeypatch):
+    # The election loop and the lock heartbeat both connect through this
+    # engine; on 2026-09-28 their reconnects hung too.
+    from app import distributed
+
+    fake_settings = MagicMock()
+    fake_settings.database_url = PG_URL
+    monkeypatch.setattr(distributed, "get_settings", lambda: fake_settings)
+
+    context = distributed.DistributedContext()
+
+    assert _liveness_subset(_connect_params(context.engine)) == EXPECTED_LIVENESS
