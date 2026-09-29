@@ -68,6 +68,12 @@ from typesafe_sdk import (
 from .settings import JevSettings
 
 logger = structlog.get_logger("jev")
+# Production drops structlog INFO events that have no sampled trace
+# (sampling_aware_filter with LOG_ALL_SAMPLED_OUT=false), so a successful call
+# would leave no trace there while a failure (a warning) still shows. This
+# stdlib line is what lets an operator see in the deploy log that the key works
+# and Jev is being used. Metadata only, like the structlog event.
+_ops_log = logging.getLogger("jev")
 
 PROVIDER = "typesafe"
 _SDK_LOGGER_NAME = "typesafe_sdk"
@@ -345,6 +351,16 @@ class JevDecider:
             input_tokens=evidence.input_tokens,
             output_tokens=evidence.output_tokens,
             question_count=len(evidence.question_ids),
+        )
+        _ops_log.info(
+            "jev_answered purpose=%s model=%s request_id=%s latency_ms=%s questions=%d input_tokens=%s output_tokens=%s",
+            purpose,
+            evidence.model,
+            evidence.request_id,
+            evidence.latency_ms,
+            len(evidence.question_ids),
+            evidence.input_tokens,
+            evidence.output_tokens,
         )
         return JevAnswers(evidence=evidence, choices=choices, nouls=nouls, scores=scores)
 
