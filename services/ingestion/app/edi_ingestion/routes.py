@@ -27,7 +27,7 @@ import math
 import os
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from pydantic import ValidationError
 
 from ..authz import IngestionPrincipal, require_permission
@@ -37,6 +37,7 @@ from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_lim
 from ..webhook_compat import ingest_events
 from ..webhook_models import (
     IngestEvent,
+    IngestResponse,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -287,7 +288,75 @@ def _reject_legacy_856_placeholders(
     raise HTTPException(status_code=422, detail=detail)
 
 
+_EDI_REJECTION_RESPONSE_DOCS: dict[str, Any] = {
+    "description": "The request, EDI document, or canonical event was rejected.",
+    "content": {
+        "application/json": {
+            "schema": {
+                "oneOf": [
+                    {"$ref": "#/components/schemas/EDIIngestResponse"},
+                    {
+                        "type": "object",
+                        "title": "HTTPValidationError",
+                        "properties": {
+                            "detail": {
+                                "type": "array",
+                                "title": "Detail",
+                                "items": {
+                                    "type": "object",
+                                    "title": "ValidationError",
+                                    "properties": {
+                                        "loc": {
+                                            "type": "array",
+                                            "title": "Location",
+                                            "items": {
+                                                "anyOf": [
+                                                    {"type": "string"},
+                                                    {"type": "integer"},
+                                                ]
+                                            },
+                                        },
+                                        "msg": {"type": "string", "title": "Message"},
+                                        "type": {"type": "string", "title": "Error Type"},
+                                        "input": {"title": "Input"},
+                                        "ctx": {"type": "object", "title": "Context"},
+                                    },
+                                    "required": ["loc", "msg", "type"],
+                                },
+                            }
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "detail": {
+                                "oneOf": [
+                                    {"type": "string"},
+                                    {"type": "object", "additionalProperties": True},
+                                ]
+                            }
+                        },
+                        "required": ["detail"],
+                        "additionalProperties": False,
+                    },
+                ]
+            }
+        }
+    },
+}
+
+
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
+
+
+def _wrapper_outcome(ingestion_result: IngestResponse) -> tuple[str, int]:
+    """Project canonical acceptance counts onto the EDI wrapper contract."""
+    if ingestion_result.rejected == 0:
+        return "accepted", 201
+    if ingestion_result.accepted == 0:
+        return "rejected", 422
+    return "partial", 207
+
 
 _resolve_tenant_id = resolve_tenant_id
 _resolve_principal_tenant_id = resolve_principal_tenant_id
@@ -442,6 +511,7 @@ def _enforce_interchange_structure(
     "",
     response_model=EDIIngestResponse,
     status_code=201,
+    responses={422: _EDI_REJECTION_RESPONSE_DOCS},
     summary="Ingest X12 856 ASN",
     description=(
         "Partner-authenticated EDI inbound route for X12 856 Ship Notice/Manifest "
@@ -450,6 +520,7 @@ def _enforce_interchange_structure(
     ),
 )
 async def ingest_edi_856(
+    response: Response,
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
@@ -627,8 +698,10 @@ async def ingest_edi_856(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
     )
+    wrapper_status, response.status_code = _wrapper_outcome(ingestion_result)
 
     return EDIIngestResponse(
+        status=wrapper_status,
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
         traceability_lot_code=traceability_lot_code,
@@ -839,6 +912,13 @@ def _build_ingest_event_for_set(
     "/document",
     response_model=EDIIngestResponse,
     status_code=201,
+    responses={
+        207: {
+            "model": EDIIngestResponse,
+            "description": "Some canonical events were accepted and some were rejected.",
+        },
+        422: _EDI_REJECTION_RESPONSE_DOCS,
+    },
     summary="Ingest X12 EDI document (856/850/810/861)",
     description=(
         "Unified EDI inbound route that auto-detects the transaction set "
@@ -847,6 +927,7 @@ def _build_ingest_event_for_set(
     ),
 )
 async def ingest_edi_document(
+    response: Response,
     file: UploadFile = File(..., description="X12 EDI file"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
@@ -1197,8 +1278,10 @@ async def ingest_edi_document(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
     )
+    wrapper_status, response.status_code = _wrapper_outcome(ingestion_result)
 
     return EDIIngestResponse(
+        status=wrapper_status,
         document_type=f"X12_{transaction_set}",
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,

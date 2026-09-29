@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 service_dir = Path(__file__).parent.parent
@@ -152,6 +152,52 @@ def test_ingest_edi_856_happy_path(client: TestClient, captured_payload: dict) -
     assert event.unit_of_measure == "cases"
     assert event.kdes["ship_from_location"] == "Valley Fresh Farms"
     assert event.kdes["ship_to_location"] == "Metro Distribution Center"
+
+
+def test_document_openapi_documents_nested_result_statuses() -> None:
+    """Generated clients must see partial and business-rejection responses."""
+    app = FastAPI()
+    app.include_router(edi_router)
+
+    openapi = app.openapi()
+    component_schemas = openapi["components"]["schemas"]
+
+    def _assert_local_refs_resolve(node) -> None:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
+                assert ref.rsplit("/", 1)[-1] in component_schemas, ref
+            for value in node.values():
+                _assert_local_refs_resolve(value)
+        elif isinstance(node, list):
+            for value in node:
+                _assert_local_refs_resolve(value)
+
+    _assert_local_refs_resolve(openapi)
+
+    paths = openapi["paths"]
+    legacy_responses = paths["/api/v1/ingest/edi"]["post"]["responses"]
+    document_responses = paths["/api/v1/ingest/edi/document"]["post"]["responses"]
+
+    assert document_responses["207"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/EDIIngestResponse"
+    }
+    for responses in (legacy_responses, document_responses):
+        rejection_variants = responses["422"]["content"]["application/json"]["schema"]["oneOf"]
+        assert {"$ref": "#/components/schemas/EDIIngestResponse"} in rejection_variants
+        validation_errors = [
+            variant
+            for variant in rejection_variants
+            if variant.get("properties", {}).get("detail", {}).get("type") == "array"
+        ]
+        assert len(validation_errors) == 1
+        validation_error = validation_errors[0]
+        assert validation_error["properties"]["detail"]["items"]["required"] == ["loc", "msg", "type"]
+        assert any(
+            variant.get("properties", {}).get("detail", {}).get("oneOf")
+            == [{"type": "string"}, {"type": "object", "additionalProperties": True}]
+            for variant in rejection_variants
+        )
 
 
 def test_ingest_rejects_non_856_transaction_set(client: TestClient) -> None:
@@ -584,6 +630,90 @@ def test_document_ingest_strict_passes_with_compliant_tlc(client: TestClient, ca
     )
     assert response.status_code == 201
     assert response.json()["extracted"]["fsma_validation_status"] == "passed"
+
+
+@pytest.mark.parametrize(
+    ("path", "traceability_lot_code"),
+    [
+        pytest.param(
+            "/api/v1/ingest/edi",
+            "LOT-2026-EDI-NESTED-REJECT",
+            id="legacy-856",
+        ),
+        pytest.param(
+            "/api/v1/ingest/edi/document",
+            _VALID_FSMA_TLC,
+            id="unified-document",
+        ),
+    ],
+)
+def test_edi_wrapper_reports_nested_rejection_in_http_and_body_status(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    traceability_lot_code: str,
+) -> None:
+    """A canonical rejection must not be relabeled as an accepted EDI upload."""
+
+    async def _reject_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+        event = payload.events[0]
+        return IngestResponse(
+            accepted=0,
+            rejected=1,
+            total=1,
+            events=[
+                EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="rejected",
+                    errors=["rule_violation"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _reject_ingest_events)
+
+    response = client.post(
+        path,
+        data={
+            "traceability_lot_code": traceability_lot_code,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", _build_856(isa13=_next_isa13()), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["status"] == "rejected"
+    assert body["ingestion_result"]["accepted"] == 0
+    assert body["ingestion_result"]["rejected"] == 1
+    assert body["ingestion_result"]["events"][0]["errors"] == ["rule_violation"]
+
+
+def test_document_ingest_preserves_nested_http_exception(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The EDI wrapper must not replace a canonical pipeline error."""
+
+    async def _unavailable_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+        raise HTTPException(status_code=503, detail={"error": "rules_unavailable"})
+
+    monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _unavailable_ingest_events)
+
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("asn.edi", _build_856(isa13=_next_isa13()), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == {"error": "rules_unavailable"}
 
 
 def test_six_digit_yymmdd_date_accepted(client: TestClient) -> None:

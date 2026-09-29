@@ -264,6 +264,66 @@ def test_2976_multi_st_interchange_emits_one_event_per_transaction_set(
     assert body["extracted"]["transaction_set_count"] == 3
 
 
+def test_2976_mixed_nested_results_report_partial_and_preserve_evidence(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mixed canonical batch must not be relabeled as wholly accepted."""
+
+    async def _mixed_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+        accepted_event, rejected_event = payload.events
+        return IngestResponse(
+            accepted=1,
+            rejected=1,
+            total=2,
+            events=[
+                EventResult(
+                    traceability_lot_code=accepted_event.traceability_lot_code,
+                    cte_type=accepted_event.cte_type.value,
+                    status="accepted",
+                    event_id="evt-edi-accepted",
+                    sha256_hash="hash-accepted",
+                    chain_hash="chain-accepted",
+                ),
+                EventResult(
+                    traceability_lot_code=rejected_event.traceability_lot_code,
+                    cte_type=rejected_event.cte_type.value,
+                    status="rejected",
+                    errors=["rule_violation"],
+                ),
+            ],
+        )
+
+    monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _mixed_ingest_events)
+    raw = _interchange(
+        [
+            _856_set(
+                control="0001",
+                asn="ASN-ACCEPTED",
+                ship_from="Valley Fresh Farms",
+                bol="BOL-ACCEPTED",
+            ),
+            _856_set(
+                control="0002",
+                asn="ASN-REJECTED",
+                ship_from="Coastal Greens",
+                bol="BOL-REJECTED",
+            ),
+        ],
+        isa13="000029799",
+    )
+
+    response = _post(client, raw, name="mixed-result.edi")
+
+    assert response.status_code == 207
+    body = response.json()
+    assert body["status"] == "partial"
+    assert body["ingestion_result"]["accepted"] == 1
+    assert body["ingestion_result"]["rejected"] == 1
+    assert [event["status"] for event in body["ingestion_result"]["events"]] == ["accepted", "rejected"]
+    assert body["ingestion_result"]["events"][1]["errors"] == ["rule_violation"]
+
+
 def test_2976_ge01_disagreeing_with_st_count_is_rejected(client: TestClient, captured_payload: dict) -> None:
     """GE01 (number of transaction sets in the functional group) must be
     checked against the real ST count.
