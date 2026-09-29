@@ -367,8 +367,8 @@ class DatabaseAPIKeyStore:
         if self._database_url.startswith("postgresql://"):
             # Default to asyncpg as it's the primary async driver used in this project
             self._database_url = self._database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        elif "postgresql" in self._database_url and "+" not in self._database_url:
-            # Handle cases like "postgres://..."
+        elif self._database_url.startswith("postgres://"):
+            # Heroku-style scheme; SQLAlchemy has no "postgres" dialect
             self._database_url = self._database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif self._database_url.startswith("postgresql+psycopg2://"):
             # psycopg2 removed — migrate any leftover URLs to asyncpg
