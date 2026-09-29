@@ -1,6 +1,6 @@
 # RegEngine Python SDK
 
-Official Python SDK for RegEngine FSMA 204 Compliance Platform.
+Python client for RegEngine FSMA 204 traceability record lookup and query, with an independent record-hash verification CLI. Additional graph-backed methods are experimental; see their availability below.
 
 > **Status:** Not yet published to PyPI. Install from source for now.
 
@@ -59,7 +59,7 @@ Trace a lot backward to source materials and suppliers.
 Get chronological timeline of all events for a lot.
 
 #### `export_fda(tlc, start_date, end_date)`
-Generate FDA-compliant CSV export per 21 CFR 1.1455(b)(3).
+Generate an FDA-oriented CSV export through the experimental graph API.
 
 #### `start_recall_drill(tlc, severity="class_ii")`
 Initiate a mock recall drill.
