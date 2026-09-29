@@ -43,3 +43,15 @@ def postgres_liveness_connect_args(url: str) -> dict[str, int]:
         "keepalives_count": 3,
         "tcp_user_timeout": 60_000,  # milliseconds
     }
+
+
+def asyncpg_liveness_connect_args() -> dict[str, int]:
+    """Return asyncpg ``connect_args`` that bound connects and commands.
+
+    asyncpg does not use libpq, so the keywords above do not reach it, and it
+    has no keepalive option. ``timeout`` bounds the whole connect (TCP, TLS
+    and auth); ``command_timeout`` bounds every operation, including
+    SQLAlchemy's pool pre-ping, so a query sent to a dead peer fails instead
+    of hanging. Callers apply these only to asyncpg URLs.
+    """
+    return {"timeout": 10, "command_timeout": 30}
