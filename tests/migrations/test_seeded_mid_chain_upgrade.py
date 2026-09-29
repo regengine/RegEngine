@@ -48,7 +48,6 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
-from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -214,6 +213,10 @@ class RehearsalResult:
 @pytest.fixture(scope="module")
 def rehearsal() -> Iterator[RehearsalResult]:
     """Upgrade to MID_CHAIN_REVISION, seed, upgrade head — once per module."""
+    # Imported here, not at module level: scripts/setup_e2e_postgres.py imports
+    # _provision_cluster from this module with only the repo root on sys.path.
+    from shared.db_url import sync_postgres_url
+
     with rls_postgres_or_skip() as (plain_url, engine):
         provider_url = _role_admin_url(plain_url)
         provider_engine = create_engine(sync_postgres_url(provider_url), future=True)
