@@ -89,6 +89,7 @@ class SourceFileReceipt:
     record_count: int = 0
     parse_errors: List[str] = field(default_factory=list)
     source_system: Optional[str] = None
+    original_format: str = "unknown"
 
     @property
     def sha256(self) -> str:
@@ -258,6 +259,7 @@ async def ingest_events(
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
             run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
+            source_file_hash = source_file.sha256
         for event in payload.events:
             dedup_key = (
                 f"{event.cte_type.value}|{event.traceability_lot_code}"
@@ -323,6 +325,10 @@ async def ingest_events(
                     from shared.canonical_persistence import CanonicalEventStore
 
                     canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+                    if source_file is not None:
+                        canonical.provenance_metadata.original_format = source_file.original_format
+                        canonical.provenance_metadata.source_file_name = source_file.filename
+                        canonical.provenance_metadata.source_file_hash = source_file_hash
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
                     persist_result = canonical_store.persist_event(canonical)
                     if persist_result.success is not True:

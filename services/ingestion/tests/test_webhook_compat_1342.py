@@ -33,6 +33,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from app import webhook_compat as wc
+from shared.canonical_event import ProvenanceMetadata
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -251,6 +252,7 @@ def _install_stubs(
             from_entity_reference="fe",
             to_entity_reference="te",
             kdes=event.kdes,
+            provenance_metadata=ProvenanceMetadata(original_format="json"),
         )
 
     ce_mod = ModuleType("shared.canonical_event")

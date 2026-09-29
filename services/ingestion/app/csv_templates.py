@@ -1415,6 +1415,7 @@ async def ingest_csv(
     # SHA-256, size, every row counted) and each accepted event carries the
     # run id, so an export can point at the exact source file for any row.
     receipt = SourceFileReceipt(
+        original_format="csv",
         filename=file.filename or "upload.csv",
         raw_bytes=content,
         content_type=file.content_type,

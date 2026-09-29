@@ -3,7 +3,9 @@
 from types import SimpleNamespace
 
 import pytest
+from app.fda_export.formatters import build_pdf_response
 from app.fda_export.queries import _verify_chain_for_export
+from fpdf import FPDF
 from shared.canonical_persistence import CanonicalEventStore
 from shared.canonical_persistence.verification import CanonicalChainVerification
 
@@ -79,3 +81,57 @@ def test_existing_chain_errors_survive_unverified_export_scope(chain_result):
     assert result.valid is False
     assert "Sequence gap" in result.errors
     assert len(result.errors) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source,expected_status", [("legacy", "UNVERIFIED"), ("canonical", "VERIFIED")])
+@pytest.mark.parametrize("hashes_present", [True, False])
+async def test_pdf_does_not_attest_displayed_fields_from_tenant_chain(
+    monkeypatch, chain_result, source, expected_status, hashes_present
+):
+    rendered_text = []
+    footer_widths = []
+    original_cell = FPDF.cell
+
+    def capture_cell(pdf, *args, **kwargs):
+        text = args[2] if len(args) > 2 else kwargs.get("text", "")
+        rendered_text.append(text)
+        if "does not establish verification of every displayed field" in text:
+            footer_widths.append((pdf.get_string_width(text), pdf.w - pdf.r_margin - pdf.x - 2 * pdf.c_margin))
+        return original_cell(pdf, *args, **kwargs)
+
+    monkeypatch.setattr(FPDF, "cell", capture_cell)
+    result = _verify_chain_for_export(None, None, "tenant", source=source)
+    response = build_pdf_response(
+        events=[
+            {
+                "traceability_lot_code": "LOT-1",
+                "product_description": "Basil",
+                "event_type": "shipping",
+                "event_timestamp": "2026-09-28T00:00:00+00:00",
+                "quantity": 1,
+                "unit_of_measure": "EA",
+                "location_name": "Farm",
+                "sha256_hash": "a" * 64 if hashes_present else "",
+                "chain_hash": "b" * 64 if hashes_present else "",
+                "kdes": {},
+            }
+        ],
+        metadata={"generated_at": "2026-09-28"},
+        filename="export.pdf",
+        export_hash="csv-hash",
+        record_count=1,
+        chain_valid=result.valid,
+    )
+
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    assert body.startswith(b"%PDF")
+    assert response.headers["x-chain-integrity"] == expected_status
+    assert response.headers["x-export-hash"] == "csv-hash"
+    assert ("a" * 16 + "..." in rendered_text) is hashes_present
+    text = " ".join(rendered_text)
+    assert "Each record is individually SHA-256 hashed and chain-verified" not in text
+    assert "Record hashes are shown when present" in text
+    assert "does not establish verification of every displayed field" in text
+    assert len(footer_widths) == 1
+    assert footer_widths[0][0] <= footer_widths[0][1]

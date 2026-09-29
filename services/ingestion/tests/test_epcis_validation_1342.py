@@ -29,6 +29,7 @@ Check-digit / strict-rejection / mandatory-GLN behavior stays in
 from __future__ import annotations
 
 import asyncio
+import inspect
 import sys
 import types
 from pathlib import Path
@@ -372,6 +373,7 @@ class TestValidateAsFsmaEvent:
 class _FakeAuditLogger:
     def __init__(self):
         self.calls: list[dict] = []
+        self.coroutines = []
 
     def log(self, **kwargs):
         self.calls.append(kwargs)
@@ -379,7 +381,9 @@ class _FakeAuditLogger:
         async def _dummy():
             return None
 
-        return _dummy()
+        coro = _dummy()
+        self.coroutines.append(coro)
+        return coro
 
 
 def _install_fake_audit(monkeypatch: pytest.MonkeyPatch, raise_on_get_instance: bool = False) -> _FakeAuditLogger:
@@ -413,14 +417,7 @@ def _install_fake_audit(monkeypatch: pytest.MonkeyPatch, raise_on_get_instance: 
     return fake_logger
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 class TestAuditLogValidationFailure:
-    # ``_FakeAuditLogger.log()`` returns a coroutine that the no-loop
-    # branch of the production code intentionally never awaits. That's
-    # the documented "no running loop, skip async audit" behavior, but
-    # it does emit a RuntimeWarning when the coroutine is GC'd. Filter
-    # at the class level rather than per-test so the test surface
-    # stays clean.
     def test_no_running_loop_is_silent(self, monkeypatch):
         # Synchronous call path — ``asyncio.get_running_loop()`` raises
         # RuntimeError, which is the documented "no loop, skip async
@@ -438,6 +435,11 @@ class TestAuditLogValidationFailure:
         assert call["action"] == "fsma_event_validation"
         assert call["resource"]["resource_id"] == "k"
         assert call["resource"]["attributes"]["tlc"] == "T"
+        try:
+            assert inspect.getcoroutinestate(fake.coroutines[0]) == inspect.CORO_CLOSED
+        finally:
+            # Clean up even when the regression fails against the old code.
+            fake.coroutines[0].close()
 
     def test_running_loop_schedules_task(self, monkeypatch):
         # Under a running event loop, the coroutine must be scheduled

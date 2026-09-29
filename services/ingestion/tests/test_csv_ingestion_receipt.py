@@ -7,12 +7,18 @@ the upload it came from.
 
 from __future__ import annotations
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # /ingest/csv retains the upload as an ingestion run
 # ---------------------------------------------------------------------------
 
 
-def test_csv_route_hands_ingest_events_a_receipt_for_the_whole_file(monkeypatch):
+@pytest.mark.parametrize(
+    "source,filename,content_type",
+    [("csv_upload", "harvest.csv", "text/csv"), ("edi", "misleading.json", "application/json")],
+)
+def test_csv_route_hands_ingest_events_a_receipt_for_the_whole_file(monkeypatch, source, filename, content_type):
     import hashlib
     from typing import Optional
 
@@ -54,15 +60,16 @@ def test_csv_route_hands_ingest_events_a_receipt_for_the_whole_file(monkeypatch)
     ).encode()
     resp = TestClient(app).post(
         "/api/v1/ingest/csv",
-        files={"file": ("harvest.csv", csv_bytes, "text/csv")},
-        data={"cte_type": "harvesting"},
+        files={"file": (filename, csv_bytes, content_type)},
+        data={"cte_type": "harvesting", "source": source},
     )
     assert resp.status_code == 200, resp.text
     receipt = captured["kwargs"]["source_file"]
-    assert receipt.filename == "harvest.csv"
+    assert receipt.filename == filename
     assert receipt.raw_bytes == csv_bytes
     assert receipt.sha256 == hashlib.sha256(csv_bytes).hexdigest()
-    assert receipt.content_type == "text/csv"
+    assert receipt.content_type == content_type
+    assert getattr(receipt, "original_format", None) == "csv"
     assert receipt.initiated_by == "key-42"
     # Every data row is accounted for: one event plus one parse rejection.
     assert receipt.record_count == 2 and len(receipt.parse_errors) == 1

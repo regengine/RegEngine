@@ -704,6 +704,7 @@ async def ingest_edi_856(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         source_file=SourceFileReceipt(
+            original_format="edi",
             filename=file.filename or "upload.edi",
             raw_bytes=raw_bytes,
             content_type=file.content_type,
@@ -1309,6 +1310,7 @@ async def ingest_edi_document(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         source_file=SourceFileReceipt(
+            original_format="edi",
             filename=file.filename or "upload.edi",
             raw_bytes=raw_bytes,
             content_type=file.content_type,

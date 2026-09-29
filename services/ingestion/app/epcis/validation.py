@@ -88,7 +88,8 @@ def _audit_log_validation_failure(
             loop = asyncio.get_running_loop()
             loop.create_task(coro)
         except RuntimeError:
-            pass  # No running loop — skip async audit (logged via stdlib above)
+            # No running loop: skip async audit without leaking its coroutine.
+            coro.close()
     except Exception:
         logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
 

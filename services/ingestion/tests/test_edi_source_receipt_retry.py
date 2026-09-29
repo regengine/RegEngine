@@ -103,6 +103,7 @@ def test_edi_retains_exact_source_bytes_in_tenant_receipt(harness, endpoint):
     assert receipt.filename == "original.edi" and receipt.content_type == "application/edi-x12"
     assert receipt.initiated_by == "synthetic-key-id" and receipt.record_count == 1
     assert getattr(receipt, "source_system", None) == "edi"
+    assert getattr(receipt, "original_format", None) == "edi"
     assert response.json()["ingestion_result"]["ingestion_run_id"] is not None
 
 
