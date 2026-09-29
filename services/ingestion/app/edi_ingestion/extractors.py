@@ -123,6 +123,7 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
         data["ship_time_raw"] = bsn[4] if len(bsn) > 4 else None
 
     total_quantity = 0.0
+    invalid_quantity_present = False
     sn1_units: list[str] = []
     for segment in segments:
         if not segment:
@@ -151,7 +152,9 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
             # non-numeric SN1 must leave ``quantity`` unset rather than
             # synthesize 1.0.
             if len(segment) > 2 and segment[2]:
-                total_quantity += _safe_float(segment[2], fallback=0.0)
+                parsed_quantity = _safe_float(segment[2], fallback=0.0)
+                invalid_quantity_present = invalid_quantity_present or parsed_quantity == 0.0
+                total_quantity += parsed_quantity
             if len(segment) > 3 and segment[3]:
                 data["unit_of_measure"] = data["unit_of_measure"] or segment[3]
                 sn1_units.append(segment[3].strip().upper())
@@ -218,6 +221,8 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
 
     if total_quantity > 0:
         data["quantity"] = total_quantity
+    if invalid_quantity_present:
+        data["_invalid_quantity_present"] = True
 
     if not data["reference_document_number"]:
         data["reference_document_number"] = data["asn_number"]

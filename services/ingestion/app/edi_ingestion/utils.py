@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -101,7 +102,7 @@ def _safe_float(value: Optional[str], fallback: float = 1.0) -> float:
         return fallback
     try:
         parsed = float(value)
-        if parsed > 0:
+        if math.isfinite(parsed) and parsed > 0:
             return parsed
     except (TypeError, ValueError):
         pass

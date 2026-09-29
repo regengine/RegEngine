@@ -69,6 +69,17 @@ LEGACY_856_MISSING_KDES = (
     b"IEA*1*000000099~"
 )
 
+DOCUMENT_856_MISSING_KDES = (
+    b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000098*0*P*>~"
+    b"GS*SH*SENDERID*RECEIVERID*20260310*1200*98*X*004010~"
+    b"ST*856*0098~"
+    b"BSN*00*ASN-MISSING-KDES~"
+    b"HL*1**S~"
+    b"SE*4*0098~"
+    b"GE*1*98~"
+    b"IEA*1*000000098~"
+)
+
 
 @pytest.fixture()
 def captured_payload() -> dict:
@@ -374,6 +385,137 @@ def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient, capture
     rejections = list_edi_rejections(TEST_TENANT_ID)
     assert len(rejections) == 1
     assert rejections[0]["reason"] == "fsma_validation_failed"
+
+
+def test_document_856_rejects_missing_required_kdes_without_placeholder_persistence(
+    client: TestClient,
+    captured_payload: dict,
+) -> None:
+    """An incomplete 856 must not become a plausible-looking shipping event."""
+    from app.edi_ingestion.rejection_log import reset_edi_rejections
+
+    reset_edi_rejections()
+    captured_payload.clear()
+
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={
+            "file": (
+                "missing-kdes.edi",
+                DOCUMENT_856_MISSING_KDES,
+                "application/edi-x12",
+            )
+        },
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_856_missing_required_kdes"
+    assert set(detail["missing_kdes"]) >= {
+        "quantity",
+        "unit_of_measure",
+        "product_description",
+        "ship_from_location",
+        "ship_to_location",
+        "ship_date",
+    }
+    assert "payload" not in captured_payload
+
+
+@pytest.mark.parametrize(
+    ("edi_quantity", "quantity_override"),
+    [
+        pytest.param("INF", None, id="edi-inf"),
+        pytest.param("1e309", None, id="edi-overflow"),
+        pytest.param("200", "inf", id="override-inf"),
+    ],
+)
+def test_document_856_rejects_non_finite_quantity_without_persistence(
+    client: TestClient,
+    captured_payload: dict,
+    edi_quantity: str,
+    quantity_override: str | None,
+) -> None:
+    """Non-finite EDI or override quantities must fail before ingestion."""
+    captured_payload.clear()
+    raw = _build_856(isa13=_next_isa13()).replace(
+        b"SN1**200*CA~",
+        f"SN1**{edi_quantity}*CA~".encode("ascii"),
+    )
+    data = {
+        "traceability_lot_code": _VALID_FSMA_TLC,
+        "tenant_id": TEST_TENANT_ID,
+    }
+    if quantity_override is not None:
+        data["quantity_override"] = quantity_override
+
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data=data,
+        files={"file": ("non-finite-quantity.edi", raw, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "edi_non_positive_quantity"
+    assert "payload" not in captured_payload
+
+
+def test_document_856_rejects_non_finite_line_hidden_by_valid_aggregate(
+    client: TestClient,
+    captured_payload: dict,
+) -> None:
+    """One valid SN1 line must not hide a non-finite sibling line."""
+    captured_payload.clear()
+    raw = _build_856(isa13=_next_isa13()).replace(
+        b"SN1**200*CA~",
+        b"SN1**INF*CA~SN1**200*CA~",
+    )
+
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("mixed-quantity.edi", raw, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "edi_non_positive_quantity"
+    assert "payload" not in captured_payload
+
+
+def test_document_856_rejects_whitespace_product_override_without_persistence(
+    client: TestClient,
+    captured_payload: dict,
+) -> None:
+    """Whitespace cannot replace a missing 856 product description."""
+    captured_payload.clear()
+    raw = _build_856(isa13=_next_isa13()).replace(b"LIN**SK*ROMAINE-12CT~", b"")
+
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+            "product_description": "   ",
+        },
+        files={"file": ("blank-product.edi", raw, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_856_missing_required_kdes"
+    assert "product_description" in detail["missing_kdes"]
+    assert "payload" not in captured_payload
 
 
 def test_document_ingest_strict_false_query_advisory(client: TestClient, captured_payload: dict) -> None:
