@@ -1041,8 +1041,11 @@ def _readiness_checks(request: Request):
 
         db_url = os.getenv("DATABASE_URL")
         if db_url:
+            from shared.db_url import sync_postgres_url
+
+            db_url = sync_postgres_url(db_url)
             connect_args = {}
-            if db_url.startswith(("postgresql:", "postgresql+psycopg:", "postgresql+psycopg2:", "postgres:")):
+            if db_url.startswith("postgresql+psycopg:"):
                 connect_args = {"connect_timeout": 2, "options": "-c statement_timeout=2000"}
             engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
             try:

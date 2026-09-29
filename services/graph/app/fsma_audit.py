@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any, Deque, Dict, List, Optional, Union
 
 import structlog
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 
 logger = structlog.get_logger("fsma-audit")
 
@@ -46,14 +47,14 @@ def _get_audit_db_engine():
         try:
             from sqlalchemy import create_engine
 
-            url = (
-                db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-                if db_url.startswith("postgresql://")
-                else db_url
-            )
+            url = sync_postgres_url(db_url)
             engine_kwargs = {"pool_pre_ping": True}
             if not url.startswith("sqlite"):
-                engine_kwargs.update(pool_size=2, max_overflow=4)
+                engine_kwargs.update(
+                    pool_size=2,
+                    max_overflow=4,
+                    connect_args=sync_postgres_connect_args(url),
+                )
             _db_engine = create_engine(url, **engine_kwargs)
             return _db_engine
         except Exception as e:
@@ -147,7 +148,7 @@ class AuditPersistenceError(RuntimeError):
 def _on_event_loop() -> bool:
     """True when called on a running asyncio event loop.
 
-    #2848: this module's persistence path is synchronous psycopg2 with
+    #2848: this module's persistence path is synchronous psycopg with
     ``time.sleep`` backoff between retries. Called inline from an
     ``async def`` handler that stalls the whole Uvicorn loop — every
     concurrent request, health probes included — for the length of the
@@ -731,7 +732,7 @@ class FSMAAuditLog:
     async def alog(self, *args, **kwargs) -> FSMAAuditEntry:
         """Async-safe :meth:`log` — runs the blocking write off the loop.
 
-        #2848: :meth:`log` drives synchronous psycopg2 inserts with
+        #2848: :meth:`log` drives synchronous psycopg inserts with
         backoff sleeps between retries. Called inline from an
         ``async def`` handler it stalls the entire Uvicorn event loop —
         freezing every concurrent request, health probes included — for

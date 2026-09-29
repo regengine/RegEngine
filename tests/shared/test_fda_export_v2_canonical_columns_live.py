@@ -23,6 +23,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -80,7 +81,7 @@ def test_fetch_v2_events_executes_against_canonical_schema() -> None:
         v2_rows_to_event_dicts,
     )
 
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     tenant_id = str(uuid.uuid4())
     other_tenant_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())

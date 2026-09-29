@@ -6,6 +6,7 @@ import os
 from typing import Any, NoReturn
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 
 def _skip_or_fail(reason: str) -> NoReturn:
@@ -24,7 +25,7 @@ def sqlalchemy_session_or_skip(database_url: str | None, *, reason: str):
     from sqlalchemy import create_engine, text
     from sqlalchemy.orm import sessionmaker
 
-    engine = create_engine(database_url)
+    engine = create_engine(sync_postgres_url(database_url))
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))

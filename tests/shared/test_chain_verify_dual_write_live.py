@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -48,7 +49,7 @@ def db_session():
     # SESSION timezone — on a non-UTC workstation the round-tripped string
     # (and thus the recomputed hash) would differ even though the instant
     # is identical. CI and prod both run UTC.
-    engine = create_engine(DATABASE_URL, connect_args={"options": "-c timezone=UTC"})
+    engine = create_engine(sync_postgres_url(DATABASE_URL), connect_args={"options": "-c timezone=UTC"})
     with Session(engine) as session:
         tenant_id = str(uuid.uuid4())
         session.execute(

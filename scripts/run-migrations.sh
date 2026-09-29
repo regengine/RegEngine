@@ -96,6 +96,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
 url = os.environ['MIGRATION_RUNNER_URL']
+# psycopg (v3) is the only sync driver installed; a bare postgresql:// URL
+# would make SQLAlchemy load psycopg2. Same rewrite as services/shared/db_url.py.
+for prefix in ('postgresql+psycopg2://', 'postgresql+asyncpg://', 'postgresql://', 'postgres://'):
+    if url.startswith(prefix):
+        url = 'postgresql+psycopg://' + url[len(prefix):]
+        break
 timeout_s = int(os.environ.get('MIGRATION_LOCK_TIMEOUT_S', '${MIGRATION_LOCK_TIMEOUT_S}'))
 # NullPool: closing a connection really disconnects it instead of parking an
 # idle backend in the pool for the whole alembic run — the probe connection

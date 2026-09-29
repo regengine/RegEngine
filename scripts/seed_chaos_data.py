@@ -210,9 +210,16 @@ def seed_scheduler_jobs():
         from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
         from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.interval import IntervalTrigger
+        from sqlalchemy import make_url
 
         # Create a temporary scheduler to insert jobs into the DB
-        jobstores = {"default": SQLAlchemyJobStore(url=POSTGRES_URL)}
+        jobstores = {
+            "default": SQLAlchemyJobStore(
+                url=make_url(POSTGRES_URL).set(drivername="postgresql+psycopg")
+                if POSTGRES_URL.startswith("postgres")
+                else POSTGRES_URL
+            )
+        }
         scheduler = BackgroundScheduler(jobstores=jobstores)
         # We don't need to start it to add jobs, but adding a jobstore requires it?
         # Actually add_jobstore works on running or stopped scheduler.
@@ -256,9 +263,13 @@ def seed_postgres():
 
     for attempt in range(max_retries):
         try:
-            from sqlalchemy import create_engine, text
+            from sqlalchemy import create_engine, make_url, text
 
-            engine = create_engine(POSTGRES_URL)
+            engine = create_engine(
+                make_url(POSTGRES_URL).set(drivername="postgresql+psycopg")
+                if POSTGRES_URL.startswith("postgres")
+                else POSTGRES_URL
+            )
 
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -345,9 +356,13 @@ def cleanup_all():
         logger.warning(f"  Neo4j cleanup skipped: {e}")
 
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import create_engine, make_url, text
 
-        engine = create_engine(POSTGRES_URL)
+        engine = create_engine(
+            make_url(POSTGRES_URL).set(drivername="postgresql+psycopg")
+            if POSTGRES_URL.startswith("postgres")
+            else POSTGRES_URL
+        )
         with engine.connect() as conn:
             r1 = conn.execute(text("DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"))
             # Cleanup persistent jobs

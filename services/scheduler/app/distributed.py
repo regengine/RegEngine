@@ -10,6 +10,7 @@ import time
 from typing import Callable, Generator, Optional
 
 import structlog
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -68,14 +69,18 @@ class DistributedContext:
     def __init__(self, database_url: Optional[str] = None):
         settings = get_settings()
         self.database_url = database_url or settings.database_url
+        engine_url = sync_postgres_url(self.database_url)
         self.engine = create_engine(
-            self.database_url,
+            engine_url,
             pool_pre_ping=True,
             # We use a separate pool for the lock to ensure the connection
             # stays open as long as we hold leadership.
             pool_size=2,
             max_overflow=1,
-            connect_args={"keepalives": 1, "keepalives_idle": 30},
+            # Bounded reconnects + ~60s dead-peer detection: on 2026-09-28 the
+            # election and heartbeat reconnects hung on a killed Postgres
+            # container, so a lost lock went unnoticed for ~4 minutes.
+            connect_args=sync_postgres_connect_args(engine_url),
         )
         self._is_leader = False
         # #1142: heartbeat state. ``_leader_pid`` is the backend pid we

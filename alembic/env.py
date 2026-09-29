@@ -27,6 +27,7 @@ config = context.config
 # Override sqlalchemy.url from the migration-only credential.  Import the
 # canonical cloud-marker inventory after ``services/`` is added to sys.path so
 # Alembic cannot drift from application environment detection.
+from shared.db_url import sync_postgres_url  # noqa: E402
 from shared.env import CLOUD_ENV_VARS  # noqa: E402
 
 _migration_url = os.environ.get("MIGRATIONS_DATABASE_URL", "").strip()
@@ -50,7 +51,8 @@ if not _migration_url:
         "postgresql://regengine:regengine@postgres:5432/regengine",
     )
 
-config.set_main_option("sqlalchemy.url", _migration_url)
+# psycopg 3 for every Postgres scheme, same driver as the app (shared.db_url).
+config.set_main_option("sqlalchemy.url", sync_postgres_url(_migration_url))
 
 # Python logging from the config file
 if config.config_file_name is not None:

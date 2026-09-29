@@ -464,7 +464,7 @@ jobs:
           if [ -f requirements.lock ]; then
             pip install --require-hashes -r requirements.lock
           fi
-          pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy psycopg2-binary
+          pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy "psycopg[binary]"
 
       - name: Create scratch database (dedicated migration + runtime roles)
         env:

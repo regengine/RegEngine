@@ -213,9 +213,13 @@ class RehearsalResult:
 @pytest.fixture(scope="module")
 def rehearsal() -> Iterator[RehearsalResult]:
     """Upgrade to MID_CHAIN_REVISION, seed, upgrade head — once per module."""
+    # Imported here, not at module level: scripts/setup_e2e_postgres.py imports
+    # _provision_cluster from this module with only the repo root on sys.path.
+    from shared.db_url import sync_postgres_url
+
     with rls_postgres_or_skip() as (plain_url, engine):
         provider_url = _role_admin_url(plain_url)
-        provider_engine = create_engine(provider_url, future=True)
+        provider_engine = create_engine(sync_postgres_url(provider_url), future=True)
         with engine.connect() as conn:
             already_migrated = conn.execute(
                 text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
@@ -247,9 +251,9 @@ def rehearsal() -> Iterator[RehearsalResult]:
             # tables already use FORCE RLS, so the intentionally NOBYPASSRLS
             # migration owner cannot manufacture representative legacy rows.
             # The head upgrade itself still runs only as the migration role.
-            import psycopg2
+            import psycopg
 
-            seed_conn = psycopg2.connect(
+            seed_conn = psycopg.connect(
                 provider_url.replace("postgresql+psycopg://", "postgresql://", 1).replace(
                     "postgresql+psycopg2://", "postgresql://", 1
                 )

@@ -97,7 +97,7 @@ def pg_engine():
         reason="PostgresContainer unavailable",
     )
     try:
-        engine = create_engine(pg.get_connection_url(), future=True)
+        engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
         with engine.begin() as conn:
             # Minimal stand-in for ``get_tenant_context()`` so the v056-style
             # RLS policy that v065 re-issues parses on this disposable DB.

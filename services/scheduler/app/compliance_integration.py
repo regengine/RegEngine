@@ -14,8 +14,9 @@ from uuid import UUID
 import structlog
 
 # Standardized path discovery via shared utility
-from shared.paths import ensure_shared_importable
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 from shared.maintenance_tenants import list_maintenance_tenant_ids
+from shared.paths import ensure_shared_importable
 from shared.tenant_context import set_tenant_guc
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -50,7 +51,8 @@ class ComplianceIntegration:
     def __init__(self, database_url: Optional[str] = None):
         settings = get_settings()
         self.database_url = database_url or settings.database_url
-        self.engine = create_engine(self.database_url)
+        engine_url = sync_postgres_url(self.database_url)
+        self.engine = create_engine(engine_url, connect_args=sync_postgres_connect_args(engine_url))
         self.Session = sessionmaker(bind=self.engine)
 
     def process_enforcement_item(self, item: EnforcementItem) -> List[UUID]:

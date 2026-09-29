@@ -22,6 +22,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -51,7 +52,7 @@ def test_tlc_traversal_executes_and_walks_both_directions() -> None:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
 
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     tenant_id = str(uuid.uuid4())
     other_tenant_id = str(uuid.uuid4())
 

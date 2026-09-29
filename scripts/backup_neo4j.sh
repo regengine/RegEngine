@@ -3,8 +3,8 @@
 # backup_neo4j.sh — Offline Neo4j backup via neo4j-admin (#2939)
 #
 # Neo4j Community Edition has no online backup, so this takes the *offline*
-# dump that docs/runbooks/disaster-recovery.md §3.1 documents and that its
-# §4.1 restore consumes:
+# dump whose restore docs/operations/DISASTER_RECOVERY.md (Neo4j section)
+# documents:
 #
 #     neo4j-admin database dump neo4j --to-path=<dir>
 #     neo4j-admin database load neo4j --from-path=<dir> --overwrite-destination=true
@@ -12,8 +12,6 @@
 # FORMAT CONTRACT: the artifact is a binary `neo4j-admin` dump named
 # `<database>.dump`, written inside a per-run timestamped directory so the
 # documented `--from-path=<dir>` restore finds it under the name it expects.
-# This mirrors the S3 layout the runbook already uses
-# (s3://regengine-backups/neo4j/<date>/neo4j.dump).
 #
 # This script previously hand-rolled a `.cypher.gz` export. Nothing could
 # restore it: the documented consumer reads only a binary neo4j-admin dump,

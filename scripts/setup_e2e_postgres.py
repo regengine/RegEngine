@@ -26,7 +26,7 @@ def main():
         raise SystemExit("Refusing to prepare anything except the local playwright_shared E2E database")
     from tests.migrations.test_seeded_mid_chain_upgrade import _provision_cluster
 
-    engine = create_engine(url)
+    engine = create_engine(target.set(drivername="postgresql+psycopg"))  # psycopg (v3); psycopg2 is not installed
     try:
         _provision_cluster(engine, engine)
     finally:

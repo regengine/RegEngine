@@ -94,6 +94,7 @@ _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 # canonical runtime alias — so exactly one module instance (and one
 # ContextVar pair) exists.
 import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 from shared.env import is_production
 
 _is_prod = is_production()
@@ -108,6 +109,8 @@ if not DATABASE_URL:
         msg="DATABASE_URL not set — using dev default. Do NOT use in production.",
     )
     DATABASE_URL = _DEV_DATABASE_URL
+
+
 # Pool-sizing kwargs are only valid for connection-pooled dialects.
 # SQLite (used by tests with ``DATABASE_URL=sqlite:///:memory:``) picks
 # ``SingletonThreadPool`` or ``StaticPool`` which reject
@@ -116,16 +119,27 @@ if not DATABASE_URL:
 # collection of every ingestion-service pytest run that transitively
 # imported ``shared.database``. Production uses Postgres so this guard
 # is invisible there.
-_engine_kwargs: dict = {"pool_pre_ping": True}
-if not DATABASE_URL.startswith("sqlite"):
-    _engine_kwargs.update(
-        pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
-        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
-        pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
-        pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
-    )
+def _build_engine_kwargs(database_url: str) -> dict:
+    kwargs: dict = {"pool_pre_ping": True}
+    if not database_url.startswith("sqlite"):
+        kwargs.update(
+            pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+            max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
+            # Bounded connect + dead-peer detection, so a Postgres restart
+            # cannot block a request or scheduler job forever; no server-side
+            # prepared statements (transaction-mode pooler safe).
+            connect_args=sync_postgres_connect_args(database_url),
+        )
+    return kwargs
 
-engine = create_engine(DATABASE_URL, **_engine_kwargs)
+
+# psycopg 3 for every Postgres scheme; see shared.db_url. DATABASE_URL itself
+# stays as configured for callers that read it.
+_ENGINE_URL = sync_postgres_url(DATABASE_URL)
+_engine_kwargs = _build_engine_kwargs(_ENGINE_URL)
+engine = create_engine(_ENGINE_URL, **_engine_kwargs)
 
 # SQLite's SingletonThreadPool/StaticPool (test envs, see above) have no
 # checkedout()/overflow(); report 0 instead of failing every metrics scrape.

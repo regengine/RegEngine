@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 service_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(service_dir))
@@ -37,7 +38,7 @@ def _connectable(dsn: str) -> bool:
     from sqlalchemy import create_engine, text
 
     try:
-        eng = create_engine(dsn, pool_pre_ping=True)
+        eng = create_engine(sync_postgres_url(dsn), pool_pre_ping=True)
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
         eng.dispose()
@@ -67,7 +68,7 @@ def admin_engine():
 
     if not _connectable(SUPERUSER_DSN):
         pytest.skip("remediation scratch Postgres not available")
-    engine = create_engine(SUPERUSER_DSN)
+    engine = create_engine(sync_postgres_url(SUPERUSER_DSN))
     yield engine
     engine.dispose()
 
@@ -77,7 +78,7 @@ def app_engine(admin_engine):
     """Exact non-superuser runtime engine; v111 owns every required grant."""
     from sqlalchemy import create_engine, text
 
-    engine = create_engine(APP_DSN)
+    engine = create_engine(sync_postgres_url(APP_DSN))
     with engine.connect() as conn:
         posture = conn.execute(
             text(

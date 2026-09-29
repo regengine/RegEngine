@@ -51,7 +51,7 @@ def pg_engine():
         reason="PostgresContainer unavailable",
     )
     try:
-        engine = create_engine(pg.get_connection_url(), future=True)
+        engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
         with engine.begin() as conn:
             # Minimal audit_logs shape sufficient to exercise the trigger.
             # Real prod schema has more columns but the trigger is row-scoped

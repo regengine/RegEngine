@@ -38,6 +38,8 @@ from typing import AsyncIterator, Iterator
 # ``shared.`` alias on purpose — one module instance, one ContextVar pair.
 import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
 import structlog
+from shared.db_liveness import postgres_liveness_connect_args
+from shared.db_url import sync_postgres_url
 
 # #2512: single shared cloud-marker tuple — keep this in lockstep with the
 # central security gate in shared.env rather than maintaining a divergent copy.
@@ -52,13 +54,7 @@ _LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
 
 
 def _sqlalchemy_url(url: str) -> str:
-    if url.startswith("postgresql+asyncpg://"):
-        return url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql+psycopg2://"):
-        return url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+    return sync_postgres_url(url)
 
 
 def _admin_fallback_environment() -> str:
@@ -97,6 +93,8 @@ def _create_engine():
         # on the new backend or collide with another tenant's prep cache.
         # `0` (the previous value) means "prepare on first use" — the
         # opposite of the desired behavior.
+        # The liveness args bound each connect and detect a dead peer, so a
+        # Postgres restart cannot hang an auth/admin request (2026-09-28).
         return create_engine(
             sqlalchemy_url,
             pool_pre_ping=True,
@@ -104,7 +102,10 @@ def _create_engine():
             pool_size=int(os.getenv("ADMIN_DB_POOL_SIZE", "10")),
             max_overflow=int(os.getenv("ADMIN_DB_MAX_OVERFLOW", "20")),
             pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
-            connect_args={"prepare_threshold": None},
+            connect_args={
+                "prepare_threshold": None,
+                **postgres_liveness_connect_args(sqlalchemy_url),
+            },
         )
 
     fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE")

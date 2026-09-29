@@ -24,6 +24,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
+
 from .models import (
     RecallDrill,
     RecallSeverity,
@@ -51,12 +53,14 @@ def _get_db_engine():
     try:
         from sqlalchemy import create_engine
 
-        url = (
-            db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-            if db_url.startswith("postgresql://")
-            else db_url
+        url = sync_postgres_url(db_url)
+        return create_engine(
+            url,
+            pool_pre_ping=True,
+            pool_size=2,
+            max_overflow=4,
+            connect_args=sync_postgres_connect_args(url),
         )
-        return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
     except Exception:
         import logging
 

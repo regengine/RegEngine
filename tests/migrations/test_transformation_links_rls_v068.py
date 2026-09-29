@@ -69,7 +69,7 @@ def pg_engine():
         reason="PostgresContainer unavailable",
     )
     try:
-        engine = create_engine(pg.get_connection_url(), future=True)
+        engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
         with engine.begin() as conn:
             # Create the ``regengine`` role the policy references.
             # autocommit-style DDL: skip CREATE ROLE if it already exists.
@@ -207,7 +207,7 @@ class TestRLSPolicy:
 
     def test_select_with_tenant_a_returns_only_tenant_a_rows(self, pg_engine):
         with _as_regengine(pg_engine) as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :t"), {"t": _TENANT_A})
+            conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": _TENANT_A})
             rows = conn.execute(text("SELECT tenant_id FROM fsma.transformation_links")).fetchall()
             conn.rollback()
             assert len(rows) == 1
@@ -215,7 +215,7 @@ class TestRLSPolicy:
 
     def test_select_with_tenant_b_returns_only_tenant_b_rows(self, pg_engine):
         with _as_regengine(pg_engine) as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :t"), {"t": _TENANT_B})
+            conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": _TENANT_B})
             rows = conn.execute(text("SELECT tenant_id FROM fsma.transformation_links")).fetchall()
             conn.rollback()
             assert len(rows) == 1
@@ -223,7 +223,7 @@ class TestRLSPolicy:
 
     def test_insert_with_matching_tenant_succeeds(self, pg_engine):
         with _as_regengine(pg_engine) as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :t"), {"t": _TENANT_A})
+            conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": _TENANT_A})
             conn.execute(
                 text(
                     "INSERT INTO fsma.transformation_links "
@@ -245,7 +245,7 @@ class TestRLSPolicy:
         gets the GUC right but passes the wrong literal in the
         INSERT."""
         with _as_regengine(pg_engine) as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :t"), {"t": _TENANT_A})
+            conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": _TENANT_A})
             with pytest.raises(
                 (InternalError, ProgrammingError, DBAPIError),
                 match="row-level security",

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 from shared import db_type_assertions as dta
-from sqlalchemy import Column, Integer, MetaData, String
-from sqlalchemy.dialects.postgresql import TEXT, UUID
+from sqlalchemy import Column, Integer, LargeBinary, MetaData, String
+from sqlalchemy.dialects.postgresql import BYTEA, TEXT, UUID
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.orm import declarative_base
 
@@ -151,6 +151,48 @@ def test_noncritical_drift_is_warned_and_returned(monkeypatch):
     assert [drift.column for drift in drifts] == ["display_name"]
     assert log.warnings[0][0] == "orm_db_type_alignment_drift"
     assert log.warnings[0][1]["drift_detected"] is True
+    assert not log.errors
+
+
+def _binary_column_drifts(monkeypatch, live_type):
+    Base = _base()
+
+    class Credential(Base):
+        __tablename__ = "webauthn_credentials"
+
+        id = Column(Integer, primary_key=True)
+        public_key = Column(LargeBinary, nullable=False)
+
+    monkeypatch.setattr(
+        dta,
+        "inspect",
+        lambda _engine: _FakeInspector(
+            {
+                (None, "webauthn_credentials"): [
+                    {"name": "id", "type": Integer()},
+                    {"name": "public_key", "type": live_type},
+                ]
+            }
+        ),
+    )
+    log = _CapturingLogger()
+    return dta.verify_orm_db_type_alignment(_FakeEngine(), Base, log=log), log
+
+
+def test_large_binary_matches_reflected_bytea(monkeypatch):
+    drifts, log = _binary_column_drifts(monkeypatch, BYTEA())
+
+    assert drifts == []
+    assert not log.warnings
+    assert not log.errors
+
+
+def test_large_binary_vs_text_still_drifts(monkeypatch):
+    drifts, log = _binary_column_drifts(monkeypatch, TEXT())
+
+    assert [(drift.column, drift.expected, drift.actual) for drift in drifts] == [("public_key", "binary", "text")]
+    assert drifts[0].critical is False
+    assert log.warnings[0][0] == "orm_db_type_alignment_drift"
     assert not log.errors
 
 

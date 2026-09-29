@@ -24,6 +24,7 @@ import os
 import uuid
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -38,7 +39,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_failed_funnel_insert_does_not_poison_borrowed_transaction() -> None:
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = SessionLocal()
     try:

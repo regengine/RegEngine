@@ -20,7 +20,7 @@ from threading import Barrier
 from types import SimpleNamespace
 from uuid import uuid4
 
-import psycopg2
+import psycopg
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -72,7 +72,7 @@ def workflow(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", unix_only)
     proof = _load("pg_evidence_proof", ROOT / "scripts/verify_inflow_to_regengine_e2e.py")
     proof._configure_paths()
-    admin = psycopg2.connect(**admin_connect)
+    admin = psycopg.connect(**admin_connect)
     admin.autocommit = True
     tenant, other = str(uuid4()), str(uuid4())
     with admin.cursor() as cur:

@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 import structlog
 from pydantic import BaseModel, Field, field_validator
+from shared.db_liveness import asyncpg_liveness_connect_args
 from sqlalchemy import (
     Boolean,
     Column,
@@ -367,8 +368,8 @@ class DatabaseAPIKeyStore:
         if self._database_url.startswith("postgresql://"):
             # Default to asyncpg as it's the primary async driver used in this project
             self._database_url = self._database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        elif "postgresql" in self._database_url and "+" not in self._database_url:
-            # Handle cases like "postgres://..."
+        elif self._database_url.startswith("postgres://"):
+            # Heroku-style scheme; SQLAlchemy has no "postgres" dialect
             self._database_url = self._database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif self._database_url.startswith("postgresql+psycopg2://"):
             # psycopg2 removed — migrate any leftover URLs to asyncpg
@@ -397,6 +398,9 @@ class DatabaseAPIKeyStore:
             connect_args: dict[str, Any] = engine_kwargs.setdefault("connect_args", {})
             connect_args.setdefault("statement_cache_size", 0)
             connect_args.setdefault("prepared_statement_cache_size", 0)
+            # Bound connects and queries so a Postgres restart cannot hang
+            # API-key auth on a dead socket (2026-09-28).
+            connect_args.update(asyncpg_liveness_connect_args())
 
         self._redis_url = redis_url or os.environ.get("REDIS_URL")
         self._arm_sysadmin_rls = arm_sysadmin_rls

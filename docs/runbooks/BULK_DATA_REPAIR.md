@@ -871,11 +871,11 @@ Subject: Data Correction Applied — [TLC(s)] Traceability Records Updated
 
 [Tenant Name],
 
-We identified and corrected an issue affecting [N] traceability records 
+We identified and corrected an issue affecting [N] traceability records
 for lot code(s) [TLC list].
 
 What happened:
-  [Description of the data issue — e.g., "Ship date KDE was missing 
+  [Description of the data issue — e.g., "Ship date KDE was missing
   from 15 Shipping events imported via CSV on March 1, 2026."]
 
 What we did:
@@ -886,10 +886,10 @@ What we did:
 
 Impact:
   - Your compliance score for [dimension] changed from [X]% to [Y]%
-  - [If applicable: FDA export packages generated before this date 
+  - [If applicable: FDA export packages generated before this date
     should be regenerated]
 
-No action is required on your part. The corrected records are already 
+No action is required on your part. The corrected records are already
 reflected in your dashboard and any future FDA exports.
 
 If you have questions, contact [support contact].
@@ -1143,4 +1143,4 @@ idempotency_key = SHA-256(json({event_type, tlc, timestamp, source, from_facilit
 
 - [FDA_RECALL_RESPONSE.md](FDA_RECALL_RESPONSE.md) — Section 8 covers data integrity failures during recalls
 - [incident-response.md](incident-response.md) — Escalation paths for SEV1/SEV2
-- [disaster-recovery.md](disaster-recovery.md) — Database backup and point-in-time recovery
+- [DISASTER_RECOVERY.md](../operations/DISASTER_RECOVERY.md) — Railway backups and database restore

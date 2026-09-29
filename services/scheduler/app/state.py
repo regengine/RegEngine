@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Set
 
 import structlog
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 from sqlalchemy import Column, DateTime, String, Text, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -62,11 +63,13 @@ class StateManager:
             return
 
         try:
+            engine_url = sync_postgres_url(self.database_url)
             self.engine = create_engine(
-                self.database_url,
+                engine_url,
                 pool_pre_ping=True,
                 pool_size=5,
                 max_overflow=10,
+                connect_args=sync_postgres_connect_args(engine_url),
             )
             self.SessionLocal = sessionmaker(bind=self.engine)
 

@@ -56,9 +56,14 @@ IGNORED_SCHEMAS = {"information_schema", "pg_catalog", "pg_toast"}
 
 
 def _connect(database_url: str):
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine, make_url
 
-    return create_engine(database_url)
+    # psycopg (v3); psycopg2 is not installed.
+    return create_engine(
+        make_url(database_url).set(drivername="postgresql+psycopg")
+        if database_url.startswith("postgres")
+        else database_url
+    )
 
 
 def _fk_record(fk: dict, default_schema: str) -> dict:
