@@ -55,6 +55,12 @@ class _Database:
             raise RuntimeError("synthetic private database diagnostic")
         self._check("document")
         self.documents.append(document)
+        return {
+            "id": document.id,
+            "tenant_id": document.tenant_id,
+            "content_sha256": document.hash.content_sha256,
+            "storage_key": document.storage_key,
+        }
 
     def insert_audit_entry(self, entry):
         pass
@@ -182,17 +188,19 @@ def test_success_requires_document_persistence_and_completed_job(harness, route)
 
 @pytest.mark.parametrize("route", ["file", "direct", "url"])
 @pytest.mark.parametrize("failure,expected_status", [("document", 503), (None, 200)])
-def test_database_cleanup_failure_preserves_primary_response(harness, caplog, route, failure, expected_status):
+def test_database_cleanup_failure_preserves_primary_response(harness, monkeypatch, route, failure, expected_status):
     harness.db.failure = failure
     harness.db.fail_close = True
+    logger = Mock()
+    monkeypatch.setattr(routes_ingest, "logger", logger)
 
     response = _request(harness, route)
 
     assert response.status_code == expected_status
     assert harness.db.closed
     assert "private cleanup diagnostic" not in response.text
-    assert "private cleanup diagnostic" not in caplog.text
-    assert "document_db_close_failed" in caplog.text
+    assert "private cleanup diagnostic" not in repr(logger.mock_calls)
+    logger.error.assert_any_call("document_db_close_failed", error_type="RuntimeError")
     if failure:
         assert response.json() == {"detail": "Document persistence unavailable"}
         assert harness.db.statuses == [JobStatus.FAILED]

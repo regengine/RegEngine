@@ -445,7 +445,7 @@ def _process_and_emit(
                 document_hash=content_sha256,
                 tenant_id=tenant_id,
                 source_system=source_system,
-                source_url=url_str,
+                source_url=existing.get("source_url") or url_str,
                 raw_s3_path="skipped://duplicate",
                 normalized_s3_path=normalized_uri,
                 timestamp=datetime.now(timezone.utc),
@@ -484,7 +484,7 @@ def _process_and_emit(
             logger.debug("json_parse_skipped", url=url_str, error=str(e))
 
     try:
-        normalized, document_id, _ = normalize_document(raw_json, raw_bytes, url_str, content_type)
+        normalized, _, _ = normalize_document(raw_json, raw_bytes, url_str, content_type)
     except (ValueError, KeyError, TypeError) as e:
         logger.error("normalization_failed", url=url_str, error=str(e))
         raise HTTPException(
@@ -493,6 +493,8 @@ def _process_and_emit(
         )
 
     # 5. Enrich with metadata
+    document_id = str(uuid.uuid5(uuid.UUID(tenant_id), content_sha256))
+    normalized["document_id"] = document_id
     normalized["parsed_text"] = parsed_text
     normalized["parser_used"] = parser_name
     normalized["parse_metadata"] = {**(doc_metadata or {})}
@@ -505,9 +507,8 @@ def _process_and_emit(
     timestamp = datetime.now(timezone.utc)
     event_id = str(uuid.uuid4())
     raw_extension = _detect_extension(content_type) or ".bin"
-    raw_key = f"raw/{document_id}/{event_id}{raw_extension}"
-    normalized_key = f"normalized/{content_sha256}/current.json"
-    normalized_alias_key = f"normalized/by-document-id/{document_id}/current.json"
+    raw_key = f"raw/{tenant_id}/{document_id}/{event_id}{raw_extension}"
+    normalized_key = f"normalized/{tenant_id}/{document_id}/{event_id}.json"
 
     raw_uri = put_bytes(settings.raw_bucket, raw_key, raw_bytes)
     normalized_payload = NormalizedDocument(**normalized)
@@ -516,7 +517,6 @@ def _process_and_emit(
         normalized_key,
         normalized_payload.model_dump(mode="json"),
     )
-    put_json(settings.processed_bucket, normalized_alias_key, normalized_payload.model_dump(mode="json"))
 
     # 7. Audit Trail (Phase 3)
     if audit_logger:
@@ -526,12 +526,8 @@ def _process_and_emit(
     # 7.5 Store in Database (Phase 4)
     if db_manager:
         try:
-            # Generate a valid UUID from the document_id (which is usually a hash)
-            # Use UUID v5 for deterministic UUID from the hash string
-            doc_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, document_id))
-
             doc = Document(
-                id=doc_uuid,
+                id=document_id,
                 tenant_id=tenant_id,
                 title=normalized.get("title") or Path(url_str).name or "Untitled",
                 source_type="url",
@@ -550,10 +546,15 @@ def _process_and_emit(
                 content_type=content_type,
                 content_length=len(raw_bytes),
             )
-            db_manager.insert_document(doc)
+            persisted = db_manager.insert_document(doc)
         except (psycopg.Error, ConnectionError, OSError, RuntimeError) as db_exc:
             logger.error("document_db_insert_failed", error_type=type(db_exc).__name__)
             raise HTTPException(status_code=503, detail="Document persistence unavailable") from db_exc
+
+    is_duplicate = persisted["storage_key"] != normalized_uri
+    document_id = str(persisted["id"])
+    normalized_uri = persisted["storage_key"]
+    persisted_source_url = persisted.get("source_url") or url_str
 
     # 8. Kafka Emission & Claim Check Pattern
     event = NormalizedEvent(
@@ -562,11 +563,12 @@ def _process_and_emit(
         document_hash=content_sha256,
         tenant_id=tenant_id,
         source_system=source_system,
-        source_url=url_str,
+        source_url=persisted_source_url,
         raw_s3_path=raw_uri,
         normalized_s3_path=normalized_uri,
         timestamp=timestamp,
         content_sha256=content_sha256,
+        is_duplicate=is_duplicate,
     )
 
     try:
@@ -575,7 +577,7 @@ def _process_and_emit(
         # If payload exceeds 1MB Kafka limit, execute Claim Check pattern
         if len(payload_bytes) > 1024 * 1024:
             logger.info("kafka_claim_check_triggered", document_id=document_id, size=len(payload_bytes))
-            text_key = f"normalized-text/{document_id}/{event_id}.txt"
+            text_key = f"normalized-text/{tenant_id}/{document_id}/{event_id}.txt"
             text_uri = put_bytes(settings.processed_bucket, text_key, parsed_text.encode("utf-8"))
             event.text_s3_uri = text_uri
 

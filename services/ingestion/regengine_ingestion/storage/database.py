@@ -151,9 +151,9 @@ class DatabaseManager:
 
     # Document operations
 
-    def insert_document(self, document: Document) -> None:
+    def insert_document(self, document: Document) -> dict:
         """
-        Insert document into database.
+        Insert a document or return the existing row owned by its tenant.
 
         Args:
             document: Document to insert
@@ -174,7 +174,8 @@ class DatabaseManager:
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s
                 )
-                ON CONFLICT (content_sha256) DO NOTHING
+                ON CONFLICT DO NOTHING
+                RETURNING *
             """,
                 (
                     UUID(document.id) if isinstance(document.id, str) else document.id,
@@ -205,6 +206,20 @@ class DatabaseManager:
                     document.storage_key,
                 ),
             )
+            persisted = cur.fetchone()
+            if persisted is None:
+                # A concurrent same-tenant insert may win either uniqueness
+                # constraint. An unrelated primary-key conflict is NOT a
+                # duplicate: only this tenant's requested hash may succeed.
+                cur.execute(
+                    """SELECT * FROM ingestion.documents
+                       WHERE content_sha256 = %s AND tenant_id = %s""",
+                    (document.hash.content_sha256, self._resolve_tenant_id(document.tenant_id)),
+                )
+                persisted = cur.fetchone()
+            if persisted is None:
+                raise RuntimeError("Document persistence did not produce an owned row")
+            return persisted
 
     def get_document(self, document_id: str, tenant_id: str) -> Optional[dict]:
         """
