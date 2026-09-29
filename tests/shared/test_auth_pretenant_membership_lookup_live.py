@@ -24,6 +24,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -39,7 +40,7 @@ def test_sysadmin_reads_memberships_without_tenant_context() -> None:
 
     # Raw engine on purpose: shared.database's Engine begin-hook must not be
     # involved — the point is a connection with NO app.tenant_id GUC at all.
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     try:
         # One explicit transaction wraps everything: SQLAlchemy 2.x
         # autobegins on the first execute(), so a later conn.begin() raises

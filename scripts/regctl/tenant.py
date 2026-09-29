@@ -223,12 +223,18 @@ class TenantManager:
         """Create PostgreSQL schema for tenant."""
         import os
 
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import create_engine, make_url, text
 
         database_url = os.getenv("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 
         try:
-            engine = create_engine(database_url, pool_pre_ping=True)
+            # psycopg (v3); psycopg2 is not installed.
+            engine = create_engine(
+                make_url(database_url).set(drivername="postgresql+psycopg")
+                if database_url.startswith("postgres")
+                else database_url,
+                pool_pre_ping=True,
+            )
             schema_name = _validate_identifier(f"tenant_{str(tenant_id).replace('-', '_')}", "schema name")
 
             with engine.connect() as conn:
@@ -332,12 +338,18 @@ class TenantManager:
         """Delete PostgreSQL schema for tenant."""
         import os
 
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import create_engine, make_url, text
 
         database_url = os.getenv("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 
         try:
-            engine = create_engine(database_url, pool_pre_ping=True)
+            # psycopg (v3); psycopg2 is not installed.
+            engine = create_engine(
+                make_url(database_url).set(drivername="postgresql+psycopg")
+                if database_url.startswith("postgres")
+                else database_url,
+                pool_pre_ping=True,
+            )
             schema_name = _validate_identifier(f"tenant_{str(tenant_id).replace('-', '_')}", "schema name")
 
             with engine.connect() as conn:

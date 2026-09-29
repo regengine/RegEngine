@@ -47,7 +47,7 @@ def pg_engine() -> Engine:
     except DockerException as exc:
         pytest.skip(f"PostgresContainer unavailable: {exc}")
 
-    engine = create_engine(pg.get_connection_url(), future=True)
+    engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
     try:
         yield engine
     finally:

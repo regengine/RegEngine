@@ -56,7 +56,7 @@ def _liveness_subset(cparams: dict) -> dict:
 def test_capture_harness_detects_missing_liveness_args():
     # Negative control: an engine built without the liveness args must show
     # none of them, or the assertions below could pass vacuously.
-    cparams = _connect_params(create_engine(PG_URL))
+    cparams = _connect_params(create_engine(PG_URL.replace("postgresql://", "postgresql+psycopg://", 1)))
 
     assert _liveness_subset(cparams) == dict.fromkeys(EXPECTED_LIVENESS)
 

@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 # DSNs — loaded from environment variables
@@ -19,7 +19,10 @@ ASYNC_DSN = os.environ.get(
 def test_sync():
     print(f"Testing SYNC connection to: {SYNC_DSN.split('@')[-1]}")
     try:
-        engine = create_engine(SYNC_DSN)
+        # psycopg (v3); psycopg2 is not installed.
+        engine = create_engine(
+            make_url(SYNC_DSN).set(drivername="postgresql+psycopg") if SYNC_DSN.startswith("postgres") else SYNC_DSN
+        )
         with engine.connect() as conn:
             ver = conn.execute(text("SELECT version();")).fetchone()[0]
             print(f"SYNC SUCCESS: {ver}")

@@ -10,16 +10,8 @@ from __future__ import annotations
 
 import os
 
-from shared.db_liveness import postgres_liveness_connect_args
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 from sqlalchemy import create_engine, text
-
-
-def _sync_postgres_url(url: str) -> str:
-    return (
-        url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-        .replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
-        .replace("postgresql://", "postgresql+psycopg://", 1)
-    )
 
 
 def list_maintenance_tenant_ids(admin_database_url: str | None = None, *, limit: int | None = None) -> list[str]:
@@ -35,8 +27,8 @@ def list_maintenance_tenant_ids(admin_database_url: str | None = None, *, limit:
     if not url:
         raise RuntimeError("ADMIN_DATABASE_URL is required for tenant maintenance discovery")
 
-    sync_url = _sync_postgres_url(url)
-    engine = create_engine(sync_url, pool_pre_ping=True, connect_args=postgres_liveness_connect_args(sync_url))
+    sync_url = sync_postgres_url(url)
+    engine = create_engine(sync_url, pool_pre_ping=True, connect_args=sync_postgres_connect_args(sync_url))
     try:
         with engine.begin() as connection:
             posture = connection.execute(

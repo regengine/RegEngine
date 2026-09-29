@@ -36,7 +36,7 @@ class _SilentLogger:
 def pg_engine():
     try:
         with PostgresContainer("postgres:16") as pg:
-            engine = create_engine(pg.get_connection_url(), future=True)
+            engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
             yield engine
             engine.dispose()
     except Exception as exc:

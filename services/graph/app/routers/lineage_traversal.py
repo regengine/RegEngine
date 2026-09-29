@@ -231,7 +231,7 @@ async def get_fact_lineage(
         # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            # #2848: ``log`` drives synchronous psycopg2 inserts with retry.
+            # #2848: ``log`` drives synchronous psycopg inserts with retry.
             # Called inline from this ``async def`` handler it blocked the
             # whole Uvicorn event loop — every concurrent request, health
             # probes included — for as long as Postgres was slow. ``alog``

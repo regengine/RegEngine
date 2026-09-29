@@ -63,7 +63,7 @@ def fresh_audit_engine(monkeypatch):
 def test_capture_harness_detects_missing_liveness_args():
     # Negative control: an engine built without the liveness args must show
     # none of them, or the assertions below could pass vacuously.
-    cparams = _connect_params(create_engine(PG_URL))
+    cparams = _connect_params(create_engine(PG_URL.replace("postgresql://", "postgresql+psycopg://", 1)))
 
     assert _liveness_subset(cparams) == dict.fromkeys(EXPECTED_LIVENESS)
 
@@ -73,9 +73,12 @@ def test_audit_engine_passes_liveness_args(monkeypatch, fresh_audit_engine):
 
     engine = fsma_audit._get_audit_db_engine()
     assert engine is not None
-    assert engine.dialect.driver == "psycopg2"
+    assert engine.dialect.driver == "psycopg"
 
-    assert _liveness_subset(_connect_params(engine)) == EXPECTED_LIVENESS
+    cparams = _connect_params(engine)
+    assert _liveness_subset(cparams) == EXPECTED_LIVENESS
+    # psycopg 3 must not prepare statements (transaction-mode pooler).
+    assert "prepare_threshold" in cparams and cparams["prepare_threshold"] is None
 
 
 def test_audit_sqlite_engine_gets_no_libpq_args(monkeypatch, fresh_audit_engine):
@@ -93,6 +96,9 @@ def test_recall_persistence_engine_passes_liveness_args(monkeypatch):
 
     engine = persistence._get_db_engine()
     assert engine is not None
-    assert engine.dialect.driver == "psycopg2"
+    assert engine.dialect.driver == "psycopg"
 
-    assert _liveness_subset(_connect_params(engine)) == EXPECTED_LIVENESS
+    cparams = _connect_params(engine)
+    assert _liveness_subset(cparams) == EXPECTED_LIVENESS
+    # psycopg 3 must not prepare statements (transaction-mode pooler).
+    assert "prepare_threshold" in cparams and cparams["prepare_threshold"] is None

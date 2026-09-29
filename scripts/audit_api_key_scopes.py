@@ -72,10 +72,7 @@ def fetch_keys(database_url: str) -> list[dict]:
     try:
         import psycopg  # type: ignore
     except ImportError:
-        try:
-            import psycopg2 as psycopg  # type: ignore
-        except ImportError:
-            sys.exit("ERROR: install psycopg or psycopg2-binary to run this script.")
+        sys.exit("ERROR: install psycopg (v3) to run this script.")
 
     # asyncpg-style URL won't work with psycopg — strip the +asyncpg.
     sync_url = database_url

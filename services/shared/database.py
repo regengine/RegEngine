@@ -94,7 +94,7 @@ _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 # canonical runtime alias — so exactly one module instance (and one
 # ContextVar pair) exists.
 import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
-from shared.db_liveness import postgres_liveness_connect_args
+from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 from shared.env import is_production
 
 _is_prod = is_production()
@@ -128,14 +128,18 @@ def _build_engine_kwargs(database_url: str) -> dict:
             pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
             pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
             # Bounded connect + dead-peer detection, so a Postgres restart
-            # cannot block a request or scheduler job forever.
-            connect_args=postgres_liveness_connect_args(database_url),
+            # cannot block a request or scheduler job forever; no server-side
+            # prepared statements (transaction-mode pooler safe).
+            connect_args=sync_postgres_connect_args(database_url),
         )
     return kwargs
 
 
-_engine_kwargs = _build_engine_kwargs(DATABASE_URL)
-engine = create_engine(DATABASE_URL, **_engine_kwargs)
+# psycopg 3 for every Postgres scheme; see shared.db_url. DATABASE_URL itself
+# stays as configured for callers that read it.
+_ENGINE_URL = sync_postgres_url(DATABASE_URL)
+_engine_kwargs = _build_engine_kwargs(_ENGINE_URL)
+engine = create_engine(_ENGINE_URL, **_engine_kwargs)
 
 # SQLite's SingletonThreadPool/StaticPool (test envs, see above) have no
 # checkedout()/overflow(); report 0 instead of failing every metrics scrape.

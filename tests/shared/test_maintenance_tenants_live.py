@@ -5,6 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+from shared.db_url import sync_postgres_url
 from shared.maintenance_tenants import list_maintenance_tenant_ids
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
@@ -23,7 +24,7 @@ def database_roles():
         pytest.fail("a direct admin test credential is required")
     provider, admin = make_url(provider_url), make_url(admin_url)
     assert (provider.host, provider.port, provider.database) == (admin.host, admin.port, admin.database)
-    engine = create_engine(provider_url)
+    engine = create_engine(sync_postgres_url(provider_url))
     try:
         yield engine, provider_url, admin_url
     finally:
@@ -66,7 +67,8 @@ def test_task_purge_retains_recall_and_unknown_evidence(database_roles):
     try:
         with engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO public.tenants(id,name,slug) VALUES (:id,'retention test',:id)"), {"id": tenant}
+                text("INSERT INTO public.tenants(id,name,slug) VALUES (:id,'retention test',:slug)"),
+                {"id": tenant, "slug": tenant},
             )
             for kind in kinds:
                 conn.execute(
@@ -75,7 +77,7 @@ def test_task_purge_retains_recall_and_unknown_evidence(database_roles):
                     ),
                     {"tid": tenant, "kind": kind},
                 )
-        admin = create_engine(admin_url)
+        admin = create_engine(sync_postgres_url(admin_url))
         try:
             with patch("services.admin.app.database.SessionLocal", sessionmaker(bind=admin)):
                 SchedulerService.purge_old_tasks(SchedulerService.__new__(SchedulerService))

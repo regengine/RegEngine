@@ -30,6 +30,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+from shared.db_url import sync_postgres_url
 
 from tests.migrations.rls_db import guarded_live_database_url
 
@@ -62,7 +63,7 @@ def _build_scheduler_service_without_init():
 def test_archive_expired_records_completes_and_archives() -> None:
     from sqlalchemy import create_engine, text
 
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
     tenant_id = str(uuid.uuid4())
     old_cte_id = str(uuid.uuid4())
     fresh_cte_id = str(uuid.uuid4())

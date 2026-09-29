@@ -65,13 +65,19 @@ def test_liveness_args_only_for_libpq_urls():
     assert postgres_liveness_connect_args("postgresql+asyncpg://u@h/db") == {}
 
 
-def test_shared_engine_passes_liveness_args_to_psycopg2():
+def test_shared_engine_passes_liveness_args_to_psycopg():
     from shared import database
+    from shared.db_url import sync_postgres_url
 
-    kwargs = database._build_engine_kwargs(PG_URL)
-    cparams = _connect_params(create_engine(PG_URL, **kwargs))
+    url = sync_postgres_url(PG_URL)
+    kwargs = database._build_engine_kwargs(url)
+    engine = create_engine(url, **kwargs)
+    assert engine.dialect.driver == "psycopg"
+    cparams = _connect_params(engine)
 
     assert _liveness_subset(cparams) == EXPECTED_LIVENESS
+    # psycopg 3 must not prepare statements (transaction-mode pooler).
+    assert "prepare_threshold" in cparams and cparams["prepare_threshold"] is None
     # Pre-existing pool behavior is unchanged.
     assert kwargs["pool_pre_ping"] is True
     assert "connect_args" not in database._build_engine_kwargs("sqlite:///:memory:")

@@ -10,6 +10,7 @@ import json
 import zipfile
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import text
 
 from .conftest import requires_db, upload_fixture
@@ -109,7 +110,7 @@ def _record_id(client, case_id: str) -> str:
 
     from .conftest import SUPERUSER_DSN
 
-    eng = create_engine(SUPERUSER_DSN)
+    eng = create_engine(sync_postgres_url(SUPERUSER_DSN))
     with eng.connect() as conn:
         rid = conn.execute(
             text("SELECT manifest_record_id FROM fsma.remediation_cases WHERE id = CAST(:c AS uuid)"),

@@ -30,7 +30,7 @@ DATABASE_URL=postgresql://... python scripts/audit_api_key_scopes.py --json > au
 DATABASE_URL=postgresql://... python scripts/audit_api_key_scopes.py --tier HIGH
 ```
 
-The script accepts both `psycopg` and `psycopg2-binary`, and rewrites `postgresql+asyncpg://`
+The script uses `psycopg` (v3), and rewrites `postgresql+asyncpg://`
 URLs to plain `postgresql://` automatically — paste the same `DATABASE_URL` you use for the
 backend services.
 

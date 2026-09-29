@@ -26,7 +26,7 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Runtime-only system deps (libpq for psycopg2, curl for health-check).
+# Runtime-only system deps (libpq for psycopg, curl for health-check).
 # Upgrade first so security-fixed Debian packages in the current slim base
 # land in the deployed image instead of waiting for the next base tag refresh.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \

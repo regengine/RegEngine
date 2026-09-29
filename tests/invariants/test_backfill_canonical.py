@@ -39,6 +39,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -187,7 +188,7 @@ def migrated_db():
 def tenant_session(migrated_db):
     """A fresh tenant plus a session with the RLS GUC set."""
     database_url, _ = migrated_db
-    engine = create_engine(database_url, future=True)
+    engine = create_engine(sync_postgres_url(database_url), future=True)
     tenant_id = uuid4()
     with engine.begin() as conn:
         conn.execute(
@@ -203,7 +204,7 @@ def tenant_session(migrated_db):
         )
     session_factory = sessionmaker(bind=engine, future=True)
     session = session_factory()
-    session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+    session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": str(tenant_id)})
     try:
         yield session, tenant_id, database_url
     finally:
@@ -418,7 +419,7 @@ class TestBackfillSafety:
         # A session_factory whose produced sessions raise on the OUTER commit,
         # exactly as a mid-batch commit failure would, while every read query and
         # the savepoint INSERT still succeed.
-        engine = create_engine(database_url, future=True)
+        engine = create_engine(sync_postgres_url(database_url), future=True)
         real_factory = sessionmaker(
             bind=engine, future=True, autoflush=False, expire_on_commit=False
         )
