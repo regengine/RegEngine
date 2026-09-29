@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import math
 import os
 from typing import Any, Optional
 
@@ -153,7 +154,7 @@ def _positive_float_or_none(value: Any) -> float | None:
         parsed = float(str(value).strip())
     except (TypeError, ValueError):
         return None
-    return parsed if parsed > 0 else None
+    return parsed if math.isfinite(parsed) and parsed > 0 else None
 
 
 def _valid_unit_or_none(value: Any) -> str | None:
@@ -172,7 +173,7 @@ def _legacy_856_placeholder_errors(
     ship_from_override: str | None,
     ship_to_override: str | None,
 ) -> list[dict[str, Any]]:
-    """Find missing 856 KDEs that the legacy route used to synthesize."""
+    """Find missing 856 KDEs that route fallbacks would synthesize."""
     errors: list[dict[str, Any]] = []
 
     def _add(field: str, placeholder: str, message: str) -> None:
@@ -191,7 +192,9 @@ def _legacy_856_placeholder_errors(
     # line was valid and whose last line was zero slipped through and
     # persisted a fabricated quantity.
     raw_quantity = extracted.get("quantity")
-    if quantity_override is None and _positive_float_or_none(raw_quantity) is None:
+    quantity_candidate = quantity_override if quantity_override is not None else raw_quantity
+    invalid_source_quantity = quantity_override is None and extracted.get("_invalid_quantity_present") is True
+    if invalid_source_quantity or _positive_float_or_none(quantity_candidate) is None:
         _add(
             "quantity",
             "1.0",
@@ -251,6 +254,7 @@ def _reject_legacy_856_placeholders(
     extracted: dict[str, Any],
     partner_id: str | None,
     source: str,
+    transaction_set_index: int | None = None,
 ) -> None:
     rejection_record = _record_edi_rejection(
         tenant_id=sender_tenant_id,
@@ -261,20 +265,26 @@ def _reject_legacy_856_placeholders(
         partner_id=partner_id,
         source=source,
     )
-    raise HTTPException(
-        status_code=422,
-        detail={
-            "error": "edi_856_missing_required_kdes",
-            "message": (
-                "EDI 856 is missing required FSMA KDEs. No events were "
-                "persisted; fix the supplier document or provide explicit "
-                "operator-reviewed overrides."
-            ),
-            "missing_kdes": [err["loc"][0] for err in errors],
-            "rejection_id": rejection_record["rejection_id"],
-            "errors": errors,
-        },
-    )
+    detail = {
+        "error": "edi_856_missing_required_kdes",
+        "message": (
+            "EDI 856 is missing required FSMA KDEs. No events were "
+            "persisted; fix the supplier document or provide explicit "
+            "operator-reviewed overrides."
+        ),
+        "missing_kdes": [err["loc"][0] for err in errors],
+        "rejection_id": rejection_record["rejection_id"],
+        "errors": errors,
+    }
+    if transaction_set_index is not None:
+        detail.update(
+            {
+                "transaction_set_index": transaction_set_index,
+                "transaction_set": "856",
+                "control_number": extracted.get("control_number"),
+            }
+        )
+    raise HTTPException(status_code=422, detail=detail)
 
 
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
@@ -455,6 +465,8 @@ async def ingest_edi_856(
     principal: IngestionPrincipal = Depends(require_permission("edi.ingest")),
 ) -> EDIIngestResponse:
     sender_tenant_id = _resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+    if product_description is not None:
+        product_description = product_description.strip() or None
 
     _verify_partner_id(x_partner_id)
 
@@ -664,12 +676,17 @@ def _build_ingest_event_for_set(
     # Resolve quantity
     quantity = quantity_override if quantity_override is not None else extracted.get("quantity")
 
-    # #2974: the legacy 856 endpoint refuses to synthesize a quantity;
-    # this unified route silently re-created the same placeholder via the
-    # 1.0 fallback below. Fail closed when the document DID send a
-    # quantity element that could not produce a positive value — a
-    # document with no quantity element at all keeps the old default.
-    if quantity is None and segments is not None and _quantity_element_present(transaction_set, segments):
+    # #2974: keep the precise error for a quantity element that is present
+    # but cannot produce a positive value. Type-specific absent-KDE gates
+    # (including the 856 gate above) run before this builder; remaining
+    # document types retain their existing missing-quantity behavior.
+    invalid_quantity = (quantity_override is None and extracted.get("_invalid_quantity_present") is True) or (
+        quantity is not None and _positive_float_or_none(quantity) is None
+    )
+    invalid_quantity_element = (
+        quantity is None and segments is not None and _quantity_element_present(transaction_set, segments)
+    )
+    if invalid_quantity or invalid_quantity_element:
         logger.warning(
             "edi_non_positive_quantity set=%s — refusing to synthesize quantity=1.0",
             transaction_set,
@@ -860,6 +877,8 @@ async def ingest_edi_document(
 ) -> EDIIngestResponse:
     """Ingest any supported X12 EDI document type."""
     sender_tenant_id = _resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+    if product_description is not None:
+        product_description = product_description.strip() or None
 
     _verify_partner_id(x_partner_id)
 
@@ -956,6 +975,41 @@ async def ingest_edi_document(
     # per interchange — the envelope is shared by every slice, and
     # re-running it would 409 the interchange against its own first set.
     _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
+
+    # The shared FSMAEvent schema permits several KDEs to be absent, but
+    # an 856 shipping event cannot safely replace them with plausible
+    # defaults. Apply the same fail-closed gate as the legacy 856 route
+    # before validation or event construction can synthesize them.
+    for slice_index, (slice_set, slice_extracted, slice_segments) in enumerate(
+        zip(slice_sets, extractions, set_slices)
+    ):
+        if slice_set != "856":
+            continue
+        placeholder_errors = _legacy_856_placeholder_errors(
+            extracted=slice_extracted,
+            product_description_override=product_description,
+            quantity_override=quantity_override,
+            unit_override=unit_of_measure_override,
+            ship_from_override=location_override,
+            ship_to_override=None,
+        )
+        # Present-but-invalid values already have precise error contracts
+        # in event construction; this gate is only for absent KDEs.
+        if _quantity_element_present(slice_set, slice_segments):
+            placeholder_errors = [error for error in placeholder_errors if error["loc"] != ["quantity"]]
+        raw_unit = unit_of_measure_override or slice_extracted.get("unit_of_measure")
+        if raw_unit is not None and str(raw_unit).strip():
+            placeholder_errors = [error for error in placeholder_errors if error["loc"] != ["unit_of_measure"]]
+        if placeholder_errors:
+            _reject_legacy_856_placeholders(
+                errors=placeholder_errors,
+                sender_tenant_id=sender_tenant_id,
+                traceability_lot_code=traceability_lot_code,
+                extracted=slice_extracted,
+                partner_id=x_partner_id,
+                source=source,
+                transaction_set_index=slice_index,
+            )
 
     # #1174: FSMA validation is fail-closed by default. A schema failure
     # returns HTTP 422 with per-field errors and nothing is persisted.

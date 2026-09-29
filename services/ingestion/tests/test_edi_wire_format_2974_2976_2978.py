@@ -530,6 +530,46 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
     assert len(list_edi_rejections(TEST_TENANT_ID)) == 2
 
 
+def test_856_batch_missing_kde_identifies_failing_transaction_set(
+    client: TestClient,
+    captured_payload: dict,
+) -> None:
+    """A batch rejection must identify the incomplete transaction set."""
+    incomplete_set = (
+        _856_set(
+            control="0002",
+            asn="ASN-BBB",
+            ship_from="Coastal Greens",
+            bol="BOL-BBB",
+        )
+        .replace("LIN**SK*ROMAINE-12CT~", "")
+        .replace("SE*9*0002~", "SE*8*0002~")
+    )
+    raw = _interchange(
+        [
+            _856_set(
+                control="0001",
+                asn="ASN-AAA",
+                ship_from="Valley Fresh Farms",
+                bol="BOL-AAA",
+            ),
+            incomplete_set,
+        ],
+        isa13="000029914",
+    )
+
+    response = _post(client, raw, name="batch-missing-product.edi")
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_856_missing_required_kdes"
+    assert detail["transaction_set_index"] == 1
+    assert detail["transaction_set"] == "856"
+    assert detail["control_number"] == "0002"
+    assert "product_description" in detail["missing_kdes"]
+    assert "payload" not in captured_payload
+
+
 # ── Review findings on PR #2991 ───────────────────────────────────────────
 # Both are consequences of features this PR introduced, caught in review.
 
