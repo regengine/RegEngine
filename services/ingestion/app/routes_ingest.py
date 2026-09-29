@@ -421,6 +421,8 @@ def _process_and_emit(
 
     # 1. Size enforcement
     _enforce_size_limit(raw_bytes)
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="Document persistence unavailable")
 
     # 1.5. Cryptographic Hashing (Early for Deduplication)
     content_sha256 = hashlib.sha256(raw_bytes).hexdigest()
@@ -550,7 +552,8 @@ def _process_and_emit(
             )
             db_manager.insert_document(doc)
         except (psycopg.Error, ConnectionError, OSError, RuntimeError) as db_exc:
-            logger.warning("document_db_insert_failed", error=str(db_exc))
+            logger.error("document_db_insert_failed", error_type=type(db_exc).__name__)
+            raise HTTPException(status_code=503, detail="Document persistence unavailable") from db_exc
 
     # 8. Kafka Emission & Claim Check Pattern
     event = NormalizedEvent(
@@ -587,6 +590,29 @@ def _process_and_emit(
     return event
 
 
+def _mark_document_job_failed(db_manager: Optional[DatabaseManager], job: Optional[IngestionJob], error: str) -> None:
+    """Attempt failure tracking without replacing the primary ingestion error."""
+    if db_manager is None or job is None:
+        return
+    job.status = JobStatus.FAILED
+    job.error_message = error
+    job.completed_at = datetime.now(timezone.utc)
+    try:
+        db_manager.update_job(job)
+    except Exception as exc:
+        logger.error("job_failure_update_failed", job_id=job.job_id, error_type=type(exc).__name__)
+
+
+def _close_document_database(db_manager: Optional[DatabaseManager]) -> None:
+    """Preserve the result of committed work or the primary ingestion error."""
+    if db_manager is None:
+        return
+    try:
+        db_manager.close()
+    except Exception as exc:
+        logger.error("document_db_close_failed", error_type=type(exc).__name__)
+
+
 @router.post("/api/v1/regulatory/v1/ingest", response_model=NormalizedEvent, include_in_schema=False)
 @router.post("/v1/ingest", response_model=NormalizedEvent)
 async def ingest_direct(
@@ -606,7 +632,12 @@ async def ingest_direct(
 
     db_manager = get_db_manager()
     audit_logger = None
-    if db_manager:
+    job = None
+    try:
+        content = payload.text.encode("utf-8") if payload.text else b""
+        _enforce_size_limit(content)
+        if db_manager is None:
+            raise HTTPException(status_code=503, detail="Document persistence unavailable")
         db_manager.connect()
         db_manager.set_tenant_context(tenant_id)
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
@@ -619,13 +650,7 @@ async def ingest_direct(
             started_at=datetime.now(timezone.utc),
             config={"source_url": url_str},
         )
-        try:
-            db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
-            logger.error("job_db_init_failed", job_id=job_id, error=str(e))
-
-    try:
-        content = payload.text.encode("utf-8") if payload.text else b""
+        db_manager.insert_job(job)
 
         event = _process_and_emit(
             raw_bytes=content,
@@ -651,16 +676,13 @@ async def ingest_direct(
         return event
     except Exception as exc:  # Catch-all: route must return HTTP response
         logger.exception("ingest_direct_failed", job_id=job_id, error=str(exc))
-        if db_manager:
-            job.status = JobStatus.FAILED
-            job.error_message = str(exc)
-            job.completed_at = datetime.now(timezone.utc)
-            db_manager.update_job(job)
+        _mark_document_job_failed(db_manager, job, str(exc))
+        if isinstance(exc, HTTPException):
+            raise
         logger.exception("ingestion_error", error=str(exc))
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
-        if db_manager:
-            db_manager.close()
+        _close_document_database(db_manager)
 
 
 @router.post("/api/v1/regulatory/v1/ingest/file", response_model=NormalizedEvent, include_in_schema=False)
@@ -682,9 +704,17 @@ async def ingest_file(
 
     logger.info("ingest_file_request", filename=safe_filename, tenant_id=tenant_id, job_id=job_id)
 
-    db_manager = get_db_manager()
+    db_manager = None
     audit_logger = None
-    if db_manager:
+    job = None
+    try:
+        content = await read_upload_with_limit(file, max_bytes=MAX_PAYLOAD_BYTES, label="File")
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        db_manager = get_db_manager()
+        if db_manager is None:
+            raise HTTPException(status_code=503, detail="Document persistence unavailable")
         db_manager.connect()
         db_manager.set_tenant_context(tenant_id)
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
@@ -697,15 +727,7 @@ async def ingest_file(
             started_at=datetime.now(timezone.utc),
             config={"filename": safe_filename},
         )
-        try:
-            db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
-            logger.error("job_db_init_failed", job_id=job_id, error=str(e))
-
-    try:
-        content = await read_upload_with_limit(file, max_bytes=MAX_PAYLOAD_BYTES, label="File")
-        if not content:
-            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        db_manager.insert_job(job)
 
         content_type = file.content_type or "application/octet-stream"
 
@@ -733,17 +755,12 @@ async def ingest_file(
         return event
     except Exception as exc:  # Catch-all: route must return HTTP response
         logger.exception("ingest_file_failed", job_id=job_id, error=str(exc))
-        if db_manager:
-            job.status = JobStatus.FAILED
-            job.error_message = str(exc)
-            job.completed_at = datetime.now(timezone.utc)
-            db_manager.update_job(job)
+        _mark_document_job_failed(db_manager, job, str(exc))
         if isinstance(exc, HTTPException):
             raise
         raise HTTPException(status_code=500, detail="Ingestion failed. Check server logs for details.")
     finally:
-        if db_manager:
-            db_manager.close()
+        _close_document_database(db_manager)
 
 
 @router.post("/ingest/url", response_model=NormalizedEvent, include_in_schema=False)
@@ -774,7 +791,10 @@ async def ingest_url(
 
     db_manager = get_db_manager()
     audit_logger = None
-    if db_manager:
+    job = None
+    try:
+        if db_manager is None:
+            raise HTTPException(status_code=503, detail="Document persistence unavailable")
         db_manager.connect()
         db_manager.set_tenant_context(tenant_id)
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
@@ -787,12 +807,7 @@ async def ingest_url(
             started_at=datetime.now(timezone.utc),
             config={"url": url_str},
         )
-        try:
-            db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
-            logger.error("job_db_init_failed", job_id=job_id, error=str(e))
-
-    try:
+        db_manager.insert_job(job)
         raw_bytes, content_type = await _fetch(url_str)
 
         if audit_logger:
@@ -823,29 +838,20 @@ async def ingest_url(
     except HTTPException as exc:
         if audit_logger:
             audit_logger.log_fetch(url_str, "failure", error=str(exc.detail))
-        if db_manager:
-            job.status = JobStatus.FAILED
-            job.error_message = str(exc.detail)
-            job.completed_at = datetime.now(timezone.utc)
-            db_manager.update_job(job)
+        _mark_document_job_failed(db_manager, job, str(exc.detail))
         REQUEST_COUNTER.labels(endpoint=endpoint, status=str(exc.status_code)).inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         raise
     except Exception as exc:  # Catch-all: route must return HTTP response
         if audit_logger:
             audit_logger.log_fetch(url_str, "failure", error=str(exc))
-        if db_manager:
-            job.status = JobStatus.FAILED
-            job.error_message = str(exc)
-            job.completed_at = datetime.now(timezone.utc)
-            db_manager.update_job(job)
+        _mark_document_job_failed(db_manager, job, str(exc))
         logger.exception("ingest_unexpected_error", error=str(exc))
         REQUEST_COUNTER.labels(endpoint=endpoint, status="500").inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         raise HTTPException(status_code=500, detail="Ingestion failed") from exc
     finally:
-        if db_manager:
-            db_manager.close()
+        _close_document_database(db_manager)
 
 
 async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_id, **kwargs):

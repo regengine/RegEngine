@@ -68,7 +68,7 @@ def _api_key(tenant_id: str = "tenant-x"):
 def test_ingest_file_oversize_short_circuits_with_413(monkeypatch):
     """An upload larger than MAX_PAYLOAD_BYTES must raise 413 BEFORE the
     whole payload is buffered."""
-    # Skip DB; the handler tolerates a None db_manager.
+    # The streaming guard must run before database availability is checked.
     monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: None)
 
     oversize = routes_ingest.MAX_PAYLOAD_BYTES + (5 * 1024 * 1024)  # +5 MiB
@@ -101,7 +101,7 @@ def test_ingest_file_under_limit_succeeds_in_size_check(monkeypatch):
     We don't run the full pipeline — we just confirm the streaming loop
     consumed the whole stream and did not raise 413.
     """
-    monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: None)
+    monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: MagicMock())
     # Stub _process_and_emit so we don't actually parse anything; the test
     # only cares that the streaming size check did not 413.
     monkeypatch.setattr(
