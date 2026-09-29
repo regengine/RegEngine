@@ -1,13 +1,14 @@
-"""Integration tests: NLP FSMAExtractor → CTE events → compliance /validate.
+"""In-process tests: NLP FSMAExtractor → compliance /validate FTL scoping.
 
-Issue #1134 — end-to-end handoff from the NLP extraction layer to the
-compliance validation endpoint.  These tests are deliberately self-contained:
-FSMAExtractor runs in-process (no real NLP service needed) and the compliance
-service is exercised via FastAPI's TestClient (no real network).
+Issue #1134 — handoff checks from the NLP extraction layer to the compliance
+validation endpoint.  These tests are deliberately self-contained: FSMAExtractor
+runs in-process (no real NLP service needed) and the compliance service is
+exercised via FastAPI's TestClient (no real network).
 
 Four test scenarios:
   1. Happy path — BOL, production log, harvest log, and receiving BOL each
-     produce valid CTEs that the compliance /validate endpoint accepts.
+     produce CTEs whose commodities clear the compliance /validate FTL gate;
+     calls without a config return a structured no-verdict response.
   2. Idempotent re-ingestion — submitting the same document twice produces
      identical extraction results (deterministic; no duplicates).
   3. Adversarial inputs — malformed text and injection payloads do not crash
@@ -35,8 +36,8 @@ os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-1134-at-least-sixteen-
 os.environ.setdefault("API_KEY", "test-api-key-1134")
 os.environ.setdefault("GRAPH_SERVICE_URL", "http://localhost:8200")
 
-# Ensure the compliance service directory is on sys.path so ``from main import
-# app`` resolves correctly regardless of where pytest is invoked from.
+# Ensure compliance and shared service imports resolve regardless of where
+# pytest is invoked from.
 _COMPLIANCE_DIR = Path(__file__).resolve().parent.parent.parent / "services" / "compliance"
 _SERVICES_DIR = _COMPLIANCE_DIR.parent
 
@@ -50,15 +51,19 @@ for _p in (str(_COMPLIANCE_DIR), str(_SERVICES_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-# NLP extractor lives in services/nlp; add it too so FSMAExtractor can be
-# imported without installing the package.
-_NLP_DIR = _SERVICES_DIR / "nlp"
-if str(_NLP_DIR) not in sys.path:
-    sys.path.insert(0, str(_NLP_DIR))
-
 import pytest
 from fastapi.testclient import TestClient
-from main import app  # noqa: E402 — path bootstrapped above
+
+from services.compliance.main import app  # noqa: E402 — path bootstrapped above
+
+pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def check_services_health():  # noqa: F811
+    """No-op override — all tests in this file are offline/in-process."""
+    return
+
 
 # The shared auth bypass token is recognised by shared/auth.py when
 # REGENGINE_ENV == "test".
@@ -67,8 +72,8 @@ _AUTH = {"X-RegEngine-API-Key": os.environ["AUTH_TEST_BYPASS_TOKEN"]}
 # ---------------------------------------------------------------------------
 # Import the extractor after the path is set up.
 # ---------------------------------------------------------------------------
-from app.extractors.fsma_extractor import FSMAExtractor  # noqa: E402
-from app.extractors.fsma_types import CTEType, ExtractionConfidence  # noqa: E402
+from services.nlp.app.extractors.fsma_extractor import FSMAExtractor  # noqa: E402
+from services.nlp.app.extractors.fsma_types import CTEType, ExtractionConfidence  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -203,12 +208,12 @@ def _ftl_commodity_from_cte(cte_list) -> str:
 
 
 class TestHappyPath:
-    """FSMAExtractor produces valid CTEs that /validate accepts (200)."""
+    """FSMAExtractor produces CTEs whose commodities clear the /validate FTL gate."""
 
     def test_bol_shipping_and_receiving_ctes(
         self, extractor: FSMAExtractor, bol_text: str, compliance_client: TestClient
     ) -> None:
-        """BOL extracts SHIPPING + RECEIVING CTEs; both commodity types pass /validate."""
+        """BOL extracts SHIPPING + RECEIVING CTEs; the commodity passes the FTL gate."""
         result = extractor.extract(bol_text, "doc-bol-001", tenant_id=TENANT_ID)
 
         # BOL should produce at least one CTE (SHIPPING; RECEIVING added when
@@ -225,8 +230,12 @@ class TestHappyPath:
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["valid"] is True
-        assert body["errors"] == []
+        assert body["valid"] is False
+        assert body["rules_evaluated"] == 0
+        assert body["no_verdict_reason"] == "nothing_evaluated"
+        assert len(body["errors"]) == 1
+        assert body["errors"][0]["code"] == "NO_VERDICT"
+        assert body["errors"][0]["path"] == "config"
 
     def test_production_log_transformation_cte(
         self, extractor: FSMAExtractor, production_log_text: str, compliance_client: TestClient
@@ -514,8 +523,8 @@ class TestNonFTLFoods:
         message = body.get("detail") or (body.get("error") or {}).get("message")
         assert message == "E_NON_FTL_FOOD", f"Expected E_NON_FTL_FOOD for '{commodity}'; got: {body}"
 
-    def test_compliance_accepts_ftl_commodity_after_non_ftl_rejection(self, compliance_client: TestClient) -> None:
-        """After a non-FTL rejection, a valid FTL commodity is still accepted (no state bleed)."""
+    def test_compliance_reaches_validation_after_non_ftl_rejection(self, compliance_client: TestClient) -> None:
+        """After rejection, an FTL commodity reaches validation with no state bleed."""
         # First call: non-FTL
         resp_bad = compliance_client.post(
             "/validate",
@@ -531,7 +540,13 @@ class TestNonFTLFoods:
             headers=_AUTH,
         )
         assert resp_ok.status_code == 200, resp_ok.text
-        assert resp_ok.json()["valid"] is True
+        body = resp_ok.json()
+        assert body["valid"] is False
+        assert body["rules_evaluated"] == 0
+        assert body["no_verdict_reason"] == "nothing_evaluated"
+        assert len(body["errors"]) == 1
+        assert body["errors"][0]["code"] == "NO_VERDICT"
+        assert body["errors"][0]["path"] == "config"
 
     def test_extractor_ftl_classification_does_not_crash_without_catalog(self, extractor: FSMAExtractor) -> None:
         """FTL classification must degrade gracefully when catalog is empty/missing.

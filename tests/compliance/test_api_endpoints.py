@@ -149,19 +149,31 @@ class TestValidationEndpoint:
         )
         assert resp.status_code == 422
 
-    def test_validate_allows_missing_config(self, compliance_client):
-        """Verify config is optional once a commodity is declared."""
+    @pytest.mark.parametrize(
+        "request_json",
+        [
+            {"ftl_commodity": "Soft Cheeses"},
+            {"ftl_commodity": "Soft Cheeses", "config": None},
+        ],
+        ids=["omitted", "explicit-null"],
+    )
+    def test_validate_missing_config_returns_no_verdict(self, compliance_client, request_json):
+        """Verify optional config does not produce a compliance verdict."""
         client, api_key = compliance_client
 
         resp = client.post(
             "/validate",
             headers={"X-RegEngine-API-Key": api_key},
-            json={"ftl_commodity": "Soft Cheeses"},
+            json=request_json,
         )
         assert resp.status_code == 200
         payload = resp.json()
-        assert payload["valid"] is True
-        assert payload["errors"] == []
+        assert payload["valid"] is False
+        assert payload["rules_evaluated"] == 0
+        assert payload["no_verdict_reason"] == "nothing_evaluated"
+        assert len(payload["errors"]) == 1
+        assert payload["errors"][0]["code"] == "NO_VERDICT"
+        assert payload["errors"][0]["path"] == "config"
         assert payload["warnings"] == []
 
     def test_validate_returns_error_for_unknown_checklist(self, compliance_client):

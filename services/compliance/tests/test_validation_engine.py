@@ -343,10 +343,14 @@ class TestFailClosed:
         assert body["no_verdict_reason"] == "no_rules_loaded"
         assert any(e["code"] == "NO_VERDICT" for e in body["errors"])
 
-    def test_config_none_is_not_a_compliance_verdict(self):
+    def test_omitted_config_is_not_a_compliance_verdict(self):
         body = _post(_payload(None))
-        assert body["valid"] is True
+        assert body["valid"] is False
         assert body["rules_evaluated"] == 0
+        assert body["no_verdict_reason"] == "nothing_evaluated"
+        assert len(body["errors"]) == 1
+        assert body["errors"][0]["code"] == "NO_VERDICT"
+        assert body["errors"][0]["path"] == "config"
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────

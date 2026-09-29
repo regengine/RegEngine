@@ -12,9 +12,9 @@ These tests exercise the catalog-level gate added to
    catalog returns HTTP 400 with ``detail == "E_NON_FTL_FOOD"``.
 2. ``test_ftl_commodity_required`` — omitting the field returns HTTP 422
    via Pydantic validation, so callers cannot accidentally skip scoping.
-3. ``test_valid_ftl_commodity_passes_basic_validation`` — a real FTL
-   commodity ("leafy_greens") clears the gate and returns 200 with a
-   normalized ``ftl_commodity`` echoed back.
+3. ``test_valid_ftl_commodity_without_config_returns_no_verdict`` — a real
+   FTL commodity ("leafy_greens") clears the gate and returns 200 with a
+   normalized ``ftl_commodity`` echoed back, but no compliance verdict.
 
 The shared FTL catalog we import from is
 ``services/shared/rules/ftl.FTL_CATEGORIES``.
@@ -106,8 +106,8 @@ class TestValidateFTLScoping:
         if isinstance(details, list):
             assert any("ftl_commodity" in str(err.get("loc", [])) for err in details), details
 
-    def test_valid_ftl_commodity_passes_basic_validation(self) -> None:
-        """A real FTL commodity clears the gate and returns 200.
+    def test_valid_ftl_commodity_without_config_returns_no_verdict(self) -> None:
+        """A real FTL commodity clears the gate without receiving a verdict.
 
         ``leafy_greens`` is in the FTL catalog (stored as "leafy greens")
         — the endpoint canonicalizes underscores to spaces before the
@@ -118,10 +118,12 @@ class TestValidateFTLScoping:
             json={"ftl_commodity": "leafy_greens"},
             headers=AUTH_HEADER,
         )
-        # The gate passes — deeper rule-engine logic is pending #1203,
-        # so the handler currently returns a clean 200.
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["valid"] is True
+        assert body["valid"] is False
         assert body["ftl_commodity"] == "leafy greens"
-        assert body["errors"] == []
+        assert body["rules_evaluated"] == 0
+        assert body["no_verdict_reason"] == "nothing_evaluated"
+        assert len(body["errors"]) == 1
+        assert body["errors"][0]["code"] == "NO_VERDICT"
+        assert body["errors"][0]["path"] == "config"

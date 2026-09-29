@@ -511,12 +511,15 @@ async def validate_compliance(
     # --- Step 4 — rules-engine evaluation (#1203 option 2) ----------------
     if request.config is None:
         # Nothing to validate: the request passed the FTL scope gate but
-        # supplied no configuration. This is NOT a compliance verdict on
-        # any event — rules_evaluated=0 makes the distinction machine-readable.
-        return ValidateResponse(
-            valid=True,
-            ftl_commodity=canonical_commodity,
-            rules_evaluated=0,
+        # supplied no configuration. Project the existing no-verdict
+        # contract rather than returning a false-positive valid response.
+        return _summary_to_validate_response(
+            EvaluationSummary(
+                total_rules=0,
+                no_verdict_reason="nothing_evaluated",
+            ),
+            canonical_commodity,
+            strict=request.strict,
         )
 
     cte_value = request.config.get("cte_type")
