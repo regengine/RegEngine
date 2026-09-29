@@ -8,9 +8,8 @@ _handle_nlp_extraction` — the path that actually runs in production
 * Hardened happy path — FSMA pass + capped-confidence regex conversion +
   three-tier routing, with review-tier results enqueued as ``review_item``
   tasks (the pg replacement for the ``nlp.needs_review`` topic).
-* Fallback-on-exception — any pipeline failure falls back to the bare
-  legacy regex extractor with a structured warning and never fails the
-  task.
+* Fail-closed completion — missing input, extraction failures, and failed
+  review enqueues enter the worker's retry/dead-letter path.
 * Output-schema compatibility — payloads enqueued by the hardened path
   satisfy the ``_handle_review_item`` consumer, and the legacy 4-key
   payload contract (document_id/entity_type/confidence/text) still works.
@@ -23,6 +22,7 @@ the consumer conversion/threshold/review-reason modules run for real.
 
 from __future__ import annotations
 
+import builtins
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -183,20 +183,40 @@ class TestHardenedHappyPath:
         assert review_calls[0].args[1]["entity_type"] == "OBLIGATION"
         assert review_calls[0].kwargs["tenant_id"] is None
 
-    def test_skip_empty_payload_preserved(self):
+    def test_empty_payload_fails(self):
         enqueue = MagicMock(return_value=1)
         with patch.object(task_processor, "enqueue_task", enqueue):
-            task_processor._handle_nlp_extraction({})
+            with pytest.raises(ValueError):
+                task_processor._handle_nlp_extraction({})
         enqueue.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# Fallback on pipeline exception
+# Failures must reach the worker's retry/dead-letter path
 # ---------------------------------------------------------------------------
 
 
-class TestFallbackOnException:
-    def test_pipeline_exception_falls_back_to_legacy_regex(self):
+class TestExtractionFailures:
+    @pytest.mark.parametrize("field", ["document_id", "text"])
+    @pytest.mark.parametrize("value", [" \t\n", 17, ["text"], {"text": "value"}])
+    def test_invalid_input_fails_before_extraction(self, field, value):
+        with patch.object(task_processor, "_run_hardened_extraction", return_value={}) as extract:
+            with pytest.raises(ValueError):
+                task_processor._handle_nlp_extraction(_payload(**{field: value}), TENANT_ID)
+        extract.assert_not_called()
+
+    def test_nonblank_text_is_not_stripped(self):
+        original_text = " \nhello world\t "
+        extractor = _stub_fsma_extractor(review_required=False)
+        with (
+            patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
+            patch.object(task_processor, "enqueue_task") as enqueue,
+        ):
+            task_processor._handle_nlp_extraction(_payload(text=original_text), TENANT_ID)
+        extractor.extract.assert_called_once_with(original_text, "doc-1", tenant_id=TENANT_ID)
+        enqueue.assert_not_called()
+
+    def test_pipeline_exception_propagates_without_regex_fallback(self):
         extractor = MagicMock()
         extractor.extract.side_effect = RuntimeError("fsma pipeline regression")
         enqueue = MagicMock(return_value=1)
@@ -206,37 +226,122 @@ class TestFallbackOnException:
             patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
             patch.object(task_processor, "enqueue_task", enqueue),
             patch.object(task_processor, "logger", log),
+            patch("services.nlp.app.extractor.extract_entities") as regex,
         ):
-            # Must NOT raise — the task must not fail on a pipeline regression.
-            task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
+            with pytest.raises(RuntimeError, match="fsma pipeline regression"):
+                task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
 
-        # Structured warning emitted for the fallback.
-        warning_events = [c.args[0] for c in log.warning.call_args_list if c.args]
-        assert "nlp_hardened_pipeline_failed" in warning_events
-        warn_call = next(
-            c for c in log.warning.call_args_list if c.args and c.args[0] == "nlp_hardened_pipeline_failed"
-        )
-        assert warn_call.kwargs["fallback"] == "legacy_regex"
-        assert warn_call.kwargs["error_type"] == "RuntimeError"
-        assert warn_call.kwargs["document_id"] == "doc-1"
+        regex.assert_not_called()
+        enqueue.assert_not_called()
+        assert not any(c.args[0] == "nlp_extraction_complete" for c in log.info.call_args_list)
 
-        # Legacy regex completion log, no review items enqueued.
-        info_calls = [c for c in log.info.call_args_list if c.args and c.args[0] == "nlp_extraction_complete"]
-        assert len(info_calls) == 1
-        assert info_calls[0].kwargs["pipeline"] == "legacy_regex_fallback"
-        # The fallback ran the real regex extractor over obligation text.
-        assert info_calls[0].kwargs["entities"] >= 1
-        assert _review_item_calls(enqueue) == []
-
-    def test_fallback_failure_still_fails_the_task(self):
-        # If the LEGACY extractor itself breaks, that is a real failure —
-        # the task must raise so the worker retry/dead-letter path engages.
-        with patch(
-            "services.nlp.app.extractor.extract_entities",
-            side_effect=TypeError("regex extractor broken"),
+    def test_regex_failure_fails_the_task(self):
+        with (
+            patch.object(task_processor, "_get_fsma_extractor", return_value=_stub_fsma_extractor(False)),
+            patch.object(task_processor, "enqueue_task", return_value=1),
+            patch(
+                "services.nlp.app.extractor.extract_entities",
+                side_effect=TypeError("regex extractor broken"),
+            ),
         ):
             with pytest.raises(TypeError):
                 task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
+
+    @pytest.mark.parametrize("attempts", [1, 3], ids=["retry", "dead"])
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            "empty_payload",
+            "missing_text",
+            "missing_document_id",
+            "extractor_import",
+            "hardened_runtime",
+            "hardened_import",
+            "fsma_enqueue",
+            "regex_enqueue",
+        ],
+    )
+    def test_worker_does_not_complete_failed_extraction(self, monkeypatch, failure, attempts):
+        payload = _payload()
+        extractor = _stub_fsma_extractor(review_required=failure == "fsma_enqueue")
+        enqueue = MagicMock(return_value=None if failure.endswith("enqueue") else 1)
+        if failure == "empty_payload":
+            payload = {}
+        elif failure == "missing_text":
+            payload.pop("text")
+        elif failure == "missing_document_id":
+            payload.pop("document_id")
+        elif failure == "hardened_runtime":
+            extractor.extract.side_effect = RuntimeError("extraction failed")
+        elif failure == "hardened_import":
+            extractor.extract.side_effect = ImportError("extraction dependency missing")
+        elif failure == "fsma_enqueue":
+            payload["text"] = "hello world"
+        elif failure == "extractor_import":
+            original_import = builtins.__import__
+
+            def missing_extractor(name, *args, **kwargs):
+                if name == "services.nlp.app.extractor":
+                    raise ImportError("extractor unavailable")
+                return original_import(name, *args, **kwargs)
+
+            monkeypatch.setattr(builtins, "__import__", missing_extractor)
+
+        db = MagicMock()
+        db.execute.return_value.rowcount = 1
+        fake_database = ModuleType("services.admin.app.database")
+        fake_database.SessionLocal = lambda: db
+        fake_database.arm_global_admin_context = lambda session: None
+        monkeypatch.setitem(sys.modules, "services.admin.app.database", fake_database)
+        task = {
+            "id": 71,
+            "task_type": "nlp_extraction",
+            "payload": payload,
+            "tenant_id": TENANT_ID,
+            "attempts": attempts,
+            "max_attempts": 3,
+        }
+        with (
+            patch.object(task_processor, "_shutdown_event") as shutdown,
+            patch.object(task_processor, "_claim_task", return_value=task),
+            patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
+            patch.object(task_processor, "enqueue_task", enqueue),
+            patch.object(task_processor, "_complete_task") as complete,
+        ):
+            shutdown.is_set.side_effect = [False, True]
+            task_processor._worker_loop()
+
+        complete.assert_not_called()
+        db.execute.assert_called_once()
+        sql, params = db.execute.call_args.args
+        assert f"status = '{'pending' if attempts < 3 else 'dead'}'" in str(sql)
+        assert params["id"] == 71
+        assert params["error"]
+        if attempts < 3:
+            assert params["delay_seconds"] == 60
+        db.commit.assert_called_once()
+
+    @pytest.mark.parametrize("tenant_id", [TENANT_ID, None])
+    def test_partial_retry_preserves_review_keys_and_row_tenant(self, tenant_id):
+        extractor = _stub_fsma_extractor(review_required=True)
+        payload = _payload(text=OBLIGATION_TEXT + " Records must be available for inspection.")
+        enqueue = MagicMock(side_effect=[17, None, 18])
+        with (
+            patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
+            patch.object(task_processor, "enqueue_task", enqueue),
+        ):
+            with pytest.raises(RuntimeError):
+                task_processor._handle_nlp_extraction(payload, tenant_id)
+            first_calls = enqueue.call_args_list[:]
+            enqueue.reset_mock()
+            enqueue.side_effect = None
+            enqueue.return_value = 17
+            task_processor._handle_nlp_extraction(payload, tenant_id)
+
+        assert enqueue.call_args_list[:2] == first_calls
+        assert all(c.kwargs["tenant_id"] == tenant_id for c in enqueue.call_args_list)
+        keys = [c.kwargs["idempotency_key"] for c in enqueue.call_args_list]
+        assert len(keys) == len(set(keys))
 
 
 # ---------------------------------------------------------------------------
@@ -366,9 +471,7 @@ class TestFSMAReviewEnvelope:
             patch.object(task_processor, "_get_fsma_extractor", return_value=FSMAExtractor()),
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
-            task_processor._handle_nlp_extraction(
-                _payload(text=BOL_MISSING_EVENT_DATE), TENANT_ID
-            )
+            task_processor._handle_nlp_extraction(_payload(text=BOL_MISSING_EVENT_DATE), TENANT_ID)
 
         fsma_calls = [c for c in _review_item_calls(enqueue) if c.args[1]["entity_type"] == "FSMA_EXTRACTION"]
         assert len(fsma_calls) == 1

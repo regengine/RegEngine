@@ -167,8 +167,8 @@ def _run_hardened_extraction(
     particular requires Kafka signing keys that pg deployments do not set,
     which is why ``_route_extraction`` is not reused verbatim here.
 
-    Raises on any pipeline failure — the caller falls back to the bare
-    legacy regex extractor so a pipeline regression never fails the task.
+    Raises on extraction or review-enqueue failure so the worker retries
+    the task instead of recording incomplete work as completed.
     """
     from services.nlp.app.consumer.conversion import _convert_entities_to_extraction
     from services.nlp.app.consumer.review_routing import _build_review_reasons
@@ -229,8 +229,9 @@ def _run_hardened_extraction(
                 priority=1,
                 idempotency_key=f"review_item:{doc_id}:FSMA_EXTRACTION",
             )
-            if task_id is not None:
-                summary["review_items_enqueued"] += 1
+            if task_id is None:
+                raise RuntimeError("Failed to enqueue FSMA extraction review")
+            summary["review_items_enqueued"] += 1
         else:
             # High-confidence FSMA result. On the Kafka backbone this is
             # emitted to graph.update; the pg worker has no graph sink, so
@@ -303,8 +304,9 @@ def _run_hardened_extraction(
             priority=1 if priority == "high" else 0,
             idempotency_key=f"review_item:{doc_id}:{entity_type}:{extraction.source_offset}",
         )
-        if task_id is not None:
-            summary["review_items_enqueued"] += 1
+        if task_id is None:
+            raise RuntimeError("Failed to enqueue NLP extraction review")
+        summary["review_items_enqueued"] += 1
 
     return summary
 
@@ -320,38 +322,18 @@ def _handle_nlp_extraction(payload: Dict[str, Any], tenant_id: Optional[str] = N
 
     Runs the hardened extraction pipeline shared with the Kafka consumer
     (FSMA KDE gating, capped-confidence regex conversion, three-tier
-    review routing — see :func:`_run_hardened_extraction`). On ANY
-    pipeline failure it falls back to the bare legacy regex extractor
-    with a structured warning, so a pipeline regression can never fail
-    the task.
+    review routing — see :func:`_run_hardened_extraction`). Missing input,
+    dependency failures, and incomplete routing raise so the worker's
+    retry/dead-letter path handles the failure.
     """
     try:
-        from services.nlp.app.extractor import extract_entities
-
         doc_id = payload.get("document_id")
         text = payload.get("text", "")
-        if not doc_id or not text:
-            logger.warning("nlp_extraction_skip_empty", payload_keys=list(payload.keys()))
-            return
-        try:
-            summary = _run_hardened_extraction(payload, doc_id, text, tenant_id)
-        except Exception as exc:
-            logger.warning(
-                "nlp_hardened_pipeline_failed",
-                document_id=doc_id,
-                error=str(exc),
-                error_type=type(exc).__name__,
-                fallback="legacy_regex",
-                exc_info=True,
-            )
-            result = extract_entities(text)
-            logger.info(
-                "nlp_extraction_complete",
-                document_id=doc_id,
-                entities=len(result),
-                pipeline="legacy_regex_fallback",
-            )
-            return
+        if not isinstance(doc_id, str) or not doc_id.strip():
+            raise ValueError("NLP extraction requires a nonblank document_id string")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("NLP extraction requires a nonblank text string")
+        summary = _run_hardened_extraction(payload, doc_id, text, tenant_id)
         logger.info(
             "nlp_extraction_complete",
             document_id=doc_id,
@@ -359,8 +341,6 @@ def _handle_nlp_extraction(payload: Dict[str, Any], tenant_id: Optional[str] = N
             pipeline="hardened",
             **summary,
         )
-    except ImportError:
-        logger.debug("nlp_extractor_unavailable", exc_info=True)
     except Exception:
         logger.exception("nlp_extraction_failed")
         raise
