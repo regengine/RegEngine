@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any, Deque, Dict, List, Optional, Union
 
 import structlog
+from shared.db_liveness import postgres_liveness_connect_args
 
 logger = structlog.get_logger("fsma-audit")
 
@@ -53,7 +54,11 @@ def _get_audit_db_engine():
             )
             engine_kwargs = {"pool_pre_ping": True}
             if not url.startswith("sqlite"):
-                engine_kwargs.update(pool_size=2, max_overflow=4)
+                engine_kwargs.update(
+                    pool_size=2,
+                    max_overflow=4,
+                    connect_args=postgres_liveness_connect_args(url),
+                )
             _db_engine = create_engine(url, **engine_kwargs)
             return _db_engine
         except Exception as e:
