@@ -112,7 +112,7 @@ def tenant_session(migrated_db):
         )
     session_factory = sessionmaker(bind=engine, future=True)
     session = session_factory()
-    session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+    session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": str(tenant_id)})
     try:
         yield session, tenant_id
     finally:

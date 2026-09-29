@@ -506,7 +506,7 @@ def seeded_tenant(migrated_db):
             {"id": str(tenant_id), "name": f"vfy-{tenant_id.hex[:8]}", "slug": f"vfy-{tenant_id.hex[:8]}"},
         )
     session = sessionmaker(bind=engine, future=True)()
-    session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+    session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": str(tenant_id)})
     for _ in range(6):
         CanonicalEventStore(session, dual_write=True).persist_event(_make_event(tenant_id))
     # Canonical-only rows: EXPECTED, must not affect the verdict.
@@ -585,7 +585,7 @@ def _seed_webhook_compat_pair(engine, tenant: str):
         kdes,
     )
     with engine.begin() as conn:
-        conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+        conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
         conn.execute(
             text("""
                 INSERT INTO fsma.cte_events (
@@ -627,7 +627,7 @@ def _seed_webhook_compat_pair(engine, tenant: str):
     try:
         from shared.canonical_persistence.writer import CanonicalEventStore
 
-        session.execute(text("SET app.tenant_id = :tid"), {"tid": tenant})
+        session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": tenant})
         canonical.kdes = kdes
         CanonicalEventStore(session, dual_write=False).persist_event(canonical)
         session.commit()
@@ -682,7 +682,7 @@ class TestAgainstLiveDatabase:
         database_url, engine, tenant = seeded_tenant
         _seed_webhook_compat_pair(engine, tenant)
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             conn.execute(
                 text("""
                     INSERT INTO fsma.cte_events (
@@ -724,7 +724,7 @@ class TestAgainstLiveDatabase:
         # transaction. Production data is never mutated by the verifier —
         # this is test setup, and the verifier itself is read-only.
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
             conn.execute(
                 text(
@@ -757,7 +757,7 @@ class TestAgainstLiveDatabase:
 
         database_url, engine, tenant = seeded_tenant
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             conn.execute(
                 text(
                     "UPDATE fsma.traceability_events SET quantity = 999.0, "
@@ -809,7 +809,7 @@ class TestAgainstLiveDatabase:
 
         session = sessionmaker(bind=engine, future=True)()
         try:
-            session.execute(text("SET app.tenant_id = :tid"), {"tid": tenant})
+            session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": tenant})
             CanonicalEventStore(session, dual_write=True).persist_event(event)
             session.commit()
         finally:
@@ -827,7 +827,7 @@ class TestAgainstLiveDatabase:
         #    append-only trigger's documented escape hatch stages the fixture and
         #    is scoped to this transaction; the verifier itself never mutates.
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
             conn.execute(
                 text(
@@ -867,7 +867,7 @@ class TestAgainstLiveDatabase:
         database_url, engine, tenant = seeded_tenant
         with engine.begin() as conn:
             conn.execute(
-                text("SET LOCAL app.tenant_id = :tid"),
+                text("SELECT set_config('app.tenant_id', :tid, true)"),
                 {"tid": tenant},
             )
             conn.execute(
@@ -900,7 +900,7 @@ class TestAgainstLiveDatabase:
 
         database_url, engine, tenant = seeded_tenant
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             # Forge a legacy row for one of the canonical-only events, with a
             # different id, description, location, and source.
             conn.execute(
@@ -952,10 +952,10 @@ class TestAgainstLiveDatabase:
                    (SELECT COUNT(*) FROM fsma.traceability_events)
         """)
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             before = tuple(conn.execute(counts_sql).fetchone())
         _run_verifier(database_url, tenant)
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
             after = tuple(conn.execute(counts_sql).fetchone())
         assert before == after

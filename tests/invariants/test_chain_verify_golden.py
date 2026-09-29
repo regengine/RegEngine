@@ -79,7 +79,7 @@ def chained_corpus(migrated_db):
             },
         )
     session = sessionmaker(bind=engine, future=True)()
-    session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+    session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": str(tenant_id)})
 
     base = datetime(2026, 6, 10, 9, 0, 0, tzinfo=timezone.utc)
     for index in range(5):
@@ -228,7 +228,7 @@ class TestChainVerifyGolden:
             )
         session = sessionmaker(bind=engine, future=True)()
         try:
-            session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+            session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": str(tenant_id)})
 
             base = datetime(2026, 7, 1, 9, 0, 0, tzinfo=timezone.utc)
             # dual_write=False → chain rows match ONLY the canonical store,
@@ -259,7 +259,7 @@ class TestChainVerifyGolden:
                     )
                 )
             session.commit()
-            session.execute(text("SET app.tenant_id = :tid"), {"tid": str(tenant_id)})
+            session.execute(text("SELECT set_config('app.tenant_id', :tid, false)"), {"tid": str(tenant_id)})
 
             clean = store.verify_chain_canonical(str(tenant_id))
             assert clean.valid is True, f"precondition: clean canonical-only chain failed: {clean.errors}"

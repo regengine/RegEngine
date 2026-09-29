@@ -126,7 +126,10 @@ class MatchingMixin:
         # inlines an unvetted string would turn a static query into a
         # SQL-injection vector. The type filter is expressed as a
         # nullable parameter (`:entity_type IS NULL OR ...`) so the
-        # planner can optimise it away when the filter is unused.
+        # planner can optimise it away when the filter is unused. The CAST
+        # is required: psycopg 3 binds server-side, and Postgres cannot type
+        # a parameter whose first use is ``IS NULL`` (same form as
+        # canonical_persistence.writer's nullable date filters).
         if entity_type is not None and entity_type not in VALID_ENTITY_TYPES:
             raise ValueError(f"Invalid entity_type '{entity_type}'")
 
@@ -188,7 +191,7 @@ class MatchingMixin:
                             WHERE ea.tenant_id = :tenant_id
                               AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
                               AND ce.is_active = TRUE
-                              AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                              AND (CAST(:entity_type AS text) IS NULL OR ce.entity_type = CAST(:entity_type AS text))
                               AND similarity(lower(ea.alias_value), :q) >= :sim_floor
                             ORDER BY similarity(lower(ea.alias_value), :q) DESC
                             LIMIT :cand_limit
@@ -232,7 +235,7 @@ class MatchingMixin:
                     WHERE ea.tenant_id = :tenant_id
                       AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
                       AND ce.is_active = TRUE
-                      AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                      AND (CAST(:entity_type AS text) IS NULL OR ce.entity_type = CAST(:entity_type AS text))
                     """
                 ),
                 params,

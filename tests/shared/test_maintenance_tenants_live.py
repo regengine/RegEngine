@@ -67,7 +67,8 @@ def test_task_purge_retains_recall_and_unknown_evidence(database_roles):
     try:
         with engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO public.tenants(id,name,slug) VALUES (:id,'retention test',:id)"), {"id": tenant}
+                text("INSERT INTO public.tenants(id,name,slug) VALUES (:id,'retention test',CAST(:id AS text))"),
+                {"id": tenant},
             )
             for kind in kinds:
                 conn.execute(
