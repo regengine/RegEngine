@@ -90,7 +90,7 @@ Use the following packet for buyer review. Mark each item as current, draft, or 
 | Security posture | `SECURITY.md`, `SECURITY_BOUNDARIES.md`, `docs/security/TRUST_FRAMEWORK.md` | Code posture, not third-party certification |
 | DPA | `docs/DATA_PROCESSING_AGREEMENT.md` | Template until executed with customer counsel |
 | Incident response | `docs/operations/INCIDENT_RESPONSE.md`, `docs/runbooks/incident-response.md` | Internal runbook unless tested with a partner |
-| Disaster recovery / RTO / RPO | `docs/operations/DISASTER_RECOVERY.md`, `docs/runbooks/disaster-recovery.md` | Targets and procedures; confirm latest tested restore status |
+| Disaster recovery / RTO / RPO | `docs/operations/DISASTER_RECOVERY.md` | Targets and procedures; confirm latest tested restore status |
 | SOC 2 | `docs/security/SOC2_CONTROL_MATRIX.md`, `docs/security/soc2_preparation.md` | Preparation only unless audit report exists |
 | Penetration test | `docs/security/PENTEST_SCOPE.md` | Scope template only unless completed report exists |
 | FDA export proof | `frontend/public/sdk/verify_chain.py`, proof/export package | Product proof, not FDA endorsement |
