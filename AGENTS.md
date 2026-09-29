@@ -68,6 +68,15 @@ Consult TypeSafe Jev alongside the user's requests.
 - Follow `.claude/skills/jev-sidecar/SKILL.md` for when to ask, what never to send, and how to report.
 - It needs `TYPESAFE_API_KEY` in the environment. Without the key the script exits 2 and sends nothing: say so once and continue.
 
+## Secrets
+
+- Never ask the user to paste a key, token or password into chat, and never print, log or commit one.
+- To put a secret on Railway (RegEngine production or staging), send the user the RegEngine Key Drop page: https://claude.ai/artifact/83mnC2gozimcQ87KJFLAFt. It writes from their browser to Railway through their own Railway connector, so the agent never receives the value. The Railway dashboard (Variables → New Variable) is the other direct path.
+- After a secret is on Railway, ask the user to seal it (Variables → ⋯ → Seal). A sealed value reaches the app but cannot be read back through the UI or the API.
+- Keys for agent sessions (for example `TYPESAFE_API_KEY` for `scripts/jev_ask.py`) go in the claude.ai cloud environment settings: the environment menu in the session title bar → Edit → Environment variables. A new session picks them up.
+- Use one key per place (production, staging, agent sessions) so each can be revoked alone. A key that appeared in chat, a log or git history is exposed: revoke it and issue a new one.
+- Verify a secret by its name or its effect, never by reading its value. For Jev, that is the `jev_configured ... key_present=` line in the deploy log.
+
 ## Verification
 
 Choose the smallest useful verification for the changed surface:

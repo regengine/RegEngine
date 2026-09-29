@@ -9,7 +9,9 @@ contract under test:
   exactly as the SDK serialises them;
 * answers convert to plain, JSON-safe results with evidence attached;
 * every SDK failure becomes ``JevUnavailable`` with a stable ``reason``;
-* the state never appears in RegEngine's own log records;
+* the state never appears in RegEngine's own log records, and a successful
+  call leaves a stdlib ``jev_answered`` line (production drops structlog INFO
+  without a sampled trace, so this is how an operator sees the key works);
 * settings parse defensively and never raise on the request path.
 """
 
@@ -320,6 +322,36 @@ def test_state_never_reaches_regengine_logs():
     assert "jev.unavailable" in events
     assert "SECRET-VALUE-9" not in json.dumps(records, default=str)
     assert "Supplier Tax ID" not in json.dumps(records, default=str)
+
+
+def test_answered_calls_leave_a_stdlib_line_that_production_keeps(caplog):
+    """Production drops structlog INFO without a sampled trace; stdlib INFO passes.
+
+    A working key must therefore leave a ``jev_answered`` stdlib line, with the
+    request id to look up at TypeSafe and no state, header or key in it. A
+    failed call must not leave one (its structlog warning is kept as it is).
+    """
+    secret_state = {"source_header": "Supplier Tax ID", "sample_values": ["SECRET-VALUE-9"]}
+
+    def failing(request):
+        return httpx2.Response(503, text="down")
+
+    with caplog.at_level(logging.INFO, logger="jev"):
+        _decider(_ok).ask(secret_state, QUESTIONS, purpose="header_mapping")
+        with pytest.raises(JevUnavailable):
+            _decider(failing).ask(secret_state, QUESTIONS, purpose="header_mapping")
+
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("jev_answered ")]
+    assert len(lines) == 1
+    (line,) = lines
+    assert "purpose=header_mapping" in line
+    assert "model=jev-1.13.0" in line
+    assert "request_id=req_abc" in line
+    assert "questions=3" in line
+    assert "input_tokens=57 output_tokens=3" in line
+    assert "SECRET-VALUE-9" not in caplog.text
+    assert "Supplier Tax ID" not in caplog.text
+    assert "test-key" not in caplog.text
 
 
 def test_sdk_logger_is_capped_unless_operator_opted_in(monkeypatch):

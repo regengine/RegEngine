@@ -317,6 +317,22 @@ To confirm a deployment picked up the key without reading the variable,
 search its startup logs for `jev_configured`: `enabled=True
 key_present=True` means the key is set and the kill switch is off.
 
+`key_present=True` does not prove TypeSafe accepts the key. Upload one CSV
+whose headers the parser does not recognise (a RegEngine template without a
+CTE works), then search the same deployment's logs:
+
+- `jev_answered purpose=... request_id=...` means TypeSafe accepted the key
+  and answered. Look the request id up at TypeSafe to match the call.
+- `jev.unavailable ... reason=auth` means TypeSafe rejected the key. Replace
+  it with the RegEngine Key Drop page or the Railway dashboard.
+- `reason=rate_limited`, `timeout`, `connection` or `server_error` is a
+  TypeSafe or network problem, not a key problem.
+
+Both lines carry metadata only (purpose, model, request id, latency, token
+counts), never the state or the key. `jev_answered` goes through stdlib
+logging because production drops structlog INFO events that have no sampled
+trace; `jev.unavailable` is a warning, which production keeps.
+
 ## Preview suggestions on your own files
 
 `scripts/jev_header_preview.py` runs the route's own suggestion step
