@@ -58,7 +58,7 @@ npm run build
 
 Browser requests use same-origin Next.js API proxies. Server-side upstream resolution lives in [api-config.ts](src/lib/api-config.ts), with routing/build configuration in [next.config.js](next.config.js). The frontend deploys separately to Vercel; the backend is one Railway application. Configure upstream URLs for the target environment before using authenticated workflows.
 
-The [frontend CI workflow](../.github/workflows/frontend-ci.yml) defines automated validation. Build success does not establish that live login, ingestion, or exports work against a deployed backend.
+The [frontend CI workflow](https://github.com/regengine/RegEngine/blob/main/.github/workflows/frontend-ci.yml) defines automated validation. Build success does not establish that live login, ingestion, or exports work against a deployed backend.
 
 ## License
 

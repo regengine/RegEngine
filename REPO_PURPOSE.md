@@ -34,4 +34,3 @@ ingest -> canonicalize -> validate -> persist evidence -> export
 ```
 
 Changes that do not strengthen or protect that pipeline should be explicitly marked as experimental, archived, or kept outside the production router surface.
-
