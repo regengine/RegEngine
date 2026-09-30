@@ -249,6 +249,12 @@ describe('Dashboard Inflow Lab', () => {
         vi.stubGlobal('fetch', mockFetch);
     });
 
+    it('explains an empty release-disabled simulator 404', async () => {
+        mockFetch.mockResolvedValue(new Response(null, { status: 404 }));
+        renderDashboardInflowLabPage();
+        expect(await screen.findByText(/Inflow Lab service connection:.*unavailable/)).toHaveTextContent('Core backend health does not include the simulator');
+    });
+
     it('renders the Inflow Lab header with one Sandbox chip and a single boundary banner', async () => {
         renderDashboardInflowLabPage();
 
