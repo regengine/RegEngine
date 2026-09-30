@@ -31,6 +31,18 @@ describe('public OpenAPI spec', () => {
     expect(publicOpenApiSpec.components.parameters.TenantHeader.description).toMatch(/optional tenant assertion/i);
   });
 
+  it('documents the runtime nested error envelope without dropping bespoke fields', () => {
+    const schema = publicOpenApiSpec.components.schemas.ErrorResponse;
+    expect(schema.required).toEqual(['error']);
+    expect(schema.properties.error.type).toBe('object');
+    expect(schema.properties.error.required).toEqual(['type', 'message']);
+    expect(schema.properties.error.additionalProperties).toBe(true);
+    expect(schema.properties).not.toHaveProperty('detail');
+    for (const response of Object.values(publicOpenApiSpec.components.responses)) {
+      expect(response.content['application/json'].schema.$ref).toBe('#/components/schemas/ErrorResponse');
+    }
+  });
+
   it('serves one identical spec from both public URLs', async () => {
     const apiResponse = await getApiOpenApi();
     const rootResponse = await getRootOpenApi();

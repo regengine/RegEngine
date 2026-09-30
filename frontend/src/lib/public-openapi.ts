@@ -283,10 +283,17 @@ export const publicOpenApiSpec = {
       },
       ErrorResponse: {
         type: 'object',
+        required: ['error'],
         properties: {
-          detail: { type: 'string' },
-          error: { type: 'string' },
-          request_id: { type: 'string' },
+          error: {
+            type: 'object',
+            required: ['type', 'message'],
+            properties: {
+              type: { type: 'string' },
+              message: { type: 'string' },
+            },
+            additionalProperties: true,
+          },
         },
         additionalProperties: true,
       },

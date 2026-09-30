@@ -3,8 +3,8 @@
 ## Live specs (authoritative)
 
 RegEngine is one consolidated FastAPI app, so there is a single spec — not one
-per service. The published spec is a **static asset generated from the app and
-drift-checked in CI**, not a live endpoint:
+per service. The published spec is a **curated TypeScript export served by application
+routes and contract-checked in CI**, not the backend's generated OpenAPI endpoint:
 
 | Spec | URL | What it is |
 |------|-----|-----------|
@@ -27,6 +27,18 @@ npm test -- --run src/__tests__/lib/public-openapi.test.ts
 `openapi-public-spec.yml` runs the contract test for every public-spec or docs
 change. Both public URLs must return the same object, and the test rejects
 administrative, internal, Bearer, retired-header, and localhost content.
+
+Python contract tests load that same TypeScript export through the installed
+TypeScript compiler; they do not require `frontend/public/openapi.json` or the
+retired `scripts/generate_openapi.py`. Run `npm ci` in `frontend/` first, then
+run the following from the repo root:
+
+```bash
+python3 -m pytest tests/contract/test_error_envelope_contract_2863.py tests/contract/test_openapi_production_surface_2861.py --no-cov
+```
+
+The tests check the public error schema against runtime responses and
+independently enumerate the release-approved production route table.
 
 ## Archived snapshots
 
