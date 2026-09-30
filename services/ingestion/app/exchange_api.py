@@ -329,7 +329,7 @@ def _load_packages_db(
                         received_at
                     FROM fsma.exchange_packages
                     WHERE receiver_tenant_id = :receiver_tenant_id
-                      AND id = :package_id::uuid
+                      AND id = CAST(:package_id AS uuid)
                     LIMIT 1
                     """
                 ),
@@ -342,7 +342,7 @@ def _load_packages_db(
                         UPDATE fsma.exchange_packages
                         SET status = 'received', received_at = now()
                         WHERE receiver_tenant_id = :receiver_tenant_id
-                          AND id = :package_id::uuid
+                          AND id = CAST(:package_id AS uuid)
                         """
                     ),
                     {"receiver_tenant_id": receiver_tenant_id, "package_id": package_id},
@@ -365,7 +365,7 @@ def _load_packages_db(
                             received_at
                         FROM fsma.exchange_packages
                         WHERE receiver_tenant_id = :receiver_tenant_id
-                          AND id = :package_id::uuid
+                          AND id = CAST(:package_id AS uuid)
                         LIMIT 1
                         """
                     ),

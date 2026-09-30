@@ -859,6 +859,7 @@ jobs:
           # shipped twice (sandbox/router.py, then request_workflow/#2625).
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             tests/test_logging_binding_guard.py \
+            tests/test_guard_text_bind_casts.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Operator database tooling tests
