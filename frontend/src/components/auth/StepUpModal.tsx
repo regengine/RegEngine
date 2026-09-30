@@ -55,7 +55,10 @@ export function StepUpModal() {
       setOpen(false);
       window.location.reload();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Passkey authentication failed.');
+      const browserError = err instanceof Error || err instanceof DOMException;
+      setError(browserError && err.name === 'SecurityError'
+        ? 'Passkey verification is unavailable on this domain. Contact support to verify the passkey domain configuration. This action remains blocked.'
+        : browserError ? err.message : 'Passkey authentication failed.');
     } finally {
       setIsSubmitting(false);
     }
