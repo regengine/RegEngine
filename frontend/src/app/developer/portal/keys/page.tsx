@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { emitStepUpRequired, isRequiresStepUpPayload } from '@/lib/step-up-events';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -36,6 +37,9 @@ export default function ApiKeysPage() {
     const [copied, setCopied] = useState(false);
     const [developerId, setDeveloperId] = useState<string | null>(null);
     const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+    const creatingRef = useRef(false);
+    const [needsRefresh, setNeedsRefresh] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const loadKeys = useCallback(async () => {
@@ -46,6 +50,7 @@ export default function ApiKeysPage() {
             return;
         }
 
+        setIsRefreshing(true);
         try {
             const response = await fetch('/api/developer/portal/keys', { credentials: 'include' });
             if (!response.ok) {
@@ -53,19 +58,23 @@ export default function ApiKeysPage() {
                 return;
             }
             const data = await response.json();
+            setError(null);
+            setNeedsRefresh(false);
             setDeveloperId(data.developerId);
             setKeys(data.keys || []);
         } catch {
             setError('Could not load your API keys. Refresh to try again.');
         } finally {
             setIsLoading(false);
+            setIsRefreshing(false);
         }
     }, [authUser, isHydrated]);
 
     useEffect(() => { loadKeys(); }, [loadKeys]);
 
     async function createKey() {
-        if (!developerId || !newKeyName.trim() || isCreating) return;
+        if (!developerId || !newKeyName.trim() || creatingRef.current || needsRefresh) return;
+        creatingRef.current = true;
         setIsCreating(true);
         setError(null);
 
@@ -77,19 +86,31 @@ export default function ApiKeysPage() {
                 body: JSON.stringify({ name: newKeyName.trim() }),
             });
 
+            const data = await response.json();
             if (!response.ok) {
-                setError('Key creation failed. Check your connection and try again.');
+                if (isRequiresStepUpPayload(data)) {
+                    setError('Authenticate with your passkey, then choose Generate again. No key was created by this request.');
+                    emitStepUpRequired(data);
+                } else {
+                    setNeedsRefresh(true);
+                    setError('Key creation could not be confirmed. Refresh the key list before creating another key.');
+                }
                 return;
             }
-
-            const data = await response.json();
             setRevealedKey(data.rawKey);
             setNewKeyName('');
             setShowCreate(false);
-            setKeys(data.keys || []);
+            if (data.keysRefreshFailed) {
+                setNeedsRefresh(true);
+                setError('Your key was created. Copy it now, then refresh the key list.');
+            } else {
+                setKeys(data.keys || []);
+            }
         } catch {
-            setError('Key creation failed. Check your connection and try again.');
+            setNeedsRefresh(true);
+            setError('Key creation could not be confirmed. Refresh the key list before creating another key.');
         } finally {
+            creatingRef.current = false;
             setIsCreating(false);
         }
     }
@@ -178,7 +199,11 @@ export default function ApiKeysPage() {
             </Callout>
 
             {error && (
-                <Callout tone="danger" role="alert">
+                <Callout tone="danger" role="alert" action={
+                    <Button variant="secondary" size="sm" loading={isRefreshing} disabled={isRefreshing || isCreating} onClick={() => loadKeys()}>
+                        Refresh key list
+                    </Button>
+                }>
                     {error}
                 </Callout>
             )}
@@ -229,7 +254,7 @@ export default function ApiKeysPage() {
                                 <Button
                                     onClick={createKey}
                                     loading={isCreating}
-                                    disabled={!newKeyName.trim() || isCreating || !developerId}
+                                    disabled={!newKeyName.trim() || isCreating || needsRefresh || !developerId}
                                 >
                                     Generate
                                 </Button>
