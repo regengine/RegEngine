@@ -146,6 +146,34 @@ describe('developer portal click behavior', () => {
         expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
     });
 
+    it('blocks creation during a pending refresh so stale rows cannot clear a later uncertain outcome', async () => {
+        const user = userEvent.setup();
+        let resolveRefresh: ((value: Response) => void) | undefined;
+        vi.mocked(global.fetch)
+            .mockResolvedValueOnce(jsonResponse({ developerId: 'dev-1', keys: [] }))
+            .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRefresh = resolve; }));
+        mocks.fetchWithCsrf
+            .mockResolvedValueOnce(jsonResponse({ detail: { code: 'requires_step_up' } }, false))
+            .mockRejectedValueOnce(new Error('Connection lost after insert'));
+        render(<ApiKeysPage />);
+        await user.click(await screen.findByRole('button', { name: /new key/i }));
+        const input = screen.getByPlaceholderText(/local testing/i);
+        await user.type(input, 'CI key');
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        await user.click(await screen.findByRole('button', { name: /refresh key list/i }));
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeDisabled();
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        await user.click(input);
+        await user.keyboard('{Enter}');
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+        resolveRefresh?.(jsonResponse({ developerId: 'dev-1', keys: [] }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /^generate$/i })).toBeEnabled());
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/could not be confirmed/i);
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeDisabled();
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(2);
+    });
+
     it.each(['canceled', 'failed'])('settles after step-up is %s without automatically retrying creation', async (outcome) => {
         const user = userEvent.setup();
         vi.mocked(global.fetch).mockResolvedValue(jsonResponse({ developerId: 'dev-1', keys: [] }));

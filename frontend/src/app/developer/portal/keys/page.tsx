@@ -38,6 +38,7 @@ export default function ApiKeysPage() {
     const [developerId, setDeveloperId] = useState<string | null>(null);
     const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
     const creatingRef = useRef(false);
+    const refreshingRef = useRef(false);
     const [needsRefresh, setNeedsRefresh] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -45,11 +46,13 @@ export default function ApiKeysPage() {
     const loadKeys = useCallback(async () => {
         // The server verifies Supabase auth; hydration supplies the client profile.
         if (!isHydrated) return;
+        if (creatingRef.current || refreshingRef.current) return;
         if (!authUser) {
             setIsLoading(false);
             return;
         }
 
+        refreshingRef.current = true;
         setIsRefreshing(true);
         try {
             const response = await fetch('/api/developer/portal/keys', { credentials: 'include' });
@@ -65,6 +68,7 @@ export default function ApiKeysPage() {
         } catch {
             setError('Could not load your API keys. Refresh to try again.');
         } finally {
+            refreshingRef.current = false;
             setIsLoading(false);
             setIsRefreshing(false);
         }
@@ -73,7 +77,7 @@ export default function ApiKeysPage() {
     useEffect(() => { loadKeys(); }, [loadKeys]);
 
     async function createKey() {
-        if (!developerId || !newKeyName.trim() || creatingRef.current || needsRefresh) return;
+        if (!developerId || !newKeyName.trim() || creatingRef.current || refreshingRef.current || needsRefresh) return;
         creatingRef.current = true;
         setIsCreating(true);
         setError(null);
@@ -254,7 +258,7 @@ export default function ApiKeysPage() {
                                 <Button
                                     onClick={createKey}
                                     loading={isCreating}
-                                    disabled={!newKeyName.trim() || isCreating || needsRefresh || !developerId}
+                                    disabled={!newKeyName.trim() || isCreating || isRefreshing || needsRefresh || !developerId}
                                 >
                                     Generate
                                 </Button>
