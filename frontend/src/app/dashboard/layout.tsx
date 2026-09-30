@@ -335,7 +335,7 @@ function CollapsibleNavSection({
 
 const HEALTH_BADGE: Record<string, { state: ComplianceState; label: string }> = {
     loading: { state: 'in-progress', label: 'Checking...' },
-    operational: { state: 'compliant', label: 'All Systems Operational' },
+    operational: { state: 'compliant', label: 'Core Backend Reachable' },
     degraded: { state: 'at-risk', label: 'Degraded Performance' },
     disruption: { state: 'non-compliant', label: 'Services Unreachable' },
 };

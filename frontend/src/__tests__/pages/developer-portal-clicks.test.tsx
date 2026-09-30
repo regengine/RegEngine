@@ -1,12 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StepUpModal } from '@/components/auth/StepUpModal';
 import ApiKeysPage from '@/app/developer/portal/keys/page';
 import DeveloperPortalDashboard from '@/app/developer/portal/page';
 import UsagePage from '@/app/developer/portal/usage/page';
 
 const mocks = vi.hoisted(() => ({
     fetchWithCsrf: vi.fn(),
+    performPasskeyLogin: vi.fn(),
     // Stable identities: the pages key their load effects off the auth user, so a
     // fresh object per render would re-fire the effect forever.
     authValue: {
@@ -15,6 +17,12 @@ const mocks = vi.hoisted(() => ({
         isHydrated: true,
         logout: () => Promise.resolve(),
     },
+}));
+
+vi.mock('@/lib/passwordless-auth', () => ({
+    isValidEmail: () => true,
+    performPasskeyLogin: mocks.performPasskeyLogin,
+    seedPasswordlessClientUser: vi.fn(),
 }));
 
 vi.mock('@/lib/fetch-with-csrf', () => ({
@@ -32,6 +40,7 @@ function jsonResponse(body: unknown, ok = true) {
 describe('developer portal click behavior', () => {
     beforeEach(() => {
         mocks.fetchWithCsrf.mockReset();
+        mocks.performPasskeyLogin.mockReset();
         vi.stubGlobal('fetch', vi.fn());
     });
 
@@ -69,7 +78,133 @@ describe('developer portal click behavior', () => {
         await user.type(screen.getByPlaceholderText(/local testing/i), 'CI key');
         await user.click(screen.getByRole('button', { name: /generate/i }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(/key creation failed/i);
+        expect(await screen.findByRole('alert')).toHaveTextContent(/key creation could not be confirmed/i);
+    });
+
+
+    it('blocks duplicate submissions, including Enter, until the request settles', async () => {
+        const user = userEvent.setup();
+        vi.mocked(global.fetch).mockResolvedValue(jsonResponse({ developerId: 'dev-1', keys: [] }));
+        let resolve: ((response: Response) => void) | undefined;
+        mocks.fetchWithCsrf.mockImplementation(() => new Promise<Response>(done => { resolve = done; }));
+        render(<ApiKeysPage />);
+        await user.click(await screen.findByRole('button', { name: /new key/i }));
+        const input = screen.getByPlaceholderText(/local testing/i);
+        await user.type(input, 'CI key');
+        const generate = screen.getByRole('button', { name: /^generate$/i });
+        act(() => {
+            fireEvent.click(generate);
+            fireEvent.click(generate);
+            fireEvent.keyDown(input, { key: 'Enter' });
+            fireEvent.keyDown(input, { key: 'Enter' });
+        });
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+        await act(async () => resolve?.(jsonResponse({ rawKey: 'synthetic-test-value', keys: [] })));
+        expect(screen.getByText('synthetic-test-value')).toBeInTheDocument();
+    });
+
+    it('recovers uncertain creation with a read-only refresh and blocks retry until it succeeds', async () => {
+        const user = userEvent.setup();
+        vi.mocked(global.fetch)
+            .mockResolvedValueOnce(jsonResponse({ developerId: 'dev-1', keys: [] }))
+            .mockResolvedValueOnce(jsonResponse({}, false))
+            .mockResolvedValueOnce(jsonResponse({ developerId: 'dev-1', keys: [] }));
+        mocks.fetchWithCsrf.mockRejectedValue(new Error('Connection lost'));
+        render(<ApiKeysPage />);
+        await user.click(await screen.findByRole('button', { name: /new key/i }));
+        await user.type(screen.getByPlaceholderText(/local testing/i), 'CI key');
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/could not be confirmed/i);
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeDisabled();
+        await user.click(screen.getByRole('button', { name: /refresh key list/i }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/could not load/i);
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeDisabled();
+        await user.click(screen.getByRole('button', { name: /refresh key list/i }));
+        await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeEnabled();
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('preserves the revealed key and existing rows when the post-create metadata read fails', async () => {
+        const user = userEvent.setup();
+        vi.mocked(global.fetch).mockResolvedValue(jsonResponse({ developerId: 'dev-1', keys: [{
+            id: 'old', name: 'Existing key', key_prefix: 'prefix', enabled: false, total_requests: 0,
+            created_at: '', last_used_at: null, revoked_at: null,
+        }] }));
+        mocks.fetchWithCsrf.mockResolvedValue(jsonResponse({ rawKey: 'synthetic-test-value', keysRefreshFailed: true }));
+        render(<ApiKeysPage />);
+        await user.click(await screen.findByRole('button', { name: /new key/i }));
+        await user.type(screen.getByPlaceholderText(/local testing/i), 'CI key');
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        expect(await screen.findByText('synthetic-test-value')).toBeInTheDocument();
+        expect(screen.getByText('Existing key')).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent(/your key was created/i);
+        await user.click(screen.getByRole('button', { name: /refresh key list/i }));
+        await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+        expect(screen.getByText('synthetic-test-value')).toBeInTheDocument();
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks creation during a pending refresh so stale rows cannot clear a later uncertain outcome', async () => {
+        const user = userEvent.setup();
+        let resolveRefresh: ((value: Response) => void) | undefined;
+        vi.mocked(global.fetch)
+            .mockResolvedValueOnce(jsonResponse({ developerId: 'dev-1', keys: [] }))
+            .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRefresh = resolve; }));
+        mocks.fetchWithCsrf
+            .mockResolvedValueOnce(jsonResponse({ detail: { code: 'requires_step_up' } }, false))
+            .mockRejectedValueOnce(new Error('Connection lost after insert'));
+        render(<ApiKeysPage />);
+        await user.click(await screen.findByRole('button', { name: /new key/i }));
+        const input = screen.getByPlaceholderText(/local testing/i);
+        await user.type(input, 'CI key');
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        await user.click(await screen.findByRole('button', { name: /refresh key list/i }));
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeDisabled();
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        await user.click(input);
+        await user.keyboard('{Enter}');
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+        resolveRefresh?.(jsonResponse({ developerId: 'dev-1', keys: [] }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /^generate$/i })).toBeEnabled());
+        await user.click(screen.getByRole('button', { name: /^generate$/i }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/could not be confirmed/i);
+        expect(screen.getByRole('button', { name: /^generate$/i })).toBeDisabled();
+        expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['canceled', 'failed'])('settles after step-up is %s without automatically retrying creation', async (outcome) => {
+        const user = userEvent.setup();
+        vi.mocked(global.fetch).mockResolvedValue(jsonResponse({ developerId: 'dev-1', keys: [] }));
+        mocks.fetchWithCsrf.mockResolvedValue(jsonResponse({ detail: { code: 'requires_step_up' } }, false));
+        mocks.performPasskeyLogin.mockRejectedValue(new Error('Passkey verification failed'));
+        // Modal cancellation/failure cannot resume this mutation: only another
+        // explicit Generate click starts a request. Modal internals are tested separately.
+        const listener = vi.fn();
+        window.addEventListener('regengine:requires-step-up', listener);
+        try {
+            render(<><ApiKeysPage /><StepUpModal /></>);
+            await user.click(await screen.findByRole('button', { name: /new key/i }));
+            await user.type(screen.getByPlaceholderText(/local testing/i), 'CI key');
+            await user.click(screen.getByRole('button', { name: /^generate$/i }));
+            expect(await screen.findByRole('dialog')).toBeInTheDocument();
+            if (outcome === 'canceled') {
+                await user.keyboard('{Escape}');
+            } else {
+                await user.click(screen.getByRole('button', { name: /authenticate with passkey/i }));
+                expect(await screen.findByText('Passkey verification failed')).toBeInTheDocument();
+                await user.keyboard('{Escape}');
+            }
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            expect(screen.getByRole('alert')).toHaveTextContent(/authenticate with your passkey/i);
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(screen.getByRole('button', { name: /^generate$/i })).toBeEnabled();
+            expect(screen.getByPlaceholderText(/local testing/i)).toHaveValue('CI key');
+            expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+        } finally {
+            window.removeEventListener('regengine:requires-step-up', listener);
+        }
     });
 
     it('does not fire a second revoke while one is already in flight', async () => {

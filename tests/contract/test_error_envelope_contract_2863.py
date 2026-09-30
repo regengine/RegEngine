@@ -34,17 +34,13 @@ has a partner that checks a live response.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_SPEC_PATH = _REPO_ROOT / "frontend" / "public" / "openapi.json"
-
 
 @pytest.fixture(scope="module")
-def spec() -> dict:
-    return json.loads(_SPEC_PATH.read_text(encoding="utf-8"))
+def spec(published_spec) -> dict:
+    return published_spec()
 
 
 @pytest.fixture(scope="module")
@@ -65,6 +61,10 @@ def _error_responses(spec: dict) -> list[tuple[str, str, str, dict]]:
                 continue
             for status, response in (operation.get("responses") or {}).items():
                 if isinstance(status, str) and status[:1] in {"4", "5"}:
+                    if "$ref" in response:
+                        prefix = "#/components/responses/"
+                        assert response["$ref"].startswith(prefix)
+                        response = spec["components"]["responses"][response["$ref"][len(prefix) :]]
                     out.append((path, method, status, response))
     return out
 
@@ -90,7 +90,7 @@ def test_no_operation_advertises_a_top_level_detail(spec):
     assert not offenders, (
         "These operations document FastAPI's default HTTPValidationError "
         '({"detail": [...]}), which this application never returns — '
-        "install_exception_handlers wraps every error in {\"error\": {...}} "
+        'install_exception_handlers wraps every error in {"error": {...}} '
         f"(#2863):\n  " + "\n  ".join(offenders)
     )
 
@@ -99,16 +99,13 @@ def test_every_error_response_uses_the_shared_envelope(spec):
     missing = [
         f"{method.upper()} {path} -> {status}"
         for path, method, status, response in _error_responses(spec)
-        if "ErrorEnvelope" not in json.dumps(response)
+        if "ErrorResponse" not in json.dumps(response)
     ]
-    assert not missing, (
-        "Error responses not pointing at the shared ErrorEnvelope schema:\n  "
-        + "\n  ".join(missing)
-    )
+    assert not missing, "Error responses not pointing at the shared ErrorEnvelope schema:\n  " + "\n  ".join(missing)
 
 
 def test_envelope_schema_requires_type_and_message(spec):
-    schema = spec["components"]["schemas"]["ErrorEnvelope"]
+    schema = spec["components"]["schemas"]["ErrorResponse"]
     inner = schema["properties"]["error"]
     assert schema["required"] == ["error"]
     assert set(inner["required"]) == {"type", "message"}
@@ -134,15 +131,12 @@ def test_live_errors_match_the_published_envelope(client, path, expected_status,
     assert response.status_code == expected_status, producer
 
     body = response.json()
-    assert "detail" not in body, (
-        f"{producer} returned a top-level 'detail'; the spec no longer documents one."
-    )
+    assert "detail" not in body, f"{producer} returned a top-level 'detail'; the spec no longer documents one."
     assert "error" in body, f"{producer} did not use the shared envelope: {body}"
 
     error = body["error"]
     assert isinstance(error.get("type"), str) and error["type"], (
-        f"{producer} produced an envelope with no usable 'type': {error}. A client "
-        f"cannot classify this error (#2863)."
+        f"{producer} produced an envelope with no usable 'type': {error}. A client cannot classify this error (#2863)."
     )
     assert isinstance(error.get("message"), str) and error["message"], (
         f"{producer} produced an envelope with no 'message': {error}"
@@ -157,9 +151,7 @@ def test_dict_detail_keeps_its_original_fields(client):
     the `type` that makes the envelope uniform.
     """
     error = client.get("/api/v1/fda/export").json()["error"]
-    assert error.get("code") == "E_NO_TENANT", (
-        f"the original 'code' field was lost in normalization: {error}"
-    )
+    assert error.get("code") == "E_NO_TENANT", f"the original 'code' field was lost in normalization: {error}"
     assert error["type"] == "E_NO_TENANT", (
         "'type' should fall back to the dict's own 'code' rather than a generic "
         f"http_<status>, so one field classifies every error: {error}"

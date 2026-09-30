@@ -42,3 +42,38 @@ def _clear_admin_brute_force_state():
             continue
         with throttle._memory_lock:
             throttle._memory.clear()
+
+
+@pytest.fixture(scope="module")
+def published_spec():
+    """Load the authoritative TypeScript export, without a stale generated asset."""
+    import json
+    import subprocess
+    from pathlib import Path
+
+    frontend = Path(__file__).resolve().parents[2] / "frontend"
+    script = """
+const fs = require('node:fs');
+const ts = require('typescript');
+const source = fs.readFileSync('src/lib/public-openapi.ts', 'utf8');
+const compiled = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS }
+}).outputText;
+const exported = { exports: {} };
+new Function('exports', 'module', compiled)(exported.exports, exported);
+process.stdout.write(JSON.stringify(exported.exports.publicOpenApiSpec));
+"""
+
+    def load(env=None):
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=frontend,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        return json.loads(result.stdout)
+
+    return load

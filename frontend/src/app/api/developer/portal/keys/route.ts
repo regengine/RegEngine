@@ -94,6 +94,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create API key' }, { status: 502 });
     }
 
-    const keys = await loadKeys(context);
-    return withDeveloperCookies(context, NextResponse.json({ rawKey, keys }));
+    // Creation is committed; a metadata read failure must not discard the
+    // one-time credential or imply that retrying the mutation is safe.
+    try {
+        const keys = await loadKeys(context);
+        return withDeveloperCookies(context, NextResponse.json({ rawKey, keys }));
+    } catch {
+        return withDeveloperCookies(context, NextResponse.json({ rawKey, keysRefreshFailed: true }));
+    }
 }
