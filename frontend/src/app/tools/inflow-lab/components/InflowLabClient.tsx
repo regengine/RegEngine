@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { inflowErrorMessage } from "@/lib/inflow-error";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -294,7 +295,7 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     });
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || payload.detail || `Inflow Lab request failed: ${response.status}`);
+        throw new Error(inflowErrorMessage(response.status, payload));
     }
     return response.json();
 }

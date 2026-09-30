@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardLayout from '@/app/dashboard/layout';
 import { useAuth } from '@/lib/auth-context';
 import { usePathname, useRouter } from 'next/navigation';
+
+vi.mock('@/hooks/use-api', () => ({
+    useSystemStatus: () => ({ data: { overall_status: 'healthy' }, isLoading: false, dataUpdatedAt: 0 }),
+}));
 
 vi.mock('next/navigation', () => ({
     usePathname: vi.fn(),
@@ -50,6 +55,16 @@ describe('Dashboard navigation discoverability', () => {
             length: 0,
             key: vi.fn(() => null),
         });
+    });
+
+    it('limits the healthy banner to the monitored core backend', () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <DashboardLayout><div>Inflow content</div></DashboardLayout>
+            </QueryClientProvider>,
+        );
+        expect(screen.getByText('Core Backend Reachable')).toBeInTheDocument();
+        expect(screen.queryByText('All Systems Operational')).not.toBeInTheDocument();
     });
 
     it('exposes Inflow Lab as a top-level active dashboard link', async () => {
