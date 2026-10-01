@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import AuditReviewPage from '@/app/audit/page';
 import DashboardLayout from '@/app/dashboard/layout';
@@ -42,6 +42,7 @@ vi.mock('@/lib/tenant-context', () => ({
 describe('experimental feature gating (flag off)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
         vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
         (useRouter as any).mockReturnValue({ push: vi.fn() });
         (usePathname as any).mockReturnValue('/dashboard');
@@ -88,6 +89,8 @@ describe('experimental feature gating (flag off)', () => {
                 <div>content</div>
             </DashboardLayout>,
         );
+        fireEvent.click(screen.getByRole('button', { name: 'Sources' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Governance' }));
         expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
         expect(screen.queryByText('Readiness')).not.toBeInTheDocument();
         expect(screen.queryByText('Scan')).not.toBeInTheDocument();
@@ -105,6 +108,7 @@ describe('experimental feature gating (flag off)', () => {
 describe('experimental feature gating (flag on)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
         vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', 'true');
         (useRouter as any).mockReturnValue({ push: vi.fn() });
         (usePathname as any).mockReturnValue('/dashboard');
@@ -128,6 +132,8 @@ describe('experimental feature gating (flag on)', () => {
                 <div>content</div>
             </DashboardLayout>,
         );
+        fireEvent.click(screen.getByRole('button', { name: 'Sources' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Governance' }));
         expect(screen.getAllByText('Inflow Lab').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Readiness').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Scan').length).toBeGreaterThan(0);
