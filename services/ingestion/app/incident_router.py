@@ -217,7 +217,7 @@ async def open_incident(
     db_session.execute(
         text("""
             INSERT INTO fsma.incidents (id, tenant_id, data)
-            VALUES (:id, :tid, :data::jsonb)
+            VALUES (:id, :tid, CAST(:data AS jsonb))
         """),
         {"id": incident_id, "tid": tid, "data": json.dumps(data, default=str)},
     )
@@ -545,7 +545,7 @@ def _save_incident_data(db_session, incident_id: str, tenant_id: str, data: dict
     db_session.execute(
         text("""
             UPDATE fsma.incidents
-            SET data = :data::jsonb, updated_at = NOW()
+            SET data = CAST(:data AS jsonb), updated_at = NOW()
             WHERE id = :id AND tenant_id = :tid
         """),
         {"id": incident_id, "tid": tenant_id, "data": json.dumps(data, default=str)},
