@@ -1,10 +1,14 @@
 # RegEngine
 
-RegEngine is a pre-production FSMA 204 traceability application. The codebase ingests food supply-chain records, normalizes them into CTE/KDE event data, stores tenant-scoped records in PostgreSQL, evaluates rule outcomes, and exposes audit/export surfaces for FDA traceability workflows.
+**FSMA 204 food traceability: supplier data in, verifiable evidence out.**
 
-Current product wedge: Inflow prepares, Engine proves. Supplier and ERP data is preflighted, scored, routed into a fix queue, and gated before it becomes tenant-scoped traceability evidence.
+RegEngine is an API-first traceability evidence platform for food supply chains. It ingests supplier and ERP records, normalizes Critical Tracking Events (CTEs) and Key Data Elements (KDEs), evaluates versioned rules, and produces tenant-scoped records, tamper-evident audit evidence, and FDA-oriented exports.
 
-Canonical product description: see [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md).
+Inflow Workbench prepares data with preflight checks, readiness scores, a fix queue, and a commit gate. Optional Jev assistance suggests CSV column mappings and missing event types; deterministic validation and authenticated tenant boundaries remain authoritative.
+
+[Website](https://regengine.co) · [Public proof](https://regengine.co/proof) · [Verify a bundle](https://regengine.co/verify) · [Product description](docs/PRODUCT_DESCRIPTION.md) · [Python SDK](regengine/README.md)
+
+This is a pre-production application with deployed public proof surfaces. The capability inventory below describes checked-in implementation and release policy, not proof of customer adoption or live configuration.
 
 ## Public proof surface
 
@@ -27,7 +31,7 @@ This README describes behavior that is visible in checked-in code, configuration
 
 ## What The Product Does
 
-Verified product capabilities in the current tree:
+Implemented capabilities in the current tree. Route availability is controlled by [server/router_policy.py](server/router_policy.py); a module or UI page existing does not mean its API is enabled in production.
 
 | Capability | Evidence |
 | --- | --- |
@@ -39,13 +43,19 @@ Verified product capabilities in the current tree:
 | EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
 | EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
 | GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
+| Optional Jev CSV column mapping and file-CTE suggestions, confidence-based review, upload UI prompts, and operator preview/evaluation tools; automatic application defaults off | [services/shared/jev/](services/shared/jev/), [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) |
 | Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
 | Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
-| Supplier CSV manifest remediation: byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles, scheduler-drained correction-link email delivery | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
-| Buyer remediation dashboard (manifest list, per-record case status, release and correction-link actions) | [frontend/src/app/remediation/page.tsx](frontend/src/app/remediation/page.tsx) |
+| Supplier CSV manifest remediation (implemented; excluded from the production router allowlist): byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles, scheduler-drained correction-link email delivery | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
+| Buyer remediation dashboard (requires the remediation API to be enabled; manifest list, per-record case status, release and correction-link actions) | [frontend/src/app/remediation/page.tsx](frontend/src/app/remediation/page.tsx) |
 | CTE persistence, hash-chain storage, and verification (legacy and canonical stores; dual-write retirement mid-cutover) | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py), [services/shared/canonical_persistence/writer.py](services/shared/canonical_persistence/writer.py), [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md) |
 | Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
-| FDA export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
+| FDA-oriented CSV and evidence-bundle export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
+| Request-response cases, scoped evidence package assembly, and auditor workflows | [services/ingestion/app/request_workflow_router.py](services/ingestion/app/request_workflow_router.py), [services/ingestion/app/auditor_router.py](services/ingestion/app/auditor_router.py) |
+| Recall readiness assessments, gap checklists, and recall reports | [services/ingestion/app/readiness_router.py](services/ingestion/app/readiness_router.py), [services/ingestion/app/recall_report.py](services/ingestion/app/recall_report.py) |
+| Public synthetic recall drill and independently verifiable sample bundles | [services/ingestion/app/proof_recall_router.py](services/ingestion/app/proof_recall_router.py), [frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py) |
+| EPCIS JSON-LD export and broader recall simulations (experimental routers; excluded from the production allowlist) | [services/ingestion/app/epcis_export.py](services/ingestion/app/epcis_export.py), [services/ingestion/app/recall_simulations.py](services/ingestion/app/recall_simulations.py) |
+| Subscription-gated access and persisted usage metering; Stripe usage reporting requires an operator call | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py), [DESIGN_metering-billing.md](DESIGN_metering-billing.md) |
 | Tenant/admin/user/API-key management | [services/admin/app/](services/admin/app/) |
 | Persisted admin tenant provisioning | [services/admin/app/routes.py](services/admin/app/routes.py) |
 | Tamper-evident admin audit log hashing | [services/admin/app/audit.py](services/admin/app/audit.py) |
@@ -69,7 +79,7 @@ ingest source record
   -> expose compliance/audit/export views
 ```
 
-The strongest tested path is Inflow Workbench preflight plus persisted CTE data plus compliance/export support. Event persistence is mid-migration from a legacy CTE store to a canonical hash-chain store: some write paths still write both stores, newer paths write canonical-only, and the remaining legacy read paths (FDA CSV export v1, legacy chain verification) are cut over to canonical behind per-consumer flags that default off **in code but are ON in production and soaking** (see [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)). Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
+The diagram describes the Workbench workflow. Direct webhook, CSV, EPCIS, and EDI intake has route-specific validation and persistence; it does not universally pass through Workbench. Event persistence is mid-migration from a legacy CTE store to a canonical hash-chain store: some write paths still write both stores, newer paths write canonical-only, and read paths have consumer-specific cutover flags. Chain verification defaults to canonical reads; FDA CSV export v1 retains a legacy code default. Historical rollout observations are recorded in the cutover runbook; current deployment flags must be read back separately (see [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)). Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
 
 ## Architecture
 
@@ -116,7 +126,7 @@ Schema-related CI guards include:
 - [scripts/check_tenant_id_uuid_only.py](scripts/check_tenant_id_uuid_only.py)
 - [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py)
 - ORM drift gate: `alembic check` runs in backend CI against an Alembic-head database. [alembic/env.py](alembic/env.py) registers all four declarative Bases (admin, agent-operator, api-key store, scheduler state) so every ORM model is compared for structural drift; raw-SQL-managed tables with no ORM model are exempt by design.
-- Schema parity contract: [scripts/schema_parity_audit.py](scripts/schema_parity_audit.py) compares the migrated schema against the checked-in contract [docs/schema/expected_schema.json](docs/schema/expected_schema.json) — every table, including raw-SQL FSMA tables the ORM gate cannot see. A migration that changes the schema must regenerate the snapshot in the same PR or CI fails. **As of v121, this snapshot has not yet been regenerated for the new `billing` schema** — `scripts/schema_parity_audit.py` sweeps every non-system schema, so this gate is expected to fail against a freshly migrated database until the snapshot is regenerated.
+- Schema parity contract: [scripts/schema_parity_audit.py](scripts/schema_parity_audit.py) compares the migrated schema against the checked-in contract [docs/schema/expected_schema.json](docs/schema/expected_schema.json) — every table, including raw-SQL FSMA tables the ORM gate cannot see. A migration that changes the schema must regenerate the snapshot in the same PR or CI fails. The checked-in snapshot includes `billing.tenant_usage_counters` and `billing.tenant_usage_event_ledger`; schema parity is distinct from the RLS test coverage described below.
 - RLS regression gate scope: [tests/migrations/test_rls_coverage.py](tests/migrations/test_rls_coverage.py) only sweeps the `fsma` schema plus a curated `public` allowlist. Tables in other schemas — including the new `billing.tenant_usage_event_ledger` / `billing.tenant_usage_counters` (v121) — are not examined by this gate. The v121 migration enables and `FORCE`s RLS with a real `get_tenant_context()` predicate on both tables (code-reviewed), but that posture is not CI-locked the way `fsma.*` tables are, and there is no dedicated `tests/migrations/test_v121_*.py` migration test (unlike v111/v120).
 - Seeded mid-chain migration rehearsal: [tests/migrations/test_seeded_mid_chain_upgrade.py](tests/migrations/test_seeded_mid_chain_upgrade.py) upgrades to v089, seeds representative rows (including audit rows that arm the append-only trigger), then upgrades to head. Runs as a two-leg CI matrix (app-roles-only and Supabase-like client roles). Added after a row-dependent backfill passed empty-database CI and then failed production deploys (#2588, #2589).
 
@@ -322,7 +332,7 @@ Verified deployment files:
 ## Python SDK
 
 - A Python client package lives at [regengine/](regengine/) (see [regengine/README.md](regengine/README.md)). It is not published to PyPI; install from source with `pip install -e ./regengine`.
-- Client surface: record lookup and query, forward/backward trace, event timeline, FDA CSV export, recall drills, readiness score ([regengine/client.py](regengine/client.py)). It cannot create records — records are written through the ingestion pipeline — and it has no per-category FTL lookup.
+- Hosted-route client surface: record lookup and query. Forward/backward trace, timeline, FDA export, recall-drill, and readiness methods require experimental graph routes and are unavailable under the production router allowlist; see `RegEngineClient.EXPERIMENTAL_METHODS` in [regengine/client.py](regengine/client.py). The client cannot create records and has no per-category FTL lookup.
 - The `regengine-verify` CLI ([regengine/verify_records.py](regengine/verify_records.py)) verifies record hashes online or offline. The separate public Merkle bundle verifier served at regengine.co/sdk/verify_chain.py is checked in at [frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py).
 
 ## Important Limitations
@@ -337,7 +347,7 @@ These are current repo facts, not speculation:
   `agent_artifact_reviews`) — see `server/main.py` startup. Extend that
   coverage deliberately if more ORM surfaces become part of the production
   contract; ORM surfaces outside these three Bases are not boot-checked.
-- CTE persistence is mid-retirement of a dual-write scheme (WS-1, #1335). `CanonicalEventStore` defaults to writing both the canonical hash-chain store (`fsma.traceability_events`) and the legacy store (`fsma.cte_events`); several newer ingest routes intentionally write canonical-only. Chain verification reads the canonical store **by default** since #3039 (code default flipped 2026-09-02; `CHAIN_VERIFY_READ_CANONICAL=0` is the emergency rollback — the canonical verifier recomputes event digests from row content, which the legacy verifier cannot). The FDA v1 recall export still reads the legacy store in code default only: per [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md), `FDA_EXPORT_V1_READ_CANONICAL=1` was "set on Railway 2026-07-17, both stores were empty at flip, parity-checked", status "🟨 flag ON in prod (2026-07-17); soaking, then default flip" — for that flag the remaining decision is flipping the **code default**, not the flag. Do not infer production read behavior from the code default — check the cutover doc. CI enforces dual-write parity and legacy-vs-canonical golden equivalence in [tests/invariants/](tests/invariants/); plan, read-path inventory, and never-do list live in the same doc.
+- CTE persistence is mid-retirement of a dual-write scheme (WS-1, #1335). `CanonicalEventStore` defaults to writing both the canonical hash-chain store (`fsma.traceability_events`) and the legacy store (`fsma.cte_events`); several newer ingest routes intentionally write canonical-only. Chain verification reads the canonical store **by default** since #3039 (code default flipped 2026-09-02; `CHAIN_VERIFY_READ_CANONICAL=0` is the emergency rollback — the canonical verifier recomputes event digests from row content, which the legacy verifier cannot). The FDA v1 recall export retains a legacy code default, with canonical reads controlled by `FDA_EXPORT_V1_READ_CANONICAL`. The [cutover runbook](docs/persistence/dual-write-cutover.md) records earlier production rollout observations; verify the current deployed flag separately before asserting live read behavior. CI enforces dual-write parity and legacy-vs-canonical golden equivalence in [tests/invariants/](tests/invariants/); plan, read-path inventory, and never-do list live in the same doc.
 - Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
 - Neo4j and Redpanda/Kafka-compatible code paths exist, but the default local dev compose file ([docker-compose.dev.yml](docker-compose.dev.yml)) starts only PostgreSQL and Redis — no Neo4j, no Kafka/Redpanda broker.
@@ -352,6 +362,10 @@ These are current repo facts, not speculation:
 - This repository does not prove broad production adoption, paid customer status, regulatory approval, or FDA certification.
 
 ## Documentation Map
+
+- [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) — canonical positioning and capability availability.
+- [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) — optional CSV suggestions, review policy, privacy defaults, and evaluation tools.
+- [frontend/README.md](frontend/README.md) — current UI surfaces and consolidated-backend development setup.
 
 - [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.
 - [DESIGN_metering-billing.md](DESIGN_metering-billing.md) — per-label metered billing: schema, the `persist_event`/`persist_events_batch` usage-counting hook, Stripe Billing Meters reporting, API surface, and documented deviations/follow-ups (see also the Data And Schema and Important Limitations sections above).
