@@ -52,6 +52,7 @@ function getIngestionTargets(): string[] {
 
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'ingestion',
+    responseHeaderPassthrough: ['content-type', 'content-disposition', 'cache-control', 'x-fda-record-count', 'x-export-hash'],
     resolveTargetBases: getIngestionTargets,
     isUnauthenticatedPath: (path: string) => {
         if (path.startsWith('api/v1/sandbox/')) return true;
@@ -77,6 +78,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
             'x-api-key',
             'x-regengine-api-key',
             'x-tenant-id',
+            'idempotency-key',
         ]);
 
         // Inject access token + tenant API key + tenant ID from cookies.

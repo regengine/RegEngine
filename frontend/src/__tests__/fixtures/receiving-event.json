@@ -1,0 +1,21 @@
+{
+  "cte_type": "receiving",
+  "traceability_lot_code": "observed-lot",
+  "product_description": "Lettuce",
+  "quantity": 2,
+  "unit_of_measure": "cases",
+  "timestamp": "2026-10-01T12:00:00Z",
+  "location_name": "Dock A",
+  "kdes": {
+    "gtin": "00614141000012",
+    "lot_code": "observed-lot",
+    "receive_date": "2026-10-01",
+    "receiving_location": "Dock A",
+    "immediate_previous_source": "Farm A",
+    "ship_from_location": "Farm A",
+    "reference_document": "PO-1",
+    "tlc_source_reference": "Farm A address",
+    "po_number": "PO-1",
+    "supplier_name": "Farm A"
+  }
+}

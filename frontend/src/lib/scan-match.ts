@@ -24,11 +24,18 @@ export interface ExpectedItemKeys {
 
 export function scanMatchesItem(item: ExpectedItemKeys, scan: ScanCandidate): boolean {
     const raw = scan.raw.trim();
-    const gtinMatch =
-        Boolean(item.gtin && scan.gtin && item.gtin === scan.gtin) ||
-        Boolean(item.gtin && raw && item.gtin === raw);
-    const lotMatch =
-        Boolean(item.lotCode && scan.lot && item.lotCode === scan.lot) ||
-        Boolean(item.lotCode && raw && item.lotCode === raw);
+    if (item.gtin && scan.gtin && item.gtin !== scan.gtin) return false;
+    if (item.lotCode && scan.lot && item.lotCode !== scan.lot) return false;
+    const hasExplicitIdentifier = Boolean(scan.gtin || scan.lot);
+    const gtinMatch = Boolean(item.gtin && scan.gtin && item.gtin === scan.gtin) ||
+        Boolean(!hasExplicitIdentifier && item.gtin && raw && item.gtin === raw);
+    const lotMatch = Boolean(item.lotCode && scan.lot && item.lotCode === scan.lot) ||
+        Boolean(!hasExplicitIdentifier && item.lotCode && raw && item.lotCode === raw);
     return gtinMatch || lotMatch;
+}
+
+/** A shared identifier is insufficient when multiple expected rows qualify. */
+export function findUniqueScanMatch<T extends ExpectedItemKeys>(items: T[], scan: ScanCandidate): T | undefined {
+    const matches = items.filter(item => scanMatchesItem(item, scan));
+    return matches.length === 1 ? matches[0] : undefined;
 }

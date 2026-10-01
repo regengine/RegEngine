@@ -28,7 +28,8 @@ import { useAuth } from '@/lib/auth-context';
 import { getServiceURL } from '@/lib/api-config';
 import { useToast } from '@/components/ui/use-toast';
 import { parseGS1 } from '@/lib/gs1-parser';
-import { scanMatchesItem } from '@/lib/scan-match';
+import { findUniqueScanMatch } from '@/lib/scan-match';
+import { receivingSubmission, interpretReceivingResults, type ReceivingSubmission } from '@/lib/receiving';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ─── Types ─── */
@@ -41,6 +42,10 @@ interface LineItem {
     expiryDate: string;
     status: 'pending' | 'scanned' | 'mismatch';
     scannedAt?: string;
+    observedGtin?: string;
+    observedLot?: string;
+    ingested?: boolean;
+    ingestError?: string;
 }
 
 interface ReceivingSession {
@@ -85,13 +90,29 @@ export default function ReceivingDockPage() {
     const [showAddExpected, setShowAddExpected] = useState(false);
     const [scanInput, setScanInput] = useState('');
     const [ingesting, setIngesting] = useState(false);
+    const [receivingLocation, setReceivingLocation] = useState('');
+    const [tlcSourceReference, setTlcSourceReference] = useState('');
+    const submissionRef = useRef<ReceivingSubmission | undefined>(undefined);
+    const operationRef = useRef(false);
+    const lookupRef = useRef(0);
+    const identityRef = useRef(tenantId);
+    const generationRef = useRef(0);
+    const authIdentityRef = useRef({ tenantId, isAuthenticated });
+    if (authIdentityRef.current.tenantId !== tenantId || authIdentityRef.current.isAuthenticated !== isAuthenticated) {
+        generationRef.current++;
+        lookupRef.current++;
+        authIdentityRef.current = { tenantId, isAuthenticated };
+    }
+    identityRef.current = tenantId;
+    useEffect(() => { setSession(null); submissionRef.current = undefined; operationRef.current = false; setIngesting(false); setManualProduct(''); }, [tenantId, isAuthenticated]);
     const scanInputRef = useRef<HTMLInputElement>(null);
 
     /* ─── Start session ─── */
     const startSession = useCallback(() => {
+        generationRef.current++;
         setSession({
-            supplier: supplier || 'Unknown Supplier',
-            poNumber: poNumber || `PO-${Date.now()}`,
+            supplier: supplier.trim(),
+            poNumber: poNumber.trim(),
             expectedItems: [],
             unexpectedScans: [],
             startedAt: new Date().toISOString(),
@@ -101,6 +122,7 @@ export default function ReceivingDockPage() {
     }, [supplier, poNumber, toast]);
 
     const startSampleSession = useCallback(() => {
+        generationRef.current++;
         const sampleSupplier = supplier || 'Valley Fresh Farms';
         const samplePo = poNumber || 'PO-2026-0042';
         setSupplier(sampleSupplier);
@@ -155,7 +177,8 @@ export default function ReceivingDockPage() {
     /* ─── Handle scan (keyboard wedge or manual) ─── */
     const handleScan = useCallback((raw: string) => {
         if (!session) return;
-        const parsed = parseGS1(raw);
+        const bareLot = session.expectedItems.some(item => item.lotCode === raw);
+        const parsed = bareLot ? { gtin: undefined, tlc: raw, expiryDate: undefined } : /^\d{8,14}$/.test(raw) ? { gtin: raw, tlc: undefined, expiryDate: undefined } : parseGS1(raw);
         const scannedGtin = parsed.gtin || '';
         const scannedLot = parsed.tlc || '';
         // The input invites typing a bare GTIN or lot code, but parseGS1 only
@@ -167,20 +190,16 @@ export default function ReceivingDockPage() {
         const scanCandidate = { gtin: parsed.gtin, lot: parsed.tlc, raw };
         const now = new Date().toISOString();
 
-        // Try to match against expected items
-        const updated = { ...session };
-        let matched = false;
-
-        for (const item of updated.expectedItems) {
-            if (item.status !== 'pending') continue;
-            if (scanMatchesItem(item, scanCandidate)) {
-                item.status = 'scanned';
-                item.scannedAt = now;
-                if (parsed.expiryDate) item.expiryDate = parsed.expiryDate;
-                matched = true;
-                toast({ title: '✓ Match', description: item.productName });
-                break;
-            }
+        const updated = { ...session, expectedItems: session.expectedItems.map(item => ({ ...item })), unexpectedScans: [...session.unexpectedScans] };
+        const matchedItem = findUniqueScanMatch(updated.expectedItems.filter(item => item.status === 'pending'), scanCandidate);
+        const matched = Boolean(matchedItem);
+        if (matchedItem) {
+            matchedItem.status = 'scanned';
+            matchedItem.scannedAt = now;
+            matchedItem.observedGtin = scannedGtin || (raw === matchedItem.gtin ? raw : '');
+            matchedItem.observedLot = scannedLot || (raw === matchedItem.lotCode ? raw : '');
+            if (parsed.expiryDate) matchedItem.expiryDate = parsed.expiryDate;
+            toast({ title: 'Identifier matched', description: matchedItem.productName });
         }
 
         if (!matched) {
@@ -188,7 +207,7 @@ export default function ReceivingDockPage() {
             updated.unexpectedScans.push({
                 id: `unx-${Date.now()}`,
                 gtin: scannedGtin,
-                lotCode: scannedLot || raw,
+                lotCode: scannedLot || (!scannedGtin && !/^\d{8,14}$/.test(raw) ? raw : ''),
                 productName: scannedGtin ? `GTIN ${scannedGtin}` : `Scan: ${raw.slice(0, 30)}`,
                 quantity: 1,
                 expiryDate: parsed.expiryDate || '',
@@ -206,9 +225,12 @@ export default function ReceivingDockPage() {
     /* ─── GTIN auto-fill from catalog ─── */
     const lookupGtin = useCallback(async (gtin: string) => {
         if (!isAuthenticated || !tenantId || gtin.length < 8) return;
+        const lookup = ++lookupRef.current;
+        const lookupTenant = tenantId;
+        const lookupGeneration = generationRef.current;
         try {
             const res = await fetchWithCsrf(
-                `${getServiceURL('ingestion')}/api/v1/products/${tenantId}/lookup?gtin=${gtin}`,
+                `${getServiceURL('ingestion')}/api/v1/products/${tenantId}/lookup?gtin=${encodeURIComponent(gtin)}`,
                 {
                     credentials: 'include',
                     signal: AbortSignal.timeout(8000),
@@ -216,7 +238,7 @@ export default function ReceivingDockPage() {
             );
             if (!res.ok) return;
             const data = await res.json();
-            if (data.found && data.product) {
+            if (lookupGeneration === generationRef.current && lookup === lookupRef.current && identityRef.current === lookupTenant && data.found && data.product) {
                 setManualProduct(data.product.name || data.product.description || '');
             }
         } catch { /* best-effort */ }
@@ -224,12 +246,15 @@ export default function ReceivingDockPage() {
 
     /* ─── Confirm & Ingest all scanned items ─── */
     const confirmAll = useCallback(async () => {
-        if (!session || !isAuthenticated || !tenantId) return;
+        if (!session || !isAuthenticated || !tenantId || operationRef.current) return;
+        operationRef.current = true;
+        const operationTenant = tenantId;
+        const operationGeneration = generationRef.current;
         setIngesting(true);
         try {
             const allItems = [
-                ...session.expectedItems.filter(i => i.status === 'scanned'),
-                ...session.unexpectedScans,
+                ...session.expectedItems.filter(i => i.status === 'scanned' && !i.ingested).map(i => ({ ...i, gtin: i.observedGtin || '', lotCode: i.observedLot || '' })),
+                ...session.unexpectedScans.filter(i => !i.ingested),
             ];
             if (allItems.length === 0) {
                 toast({ title: 'Nothing to ingest', description: 'Scan items first.' });
@@ -237,34 +262,19 @@ export default function ReceivingDockPage() {
                 return;
             }
 
-            const events = allItems.map(item => ({
-                cte_type: 'receiving',
-                traceability_lot_code: item.lotCode || item.gtin || `RCV-${Date.now()}`,
-                product_description: item.productName,
-                quantity: item.quantity,
-                unit_of_measure: 'cases',
-                timestamp: item.scannedAt || new Date().toISOString(),
-                location_name: `Receiving Dock — ${session.supplier}`,
-                kdes: {
-                    gtin: item.gtin || undefined,
-                    lot_code: item.lotCode || undefined,
-                    expiry_date: item.expiryDate || undefined,
-                    po_number: session.poNumber,
-                    supplier_name: session.supplier,
-                },
-            }));
+            const submission = receivingSubmission(tenantId, allItems, {
+                supplier: session.supplier, poNumber: session.poNumber, receivingLocation, tlcSourceReference,
+            }, submissionRef.current);
+            submissionRef.current = submission;
 
             const res = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Idempotency-Key': submission.key,
                 },
-                body: JSON.stringify({
-                    source: 'receiving_dock',
-                    tenant_id: tenantId,
-                    events,
-                }),
+                body: submission.body,
             });
 
             if (!res.ok) {
@@ -285,22 +295,31 @@ export default function ReceivingDockPage() {
                 throw new Error(detail || `The ingestion service returned status ${res.status}.`);
             }
             const data = await res.json();
-            setSession({ ...session, status: 'completed' });
-            notifyDashboardRefresh();
-            toast({
-                title: 'Receiving Complete',
-                description: `${data.accepted} items ingested into trace pipeline`,
-            });
+            if (generationRef.current !== operationGeneration || identityRef.current !== operationTenant) return;
+            const outcome = interpretReceivingResults(allItems, data);
+            const updateItem = (item: LineItem) => ({ ...item, ingested: item.ingested || outcome.acceptedIds.includes(item.id), ingestError: outcome.errors[item.id] });
+            const expectedItems = session.expectedItems.map(updateItem);
+            const unexpectedScans = session.unexpectedScans.map(updateItem);
+            const complete = outcome.acceptedIds.length === allItems.length && !expectedItems.some(item => item.status === 'pending');
+            setSession({ ...session, expectedItems, unexpectedScans, status: complete ? 'completed' : 'active' });
+            if (outcome.acceptedIds.length) notifyDashboardRefresh();
+            toast({ title: complete ? 'Receiving Complete' : 'Receiving needs review',
+                description: `${outcome.acceptedIds.length} items persisted; ${Object.keys(outcome.errors).length} items require review.`,
+                variant: Object.keys(outcome.errors).length ? 'destructive' : 'default' });
         } catch (err) {
+            if (generationRef.current !== operationGeneration || identityRef.current !== operationTenant) return;
             toast({
                 title: 'Ingest Failed',
                 description: err instanceof Error ? err.message : String(err),
                 variant: 'destructive',
             });
         } finally {
-            setIngesting(false);
+            if (generationRef.current === operationGeneration) {
+                operationRef.current = false;
+                setIngesting(false);
+            }
         }
-    }, [session, isAuthenticated, tenantId, toast]);
+    }, [session, isAuthenticated, tenantId, toast, receivingLocation, tlcSourceReference]);
 
     /* ─── Stats ─── */
     const stats = session ? {
@@ -370,6 +389,7 @@ export default function ReceivingDockPage() {
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <Button
                                     onClick={startSession}
+                                    disabled={!supplier.trim() || !poNumber.trim()}
                                     size="lg"
                                     className="w-full sm:w-auto"
                                     leadingIcon={<Truck strokeWidth={1.75} aria-hidden="true" />}
@@ -409,6 +429,10 @@ export default function ReceivingDockPage() {
                             </CardContent>
                         </Card>
 
+                        <Card><CardContent className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Receiving location" htmlFor="receiving-location"><Input id="receiving-location" value={receivingLocation} onChange={e => setReceivingLocation(e.target.value)} disabled={ingesting} /></Field>
+                            <Field label="TLC source reference" htmlFor="receiving-tlc-source"><Input id="receiving-tlc-source" value={tlcSourceReference} onChange={e => setTlcSourceReference(e.target.value)} disabled={ingesting} placeholder="Source location address or reference" /></Field>
+                        </CardContent></Card>
                         {/* Scan input — keyboard wedge or manual */}
                         <Card>
                             <CardContent>
@@ -423,6 +447,7 @@ export default function ReceivingDockPage() {
                                     <Input
                                         id="receiving-scan-input"
                                         ref={scanInputRef}
+                                        disabled={ingesting}
                                         type="text"
                                         mono
                                         value={scanInput}
@@ -434,7 +459,7 @@ export default function ReceivingDockPage() {
                                     />
                                     <Button
                                         onClick={() => { if (scanInput.trim()) handleScan(scanInput.trim()); }}
-                                        disabled={!scanInput.trim()}
+                                        disabled={ingesting || !scanInput.trim()}
                                         className="shrink-0"
                                     >
                                         Scan
@@ -472,7 +497,7 @@ export default function ReceivingDockPage() {
                                                     mono
                                                     placeholder="Barcode / GTIN"
                                                     value={manualGtin}
-                                                    onChange={e => { setManualGtin(e.target.value); if (e.target.value.length >= 8) lookupGtin(e.target.value); }}
+                                                    onChange={e => { lookupRef.current++; setManualGtin(e.target.value); if (e.target.value.length >= 8) lookupGtin(e.target.value); }}
                                                 />
                                             </div>
                                             <div className="min-w-0">
@@ -494,7 +519,7 @@ export default function ReceivingDockPage() {
                                                     type="text"
                                                     placeholder="Product name"
                                                     value={manualProduct}
-                                                    onChange={e => setManualProduct(e.target.value)}
+                                                    onChange={e => { lookupRef.current++; setManualProduct(e.target.value); }}
                                                 />
                                             </div>
                                             <div className="min-w-0">
@@ -512,7 +537,7 @@ export default function ReceivingDockPage() {
                                         <Button
                                             size="sm"
                                             onClick={addExpectedItem}
-                                            disabled={!manualGtin && !manualLot}
+                                            disabled={ingesting || (!manualGtin && !manualLot)}
                                             leadingIcon={<Check strokeWidth={1.75} aria-hidden="true" />}
                                         >
                                             Add to Expected
@@ -565,9 +590,11 @@ export default function ReceivingDockPage() {
                                                         {item.gtin && item.lotCode && ' · '}
                                                         {item.lotCode && `Lot: ${item.lotCode}`}
                                                     </div>
+                                                    {item.status === 'scanned' && !item.ingested && <Field label="Observed lot code" htmlFor={`observed-${item.id}`}><Input id={`observed-${item.id}`} value={item.observedLot || ''} disabled={ingesting} onChange={e => setSession({ ...session, expectedItems: session.expectedItems.map(row => row.id === item.id ? { ...row, observedLot: e.target.value } : row) })} /></Field>}
+                                                    {item.ingestError && <p role="alert" className="text-small">{item.ingestError}</p>}
                                                 </div>
                                                 {item.status === 'scanned' ? (
-                                                    <StatusBadge state="compliant" label="Verified" size="sm" className="shrink-0" />
+                                                    <StatusBadge state="compliant" label={item.ingested ? "Persisted" : "Identifier matched"} size="sm" className="shrink-0" />
                                                 ) : (
                                                     <Badge size="sm" className="shrink-0">{`×${item.quantity}`}</Badge>
                                                 )}
@@ -601,7 +628,7 @@ export default function ReceivingDockPage() {
                                                         {item.expiryDate && ` · Exp: ${item.expiryDate}`}
                                                     </div>
                                                 </div>
-                                                <StatusBadge state="at-risk" label="Not Expected" size="sm" className="shrink-0" />
+                                                {item.ingested ? <Badge>Persisted</Badge> : <div><Field label="Observed lot code" htmlFor={`observed-${item.id}`}><Input id={`observed-${item.id}`} value={item.lotCode} disabled={ingesting} onChange={e => setSession({ ...session, unexpectedScans: session.unexpectedScans.map(row => row.id === item.id ? { ...row, lotCode: e.target.value } : row) })} /></Field>{item.ingestError && <p role="alert">{item.ingestError}</p>}</div>}
                                             </li>
                                         ))}
                                     </ul>
@@ -613,13 +640,13 @@ export default function ReceivingDockPage() {
                         <div className="flex gap-3">
                             <Button
                                 onClick={confirmAll}
-                                disabled={ingesting || (stats?.scanned === 0 && session.unexpectedScans.length === 0)}
+                                disabled={ingesting || ![...session.expectedItems.filter(item => item.status === 'scanned'), ...session.unexpectedScans].some(item => !item.ingested)}
                                 className="flex-1"
                                 size="lg"
                                 loading={ingesting}
                                 leadingIcon={ingesting ? undefined : <CheckCircle2 strokeWidth={1.75} aria-hidden="true" />}
                             >
-                                {ingesting ? 'Ingesting...' : <>Confirm &amp; Ingest All ({(stats?.scanned || 0) + session.unexpectedScans.length} items)</>}
+                                {ingesting ? 'Ingesting...' : <>Confirm &amp; Ingest All ({[...session.expectedItems.filter(item => item.status === 'scanned'), ...session.unexpectedScans].filter(item => !item.ingested).length} items)</>}
                             </Button>
                         </div>
                     </>
@@ -628,8 +655,8 @@ export default function ReceivingDockPage() {
                 {/* ─── Completed Session ─── */}
                 {session && session.status === 'completed' && (() => {
                     const allItems = [
-                        ...session.expectedItems.filter(i => i.status === 'scanned'),
-                        ...session.unexpectedScans,
+                        ...session.expectedItems.filter(i => i.ingested).map(i => ({ ...i, gtin: i.observedGtin || '', lotCode: i.observedLot || '' })),
+                        ...session.unexpectedScans.filter(i => i.ingested),
                     ];
                     const ts = new Date().toLocaleString();
                     return (
@@ -647,7 +674,7 @@ export default function ReceivingDockPage() {
                                 {/* Summary stats */}
                                 <div className="grid grid-cols-3 gap-3">
                                     <StatTile label="Items Ingested" value={allItems.length} />
-                                    <StatTile label="Expected Verified" value={session.expectedItems.filter(i => i.status === 'scanned').length} />
+                                    <StatTile label="Expected Persisted" value={session.expectedItems.filter(i => i.status === 'scanned').length} />
                                     <StatTile label="Unexpected Added" value={session.unexpectedScans.length} />
                                 </div>
 
@@ -676,7 +703,7 @@ export default function ReceivingDockPage() {
                                     </Button>
                                     <Button
                                         size="lg"
-                                        onClick={() => { setSession(null); setSupplier(''); setPoNumber(''); }}
+                                        onClick={() => { generationRef.current++; setSession(null); setSupplier(''); setPoNumber(''); }}
                                         leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
                                     >
                                         New Session

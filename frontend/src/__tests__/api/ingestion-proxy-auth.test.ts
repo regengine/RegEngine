@@ -116,6 +116,24 @@ describe('ingestion BFF credential boundary', () => {
         expect(headers.get('x-regengine-api-key')).toBeNull();
     });
 
+    it('forwards a submission idempotency key unchanged', async () => {
+        await POST!(makeRequest({ method: 'POST', path: ['api', 'v1', 'webhooks', 'ingest'], headers: { authorization: 'Bearer test-token', 'idempotency-key': 'receiving-submission-1' } }), { params: Promise.resolve({ path: ['api', 'v1', 'webhooks', 'ingest'] }) });
+        const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+        expect(headers.get('idempotency-key')).toBe('receiving-submission-1');
+    });
+
+    it('preserves binary export bytes, filename and durable export hash', async () => {
+        const bytes = new Uint8Array([80, 75, 3, 4, 0, 255]);
+        fetchMock.mockResolvedValueOnce(new Response(bytes, { status: 200, headers: { 'content-type': 'application/zip', 'content-disposition': 'attachment; filename="recall.zip"', 'x-export-hash': 'synthetic-export-sha256', 'x-fda-record-count': '3' } }));
+        const path = ['api', 'v1', 'fsma', 'fda', 'export'];
+        const response = await GET!(makeRequest({ path, headers: { authorization: 'Bearer test-token' } }), { params: Promise.resolve({ path }) });
+        expect(response.headers.get('x-export-hash')).toBe('synthetic-export-sha256');
+        expect(response.headers.get('content-disposition')).toBe('attachment; filename="recall.zip"');
+        expect(response.headers.get('content-type')).toBe('application/zip');
+        expect(response.headers.get('x-fda-record-count')).toBe('3');
+        expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+    });
+
     describe('opaque session on non-readiness routes', () => {
         it('rejects an arbitrary opaque cookie at /auth/me without contacting ingestion', async () => {
             const response = await GET!(

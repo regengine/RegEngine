@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseGS1 } from './gs1-parser';
-import { scanMatchesItem, type ScanCandidate } from './scan-match';
+import { scanMatchesItem, findUniqueScanMatch, type ScanCandidate } from './scan-match';
 
 const ITEM = { gtin: '00614141000012', lotCode: 'TLC-ROM-20260426-001' };
 
 function candidate(raw: string): ScanCandidate {
+    // Bare numeric GTIN classification happens before the permissive GS1 parser.
+    if (/^\d{8,14}$/.test(raw.trim())) return { raw, gtin: raw.trim() };
     const parsed = parseGS1(raw);
     return { gtin: parsed.gtin, lot: parsed.tlc, raw };
 }
@@ -43,4 +45,17 @@ describe('scanMatchesItem', () => {
     it('never matches on an empty raw string', () => {
         expect(scanMatchesItem(ITEM, { raw: '   ' })).toBe(false);
     });
+});
+
+describe('contradictory observations', () => {
+ it('rejects matching GTIN with a different observed lot', () => expect(scanMatchesItem(ITEM, { raw: 'encoded', gtin: ITEM.gtin, lot: 'OTHER' })).toBe(false));
+ it('rejects matching lot with a different observed GTIN', () => expect(scanMatchesItem(ITEM, { raw: 'encoded', gtin: '99999999999999', lot: ITEM.lotCode })).toBe(false));
+});
+
+it('does not auto-select ambiguous shared GTIN rows', () => expect(findUniqueScanMatch([ITEM, { ...ITEM, lotCode: 'OTHER' }], candidate(ITEM.gtin))).toBeUndefined());
+
+it('respects an explicitly classified numeric lot with a different GTIN', () => {
+ const scan = { raw: '12345678', lot: '12345678' };
+ expect(scanMatchesItem({ gtin: ITEM.gtin, lotCode: '12345678' }, scan)).toBe(true);
+ expect(scanMatchesItem({ gtin: '12345678', lotCode: 'OTHER' }, scan)).toBe(false);
 });
