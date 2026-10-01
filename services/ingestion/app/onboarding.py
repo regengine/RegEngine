@@ -35,7 +35,7 @@ def _seed_obligations_if_needed(tenant_id: str):
 
         db = SessionLocal()
         try:
-            db.execute(text("SELECT seed_obligations_for_tenant(:tid::uuid)"), {"tid": tenant_id})
+            db.execute(text("SELECT seed_obligations_for_tenant(CAST(:tid AS uuid))"), {"tid": tenant_id})
             db.commit()
             logger.info("obligations_seeded tenant_id=%s", tenant_id)
         finally:

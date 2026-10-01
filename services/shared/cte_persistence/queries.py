@@ -58,13 +58,14 @@ def _is_missing_table_error(exc: DatabaseError) -> bool:
     """True only for "relation/table does not exist" — the documented
     fresh-DB bootstrap case.
 
-    Postgres: UndefinedTable, pgcode ``42P01`` (a ``ProgrammingError``).
+    Postgres: UndefinedTable, SQLSTATE ``42P01`` (a ``ProgrammingError``).
+    psycopg 3 exposes it as ``.sqlstate``; psycopg2 exposed ``.pgcode``.
     SQLite: "no such table" (an ``OperationalError``). Anything else —
     transient connectivity loss, permission/privilege errors, undefined
     columns — is NOT a bootstrap condition and must fail closed.
     """
     orig = getattr(exc, "orig", None)
-    if getattr(orig, "pgcode", None) == "42P01":
+    if (getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)) == "42P01":
         return True
     msg = str(orig if orig is not None else exc).lower()
     if "no such table" in msg:
