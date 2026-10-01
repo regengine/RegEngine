@@ -112,13 +112,14 @@ class AmendRequest(BaseModel):
     description="Returns request cases with countdown timer info, ordered by deadline urgency.",
 )
 async def list_requests(
+    include_submitted: bool = Query(False),
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    cases = svc.get_active_cases(tid)
+    cases = svc.get_active_cases(tid, include_submitted=True) if include_submitted else svc.get_active_cases(tid)
     return {"tenant_id": tid, "cases": cases, "total": len(cases)}
 
 
@@ -192,11 +193,10 @@ async def get_request(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    cases = svc.get_active_cases(tid)
-    for c in cases:
-        if c.get("request_case_id") == request_case_id:
-            return c
-    raise HTTPException(status_code=404, detail="Request case not found")
+    try:
+        return svc.get_case_detail(tid, request_case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Request case not found") from exc
 
 
 @router.patch(
@@ -302,13 +302,16 @@ async def add_signoff(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    svc.add_signoff(
-        tenant_id=tid,
-        request_case_id=request_case_id,
-        signoff_type=body.signoff_type,
-        signed_by=body.signed_by,
-        notes=body.notes,
-    )
+    try:
+        svc.add_signoff(
+            tenant_id=tid,
+            request_case_id=request_case_id,
+            signoff_type=body.signoff_type,
+            signed_by=body.signed_by,
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"request_case_id": request_case_id, "signoff_type": body.signoff_type, "status": "signed"}
 
 

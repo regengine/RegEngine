@@ -355,6 +355,14 @@ class AssemblyMixin:
             raise ValueError(f"Invalid signoff_type: {signoff_type}. Must be one of {VALID_SIGNOFF_TYPES}.")
 
         case = self._get_case(tenant_id, request_case_id)
+        allowed = {
+            "scope_approval": {"gap_analysis", "exception_triage", "assembling", "internal_review", "ready"},
+            "package_review": {"assembling", "internal_review"},
+            "final_approval": {"internal_review", "ready"},
+            "submission_authorization": {"ready"},
+        }
+        if case["package_status"] not in allowed[signoff_type]:
+            raise ValueError(f"Cannot record {signoff_type} from {case['package_status']}; reload the case.")
 
         signoff_id = str(uuid4())
         now = datetime.now(timezone.utc)
@@ -383,7 +391,7 @@ class AssemblyMixin:
 
         # Advance status based on signoff type
         status_transitions = {
-            "scope_approval": "exception_triage",
+            "scope_approval": "exception_triage" if case["package_status"] == "gap_analysis" else case["package_status"],
             "package_review": "internal_review",
             "final_approval": "ready",
             "submission_authorization": "ready",
@@ -395,6 +403,7 @@ class AssemblyMixin:
             "now": now,
             "case_id": request_case_id,
             "tenant_id": tenant_id,
+            "previous_status": case["package_status"],
         }
 
         if new_status:
@@ -408,15 +417,19 @@ class AssemblyMixin:
             update_fields.append("final_approver = :approver")
             update_params["approver"] = signed_by
 
-        self.db.execute(
+        updated = self.db.execute(
             text(f"""
                 UPDATE fsma.request_cases
                 SET {", ".join(update_fields)}
                 WHERE request_case_id = :case_id
                   AND tenant_id = :tenant_id
+                  AND package_status = :previous_status
             """),
             update_params,
         )
+        if updated.rowcount == 0:
+            self.db.rollback()
+            raise ValueError("Cannot record signoff: case changed; reload and review the current state.")
         self._safe_commit()
 
         logger.info(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from sqlalchemy import text
@@ -14,6 +15,20 @@ logger = logging.getLogger("request-workflow")
 
 class QueryMixin:
     """Methods for querying request cases and package history."""
+
+    def get_case_detail(self, tenant_id: str, request_case_id: str) -> Dict[str, Any]:
+        case = self._get_case(tenant_id, request_case_id)
+        result = self.db.execute(text("""
+            SELECT signoff_type, signed_by, signed_at, notes
+            FROM fsma.request_signoffs
+            WHERE request_case_id = :case_id AND tenant_id = :tenant_id
+            ORDER BY signed_at ASC
+        """), {"case_id": request_case_id, "tenant_id": tenant_id})
+        if case.get("response_due_at") and case["package_status"] not in {"submitted", "amended"}:
+            hours = (case["response_due_at"] - datetime.now(timezone.utc)).total_seconds() / 3600
+            case.update(hours_remaining=round(hours, 2), is_overdue=hours < 0, countdown_display=format_countdown(hours))
+        case["signoffs"] = [row_to_dict(row) for row in result.mappings().fetchall()]
+        return case
 
     def get_active_cases(
         self,

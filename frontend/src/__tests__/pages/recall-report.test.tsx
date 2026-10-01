@@ -242,11 +242,13 @@ describe('RecallReportPage', () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
 
     const exportButton = await screen.findByRole('button', { name: /generate fda 24-hour response/i });
+    await user.type(screen.getByLabelText('Export start date'), '2026-09-01');
+    await user.type(screen.getByLabelText('Export end date'), '2026-10-01');
     await user.click(exportButton);
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/ingestion/api/v1/fda/export/all?tenant_id=tenant-123&format=csv',
+        '/api/ingestion/api/v1/fda/export/all?start_date=2026-09-01&end_date=2026-10-01&format=csv&tenant_id=tenant-123',
         expect.objectContaining({ credentials: 'include' }),
       );
     });

@@ -126,17 +126,14 @@ def test_create_request(client, mock_svc):
 
 
 def test_get_request_found(client, mock_svc):
-    mock_svc.get_active_cases.return_value = [
-        {"request_case_id": "rc-1", "status": "intake"},
-        {"request_case_id": "rc-2", "status": "collecting"},
-    ]
+    mock_svc.get_case_detail.return_value = {"request_case_id": "rc-2", "status": "collecting"}
     resp = client.get("/api/v1/requests/rc-2")
     assert resp.status_code == 200
     assert resp.json()["request_case_id"] == "rc-2"
 
 
 def test_get_request_not_found(client, mock_svc):
-    mock_svc.get_active_cases.return_value = []
+    mock_svc.get_case_detail.side_effect = ValueError("Not found")
     resp = client.get("/api/v1/requests/rc-missing")
     assert resp.status_code == 404
 
@@ -437,3 +434,26 @@ def test_submit_with_explicit_package_id_skips_lookup(mock_svc):
     kw = mock_svc.submit_package.call_args.kwargs
     assert kw["package_id"] == "pkg-pinned"
     fake_db.execute.assert_not_called()
+
+
+def test_list_includes_retained_cases_when_requested(client, mock_svc):
+    mock_svc.get_active_cases.return_value = [{'request_case_id': 'done', 'package_status': 'amended'}]
+    response = client.get('/api/v1/requests?include_submitted=true')
+    assert response.status_code == 200
+    assert response.json()['cases'][0]['package_status'] == 'amended'
+    mock_svc.get_active_cases.assert_called_once_with(TENANT, include_submitted=True)
+
+
+def test_completed_case_detail_uses_tenant_scoped_id_lookup(client, mock_svc):
+    mock_svc.get_case_detail.return_value = {'request_case_id': 'done', 'package_status': 'submitted', 'signoffs': []}
+    response = client.get('/api/v1/requests/done')
+    assert response.status_code == 200
+    assert response.json()['package_status'] == 'submitted'
+    mock_svc.get_case_detail.assert_called_once_with(TENANT, 'done')
+    mock_svc.get_active_cases.assert_not_called()
+
+
+def test_stale_signoff_is_recoverable_conflict(client, mock_svc):
+    mock_svc.add_signoff.side_effect = ValueError('Cannot sign off changed case')
+    response = client.post('/api/v1/requests/rc-1/signoff', json={'signoff_type': 'final_approval', 'signed_by': 'reviewer'})
+    assert response.status_code == 409

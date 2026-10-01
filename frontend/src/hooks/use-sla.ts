@@ -64,12 +64,24 @@ const POLL_FAST = 10_000;  // 10 seconds for active requests
 const POLL_SLOW = 30_000;  // 30 seconds for alerts
 
 /** List all SLA requests for the current tenant. Polls every 10s. */
-export function useSLARequests() {
+export interface SLARequestsEnvelope { tenant_id: string; total: number; skip: number; limit: number; requests: FDARequestData[] }
+export interface SLAAlertsEnvelope { tenant_id: string; total: number; skip: number; limit: number; alerts: SLAAlertData[] }
+export function decodeSLARequests(value: unknown): SLARequestsEnvelope {
+  const data = value as SLARequestsEnvelope;
+  if (!data || !Array.isArray(data.requests) || !Number.isInteger(data.total) || data.total < 0 || !Number.isInteger(data.skip) || data.skip < 0 || !Number.isInteger(data.limit) || data.limit < 1 || data.requests.some(row => !row || typeof row.id !== 'string' || !['open', 'in_progress', 'completed', 'overdue'].includes(row.status) || !Array.isArray(row.export_ids) || !Number.isFinite(Date.parse(row.requested_at)) || !Number.isFinite(Date.parse(row.deadline_at)))) throw new Error('Invalid SLA requests response. Retry loading requests.');
+  return data;
+}
+export function decodeSLAAlerts(value: unknown): SLAAlertsEnvelope {
+  const data = value as SLAAlertsEnvelope;
+  if (!data || !Array.isArray(data.alerts) || data.alerts.some(row => !row || typeof row.id !== 'string' || typeof row.message !== 'string')) throw new Error('Invalid SLA alerts response.');
+  return data;
+}
+export function useSLARequests(skip = 0) {
   const { tenantId } = useTenant();
-  return useApiQuery<FDARequestData[]>(
-    ['sla-requests', tenantId],
-    `/api/v1/sla/requests/${tenantId}`,
-    { service: 'ingestion', refetchInterval: POLL_FAST, enabled: !!tenantId },
+  return useApiQuery<SLARequestsEnvelope>(
+    ['sla-requests', tenantId, skip],
+    `/api/v1/sla/requests/${tenantId}?skip=${skip}&limit=50`,
+    { service: 'ingestion', refetchInterval: POLL_FAST, enabled: !!tenantId, select: decodeSLARequests },
   );
 }
 
@@ -84,12 +96,12 @@ export function useSLADashboard() {
 }
 
 /** Active SLA alerts. Polls every 30s. */
-export function useSLAAlerts() {
+export function useSLAAlerts(skip = 0) {
   const { tenantId } = useTenant();
-  return useApiQuery<SLAAlertData[]>(
-    ['sla-alerts', tenantId],
-    `/api/v1/sla/alerts/${tenantId}`,
-    { service: 'ingestion', refetchInterval: POLL_SLOW, enabled: !!tenantId },
+  return useApiQuery<SLAAlertsEnvelope>(
+    ['sla-alerts', tenantId, skip],
+    `/api/v1/sla/alerts/${tenantId}?skip=${skip}&limit=50`,
+    { service: 'ingestion', refetchInterval: POLL_SLOW, enabled: !!tenantId, select: decodeSLAAlerts },
   );
 }
 
@@ -106,8 +118,9 @@ export function useCreateSLARequest() {
 }
 
 /** Mark a request as completed. */
+export interface CompletionEvidence { export_hash: string; start_date: string; end_date: string; completion_notes: string; acknowledged: boolean }
 export function useCompleteSLARequest(requestId: string) {
-  return useApiMutate<FDARequestData, Record<string, never>>(
+  return useApiMutate<{ status: string; request: FDARequestData; met_sla: boolean }, CompletionEvidence>(
     `/api/v1/sla/requests/${requestId}/complete`,
     {
       service: 'ingestion',

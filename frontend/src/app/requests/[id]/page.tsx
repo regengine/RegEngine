@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -16,12 +17,13 @@ import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
 import {
-  useRequestCases,
+  useRequestCase,
+  useRequestSignoff,
+  type SignoffType,
   usePackageHistory,
   useAssemblePackage,
   useSubmitPackage,
-  type RequestCase,
-} from '@/hooks/use-control-plane';
+} from '@/hooks/use-request-workflow';
 
 import {
   ArrowLeft,
@@ -81,14 +83,22 @@ export default function RequestCaseDetailPage() {
   const tid = tenantId || '';
   const actor = user?.email || user?.id || 'unknown';
 
-  const requests = useRequestCases(tid);
+  const requests = useRequestCase(tid, requestCaseId);
+  const signoff = useRequestSignoff(tid);
+  const [notes, setNotes] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
   const packages = usePackageHistory(tid, requestCaseId);
   const assemblePackage = useAssemblePackage(tid);
   const submitPackage = useSubmitPackage(tid);
 
-  const requestCase = requests.data?.cases?.find(
-    (c: RequestCase) => c.request_case_id === requestCaseId
-  );
+  const requestCase = requests.data;
+  const recordSignoff = (type: SignoffType) => {
+    setActionError(null);
+    signoff.mutate({ requestCaseId, signoff_type: type, signed_by: actor, notes: notes.trim() }, {
+      onSuccess: () => setNotes(''),
+      onError: error => setActionError(error.message),
+    });
+  };
   const packageList = (packages.data?.packages ?? []) as unknown as ResponsePackage[];
 
   if (requests.isLoading) {
@@ -105,7 +115,7 @@ export default function RequestCaseDetailPage() {
     return (
       <PageContainer>
         <EmptyState
-          title="Request case not found"
+          title={requests.error ? "Request unavailable" : "Request case not found"}
           action={
             <Link href="/requests" className={BACK_LINK_CLASS}>
               <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
@@ -235,7 +245,7 @@ export default function RequestCaseDetailPage() {
               <CardTitle>Response Packages ({packageList.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {packages.isLoading ? (
+              {packages.error ? <p role="alert">Package history unavailable: {packages.error.message}</p> : packages.isLoading ? (
                 <div className="space-y-2">
                   {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full" />)}
                 </div>
@@ -310,7 +320,15 @@ export default function RequestCaseDetailPage() {
               <CardTitle>Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {requestCase.package_status !== 'submitted' && (
+              <label>Review or submission rationale<textarea value={notes} onChange={event => setNotes(event.target.value)} /></label>
+              <p>Recording an export does not confirm external delivery. Enter the reviewed scope and evidence.</p>
+              {actionError && <p role="alert">{actionError}</p>}
+              {['gap_analysis', 'exception_triage', 'assembling', 'internal_review', 'ready'].includes(requestCase.package_status) && !requestCase.signoffs?.some(item => item.signoff_type === 'scope_approval') && <Button disabled={signoff.isPending || !notes.trim()} onClick={() => recordSignoff('scope_approval')}>Sign off scope</Button>}
+              {requestCase.package_status === 'assembling' && <Button disabled={signoff.isPending || !notes.trim()} onClick={() => recordSignoff('package_review')}>Sign off package review</Button>}
+              {requestCase.package_status === 'internal_review' && <Button disabled={signoff.isPending || !notes.trim()} onClick={() => recordSignoff('final_approval')}>Sign off final approval</Button>}
+              <ul>{requestCase.signoffs?.map(item => <li key={item.signoff_type}>{item.signoff_type.replace(/_/g, ' ')} — {item.signed_by}</li>)}</ul>
+
+              {['gap_analysis', 'exception_triage', 'assembling', 'internal_review'].includes(requestCase.package_status) && (
                 <Button
                   className="w-full"
                   variant="secondary"
@@ -318,7 +336,7 @@ export default function RequestCaseDetailPage() {
                   onClick={() => assemblePackage.mutate({
                     requestCaseId,
                     generatedBy: actor,
-                  })}
+                  }, { onError: error => setActionError(error.message) })}
                   disabled={assemblePackage.isPending}
                 >
                   {assemblePackage.isPending ? 'Assembling...' : 'Assemble Package'}
@@ -332,10 +350,12 @@ export default function RequestCaseDetailPage() {
                     requestCaseId,
                     submitted_by: actor,
                     submitted_to: requestCase.requesting_party,
-                  })}
-                  disabled={submitPackage.isPending}
+                    submission_method: 'export',
+                    submission_notes: notes.trim(),
+                  }, { onError: error => setActionError(error.message) })}
+                  disabled={submitPackage.isPending || !notes.trim()}
                 >
-                  {submitPackage.isPending ? 'Submitting...' : 'Submit to ' + requestCase.requesting_party}
+                  {submitPackage.isPending ? 'Submitting...' : 'Record response export'}
                 </Button>
               )}
               {requestCase.package_status === 'submitted' && (

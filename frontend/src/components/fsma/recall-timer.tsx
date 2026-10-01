@@ -33,13 +33,14 @@ const SLA_SECONDS = 24 * 60 * 60; // 86400 seconds
 
 interface RecallTimerProps {
   drill?: RecallDrill;
+  isRecordsRequest?: boolean;
   onCancel?: () => void;
   onComplete?: () => void;
   onStartDrill?: () => void;
   className?: string;
 }
 
-export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, className }: RecallTimerProps) {
+export function RecallTimer({ drill, isRecordsRequest = false, onCancel, onComplete, onStartDrill, className }: RecallTimerProps) {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // Update timer every second
@@ -61,13 +62,17 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
 
     const deadline = new Date(drill.deadline).getTime();
     const initiated = new Date(drill.initiated_at).getTime();
-    const elapsed = Math.floor((currentTime - initiated) / 1000);
-    const remaining = Math.max(0, Math.floor((deadline - currentTime) / 1000));
+    const finished = drill.status === 'COMPLETED' || drill.status === 'CANCELLED';
+    const elapsed = finished ? drill.elapsed_seconds : Math.max(0, Math.floor((currentTime - initiated) / 1000));
+    const effectiveTime = finished ? initiated + elapsed * 1000 : currentTime;
+    const remaining = Math.max(0, Math.floor((deadline - effectiveTime) / 1000));
     const progress = Math.min(100, (elapsed / SLA_SECONDS) * 100);
 
     // Determine urgency level
     let urgency: 'normal' | 'warning' | 'critical' | 'breached' = 'normal';
-    if (remaining <= 0) {
+    if (finished) {
+      urgency = 'normal';
+    } else if (remaining <= 0) {
       urgency = 'breached';
     } else if (remaining <= 60 * 60) { // Less than 1 hour
       urgency = 'critical';
@@ -112,7 +117,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <Bell className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            FDA Recall Drill
+            {isRecordsRequest ? 'FDA Records Response' : 'FDA Recall Drill'}
           </CardTitle>
           <StatusBadge state={status.state} label={status.label} />
         </div>
@@ -130,7 +135,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             isActive={drill.status === 'IN_PROGRESS'}
           />
           <p className="mt-2 text-ui text-re-text-tertiary">
-            Time Remaining for FDA 24-Hour Response Objective
+            {drill.status === 'COMPLETED' ? 'Time remaining when completion was recorded' : 'Time Remaining for FDA 24-Hour Response Objective'}
           </p>
         </div>
 
@@ -161,7 +166,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
         </div>
 
         {/* Drill Details */}
-        <div className="grid grid-cols-2 gap-4 border-t border-re-border-subtle pt-4">
+        {!isRecordsRequest && <div className="grid grid-cols-2 gap-4 border-t border-re-border-subtle pt-4">
           <div>
             <p className="text-label text-re-text-muted">Target Lot</p>
             <p className="mt-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{drill.target_tlc}</p>
@@ -180,7 +185,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             <p className="text-label text-re-text-muted">Lots Traced</p>
             <p className="mt-1 text-ui font-medium tabular-nums text-re-text-primary">{drill.lots_traced}</p>
           </div>
-        </div>
+        </div>}
 
         {/* Actions */}
         {drill.status === 'IN_PROGRESS' && (

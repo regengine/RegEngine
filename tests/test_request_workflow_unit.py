@@ -623,3 +623,30 @@ class TestCreateAmendment:
 
         with pytest.raises(ValueError, match="Cannot amend"):
             wf.create_amendment(TENANT, CASE_ID)
+
+@pytest.mark.parametrize('status,signoff', [('intake','final_approval'), ('submitted','package_review'), ('amended','scope_approval')])
+def test_signoff_rejects_invalid_state_without_writes(status, signoff):
+    wf, db = _setup_workflow_with_case(_mock_case_row(status=status))
+    db.execute.reset_mock()
+    with pytest.raises(ValueError, match='Cannot'):
+        wf.add_signoff(TENANT, CASE_ID, signoff, signed_by='reviewer')
+    db.execute.assert_not_called()
+    db.commit.assert_not_called()
+
+
+def test_signoff_conflict_rolls_back_before_commit():
+    wf, db = _setup_workflow_with_case(_mock_case_row(status='internal_review'))
+    db.execute.return_value.rowcount = 0
+    with pytest.raises(ValueError, match='case changed'):
+        wf.add_signoff(TENANT, CASE_ID, 'final_approval', signed_by='reviewer')
+    db.rollback.assert_called_once()
+    db.commit.assert_not_called()
+
+
+def test_missing_scope_approval_can_recover_ready_case_without_rewinding():
+    wf, db = _setup_workflow_with_case(_mock_case_row(status='ready'))
+    db.execute.return_value.rowcount = 1
+    result = wf.add_signoff(TENANT, CASE_ID, 'scope_approval', signed_by='qa_lead', notes='Scope reviewed')
+    assert result['case_status'] == 'ready'
+    assert db.execute.call_args_list[-1].args[1]['new_status'] == 'ready'
+    db.commit.assert_called_once()

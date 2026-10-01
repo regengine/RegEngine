@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
@@ -26,8 +27,7 @@ import {
   useCollectRecords,
   useRunGapAnalysis,
   useAssemblePackage,
-  useSubmitPackage,
-} from '@/hooks/use-control-plane';
+} from '@/hooks/use-request-workflow';
 import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
@@ -85,7 +85,6 @@ export default function RequestWorkflowPage() {
   const collectRecords = useCollectRecords(tid);
   const runGapAnalysis = useRunGapAnalysis(tid);
   const assemblePackage = useAssemblePackage(tid);
-  const submitPackage = useSubmitPackage(tid);
 
   const cases = requests.data?.cases ?? [];
   const activeCases = cases.filter(c => !['submitted', 'amended'].includes(c.package_status));
@@ -254,19 +253,8 @@ export default function RequestWorkflowPage() {
                       {isOverdue && <Badge tone="danger" size="sm">OVERDUE</Badge>}
 
                       <div className="flex flex-wrap gap-1">
-                        {rc.package_status === 'ready' && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            leadingIcon={<Send strokeWidth={1.75} aria-hidden="true" />}
-                            onClick={() => submitPackage.mutate({
-                              requestCaseId: rc.request_case_id,
-                              submitted_by: actor,
-                              submitted_to: rc.requesting_party,
-                            }, { onError: notifyActionError('Submit') })}
-                          >
-                            Submit
-                          </Button>
+                        {['gap_analysis', 'assembling', 'internal_review', 'ready'].includes(rc.package_status) && (
+                          <Button size="sm" variant="secondary" asChild><Link href={`/requests/${rc.request_case_id}`}>Review and sign off</Link></Button>
                         )}
                         {/* Status-aware next step. The card used to show
                             Assemble for every pre-ready status, but the
@@ -350,9 +338,7 @@ export default function RequestWorkflowPage() {
                     <span className="text-ui text-re-text-primary">{rc.requesting_party}</span>
                     <span className="text-small text-re-text-tertiary">{rc.total_records} records</span>
                   </div>
-                  <span className="text-small text-re-text-tertiary">
-                    {new Date(rc.request_received_at).toLocaleDateString()}
-                  </span>
+                  <Link href={`/requests/${rc.request_case_id}`}>View retained history</Link>
                 </div>
               </Card>
             ))}

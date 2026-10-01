@@ -39,7 +39,7 @@ const mockCollectRecordsMutate = vi.fn();
 const mockRunGapAnalysisMutate = vi.fn();
 const mockUseRequestCases = vi.fn();
 
-vi.mock('@/hooks/use-control-plane', () => ({
+vi.mock('@/hooks/use-request-workflow', () => ({
   useRequestCases: (...args: any[]) => mockUseRequestCases(...args),
   useCreateRequestCase: () => ({ mutateAsync: mockCreateMutateAsync, isPending: false }),
   useApproveScope: () => ({ mutate: mockApproveScopeMutate, isPending: false }),
@@ -204,7 +204,7 @@ describe('RequestWorkflowPage', () => {
     render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     // Submit button for the ready case
-    const submitButtons = screen.getAllByRole('button', { name: /submit/i });
+    const submitButtons = screen.getAllByRole('link', { name: /review and sign off/i });
     expect(submitButtons.length).toBeGreaterThanOrEqual(1);
 
     // The collecting case advances via gap analysis — Assemble is only

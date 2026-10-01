@@ -22,32 +22,31 @@ const PHASES: PhaseGate[] = [
   { label: 'Records Assembly', targetHours: 4, icon: Search },
   { label: 'Verification', targetHours: 6, icon: ShieldCheck },
   { label: 'Review & Submit', targetHours: 8, icon: Send },
-  { label: 'FDA Submission', targetHours: 24, icon: CheckCircle },
+  { label: 'Response Closed', targetHours: 24, icon: CheckCircle },
 ];
+
+export function completedPhaseCount(milestones: string[], isComplete: boolean): number {
+  const events = ['records_assembled', 'verified', 'reviewed', 'submitted'];
+  let count = 1; // Request received is the only event proven by an SLA request.
+  for (const event of events) {
+    if (!milestones.includes(event)) break;
+    if (event === 'submitted' && !isComplete) break;
+    count++;
+  }
+  return count;
+}
 
 interface PhaseGatesProps {
   /** Seconds elapsed since the request was created */
-  elapsedSeconds: number;
+  elapsedSeconds?: number;
+  milestones?: string[];
   /** Whether the request has been completed */
   isComplete: boolean;
   className?: string;
 }
 
-export function PhaseGates({ elapsedSeconds, isComplete, className }: PhaseGatesProps) {
-  const elapsedHours = elapsedSeconds / 3600;
-
-  // Determine the current active phase index
-  let activePhaseIndex = 0;
-  if (isComplete) {
-    activePhaseIndex = PHASES.length; // All complete
-  } else {
-    for (let i = PHASES.length - 1; i >= 0; i--) {
-      if (elapsedHours >= PHASES[i].targetHours) {
-        activePhaseIndex = i + 1;
-        break;
-      }
-    }
-  }
+export function PhaseGates({ milestones = [], isComplete, className }: PhaseGatesProps) {
+  const activePhaseIndex = completedPhaseCount(milestones, isComplete);
 
   return (
     <div className={cn('w-full', className)}>
@@ -62,7 +61,7 @@ export function PhaseGates({ elapsedSeconds, isComplete, className }: PhaseGates
         />
 
         {PHASES.map((phase, idx) => {
-          const isCompleted = idx < activePhaseIndex;
+          const isCompleted = idx === PHASES.length - 1 ? isComplete : idx < activePhaseIndex;
           const isCurrent = idx === activePhaseIndex && !isComplete;
           const Icon = phase.icon;
 

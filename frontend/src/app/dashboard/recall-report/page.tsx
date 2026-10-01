@@ -1,5 +1,7 @@
 'use client';
 
+import { exportWindowParams } from '@/lib/recall-export';
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -146,6 +148,8 @@ export default function RecallReportPage() {
     const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
     const [expanded, setExpanded] = useState<string | null>(null);
+    const [exportStart, setExportStart] = useState('');
+    const [exportEnd, setExportEnd] = useState('');
     const [exporting, setExporting] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
 
@@ -191,10 +195,12 @@ export default function RecallReportPage() {
         setExporting(true);
         setExportError(null);
         try {
+            const params = exportWindowParams(exportStart, exportEnd);
+            params.set('tenant_id', tenantId);
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
             const res = await fetchWithCsrf(
-                `${base}/api/v1/fda/export/all?tenant_id=${tenantId}&format=csv`,
+                `${base}/api/v1/fda/export/all?${params}`,
                 { credentials: 'include' }
             );
             if (!res.ok) {
@@ -217,6 +223,7 @@ export default function RecallReportPage() {
                 throw new Error(detail || `The export service returned status ${res.status}. Try again or check system health.`);
             }
             const blob = await res.blob();
+            if (!blob.size) throw new Error('The export returned an empty artifact. Retry with a window containing records.');
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -284,7 +291,12 @@ export default function RecallReportPage() {
 
             <div className="space-y-6">
                 {/* Export error */}
-                {exportError && (
+                {!isDemo && <div className="flex flex-wrap gap-4">
+                <label>Export start date<input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} /></label>
+                <label>Export end date<input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} /></label>
+                <p>Choose a window of 90 days or fewer.</p>
+            </div>}
+            {exportError && (
                     <div className={`${NOTICE_BASE} border-l-re-danger bg-re-danger-bg`} role="alert">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
                         <span>{exportError}</span>

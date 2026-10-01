@@ -35,6 +35,9 @@ import {
 import { RecallTimer } from '@/components/fsma/recall-timer';
 import { SLAGauge } from '@/components/fsma/recall-timer';
 import { PhaseGates } from '@/components/fsma/phase-gates';
+import { exportWindowParams } from '@/lib/recall-export';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { getServiceURL } from '@/lib/api-config';
 import type { RecallDrill } from '@/types/fsma';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +59,7 @@ const STATUS_DISPLAY: Record<RequestStatus, { label: string; state: ComplianceSt
 /** Map an SLA request to the RecallDrill shape the RecallTimer component expects. */
 function toRecallDrill(req: FDARequestData): RecallDrill {
   const initiated = new Date(req.requested_at).getTime();
-  const now = Date.now();
+  const now = req.completed_at ? new Date(req.completed_at).getTime() : Date.now();
   const elapsed = Math.floor((now - initiated) / 1000);
   const remaining = Math.max(0, (req.time_remaining_seconds ?? 0));
 
@@ -90,13 +93,16 @@ function toRecallDrill(req: FDARequestData): RecallDrill {
 
 export default function RecallResponsePage() {
   const { tenantId } = useTenant();
-  const { data: requests, isLoading: requestsLoading } = useSLARequests();
-  const { data: dashboard } = useSLADashboard();
-  const { data: alerts } = useSLAAlerts();
+  const [skip, setSkip] = useState(0);
+  const { data: requestPage, isLoading: requestsLoading, error: requestsError, refetch } = useSLARequests(skip);
+  const requests = requestPage?.requests;
+  const { data: dashboard, error: dashboardError } = useSLADashboard();
+  const [alertsSkip, setAlertsSkip] = useState(0);
+  const { data: alertPage, error: alertsError } = useSLAAlerts(alertsSkip);
+  const alerts = alertPage?.alerts;
   const createRequest = useCreateSLARequest();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [renderedAt] = useState(() => Date.now());
 
   // Find the active (non-completed) request, or the selected one
   const activeRequests = (requests ?? []).filter(r => r.status !== 'completed');
@@ -130,10 +136,11 @@ export default function RecallResponsePage() {
       />
 
       <div className="space-y-6">
+        {dashboardError && <Callout tone="warning" title="Response metrics unavailable">{dashboardError.message}</Callout>}
         {/* KPI Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-          <StatTile label="Active Requests" value={dashboard?.open_requests ?? 0} />
-          <StatTile label="Overdue" value={dashboard?.overdue_requests ?? 0} />
+          <StatTile label="Active Requests" value={dashboard?.open_requests ?? '—'} />
+          <StatTile label="Overdue" value={dashboard?.overdue_requests ?? '—'} />
           <StatTile
             label="Avg Response"
             value={
@@ -144,13 +151,15 @@ export default function RecallResponsePage() {
           />
           <Card padding="compact">
             <div className="flex h-full items-center justify-center">
-              <SLAGauge percentage={dashboard?.compliance_rate_pct ?? 100} />
+              {dashboard?.compliance_rate_pct != null ? <SLAGauge percentage={dashboard.compliance_rate_pct} /> : <p>Response rate not yet measured</p>}
             </div>
           </Card>
         </div>
 
         {/* Main Content: Timer + Phase Gates */}
-        {requestsLoading ? (
+        {requestsError ? (
+          <Callout tone="danger" title="Requests unavailable"><p>{requestsError.message}</p><Button onClick={() => refetch()}>Retry</Button></Callout>
+        ) : requestsLoading ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3" aria-busy="true">
             <Skeleton className="h-[280px] w-full lg:col-span-1" />
             <Skeleton className="h-[280px] w-full lg:col-span-2" />
@@ -160,10 +169,8 @@ export default function RecallResponsePage() {
             {/* Timer Column */}
             <div className="lg:col-span-1">
               <RecallTimer
+                isRecordsRequest
                 drill={toRecallDrill(focusedRequest)}
-                onComplete={() => {
-                  // Will be handled by the export + complete flow below
-                }}
               />
             </div>
 
@@ -181,9 +188,7 @@ export default function RecallResponsePage() {
                 </CardHeader>
                 <CardContent>
                   <PhaseGates
-                    elapsedSeconds={
-                      Math.floor((renderedAt - new Date(focusedRequest.requested_at).getTime()) / 1000)
-                    }
+                    milestones={focusedRequest.export_ids.length ? ['records_assembled'] : []}
                     isComplete={focusedRequest.status === 'completed'}
                   />
                 </CardContent>
@@ -209,7 +214,7 @@ export default function RecallResponsePage() {
                       Check FSMA Readiness Score
                     </Link>
                   </Button>
-                  <ExportAndCompleteButton request={focusedRequest} />
+                  <ExportAndCompleteButton key={`${tenantId}:${focusedRequest.id}`} request={focusedRequest} />
                   <Button variant="outline" asChild>
                     <Link href="/dashboard/recall-drills">
                       <Clock className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -240,6 +245,11 @@ export default function RecallResponsePage() {
                         </p>
                       </Callout>
                     ))}
+                    {alertPage && alertPage.total > alertPage.limit && <div className="flex gap-3">
+                      <Button disabled={alertsSkip === 0} onClick={() => setAlertsSkip(Math.max(0, alertsSkip - 50))}>Previous alerts</Button>
+                      <span>{alertsSkip + 1}–{Math.min(alertsSkip + 50, alertPage.total)} of {alertPage.total}</span>
+                      <Button disabled={alertsSkip + 50 >= alertPage.total} onClick={() => setAlertsSkip(alertsSkip + 50)}>Next alerts</Button>
+                    </div>}
                   </CardContent>
                 </Card>
               )}
@@ -264,6 +274,13 @@ export default function RecallResponsePage() {
           />
         )}
 
+        {createRequest.error && <Callout tone="danger" title="Request could not be created">{createRequest.error.message}</Callout>}
+        {alertsError && <Callout tone="warning" title="Alerts unavailable">{alertsError.message}</Callout>}
+        {requestPage && requestPage.total > requestPage.limit && <div className="flex gap-3">
+          <Button disabled={skip === 0} onClick={() => { setSkip(Math.max(0, skip - 50)); setSelectedRequestId(null); }}>Previous requests</Button>
+          <span>{skip + 1}–{Math.min(skip + 50, requestPage.total)} of {requestPage.total}</span>
+          <Button disabled={skip + 50 >= requestPage.total} onClick={() => { setSkip(skip + 50); setSelectedRequestId(null); }}>Next requests</Button>
+        </div>}
         {/* Request History */}
         {activeRequests.length > 1 && (
           <Card>
@@ -296,7 +313,7 @@ export default function RecallResponsePage() {
             </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y divide-re-border-subtle">
-                {completedRequests.slice(0, 10).map((req) => (
+                {completedRequests.map((req) => (
                   <RequestRow
                     key={req.id}
                     request={req}
@@ -370,27 +387,53 @@ function RequestRow({
 }
 
 function ExportAndCompleteButton({ request }: { request: FDARequestData }) {
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [offered, setOffered] = useState(false);
+  const [artifact, setArtifact] = useState<{ hash: string; start: string; end: string } | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [notes, setNotes] = useState('');
   const complete = useCompleteSLARequest(request.id);
-
-  const handleExportAndComplete = useCallback(() => {
-    // Open export in new tab, then mark complete
-    const exportUrl = `/api/ingestion/api/v1/fsma/audit/spreadsheet?start_date=2020-01-01&end_date=2099-12-31`;
-    window.open(exportUrl, '_blank');
-    complete.mutate({});
-  }, [complete]);
-
+  const { tenantId } = useTenant();
   if (request.status === 'completed') return null;
-
-  return (
-    <Button
-      onClick={handleExportAndComplete}
-      disabled={complete.isPending}
-      loading={complete.isPending}
-      leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
-    >
-      {complete.isPending ? 'Submitting...' : 'Export & Complete'}
-    </Button>
-  );
+  const generate = async () => {
+    setError(null); setOffered(false); setPending(true); setArtifact(null); setAcknowledged(false);
+    try {
+      const params = exportWindowParams(start, end);
+      if (!tenantId) throw new Error('Select a workspace before exporting.');
+      params.set('tenant_id', tenantId);
+      const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/fda/export/all?${params}`, { credentials: 'include' });
+      if (!response.ok) throw new Error(`Export failed (${response.status}). Request remains open.`);
+      const hash = response.headers.get('X-Export-Hash');
+      if (!hash || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Export has no audit hash. Request remains open; retry after service recovery.');
+      const blob = await response.blob();
+      if (!blob.size) throw new Error('Export returned an empty artifact. Request remains open.');
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement('a'); link.href = url; link.download = `fda-records-${request.id}.csv`; link.click();
+        setOffered(true); setArtifact({ hash, start, end });
+      } finally { URL.revokeObjectURL(url); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Export failed. Request remains open.'); }
+    finally { setPending(false); }
+  };
+  return <div className="space-y-2">
+    <label>Export start date<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
+    <label>Export end date<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
+    <Button onClick={generate} disabled={pending} loading={pending} leadingIcon={<Download aria-hidden="true" />}>Generate export</Button>
+    {error && <p role="alert">{error}</p>}
+    {offered && <p>Download offered. This does not confirm delivery or close the request.</p>}
+    {artifact && <div className="space-y-2">
+      <p>Export window: {artifact.start} to {artifact.end}. Audit hash: <span className="break-all font-mono">{artifact.hash}</span></p>
+      <label><input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} /> I reviewed this export and confirm this window covers the requested scope and the response work is complete.</label>
+      <label>Completion evidence<textarea value={notes} onChange={e => setNotes(e.target.value)} /></label>
+      <Button disabled={complete.isPending || !acknowledged || !notes.trim()} onClick={() => complete.mutate({ export_hash: artifact.hash, start_date: artifact.start, end_date: artifact.end, acknowledged, completion_notes: notes.trim() })}>Record response completion</Button>
+      {complete.error && <p role="alert">{complete.error.message}</p>}
+      <p>This records your attestation; external delivery is not verified.</p>
+    </div>}
+    <Link href="/requests">Review and record submission in Request Workflow</Link>
+  </div>;
 }
 
 function formatHoursRemaining(seconds: number): string {

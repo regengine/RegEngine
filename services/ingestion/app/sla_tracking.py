@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Literal, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from shared.pagination import PaginationParams
 from shared.tenant_context import TenantContext
@@ -246,8 +246,8 @@ def _try_load_requests(tenant_id: str) -> Optional[List[FDARequest]]:
             for row in rows:
                 export_ids = row.export_ids.split(",") if row.export_ids else []
                 req = FDARequest(
-                    id=row.id,
-                    tenant_id=row.tenant_id,
+                    id=str(row.id),
+                    tenant_id=str(row.tenant_id),
                     request_type=row.request_type,
                     requested_at=row.requested_at,
                     deadline_at=row.deadline_at,
@@ -325,6 +325,7 @@ async def list_requests(
     if status_filter:
         requests = [r for r in requests if r.status == status_filter]
 
+    requests.sort(key=lambda request: (request.requested_at, request.id), reverse=True)
     total = len(requests)
     requests = requests[pagination.skip : pagination.skip + pagination.limit]
 
@@ -337,52 +338,98 @@ async def list_requests(
     }
 
 
-@router.patch("/requests/{request_id}/complete", summary="Mark request completed")
+class CompletionEvidence(BaseModel):
+    export_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    start_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    completion_notes: str = Field(min_length=1, max_length=2000)
+    acknowledged: bool
+
+
+def _persist_evidenced_completion(req: FDARequest, evidence: CompletionEvidence, ctx: TenantContext) -> FDARequest:
+    """Bind an operator closure to durable export evidence in one transaction."""
+    from shared.database import SessionLocal
+    from sqlalchemy import text
+    import json
+    from shared.fda_export.windows import validate_export_window, ExportWindowError
+
+    if not evidence.acknowledged or not evidence.completion_notes.strip():
+        raise HTTPException(status_code=422, detail="Confirm scope coverage and enter completion evidence.")
+    try:
+        validate_export_window(evidence.start_date, evidence.end_date)
+    except ExportWindowError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db = None
+    try:
+        db = SessionLocal()
+        stored = db.execute(text("""
+            SELECT status, completed_at, export_ids, notes FROM fsma.fda_sla_requests
+            WHERE id = :id AND tenant_id = :tenant_id FOR UPDATE
+        """), {"id": req.id, "tenant_id": ctx.tenant_id}).mappings().first()
+        if not stored:
+            raise HTTPException(status_code=409, detail="Request has no durable record. Reload or recreate before recording completion.")
+        if stored["status"] == "completed":
+            return req.model_copy(update={"status": "completed", "completed_at": stored["completed_at"],
+                "export_ids": (stored["export_ids"] or "").split(",") if stored["export_ids"] else [], "notes": stored["notes"]})
+        artifact = db.execute(text("""
+            SELECT id, export_hash, query_start_date, query_end_date FROM fsma.fda_export_log
+            WHERE tenant_id = :tenant_id AND export_hash = :hash AND record_count > 0
+              AND export_type = 'fda_export_all'
+              AND query_start_date = CAST(:start AS date) AND query_end_date = CAST(:end AS date)
+            ORDER BY generated_at DESC LIMIT 1
+        """), {"tenant_id": ctx.tenant_id, "hash": evidence.export_hash,
+                "start": evidence.start_date, "end": evidence.end_date}).mappings().first()
+        if not artifact:
+            raise HTTPException(status_code=409, detail="No nonempty audited all-records export matches this workspace, hash and date range. Generate the export again.")
+        now = datetime.now(timezone.utc)
+        closure = json.dumps({"event": "operator_response_completion", "actor_id": ctx.principal_id,
+            "principal_kind": ctx.principal_kind, "export_id": str(artifact["id"]),
+            "export_hash": evidence.export_hash, "start_date": evidence.start_date, "end_date": evidence.end_date,
+            "scope_coverage_attested": True, "notes": evidence.completion_notes.strip(), "recorded_at": now.isoformat()})
+        notes = ((stored["notes"] or "") + "\n" + closure).strip()
+        ids = list(dict.fromkeys([*((stored["export_ids"] or "").split(",") if stored["export_ids"] else []), str(artifact["id"])]))
+        db.execute(text("""
+            UPDATE fsma.fda_sla_requests SET status = 'completed', completed_at = :now,
+              export_ids = :exports, notes = :notes
+            WHERE id = :id AND tenant_id = :tenant_id
+        """), {"now": now, "exports": ",".join(ids), "notes": notes, "id": req.id, "tenant_id": ctx.tenant_id})
+        db.commit()
+        return req.model_copy(update={"status": "completed", "completed_at": now, "export_ids": ids, "notes": notes})
+    except HTTPException:
+        if db is not None: db.rollback()
+        raise
+    except Exception as exc:
+        if db is not None: db.rollback()
+        logger.warning("SLA completion persistence unavailable", exc_info=False)
+        raise HTTPException(status_code=503, detail="Completion could not be persisted. Request remains open; retry after service recovery.") from exc
+    finally:
+        if db is not None: db.close()
+
+
+@router.patch("/requests/{request_id}/complete", summary="Record evidenced operator response completion")
 async def complete_request(
     request_id: str,
+    evidence: Optional[CompletionEvidence] = Body(None),
     export_ids: Optional[List[str]] = Query(None),
     ctx: TenantContext = Depends(require_tenant_context),
 ):
-    """Mark an FDA records request as completed, recording response time."""
     req = _requests_store.get(request_id)
     if req is None:
+        for loaded in _try_load_requests(ctx.tenant_id) or []:
+            _requests_store[loaded.id] = loaded
+        req = _requests_store.get(request_id)
+    if req is None or req.tenant_id != ctx.tenant_id:
         raise HTTPException(status_code=404, detail=f"Request {request_id} not found")
-    if req.tenant_id != ctx.tenant_id:
-        raise HTTPException(status_code=404, detail=f"Request {request_id} not found")
-
-    now = datetime.now(timezone.utc)
-    req.status = "completed"
-    req.completed_at = now
-    if export_ids:
-        req.export_ids.extend(export_ids)
-
-    _try_persist_request(req)
-
-    response_hours = req.response_hours
-    met_sla = response_hours is not None and response_hours <= SLA_HOURS
-
-    # Generate completion alert
-    alert = SLAAlert(
-        tenant_id=req.tenant_id,
-        request_id=req.id,
-        alert_type="completed",
-        message=f"FDA {req.request_type} request {req.id} completed in "
-        f"{response_hours:.1f}h. SLA {'MET' if met_sla else 'MISSED'}.",
-    )
-    _alerts_store[alert.id] = alert
-
-    logger.info(
-        "SLA request completed: %s (response_hours=%.1f, met_sla=%s)",
-        req.id,
-        response_hours or 0,
-        met_sla,
-    )
-
-    return {
-        "status": "completed",
-        "request": _request_to_dict(req),
-        "met_sla": met_sla,
-    }
+    if evidence is None:
+        raise HTTPException(status_code=422, detail="Completion requires audited export hash, date range and explicit scope attestation; export_ids alone do not prove completion.")
+    completed = _persist_evidenced_completion(req, evidence, ctx)
+    _requests_store[req.id] = completed  # publish only after durable commit
+    if not any(a.request_id == req.id and a.alert_type == "completed" for a in _alerts_store.values()):
+        alert = SLAAlert(tenant_id=ctx.tenant_id, request_id=req.id, alert_type="completed",
+            message=f"Operator recorded response completion for {req.id}; external delivery is not verified.")
+        _alerts_store[alert.id] = alert
+    met_sla = completed.response_hours is not None and completed.response_hours <= SLA_HOURS
+    return {"status": "completed", "request": _request_to_dict(completed), "met_sla": met_sla}
 
 
 @router.get("/dashboard/{tenant_id}", summary="SLA compliance dashboard")

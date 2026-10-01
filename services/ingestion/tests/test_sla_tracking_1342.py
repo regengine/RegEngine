@@ -73,6 +73,9 @@ def client(monkeypatch):
     monkeypatch.setattr(sla_tracking, "_try_persist_request", lambda req: None)
     monkeypatch.setattr(sla_tracking, "_try_load_requests", lambda tid: None)
 
+    def persisted_completion(req, evidence, ctx):
+        return req.model_copy(update={"status": "completed", "completed_at": datetime.now(timezone.utc), "export_ids": ["audited-export-1"]})
+    monkeypatch.setattr(sla_tracking, "_persist_evidenced_completion", persisted_completion)
     with TestClient(app) as c:
         yield c
 
@@ -576,6 +579,8 @@ class TestListRequestsEndpoint:
 # ===========================================================================
 
 
+COMPLETION_BODY = {"export_hash": "a" * 64, "start_date": "2026-09-01", "end_date": "2026-10-01", "completion_notes": "Reviewed scope", "acknowledged": True}
+
 class TestCompleteEndpoint:
     def test_404_for_unknown_request(self, client):
         resp = client.patch("/api/v1/sla/requests/no-such-id/complete")
@@ -583,7 +588,7 @@ class TestCompleteEndpoint:
 
     def test_marks_request_completed(self, client):
         created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
-        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
+        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete", json=COMPLETION_BODY)
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "completed"
@@ -592,7 +597,7 @@ class TestCompleteEndpoint:
 
     def test_completion_within_24h_sets_met_sla_true(self, client):
         created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
-        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
+        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete", json=COMPLETION_BODY)
         assert resp.json()["met_sla"] is True
 
     def test_completion_past_deadline_sets_met_sla_false(self, client):
@@ -604,18 +609,20 @@ class TestCompleteEndpoint:
             deadline_at=datetime.now(timezone.utc) - timedelta(hours=6),
         )
         sla_tracking._requests_store[past.id] = past
-        resp = client.patch(f"/api/v1/sla/requests/{past.id}/complete")
+        resp = client.patch(f"/api/v1/sla/requests/{past.id}/complete", json=COMPLETION_BODY)
         assert resp.status_code == 200
         assert resp.json()["met_sla"] is False
 
-    def test_export_ids_appended(self, client):
+    def test_unverified_export_ids_do_not_complete(self, client):
         created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
         resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete?export_ids=exp-1&export_ids=exp-2")
-        assert resp.json()["request"]["export_ids"] == ["exp-1", "exp-2"]
+        assert resp.status_code == 422
+        assert sla_tracking._requests_store[created['id']].status == 'open'
+        assert sla_tracking._requests_store[created['id']].export_ids == []
 
     def test_completion_produces_stored_alert(self, client):
         created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
-        client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
+        client.patch(f"/api/v1/sla/requests/{created['id']}/complete", json=COMPLETION_BODY)
         stored_alerts = [a for a in sla_tracking._alerts_store.values() if a.request_id == created["id"]]
         assert len(stored_alerts) == 1
         assert stored_alerts[0].alert_type == "completed"
@@ -723,7 +730,7 @@ class TestAlertsEndpoint:
 
     def test_stored_completion_alert_included(self, client):
         created = client.post("/api/v1/sla/requests", json=_mk_req(tenant_id="tenant-1")).json()["request"]
-        client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
+        client.patch(f"/api/v1/sla/requests/{created['id']}/complete", json=COMPLETION_BODY)
         resp = client.get("/api/v1/sla/alerts/tenant-1")
         assert any(a["alert_type"] == "completed" for a in resp.json()["alerts"])
 
