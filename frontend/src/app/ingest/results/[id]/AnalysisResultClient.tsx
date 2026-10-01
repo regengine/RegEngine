@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { AnalysisSummary } from '@/types/api';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { Shield, Database, Lock, Search } from 'lucide-react';
@@ -16,18 +15,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AnalysisResultClient() {
     const params = useParams();
-    const { apiKey } = useAuth();
-    const [data, setData] = useState<AnalysisSummary | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!params.id || !apiKey) return;
-
-        apiClient.getDocumentAnalysis(params.id as string, apiKey)
-            .then(setData)
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [params.id, apiKey]);
+    const { apiKey, tenantId, user } = useAuth();
+    const analysis = useQuery({
+        queryKey: ['document-analysis', tenantId, user?.id, params.id],
+        queryFn: () => apiClient.getDocumentAnalysis(params.id as string, apiKey!),
+        enabled: !!params.id && !!apiKey,
+        retry: false,
+    });
+    const data = analysis.data;
+    const loading = analysis.isLoading;
+    if (!apiKey) return <PageContainer><Callout tone="warning">Sign in to load document analysis.</Callout></PageContainer>;
+    if (analysis.error) return <PageContainer><Callout tone="danger" role="alert" title="Unable to load document analysis" action={<button onClick={() => analysis.refetch()}>Retry analysis</button>}>{(analysis.error as Error).message}</Callout></PageContainer>;
 
     if (loading) {
         return (

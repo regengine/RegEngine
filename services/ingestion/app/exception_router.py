@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from shared.database import get_db_session
 from shared.pagination import PaginationParams
 
@@ -83,13 +83,27 @@ class AssignRequest(BaseModel):
 
 
 class ResolveRequest(BaseModel):
-    resolution_summary: str
+    resolution_summary: str = Field(min_length=1, max_length=10000)
     resolved_by: str
+
+    @field_validator("resolution_summary")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("A case-specific resolution reason is required")
+        return value.strip()
 
 
 class WaiveRequest(BaseModel):
-    waiver_reason: str
+    waiver_reason: str = Field(min_length=1, max_length=10000)
     waiver_approved_by: str
+
+    @field_validator("waiver_reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("A case-specific waiver reason is required")
+        return value.strip()
 
 
 class AddCommentRequest(BaseModel):
@@ -233,7 +247,9 @@ async def resolve_exception(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    svc.resolve_exception(tid, case_id, body.resolution_summary, body.resolved_by)
+    updated = svc.resolve_exception(tid, case_id, body.resolution_summary, body.resolved_by)
+    if updated is None:
+        raise HTTPException(status_code=409, detail="Exception changed or is unavailable. Refresh and review the current case before signing off.")
     return {"case_id": case_id, "status": "resolved"}
 
 
@@ -250,7 +266,9 @@ async def waive_exception(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    svc.waive_exception(tid, case_id, body.waiver_reason, body.waiver_approved_by)
+    updated = svc.waive_exception(tid, case_id, body.waiver_reason, body.waiver_approved_by)
+    if updated is None:
+        raise HTTPException(status_code=409, detail="Exception changed or is unavailable. Refresh and review the current case before signing off.")
     return {"case_id": case_id, "status": "waived"}
 
 

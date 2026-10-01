@@ -41,8 +41,8 @@ const mockUseBlockingExceptionCount = vi.fn();
 vi.mock('@/hooks/use-control-plane', () => ({
   useExceptions: (...args: any[]) => mockUseExceptions(...args),
   useBlockingExceptionCount: (...args: any[]) => mockUseBlockingExceptionCount(...args),
-  useResolveException: () => ({ mutate: mockResolveMutate, isPending: false }),
-  useWaiveException: () => ({ mutate: mockWaiveMutate, isPending: false }),
+  useResolveException: () => ({ mutateAsync: mockResolveMutate, isPending: false }),
+  useWaiveException: () => ({ mutateAsync: mockWaiveMutate, isPending: false }),
   useAssignException: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -162,9 +162,12 @@ describe('ExceptionQueuePage', () => {
     const resolveButtons = screen.getAllByRole('button', { name: /resolve/i });
     await user.click(resolveButtons[0]);
 
+    expect(mockResolveMutate).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText('Case-specific reason'), 'Verified corrected KDE against supplier evidence');
+    await user.click(screen.getByRole('button', { name: 'Confirm resolve' }));
     expect(mockResolveMutate).toHaveBeenCalledWith({
       caseId: 'exc-1',
-      resolutionSummary: 'Resolved from queue',
+      resolutionSummary: 'Verified corrected KDE against supplier evidence',
       resolvedBy: 'qa@example.com',
     });
   });
@@ -177,14 +180,44 @@ describe('ExceptionQueuePage', () => {
     const waiveButtons = screen.getAllByRole('button', { name: /waive/i });
     await user.click(waiveButtons[0]);
 
+    expect(mockWaiveMutate).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText('Case-specific reason'), 'Approved documented exception for supplier Acme');
+    await user.click(screen.getByRole('button', { name: 'Confirm waive' }));
     expect(mockWaiveMutate).toHaveBeenCalledWith({
       caseId: 'exc-1',
-      waiverReason: 'Waived from queue',
+      waiverReason: 'Approved documented exception for supplier Acme',
       waiverApprovedBy: 'qa@example.com',
     });
   });
 
-  it('displays blocking count badge', () => {
+  it.each(['403 Permission denied', '409 Case changed; refresh', '500 Database unavailable'])('preserves the reason when sign-off fails: %s', async (message) => {
+    setupExceptions();
+    mockResolveMutate.mockRejectedValueOnce(new Error(message));
+    const user = userEvent.setup();
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
+    await user.click(screen.getAllByRole('button', { name: 'Resolve' })[0]);
+    await user.type(screen.getByLabelText('Case-specific reason'), 'Supplier evidence reviewed');
+    await user.click(screen.getByRole('button', { name: 'Confirm resolve' }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByLabelText('Case-specific reason')).toHaveValue('Supplier evidence reviewed');
+  });
+
+  it('prevents competing actions while the sign-off is pending', async () => {
+    setupExceptions();
+    let finish!: () => void;
+    mockResolveMutate.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const user = userEvent.setup();
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
+    await user.click(screen.getAllByRole('button', { name: 'Resolve' })[0]);
+    expect(screen.getByRole('button', { name: 'Confirm resolve' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Case-specific reason'), 'Corrected KDE evidence');
+    await user.click(screen.getByRole('button', { name: 'Confirm resolve' }));
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    expect(screen.getByLabelText('Case-specific reason')).toBeDisabled();
+    finish();
+  });
+
+  it('displays blocking count badge' , () => {
     setupExceptions();
     render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
@@ -200,6 +233,14 @@ describe('ExceptionQueuePage', () => {
     render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('No Blockers')).toBeInTheDocument();
+  });
+
+  it('never declares unknown blockers clear', () => {
+    setupExceptions();
+    mockUseBlockingExceptionCount.mockReturnValue({ error: new Error('Unavailable') });
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
+    expect(screen.queryByText('No Blockers')).not.toBeInTheDocument();
+    expect(screen.getByText('Blockers unavailable')).toBeInTheDocument();
   });
 
   it('renders page heading and description', () => {

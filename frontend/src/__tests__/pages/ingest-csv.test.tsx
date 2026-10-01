@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import IngestPage from '@/app/ingest/page';
 
 const mocks = vi.hoisted(() => ({
+  urlError: null as Error | null,
   ingestFile: vi.fn(),
   ingestURL: vi.fn(),
   getIngestionJob: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ apiKey: 'cookie-managed', setApiKey: mocks.storeApiKey }), // pragma: allowlist secret
 }));
 vi.mock('@/hooks/use-api', () => ({
-  useIngestURL: () => ({ mutateAsync: mocks.ingestURL, reset: vi.fn() }),
+  useIngestURL: () => ({ mutateAsync: mocks.ingestURL, reset: vi.fn(), isError: !!mocks.urlError, error: mocks.urlError }),
   useIngestFile: () => ({ mutateAsync: mocks.ingestFile, reset: vi.fn() }),
 }));
 vi.mock('@/lib/api-client', () => ({
@@ -228,5 +229,104 @@ describe('CSV import results on /ingest', () => {
     await userEvent.click(screen.getByRole('tab', { name: /file upload/i }));
     expect(document.getElementById('file-upload')).toHaveAttribute('accept', '.csv,text/csv');
     expect(screen.getByText('CSV files up to 5MB')).toBeInTheDocument();
+  });
+});
+
+
+describe('URL document receipt', () => {
+  it('shows the synchronous document ID without treating it as a job', async () => {
+    mocks.ingestURL.mockResolvedValue({ document_id: 'document-sync-42' });
+    render(<IngestPage />);
+    await userEvent.type(screen.getByPlaceholderText(/https:/i), 'https://example.org/regulation');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    expect(await screen.findByText(/document-sync-42/)).toBeInTheDocument();
+    expect(mocks.getIngestionJob).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('Ingestion response identity and failed terminal status', () => {
+  it('ignores a late URL response after the input changes', async () => {
+    let finish!: (receipt: { document_id: string }) => void;
+    mocks.ingestURL.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<IngestPage />);
+    const input = screen.getByPlaceholderText(/https:/i);
+    await userEvent.type(input, 'https://example.org/A');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    fireEvent.change(input, { target: { value: 'https://example.org/B' } });
+    await act(async () => finish({ document_id: 'stale-document-A' }));
+    expect(screen.queryByText(/stale-document-A/)).not.toBeInTheDocument();
+  });
+
+  it('renders failed polling as a terminal failure', async () => {
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: 'async-job-42' });
+    mocks.getIngestionJob.mockResolvedValueOnce({ status: 'failed' });
+    render(<IngestPage />);
+    await userEvent.type(screen.getByPlaceholderText(/https:/i), 'https://example.org/job');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    expect(await screen.findByText('Job async-job-42')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Status: FAILED')).toBeInTheDocument(), { timeout: 3500 });
+    expect(screen.getByText(/Document processing failed/)).toBeInTheDocument();
+    expect(screen.queryByText('Ingestion request completed')).not.toBeInTheDocument();
+  });
+
+  it('keeps the durable run receipt without linking legacy IDs as canonical records', async () => {
+    mocks.ingestFile.mockResolvedValueOnce({ ...csvResult(1, 0), ingestion_run_id: 'run-source-42' });
+    await uploadCsv();
+    expect(await screen.findByRole('link', { name: 'run-source-42' })).toHaveAttribute('href', '/api/ingestion/api/v1/records/ingestion-runs/run-source-42');
+    expect(screen.queryByRole('link', { name: 'evt-1' })).not.toBeInTheDocument();
+  });
+});
+
+
+describe('Reviewed ingestion context transitions', () => {
+  beforeEach(() => { mocks.urlError = null; });
+  it('clears and disposes a received job when switching tabs', async () => {
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: 'job-before-tab' });
+    let finish!: (value: { status: string }) => void;
+    mocks.getIngestionJob.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<IngestPage />);
+    await userEvent.type(screen.getByPlaceholderText(/https:/i), 'https://example.org/job');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    expect(await screen.findByText('Job job-before-tab')).toBeInTheDocument();
+    await waitFor(() => expect(finish).toBeDefined(), { timeout: 3500 });
+    await userEvent.click(screen.getByRole('tab', { name: /file upload/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /URL ingestion/i }));
+    expect(screen.queryByText('Job job-before-tab')).not.toBeInTheDocument();
+    await act(async () => finish({ status: 'completed' }));
+    expect(screen.queryByText('Ingestion request completed')).not.toBeInTheDocument();
+  });
+
+  it('clears a retained job when an example replaces the input', async () => {
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: 'job-before-example' });
+    render(<IngestPage />);
+    await userEvent.type(screen.getByPlaceholderText(/https:/i), 'https://example.org/job');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    expect(await screen.findByText('Job job-before-example')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'FDA Regulations (21 CFR)' }));
+    expect(screen.queryByText('Job job-before-example')).not.toBeInTheDocument();
+  });
+
+  it('suppresses a stale observer error after an example replaces pending input', async () => {
+    let reject!: (error: Error) => void;
+    mocks.ingestURL.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    render(<IngestPage />);
+    await userEvent.type(screen.getByPlaceholderText(/https:/i), 'https://example.org/A');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'FDA Regulations (21 CFR)' }));
+    await act(async () => { mocks.urlError = new Error('URL A rejected'); reject(mocks.urlError); });
+    expect(screen.queryByText('URL A rejected')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ingestion Failed')).not.toBeInTheDocument();
+  });
+
+  it('clears a current failure when the URL is edited', async () => {
+    mocks.ingestURL.mockImplementationOnce(async () => { mocks.urlError = new Error('URL A rejected'); throw mocks.urlError; });
+    render(<IngestPage />);
+    const input = screen.getByPlaceholderText(/https:/i);
+    await userEvent.type(input, 'https://example.org/A');
+    await userEvent.click(screen.getByRole('button', { name: /ingest document/i }));
+    expect((await screen.findAllByText('URL A rejected')).length).toBeGreaterThan(0);
+    fireEvent.change(input, { target: { value: 'https://example.org/B' } });
+    expect(screen.queryByText('URL A rejected')).not.toBeInTheDocument();
   });
 });

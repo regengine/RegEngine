@@ -160,6 +160,8 @@ export interface HeaderMappingSuggestion {
 }
 
 export interface IngestCSVResponse {
+    /** Durable source receipt; event IDs may belong to the legacy event store. */
+    ingestion_run_id?: string | null;
     total: number;
     accepted: number;
     rejected: number;

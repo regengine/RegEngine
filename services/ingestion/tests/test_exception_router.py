@@ -342,3 +342,16 @@ def test_wildcard_scope_does_not_allow_cross_tenant(monkeypatch):
     )
     assert resp.status_code == 403
     assert "tenant mismatch" in resp.json()["detail"].lower()
+
+
+@pytest.mark.parametrize("action,payload", [("resolve", {"resolution_summary": "Supplier evidence corrected", "resolved_by": "operator"}), ("waive", {"waiver_reason": "Supplier exemption reviewed", "waiver_approved_by": "operator"})])
+def test_stale_exception_transition_returns_conflict(client, mock_svc, action, payload):
+    getattr(mock_svc, action + "_exception").return_value = None
+    response = client.patch(f"/api/v1/exceptions/exc-stale/{action}", json=payload)
+    assert response.status_code == 409
+
+@pytest.mark.parametrize("action,payload", [("resolve", {"resolution_summary": "   ", "resolved_by": "operator"}), ("waive", {"waiver_reason": " ", "waiver_approved_by": "operator"})])
+def test_exception_transition_rejects_blank_reason(client, mock_svc, action, payload):
+    response = client.patch(f"/api/v1/exceptions/exc-blank/{action}", json=payload)
+    assert response.status_code == 422
+    getattr(mock_svc, action + "_exception").assert_not_called()

@@ -207,7 +207,9 @@ export default function CanonicalRecordsPage() {
       {/* Detail panels sit below the table, so selecting a row never reflows it. */}
       {selectedEventId && (
         <div className="mt-8 space-y-4">
-          {eventDetail.isLoading ? (
+          {eventDetail.error ? (
+            <Callout tone="danger" role="alert" title="Unable to load record detail" action={<Button onClick={() => eventDetail.refetch()}>Retry detail</Button>}>{(eventDetail.error as Error).message}</Callout>
+          ) : eventDetail.isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
             </div>

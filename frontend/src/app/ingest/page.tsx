@@ -107,6 +107,8 @@ export default function IngestPage() {
   const { apiKey: storedApiKey, setApiKey: storeApiKey } = useAuth();
   const [url, setUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const inputGeneration = useRef(0);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>('queued');
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -119,12 +121,32 @@ export default function IngestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
 
+  useEffect(() => () => { inputGeneration.current += 1; }, []);
+
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
   const isPending = isSubmitting || ingestMutation.isPending || ingestFileMutation.isPending;
 
+  // Input changes dispose the prior receipt monitor and its feedback together.
+  // The backend job continues independently; this form no longer presents it.
+  const invalidateInput = () => {
+    inputGeneration.current += 1;
+    setDocumentId(null);
+    setJobId(null);
+    setJobStatus('queued');
+    setStatusError(null);
+    setCsvResult(null);
+    setCsvError(null);
+    setCteSuggestion(null);
+    setErrorColumnSuggestions([]);
+    ingestMutation.reset();
+    ingestFileMutation.reset();
+  };
+
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      invalidateInput();
       setFile(e.target.files[0]);
       setCsvResult(null);
       setCsvError(null);
@@ -144,23 +166,30 @@ export default function IngestPage() {
   useEffect(() => {
     if (!jobId || jobId === 'demo-job-123') return;
 
+    const generation = inputGeneration.current;
+    let cancelled = false;
+    let polling = false;
     const intervalId = window.setInterval(async () => {
+      if (polling) return;
+      polling = true;
       try {
         const statusResponse = await apiClient.getIngestionJob(jobId);
+        if (cancelled || generation !== inputGeneration.current) return;
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
-          setJobStatus(STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
+          setJobStatus((['failed', ...STATUS_STEPS.map(step => step.id)]).includes(normalizedStatus) ? normalizedStatus : 'queued');
           if (['completed', 'failed'].includes(normalizedStatus)) {
+            if (normalizedStatus === 'failed') setStatusError('Document processing failed. Retain the job ID for investigation.');
             window.clearInterval(intervalId);
           }
         }
       } catch (error) {
-        console.error('Failed to fetch ingestion status:', error);
+        if (cancelled || generation !== inputGeneration.current) return;
         setStatusError('Unable to fetch ingestion status.');
-      }
+      } finally { polling = false; }
     }, 2000);
 
-    return () => window.clearInterval(intervalId);
+    return () => { cancelled = true; window.clearInterval(intervalId); };
   }, [jobId]);
 
   // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
@@ -172,6 +201,7 @@ export default function IngestPage() {
     if (activeTab === 'file' && !file) return;
     if (submitInFlightRef.current) return;
 
+    const generation = inputGeneration.current;
     submitInFlightRef.current = true;
     setIsSubmitting(true);
     try {
@@ -189,6 +219,8 @@ export default function IngestPage() {
           return;
         }
       }
+      if (generation !== inputGeneration.current) return;
+      setDocumentId(null);
       setJobId(null);
       setJobStatus('queued');
       setStatusError(null);
@@ -202,9 +234,9 @@ export default function IngestPage() {
         setJobId('demo-job-123');
 
         // Simulate real ingestion stages over 3.5 seconds
-        setTimeout(() => setJobStatus('parsing'), 800);
-        setTimeout(() => setJobStatus('extracting'), 1800);
-        setTimeout(() => setJobStatus('completed'), 3500);
+        setTimeout(() => { if (generation === inputGeneration.current) setJobStatus('parsing'); }, 800);
+        setTimeout(() => { if (generation === inputGeneration.current) setJobStatus('extracting'); }, 1800);
+        setTimeout(() => { if (generation === inputGeneration.current) setJobStatus('completed'); }, 3500);
         return;
       }
 
@@ -212,13 +244,19 @@ export default function IngestPage() {
         if (activeTab === 'file') {
           if (!file) return;
           const result = await ingestFileMutation.mutateAsync({ apiKey, file, cteType });
+          if (generation !== inputGeneration.current) return;
           setCsvResult(result);
           if (result.accepted > 0) notifyDashboardRefresh();
           return;
         }
 
         const result = await ingestMutation.mutateAsync({ apiKey, url });
-        const returnedJobId = result.job_id || result.doc_id || null;
+        if (generation !== inputGeneration.current) return;
+        const returnedJobId = result.job_id || null;
+        if (!returnedJobId && result.document_id) {
+          setDocumentId(result.document_id);
+          notifyDashboardRefresh();
+        } else if (!returnedJobId) setStatusError('The server returned no document receipt or processing job ID.');
         if (returnedJobId) {
           setJobId(returnedJobId);
           setJobStatus('queued');
@@ -226,6 +264,7 @@ export default function IngestPage() {
           notifyDashboardRefresh();
         }
       } catch (error) {
+        if (generation !== inputGeneration.current) return;
         if (activeTab === 'file') {
           setCsvError(error instanceof Error ? error.message : 'CSV upload failed');
           // Only offered when the server rejected an undeclared file: a
@@ -233,7 +272,7 @@ export default function IngestPage() {
           setCteSuggestion(cteType ? null : cteSuggestionFromUploadError(error));
           setErrorColumnSuggestions(columnSuggestionsFromUploadError(error));
         } else {
-          console.error('Ingestion failed:', error);
+          setStatusError(error instanceof Error ? error.message : 'Document ingestion failed');
         }
       }
     } finally {
@@ -435,7 +474,7 @@ export default function IngestPage() {
                       )}
                     </div>
 
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <Tabs value={activeTab} onValueChange={(tab) => { invalidateInput(); setActiveTab(tab); }} className="w-full">
                       <TabsList className="w-full">
                         <TabsTrigger value="url">URL Ingestion</TabsTrigger>
                         <TabsTrigger value="file">File Upload</TabsTrigger>
@@ -455,7 +494,7 @@ export default function IngestPage() {
                             type="url"
                             placeholder="https://example.com/regulatory-document.pdf"
                             value={url}
-                            onChange={(e) => setUrl(e.target.value)}
+                            onChange={(e) => { invalidateInput(); setUrl(e.target.value); }}
                             disabled={isPending}
                             leadingIcon={<Link2 strokeWidth={1.75} />}
                           />
@@ -468,6 +507,7 @@ export default function IngestPage() {
                                 size="sm"
                                 type="button"
                                 onClick={() => {
+                                  invalidateInput();
                                   setUrl(example.url);
                                   setActiveTab('url');
                                 }}
@@ -542,10 +582,12 @@ export default function IngestPage() {
                       {csvResult.kde_warnings?.map((warning, index) => (
                         <p key={index} className="mt-2">{warning}</p>
                       ))}
+                      {csvResult.ingestion_run_id && <p className="mt-2">Source receipt: <Link className="underline" href={`/api/ingestion/api/v1/records/ingestion-runs/${encodeURIComponent(csvResult.ingestion_run_id)}`}>{csvResult.ingestion_run_id}</Link></p>}
                       <ColumnSuggestionList suggestions={columnSuggestions(csvResult.header_mapping_suggestions)} />
                     </Callout>
                   )}
 
+                  {documentId && <Callout tone="info" className="mt-4" title="Document received">Document ID: {documentId}. Receipt does not confirm normalization, validation, or evidence verification.</Callout>}
                   {jobId && (
                     <div className="mt-6 space-y-4 rounded-lg border border-re-border-subtle bg-re-surface-inset p-4">
                       {jobId === 'demo-job-123' && demoBanner}
@@ -553,7 +595,7 @@ export default function IngestPage() {
                         <p className="text-ui font-medium text-re-text-primary">Ingestion Progress</p>
                         <Badge size="sm" mono>Job {jobId}</Badge>
                       </div>
-                      <ol className="flex items-start">
+                      {jobStatus !== 'failed' && <ol className="flex items-start">
                         {STATUS_STEPS.map((step, index) => {
                           const isComplete = index < activeStepIndex;
                           const isActive = index === activeStepIndex;
@@ -583,7 +625,7 @@ export default function IngestPage() {
                             </li>
                           );
                         })}
-                      </ol>
+                      </ol>}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-small text-re-text-tertiary">
                           <span>Status: {jobStatus.toUpperCase()}</span>
@@ -602,13 +644,13 @@ export default function IngestPage() {
                     </div>
                   )}
 
-                  {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError)) && (
+                  {((activeTab === 'url' && !jobId && statusError) || (activeTab === 'file' && csvError)) && (
                     <Callout tone="danger" role="alert" className="mt-4">
                       <h4 className="font-medium text-re-text-primary">
                         Ingestion Failed
                       </h4>
                       <p className="mt-1">
-                        {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
+                        {(activeTab === 'file' ? csvError : statusError) || 'An error occurred during ingestion'}
                       </p>
                       {activeTab === 'file' && (
                         <ColumnSuggestionList suggestions={errorColumnSuggestions} />
@@ -653,8 +695,10 @@ export default function IngestPage() {
                       size="sm"
                       variant="secondary"
                       onClick={() => {
+                        inputGeneration.current += 1;
                         setUrl('');
                         setFile(null);
+                        setDocumentId(null);
                         setJobId(null);
                         setJobStatus('queued');
                         ingestMutation.reset();

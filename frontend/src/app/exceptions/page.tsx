@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -12,6 +12,7 @@ import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { fieldControlClasses } from '@/components/ui/input';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
@@ -79,7 +80,26 @@ export default function ExceptionQueuePage() {
   const waiveException = useWaiveException(tid);
   const assignException = useAssignException(tid);
 
-  const blockingCount = blocking.data?.blocking_count ?? 0;
+  const [decision, setDecision] = useState<{ caseId: string; action: 'resolve' | 'waive' } | null>(null);
+  const [reason, setReason] = useState('');
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const openDecision = (caseId: string, action: 'resolve' | 'waive') => {
+    setDecision({ caseId, action }); setReason(''); setDecisionError(null);
+  };
+  const confirmDecision = async () => {
+    if (!decision || !reason.trim() || submittingRef.current) return;
+    submittingRef.current = true; setSubmitting(true); setDecisionError(null);
+    try {
+      if (decision.action === 'resolve') await resolveException.mutateAsync({ caseId: decision.caseId, resolutionSummary: reason.trim(), resolvedBy: actor });
+      else await waiveException.mutateAsync({ caseId: decision.caseId, waiverReason: reason.trim(), waiverApprovedBy: actor });
+      setDecision(null); setReason('');
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : 'Unable to save decision. Retry after reviewing the current case.');
+    } finally { submittingRef.current = false; setSubmitting(false); }
+  };
+  const blockingCount = blocking.error ? undefined : blocking.data?.blocking_count;
   const cases = (exceptions.data?.cases ?? []) as ExceptionRow[];
 
   const pageHeader = (
@@ -87,7 +107,9 @@ export default function ExceptionQueuePage() {
       title="Exception Queue"
       description="Manage compliance exceptions — resolve defects before they block response packages"
       meta={
-        blockingCount > 0 ? (
+        blockingCount === undefined ? (
+          <StatusBadge state="unknown" label="Blockers unavailable" />
+        ) : blockingCount > 0 ? (
           <StatusBadge state="blocked" label={`${blockingCount} Blocking`} />
         ) : (
           <StatusBadge state="compliant" label="No Blockers" />
@@ -210,22 +232,16 @@ export default function ExceptionQueuePage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => resolveException.mutate({
-                caseId: exc.case_id,
-                resolutionSummary: 'Resolved from queue',
-                resolvedBy: actor,
-              })}
+              disabled={submitting}
+              onClick={() => openDecision(exc.case_id, 'resolve')}
             >
               Resolve
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => waiveException.mutate({
-                caseId: exc.case_id,
-                waiverReason: 'Waived from queue',
-                waiverApprovedBy: actor,
-              })}
+              disabled={submitting}
+              onClick={() => openDecision(exc.case_id, 'waive')}
             >
               Waive
             </Button>
@@ -238,6 +254,17 @@ export default function ExceptionQueuePage() {
   return (
     <PageContainer>
       {pageHeader}
+      <Dialog open={!!decision} onOpenChange={(open) => { if (!open && !submittingRef.current) setDecision(null); }}>
+        <DialogContent>
+          <DialogTitle>{decision?.action === 'waive' ? 'Waive' : 'Resolve'} exception {decision?.caseId}</DialogTitle>
+          <DialogDescription>Document the evidence and rationale for this specific case before signing off.</DialogDescription>
+          <label htmlFor="exception-reason">Case-specific reason</label>
+          <textarea id="exception-reason" className={fieldControlClasses} value={reason} disabled={submitting} onChange={e => setReason(e.target.value)} />
+          {decisionError && <Callout tone="danger" role="alert">{decisionError}</Callout>}
+          <Button disabled={!reason.trim() || submitting} onClick={confirmDecision}>{submitting ? 'Saving…' : `Confirm ${decision?.action}`}</Button>
+        </DialogContent>
+      </Dialog>
+      {blocking.error && <Callout tone="warning" role="alert" action={<Button onClick={() => blocking.refetch()}>Retry blocker count</Button>}>Blocking status could not be assessed.</Callout>}
 
       <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
 
@@ -270,7 +297,7 @@ export default function ExceptionQueuePage() {
           empty={{
             icon: CheckCircle,
             title: 'No exceptions found',
-            description: 'All records are compliant with current filters',
+            description: 'No cases match the current filters',
           }}
           toolbar={{
             search: {
