@@ -49,9 +49,10 @@ function readStoredTenantId(): string | null {
     }
 }
 
-export function TenantProvider({ children }: { children: React.ReactNode }) {
+export function TenantProvider({ children, resetSessionCache }: { children: React.ReactNode; resetSessionCache?: () => void }) {
     const { tenantId: authTenantId, isHydrated } = useAuth();
     const [tenantId, setTenantId] = useState<string>(() => readStoredTenantId() || DEFAULT_TENANT_ID);
+    const [lastAuthTenant, setLastAuthTenant] = useState<string | null | undefined>(undefined);
     const [hadStoredTenant] = useState<boolean>(() => Boolean(readStoredTenantId()));
 
     // Sync the API client with the tenant this provider already resolved.
@@ -69,19 +70,24 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        const resolvedTenantId = isSafeTenantId(authTenantId) ? authTenantId : readStoredTenantId();
+        if (lastAuthTenant === authTenantId) return;
+        // Reconcile server auth identity before enabling tenant queries.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLastAuthTenant(authTenantId);
+        const resolvedTenantId = isSafeTenantId(authTenantId) ? authTenantId : DEFAULT_TENANT_ID;
         if (!resolvedTenantId || resolvedTenantId === tenantId) {
             return;
         }
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        resetSessionCache?.();
         setTenantId(resolvedTenantId);
         apiClient.setCurrentTenant(resolvedTenantId);
-    }, [authTenantId, isHydrated, tenantId]);
+    }, [authTenantId, isHydrated, tenantId, lastAuthTenant, resetSessionCache]);
 
     // Update local storage and API client on change
     const updateTenant = (id: string) => {
         const safeTenantId = isSafeTenantId(id) ? id : DEFAULT_TENANT_ID;
+        if (safeTenantId !== tenantId) resetSessionCache?.();
         setTenantId(safeTenantId);
         try {
             if (safeTenantId === id) {
@@ -101,7 +107,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     // isHydrated flips — in that gap tenantId is still the placeholder and
     // gated hooks would fire against it anyway.
     const authResolvedTenantId = isHydrated && isSafeTenantId(authTenantId) ? authTenantId : null;
-    const awaitingAuthSwap = Boolean(authResolvedTenantId && authResolvedTenantId !== tenantId);
+    const awaitingAuthSwap = Boolean(authResolvedTenantId && lastAuthTenant !== authTenantId && authResolvedTenantId !== tenantId);
 
     const value = {
         tenantId,

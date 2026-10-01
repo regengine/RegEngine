@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { apiClient } from '@/lib/api-client';
+import { readOrganizationPolicy } from '@/lib/organization-policy';
 import { useAuth } from '@/lib/auth-context';
 import { registerPasskey } from '@/lib/passwordless-auth';
 
@@ -37,7 +37,15 @@ const SECURITY_CAPABILITIES = [
 ];
 
 export default function SecuritySettingsPage() {
-  const { authMethod, isHighAssuranceSession, tenantId, user } = useAuth();
+  const { tenantId, user, authMethod, sessionIdentityVersion } = useAuth();
+  // A credential/tenant change disposes both pending checks and prior results.
+  // Late responses belong to the unmounted content and cannot publish under B.
+  const identity = JSON.stringify([tenantId, user?.id, authMethod, sessionIdentityVersion, user?.is_sysadmin, user?.permissions]);
+  return <SecuritySettingsContent key={identity} />;
+}
+
+function SecuritySettingsContent() {
+  const { authMethod, isHighAssuranceSession, tenantId } = useAuth();
   const [policyStatus, setPolicyStatus] = useState<string | null>(null);
   const [passkeyStatus, setPasskeyStatus] = useState<string | null>(null);
   const [isCheckingPolicy, setIsCheckingPolicy] = useState(false);
@@ -57,7 +65,6 @@ export default function SecuritySettingsPage() {
   };
 
   const handleAdminPolicyAccessCheck = async () => {
-    const domainName = user?.email?.split('@')[1]?.toLowerCase() || 'example.test';
     if (!tenantId) {
       setPolicyStatus('No active organization is available for this session.');
       return;
@@ -66,14 +73,10 @@ export default function SecuritySettingsPage() {
     setIsCheckingPolicy(true);
     setPolicyStatus(null);
     try {
-      await apiClient.updateOrganizationSsoPolicy(tenantId, {
-        domain_name: domainName,
-        domain_verified: false,
-        enforced_auth_policy: 'standard',
-      });
-      setPolicyStatus('High-assurance organization policy access confirmed.');
-    } catch {
-      setPolicyStatus('Passkey authentication is required to change organization policy.');
+      const policy = await readOrganizationPolicy(tenantId);
+      setPolicyStatus(`Organization policy read access confirmed. Current policy: ${policy.enforced_auth_policy}; domain ${policy.domain_verified ? 'verified' : 'unverified'}.`);
+    } catch (err) {
+      setPolicyStatus(err instanceof Error ? err.message : 'Policy access could not be confirmed. Please retry.');
     } finally {
       setIsCheckingPolicy(false);
     }
@@ -115,12 +118,13 @@ export default function SecuritySettingsPage() {
               type="button"
               variant="outline"
               onClick={handleRegisterPasskey}
-              disabled={isRegisteringPasskey}
+              disabled={isRegisteringPasskey || !isHighAssuranceSession}
               loading={isRegisteringPasskey}
               leadingIcon={<Fingerprint strokeWidth={1.75} aria-hidden="true" />}
             >
               {isRegisteringPasskey ? 'Registering passkey...' : 'Register Passkey'}
             </Button>
+            {!isHighAssuranceSession && <Callout tone="info">Passkey enrollment requires an existing passkey or SSO session. Sign in with an enrolled passkey or your organization’s SSO; contact your administrator if neither is available.</Callout>}
             {passkeyStatus && (
               <Callout tone="info" role="status">
                 {passkeyStatus}
@@ -155,7 +159,7 @@ export default function SecuritySettingsPage() {
                 <dd className="mt-1.5">
                   <StatusBadge
                     state={isHighAssuranceSession ? 'compliant' : 'at-risk'}
-                    label={isHighAssuranceSession ? 'Ready' : 'Step-up required'}
+                    label={isHighAssuranceSession ? 'Assurance satisfied; access unverified' : 'Step-up required'}
                   />
                 </dd>
               </div>

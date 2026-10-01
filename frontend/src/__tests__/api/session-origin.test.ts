@@ -383,6 +383,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
                 Authorization: 'Bearer access-token-to-revoke',
             },
             redirect: 'manual',
+            signal: expect.any(AbortSignal),
         });
         expect(response.cookies.get('re_access_token')).toEqual(
             expect.objectContaining({ name: 're_access_token', value: '' }),
@@ -410,10 +411,25 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
                 cookie: '__Host-regengine_session=opaque-session-token',
             },
             redirect: 'manual',
+            signal: expect.any(AbortSignal),
         });
         expect(response.cookies.get('__Host-regengine_session')).toEqual(
             expect.objectContaining({ name: '__Host-regengine_session', value: '' }),
         );
+    });
+
+    it('bounds stalled backend revocation and expires all local credentials', async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+        try {
+            const deletion = DELETE(makeRequest({method:'DELETE', cookies:{'__Host-regengine_session':'synthetic-stalled'}}));
+            await vi.advanceTimersByTimeAsync(3_001);
+            const response = await deletion;
+            expect(response.status).toBe(200);
+            await expect(response.json()).resolves.toEqual({ok:true,local_cookie_expiry:true,revocation_confirmed:false});
+            expect(response.cookies.get('__Host-regengine_session')).toEqual(expect.objectContaining({value:'',maxAge:0,secure:true,path:'/'}));
+            expect(response.cookies.get('re_access_token')?.value).toBe('');
+        } finally { vi.useRealTimers(); }
     });
 
     it('DELETE without an access token skips backend logout and still clears cookies', async () => {

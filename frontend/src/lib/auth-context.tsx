@@ -6,6 +6,21 @@ import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
 
+// Browser storage is optional; cookie validation remains authoritative.
+const safeStorage = {
+  getItem(key: string) { try { return localStorage.getItem(key); } catch { return null; } },
+  setItem(key: string, value: string) { try { localStorage.setItem(key, value); } catch {} },
+  removeItem(key: string) { try { localStorage.removeItem(key); } catch {} },
+  keys() { try { return Object.keys(localStorage); } catch { return []; } },
+};
+async function boundedSessionFetch(options: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => {controller.abort(); reject(new Error('Session request timed out.'));}, 10_000); });
+  try { return await Promise.race([fetchWithCsrf('/api/session', {...options, signal:controller.signal}), timeout]); }
+  finally { clearTimeout(timer!); }
+}
+
 interface AuthContextType {
   user: User | null;
   accessToken: string | null;
@@ -18,6 +33,8 @@ interface AuthContextType {
   isHighAssuranceSession: boolean;
   isOnboarded: boolean;
   isHydrated: boolean;
+  /** Nonsecret version for in-document credential/identity boundaries. */
+  sessionIdentityVersion: number;
   demoMode: boolean;
   setApiKey: (key: string | null) => Promise<void>;
   setTenantId: (id: string | null) => Promise<void>;
@@ -95,10 +112,10 @@ async function setSessionCookies(params: {
     // immediately without race-conditioning on the hydrate fetch.
     if (!document.cookie.includes('re_csrf=')) {
       try {
-        await fetch('/api/session', { method: 'GET', credentials: 'include' });
+        await boundedSessionFetch({ method: 'GET', credentials: 'include' });
       } catch { /* fall through — POST will surface the error if cookies still missing */ }
     }
-    const res = await fetchWithCsrf('/api/session', {
+    const res = await boundedSessionFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -118,18 +135,14 @@ async function setSessionCookies(params: {
   }
 }
 
-/** Clear all session cookies via /api/session DELETE. Must be awaited before navigation. */
+/** Reject unless browser cookie expiry was confirmed by the endpoint. */
 async function clearSessionCookies(): Promise<void> {
   if (typeof window === 'undefined') return;
   try {
-    const res = await fetchWithCsrf('/api/session', { method: 'DELETE' });
-    if (!res.ok && process.env.NODE_ENV !== 'production') {
-      console.error('[auth] Failed to clear session cookie:', res.status);
-    }
-  } catch (err) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[auth] Failed to clear session cookie:', err);
-    }
+    const res = await boundedSessionFetch({method: 'DELETE'});
+    if (!res.ok) throw new Error('Session deletion rejected.');
+  } catch {
+    throw new Error('Sign-out could not be confirmed. Please retry.');
   }
 }
 
@@ -144,7 +157,7 @@ async function getSessionInfo(): Promise<{
 } | null> {
   if (typeof window === 'undefined') return null;
   try {
-    const res = await fetch('/api/session', { method: 'GET', credentials: 'include' });
+    const res = await boundedSessionFetch({ method: 'GET', credentials: 'include' });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -175,15 +188,15 @@ function normalizeAuthMethod(value: unknown): SessionAuthMethod | null {
 async function migrateLocalStorageToCookies(): Promise<void> {
   if (typeof window === 'undefined') return;
 
-  const legacyApiKey = localStorage.getItem(STORAGE_KEYS._LEGACY_API_KEY);
-  const legacyAccessToken = localStorage.getItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
+  const legacyApiKey = safeStorage.getItem(STORAGE_KEYS._LEGACY_API_KEY);
+  const legacyAccessToken = safeStorage.getItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
   // Remove any retired RegEngine credential entries left by older builds,
   // including credential types that no longer have a runtime representation.
   // Capture the two supported migration values above before clearing them.
-  for (const key of Object.keys(localStorage)) {
+  for (const key of safeStorage.keys()) {
     if (/^regengine_.*(?:_key|_token)$/.test(key)) {
-      localStorage.removeItem(key);
+      safeStorage.removeItem(key);
     }
   }
 
@@ -193,8 +206,8 @@ async function migrateLocalStorageToCookies(): Promise<void> {
     // eslint-disable-next-line no-console
     console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
   }
-  const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
-  const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+  const tenantId = safeStorage.getItem(STORAGE_KEYS.TENANT_ID);
+  const userStr = safeStorage.getItem(STORAGE_KEYS.USER);
   let user: User | null = null;
   try {
     if (userStr) user = JSON.parse(userStr);
@@ -210,8 +223,8 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   // Remove sensitive keys from localStorage permanently. These explicit
   // removals also support non-browser Storage mocks whose keys are not
   // enumerable.
-  localStorage.removeItem(STORAGE_KEYS._LEGACY_API_KEY);
-  localStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
+  safeStorage.removeItem(STORAGE_KEYS._LEGACY_API_KEY);
+  safeStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
   if (process.env.NODE_ENV !== 'production') {
     // eslint-disable-next-line no-console
@@ -223,7 +236,7 @@ async function migrateLocalStorageToCookies(): Promise<void> {
 // Provider
 // ---------------------------------------------------------------------------
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children, resetSessionCache }: { children: React.ReactNode; resetSessionCache?: () => void }) {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
   const [tenantId, setTenantIdState] = useState<string | null>(null);
   const [accessToken, setAccessTokenState] = useState<string | null>(null);
@@ -233,6 +246,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [demoMode, setDemoModeState] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const logoutInProgressRef = useRef(false);
+  const sessionGeneration = useRef(0);
+  const [sessionIdentityVersion, setSessionIdentityVersion] = useState(0);
   // Set once login() has established a cookie session. Guards the hydrate
   // effect's stale-state cleanup: if the /api/session GET was in flight while
   // a login completed (magic-link / auto-login on mount), its stale
@@ -244,6 +259,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
 
     const hydrate = async () => {
+      const generation = sessionGeneration.current;
+      try {
       // If middleware redirected here with an auth error the JWT is expired or
       // invalid. Clear stale client state so the nav doesn't render an
       // authenticated shell on the login page.
@@ -252,8 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.location.search.includes('error=token_invalid');
 
       if (isAuthError) {
-        Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
-        clearSessionCookies();
+        Object.values(STORAGE_KEYS).forEach(key => safeStorage.removeItem(key));
+        void clearSessionCookies().catch(() => {});
         setAuthMethodState(null);
         setIsHydrated(true);
         return;
@@ -261,12 +278,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Step 1: If localStorage still has secrets, migrate them to cookies
       await migrateLocalStorageToCookies();
+      if (generation !== sessionGeneration.current) return;
 
       // Step 2: Read non-sensitive state from localStorage
-      const storedTenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
-      const storedOnboarded = localStorage.getItem(STORAGE_KEYS.ONBOARDED);
-      const storedDemoMode = localStorage.getItem(STORAGE_KEYS.DEMO_MODE);
-      const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
+      const storedTenantId = safeStorage.getItem(STORAGE_KEYS.TENANT_ID);
+      const storedOnboarded = safeStorage.getItem(STORAGE_KEYS.ONBOARDED);
+      const storedDemoMode = safeStorage.getItem(STORAGE_KEYS.DEMO_MODE);
+      const storedUser = safeStorage.getItem(STORAGE_KEYS.USER);
 
       if (storedTenantId) setTenantIdState(storedTenantId);
       if (storedOnboarded === 'true') setIsOnboarded(true);
@@ -282,22 +300,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Step 3: Check cookie-based session for credentials
       const session = await getSessionInfo();
+      if (generation !== sessionGeneration.current) return;
       if (session) {
         const sessionAuthMethod = normalizeAuthMethod(session.auth_method);
         setAuthMethodState(sessionAuthMethod);
         if (session.tenant_id && session.tenant_id !== storedTenantId) {
           setTenantIdState(session.tenant_id);
-          localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.tenant_id);
+          safeStorage.setItem(STORAGE_KEYS.TENANT_ID, session.tenant_id);
         } else if (!session.tenant_id && session.auth_method && storedTenantId) {
           setTenantIdState(null);
-          localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+          safeStorage.removeItem(STORAGE_KEYS.TENANT_ID);
         }
         if (session.authenticated) {
           if (session.user) {
             const normalizedSessionUser = normalizeUserProfile(session.user);
             setUserState(normalizedSessionUser);
             apiClient.setUser(normalizedSessionUser);
-            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
+            safeStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
           }
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
@@ -310,7 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // user profile, so this doesn't affect them.
           setUserState(null);
           apiClient.setUser(null);
-          localStorage.removeItem(STORAGE_KEYS.USER);
+          safeStorage.removeItem(STORAGE_KEYS.USER);
         }
         if (session.has_api_key) {
           setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
@@ -327,10 +346,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthMethodState(null);
       }
 
-      setIsHydrated(true);
+      } finally { setIsHydrated(true); }
     };
 
-    hydrate();
+    void hydrate().catch(() => { setAuthMethodState(null); });
   }, []);
 
   const setApiKey = useCallback(async (key: string | null) => {
@@ -342,39 +361,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!cookiesOk) {
         throw new Error('API key could not be saved. Please try again.');
       }
+      sessionGeneration.current += 1;
+      setSessionIdentityVersion(value => value + 1);
+      resetSessionCache?.();
       setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
     } else {
+      sessionGeneration.current += 1;
+      setSessionIdentityVersion(value => value + 1);
+      resetSessionCache?.();
       setApiKeyState(null);
     }
-  }, []);
+  }, [resetSessionCache]);
 
   const setTenantId = useCallback(async (id: string | null) => {
     if (typeof window !== 'undefined') {
       if (id) {
         // Await cookie write before updating state — middleware needs the
         // tenant cookie in place before any navigation triggers a request.
-        await setSessionCookies({ tenantId: id });
-        localStorage.setItem(STORAGE_KEYS.TENANT_ID, id);
+        const cookiesOk = await setSessionCookies({ tenantId: id });
+        if (!cookiesOk) throw new Error('Organization session could not be updated. Please retry.');
+        safeStorage.setItem(STORAGE_KEYS.TENANT_ID, id);
       } else {
-        localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+        safeStorage.removeItem(STORAGE_KEYS.TENANT_ID);
       }
     }
+    if (id !== tenantId) { sessionGeneration.current += 1; setSessionIdentityVersion(value => value + 1); resetSessionCache?.(); }
     setTenantIdState(id);
-  }, []);
+  }, [tenantId, resetSessionCache]);
 
   const setDemoMode = useCallback((enabled: boolean) => {
     setDemoModeState(enabled);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.DEMO_MODE, String(enabled));
+      safeStorage.setItem(STORAGE_KEYS.DEMO_MODE, String(enabled));
     }
   }, []);
 
   const completeOnboarding = useCallback(() => {
     setIsOnboarded(true);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.ONBOARDED, 'true');
+      safeStorage.setItem(STORAGE_KEYS.ONBOARDED, 'true');
       // Best-effort persist to backend so state survives across devices
-      const tid = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
+      const tid = safeStorage.getItem(STORAGE_KEYS.TENANT_ID);
       if (tid) {
         fetchWithCsrf(`/api/admin/v1/tenants/${tid}/settings`, {
           method: 'PATCH',
@@ -394,16 +421,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     logoutInProgressRef.current = false;
     const normalizedLoginUser = normalizeUserProfile(loginUser);
-
-    // Non-React state — these don't trigger re-renders or effects.
-    apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
-    apiClient.setUser(normalizedLoginUser);
-    if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedLoginUser));
-      if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
-    }
 
     // Set the HTTP-only cookie BEFORE updating React state.
     //
@@ -432,17 +449,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Session could not be established. Please try again.');
     }
 
+    sessionGeneration.current += 1; setSessionIdentityVersion(value => value + 1);
+    resetSessionCache?.();
     loginCompletedRef.current = true;
+    apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
+    apiClient.setUser(normalizedLoginUser);
+    apiClient.setCurrentTenant(loginTenantId ?? null);
+    safeStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedLoginUser));
+    if (loginTenantId) safeStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
+    else safeStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+
 
     // React state updates — triggers re-renders and the navigation useEffect.
     // Cookie should be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
     setAuthMethodState(null);
     setUserState(normalizedLoginUser);
-    if (loginTenantId) setTenantIdState(loginTenantId);
-  }, []);
+    setTenantIdState(loginTenantId ?? null);
+  }, [resetSessionCache]);
 
   const clearCredentials = useCallback(async () => {
+    sessionGeneration.current += 1; setSessionIdentityVersion(value => value + 1);
+    loginCompletedRef.current = false;
+    resetSessionCache?.();
     setApiKeyState(null);
     setTenantIdState(null);
     setAccessTokenState(null);
@@ -456,15 +485,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiClient.setCurrentTenant(null);
 
     if (typeof window !== 'undefined') {
-      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+      Object.values(STORAGE_KEYS).forEach(key => safeStorage.removeItem(key));
     }
     await clearSessionCookies();
-  }, []);
+  }, [resetSessionCache]);
 
   const logout = useCallback(async () => {
     logoutInProgressRef.current = true;
-    await clearCredentials();
-    logoutInProgressRef.current = false;
+    try { await clearCredentials(); } finally { logoutInProgressRef.current = false; }
   }, [clearCredentials]);
 
   const isAuthenticated = !!(user && accessToken);
@@ -494,6 +522,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isOnboarded,
         isHydrated,
+        sessionIdentityVersion,
         demoMode,
         setApiKey,
         setTenantId,

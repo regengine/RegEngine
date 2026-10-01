@@ -403,17 +403,27 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-    const accessToken = request.cookies.get('re_access_token')?.value;
-    if (isUsableCredential(accessToken)) {
-        await revokeBackendSession(accessToken);
-    }
+    // One shared deadline bounds all fallback targets and both credential types.
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<boolean>(resolve => {
+        timer = setTimeout(() => { controller.abort(); resolve(false); }, 3_000);
+    });
+    const revoke = async () => {
+        const accessToken = request.cookies.get('re_access_token')?.value;
+        let confirmed = true;
+        if (isUsableCredential(accessToken)) confirmed = await revokeBackendSession(accessToken, controller.signal);
+        const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
+        if (isUsableCredential(sessionToken)) {
+            confirmed = !controller.signal.aborted && await revokeOpaqueSession(sessionToken, controller.signal) && confirmed;
+        }
+        return confirmed;
+    };
+    let revocationConfirmed = false;
+    try { revocationConfirmed = await Promise.race([revoke(), deadline]); }
+    finally { clearTimeout(timer!); }
 
-    const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
-    if (isUsableCredential(sessionToken)) {
-        await revokeOpaqueSession(sessionToken);
-    }
-
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true, local_cookie_expiry: true, revocation_confirmed: revocationConfirmed });
     response.cookies.delete('re_access_token');
     response.cookies.delete('re_api_key');
     response.cookies.delete('re_tenant_id');
@@ -433,8 +443,9 @@ export async function DELETE(request: NextRequest) {
     return response;
 }
 
-async function revokeBackendSession(accessToken: string): Promise<void> {
+async function revokeBackendSession(accessToken: string, signal: AbortSignal): Promise<boolean> {
     for (const target of getAdminTargets()) {
+        if (signal.aborted) return false;
         try {
             const response = await fetch(`${target}/auth/logout`, {
                 method: 'POST',
@@ -442,21 +453,23 @@ async function revokeBackendSession(accessToken: string): Promise<void> {
                     Authorization: `Bearer ${accessToken}`,
                 },
                 redirect: 'manual',
+                signal,
             });
 
             if (response.status >= 300 && response.status < 400) {
                 continue;
             }
             if (!shouldRetryAdminProxyResponse(response, 'auth/logout')) {
-                return;
+                return response.ok;
             }
         } catch {
             // Best effort only: local cookie teardown must still complete.
         }
     }
+    return false;
 }
 
-async function revokeOpaqueSession(sessionToken: string): Promise<void> {
+async function revokeOpaqueSession(sessionToken: string, signal: AbortSignal): Promise<boolean> {
     // Passwordless sessions carry no bearer token — the backend authenticates
     // the opaque cookie itself, so forward it to the session-logout endpoint
     // to revoke the sessions row server-side. Without this, logout only
@@ -464,6 +477,7 @@ async function revokeOpaqueSession(sessionToken: string): Promise<void> {
     const cookieHeader = `${AUTH_SESSION_COOKIE}=${sessionToken}`;
 
     for (const target of getAdminTargets()) {
+        if (signal.aborted) return false;
         try {
             const response = await fetch(`${target}/auth/session/logout`, {
                 method: 'POST',
@@ -471,16 +485,18 @@ async function revokeOpaqueSession(sessionToken: string): Promise<void> {
                     cookie: cookieHeader,
                 },
                 redirect: 'manual',
+                signal,
             });
 
             if (response.status >= 300 && response.status < 400) {
                 continue;
             }
             if (!shouldRetryAdminProxyResponse(response, 'auth/session/logout')) {
-                return;
+                return response.ok;
             }
         } catch {
             // Best effort only: local cookie teardown must still complete.
         }
     }
+    return false;
 }

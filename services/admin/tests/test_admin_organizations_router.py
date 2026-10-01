@@ -181,3 +181,41 @@ def test_update_organization_sso_policy_allows_webauthn_session_and_updates_data
     assert "regengine.is_sysadmin', 'false'" in gucs[1]
     assert "regengine.user_id" in gucs[2]
     assert "regengine.is_sysadmin', 'true'" in gucs[3]
+
+
+def test_read_policy_never_mutates_verified_sso_policy():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    organization = OrganizationModel(id=org_id, name="Synthetic", domain_name="secure.example", domain_verified=True, enforced_auth_policy="sso_only")
+    db = _db_with_authenticated_session(user=_user(is_sysadmin=True), session=_session(auth_method="webauthn"))
+    db.get.return_value = organization
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "synthetic")
+    response = client.get(f"/admin/organizations/{org_id}/sso-policy")
+    assert response.status_code == 200
+    assert response.json()["domain_verified"] is True
+    assert response.json()["enforced_auth_policy"] == "sso_only"
+    assert organization.domain_name == "secure.example"
+    db.commit.assert_not_called()
+
+
+def test_policy_read_keeps_existing_high_assurance_guard():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    db = _db_with_authenticated_session(user=_user(is_sysadmin=True), session=_session(auth_method="email_otp"))
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "synthetic")
+    response = client.get(f"/admin/organizations/{org_id}/sso-policy")
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "requires_step_up"
+    db.get.assert_not_called()
+    db.commit.assert_not_called()
+
+
+def test_policy_read_keeps_existing_sysadmin_guard():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    db = _db_with_authenticated_session(user=_user(is_sysadmin=False), session=_session(auth_method="webauthn"))
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "synthetic")
+    response = client.get(f"/admin/organizations/{org_id}/sso-policy")
+    assert response.status_code == 403
+    db.get.assert_not_called()
+    db.commit.assert_not_called()

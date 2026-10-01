@@ -45,7 +45,7 @@ class OrganizationSsoPolicyUpdate(BaseModel):
 
 class OrganizationSsoPolicyResponse(BaseModel):
     id: uuid.UUID
-    domain_name: str
+    domain_name: str | None
     domain_verified: bool
     enforced_auth_policy: OrganizationAuthPolicy
 
@@ -65,6 +65,24 @@ def require_super_admin(
             detail="Super admin access required.",
         )
     return current_user
+
+
+@router.get("/{org_id}/sso-policy", response_model=OrganizationSsoPolicyResponse)
+async def read_organization_sso_policy(
+    org_id: uuid.UUID,
+    _: UserModel = Depends(require_super_admin),
+    db: Session = Depends(get_session),
+) -> OrganizationSsoPolicyResponse:
+    # Preserve the existing high-assurance/sysadmin capability without writes.
+    arm_global_admin_context(db)
+    organization = db.get(OrganizationModel, org_id)
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found.")
+    return OrganizationSsoPolicyResponse(
+        id=organization.id, domain_name=organization.domain_name,
+        domain_verified=bool(organization.domain_verified),
+        enforced_auth_policy=organization.enforced_auth_policy,
+    )
 
 
 @router.put("/{org_id}/sso-policy", response_model=OrganizationSsoPolicyResponse)

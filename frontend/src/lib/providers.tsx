@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { AuthProvider } from './auth-context';
 import { TenantProvider } from './tenant-context';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Toaster } from '@/components/ui/toaster';
 import { CSPostHogProvider } from './posthog-provider';
@@ -24,12 +24,18 @@ export function Providers({ children, nonce }: ProvidersProps) {
         },
     }));
 
+    const resetSessionCache = useCallback(() => {
+        // Cancel before removal so late results cannot populate the next identity.
+        void queryClient.cancelQueries();
+        queryClient.clear();
+    }, [queryClient]);
+
     return (
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="re-theme-v2" nonce={nonce}>
             <CSPostHogProvider>
                 <QueryClientProvider client={queryClient}>
-                    <AuthProvider>
-                        <TenantProvider>
+                    <AuthProvider resetSessionCache={resetSessionCache}>
+                        <TenantProvider resetSessionCache={resetSessionCache}>
                             {children}
                             <Toaster />
                         </TenantProvider>
