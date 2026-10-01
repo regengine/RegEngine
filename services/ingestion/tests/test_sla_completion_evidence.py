@@ -92,3 +92,40 @@ def test_cold_worker_loads_driver_uuid_history_and_completion_replay(monkeypatch
     replay = asyncio.run(sla_tracking.complete_request(str(request_id), evidence=EVIDENCE, ctx=TenantContext(str(tenant_id),'jwt','operator')))
     assert replay['request']['status'] == 'completed'
     assert replay['request']['completed_at'] == now.isoformat()
+
+
+@pytest.mark.parametrize('persisted_status', ['open','in_progress'])
+def test_cold_driver_loaded_overdue_list_and_dashboard_are_consistent(monkeypatch, persisted_status):
+    import asyncio
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from datetime import timedelta
+    from app import sla_tracking
+    from shared.pagination import PaginationParams
+    tenant, request_id, completed_id = uuid4(), uuid4(), uuid4()
+    now = datetime.now(timezone.utc)
+    def row(identity, status, completed_at=None):
+        return SimpleNamespace(id=identity,tenant_id=tenant,request_type='records_request',
+            requested_at=now-timedelta(hours=26),deadline_at=now-timedelta(hours=2),
+            status=status,completed_at=completed_at,export_ids=None,notes=None)
+    db = MagicMock()
+    db.execute.return_value.fetchall.return_value = [row(request_id,persisted_status),row(completed_id,'completed',now-timedelta(hours=3))]
+    monkeypatch.setattr('shared.database.SessionLocal',lambda:db)
+    sla_tracking._requests_store.clear()
+    unrelated = FDARequest(tenant_id=str(uuid4()),status='in_progress',deadline_at=now-timedelta(hours=2))
+    sla_tracking._requests_store[unrelated.id] = unrelated
+    ctx = TenantContext(str(tenant),'jwt','synthetic-operator')
+    for _ in range(2):
+        listed = asyncio.run(sla_tracking.list_requests(str(tenant),status_filter='overdue',pagination=PaginationParams(skip=0,limit=50),ctx=ctx))
+        assert listed['total'] == 1 and listed['requests'][0]['id'] == str(request_id)
+        assert listed['requests'][0]['status'] == 'overdue'
+        assert sla_tracking._requests_store[str(completed_id)].status == 'completed'
+        assert unrelated.status == 'in_progress'
+        # Cold dashboard must derive the same state rather than relying on
+        # the immediately preceding list's modified cache object.
+        sla_tracking._requests_store.clear()
+        sla_tracking._requests_store[unrelated.id] = unrelated
+        dashboard = asyncio.run(sla_tracking.sla_dashboard(str(tenant),ctx=ctx))
+        assert dashboard['open_requests'] == 0 and dashboard['overdue_requests'] == 1
+        assert {item['status'] for item in dashboard['requests']} == {'overdue','completed'}
+        assert unrelated.status == 'in_progress'

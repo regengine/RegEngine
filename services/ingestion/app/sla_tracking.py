@@ -117,10 +117,10 @@ _requests_store: Dict[str, FDARequest] = {}
 _alerts_store: Dict[str, SLAAlert] = {}
 
 
-def _refresh_overdue_statuses() -> None:
+def _refresh_overdue_statuses(requests: Optional[List[FDARequest]] = None) -> None:
     """Mark any open/in_progress requests as overdue if deadline has passed."""
     now = datetime.now(timezone.utc)
-    for req in _requests_store.values():
+    for req in requests if requests is not None else _requests_store.values():
         if req.status in ("open", "in_progress") and now > req.deadline_at:
             req.status = "overdue"
 
@@ -313,7 +313,6 @@ async def list_requests(
 ):
     """List all FDA records requests for a tenant with current status."""
     tenant_id = ctx.tenant_id
-    _refresh_overdue_statuses()
 
     # Try DB first, fall back to in-memory
     db_requests = _try_load_requests(tenant_id)
@@ -321,6 +320,9 @@ async def list_requests(
         requests = db_requests
     else:
         requests = [r for r in _requests_store.values() if r.tenant_id == tenant_id]
+    # Deadline status is derived from the selected durable/fallback rows,
+    # after loading and before filters/counts. Refresh only this tenant.
+    _refresh_overdue_statuses(requests)
 
     if status_filter:
         requests = [r for r in requests if r.status == status_filter]
@@ -439,7 +441,6 @@ async def sla_dashboard(
 ):
     """Compute SLA compliance metrics for a tenant."""
     tenant_id = ctx.tenant_id
-    _refresh_overdue_statuses()
 
     # Try DB first, fall back to in-memory
     db_requests = _try_load_requests(tenant_id)
@@ -447,6 +448,9 @@ async def sla_dashboard(
         requests = db_requests
     else:
         requests = [r for r in _requests_store.values() if r.tenant_id == tenant_id]
+    # Deadline status is derived from the selected durable/fallback rows,
+    # after loading and before filters/counts. Refresh only this tenant.
+    _refresh_overdue_statuses(requests)
 
     open_count = sum(1 for r in requests if r.status in ("open", "in_progress"))
     overdue_count = sum(1 for r in requests if r.status == "overdue")
