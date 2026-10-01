@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 1000
 
 type ToastProps = {
     id: string
@@ -21,9 +21,8 @@ function genId() {
     return count.toString()
 }
 
-type ActionType = {
-    type: "ADD_TOAST" | "UPDATE_TOAST" | "DISMISS_TOAST" | "REMOVE_TOAST"
-    toast: Partial<ToastProps>
+type ActionType = { type: "ADD_TOAST"; toast: ToastProps } | {
+    type: "UPDATE_TOAST" | "DISMISS_TOAST" | "REMOVE_TOAST"; toast: Partial<ToastProps>
 }
 
 interface State {
@@ -56,7 +55,7 @@ export const reducer = (state: State, action: ActionType): State => {
             return {
                 ...state,
                 toasts: [
-                    { ...action.toast, id: genId(), open: true } as ToastProps, // simple append
+                    action.toast,
                     ...state.toasts
                 ].slice(0, TOAST_LIMIT),
             }
@@ -158,7 +157,7 @@ function useToast() {
                 listeners.splice(index, 1)
             }
         }
-    }, [state])
+    }, [])
 
     return {
         ...state,

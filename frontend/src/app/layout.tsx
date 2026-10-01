@@ -1,3 +1,4 @@
+import { SkipLink } from '@/components/layout/skip-link'
 import { Providers } from '@/lib/providers'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
@@ -135,15 +136,10 @@ export default async function RootLayout({
         className="min-h-screen flex flex-col bg-background text-foreground re-page"
         suppressHydrationWarning
       >
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-[var(--re-brand)] focus:text-[var(--re-surface-base)] focus:text-sm focus:font-semibold focus:outline-none"
-        >
-          Skip to content
-        </a>
+        <SkipLink />
         <Providers nonce={nonce}>
           <MarketingHeader />
-          <main id="main-content" aria-label="Page content" className="flex-grow re-app-surface">
+          <main tabIndex={-1} id="main-content" aria-label="Page content" className="flex-grow re-app-surface">
             {children}
           </main>
           <AuthAwareFooter />

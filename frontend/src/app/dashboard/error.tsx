@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { captureError } from '@/instrumentation-client';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
 
@@ -12,9 +13,7 @@ export default function DashboardError({
     reset: () => void;
 }) {
     useEffect(() => {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error('Dashboard error:', error);
-        }
+        captureError(new Error('Dashboard route render failed'));
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

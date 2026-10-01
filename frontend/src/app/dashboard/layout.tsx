@@ -9,6 +9,7 @@ import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
 import { Container } from '@/components/layout/container';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,7 +38,6 @@ import {
     ChevronRight,
     ChevronDown,
     Menu,
-    X,
     Zap,
     AlertTriangle,
     FileCheck,
@@ -239,12 +239,10 @@ const footerLinkClass = clsx(
 function NavLinkItem({
     item,
     pathname,
-    role,
     tabIndex,
 }: {
     item: NavItem;
     pathname: string;
-    role?: string;
     tabIndex?: number;
 }) {
     const Icon = item.icon;
@@ -252,7 +250,6 @@ function NavLinkItem({
     return (
         <Link
             href={item.href}
-            role={role}
             tabIndex={tabIndex}
             aria-current={isActive ? 'page' : undefined}
             className={navItemClass(isActive)}
@@ -278,27 +275,25 @@ function CollapsibleNavSection({
     onToggle: () => void;
     pathname: string;
 }) {
-    const contentRef = React.useRef<HTMLDivElement>(null);
-    const [height, setHeight] = React.useState<number | undefined>(undefined);
-
-    // Measure content height for smooth animation
-    React.useEffect(() => {
-        if (contentRef.current) {
-            setHeight(contentRef.current.scrollHeight);
-        }
-    }, [expanded, section.items.length]);
-
+    const contentId = React.useId();
+    const toggleRef = React.useRef<HTMLButtonElement>(null);
     return (
         <div className="mt-1">
             {/* Section header — clickable toggle */}
             <button
                 type="button"
-                onClick={onToggle}
+                ref={toggleRef}
+                onClick={() => {
+                    const content = document.getElementById(contentId);
+                    if (expanded && content?.contains(document.activeElement)) toggleRef.current?.focus();
+                    onToggle();
+                }}
                 className={clsx(
                     'flex w-full cursor-pointer select-none items-center gap-1.5 rounded-md px-3 py-2 text-label uppercase text-re-text-muted transition-colors duration-120 hover:text-re-text-secondary motion-reduce:transition-none',
                     FOCUS_RING,
                 )}
                 aria-expanded={expanded}
+                aria-controls={contentId}
             >
                 {expanded ? (
                     <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -308,23 +303,11 @@ function CollapsibleNavSection({
                 <span>{section.title}</span>
             </button>
 
-            {/* Collapsible items */}
-            <div
-                className="overflow-hidden transition-all duration-200 motion-reduce:transition-none"
-                style={{ maxHeight: expanded ? (height ?? 1000) : 0, opacity: expanded ? 1 : 0 }}
-            >
-                <div ref={contentRef} className="space-y-0.5 pb-1 pl-2" role="list">
-                    {section.items.map((item) => (
-                        <NavLinkItem
-                            key={item.href + item.label}
-                            item={item}
-                            pathname={pathname}
-                            role="listitem"
-                            tabIndex={expanded ? 0 : -1}
-                        />
-                    ))}
-                </div>
-            </div>
+            <ul id={contentId} hidden={!expanded} className="space-y-0.5 pb-1 pl-2">
+                {expanded && section.items.map((item) => (
+                    <li key={item.href + item.label}><NavLinkItem item={item} pathname={pathname} /></li>
+                ))}
+            </ul>
         </div>
     );
 }
@@ -410,7 +393,7 @@ function DashboardShellSkeleton() {
                             <Skeleton className="h-9 w-9 rounded-md" />
                         </div>
                     </div>
-                    <div className="flex-1 pb-20 md:pb-0">
+                    <div id="dashboard-main-content" tabIndex={-1} aria-label="Dashboard page content" className="flex-1 pb-20 md:pb-0">
                         <Container width="app" className="space-y-6 py-6">
                             <Skeleton className="h-8 w-44" />
                             <Skeleton className="h-[244px] rounded-lg" />
@@ -453,6 +436,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // ------ Mobile nav sheet ------
     const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+    const [signingOut, setSigningOut] = React.useState(false);
+    const [signOutError, setSignOutError] = React.useState('');
+    const signingOutRef = React.useRef(false);
+    const routeSelected = React.useRef(false);
+    const handleSignOut = async () => {
+        if (signingOutRef.current) return;
+        signingOutRef.current = true;
+        setSigningOut(true);
+        setSignOutError('');
+        try {
+            await logout();
+            router.replace('/login');
+        } catch {
+            setSignOutError('Sign-out could not be confirmed. Please retry.');
+        } finally {
+            signingOutRef.current = false;
+            setSigningOut(false);
+        }
+    };
+    const accountActions = <div className="border-t border-re-border-subtle p-2">
+        {user?.email && <div aria-label="Signed in user" className="truncate px-3 py-1.5 text-small">{user.email}</div>}
+        <button type="button" disabled={signingOut} onClick={handleSignOut} className={clsx(footerLinkClass, 'text-left')}>
+            {signingOut ? 'Signing out…' : 'Sign Out'}
+        </button>
+        {signOutError && <p role="alert" className="px-3 py-2 text-small">{signOutError}</p>}
+    </div>;
 
     // Hydrate from localStorage + auto-expand sections containing the active route
     React.useEffect(() => {
@@ -498,42 +507,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }, [pathname]);
 
     React.useEffect(() => {
-        if (!mobileNavOpen) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setMobileNavOpen(false);
-        };
-        document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
+        window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: mobileNavOpen } }));
+        return () => { window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: false } })); };
     }, [mobileNavOpen]);
+    React.useEffect(() => {
+        if (!window.matchMedia) return;
+        const media = window.matchMedia('(min-width: 768px)');
+        const closeOnDesktop = () => { if (media.matches) setMobileNavOpen(false); };
+        media.addEventListener('change', closeOnDesktop);
+        return () => media.removeEventListener('change', closeOnDesktop);
+    }, []);
 
     const toggleSection = React.useCallback((key: string) => {
         setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
     }, []);
 
+    React.useEffect(() => {
+        if (!isAuthenticated && (signingOut || signOutError)) setMobileNavOpen(false);
+    }, [isAuthenticated, signingOut, signOutError]);
+
     // ------ Route-level auth guard ------
     React.useEffect(() => {
-        if (isHydrated && !isAuthenticated) {
+        if (isHydrated && !isAuthenticated && !signingOutRef.current && !signOutError) {
             router.push(`/login?next=${encodeURIComponent(pathname)}`);
         }
-    }, [isHydrated, isAuthenticated, router, pathname]);
+    }, [isHydrated, isAuthenticated, router, pathname, signOutError]);
 
+    if (!isAuthenticated && (signingOut || signOutError)) {
+        return <div className="p-6" id="dashboard-main-content" tabIndex={-1}>{accountActions}</div>;
+    }
     if (!isHydrated || !isAuthenticated) {
         return <DashboardShellSkeleton />;
     }
-
-    // Arrow keys traverse nav items (MEDIUM #12)
-    const onNavKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
-        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
-        e.preventDefault();
-        const links = Array.from(e.currentTarget.querySelectorAll<HTMLAnchorElement>('a[href]'));
-        const current = links.findIndex(l => l === document.activeElement);
-        let next = current;
-        if (e.key === 'ArrowDown') next = Math.min(current + 1, links.length - 1);
-        else if (e.key === 'ArrowUp') next = Math.max(current - 1, 0);
-        else if (e.key === 'Home') next = 0;
-        else if (e.key === 'End') next = links.length - 1;
-        links[next]?.focus();
-    };
 
     const sectionList = navSections.map((section) => (
         <CollapsibleNavSection
@@ -546,7 +551,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ));
 
     return (
-        <div className="re-app-shell flex min-h-screen flex-col">
+        <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}><div className="re-app-shell flex min-h-screen flex-col">
             {demoMode && (
                 <Callout tone="warning" className="rounded-none border-r-0 border-t-0 px-4 py-2 text-small">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -576,14 +581,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         aria-label="Dashboard navigation"
                         className="flex-1 overflow-y-auto px-2 py-3"
                         role="navigation"
-                        onKeyDown={onNavKeyDown}
                     >
                         {/* Always-visible top items */}
-                        <div className="space-y-0.5" role="list">
+                        <ul className="space-y-0.5">
                             {topItems.map((item) => (
-                                <NavLinkItem key={item.href} item={item} pathname={pathname} role="listitem" />
+                                <li key={item.href}><NavLinkItem item={item} pathname={pathname} /></li>
                             ))}
-                        </div>
+                        </ul>
 
                         {/* Divider between top items and collapsible sections */}
                         <div className="my-3 border-t border-re-border-subtle" />
@@ -592,43 +596,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {sectionList}
                     </nav>
 
-                    {/* Footer */}
-                    <div className="flex-shrink-0 border-t border-re-border-subtle p-2">
-                        {user?.email && (
-                            <div
-                                aria-label="Signed in user"
-                                className="truncate px-3 py-1.5 font-mono text-small text-re-text-muted"
-                                title={user.email}
-                            >
-                                {user.email}
-                            </div>
-                        )}
-                        <div className="flex flex-col">
-                            <Link href="/dashboard/settings" className={footerLinkClass}>
-                                Settings & usage
-                            </Link>
-                            <Link href="/onboarding" className={footerLinkClass}>
-                                Onboarding
-                            </Link>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    await logout();
-                                    router.replace('/login');
-                                }}
-                                className={clsx(footerLinkClass, 'text-left')}
-                            >
-                                Sign Out
-                            </button>
-                        </div>
-                    </div>
+                    <Link href="/dashboard/settings" className={footerLinkClass}>Settings & usage</Link>
+                    <Link href="/onboarding" className={footerLinkClass}>Onboarding</Link>
+                    {accountActions}
                 </aside>
 
                 <div className="flex min-w-0 flex-1 flex-col">
                     {/* Status strip — the only topbar (SPEC §3.3) */}
                     <header className="sticky top-0 z-[var(--re-z-sticky)] border-b border-re-border-subtle bg-re-surface-base/95 backdrop-blur">
                         <div className="flex h-12 items-center gap-2 px-3 md:h-11 md:px-4">
-                            <Button
+                            <DialogTrigger asChild><Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
@@ -639,7 +616,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 onClick={() => setMobileNavOpen(true)}
                             >
                                 <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
-                            </Button>
+                            </Button></DialogTrigger>
                             <Link
                                 href="/dashboard"
                                 className={clsx('flex shrink-0 items-center rounded-md md:hidden', FOCUS_RING)}
@@ -664,7 +641,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                     {/* Main content. overflow-x keeps a wide table inside the
                         content column instead of widening the whole page. */}
-                    <div className="min-w-0 flex-1 overflow-x-auto pb-20 md:pb-0">
+                    <div id="dashboard-main-content" tabIndex={-1} aria-label="Dashboard page content" className="min-w-0 flex-1 overflow-x-auto pb-20 md:pb-0">
                         <DashboardErrorBoundary>
                             {children}
                         </DashboardErrorBoundary>
@@ -700,45 +677,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </nav>
 
-            {/* Mobile nav sheet — TOP_ITEMS plus the collapsible sections */}
-            {mobileNavOpen && (
-                <div className="fixed inset-0 z-[var(--re-z-nav)] md:hidden">
-                    <div
-                        className="absolute inset-0 bg-re-surface-overlay"
-                        aria-hidden="true"
-                        onClick={() => setMobileNavOpen(false)}
-                    />
-                    <div
-                        id="dashboard-mobile-nav"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Dashboard navigation menu"
-                        className="relative flex h-full w-[min(20rem,86vw)] flex-col border-r border-re-border-subtle bg-re-surface-elevated"
-                    >
-                        <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-re-border-subtle px-3">
-                            <RegEngineWordmark size="sm" />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Close navigation menu"
-                                onClick={() => setMobileNavOpen(false)}
-                            >
-                                <X className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
-                            </Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto px-2 py-3" onKeyDown={onNavKeyDown}>
-                            <div className="space-y-0.5">
-                                {topItems.map((item) => (
-                                    <NavLinkItem key={item.href} item={item} pathname={pathname} />
-                                ))}
-                            </div>
-                            <div className="my-3 border-t border-re-border-subtle" />
-                            {sectionList}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            <DialogContent id="dashboard-mobile-nav" aria-describedby={undefined}
+                className="left-0 top-0 flex h-dvh w-[min(20rem,86vw)] max-w-none translate-x-0 translate-y-0 flex-col rounded-none p-3"
+                onCloseAutoFocus={(event) => {
+                    if (routeSelected.current) {
+                        event.preventDefault();
+                        routeSelected.current = false;
+                        document.getElementById('dashboard-main-content')?.focus();
+                    }
+                }}>
+                <DialogTitle>Dashboard navigation menu</DialogTitle>
+                <nav aria-label="Mobile dashboard navigation" className="flex-1 overflow-y-auto"
+                    onClick={(event) => {
+                        if ((event.target as HTMLElement).closest('a[href]')) {
+                            routeSelected.current = true;
+                            setMobileNavOpen(false);
+                        }
+                    }}>
+                    <ul>{topItems.map(item => <li key={item.href}><NavLinkItem item={item} pathname={pathname}/></li>)}</ul>
+                    {sectionList}
+                </nav>
+                {accountActions}
+            </DialogContent>
+        </div></Dialog>
     );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardLayout from '@/app/dashboard/layout';
 import { useAuth } from '@/lib/auth-context';
@@ -82,7 +82,8 @@ describe('Dashboard navigation discoverability', () => {
         expect(inflowLink).toHaveAttribute('href', '/dashboard/inflow-lab');
         expect(inflowLink).toHaveAttribute('aria-current', 'page');
         expect(screen.getByRole('button', { name: /Intake/i })).toBeInTheDocument();
-        expect(screen.getAllByText('Import files')[0].closest('a')).toHaveAttribute('href', '/ingest');
+        fireEvent.click(screen.getByRole('button', {name:'Intake'}));
+        expect(screen.getByRole('link', {name:'Import files'})).toHaveAttribute('href', '/ingest');
     });
 
     it('shows QA Health navigation only to sysadmins', async () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { captureError } from '@/instrumentation-client';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -23,10 +24,8 @@ export class DashboardErrorBoundary extends React.Component<
         return { hasError: true, error };
     }
 
-    componentDidCatch(error: Error, info: React.ErrorInfo) {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error('[DashboardErrorBoundary]', error, info.componentStack);
-        }
+    componentDidCatch() {
+        captureError(new Error('Dashboard render failed'));
     }
 
     render() {

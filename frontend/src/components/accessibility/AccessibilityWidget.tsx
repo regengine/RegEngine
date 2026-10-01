@@ -31,35 +31,17 @@ function loadSettings(): A11ySettings {
   if (typeof window === 'undefined') return defaultSettings;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return { ...defaultSettings, ...JSON.parse(stored) };
+    if (stored) return { ...defaultSettings, ...JSON.parse(stored), dyslexicFont: false };
   } catch {}
   return defaultSettings;
-}
-
-let dyslexicFontLoaded = false;
-
-function loadOpenDyslexicFont() {
-  if (dyslexicFontLoaded) return;
-  const linkId = 're-opendyslexic-font';
-  if (document.getElementById(linkId)) {
-    dyslexicFontLoaded = true;
-    return;
-  }
-  const link = document.createElement('link');
-  link.id = linkId;
-  link.rel = 'stylesheet';
-  link.href = 'https://fonts.cdnfonts.com/css/opendyslexic';
-  link.onload = () => { dyslexicFontLoaded = true; };
-  link.onerror = () => { link.remove(); };
-  document.head.appendChild(link);
 }
 
 function applySettings(s: A11ySettings) {
   const html = document.documentElement;
   html.classList.toggle('a11y-font-large', s.fontSize === 'large');
   html.classList.toggle('a11y-font-xl', s.fontSize === 'xl');
-  if (s.dyslexicFont) loadOpenDyslexicFont();
-  html.classList.toggle('a11y-dyslexic', s.dyslexicFont);
+  // No licensed local font is bundled; never claim a fallback is OpenDyslexic.
+  html.classList.remove('a11y-dyslexic');
   html.classList.toggle('a11y-high-contrast', s.highContrast);
   html.classList.toggle('a11y-reduced-motion', s.reducedMotion);
   html.classList.toggle('a11y-line-height', s.lineHeight);
@@ -242,8 +224,7 @@ export function AccessibilityWidget() {
               <span className="text-label uppercase text-re-text-muted">Vision</span>
             </div>
             <FontSizeSelector value={settings.fontSize} onChange={v => update({ fontSize: v })} />
-            <Toggle id="a11y-dyslexic" label="Dyslexia-Friendly Font" description="Switch to OpenDyslexic typeface"
-              checked={settings.dyslexicFont} onChange={v => update({ dyslexicFont: v })} />
+            <p className="text-small text-re-text-secondary">OpenDyslexic font is currently unavailable. Text size, line height and letter spacing preferences are available below.</p>
             <Toggle id="a11y-contrast" label="High Contrast" description="Increase contrast for better readability"
               checked={settings.highContrast} onChange={v => update({ highContrast: v })} />
             <Toggle id="a11y-line-height" label="Increased Line Spacing" description="More space between lines of text"

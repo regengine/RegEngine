@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { captureError } from '@/instrumentation-client';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function ErrorBoundary({
@@ -11,9 +12,7 @@ export default function ErrorBoundary({
     reset: () => void;
 }) {
     useEffect(() => {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error(error);
-        }
+        captureError(new Error('Dashboard route render failed'));
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { captureError } from '@/instrumentation-client';
+vi.mock('@/instrumentation-client', () => ({captureError:vi.fn()}));
 import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
 
 function ThrowSensitiveError(): ReactNode {
@@ -36,5 +38,7 @@ describe('DashboardErrorBoundary', () => {
         expect(screen.getByText(/unexpected error occurred while rendering this page/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /reload page/i })).toBeInTheDocument();
         expect(screen.queryByText(/database password leaked/i)).not.toBeInTheDocument();
+        expect(captureError).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(captureError).mock.calls[0][0].message).toBe('Dashboard render failed');
     });
 });
