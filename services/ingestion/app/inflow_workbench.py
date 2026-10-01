@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -160,6 +160,13 @@ class ReadinessSummary(BaseModel):
     components: list[ReadinessComponent]
 
 
+def _validate_nonnegative_issue_counts(result: SandboxResponse) -> SandboxResponse:
+    for field in ("total_kde_errors", "total_rule_failures", "non_compliant_events"):
+        if getattr(result, field) < 0:
+            raise ValueError(f"{field} must be greater than or equal to 0")
+    return result
+
+
 class CommitGateRequest(BaseModel):
     mode: CommitMode
     tenant_id: Optional[str] = None
@@ -167,7 +174,12 @@ class CommitGateRequest(BaseModel):
     authenticated: bool = False
     persisted: bool = False
     provenance_attached: bool = False
-    unresolved_fix_count: int = 0
+    unresolved_fix_count: int = Field(default=0, ge=0)
+
+    @field_validator("result")
+    @classmethod
+    def validate_result_issue_counts(cls, result: Optional[SandboxResponse]) -> Optional[SandboxResponse]:
+        return _validate_nonnegative_issue_counts(result) if result is not None else None
 
 
 class CommitGateDecision(BaseModel):
@@ -183,6 +195,11 @@ class SaveRunRequest(BaseModel):
     source: str = Field(default="inflow-lab")
     csv: str = Field(default="")
     result: SandboxResponse
+
+    @field_validator("result")
+    @classmethod
+    def validate_result_issue_counts(cls, result: SandboxResponse) -> SandboxResponse:
+        return _validate_nonnegative_issue_counts(result)
 
 
 class WorkbenchRun(BaseModel):
@@ -991,7 +1008,7 @@ def decide_commit_gate(payload: CommitGateRequest) -> CommitGateDecision:
         )
 
     if payload.mode == "staging":
-        allowed = unresolved == 0
+        allowed = unresolved == 0 and not reasons
         return CommitGateDecision(
             mode=payload.mode,
             allowed=allowed,
