@@ -48,6 +48,8 @@ interface NextAction {
 }
 
 interface ComplianceScore {
+    assessment_status?: "available" | "unavailable" | "unassessed";
+    scoring_policy?: { version: string; weights: Record<string, number>; rounding: string };
     tenant_id: string;
     overall_score: number;
     grade: string;
@@ -203,13 +205,13 @@ function ComplianceSetupPanel({ title = 'No compliance score yet' }: { title?: s
 
 /* ── Dimension metadata ── */
 
-const DIMENSION_META: Record<string, { label: string; weight: number; icon: string }> = {
-    chain_integrity:     { label: 'Chain Integrity',     weight: 25, icon: '🔗' },
-    kde_completeness:    { label: 'Data Fields Filled (KDE)',    weight: 20, icon: '📋' },
-    cte_completeness:    { label: 'Events Recorded (CTE)',    weight: 20, icon: '📦' },
-    obligation_coverage: { label: 'Obligation Coverage',  weight: 15, icon: '⚖️' },
-    product_coverage:    { label: 'Product Coverage',     weight: 10, icon: '🏷️' },
-    export_readiness:    { label: 'Export Readiness',     weight: 10, icon: '📤' },
+const DIMENSION_META: Record<string, { label: string; icon: string }> = {
+    chain_integrity:     { label: 'Chain Integrity',     icon: '🔗' },
+    kde_completeness:    { label: 'Data Fields Filled (KDE)',    icon: '📋' },
+    cte_completeness:    { label: 'Events Recorded (CTE)',    icon: '📦' },
+    obligation_coverage: { label: 'Obligation Coverage',  icon: '⚖️' },
+    product_coverage:    { label: 'Product Coverage',     icon: '🏷️' },
+    export_readiness:    { label: 'Export Readiness',     icon: '📤' },
 };
 
 /* ── Pure UI Components ── */
@@ -259,8 +261,8 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
     );
 }
 
-function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownItem }) {
-    const meta = DIMENSION_META[dimKey] || { label: dimKey.replace(/_/g, ' '), weight: 0, icon: '📊' };
+function DimensionRow({ dimKey, item, weight }: { dimKey: string; item: ScoreBreakdownItem; weight?: number }) {
+    const meta = DIMENSION_META[dimKey] || { label: dimKey.replace(/_/g, ' '), icon: '📊' };
     const toneText = scoreTextClass(item.score);
     const toneBg = scoreBgClass(item.score);
     const isLow = item.score < 60;
@@ -276,7 +278,7 @@ function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownIt
                 <div className="flex items-center gap-2">
                     <span className="text-sm">{meta.icon}</span>
                     <span className="text-sm font-medium">{meta.label}</span>
-                    <span className="text-label text-muted-foreground bg-[var(--re-surface-card)] px-1.5 py-0.5 rounded-full">{meta.weight}%</span>
+                    <span className="text-label text-muted-foreground bg-[var(--re-surface-card)] px-1.5 py-0.5 rounded-full">{typeof weight === "number" ? `${weight}%` : "Weight unavailable"}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                     {isLow && <AlertTriangle className="h-3.5 w-3.5 text-re-danger" />}
@@ -305,11 +307,14 @@ export default function ComplianceDashboardPage() {
 
     const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
 
-    const { data: score = null, isLoading: loading, error: scoreError, dataUpdatedAt, refetch: fetchScore } = useQuery({
+    const { data: rawScore = null, isLoading: loading, error: scoreError, dataUpdatedAt, refetch: fetchScore } = useQuery({
         queryKey: ['compliance-score', tenantId],
         queryFn: async () => {
             const data = await fetchComplianceScore(tenantId);
-            return data as ComplianceScore;
+            const result = data as ComplianceScore;
+            if (result.assessment_status === 'unavailable') throw new Error('Scoring unavailable. No compliance assessment was completed.');
+            if (result.assessment_status === 'unassessed') throw new Error('Not assessed. Add traceability evidence before reviewing a readiness score.');
+            return result;
         },
         enabled: isLoggedIn && !!tenantId,
         refetchInterval: POLL_MS,
@@ -317,7 +322,9 @@ export default function ComplianceDashboardPage() {
     });
 
     const {
-        data: workbenchSummary = null,
+        data: rawWorkbenchSummary = null,
+        isLoading: workbenchLoading,
+        error: workbenchError,
         refetch: fetchWorkbenchSummary,
     } = useQuery({
         queryKey: ['inflow-workbench-readiness', tenantId],
@@ -327,6 +334,15 @@ export default function ComplianceDashboardPage() {
         retry: false,
     });
 
+    // A rejected refresh leaves cached query data intact. It is not a current
+    // eligibility result; suppress it until a new successful read completes.
+    const workbenchSummary = workbenchError || workbenchLoading ? null : rawWorkbenchSummary;
+    const preflightAvailable = workbenchSummary !== null;
+    const preflightLabel = workbenchLoading ? 'Preflight loading' : !preflightAvailable
+        ? 'Preflight unavailable' : workbenchSummary?.label ?? (workbenchSummary?.run_id
+            ? 'Saved preflight run' : workbenchSummary?.run_id === null ? 'No saved preflight run yet' : 'Preflight status unavailable');
+
+    const score = scoreError ? null : rawScore;
     const error = scoreError?.message ?? null;
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
@@ -334,8 +350,8 @@ export default function ComplianceDashboardPage() {
     const breakdownKeys = useMemo(() => {
         if (!score) return [];
         return Object.keys(score.breakdown).sort((a, b) => {
-            const wa = DIMENSION_META[a]?.weight ?? 0;
-            const wb = DIMENSION_META[b]?.weight ?? 0;
+            const wa = score.scoring_policy?.weights[a] ?? 0;
+            const wb = score.scoring_policy?.weights[b] ?? 0;
             return wb - wa;
         });
     }, [score]);
@@ -467,8 +483,8 @@ export default function ComplianceDashboardPage() {
                             <div className="flex items-center gap-3 text-muted-foreground">
                                 <Info className="h-5 w-5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm font-medium text-foreground">Compliance data is currently unavailable for this workspace.</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">This can mean the scoring service is unavailable or there is not enough connected evidence to calculate a score yet.</p>
+                                    <p className="text-sm font-medium text-foreground">{error}</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">No readiness grade is asserted until an assessment is available. Retry after connecting evidence or restoring the scoring service.</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -534,7 +550,7 @@ export default function ComplianceDashboardPage() {
                                                 {workbenchSummary?.score ?? '—'}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground mt-1">
-                                                {workbenchSummary?.label ?? 'No saved preflight run yet'}
+                                                {preflightLabel}
                                             </p>
                                         </div>
                                         <Badge
@@ -545,18 +561,20 @@ export default function ComplianceDashboardPage() {
                                                     : 'bg-re-brand-muted text-re-brand'
                                             }`}
                                         >
-                                            {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
+                                            {typeof workbenchSummary?.unresolved_fix_count === 'number'
+                                                ? `${workbenchSummary.unresolved_fix_count} open fix${workbenchSummary.unresolved_fix_count === 1 ? '' : 'es'}`
+                                                : 'Fix count unavailable'}
                                         </Badge>
                                     </div>
                                     <div className="space-y-2 text-[11px] text-muted-foreground">
                                         <div className="flex items-center justify-between">
                                             <span>Export eligible</span>
-                                            <span className="font-medium text-foreground">{workbenchSummary?.export_eligible ? 'Yes' : 'Not yet'}</span>
+                                            <span className="font-medium text-foreground">{typeof workbenchSummary?.export_eligible === 'boolean' ? (workbenchSummary.export_eligible ? 'Yes' : 'Not yet') : workbenchLoading ? 'Pending' : 'Unavailable'}</span>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span>Latest run</span>
                                             <span className="font-mono text-label text-foreground">
-                                                {workbenchSummary?.run_id ? workbenchSummary.run_id.slice(0, 16) : 'none'}
+                                                {workbenchSummary?.run_id ? workbenchSummary.run_id.slice(0, 16) : workbenchSummary?.run_id === null ? 'none' : workbenchLoading ? 'Pending' : 'Unavailable'}
                                             </span>
                                         </div>
                                     </div>
@@ -583,7 +601,7 @@ export default function ComplianceDashboardPage() {
                                 <CardContent className="space-y-2.5">
                                     {breakdownKeys.map((key, i) => (
                                         <motion.div key={key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 * i }}>
-                                            <DimensionRow dimKey={key} item={score.breakdown[key]} />
+                                            <DimensionRow dimKey={key} item={score.breakdown[key]} weight={score.scoring_policy?.weights[key]} />
                                         </motion.div>
                                     ))}
                                 </CardContent>

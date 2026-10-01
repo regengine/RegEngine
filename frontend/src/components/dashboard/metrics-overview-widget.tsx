@@ -1,6 +1,6 @@
 "use client";
 
-import { useSystemMetrics, useSystemStatus } from "@/hooks/use-api";
+import { useSystemMetrics } from "@/hooks/use-api";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { WorkbenchReadinessSnapshot } from "@/lib/api-hooks";
@@ -19,17 +19,15 @@ export function MetricsOverviewWidget({
 }: {
   readiness?: WorkbenchReadinessSnapshot;
 }) {
-  const { data: metrics, isLoading } = useSystemMetrics();
-  const { data: systemStatus } = useSystemStatus();
-
-  const score = metrics?.compliance_score ?? 0;
-  const events = metrics?.events_ingested ?? 0;
-  const chainLen = metrics?.chain_length ?? 0;
-  const chainOk = metrics?.chain_valid ?? false;
-  const alerts = metrics?.open_alerts ?? 0;
-  const hasMetrics = Boolean(metrics) && !isLoading;
-  const servicesDown =
-    systemStatus?.overall_status && systemStatus.overall_status !== "healthy";
+  const { data: rawMetrics, isLoading, isError } = useSystemMetrics();
+  const metrics = isError ? undefined : rawMetrics;
+  const score = metrics?.compliance_score;
+  const events = metrics?.events_ingested;
+  const chainLen = metrics?.chain_length;
+  const chainOk = metrics?.chain_valid;
+  const alerts = metrics?.open_alerts;
+  const assessed = typeof score === "number";
+  const chainLabel = chainOk === true ? "Verified" : chainOk === false ? "Broken" : "Verification unavailable";
 
   const openFixes = readiness?.unresolved_fix_count;
   const exportEligible = readiness?.export_eligible;
@@ -40,17 +38,13 @@ export function MetricsOverviewWidget({
         className="sm:col-span-2 lg:col-span-1 lg:row-span-2"
         hero
         label="FSMA readiness score"
-        value={score > 0 ? score : ""}
-        unit={score > 0 ? "/100" : undefined}
+        value={assessed ? score : ""}
+        unit={assessed ? "/100" : undefined}
         loading={isLoading}
-        empty={!isLoading && score <= 0}
-        emptyCaption={
-          servicesDown
-            ? "No data — services unreachable"
-            : "No saved Inflow Workbench run yet"
-        }
+        empty={!isLoading && !assessed}
+        emptyCaption={metrics?.score_assessment_status === "unassessed" ? "Not assessed" : "Score unavailable"}
         status={
-          hasMetrics && score > 0 ? (
+          assessed && typeof exportEligible === "boolean" ? (
             <StatusBadge
               state={exportEligible ? "compliant" : "at-risk"}
               label={exportEligible ? "Export eligible" : "Not export eligible"}
@@ -62,19 +56,18 @@ export function MetricsOverviewWidget({
 
       <StatTile
         label="CTE events"
-        value={events > 0 ? events.toLocaleString() : ""}
+        value={typeof events === "number" ? events.toLocaleString() : ""}
         loading={isLoading}
-        empty={!isLoading && events <= 0}
-        emptyCaption="Traceability events tracked"
+        empty={!isLoading && typeof events !== "number"}
+        emptyCaption="Event count unavailable"
       />
       <StatTile
         label="Hash chain"
-        value={chainLen > 0 ? (chainOk ? "Verified" : "Broken") : ""}
+        value={chainLabel}
         loading={isLoading}
-        empty={!isLoading && chainLen <= 0}
-        emptyCaption="Tamper-evident ledger entries"
+        empty={false}
         status={
-          chainLen > 0 ? (
+          typeof chainLen === "number" && typeof chainOk === "boolean" ? (
             <StatusBadge
               state={chainOk ? "committed" : "non-compliant"}
               label={`${chainLen.toLocaleString()} entries`}
@@ -82,12 +75,17 @@ export function MetricsOverviewWidget({
             />
           ) : undefined
         }
-      />
+      >
+        <p className="text-small text-re-text-tertiary">
+          {metrics?.chain_verified_scope ?? "Verification scope unavailable"}
+        </p>
+      </StatTile>
       <StatTile
         label="Open alerts"
-        value={alerts}
+        value={typeof alerts === "number" ? alerts : ""}
+        empty={typeof alerts !== "number"}
         loading={isLoading}
-        emptyCaption="Compliance issues to resolve"
+        emptyCaption="Alert count unavailable"
       />
       <StatTile
         label="Open fixes"

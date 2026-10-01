@@ -33,6 +33,7 @@ import { useTenant } from '@/lib/tenant-context';
 interface Blocker {
     type: string;
     message: string;
+    request_case_id?: string;
     event_id?: string;
     rule_id?: string;
     rule_title?: string;
@@ -116,32 +117,49 @@ export default function IssuesPage() {
             const allBlockers: Blocker[] = [];
             const allWarnings: Warning[] = [];
             let pendingReviews: Record<string, number> = {};
+            const unavailable: string[] = [];
+            let deadlinesAvailable = false;
+            let reviewsAvailable = false;
+            let checkedCases = 0;
 
             if (deadlineRes.status === 'fulfilled' && deadlineRes.value.ok) {
                 const data = await deadlineRes.value.json();
-                deadlines = data.cases || [];
-
-                for (const c of deadlines.slice(0, 5)) {
-                    try {
-                        const bRes = await fetchWithCsrf(
-                            `${base}/api/v1/requests/${c.request_case_id}/blockers`,
-                            { credentials: 'include', signal: AbortSignal.timeout(5000) }
-                        );
-                        if (bRes.ok) {
-                            const bData: BlockerCheck = await bRes.json();
-                            allBlockers.push(...bData.blockers);
-                            allWarnings.push(...bData.warnings);
-                        }
-                    } catch { /* individual case blocker fetch failed -- continue */ }
-                }
+                deadlinesAvailable = Array.isArray(data.cases);
+                if (deadlinesAvailable) deadlines = data.cases;
             }
-
+            if (!deadlinesAvailable) unavailable.push('Deadlines');
             if (pendingRes.status === 'fulfilled' && pendingRes.value.ok) {
                 const data = await pendingRes.value.json();
-                pendingReviews = data.breakdown || {};
+                reviewsAvailable = data.breakdown != null && typeof data.breakdown === 'object' &&
+                    !Array.isArray(data.breakdown) && Object.values(data.breakdown).every(v => typeof v === 'number');
+                if (reviewsAvailable) pendingReviews = data.breakdown;
             }
+            if (!reviewsAvailable) unavailable.push('Pending reviews');
 
-            return { deadlines, blockers: allBlockers, warnings: allWarnings, pendingReviews };
+            // Check every active case with bounded concurrency, keeping the
+            // origin attached. A failed check remains unknown, never zero.
+            for (let offset = 0; offset < deadlines.length; offset += 4) {
+                const results = await Promise.allSettled(deadlines.slice(offset, offset + 4).map(async c => {
+                    const response = await fetchWithCsrf(`${base}/api/v1/requests/${c.request_case_id}/blockers`,
+                        { credentials: 'include', signal: AbortSignal.timeout(5000) });
+                    if (!response.ok) throw new Error('Blocker check unavailable');
+                    const result: BlockerCheck = await response.json();
+                    if (!Array.isArray(result.blockers) || !Array.isArray(result.warnings)) throw new Error('Incomplete blocker response');
+                    return { c, result };
+                }));
+                for (const result of results) {
+                    if (result.status === 'fulfilled') {
+                        checkedCases++;
+                        allBlockers.push(...result.value.result.blockers.map(b => ({...b, request_case_id:result.value.c.request_case_id})));
+                        allWarnings.push(...result.value.result.warnings);
+                    } else unavailable.push('Case blockers');
+                }
+            }
+            return { deadlines, blockers: allBlockers, warnings: allWarnings, pendingReviews,
+                deadlinesAvailable, reviewsAvailable, checkedCases,
+                blockersAvailable: deadlinesAvailable && checkedCases === deadlines.length,
+                unavailable: [...new Set(unavailable)], complete: unavailable.length === 0 };
+
         },
         enabled: !!tenantId && isAuthenticated,
         retry: false,
@@ -152,6 +170,7 @@ export default function IssuesPage() {
     const warnings = issuesData?.warnings ?? [];
     const pendingReviews = issuesData?.pendingReviews ?? {};
     const error = issuesError?.message ?? null;
+    const complete = Boolean(issuesData?.complete) && !issuesError;
 
     const overdueCount = deadlines.filter(d => d.urgency === 'overdue').length;
     const criticalCount = deadlines.filter(d => d.urgency === 'critical').length;
@@ -257,12 +276,15 @@ export default function IssuesPage() {
                     </Callout>
                 )}
 
+                {issuesData && !complete && (
+                    <Callout tone="warning">Checks incomplete: {issuesData.unavailable.join(', ')} unavailable. Checked {issuesData.checkedCases} of {deadlines.length} cases.</Callout>
+                )}
                 {/* Summary */}
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                    <StatTile label="Blocking Defects" value={blockers.length} />
-                    <StatTile label="Urgent Deadlines" value={overdueCount + criticalCount} />
-                    <StatTile label="Warnings" value={warnings.length} />
-                    <StatTile label="Pending Reviews" value={pendingReviewCount} />
+                    <StatTile label="Blocking Defects" value={issuesData?.blockersAvailable && !error ? blockers.length : "—"} />
+                    <StatTile label="Urgent Deadlines" value={issuesData?.deadlinesAvailable && !error ? overdueCount + criticalCount : "—"} />
+                    <StatTile label="Warnings" value={issuesData?.blockersAvailable && !error ? warnings.length : "—"} />
+                    <StatTile label="Pending Reviews" value={issuesData?.reviewsAvailable && !error ? pendingReviewCount : "—"} />
                 </div>
 
                 {loading && (
@@ -284,6 +306,9 @@ export default function IssuesPage() {
                     </section>
                 )}
 
+                {blockers.map((b, i) => b.request_case_id && (
+                    <a key={`origin-${i}`} href={`/dashboard/requests/${encodeURIComponent(b.request_case_id)}`} className="text-ui underline">Open request {b.request_case_id}</a>
+                ))}
                 {/* Blocking defects */}
                 {blockers.length > 0 && (
                     <section className="space-y-3">
@@ -347,7 +372,7 @@ export default function IssuesPage() {
                 )}
 
                 {/* Empty state */}
-                {!loading && blockers.length === 0 && deadlines.length === 0 && warnings.length === 0 && (
+                {!loading && complete && pendingReviewCount === 0 && blockers.length === 0 && deadlines.length === 0 && warnings.length === 0 && (
                     <EmptyState
                         icon={CheckCircle2}
                         title="No issues in the current view"

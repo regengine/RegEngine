@@ -236,4 +236,30 @@ describe('IssuesPage', () => {
 
         expect(global.fetch).not.toHaveBeenCalled();
     });
+    it('never shows an all-clear when a required source fails', async () => {
+        global.fetch = vi.fn().mockResolvedValue({ok:false, status:503});
+        render(<IssuesPage />, {wrapper:createWrapper()});
+        await waitFor(() => expect(screen.getByText(/Checks incomplete/)).toBeInTheDocument());
+        expect(screen.queryByText('No issues in the current view')).not.toBeInTheDocument();
+    });
+
+    it('checks the sixth case and preserves its blocker origin', async () => {
+        const cases = Array.from({length:6}, (_,i) => ({request_case_id:`case-${i+1}`, requesting_party:`FDA ${i+1}`, urgency:'normal', countdown_display:'24h'}));
+        mockDeadlinesAndBlockers({deadlines:cases,pendingReviews:{}});
+        global.fetch = vi.fn().mockImplementation((url:string) => Promise.resolve({ok:true,json:async () => url.includes('/deadlines') ? {cases} : url.includes('/pending-reviews') ? {breakdown:{}} : {blockers:url.includes('/case-6/') ? [{type:'missing_signoff',message:'Sixth case signoff missing'}] : [],warnings:[]}}));
+        render(<IssuesPage />, {wrapper:createWrapper()});
+        await waitFor(() => expect(screen.getByText(/Sixth case signoff missing/)).toBeInTheDocument());
+        expect(screen.getByRole('link', {name:/case-6/})).toHaveAttribute('href','/dashboard/requests/case-6');
+    });
+
+    it.each(['deadlines','pending-reviews','blockers'])('marks %s failure as incomplete instead of zero', async (failedSource) => {
+        mockDeadlinesAndBlockers();
+        const normalFetch = global.fetch;
+        global.fetch = vi.fn().mockImplementation((url:string,init:RequestInit) => url.includes(failedSource) ? Promise.resolve({ok:false,status:failedSource==='blockers'?403:503}) : normalFetch(url,init));
+        render(<IssuesPage/>,{wrapper:createWrapper()});
+        await waitFor(()=>expect(screen.getByText(/Checks incomplete/)).toBeInTheDocument());
+        expect(screen.queryByText('No issues in the current view')).not.toBeInTheDocument();
+        expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    });
+
 });

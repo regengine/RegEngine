@@ -1,5 +1,6 @@
 'use client';
 
+import { SnapshotIntegrityCoverage } from '@/components/compliance/snapshot-integrity-coverage';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/lib/tenant-context';
@@ -65,6 +66,8 @@ interface Snapshot {
     critical_alert_count: number;
     content_hash: string;
     integrity_verified: boolean;
+    hash_version?: number | null;
+    integrity_coverage?: string | null;
     // Degradation
     snapshot_state: string;  // VALID, STALE, INVALID
     state_emoji: string;     // 🟢, 🟠, 🔴
@@ -76,6 +79,8 @@ interface Snapshot {
 
 interface VerifyResult {
     is_valid: boolean;
+    hash_version?: number | null;
+    hash_coverage?: string | null;
     stored_hash: string;
     computed_hash: string;
     hash_match: boolean;
@@ -318,8 +323,8 @@ export default function SnapshotsPage() {
                                 value: data?.content_hash ? String(data.content_hash) : 'N/A',
                             },
                             {
-                                key: 'Integrity Verified',
-                                value: data?.integrity_verified ? 'Yes' : 'No',
+                                key: 'Hash Match',
+                                value: data?.integrity_verified ? `Hash matches — ${data?.integrity_coverage ?? 'coverage not provided'}` : 'No matching seal',
                                 status: data?.integrity_verified ? 'success' : 'danger',
                             },
                         ],
@@ -595,8 +600,11 @@ export default function SnapshotsPage() {
                                                 {snapshot.integrity_verified && (
                                                     <Badge tone="success" size="sm" mono>
                                                         <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                                        INTEGRITY VERIFIED
+                                                        HASH MATCH
                                                     </Badge>
+                                                )}
+                                                {snapshot.integrity_verified && (
+                                                    <SnapshotIntegrityCoverage version={snapshot.hash_version} coverage={snapshot.integrity_coverage}/>
                                                 )}
                                                 {snapshot.is_attested ? (
                                                     <span className="flex items-center gap-1.5 text-small text-re-text-secondary">
@@ -892,11 +900,9 @@ export default function SnapshotsPage() {
                                 <>
                                     <CheckCircle2 className="mx-auto mb-4 h-8 w-8 text-re-success" strokeWidth={1.75} aria-hidden="true" />
                                     <h2 id="snapshot-verify-title" className="mb-2 text-heading text-re-text-primary">
-                                        Integrity Verified
+                                        Hash Match
                                     </h2>
-                                    <p className="mb-6 text-ui text-re-text-secondary">
-                                        The snapshot data has not been modified. Hash matches.
-                                    </p>
+                                    <div className="mb-6"><SnapshotIntegrityCoverage version={verifyResult.hash_version} coverage={verifyResult.hash_coverage}/></div>
                                 </>
                             ) : (
                                 <>

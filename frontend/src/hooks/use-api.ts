@@ -2,24 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { IngestURLRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
-import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
+import type { SystemStatusResponse } from '@/lib/api-client';
 import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
-
-// Fallback data shown when backend services are unreachable.
-// Uses zeros — no fabricated metrics. The _demo flag lets the UI
-// distinguish "backend unavailable" from "tenant has no data."
-const DEMO_METRICS: SystemMetricsResponse & { _demo: true } = {
-  _demo: true,
-  total_tenants: 0,
-  total_documents: 0,
-  active_jobs: 0,
-  compliance_score: 0,
-  compliance_grade: '—',
-  events_ingested: 0,
-  chain_length: 0,
-  chain_valid: false,
-  open_alerts: 0,
-};
 
 const DEMO_STATUS: SystemStatusResponse & { _demo: true } = {
   _demo: true,
@@ -115,10 +99,7 @@ export const useSystemMetrics = () => {
     refetchInterval: POLL_METRICS,
     retry: false,
   });
-  return {
-    ...query,
-    data: query.data ?? (query.error ? DEMO_METRICS : undefined),
-  };
+  return query;
 };
 
 export const useQAHealth = (enabled = true) => {

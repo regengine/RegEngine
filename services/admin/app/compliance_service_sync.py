@@ -40,8 +40,7 @@ class ComplianceServiceSync:
         )
         status = result.scalar_one_or_none()
 
-        if not status:
-            status = self._create_default_status(tenant_id)
+        # Reading a new workspace must not fabricate or persist an assessment.
 
         # Get active alerts
         alerts_result = self.session.execute(
@@ -57,16 +56,26 @@ class ComplianceServiceSync:
         active_alerts = alerts_result.scalars().all()
 
         return {
-            **status.to_dict(),
+            **(status.to_dict() if status else {
+                "tenant_id": str(tenant_id), "status": "UNASSESSED",
+                "status_emoji": "❓", "status_label": "Not assessed",
+                "active_alert_count": len(active_alerts),
+                "critical_alert_count": sum(a.severity == AlertSeverity.CRITICAL.value for a in active_alerts),
+                "completeness_score": None, "last_status_change": None,
+                "next_deadline": None, "next_deadline_description": None,
+                "countdown_seconds": None, "countdown_display": None,
+            }),
+            "assessment_scope": "active alert monitoring; not a regulatory compliance assessment",
             "active_alerts": [alert.to_dict() for alert in active_alerts],
         }
 
     def _create_default_status(self, tenant_id: UUID) -> TenantComplianceStatusModel:
-        """Create a default compliant status for a new tenant."""
+        """Initialize alert monitoring without claiming regulatory assessment."""
         now = datetime.now(timezone.utc)
         status = TenantComplianceStatusModel(
             tenant_id=tenant_id,
-            status=ComplianceStatus.COMPLIANT.value,
+            status="UNASSESSED",
+            completeness_score=None,
             last_status_change=now,
         )
         self.session.add(status)

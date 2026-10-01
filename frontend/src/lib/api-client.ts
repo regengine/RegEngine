@@ -151,6 +151,10 @@ export interface SystemMetricsResponse {
   events_ingested?: number | null;
   chain_length?: number | null;
   chain_valid?: boolean | null;
+  chain_verification_status?: 'verified' | 'failed' | 'unavailable';
+  chain_verified_scope?: string | null;
+  score_assessment_status?: 'available' | 'unavailable' | 'unassessed';
+  events_availability?: 'available' | 'partial' | 'unavailable';
   open_alerts?: number | null;
 }
 

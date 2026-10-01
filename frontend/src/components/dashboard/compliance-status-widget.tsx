@@ -30,7 +30,7 @@ export interface ComplianceAlert {
 
 interface ComplianceStatus {
     tenant_id: string;
-    status: "COMPLIANT" | "AT_RISK" | "NON_COMPLIANT";
+    status: "COMPLIANT" | "AT_RISK" | "NON_COMPLIANT" | "UNASSESSED";
     status_emoji: string;
     status_label: string;
     active_alert_count: number;
@@ -47,6 +47,10 @@ interface ComplianceStatusWidgetProps {
 }
 
 const STATUS_CONFIG = {
+    UNASSESSED: {
+        bgClass: "bg-re-surface-card", borderClass: "border-re-border",
+        textClass: "text-re-text-primary", iconClass: "text-re-text-muted", Icon: Clock,
+    },
     COMPLIANT: {
         bgClass: "bg-re-success-muted",
         borderClass: "border-re-success-border",
@@ -161,19 +165,25 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        let active = true;
+        setLoading(true);
+        setStatus(null);
+        setError(null);
         async function fetchStatus() {
             try {
                 const response = await fetch(`/api/v1/compliance/status/${tenantId}`);
                 if (!response.ok) throw new Error("API unavailable");
                 const data = await response.json();
+                if (!active) return;
                 setStatus(data);
                 setError(null);
             } catch (e) {
                 // Show error - no mock fallback for production FSMA
                 if (process.env.NODE_ENV !== 'production') { console.error('Compliance API unavailable:', e); }
+                if (!active) return;
                 setError(e instanceof Error ? e.message : "Compliance service unavailable");
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         }
 
@@ -181,7 +191,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
 
         // Refresh every 30 seconds
         const interval = setInterval(fetchStatus, 30000);
-        return () => clearInterval(interval);
+        return () => { active = false; clearInterval(interval); };
     }, [tenantId]);
 
     if (loading) {
@@ -219,7 +229,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
                             <StatusIcon className={`h-12 w-12 ${config.iconClass}`} />
                             <div>
                                 <h2 className={`text-3xl font-bold ${config.textClass}`}>
-                                    {status.status_emoji} {status.status_label}
+                                    {status.status_emoji} {status.status === "COMPLIANT" ? "No active alerts" : status.status_label}
                                 </h2>
                                 <p className="text-sm text-re-text-tertiary">
                                     {status.active_alert_count > 0
@@ -280,8 +290,8 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
                 <Card className="border-dashed">
                     <CardContent className="p-6 text-center text-re-text-muted">
                         <CheckCircle className="h-8 w-8 mx-auto mb-2 text-re-success" />
-                        <p>All compliance requirements met</p>
-                        <p className="text-xs mt-1">Last checked: just now</p>
+                        <p>No active alerts returned. Regulatory compliance has not been assessed here.</p>
+                        <p className="text-xs mt-1">Scope: active alert monitoring</p>
                     </CardContent>
                 </Card>
             )}

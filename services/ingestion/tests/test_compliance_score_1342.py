@@ -1302,6 +1302,7 @@ class TestGetComplianceScoreEndpoint:
         r = client.get("/api/v1/compliance/score/00000000-0000-0000-0000-000000000001")
         assert r.status_code == 200
         body = r.json()
+        assert body["assessment_status"] == "unavailable"
         assert body["overall_score"] == 0
         assert body["grade"] == "F"
         assert body["breakdown"]["chain_integrity"]["detail"] == "Database unavailable"
@@ -1328,6 +1329,7 @@ class TestGetComplianceScoreEndpoint:
         r = client.get("/api/v1/compliance/score/00000000-0000-0000-0000-000000000001")
         assert r.status_code == 200
         body = r.json()
+        assert body["assessment_status"] == "unavailable"
         assert body["overall_score"] == 0
         assert body["grade"] == "F"
         assert "Schema not initialized" in body["breakdown"]["chain_integrity"]["detail"]
@@ -1355,6 +1357,29 @@ class TestGetComplianceScoreEndpoint:
         assert body["events_analyzed"] == 10
         assert body["last_chain_hash"] == "x" * 64
         assert session.close.called
+
+    def test_policy_metadata_reproduces_asymmetric_score(self, client, monkeypatch):
+        import shared.database as db_mod
+        session = MagicMock()
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
+        monkeypatch.setattr(cs, "_query_scoring_data", lambda s, t: _base_data(event_count=10))
+        monkeypatch.setattr(cs, "_compute_scores", lambda data: {
+            key: (100 if key == "chain_integrity" else 0, "fixture") for key in cs.SCORING_WEIGHTS
+        })
+        result = client.get("/api/v1/compliance/score/00000000-0000-0000-0000-000000000001").json()
+        assert result["assessment_status"] == "available"
+        assert result["overall_score"] == 10
+        weights = result["scoring_policy"]["weights"]
+        assert weights == {"chain_integrity":10,"kde_completeness":25,"cte_completeness":15,"obligation_coverage":10,"product_coverage":10,"export_readiness":30}
+        assert sum(weights.values()) == 100
+        assert int(sum(result["breakdown"][key]["score"] * weight / 100 for key,weight in weights.items())) == result["overall_score"]
+
+    def test_empty_workspace_is_unassessed(self, client, monkeypatch):
+        import shared.database as db_mod
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: MagicMock())
+        monkeypatch.setattr(cs, "_query_scoring_data", lambda s, t: _base_data(event_count=0))
+        result = client.get("/api/v1/compliance/score/00000000-0000-0000-0000-000000000001").json()
+        assert result["assessment_status"] == "unassessed"
 
     def test_scoring_inner_exception_returns_500(self, client, monkeypatch):
         session = MagicMock()

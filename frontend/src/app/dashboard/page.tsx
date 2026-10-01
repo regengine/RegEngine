@@ -95,7 +95,8 @@ export default function DashboardPage() {
   // Derive the health signal from the same useSystemStatus() data the widget
   // uses — one source of truth, so the strip and the widget never contradict.
   const { data: systemStatus, isLoading: statusLoading } = useSystemStatus();
-  const { data: metrics } = useSystemMetrics();
+  const { data: rawMetrics, isError: metricsError, isLoading: metricsLoading } = useSystemMetrics();
+  const metrics = metricsError ? undefined : rawMetrics;
 
   const healthStatus = useMemo(():
     | "loading"
@@ -122,13 +123,20 @@ export default function DashboardPage() {
   const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
 
-  const { data: workbenchReadiness } = useQuery({
+  const { data: rawReadiness, isError: readinessError, isLoading: readinessLoading } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
     queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
     enabled: !!effectiveTenantId && isAuthenticated && isTenantReady,
     staleTime: 60_000,
     retry: false,
   });
+
+  const workbenchReadiness = readinessError ? undefined : rawReadiness;
+  const attentionComplete = !statusLoading && !metricsLoading && !readinessLoading &&
+    systemStatus?.overall_status === "healthy" && !metricsError && !readinessError &&
+    typeof metrics?.open_alerts === "number" && metrics?.chain_valid === true &&
+    typeof workbenchReadiness?.unresolved_fix_count === "number" &&
+    workbenchReadiness?.source !== "none" && Boolean(workbenchReadiness?.run_id);
 
   /**
    * "Needs attention" absorbs what used to be three separate red widgets: the
@@ -174,7 +182,7 @@ export default function DashboardPage() {
       });
     }
 
-    if (metrics && (metrics.chain_length ?? 0) > 0 && !metrics.chain_valid) {
+    if (metrics?.chain_valid === false) {
       rows.push({
         id: "chain-broken",
         state: "blocked",
@@ -212,7 +220,7 @@ export default function DashboardPage() {
     if ((metrics?.open_alerts ?? 0) > 0) {
       actions.push({ label: "Review open compliance alerts", href: "/dashboard/alerts", cta: "Review" });
     }
-    if ((metrics?.events_ingested ?? 0) === 0) {
+    if (metrics?.events_ingested === 0) {
       actions.push({ label: "Import your first traceability records", href: "/ingest", cta: "Import" });
     }
     actions.push({ label: "Run a recall drill", href: "/dashboard/recall-drills" });
@@ -284,8 +292,8 @@ export default function DashboardPage() {
               status={attentionRows.length === 0 ? "empty" : "idle"}
               empty={{
                 icon: CheckCircle2,
-                title: "Nothing needs attention",
-                description: "Every check you have configured is currently passing.",
+                title: attentionComplete ? "Nothing needs attention" : "Checks incomplete",
+                description: attentionComplete ? "The checks shown here returned no open items." : "Metrics, readiness, or integrity checks are pending or unavailable. Refresh to retry.",
                 size: "sm",
               }}
             />

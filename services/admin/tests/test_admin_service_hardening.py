@@ -449,8 +449,8 @@ async def test_system_metrics_rejects_redirect_without_following_scoped_key(monk
 
     assert len(requests) == 2
     assert response.compliance_score is None
-    assert response.events_ingested == 0
-    assert response.chain_length == 0
+    assert response.events_ingested is None
+    assert response.chain_length is None
 
 
 @pytest.mark.asyncio
@@ -815,3 +815,33 @@ def test_get_auth_scoped_session_default_uses_resolve_tenant_context():
     assert default.dependency is resolve_tenant_context, (
         f"ctx default must wrap resolve_tenant_context; got {getattr(default, 'dependency', None)}"
     )
+
+@pytest.mark.asyncio
+async def test_supplier_sequence_is_not_chain_verification(monkeypatch):
+    from services.admin.app import system_routes as routes
+    monkeypatch.setattr(routes, '_resolve_tenant', lambda db: '11111111-1111-4111-8111-111111111111')
+    def unavailable(**kwargs):
+        raise routes.CircuitOpenError('unavailable', 30)
+    monkeypatch.setattr(routes, 'resilient_client', unavailable)
+    db = MagicMock()
+    db.execute.return_value.scalar.return_value = 12
+    db.execute.return_value.fetchone.return_value = (0,)
+    response = await routes.get_system_metrics(current_user=SimpleNamespace(), db=db)
+    assert response.total_documents == 12
+    assert response.events_ingested is None
+    assert response.events_availability == "partial"
+    assert response.chain_valid is None
+    assert response.chain_verification_status == 'unavailable'
+    assert response.chain_verified_scope is None
+
+
+def test_new_status_is_unassessed_without_writing():
+    from services.admin.app.compliance_service_sync import ComplianceServiceSync
+    db = MagicMock()
+    db.execute.return_value.scalar_one_or_none.return_value = None
+    db.execute.return_value.scalars.return_value.all.return_value = []
+    response = ComplianceServiceSync(db).get_status('11111111-1111-4111-8111-111111111111')
+    assert response['status'] == 'UNASSESSED'
+    assert response['completeness_score'] is None
+    db.add.assert_not_called()
+    db.commit.assert_not_called()

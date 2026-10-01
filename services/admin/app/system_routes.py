@@ -49,6 +49,10 @@ class SystemMetricsResponse(BaseModel):
     chain_length: Optional[int] = None
     chain_valid: Optional[bool] = None
     open_alerts: Optional[int] = None
+    chain_verification_status: str = "unavailable"
+    chain_verified_scope: Optional[str] = None
+    score_assessment_status: str = "unavailable"
+    events_availability: str = "unavailable"
 
 
 class TaskQueueSummaryResponse(BaseModel):
@@ -457,7 +461,9 @@ async def get_system_metrics(
     except CircuitOpenError as exc:
         logger.warning("metrics_ingestion_circuit_open", error=str(exc))
 
-    ingestion_events = score_data.get("events_analyzed", 0)
+    score_status = score_data.get("assessment_status", "available" if score_data else "unavailable")
+    ingestion_events = score_data.get("events_analyzed") if score_status != "unavailable" else None
+    supplier_available = False
 
     # Also query the admin DB's supplier tables (bulk upload destination)
     supplier_event_count = 0
@@ -500,21 +506,23 @@ async def get_system_metrics(
             ).scalar()
             or 0
         )
+        supplier_available = True
     except (RuntimeError, OSError, ValueError, KeyError, ImportError, AttributeError, SQLAlchemyError) as exc:
         logger.warning("supplier_metrics_query_failed", error=str(exc))
 
-    # Use the higher of ingestion vs supplier counts (they're separate data paths)
-    total_events = max(ingestion_events, supplier_event_count)
-    chain_len = chain_data.get("chain_length") or supplier_chain_length
-
-    # Chain validity: trust ingestion service if available, otherwise
-    # assume valid if supplier events exist with sequential hashes
-    chain_valid = chain_data.get("chain_valid")
-    if chain_valid is None and supplier_chain_length > 0:
-        chain_valid = True  # Supplier events have Merkle chain by construction
+    # Counts from separate paths are not proof of verification. Preserve the
+    # verifier's scope; supplier sequence numbers never establish hash validity.
+    total_events = max(ingestion_events or 0, supplier_event_count)
+    events_available = ingestion_events is not None and supplier_available
+    chain_len = chain_data.get("chain_length")
+    raw_chain_valid = chain_data.get("chain_valid")
+    chain_valid = raw_chain_valid if isinstance(raw_chain_valid, bool) else None
+    verification_status = "unavailable"
+    if isinstance(chain_valid, bool):
+        verification_status = "verified" if chain_valid else "failed"
 
     # Query open alerts from the compliance_alerts table
-    open_alert_count = 0
+    open_alert_count = None
     try:
         alert_row = db.execute(
             text("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE org_id = CAST(:tid AS uuid) AND resolved = false"),
@@ -528,11 +536,15 @@ async def get_system_metrics(
         total_tenants=1,
         total_documents=total_events,
         active_jobs=0,
-        compliance_score=score_data.get("overall_score"),
-        compliance_grade=score_data.get("grade"),
-        events_ingested=total_events,
+        compliance_score=score_data.get("overall_score") if score_status == "available" else None,
+        compliance_grade=score_data.get("grade") if score_status == "available" else None,
+        events_ingested=total_events if events_available else None,
         chain_length=chain_len,
         chain_valid=chain_valid,
+        chain_verification_status=verification_status,
+        chain_verified_scope="ingestion webhook chain" if isinstance(chain_valid, bool) else None,
+        score_assessment_status=score_status,
+        events_availability="available" if events_available else "partial" if supplier_available or ingestion_events is not None else "unavailable",
         open_alerts=open_alert_count,
     )
 

@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { getTenantDashboard } from '@/lib/mock-dashboard-data';
 import { useRouter } from 'next/navigation';
+import { useSystemMetrics, useSystemStatus } from '@/hooks/use-api';
 
 function createWrapper() {
     const queryClient = new QueryClient({
@@ -230,6 +231,37 @@ describe('DashboardPage', () => {
             });
         });
 
+        it('shows incomplete checks when readiness fails while health is healthy', async () => {
+            (useTenant as any).mockReturnValue({tenantId:'tenant-123',isTenantReady:true});
+            vi.mocked(useSystemStatus).mockReturnValue({data:{overall_status:'healthy',services:[]},isLoading:false} as any);
+            vi.mocked(useSystemMetrics).mockReturnValue({data:{open_alerts:0,events_ingested:null,chain_valid:true,chain_length:0},isLoading:false} as any);
+            mockFetch.mockImplementation((url:string) => Promise.resolve({ok:!url.includes('/readiness/summary'),status:503,json:async()=>({})}));
+            render(<DashboardPage />, {wrapper:createWrapper()});
+            await waitFor(() => expect(screen.getByText('Checks incomplete')).toBeInTheDocument());
+            expect(screen.queryByText('Nothing needs attention')).not.toBeInTheDocument();
+            expect(screen.queryByText('Import your first traceability records')).not.toBeInTheDocument();
+        });
+
+
+        it('shows failed integrity for actual missing-chain verdict even at length zero', async () => {
+            (useTenant as any).mockReturnValue({tenantId:'tenant-123',isTenantReady:true});
+            vi.mocked(useSystemStatus).mockReturnValue({data:{overall_status:'healthy',services:[]},isLoading:false} as any);
+            vi.mocked(useSystemMetrics).mockReturnValue({data:{open_alerts:0,events_ingested:12,chain_valid:false,chain_length:0},isLoading:false} as any);
+            mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.includes('/readiness/summary') ? {unresolved_fix_count:0,run_id:'saved-run',source:'live',score:100,export_eligible:true} : {}}));
+            render(<DashboardPage/>,{wrapper:createWrapper()});
+            await waitFor(()=>expect(screen.getByText('Hash chain verification failed')).toBeInTheDocument());
+            expect(screen.queryByText('Nothing needs attention')).not.toBeInTheDocument();
+        });
+
+        it('shows all-clear only after a successful zero-fix run and verified chain', async () => {
+            (useTenant as any).mockReturnValue({tenantId:'tenant-123',isTenantReady:true});
+            vi.mocked(useSystemStatus).mockReturnValue({data:{overall_status:'healthy',services:[]},isLoading:false} as any);
+            vi.mocked(useSystemMetrics).mockReturnValue({data:{open_alerts:0,events_ingested:12,chain_valid:true,chain_length:12},isLoading:false} as any);
+            mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.includes('/readiness/summary') ? {unresolved_fix_count:0,run_id:'saved-run',source:'live',score:100,export_eligible:true} : {}}));
+            render(<DashboardPage/>,{wrapper:createWrapper()});
+            await waitFor(()=>expect(screen.getByText('Nothing needs attention')).toBeInTheDocument());
+            expect(screen.queryByText('Hash chain verification failed')).not.toBeInTheDocument();
+        });
         it('loads internal dashboard data without a placeholder apiKey', async () => {
             mockFetch.mockImplementation((url: string) => {
                 if (url.includes('/pending-reviews/tenant-123')) {

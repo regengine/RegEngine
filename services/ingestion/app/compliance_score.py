@@ -38,6 +38,12 @@ router = APIRouter(prefix="/api/v1/compliance", tags=["Compliance Score"])
 # ---------------------------------------------------------------------------
 
 
+SCORING_WEIGHTS = {
+    "chain_integrity": 10, "kde_completeness": 25, "cte_completeness": 15,
+    "obligation_coverage": 10, "product_coverage": 10, "export_readiness": 30,
+}
+
+
 class ScoreBreakdown(BaseModel):
     """Individual score category."""
 
@@ -56,6 +62,11 @@ class NextAction(BaseModel):
 class ComplianceScoreResponse(BaseModel):
     """Full compliance score response."""
 
+    assessment_status: str = "available"
+    scoring_policy: dict = Field(default_factory=lambda: {
+        "version": "fsma-readiness-v1", "weights": dict(SCORING_WEIGHTS),
+        "rounding": "truncate sum of weighted dimension scores",
+    })
     tenant_id: str
     overall_score: int = Field(..., ge=0, le=100)
     grade: str  # A, B, C, D, F
@@ -939,6 +950,7 @@ async def get_compliance_score(
         # Fallback — no DB, return zero score
         return ComplianceScoreResponse(
             tenant_id=tenant_id,
+            assessment_status="unavailable",
             overall_score=0,
             grade="F",
             breakdown={
@@ -969,6 +981,7 @@ async def get_compliance_score(
             db_session.close()
         return ComplianceScoreResponse(
             tenant_id=tenant_id,
+            assessment_status="unavailable",
             overall_score=0,
             grade="F",
             breakdown={
@@ -1013,20 +1026,14 @@ async def get_compliance_score(
         # - Chain integrity (10%): Hash-chain verification for tamper detection
         # - Obligation coverage (10%): Regulatory obligation fulfillment
         # - Product coverage (10%): Product catalog completeness
-        overall = int(
-            chain_score * 0.10
-            + kde_score * 0.25
-            + cte_score * 0.15
-            + obligation_score * 0.10
-            + product_score * 0.10
-            + export_score * 0.30
-        )
+        overall = int(sum(scores[key][0] * weight / 100 for key, weight in SCORING_WEIGHTS.items()))
 
         # Build next actions
         next_actions = _build_next_actions(scores, data)
 
         return ComplianceScoreResponse(
             tenant_id=tenant_id,
+            assessment_status="available" if data["event_count"] > 0 else "unassessed",
             overall_score=overall,
             grade=_compute_grade(overall),
             breakdown={

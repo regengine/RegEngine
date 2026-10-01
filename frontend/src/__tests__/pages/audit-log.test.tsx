@@ -208,7 +208,7 @@ describe('AuditLogPage', () => {
         expect(mockListSupplierFacilities).not.toHaveBeenCalled();
     });
 
-    it('describes the empty audit log as hash-chained, not signed', async () => {
+    it('does not claim verification for an empty activity feed', async () => {
         mockAuditFetch([]);
         render(<AuditLogPage />, { wrapper: createWrapper() });
 
@@ -218,7 +218,8 @@ describe('AuditLogPage', () => {
 
         // Audit entries are SHA-256 hash-chained and guarded by append-only
         // triggers; no digital signature is applied, so copy must not say so.
-        expect(screen.getByText(/SHA-256 hash-chained/i)).toBeInTheDocument();
+        expect(screen.getByText(/this feed does not verify chains/i)).toBeInTheDocument();
+        expect(screen.queryByText(/SHA-256 hash chain ready/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/cryptographically signed/i)).not.toBeInTheDocument();
     });
 

@@ -182,13 +182,13 @@ export default function AuditLogPage() {
         <PageContainer>
             <PageHeader
                 title="Audit Log"
-                description="Immutable, SHA-256 verified record of all system events"
+                description="System activity feed; integrity verification is not performed on this page"
                 meta={
                     <>
                         {lastFetched && <span>Updated {lastFetched.toLocaleTimeString()}</span>}
                         <Badge tone="neutral" size="sm" className="hidden sm:inline-flex">
                             <Shield className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                            Hash-chained
+                            Verification not run
                         </Badge>
                     </>
                 }
@@ -488,11 +488,11 @@ export default function AuditLogPage() {
                         icon={ScrollText}
                         title="No Audit Entries Yet"
                         titleAs="h2"
-                        description="Events will appear here as your team scans labels, imports data, and generates reports. Every action is SHA-256 hash-chained and protected from modification by append-only database triggers."
+                        description="Events will appear here as your team scans labels, imports data, and generates reports. Available hashes are shown per event; this feed does not verify chains."
                         action={
                             <Badge tone="success">
                                 <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                SHA-256 hash chain ready
+                                No events to inspect
                             </Badge>
                         }
                     />
@@ -502,8 +502,8 @@ export default function AuditLogPage() {
                 {isLoggedIn && entries.length > 0 && (
                     <Card variant="inset">
                         <CardContent className="p-4 text-ui text-re-text-secondary">
-                            <span className="font-medium text-re-text-primary">Tamper-evident audit trail: </span>
-                            Every entry is cryptographically chained using SHA-256. Database triggers prevent modification or deletion.
+                            <span className="font-medium text-re-text-primary">Activity provenance: </span>
+                            Available hashes identify individual source records. Hashless entries may come from other activity sources. This page has not verified chain integrity.
                             Designed to support 21 CFR Part 11-style record controls and long-term retention.
                         </CardContent>
                     </Card>

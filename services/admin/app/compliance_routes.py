@@ -60,6 +60,7 @@ class ComplianceStatusResponse(BaseModel):
     countdown_seconds: Optional[int]
     countdown_display: Optional[str]
     active_alerts: List[Dict[str, Any]] = Field(default_factory=list)
+    assessment_scope: str = "active alert monitoring; not a regulatory compliance assessment"
 
 
 class AlertResponse(BaseModel):
