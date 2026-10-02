@@ -132,25 +132,20 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
 
 
 def _fetch_supplier_submissions(tenant_id: str, supplier_id: str) -> Optional[list[dict]]:
-    """Fetch recent submissions for a supplier. Returns None if DB unavailable."""
-    db = get_db_safe()
-    if not db:
-        return None
-    try:
-        rows = db.execute(
-            text(
-                "SELECT cte_type, kde_completeness, gln FROM fsma.supplier_submissions "
-                "WHERE tenant_id = :tid AND supplier_id = :sid "
-                "ORDER BY submitted_at DESC LIMIT 100"
-            ),
-            {"tid": tenant_id, "sid": supplier_id},
-        ).fetchall()
-        return [{"cte_type": r[0], "kde_completeness": r[1], "gln": r[2]} for r in rows]
-    except Exception as exc:
-        logger.debug("supplier_submissions_query_failed error=%s", str(exc))
-        return None
-    finally:
-        db.close()
+    """Per-submission data for a supplier. Always ``None``: no table stores it.
+
+    This read a ``supplier_submissions`` table that no migration creates, so
+    Postgres rejected the statement on every call and the except branch
+    returned ``None``. Supplier portal submissions are ingested as
+    ``fsma.cte_events`` rows (``source = 'supplier_portal'``) carrying
+    ``supplier_name`` and ``portal_id`` KDEs, but nothing links them to a
+    ``fsma.tenant_suppliers`` row (``portal_link_id`` is a placeholder set by
+    ``supplier_mgmt.send_portal_link``, not a portal token) and no column
+    stores a per-submission ``kde_completeness``. Until a product decision
+    defines that link, the checks that depend on it (CTE coverage, KDE
+    completeness, GLN) keep their "no data" outcome without a doomed query.
+    """
+    return None
 
 
 def _validate_supplier(supplier: dict, tenant_id: str) -> SupplierValidationResult:

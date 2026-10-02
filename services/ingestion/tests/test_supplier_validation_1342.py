@@ -9,7 +9,9 @@ Issue: #1342
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -248,37 +250,42 @@ class TestFetchSuppliers:
 # ---------------------------------------------------------------------------
 
 
-class TestFetchSupplierSubmissions:
-    def test_returns_none_when_no_db(self, monkeypatch):
-        monkeypatch.setattr(sv, "get_db_safe", lambda: None)
-        assert _fetch_supplier_submissions("t1", "s1") is None
-
-    def test_maps_rows(self, monkeypatch):
-        session = _mock_db(
-            rows=[
-                ("shipping", 95.5, "1234567890123"),
-                ("receiving", 80.0, None),
-            ]
+def _tables_created_by_migrations() -> set[str]:
+    """Every ``fsma.<table>`` that an ``alembic/sql`` file or a revision creates."""
+    alembic = Path(__file__).resolve().parents[3] / "alembic"
+    created: set[str] = set()
+    for path in [*alembic.glob("sql/*.sql"), *alembic.glob("versions/*.py")]:
+        created.update(
+            re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?fsma\.([a-z_]+)", path.read_text(), flags=re.IGNORECASE)
         )
-        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
-        result = _fetch_supplier_submissions("t1", "s1")
-        assert len(result) == 2
-        assert result[0]["cte_type"] == "shipping"
-        assert result[0]["kde_completeness"] == 95.5
-        assert result[0]["gln"] == "1234567890123"
+    return created
 
-    def test_exception_returns_none_and_closes(self, monkeypatch):
-        session = _mock_db(raise_on_execute=True)
-        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
+
+class TestFetchSupplierSubmissions:
+    def test_returns_none_without_a_database_round_trip(self, monkeypatch):
+        """No table stores per-submission data for a supplier, so nothing is queried."""
+        monkeypatch.setattr(sv, "get_db_safe", lambda: pytest.fail("a statement was issued"))
         assert _fetch_supplier_submissions("t1", "s1") is None
-        session.close.assert_called_once()
 
-    def test_tid_and_sid_params(self, monkeypatch):
-        session = _mock_db(rows=[])
-        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
-        _fetch_supplier_submissions("tenant-xyz", "sup-123")
-        _sql, params = session.execute.call_args[0]
-        assert params == {"tid": "tenant-xyz", "sid": "sup-123"}
+    def test_module_reads_only_tables_a_migration_creates(self):
+        """Every ``fsma.<table>`` the module names exists at alembic head.
+
+        ``_fetch_supplier_submissions`` read ``supplier_submissions``. No
+        migration creates it (``to_regclass`` is NULL at head), so Postgres
+        raised ``UndefinedTable`` on every call, the except logged at DEBUG
+        and returned ``None``, and the CTE-coverage, KDE and GLN checks
+        reported "no data" for every supplier. This is not a rename: portal
+        submissions land in ``fsma.cte_events``, and nothing links them to a
+        ``fsma.tenant_suppliers`` row, so the read needs a product decision.
+        This guard keeps the module off tables that do not exist.
+        """
+        created = _tables_created_by_migrations()
+        assert "tenant_suppliers" in created  # the migration scan itself still works
+        assert "supplier_submissions" not in created
+
+        referenced = set(re.findall(r"\bfsma\.([a-z_]+)", Path(sv.__file__).read_text()))
+        assert referenced, "the module stopped naming any fsma table"
+        assert referenced <= created, f"tables no migration creates: {sorted(referenced - created)}"
 
 
 # ---------------------------------------------------------------------------
