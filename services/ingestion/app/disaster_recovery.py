@@ -18,6 +18,7 @@ from shared.tenant_context import TenantContext
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from .compliance_score import _query_required_kde_coverage
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("disaster-recovery")
@@ -122,7 +123,7 @@ def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
         row = db.execute(
             text(
                 "SELECT COUNT(*) AS total, "
-                "SUM(CASE WHEN prev_hash IS NULL AND seq > 1 THEN 1 ELSE 0 END) AS gaps "
+                "SUM(CASE WHEN previous_chain_hash IS NULL AND sequence_num > 1 THEN 1 ELSE 0 END) AS gaps "
                 "FROM fsma.hash_chain WHERE tenant_id = :tid"
             ),
             {"tid": tenant_id},
@@ -176,8 +177,8 @@ def _check_export_completeness(tenant_id: str) -> DRCheck:
     try:
         row = db.execute(
             text(
-                "SELECT COUNT(*), MAX(created_at) FROM fsma.export_logs "
-                "WHERE tenant_id = :tid AND created_at > now() - interval '7 days'"
+                "SELECT COUNT(*), MAX(generated_at) FROM fsma.fda_export_log "
+                "WHERE tenant_id = :tid AND generated_at > now() - interval '7 days'"
             ),
             {"tid": tenant_id},
         ).fetchone()
@@ -501,19 +502,19 @@ async def test_recovery(
     kde_details = "Cannot verify KDE completeness — database unavailable"
     if db:
         try:
-            row = db.execute(
-                text(
-                    "SELECT AVG(kde_completeness) FROM fsma.events "
-                    "WHERE tenant_id = :tid AND kde_completeness IS NOT NULL"
-                ),
-                {"tid": tenant_id},
-            ).fetchone()
-            if row and row[0] is not None:
-                avg = float(row[0])
-                kde_status = "pass" if avg >= 80 else "warn"
-                kde_details = f"Average KDE completeness: {avg:.1f}%"
+            # Same measure the compliance score reports (#2962): required KDE
+            # fields present over required KDE fields, per CTE type.
+            coverage = _query_required_kde_coverage(db, tenant_id)
+            total = coverage["required_kde_checks_total"]
+            passed = coverage["required_kde_checks_passed"]
+            unchecked = coverage["events_unchecked_type"]
+            unchecked_note = f"; {unchecked} event(s) have no required-KDE checklist" if unchecked else ""
+            if total:
+                pct = passed / total * 100
+                kde_status = "pass" if pct >= 80 else "warn"
+                kde_details = f"Required KDE completeness: {pct:.1f}% ({passed}/{total} fields present){unchecked_note}"
             else:
-                kde_details = "No KDE completeness data available"
+                kde_details = f"No KDE completeness data available{unchecked_note}"
         except SQLAlchemyError as exc:
             logger.debug("kde_recovery_check_failed error=%s", str(exc))
             kde_details = f"KDE check error: {exc}"
