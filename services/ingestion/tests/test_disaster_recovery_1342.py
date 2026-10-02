@@ -7,6 +7,8 @@ paths (db unavailable, empty results, SQL errors, success branches).
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
@@ -296,6 +298,39 @@ class TestCheckDataVolume:
         assert check.status == "warn"
         assert "Data volume check error" in check.details
         assert info == {"total_events": 0, "total_tlcs": 0, "date_range_days": 0}
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The volume statement reads the canonical event store by real column names.
+
+        The fake session never parses SQL, so ``FROM fsma.events`` — a table
+        no migration creates — and ``MAX(event_time)`` — a column
+        ``fsma.traceability_events`` does not have — passed every test above
+        while Postgres rejected the statement and the check fell through to
+        its ``warn`` branch. ``test_disaster_recovery_data_volume_pg.py``
+        proves the statement against a live cluster; this is the copy that
+        needs no database.
+        """
+        ddl = (Path(__file__).resolve().parents[3] / "alembic/sql/V043__canonical_traceability_events.sql").read_text()
+        table = ddl.split("CREATE TABLE IF NOT EXISTS fsma.traceability_events (", 1)[1].split("\n);", 1)[0]
+        columns = set(re.findall(r"^ {4}([a-z_]+) ", table, flags=re.MULTILINE))
+        assert "event_timestamp" in columns  # the DDL parse itself still works
+
+        session = _FakeSession(rows=[(1, 1, 0)])
+        _set_db(monkeypatch, session)
+        _check_data_volume("t1")
+        sql, params = session.calls[0]
+
+        assert "FROM fsma.traceability_events WHERE tenant_id = :tid" in sql
+        assert params == {"tid": "t1"}
+
+        # Keywords are upper-case in the statement, so every lower-case word
+        # is an identifier. These are the ones that are not columns.
+        not_columns = {
+            *("events", "tlcs", "days_range"),  # output aliases
+            *("fsma", "traceability_events", "tid"),
+        }
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.traceability_events: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------

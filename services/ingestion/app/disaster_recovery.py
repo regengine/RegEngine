@@ -227,8 +227,8 @@ def _check_data_volume(tenant_id: str) -> tuple[DRCheck, dict]:
             text(
                 "SELECT COUNT(*) AS events, "
                 "COUNT(DISTINCT traceability_lot_code) AS tlcs, "
-                "EXTRACT(EPOCH FROM (MAX(event_time) - MIN(event_time))) / 86400 AS days_range "
-                "FROM fsma.events WHERE tenant_id = :tid"
+                "EXTRACT(EPOCH FROM (MAX(event_timestamp) - MIN(event_timestamp))) / 86400 AS days_range "
+                "FROM fsma.traceability_events WHERE tenant_id = :tid"
             ),
             {"tid": tenant_id},
         ).fetchone()
