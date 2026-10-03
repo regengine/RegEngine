@@ -97,8 +97,6 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
     if not db:
         return None
     try:
-        import json
-
         rows = db.execute(
             text(
                 "SELECT id, name, contact_email, portal_link_id, portal_status, "
@@ -111,7 +109,7 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
         for row in rows:
             suppliers.append(
                 {
-                    "id": row[0],
+                    "id": str(row[0]),  # UUID column: the driver returns uuid.UUID
                     "name": row[1],
                     "contact_email": row[2],
                     "portal_link_id": row[3],
@@ -119,8 +117,9 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
                     "submissions_count": row[5],
                     "last_submission": row[6],
                     "compliance_status": row[7],
-                    "missing_kdes": json.loads(row[8]) if row[8] else [],
-                    "products": json.loads(row[9]) if row[9] else [],
+                    # TEXT[] columns: the driver returns Python lists (NULL -> None).
+                    "missing_kdes": list(row[8] or []),
+                    "products": list(row[9] or []),
                 }
             )
         return suppliers
