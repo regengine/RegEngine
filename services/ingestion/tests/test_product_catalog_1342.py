@@ -7,9 +7,12 @@ endpoints.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Optional
+from unittest.mock import MagicMock
 
 import pytest
 from app import product_catalog as pc
@@ -311,6 +314,34 @@ class TestDeriveProducts:
         db = _FakeSession(responses=[_FakeResult(rows=rows)])
         products = _derive_products_from_events(db, "t1", category="Leafy Greens")
         assert products == []
+
+    def test_statement_references_only_real_columns(self):
+        """Every column the derive statement names exists on the table.
+
+        The fake session never parses SQL, so ``MAX(event_time)`` — a column
+        ``fsma.traceability_events`` does not have — passed every test above
+        while Postgres rejected the statement and the fallback returned
+        nothing. ``test_product_catalog_derive_events_pg.py`` proves the
+        statement against a live cluster; this is the copy that needs no
+        database.
+        """
+        ddl = (Path(__file__).resolve().parents[3] / "alembic/sql/V043__canonical_traceability_events.sql").read_text()
+        table = ddl.split("CREATE TABLE IF NOT EXISTS fsma.traceability_events (", 1)[1].split("\n);", 1)[0]
+        columns = set(re.findall(r"^ {4}([a-z_]+) ", table, flags=re.MULTILINE))
+        assert "event_timestamp" in columns  # the DDL parse itself still works
+
+        db = MagicMock()
+        _derive_products_from_events(db, "t1")
+        sql = str(db.execute.call_args.args[0])
+
+        # Keywords are upper-case in the statement, so every lower-case word
+        # is an identifier. These are the ones that are not columns.
+        not_columns = {
+            *("cte_count", "last_cte", "first_seen", "lot_codes"),  # output aliases
+            *("array_agg", "fsma", "traceability_events", "tid", "uuid"),
+        }
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.traceability_events: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------

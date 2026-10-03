@@ -9,7 +9,9 @@ Issue: #1342
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -75,6 +77,18 @@ def _mock_db(rows=None, raise_on_execute=False):
         result.fetchall.return_value = rows or []
         session.execute.return_value = result
     return session
+
+
+def _ddl_columns(sql_file: str, table: str) -> set[str]:
+    """Column names of ``table`` as declared in an ``alembic/sql`` file."""
+    ddl = (Path(__file__).resolve().parents[3] / "alembic/sql" / sql_file).read_text()
+    body = ddl.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split("\n);", 1)[0]
+    return set(re.findall(r"^ {4}([a-z_]+) ", body, flags=re.MULTILINE))
+
+
+def _identifiers(sql: str) -> set[str]:
+    """Lower-case words of ``sql`` other than bind names. Keywords are upper-case, so these are identifiers."""
+    return set(re.findall(r"\b[a-z_]+\b", re.sub(r":\w+", " ", sql)))
 
 
 def _perfect_supplier():
@@ -194,34 +208,43 @@ class TestFetchSuppliers:
         monkeypatch.setattr(sv, "get_db_safe", lambda: None)
         assert _fetch_suppliers("t1") is None
 
-    def test_maps_rows_with_json_fields(self, monkeypatch):
+    def test_maps_rows_with_array_columns(self, monkeypatch):
+        """Rows carry what the driver returns: a uuid.UUID id and lists for the TEXT[] columns.
+
+        ``json.loads`` on those lists raised ``TypeError``, the except branch
+        returned ``None`` and the whole validation report came back empty for
+        any tenant with a populated array. ``SupplierValidationResult.supplier_id``
+        is ``str``, so the id is rendered. ``test_supplier_mgmt_pg.py`` reads
+        real rows back.
+        """
+        supplier_id = uuid.uuid4()
         session = _mock_db(
             rows=[
                 (
-                    "s1",
+                    supplier_id,
                     "Acme",
                     "a@x.com",
                     "pl-1",
                     "active",
                     3,
-                    "2026-04-18T00:00:00+00:00",
+                    datetime(2026, 4, 18, tzinfo=timezone.utc),
                     "compliant",
-                    '["kde1"]',
-                    '["Spinach"]',
+                    ["kde1"],
+                    ["Spinach"],
                 ),
             ]
         )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
         result = _fetch_suppliers("t1")
         assert len(result) == 1
-        assert result[0]["id"] == "s1"
+        assert result[0]["id"] == str(supplier_id)
         assert result[0]["missing_kdes"] == ["kde1"]
         assert result[0]["products"] == ["Spinach"]
 
-    def test_null_json_fields_become_empty(self, monkeypatch):
+    def test_null_array_columns_become_empty(self, monkeypatch):
         session = _mock_db(
             rows=[
-                ("s1", "A", "a@x.com", None, "active", 0, None, "unknown", None, None),
+                (uuid.uuid4(), "A", "a@x.com", None, "active", 0, None, "unknown", None, None),
             ]
         )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
@@ -242,43 +265,66 @@ class TestFetchSuppliers:
         _sql, params = session.execute.call_args[0]
         assert params == {"tid": "tenant-xyz"}
 
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The SELECT names ``fsma.tenant_suppliers`` columns as V042 declares them.
+
+        The mock session never parses SQL; ``test_supplier_mgmt_pg.py`` runs
+        the statement on a live cluster and this is the copy that needs no
+        database.
+        """
+        columns = _ddl_columns("V042__tenant_feature_data_tables.sql", "fsma.tenant_suppliers")
+        assert {"missing_kdes", "products"} <= columns  # the DDL parse itself still works
+
+        session = _mock_db(rows=[])
+        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
+        _fetch_suppliers("t1")
+        sql = str(session.execute.call_args[0][0])
+
+        referenced = _identifiers(sql) - {"fsma", "tenant_suppliers"}
+        assert referenced <= columns, f"not columns of fsma.tenant_suppliers: {sorted(referenced - columns)}"
+
 
 # ---------------------------------------------------------------------------
 # _fetch_supplier_submissions
 # ---------------------------------------------------------------------------
 
 
-class TestFetchSupplierSubmissions:
-    def test_returns_none_when_no_db(self, monkeypatch):
-        monkeypatch.setattr(sv, "get_db_safe", lambda: None)
-        assert _fetch_supplier_submissions("t1", "s1") is None
-
-    def test_maps_rows(self, monkeypatch):
-        session = _mock_db(
-            rows=[
-                ("shipping", 95.5, "1234567890123"),
-                ("receiving", 80.0, None),
-            ]
+def _tables_created_by_migrations() -> set[str]:
+    """Every ``fsma.<table>`` that an ``alembic/sql`` file or a revision creates."""
+    alembic = Path(__file__).resolve().parents[3] / "alembic"
+    created: set[str] = set()
+    for path in [*alembic.glob("sql/*.sql"), *alembic.glob("versions/*.py")]:
+        created.update(
+            re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?fsma\.([a-z_]+)", path.read_text(), flags=re.IGNORECASE)
         )
-        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
-        result = _fetch_supplier_submissions("t1", "s1")
-        assert len(result) == 2
-        assert result[0]["cte_type"] == "shipping"
-        assert result[0]["kde_completeness"] == 95.5
-        assert result[0]["gln"] == "1234567890123"
+    return created
 
-    def test_exception_returns_none_and_closes(self, monkeypatch):
-        session = _mock_db(raise_on_execute=True)
-        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
+
+class TestFetchSupplierSubmissions:
+    def test_returns_none_without_a_database_round_trip(self, monkeypatch):
+        """No table stores per-submission data for a supplier, so nothing is queried."""
+        monkeypatch.setattr(sv, "get_db_safe", lambda: pytest.fail("a statement was issued"))
         assert _fetch_supplier_submissions("t1", "s1") is None
-        session.close.assert_called_once()
 
-    def test_tid_and_sid_params(self, monkeypatch):
-        session = _mock_db(rows=[])
-        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
-        _fetch_supplier_submissions("tenant-xyz", "sup-123")
-        _sql, params = session.execute.call_args[0]
-        assert params == {"tid": "tenant-xyz", "sid": "sup-123"}
+    def test_module_reads_only_tables_a_migration_creates(self):
+        """Every ``fsma.<table>`` the module names exists at alembic head.
+
+        ``_fetch_supplier_submissions`` read ``supplier_submissions``. No
+        migration creates it (``to_regclass`` is NULL at head), so Postgres
+        raised ``UndefinedTable`` on every call, the except logged at DEBUG
+        and returned ``None``, and the CTE-coverage, KDE and GLN checks
+        reported "no data" for every supplier. This is not a rename: portal
+        submissions land in ``fsma.cte_events``, and nothing links them to a
+        ``fsma.tenant_suppliers`` row, so the read needs a product decision.
+        This guard keeps the module off tables that do not exist.
+        """
+        created = _tables_created_by_migrations()
+        assert "tenant_suppliers" in created  # the migration scan itself still works
+        assert "supplier_submissions" not in created
+
+        referenced = set(re.findall(r"\bfsma\.([a-z_]+)", Path(sv.__file__).read_text()))
+        assert referenced, "the module stopped naming any fsma table"
+        assert referenced <= created, f"tables no migration creates: {sorted(referenced - created)}"
 
 
 # ---------------------------------------------------------------------------

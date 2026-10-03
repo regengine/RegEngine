@@ -7,11 +7,14 @@ paths (db unavailable, empty results, SQL errors, success branches).
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
 import pytest
 from app import disaster_recovery as dr
+from app.compliance_score import _required_fields_for
 from app.disaster_recovery import (
     DRCheck,
     DRReport,
@@ -41,6 +44,9 @@ class _FakeResult:
 
     def fetchone(self) -> Optional[tuple]:
         return self._row
+
+    def fetchall(self) -> list:
+        return list(self._row or [])
 
 
 class _FakeSession:
@@ -79,6 +85,13 @@ def _set_db(monkeypatch, session_or_factory):
         monkeypatch.setattr(dr, "get_db_safe", session_or_factory)
     else:
         monkeypatch.setattr(dr, "get_db_safe", lambda: session_or_factory)
+
+
+def _ddl_columns(sql_file: str, table: str) -> set[str]:
+    """Column names of ``table`` as declared in an ``alembic/sql`` file."""
+    ddl = (Path(__file__).resolve().parents[3] / "alembic/sql" / sql_file).read_text()
+    body = ddl.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split("\n);", 1)[0]
+    return set(re.findall(r"^ {4}([a-z_]+) ", body, flags=re.MULTILINE))
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +235,37 @@ class TestCheckHashChain:
         assert check.status == "warn"
         assert "Hash chain check error" in check.details
 
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The gap statement names ``fsma.hash_chain`` columns as V002 declares them.
+
+        It read ``prev_hash`` and ``seq``; the columns are
+        ``previous_chain_hash`` and ``sequence_num`` and no migration ever
+        renamed them. Postgres raised ``UndefinedColumn``, the check fell
+        through to its ``warn`` branch, and a tenant with a broken chain was
+        never reported as ``fail``. The fake session above never parses SQL.
+        ``test_disaster_recovery_readiness_pg.py`` runs the statement on a
+        live cluster; this is the copy that needs no database.
+        """
+        columns = _ddl_columns("V002__fsma_cte_persistence.sql", "fsma.hash_chain")
+        assert {"sequence_num", "previous_chain_hash"} <= columns  # the DDL parse itself still works
+
+        session = _FakeSession(rows=[(1, 0)])
+        _set_db(monkeypatch, session)
+        _check_hash_chain_integrity("t1")
+        sql, params = session.calls[0]
+
+        assert "FROM fsma.hash_chain WHERE tenant_id = :tid" in sql
+        assert params == {"tid": "t1"}
+
+        # Keywords are upper-case in the statement, so every lower-case word
+        # is an identifier. These are the ones that are not columns.
+        not_columns = {
+            *("total", "gaps"),  # output aliases
+            *("fsma", "hash_chain", "tid"),
+        }
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.hash_chain: {sorted(referenced - columns)}"
+
 
 # ---------------------------------------------------------------------------
 # _check_export_completeness
@@ -254,6 +298,37 @@ class TestCheckExportCompleteness:
         check = _check_export_completeness("t1")
         assert check.status == "warn"
         assert "Export check error" in check.details
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The export statement reads ``fsma.fda_export_log`` by its real timestamp column.
+
+        It read ``fsma.export_logs`` — a table no migration creates — and
+        ``created_at``, a column the export log does not have (the export
+        time is ``generated_at``). Postgres raised ``UndefinedTable`` and the
+        check always reported its ``warn`` branch, so a tenant with recent
+        exports was told to schedule exports. The fake session above never
+        parses SQL. ``test_disaster_recovery_readiness_pg.py`` runs the
+        statement on a live cluster; this is the copy that needs no database.
+        """
+        columns = _ddl_columns("V002__fsma_cte_persistence.sql", "fsma.fda_export_log")
+        assert "generated_at" in columns  # the DDL parse itself still works
+        assert "created_at" not in columns
+
+        session = _FakeSession(rows=[(1, "2026-04-18")])
+        _set_db(monkeypatch, session)
+        _check_export_completeness("t1")
+        sql, params = session.calls[0]
+
+        assert "FROM fsma.fda_export_log WHERE tenant_id = :tid" in sql
+        assert params == {"tid": "t1"}
+
+        # Every lower-case word is an identifier except the ones listed here.
+        not_columns = {
+            *("fsma", "fda_export_log", "tid"),
+            *("now", "interval", "days"),  # now() - interval '7 days'
+        }
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.fda_export_log: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +371,39 @@ class TestCheckDataVolume:
         assert check.status == "warn"
         assert "Data volume check error" in check.details
         assert info == {"total_events": 0, "total_tlcs": 0, "date_range_days": 0}
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The volume statement reads the canonical event store by real column names.
+
+        The fake session never parses SQL, so ``FROM fsma.events`` — a table
+        no migration creates — and ``MAX(event_time)`` — a column
+        ``fsma.traceability_events`` does not have — passed every test above
+        while Postgres rejected the statement and the check fell through to
+        its ``warn`` branch. ``test_disaster_recovery_data_volume_pg.py``
+        proves the statement against a live cluster; this is the copy that
+        needs no database.
+        """
+        ddl = (Path(__file__).resolve().parents[3] / "alembic/sql/V043__canonical_traceability_events.sql").read_text()
+        table = ddl.split("CREATE TABLE IF NOT EXISTS fsma.traceability_events (", 1)[1].split("\n);", 1)[0]
+        columns = set(re.findall(r"^ {4}([a-z_]+) ", table, flags=re.MULTILINE))
+        assert "event_timestamp" in columns  # the DDL parse itself still works
+
+        session = _FakeSession(rows=[(1, 1, 0)])
+        _set_db(monkeypatch, session)
+        _check_data_volume("t1")
+        sql, params = session.calls[0]
+
+        assert "FROM fsma.traceability_events WHERE tenant_id = :tid" in sql
+        assert params == {"tid": "t1"}
+
+        # Keywords are upper-case in the statement, so every lower-case word
+        # is an identifier. These are the ones that are not columns.
+        not_columns = {
+            *("events", "tlcs", "days_range"),  # output aliases
+            *("fsma", "traceability_events", "tid"),
+        }
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.traceability_events: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------
@@ -596,12 +704,24 @@ class TestBackupStatusEndpoint:
         assert body["data_volume"]["total_events"] == 0
 
 
+def _kde_session(pct: float) -> _CountedSession:
+    """Answers the two required-KDE coverage reads with ``pct``% of required fields present."""
+    events = 200
+    present = int(events * pct / 100)
+    return _CountedSession(
+        [
+            [("shipping", events)],  # events per CTE type
+            [("shipping", field, present) for field in _required_fields_for("shipping")],
+        ]
+    )
+
+
 class TestRecoverySimulationEndpoint:
     def test_successful_recovery(self, monkeypatch):
         sessions = [
             _CountedSession([(1500, 12, 30.0)]),  # data volume
             _CountedSession([(100, 0)]),  # hash chain
-            _CountedSession([(85.5,)]),  # KDE
+            _kde_session(85.5),  # KDE
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -625,7 +745,7 @@ class TestRecoverySimulationEndpoint:
         sessions = [
             _CountedSession([(1000, 10, 5.0)]),  # data volume
             _CountedSession([(50, 5)]),  # hash chain: gaps → fail
-            _CountedSession([(None,)]),  # KDE: row exists but value is None
+            _CountedSession([[], []]),  # KDE: tenant has no events
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -644,7 +764,7 @@ class TestRecoverySimulationEndpoint:
         sessions = [
             _CountedSession([(500, 5, 2.0)]),
             _CountedSession([(50, 0)]),  # hash chain: pass
-            _CountedSession([(45.0,)]),  # KDE: < 80 → warn
+            _kde_session(45.0),  # KDE: < 80 → warn
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -718,7 +838,7 @@ class TestRecoverySimulationEndpoint:
         sessions = [
             _CountedSession([(0, 0, 0)]),  # zero events → warn
             _CountedSession([(100, 0)]),
-            _CountedSession([(90.0,)]),
+            _kde_session(90.0),
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -729,6 +849,54 @@ class TestRecoverySimulationEndpoint:
         body = resp.json()
         re_export = next(c for c in body["checks"] if c["name"] == "re_export_estimate")
         assert re_export["status"] == "warn"
+
+    def test_kde_unchecked_event_types_are_reported(self, monkeypatch):
+        """Events whose type has no required-KDE checklist are named, never counted as covered."""
+        sessions = [
+            _CountedSession([(500, 5, 2.0)]),
+            _CountedSession([(50, 0)]),
+            _CountedSession([[("growing", 7)], []]),  # KDE: only an unchecked type
+        ]
+        it = iter(sessions)
+        monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
+
+        client = TestClient(_build_app())
+        resp = client.post("/api/v1/dr/t1/test-recovery")
+        assert resp.status_code == 200
+        kde = next(c for c in resp.json()["checks"] if c["name"] == "kde_recovery_completeness")
+        assert kde["status"] == "warn"
+        assert kde["details"] == "No KDE completeness data available; 7 event(s) have no required-KDE checklist"
+
+    def test_kde_statements_read_real_tables_for_the_tenant(self, monkeypatch):
+        """The KDE check reads the tenant's ``fsma.cte_events``, not ``fsma.events``.
+
+        It ran ``SELECT AVG(kde_completeness) FROM fsma.events``. No migration
+        creates ``fsma.events``, and the only ``kde_completeness`` column in
+        the schema is on ``fsma.compliance_snapshots``, which nothing writes.
+        Postgres raised ``UndefinedTable`` and the check always reported
+        ``KDE check error``. It now reuses the compliance score's
+        required-KDE coverage read (#2962). The sessions above never parse
+        SQL; ``test_disaster_recovery_readiness_pg.py`` runs it on a live
+        cluster.
+        """
+        kde_session = _FakeSession()
+        sessions = [
+            _CountedSession([(1500, 12, 30.0)]),
+            _CountedSession([(100, 0)]),
+            kde_session,
+        ]
+        it = iter(sessions)
+        monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
+
+        client = TestClient(_build_app())
+        assert client.post("/api/v1/dr/t1/test-recovery").status_code == 200
+
+        assert kde_session.calls, "the KDE check issued no statement"
+        assert kde_session.closed is True
+        for sql, params in kde_session.calls:
+            assert "FROM fsma.cte_events WHERE tenant_id = :tid" in " ".join(sql.split())
+            assert "kde_completeness" not in sql
+            assert params == {"tid": "t1"}
 
 
 # ---------------------------------------------------------------------------
