@@ -1,7 +1,8 @@
 [project]
 name = "regengine"
 version = "0.4.0"
-description = "RegEngine: The Regulatory Intelligence Platform"
+description = "API-first FSMA 204 food traceability, validation, tamper-evident audit evidence, and FDA-oriented exports"
+keywords = ["fsma-204", "food-traceability", "cte", "kde", "epcis", "audit-evidence", "supply-chain"]
 authors = [{ name = "RegEngine Engineering", email = "admin@regengine.co" }]
 license = { text = "Proprietary" }
 readme = "README.md"

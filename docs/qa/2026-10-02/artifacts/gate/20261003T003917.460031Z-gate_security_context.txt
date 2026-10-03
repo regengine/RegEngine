@@ -1,0 +1,393 @@
+UTC: 2026-10-03T00:39:17.460031+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; spans={"services/ingestion/app/fda_export_service.py":[(220,315)],"services/ingestion/app/supplier_portal.py":[(395,455),(981,1020)],"server/main.py":[(332,350)],"services/shared/idempotency.py":[(1,180)]}; [(print("FILE",p),print("\n".join(f"{i}: {line}" for i,line in enumerate(Path(p).read_text().splitlines(),1) if any(a<=i<=b for a,b in ranges)))) for p,ranges in spans.items() if Path(p).exists()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE services/ingestion/app/fda_export_service.py
+220:             include_pii,
+221:         ),
+222:         "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
+223:         "Ship From Name": _redact_location_value(
+224:             sanitize_cell(kdes.get("ship_from_location", "") or ""),
+225:             "Ship From Name",
+226:             include_pii,
+227:         ),
+228:         "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
+229:         "Ship To Name": _redact_location_value(
+230:             sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
+231:             "Ship To Name",
+232:             include_pii,
+233:         ),
+234:         "Immediate Previous Source": _redact_location_value(
+235:             sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+236:             "Immediate Previous Source",
+237:             include_pii,
+238:         ),
+239:         "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
+240:         "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
+241:         "Source Document": sanitize_cell(event.get("source", "")),
+242:         "Record Hash (SHA-256)": sanitize_cell(event.get("sha256_hash", "")),
+243:         "Chain Hash": sanitize_cell(event.get("chain_hash", "")),
+244:     }
+245: 
+246:     # Map named KDE columns. Apply PII redaction on the named columns
+247:     # that land in _PII_LOCATION_COLUMNS (e.g. "Receiving Location").
+248:     for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
+249:         raw = kdes.get(kde_key)
+250:         sanitized = sanitize_cell(raw) if raw else ""
+251:         row[col_name] = _redact_location_value(sanitized, col_name, include_pii)
+252: 
+253:     # Remaining KDEs not in named columns → JSON blob.
+254:     # A JSON-encoded string can still begin with ``=`` once a spreadsheet
+255:     # renders it into a cell, so sanitize the whole blob as well.
+256:     #
+257:     # Exclude both:
+258:     #   • keys already surfaced via ``_NAMED_KDE_COLUMNS`` (explicit map
+259:     #     of KDE → named column), AND
+260:     #   • keys surfaced via the literal dict block above (Ship From/To
+261:     #     Name, Immediate Previous Source, TLC Source GLN/FDA Reg, etc.).
+262:     # Without the second filter, those PII-bearing KDEs would leak into
+263:     # the extras blob as a back-channel even after we redacted the named
+264:     # columns (issue #1219).
+265:     #
+266:     # PII redaction for the JSON blob: the "extras" map can carry arbitrary
+267:     # customer-supplied keys, some of which (``facility_address``,
+268:     # ``receiver_address``, ``origin_address``) are PII. When
+269:     # ``include_pii=False`` we strip any key whose name contains a PII
+270:     # signal (``address``, ``street``, ``location``, ``phone``,
+271:     # ``contact``) before encoding. This is a defensive default — the
+272:     # primary PII columns are already redacted above; this catches the
+273:     # long tail of unknown-shape KDE data.
+274:     extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS and k not in _LITERAL_CONSUMED_KDES}
+275:     if extra_kdes and not include_pii:
+276:         extra_kdes = _redact_extra_kde_pii(extra_kdes)
+277:     row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
+278: 
+279:     # FSMA 204 requires "system entry timestamp" — when the record was entered
+280:     # into the traceability system (distinct from when the physical event occurred).
+281:     # This maps to the ingested_at column which defaults to NOW() on INSERT.
+282:     row["System Entry Timestamp"] = sanitize_cell(event.get("ingested_at", "") or "")
+283: 
+284:     return row
+285: 
+286: 
+287: # KDE-key substrings that signal PII in the freeform "Additional KDEs
+288: # (JSON)" bucket. Case-insensitive substring match because upstream
+289: # parsers normalize key casing inconsistently.
+290: _PII_EXTRA_KDE_SUBSTRINGS = (
+291:     "address",
+292:     "street",
+293:     "location_name",
+294:     "facility_name",
+295:     "contact",
+296:     "phone",
+297:     "email",
+298:     "owner_name",
+299:     "operator_name",
+300:     "driver_name",
+301:     "receiver_name",
+302:     "consignee_name",
+303: )
+304: 
+305: 
+306: def _redact_extra_kde_pii(extra_kdes: dict) -> dict:
+307:     """Replace PII values in the extras JSON blob with the placeholder.
+308: 
+309:     Preserves the key (so auditors see "this field existed but was
+310:     redacted") and the surrounding structure; only the string value is
+311:     replaced. Non-string values (numbers, dates) pass through unchanged
+312:     because numeric PII is unusual in KDE data and the round-trip would
+313:     be lossy.
+314:     """
+315:     redacted = {}
+FILE services/ingestion/app/supplier_portal.py
+395:                     WHERE tenant_id = CAST(:tenant_id AS uuid)
+396:                       AND profile_id = :profile_id
+397:                 """),
+398:                 {"tenant_id": tenant_id, "profile_id": profile_id},
+399:             ).fetchone()
+400:             if row:
+401:                 return {
+402:                     "profile_id": row[0],
+403:                     "display_name": row[1],
+404:                     "source_type": row[2],
+405:                     "default_cte_type": row[3],
+406:                     "status": row[4],
+407:                     "confidence": float(row[5] or 0),
+408:                     "supplier_name": row[6],
+409:                 }
+410:         except Exception as exc:
+411:             logger.warning("portal_profile_summary_failed portal_profile=%s error=%s", profile_id, str(exc))
+412:         finally:
+413:             db.close()
+414: 
+415:     if not _allow_memory_fallback():
+416:         return None
+417: 
+418:     try:
+419:         from .integration_router import _memory_get_profile
+420: 
+421:         profile = _memory_get_profile(tenant_id, profile_id)
+422:         if not profile:
+423:             return None
+424:         return {
+425:             "profile_id": profile.profile_id,
+426:             "display_name": profile.display_name,
+427:             "source_type": profile.source_type,
+428:             "default_cte_type": profile.default_cte_type,
+429:             "status": profile.status,
+430:             "confidence": float(profile.confidence or 0),
+431:             "supplier_name": profile.supplier_name,
+432:         }
+433:     except Exception as exc:
+434:         logger.warning("portal_profile_summary_memory_failed portal_profile=%s error=%s", profile_id, str(exc))
+435:         return None
+436: 
+437: 
+438: class CreatePortalLinkRequest(BaseModel):
+439:     """Request to create a supplier portal link."""
+440: 
+441:     tenant_id: str = Field(..., description="Customer's tenant ID")
+442:     supplier_name: str = Field(..., description="Supplier business name")
+443:     supplier_email: Optional[str] = Field(None, description="Supplier contact email")
+444:     allowed_cte_types: list[str] = Field(
+445:         default=["shipping"], description="CTE types the supplier can submit (default: shipping only)"
+446:     )
+447:     integration_profile_id: Optional[str] = Field(
+448:         default=None,
+449:         description="Optional saved integration profile to attach to this supplier link",
+450:     )
+451:     expires_days: int = Field(default=90, ge=1, le=365, description="Link expiry in days")
+452: 
+453: 
+454: class PortalLinkResponse(BaseModel):
+455:     """Response with the generated portal link."""
+981:         event_result = result.events[0]
+982:         logger.info(
+983:             "supplier_submission_accepted",
+984:             extra={
+985:                 "portal_id": portal_id,
+986:                 "tenant_id": link["tenant_id"],
+987:                 "supplier": link["supplier_name"],
+988:                 "tlc": submission.traceability_lot_code,
+989:             },
+990:         )
+991:         return SubmissionResult(
+992:             status="accepted",
+993:             event_id=event_result.event_id,
+994:             sha256_hash=event_result.sha256_hash,
+995:             message=f"Shipment data received and verified. Event ID: {event_result.event_id}",
+996:             supplier_name=link["supplier_name"],
+997:             submitted_at=submitted_at,
+998:         )
+999:     else:
+1000:         errors = result.events[0].errors if result.events else ["Unknown error"]
+1001:         return SubmissionResult(
+1002:             status="error",
+1003:             message=f"Submission rejected: {'; '.join(errors)}",
+1004:             supplier_name=link["supplier_name"],
+1005:             submitted_at=submitted_at,
+1006:         )
+FILE server/main.py
+332: app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+333: # Issue #2307: surface X-RateLimit-* headers on 2xx responses by mirroring
+334: # ``request.state.rate_limit_*`` (populated by authz/routes_ingest/webhook
+335: # rate-limit guards) onto the outbound response. Read-only: never consumes
+336: # the bucket, so no double-counting.
+337: from services.ingestion.app.middleware import RateLimitHeadersMiddleware
+338: 
+339: app.add_middleware(RateLimitHeadersMiddleware)
+340: 
+341: from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+342: 
+343: app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+344: app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+345: 
+346: # #1232 — wire the shared IdempotencyMiddleware so webhook_router_v2
+347: # (and every other POST endpoint) de-duplicates retried requests via the
+348: # ``Idempotency-Key`` header. Cache keys are tenant-scoped (#1237) so
+349: # two tenants can safely pick the same key.
+350: from shared.idempotency import IdempotencyMiddleware
+FILE services/shared/idempotency.py
+1: """Idempotency middleware for POST endpoints using Redis.
+2: 
+3: Provides deduplication for POST requests via Idempotency-Key header.
+4: Caches successful responses (2xx) for 24 hours to enable safe retries.
+5: Gracefully degrades if Redis is unavailable unless IDEMPOTENCY_FAIL_MODE=closed.
+6: The default degrade mode can dispatch duplicates on an ambiguous Redis failure;
+7: use closed mode where cache-level duplicate suppression is required.
+8: 
+9: Keys bind exact request bytes, URL, content type, and credential to the tenant.
+10: Conflicting and legacy unbound cache entries return 409. An active or uncertain
+11: reservation also returns 409 and remains for the 24-hour retry window after a
+12: crash or failed publish. Such outcomes need reconciliation before retrying with
+13: another key. Rolling deployment requires retiring old writers first: old code
+14: cannot safely interpret reservation payloads or enforce fingerprint binding.
+15: 
+16: Browser Cookie/Authorization requests and /auth operations bypass this cache,
+17: preserving session revocation and single-use authentication checks. Webhook
+18: replays bind the signature and current signing secret as well as request bytes.
+19: API-key replay fingerprints include fresh database scopes and jurisdictions,
+20: so same-key permission changes invalidate older responses. A replay still skips
+21: route dependencies: unrelated dynamic authorization policies and rate limits
+22: require an outer enforcement layer or a future route-level replay boundary.
+23: 
+24: Tenant isolation (#1237): cache keys are composed as
+25: ``idempotency:{tenant_id}:{idempotency_key}`` so that two tenants who
+26: happen to choose the same key (``daily-batch-2026-04-17``) cannot see
+27: each other's cached responses.
+28: 
+29: The tenant is sourced ONLY from authenticated context: the RBAC principal,
+30: ``request.state.tenant_id``, the secret-gated ``X-RegEngine-Tenant-ID``
+31: internal header, or a scoped API-key lookup. Neither the request body
+32: (#1237) nor the raw ``X-Tenant-ID`` header (#2841) may name the namespace —
+33: both are client-controlled, and this middleware serves cache hits before any
+34: authentication runs. When no authenticated tenant is available the request
+35: is simply not cached.
+36: """
+37: 
+38: from __future__ import annotations
+39: 
+40: import asyncio
+41: import hashlib
+42: import json
+43: import os
+44: from datetime import datetime, timezone
+45: from typing import Any, Callable, Optional
+46: from uuid import UUID, uuid4
+47: 
+48: import redis.asyncio as redis
+49: import structlog
+50: from fastapi import Request, Response
+51: from shared.internal_caller import internal_tenant_id
+52: from starlette.middleware.base import BaseHTTPMiddleware
+53: 
+54: logger = structlog.get_logger("idempotency")
+55: 
+56: # Cache key prefix for idempotency responses.
+57: #
+58: # Prior to #1237 the prefix was ``idempotency:`` and keys were not
+59: # tenant-scoped, letting tenant B receive tenant A's cached 2xx response
+60: # when both happened to choose the same idempotency key. The new format
+61: # is ``idempotency:{tenant_id}:{idempotency_key}`` — see
+62: # ``_build_cache_key`` below. Legacy un-scoped keys will expire out on
+63: # their own 24h TTL.
+64: IDEMPOTENCY_KEY_PREFIX = "idempotency:"
+65: IDEMPOTENCY_TTL_SECONDS = 86400  # 24 hours
+66: _ANONYMOUS_TENANT = "_anonymous_"  # placeholder when no tenant resolvable
+67: 
+68: 
+69: def _tenant_value_to_str(value: Any) -> Optional[str]:
+70:     if isinstance(value, UUID):
+71:         return str(value)
+72:     if isinstance(value, str):
+73:         stripped = value.strip()
+74:         return stripped or None
+75:     return None
+76: 
+77: 
+78: def _lookup_api_key_context(raw_api_key: [REDACTED] -> Optional[tuple[str, str]]:
+79:     """Resolve a scoped API key to its tenant before route dependencies run.
+80: 
+81:     The production monolith installs this middleware outside FastAPI route
+82:     dependencies, so ``request.state.principal`` is not available yet for
+83:     API-key-authenticated requests. This best-effort lookup uses the same key
+84:     hash candidates as the auth path and only returns enabled, unexpired keys.
+85:     """
+86:     try:
+87:         from shared.api_key_store import set_api_key_lookup_context
+88:         from shared.database import SessionLocal
+89:         from sqlalchemy import bindparam, text
+90: 
+91:         db_session = SessionLocal()
+92:         try:
+93:             lookup_proof = set_api_key_lookup_context(db_session, raw_api_key)
+94:             if lookup_proof is None:
+95:                 return None
+96:             _key_id, key_hashes = lookup_proof
+97:             stmt = text(
+98:                 """
+99:                 SELECT tenant_id, enabled, expires_at, key_id, scopes, allowed_jurisdictions
+100:                 FROM api_keys
+101:                 WHERE key_hash IN :key_hashes
+102:                 LIMIT 1
+103:                 """
+104:             ).bindparams(bindparam("key_hashes", expanding=True))
+105:             row = db_session.execute(stmt, {"key_hashes": key_hashes}).fetchone()
+106:         finally:
+107:             db_session.close()
+108: 
+109:         if not row:
+110:             return None
+111:         tenant_id, enabled, expires_at, key_id, scopes, jurisdictions = row
+112:         if enabled is False:
+113:             return None
+114:         if expires_at and expires_at < datetime.now(timezone.utc):
+115:             return None
+116:         if not tenant_id:
+117:             return None
+118:         # Permission narrowing may retain the same raw key. Bind the current
+119:         # authoritative authorization state so an older response cannot survive it.
+120:         snapshot = json.dumps(
+121:             [
+122:                 str(tenant_id),
+123:                 str(key_id),
+124:                 sorted(scopes or []),
+125:                 sorted(jurisdictions or []),
+126:             ]
+127:         )
+128:         return str(tenant_id), hashlib.sha256(snapshot.encode()).hexdigest()
+129:     except Exception:  # pragma: no cover - environment-specific fallback
+130:         logger.debug("idempotency_api_key_context_lookup_failed")
+131:         return None
+132: 
+133: 
+134: class IdempotencyMiddleware(BaseHTTPMiddleware):
+135:     """Middleware that caches POST responses keyed by Idempotency-Key header.
+136: 
+137:     For POST requests with an Idempotency-Key header:
+138:     - Reject a key already bound to another request with 409.
+139:     - Replay completed requests; reject active reservations with 409.
+140:     - Reserve new requests atomically, then cache successful responses.
+141: 
+142:     Redis failures follow IDEMPOTENCY_FAIL_MODE (degrade by default).
+143:     """
+144: 
+145:     def __init__(self, app, redis_url: str | None = None):
+146:         super().__init__(app)
+147:         self.redis_url = redis_url or os.getenv("REDIS_URL", "rediss://redis:6379/0")
+148:         self._client: redis.Redis | None = None
+149:         self._redis_available: bool | None = None
+150: 
+151:     async def _get_client(self) -> redis.Redis | None:
+152:         """Lazy-init Redis client with graceful degradation on failure."""
+153:         if self._redis_available is False:
+154:             return None
+155:         if self._client is None:
+156:             try:
+157:                 self._client = redis.from_url(
+158:                     self.redis_url,
+159:                     encoding="utf-8",
+160:                     decode_responses=False,  # Store as bytes for binary-safe JSON
+161:                     max_connections=10,
+162:                     socket_connect_timeout=2,
+163:                     socket_timeout=2,
+164:                     socket_keepalive=True,
+165:                 )
+166:                 await self._client.ping()
+167:                 self._redis_available = True
+168:                 logger.info("idempotency_redis_connected")
+169:             except Exception as exc:  # pragma: no cover - environment specific
+170:                 logger.warning("idempotency_redis_unavailable", error=str(exc))
+171:                 self._redis_available = False
+172:                 self._client = None
+173:         return self._client
+174: 
+175:     def _should_cache(self, method: str) -> bool:
+176:         """Only cache POST requests."""
+177:         return method.upper() == "POST"
+178: 
+179:     def _get_cache_key(self, idempotency_key: str, tenant_id: Optional[str] = None) -> str:
+180:         """Generate a tenant-scoped Redis cache key (#1237).

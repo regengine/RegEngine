@@ -1,0 +1,138 @@
+UTC: 2026-10-03T00:40:24.567761+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 --runxfail --tb=short
+Exit: 1
+Duration: 2.05s
+Timeout: False
+
+.FFFFFFFFFFF.........F..F                                                [100%]
+=================================== FAILURES ===================================
+__ test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] __
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:97: in test_webhook_naive_timestamp_is_a_validation_response
+    assert response.status_code == 422, response.text
+E   AssertionError: Internal Server Error
+E   assert 500 == 422
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stdout call -----------------------------
+2026-10-02 17:40:25 [info     ] idempotency_key_validated      idempotency_key=qa-naive-date
+______ test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] _______
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:97: in test_webhook_naive_timestamp_is_a_validation_response
+    assert response.status_code == 422, response.text
+E   AssertionError: Internal Server Error
+E   assert 500 == 422
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stdout call -----------------------------
+2026-10-02 17:40:25 [info     ] idempotency_key_validated      idempotency_key=qa-naive-date
+_ test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] _
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:97: in test_webhook_naive_timestamp_is_a_validation_response
+    assert response.status_code == 422, response.text
+E   AssertionError: Internal Server Error
+E   assert 500 == 422
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stdout call -----------------------------
+2026-10-02 17:40:25 [info     ] idempotency_key_validated      idempotency_key=qa-naive-date
+_______________ test_csv_rejects_nonfinite_output_quantity[inf] ________________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:108: in test_csv_rejects_nonfinite_output_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+_____________ test_csv_rejects_nonfinite_output_quantity[Infinity] _____________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:108: in test_csv_rejects_nonfinite_output_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+______________ test_csv_rejects_nonfinite_output_quantity[1e309] _______________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:108: in test_csv_rejects_nonfinite_output_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+________________ test_csv_rejects_nonfinite_input_quantity[nan] ________________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:120: in test_csv_rejects_nonfinite_input_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+________________ test_csv_rejects_nonfinite_input_quantity[inf] ________________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:120: in test_csv_rejects_nonfinite_input_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+_______________ test_csv_rejects_nonfinite_input_quantity[1e309] _______________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:120: in test_csv_rejects_nonfinite_input_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+___________ test_csv_rejects_conflicting_duplicate_headers[quantity] ___________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:130: in test_csv_rejects_conflicting_duplicate_headers
+    assert response.status_code == 400, (
+E   AssertionError: status=200; ingested_quantities=[999.0]
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+__________ test_csv_rejects_conflicting_duplicate_headers[ Quantity ] __________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:130: in test_csv_rejects_conflicting_duplicate_headers
+    assert response.status_code == 400, (
+E   AssertionError: status=200; ingested_quantities=[999.0]
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+_________ test_redacted_fda_export_does_not_disclose_portal_capability _________
+tests/qa_sweep_20261002/test_portal_export_disclosure.py:52: in test_redacted_fda_export_does_not_disclose_portal_capability
+    assert _SYNTHETIC_CAPABILITY not in exported
+E   assert 'qa-only-inv...l-capability' not in '"Traceabili...rue}",""\r\n'
+E     
+E     'qa-only-invalid-portal-capability' is contained here:
+E       l_id"": ""qa-only-invalid-portal-capability"", ""reference_document"": ""supplier-portal:qa-only-invalid-portal-capability"", ""tlc_source_reference"": ""QA supplier"", ""ftl_covered"": true}",""
+E     ?           +++++++++++++++++++++++++++++++++
+_____________ test_streamed_body_is_limited_without_content_length _____________
+tests/qa_sweep_20261002/test_request_safety.py:36: in test_streamed_body_is_limited_without_content_length
+    assert response.status_code == 413, response.text
+E   AssertionError: {"bytes_read":10}
+E   assert 200 == 413
+E    +  where 200 = <Response [200 OK]>.status_code
+=========================== short test summary info ============================
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - AssertionError: Internal Server Error
+assert 500 == 422
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - AssertionError: Internal Server Error
+assert 500 == 422
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - AssertionError: Internal Server Error
+assert 500 == 422
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[inf] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[Infinity] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[1e309] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[nan] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[inf] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[1e309] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[quantity] - AssertionError: status=200; ingested_quantities=[999.0]
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[ Quantity ] - AssertionError: status=200; ingested_quantities=[999.0]
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED tests/qa_sweep_20261002/test_portal_export_disclosure.py::test_redacted_fda_export_does_not_disclose_portal_capability - assert 'qa-only-inv...l-capability' not in '"Traceabili...rue}",""\r\n'
+  
+  'qa-only-invalid-portal-capability' is contained here:
+    l_id"": ""qa-only-invalid-portal-capability"", ""reference_document"": ""supplier-portal:qa-only-invalid-portal-capability"", ""tlc_source_reference"": ""QA supplier"", ""ftl_covered"": true}",""
+  ?           +++++++++++++++++++++++++++++++++
+FAILED tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length - AssertionError: {"bytes_read":10}
+assert 200 == 413
+ +  where 200 = <Response [200 OK]>.status_code
+13 failed, 12 passed in 1.12s

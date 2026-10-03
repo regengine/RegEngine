@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:41:46.950681+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: ruff check --no-cache --select I --fix services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+Found 1 error (1 fixed, 0 remaining).

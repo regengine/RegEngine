@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:46:58.844494+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/BACKEND-REPORT.md"); print(p.read_text() if p.exists() else "Backend report pending"); print("COVERAGE",[p.name for p in Path("docs/qa/2026-10-02/artifacts/backend").glob("*summary*")])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Backend report pending
+COVERAGE ['20261003T004610.965837Z-coverage-summary-current.txt', '20261003T004338.733675Z-manifest-diff-summary.txt']

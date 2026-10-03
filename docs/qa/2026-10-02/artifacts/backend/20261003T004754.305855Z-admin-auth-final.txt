@@ -1,0 +1,19 @@
+UTC: 2026-10-03T00:47:54.305855+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/admin/tests/test_privileged_auth.py services/admin/tests/test_session_auth.py --tb=short --cov=services.admin.app.privileged_auth --cov=services.admin.app.auth.session_auth --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-admin-auth-isolated.json
+Exit: 0
+Duration: 3.37s
+Timeout: False
+
+..................................                                       [100%]
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                      Stmts   Miss  Cover
+-------------------------------------------------------------
+services/admin/app/auth/session_auth.py      58     12    79%
+services/admin/app/privileged_auth.py       312     72    77%
+-------------------------------------------------------------
+TOTAL                                       370     84    77%
+Coverage JSON written to file docs/qa/2026-10-02/artifacts/backend/coverage-admin-auth-isolated.json
+34 passed in 2.16s

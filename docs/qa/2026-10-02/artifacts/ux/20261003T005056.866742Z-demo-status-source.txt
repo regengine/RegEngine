@@ -1,0 +1,31 @@
+UTC: 2026-10-03T00:50:56.866742+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; subprocess.run(["rg","-n","function DemoBanner|Backend unavailable|DemoBanner visible","frontend/src"]); print("CURRENT AXE"); import json;
+for f in Path("docs/qa/2026-10-02/artifacts/ux").glob("chrome-axe*.json"):
+ d=json.loads(f.read_text()); v=[(x["id"],len(x["nodes"])) for x in d["axe"]["violations"] if not all("aiFabShadowRoot" in str(n["target"]) for n in x["nodes"])]; print(f.name,"width",d["width"],"doc",d["documentWidth"],"product violations",v)'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+frontend/src/components/control-plane/demo-banner.tsx:5:export function DemoBanner({ visible }: { visible: boolean }) {
+frontend/src/components/control-plane/demo-banner.tsx:10:        <strong className="font-medium text-re-text-primary">Sample Data</strong> — Backend unavailable.
+frontend/src/__tests__/components/demo-banner.test.tsx:11:        render(<DemoBanner visible={true} />);
+frontend/src/__tests__/components/demo-banner.test.tsx:16:        render(<DemoBanner visible={true} />);
+frontend/src/__tests__/components/demo-banner.test.tsx:22:        const { container } = render(<DemoBanner visible={false} />);
+frontend/src/app/exceptions/page.tsx:242:      <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
+frontend/src/app/compliance/profile/page.tsx:130:            setSaveMessage({ type: 'error', text: 'Failed to save profile. Backend unavailable.' });
+frontend/src/app/rules/page.tsx:177:      <DemoBanner visible={!!(rules.data?.__isDemo)} />
+frontend/src/app/audit/page.tsx:168:      <DemoBanner visible={false} />
+frontend/src/app/records/page.tsx:159:      <DemoBanner visible={!!(events.data?.__isDemo)} />
+frontend/src/app/identity/page.tsx:203:        <DemoBanner visible={!!(entities.data?.__isDemo)} />
+frontend/src/app/requests/page.tsx:146:      <DemoBanner visible={!!(requests.data?.__isDemo)} />
+frontend/src/app/demo/page.tsx:86:        <DemoBanner visible={true} />
+CURRENT AXE
+chrome-axe_verify-320-004936758162.json width 320 doc 320 product violations [('scrollable-region-focusable', 6)]
+chrome-axe_login-1728-1.json width 1728 doc 1728 product violations []
+chrome-axe_verify-1728-1.json width 1728 doc 1728 product violations []
+chrome-axe_-390-004818082219.json width 390 doc 390 product violations []
+chrome-axe_demo-390-005044980842.json width 390 doc 390 product violations []
+chrome-axe_contact-1728-005025461082.json width 1728 doc 1728 product violations []
+chrome-axe_-1728-2.json width 1728 doc 1728 product violations []
+chrome-axe_-1728-1.json width 1728 doc 1728 product violations []

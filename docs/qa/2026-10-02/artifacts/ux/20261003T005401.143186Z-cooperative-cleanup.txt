@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:54:01.143186+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; base=Path("/private/tmp/regengine-qa-ux-u2059hm8"); [(base/name).touch() for name in ["stop-proxy-v2","stop-ready-server"]]; print("Requested cooperative stop of QA proxy3105 and guarded built-server3104; browser tabs already closed")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Requested cooperative stop of QA proxy3105 and guarded built-server3104; browser tabs already closed

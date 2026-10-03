@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:40:03.009294+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+Wrote GATE-REPORT.md; all preliminary pending checks remain explicit.

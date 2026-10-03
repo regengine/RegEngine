@@ -1,0 +1,14 @@
+{
+  "fixtureError": "Error: page.evaluate: Error: Photo fixture request failed: UnknownError: Error preparing Blob/File data to be stored in object store",
+  "nativeControl": [
+    {
+      "kind": "string",
+      "success": true
+    },
+    {
+      "kind": "blob",
+      "success": false,
+      "error": "UnknownError: Error preparing Blob/File data to be stored in object store"
+    }
+  ]
+}

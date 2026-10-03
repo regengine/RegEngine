@@ -1,0 +1,30 @@
+UTC: 2026-10-03T00:46:04.214971+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; q=Path("docs/qa/2026-10-02"); print(subprocess.check_output(["git","status","--short"],text=True)); print("REPORTS",[p.name for p in q.glob("*-REPORT.md")]); print("UX RECENT"); print((q/"UX-SESSION-LOG.md").read_text()[-2600:]); print("ARTIFACT COUNTS",{d.name:len(list(d.glob("*"))) for d in (q/"artifacts").iterdir() if d.is_dir()})'
+Exit: 0
+Duration: 0.08s
+Timeout: False
+
+ M frontend/src/__tests__/hooks/useSync.test.tsx
+?? docs/qa/2026-10-02/
+?? frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+?? services/ingestion/tests/test_qa_sweep_20261002_contract.py
+?? tests/qa_sweep_20261002/
+
+REPORTS ['FRONTEND-REPORT.md', 'SECURITY-REPORT.md', 'GATE-REPORT.md']
+UX RECENT
+build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'`; cwd `.`; exit 1, 0.09s. [Output](artifacts/ux/20261003T004123.566237Z-built-server-preflight.txt).
+
+- **2026-10-03T00:41:30.248988+00:00** `startup-assertion-requirements` — `rg -n 'startup|CSRF_SECRET|JWT_SIGNING|production|assert' frontend/src/instrumentation.ts frontend/src/lib/startup-assertions.ts`; cwd `.`; exit 2, 0.01s. [Output](artifacts/ux/20261003T004130.248988Z-startup-assertion-requirements.txt).
+
+- **2026-10-03T00:41:30.337915+00:00** `stop-unconfigured-built-server` — `python3 -c 'from pathlib import Path; Path("/private/tmp/regengine-qa-ux-u2059hm8/stop-built-server").touch(); print("Requested cooperative stop; missing synthetic production-mode CSRF runtime value")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004130.337915Z-stop-unconfigured-built-server.txt).
+
+- **2026-10-03T00:41:17.828789+00:00** `guarded-built-server` — `python3 docs/qa/2026-10-02/scripts/ux-server.py`; cwd `.`; exit 0, 12.57s. [Output](artifacts/ux/20261003T004117.828789Z-guarded-built-server.txt).
+
+- **2026-10-03T00:41:43.828393+00:00** `ready-server-preflight` — `python3 -c 'from pathlib import Path; import urllib.request; print(Path("docs/qa/2026-10-02/artifacts/ux/ready-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/ready-server-output.txt").read_text()[-2000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'`; cwd `.`; exit 0, 0.25s. [Output](artifacts/ux/20261003T004143.828393Z-ready-server-preflight.txt).
+
+- **2026-10-03T00:41:50.831989+00:00** `cross-browser-smoke` — `env QA_MIRROR=/private/tmp/regengine-qa-ux-u2059hm8 PLAYWRIGHT_BROWSERS_PATH=/private/tmp/regengine-qa-ux-u2059hm8/browsers node docs/qa/2026-10-02/scripts/ux-browser-pass.cjs smoke`; cwd `.`; exit 0, 9.53s. [Output](artifacts/ux/20261003T004150.831989Z-cross-browser-smoke.txt).
+
+- **2026-10-03T00:42:05.747355+00:00** `login-verify-control-source` — `python3 -c 'from pathlib import Path; print(Path("frontend/src/app/login/page.tsx").read_text()); p=Path("frontend/src/app/verify/page.tsx"); print("VERIFY", "\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if 145<=i<=280)); print("LOGIN CANDIDATES",[str(p) for p in Path("frontend/src").rglob("*login*")])'`; cwd `.`; exit 0, 0.04s. [Output](artifacts/ux/20261003T004205.747355Z-login-verify-control-source.txt).
+
+ARTIFACT COUNTS {'frontend': 50, 'security': 31, 'meta': 17, 'backend': 57, 'ux': 40, 'gate': 33}

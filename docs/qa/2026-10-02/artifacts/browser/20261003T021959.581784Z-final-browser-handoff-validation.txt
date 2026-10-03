@@ -1,0 +1,88 @@
+UTC: 2026-10-03T02:19:59.581784+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+from collections import Counter
+import json, re, struct, subprocess
+root = Path.cwd()
+qa = root / "docs/qa/2026-10-02"
+def git(*args):
+    return subprocess.check_output(["git", *args], text=True).strip()
+assert git("branch", "--show-current") == "qa/2026-10-02-sweep"
+assert git("rev-parse", "HEAD").startswith("c98e1a30")
+required = ["PLAN.md", "SESSION-LOG.md", "FINDINGS.md", "COVERAGE.md", "SUMMARY.md"]
+for name in required:
+    text = (qa / name).read_text()
+    assert text.count("## Browser follow-up pass") == 1, name
+    assert "PR: opened by orchestrator" in text and "CI status: pending at time of writing" in text
+rows = []
+for line in (qa / "FINDINGS.md").read_text().splitlines():
+    if re.match(r"\| (?:BE|FE|UX)-\d{3} \|", line):
+        cells = [x.strip() for x in line.strip("|").split("|")]
+        assert len(cells) == 9 and all(cells)
+        rows.append(cells)
+assert len(rows) == len({r[0] for r in rows}) == 18
+counts = Counter(r[1] for r in rows)
+expected_line = "Counts: " + " ".join(f"{s}={counts[s]}" for s in ["Critical","High","Medium","Low"])
+summary = (qa / "SUMMARY.md").read_text()
+assert re.findall(r"^Counts:.*$", summary, re.M) == [expected_line]
+assert expected_line == "Counts: Critical=0 High=3 Medium=11 Low=4"
+tracked = set(git("diff", "--name-only", "HEAD").splitlines())
+assert tracked <= {"docs/qa/2026-10-02/" + f for f in required}, tracked
+assert not git("diff", "--name-only", "--diff-filter=D", "HEAD")
+changed = tracked | set(git("ls-files", "--others", "--exclude-standard").splitlines())
+allowed = ("docs/qa/2026-10-02/", "frontend/tests/e2e/qa-2026-10-02/")
+assert all(p.startswith(allowed) for p in changed)
+assert len(list((root/"frontend/tests/e2e/qa-2026-10-02").glob("*.spec.ts"))) == 2
+link_count = 0
+for p in [qa / f for f in required] + list((qa/"artifacts/browser").glob("*.md")):
+    text = p.read_text()
+    if p.name in required:
+        text = text.split("## Browser follow-up pass", 1)[1]
+    for target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", text):
+        target = target.split("#",1)[0].strip("<>")
+        if not target or re.match(r"^[a-z]+:", target):
+            continue
+        assert (p.parent/target).exists(), (p.name, target)
+        link_count += 1
+art = qa/"artifacts/browser"
+reg = json.loads((art/"fe-regression-results-2026-10-03T02-09-55-607Z.json").read_text())
+assert [reg["stats"][k] for k in ["expected","unexpected","skipped"]] == [5,0,1]
+assert not reg["errors"]
+e2e = json.loads((art/"existing-e2e-proxy-local-browser-summary.json").read_text())
+assert len(e2e["tests"]) == 270
+assert [(p["project"],p["passed"],p["failed"],p["skipped"]) for p in e2e["projects"]] == [
+    ("chromium",21,8,61),("firefox",20,9,61),("webkit",18,11,61)]
+failure_classes = Counter(t["classification"].split(":")[0] for t in e2e["tests"] if t["status"] in ["failed","timedOut"])
+assert failure_classes == {"environment":19,"harness":8,"product":1}, failure_classes
+ux = json.loads((art/"browser-ux-summary.json").read_text())
+assert len(ux["routes"]) == 42
+for route in ux["routes"]:
+    assert route["httpStatus"] == 200 and route["topLevel"]
+    assert not route["pageErrors"] and not route["horizontalOverflow"]
+    png = (art/route["screenshot"]).read_bytes()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    dims = struct.unpack(">II", png[16:24])
+    assert dims == (route["viewport"]["width"],route["viewport"]["height"])
+    assert dims in [(1440,900),(390,844)]
+oversized = [p.relative_to(art).as_posix() for p in art.rglob("*") if p.is_file() and p.stat().st_size > 5_000_000]
+assert not oversized, oversized
+subprocess.run(["git","diff","--check"],check=True)
+print(expected_line)
+print("PASS: five follow-up docs; 18 unique finding IDs; exact count line;", link_count, "local links")
+print("PASS: 270 original cases; 19 environment / 8 harness / 1 product failures")
+print("PASS: 5 expected regression failures / 1 environment skip; 42 true viewport PNGs")
+print("PASS: original product/tests/artifacts preserved; only authorized docs/new QA tests changed")
+print("PASS: no deletions, no artifact over 5 MB, git diff --check")
+print("Branch",git("branch","--show-current"),"HEAD",git("rev-parse","HEAD"))
+print("Changed/untracked files",len(changed))
+print("This validates local browser evidence only; PR/CI and secret scan remain orchestrator-owned.")
+'
+Exit: 1
+Duration: 0.13s
+Timeout: False
+
+Traceback (most recent call last):
+  File "<string>", line 32, in <module>
+    assert all(p.startswith(allowed) for p in changed)
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

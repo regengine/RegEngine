@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:40:15.055091+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node -e 'const net = require("node:net"); let observed; net.Socket.prototype.connect = function (...args) { observed=args; return this; }; require("./docs/qa/2026-10-02/scripts/node-isolation.cjs"); try { net.connect({host:"198.51.100.5",port:443}); console.log(JSON.stringify({entrypoint:"net.connect",reachedOriginal:!!observed,firstArgumentArray:Array.isArray(observed?.[0]),normalizedHost:observed?.[0]?.[0]?.host})); } catch(e) { console.log(JSON.stringify({entrypoint:"net.connect",blocked:true,message:e.message})); }'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+{"entrypoint":"net.connect","blocked":true,"message":"QA isolation: off-host socket blocked"}

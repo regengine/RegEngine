@@ -1,0 +1,7 @@
+UTC: 2026-10-03T02:09:48.277722+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node --check docs/qa/2026-10-02/scripts/browser-ux-followup.cjs
+Exit: 0
+Duration: 0.03s
+Timeout: False
+

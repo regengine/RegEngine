@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:53:35.336583+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02"); print({n:(p/n).exists() for n in ["PLAN.md","SESSION-LOG.md","FINDINGS.md","COVERAGE.md","SUMMARY.md","UX-REPORT.md"]}); q=p/"UX-REPORT.md"; print(q.read_text() if q.exists() else "")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+{'PLAN.md': True, 'SESSION-LOG.md': True, 'FINDINGS.md': True, 'COVERAGE.md': True, 'SUMMARY.md': True, 'UX-REPORT.md': False}
+

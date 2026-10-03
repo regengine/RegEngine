@@ -1,0 +1,384 @@
+UTC: 2026-10-03T00:37:31.031024+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'nl -ba services/ingestion/app/proof_verify_router.py | sed -n "690,795p"; rg -n "@router|portal_id|token|secret|rate.limit|Depends|expires|tenant_id|hmac" services/ingestion/app/supplier_portal.py | head -150; sed -n "1,180p" services/shared/internal_caller.py; rg -n "require_api_key|credential_type|tenant_id|rate_limit|is_dev|API_KEY" services/shared/auth.py | head -100'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+   690	            )
+   691	        if not isinstance(chain_payload, dict):
+   692	            raise HTTPException(
+   693	                status_code=400,
+   694	                detail="chain_verification JSON must contain an object",
+   695	            )
+   696	        events = chain_payload.get("events") or []
+   697	        chain_result = chain_payload.get("chain_verification")
+   698	        declared_root = chain_payload.get("merkle_root") or (
+   699	            chain_result.get("merkle_root") if isinstance(chain_result, dict) else None
+   700	        )
+   701	
+   702	    # Manifest may also carry an embedded event list / root for simpler bundles.
+   703	    if not events:
+   704	        events = manifest.get("events") or []
+   705	    if not declared_root:
+   706	        summary = manifest.get("summary")
+   707	        declared_root = manifest.get("merkle_root") or (
+   708	            summary.get("merkle_root") if isinstance(summary, dict) else None
+   709	        )
+   710	
+   711	    return _verify_payload(
+   712	        manifest=manifest,
+   713	        events=events,
+   714	        declared_root=declared_root,
+   715	        extra_checks=extra,
+   716	    )
+   717	
+   718	
+   719	# ---------------------------------------------------------------------------
+   720	# Route
+   721	# ---------------------------------------------------------------------------
+   722	@router.post(
+   723	    "/verify",
+   724	    response_model=VerifyResponse,
+   725	    summary="Public hash-chain / Merkle verification of a RegEngine export bundle",
+   726	)
+   727	@limiter.limit("10/minute")
+   728	async def verify_export(
+   729	    request: Request,
+   730	    bundle: Optional[UploadFile] = File(default=None),
+   731	) -> VerifyResponse:
+   732	    """Verify a RegEngine FSMA-204 export bundle without authentication.
+   733	
+   734	    Accepts either a ``multipart/form-data`` upload (``bundle`` ZIP) or
+   735	    an ``application/json`` body shaped as :class:`JsonBundle`. Performs
+   736	    structural checks plus Merkle-root recomputation against the
+   737	    bundle's declared root. Reads no tenant data — operates purely on
+   738	    the uploaded bytes.
+   739	    """
+   740	    ip_hash = _hash_ip(request.client.host if request.client else None)
+   741	    content_type = (request.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+   742	
+   743	    # ---- JSON path ----
+   744	    if bundle is None:
+   745	        if not content_type.startswith("application/json"):
+   746	            raise HTTPException(
+   747	                status_code=400,
+   748	                detail=(
+   749	                    "request must be multipart/form-data with a 'bundle' file "
+   750	                    "OR application/json with {manifest, events, merkle_root}"
+   751	                ),
+   752	            )
+   753	        try:
+   754	            raw_json = await request.body()
+   755	            if len(raw_json) > MAX_BUNDLE_BYTES:
+   756	                raise HTTPException(
+   757	                    status_code=413,
+   758	                    detail=f"JSON body exceeds {MAX_BUNDLE_BYTES} bytes",
+   759	                )
+   760	            payload = JsonBundle.model_validate_json(raw_json)
+   761	        except HTTPException:
+   762	            raise
+   763	        except Exception as exc:
+   764	            raise HTTPException(status_code=400, detail=f"malformed JSON: {exc}")
+   765	
+   766	        result = _verify_payload(
+   767	            manifest=payload.manifest,
+   768	            events=payload.events,
+   769	            declared_root=payload.merkle_root,
+   770	        )
+   771	        logger.info(
+   772	            "proof_verify_call",
+   773	            extra={
+   774	                "mode": "json",
+   775	                "ip_hash": ip_hash,
+   776	                "verified": result.verified,
+   777	                "event_count": len(payload.events),
+   778	            },
+   779	        )
+   780	        return result
+   781	
+   782	    # ---- Multipart / ZIP path ----
+   783	    declared_ct = (bundle.content_type or "").lower()
+   784	    if declared_ct and declared_ct not in ALLOWED_BUNDLE_CONTENT_TYPES:
+   785	        raise HTTPException(
+   786	            status_code=400,
+   787	            detail=f"unsupported bundle content-type: {declared_ct!r}",
+   788	        )
+   789	
+   790	    raw = await bundle.read(MAX_BUNDLE_BYTES + 1)
+   791	    if len(raw) > MAX_BUNDLE_BYTES:
+   792	        raise HTTPException(status_code=413, detail=f"bundle exceeds {MAX_BUNDLE_BYTES} bytes")
+   793	    if not raw:
+   794	        raise HTTPException(status_code=400, detail="empty bundle")
+   795	
+17:import secrets
+22:from fastapi import APIRouter, Depends, Header, HTTPException
+28:from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+43:from .shared.tenant_resolution import resolve_principal_tenant_id
+66:# keyed on ``portal:{portal_id}`` so abuse on one link cannot consume the
+73:def _enforce_portal_rate_limit(portal_id: str, tenant_id: str, *, scope: str, limit: int) -> None:
+76:    Keyed on ``portal:{portal_id}`` (not the bare tenant_id) so each link gets
+80:    allowed, _remaining = consume_tenant_rate_limit(
+81:        tenant_id=tenant_id,
+82:        bucket_suffix=f"portal:{portal_id}:{scope}",
+89:            detail=(f"Portal rate limit exceeded ({limit}/{_PORTAL_RATE_LIMIT_WINDOW_SECS}s for this link)"),
+94:                "X-RateLimit-Reset": str(rate_limit_reset_epoch(_PORTAL_RATE_LIMIT_WINDOW_SECS)),
+95:                "X-RateLimit-Scope": f"portal:{portal_id}:{scope}",
+100:def _portal_subscription_active(tenant_id: str) -> Optional[bool]:
+121:    with the link's tenant_id, since the portal has no authenticated principal.
+130:        status, redis_available = _check_subscription_and_redis_health(tenant_id)
+152:def _set_tenant_context(db, tenant_id: str) -> None:
+159:    set_tenant_guc_if_uuid(db, tenant_id)
+162:def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
+168:        _set_tenant_context(db, link_data["tenant_id"])
+174:                    (id, tenant_id, supplier_name, supplier_email, allowed_cte_types,
+175:                     integration_profile_id, link_token, status, created_at, expires_at)
+176:                    VALUES (gen_random_uuid(), :tenant_id, :supplier_name, :supplier_email,
+177:                            :allowed_cte_types, :integration_profile_id, :link_token,
+178:                            'active', :created_at, :expires_at)
+179:                    ON CONFLICT (link_token) DO UPDATE SET
+185:                        expires_at = :expires_at
+188:                    "tenant_id": link_data["tenant_id"],
+193:                    "link_token": portal_id,
+195:                    "expires_at": link_data["expires_at"],
+210:                    (id, tenant_id, supplier_name, link_token, status, created_at, expires_at)
+211:                    VALUES (gen_random_uuid(), :tenant_id, :supplier_name, :link_token, 'active', :created_at, :expires_at)
+212:                    ON CONFLICT (link_token) DO UPDATE SET
+215:                        expires_at = :expires_at
+218:                    "tenant_id": link_data["tenant_id"],
+220:                    "link_token": portal_id,
+222:                    "expires_at": link_data["expires_at"],
+236:def _db_get_portal_link(portal_id: str) -> Optional[dict]:
+237:    """Fetch a portal link from the database by link_token. Returns dict or None."""
+244:                # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized token
+246:                    SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
+247:                           integration_profile_id, link_token, status, created_at, expires_at
+248:                    FROM fsma.get_active_portal_link_by_token(:link_token)
+250:                {"link_token": portal_id},
+254:                    "tenant_id": str(row[0]),
+259:                    "expires_at": row[8].isoformat() if row[8] else None,
+270:                    SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
+271:                           integration_profile_id, link_token, status, created_at, expires_at
+273:                    WHERE link_token = :link_token AND status = 'active'
+275:                {"link_token": portal_id},
+281:                    "tenant_id": str(row[0]),
+286:                    "expires_at": row[5].isoformat() if row[5] else None,
+290:                "tenant_id": str(row[0]),
+295:                "expires_at": row[8].isoformat() if row[8] else None,
+308:                    SELECT tenant_id, supplier_name, link_token, status, created_at, expires_at
+310:                    WHERE link_token = :link_token AND status = 'active'
+312:                {"link_token": portal_id},
+317:            "tenant_id": str(row[0]),
+322:            "expires_at": row[5].isoformat() if row[5] else None,
+332:def _db_update_portal_link_status(portal_id: str, status: str, tenant_id: Optional[str] = None) -> bool:
+338:        if tenant_id:
+339:            _set_tenant_context(db, tenant_id)
+342:            text("UPDATE fsma.tenant_portal_links SET status = :status WHERE link_token = :link_token"),
+343:            {"status": status, "link_token": portal_id},
+356:def _get_active_portal_link(portal_id: str) -> dict:
+358:    link = _db_get_portal_link(portal_id)
+360:        link = _portal_links.get(portal_id)
+364:    expires_at_raw = link.get("expires_at")
+365:    if not expires_at_raw:
+369:        expires_at = datetime.fromisoformat(str(expires_at_raw).replace("Z", "+00:00"))
+373:    if expires_at <= datetime.now(timezone.utc):
+374:        _portal_links.pop(portal_id, None)
+375:        _db_update_portal_link_status(portal_id, "expired", link["tenant_id"])
+381:def _db_get_integration_profile_summary(tenant_id: str, profile_id: Optional[str]) -> Optional[dict]:
+382:    """Return non-secret profile metadata safe to show to a supplier."""
+388:            _set_tenant_context(db, tenant_id)
+395:                    WHERE tenant_id = CAST(:tenant_id AS uuid)
+398:                {"tenant_id": tenant_id, "profile_id": profile_id},
+421:        profile = _memory_get_profile(tenant_id, profile_id)
+441:    tenant_id: str = Field(..., description="Customer's tenant ID")
+451:    expires_days: int = Field(default=90, ge=1, le=365, description="Link expiry in days")
+457:    portal_id: str
+460:    tenant_id: str
+461:    expires_at: str
+506:def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+513:        "portal_id": portal_id,
+519:    kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+544:def _build_supplier_preflight(portal_id: str, link: dict, submission: SupplierSubmission) -> SupplierPreflightResult:
+545:    raw_event = _submission_event_dict(portal_id, link, submission)
+615:            tenant_id=link["tenant_id"],
+638:@router.post(
+646:    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+647:    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+650:    tenant_id = resolve_principal_tenant_id(request.tenant_id, x_tenant_id, principal.tenant_id)
+651:    portal_id = secrets.token_urlsafe(16)
+653:    expires_at = (now + timedelta(days=request.expires_days)).isoformat()
+656:        "tenant_id": tenant_id,
+661:        "expires_at": expires_at,
+666:    db_success = _db_store_portal_link(portal_id, link_data)
+670:        logger.info("db_store_fallback using in-memory for portal_id=%s", portal_id)
+672:    _portal_links[portal_id] = link_data
+677:            "portal_id": portal_id,
+678:            "tenant_id": tenant_id,
+684:        portal_id=portal_id,
+685:        portal_url=f"https://regengine.co/portal/{portal_id}",
+687:        tenant_id=tenant_id,
+688:        expires_at=expires_at,
+694:@router.get(
+700:    tenant_id: Optional[str] = None,
+701:    pagination: PaginationParams = Depends(),
+702:    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+703:    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+706:    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+713:            _set_tenant_context(db, tenant_id)
+718:                        SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at,
+721:                        WHERE tenant_id = :tenant_id
+724:                    {"tenant_id": tenant_id},
+732:                        SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at
+734:                        WHERE tenant_id = :tenant_id
+737:                    {"tenant_id": tenant_id},
+740:                expires_at = row[6]
+744:                if status == "active" and expires_at and expires_at <= datetime.now(timezone.utc):
+748:                        "portal_id": row[3],
+751:                        "tenant_id": str(row[1]),
+754:                        "expires_at": expires_at.isoformat() if expires_at else None,
+764:    db_tokens = {link["portal_id"] for link in links}
+766:        for token, entry in _portal_links.items():
+768:            # tenant_id argument — we are NOT trusting tenant_id from a request
+770:            if entry.get("tenant_id") != tenant_id or token in db_tokens:
+772:            expires_at_raw = entry.get("expires_at")
+774:            if expires_at_raw:
+776:                    exp = datetime.fromisoformat(str(expires_at_raw).replace("Z", "+00:00"))
+783:                    "portal_id": token,
+784:                    "portal_url": f"https://regengine.co/portal/{token}",
+786:                    "tenant_id": tenant_id,
+789:                    "expires_at": expires_at_raw,
+799:@router.patch(
+800:    "/links/{portal_id}/revoke",
+805:    portal_id: str,
+806:    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+809:    link = _db_get_portal_link(portal_id)
+811:        link = _portal_links.get(portal_id)
+814:        # _db_update_portal_link_status(tenant_id=None) can never
+817:    if principal.tenant_id and link.get("tenant_id") != principal.tenant_id:
+824:        portal_id,
+826:        link.get("tenant_id"),
+829:    _portal_links.pop(portal_id, None)
+832:        logger.warning("revoke_portal_link portal_id=%s db_update_failed", portal_id)
+834:    return {"status": "revoked", "portal_id": portal_id}
+837:@router.get(
+"""Secret-gated trust check for the internal service-to-service tenant header.
+
+Pre-auth middleware runs before FastAPI route dependencies, so it has no
+authenticated principal to read a tenant from. The repo's established answer
+(``services/shared/middleware/tenant_context.py`` Method 2) is that the *only*
+header a pre-auth layer may trust for tenant identity is
+``X-RegEngine-Tenant-ID``, and only when the caller also proves it is an
+internal service by presenting ``X-RegEngine-Internal-Secret`` matching the
+``REGENGINE_INTERNAL_SECRET`` env var.
+
+A plain ``X-Tenant-ID`` is never trustworthy pre-auth: the gateway does not
+strip it, any client can set it, and the trusted-tenant path in
+``tenant_context.py`` deliberately refuses it. #2841 (idempotency cache
+namespace) and #2844 (rate-limit bucket) were both instances of a pre-auth
+control trusting that header; this helper is the shared gate they now use.
+
+The secret is read from the environment on every call rather than cached at
+import time so rotation takes effect without a restart, and so tests can set
+it with ``monkeypatch.setenv``.
+"""
+
+from __future__ import annotations
+
+import hmac
+import os
+from typing import Optional
+
+INTERNAL_TENANT_HEADER = "X-RegEngine-Tenant-ID"
+INTERNAL_SECRET_HEADER = "X-RegEngine-Internal-Secret"
+INTERNAL_SECRET_ENV = "REGENGINE_INTERNAL_SECRET"
+
+
+def is_internal_caller(headers) -> bool:
+    """True when the request proves internal-service origin.
+
+    Fails closed: an unset or empty ``REGENGINE_INTERNAL_SECRET`` means no
+    caller is internal, so a deployment that forgets to configure the secret
+    degrades to "nobody is trusted" rather than "everybody is".
+    """
+    configured = os.getenv(INTERNAL_SECRET_ENV)
+    if not configured:
+        return False
+    presented = headers.get(INTERNAL_SECRET_HEADER)
+    if not presented:
+        return False
+    return hmac.compare_digest(presented, configured)
+
+
+def internal_tenant_id(headers) -> Optional[str]:
+    """Return the internal-header tenant, but only for a proven internal caller.
+
+    Returns ``None`` for every external request — including one that supplies
+    ``X-RegEngine-Tenant-ID`` without a valid secret — so callers can treat
+    ``None`` as "no trusted tenant available at this point in the request".
+    """
+    tenant = headers.get(INTERNAL_TENANT_HEADER)
+    if not tenant:
+        return None
+    if not is_internal_caller(headers):
+        return None
+    stripped = tenant.strip()
+    return stripped or None
+107:    tenant_id: Optional[str] = None  # UUID of tenant this key belongs to
+113:    rate_limit_per_minute: int = 60
+121:    Thread-safe: All operations on _keys and _rate_limits are protected by a lock.
+126:        self._rate_limits: dict[str, list[float]] = {}
+132:        tenant_id: Optional[str] = None,
+133:        rate_limit_per_minute: int = 60,
+143:            tenant_id: UUID of tenant this key belongs to (for multi-tenancy)
+144:            rate_limit_per_minute: Request rate limit
+162:            tenant_id=tenant_id,
+165:            rate_limit_per_minute=rate_limit_per_minute,
+174:        logger.info("api_key_created", key_id=key_id, name=name, tenant_id=tenant_id)
+214:    def check_rate_limit(self, key_id: str, limit_per_minute: int) -> bool:
+221:            if key_id not in self._rate_limits:
+222:                self._rate_limits[key_id] = []
+225:            self._rate_limits[key_id] = [ts for ts in self._rate_limits[key_id] if ts > window_start]
+228:            if len(self._rate_limits[key_id]) >= limit_per_minute:
+232:            self._rate_limits[key_id].append(now)
+258:from shared.tenant_context import set_rls_tenant_id
+274:    # Callers (require_api_key / optional_api_key) are async dependencies,
+276:    tenant_id = getattr(api_key, "tenant_id", None)
+277:    if tenant_id:
+278:        set_rls_tenant_id(tenant_id)
+287:    ``ENABLE_DB_API_KEYS=true``.
+291:    use_db = requires_strict_auth_runtime() or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
+300:async def require_api_key(
+317:    _bypass_tenant_id = os.getenv("AUTH_TEST_BYPASS_TENANT_ID", "11111111-1111-1111-1111-111111111111")
+339:            tenant_id=_bypass_tenant_id,
+341:            rate_limit_per_minute=1000,
+375:    if not getattr(api_key, "tenant_id", None) or any(scope.startswith("internal.") for scope in scopes):
+388:        rate_info = await key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute)
+390:            logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
+397:        if not key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute):
+398:            logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
+408:        tenant_id=getattr(api_key, "tenant_id", None),
+429:    # reach require_api_key so it is rejected with the normal 401 contract.
+433:    return await require_api_key(request, x_regengine_api_key)
+461:    demo_tenant_id = os.getenv("REGENGINE_DEMO_TENANT_ID", "11111111-1111-1111-1111-111111111111")
+466:        tenant_id=demo_tenant_id,
+467:        rate_limit_per_minute=100,
+475:        tenant_id=demo_tenant_id,
+476:        rate_limit_per_minute=1000,
+500:    middleware_tenant_id: object,
+506:    Handlers that depend on BOTH ``require_api_key`` (authenticated
+507:    principal) and ``get_current_tenant_id`` (TenantContextMiddleware) have
+518:        api_key: [REDACTED] authenticated ``APIKey`` (from ``require_api_key``).
+519:        middleware_tenant_id: The middleware-resolved tenant (from
+520:            ``get_current_tenant_id`` — a ``uuid.UUID`` in practice). Any
+531:    authenticated_tenant_id = getattr(api_key, "tenant_id", None)
+532:    if not authenticated_tenant_id:
+537:    authenticated_tenant = str(authenticated_tenant_id)
+539:    # ``middleware_tenant_id`` is non-optional at the handler (the
+540:    # get_current_tenant_id dependency 401s when absent), but guard anyway.
+541:    middleware_tenant = str(middleware_tenant_id) if middleware_tenant_id is not None else None
+557:def get_tenant_id(
+558:    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+560:    """Resolve tenant_id from the X-Tenant-ID header.
+566:    if not x_tenant_id:
+575:        _uuid.UUID(x_tenant_id)
+581:    return x_tenant_id

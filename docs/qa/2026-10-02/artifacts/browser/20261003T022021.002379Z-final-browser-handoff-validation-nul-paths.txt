@@ -1,0 +1,14 @@
+UTC: 2026-10-03T02:20:21.002379+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import shlex; p=Path("docs/qa/2026-10-02/artifacts/browser/20261003T021959.581784Z-final-browser-handoff-validation.txt"); command=p.read_text().split("Command: ",1)[1].split("\nExit:",1)[0]; code=shlex.split(command)[2]; old="set(git(\"ls-files\", \"--others\", \"--exclude-standard\").splitlines())"; new="set(filter(None, subprocess.check_output([\"git\", \"ls-files\", \"--others\", \"--exclude-standard\", \"-z\"], text=True).split(\"\\0\")))"; assert old in code; print("Validator retry uses NUL-delimited paths for Unicode Playwright test names"); exec(compile(code.replace(old,new), "<qa-handoff-validator>", "exec"))'
+Exit: 1
+Duration: 0.12s
+Timeout: False
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from pathlib import Path; import shlex; p=Path("docs/qa/2026-10-02/artifacts/browser/20261003T021959.581784Z-final-browser-handoff-validation.txt"); command=p.read_text().split("Command: ",1)[1].split("\nExit:",1)[0]; code=shlex.split(command)[2]; old="set(git(\"ls-files\", \"--others\", \"--exclude-standard\").splitlines())"; new="set(filter(None, subprocess.check_output([\"git\", \"ls-files\", \"--others\", \"--exclude-standard\", \"-z\"], text=True).split(\"\\0\")))"; assert old in code; print("Validator retry uses NUL-delimited paths for Unicode Playwright test names"); exec(compile(code.replace(old,new), "<qa-handoff-validator>", "exec"))
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa-handoff-validator>", line 54, in <module>
+AssertionError: Counter({'environment': 19, 'harness': 8, 'product UX-008': 1})
+Validator retry uses NUL-delimited paths for Unicode Playwright test names

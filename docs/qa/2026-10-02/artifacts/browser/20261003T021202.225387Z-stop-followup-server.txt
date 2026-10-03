@@ -1,0 +1,8 @@
+UTC: 2026-10-03T02:12:02.225387+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; data=Path("docs/qa/2026-10-02/artifacts/browser/followup-server-metadata.txt").read_text(); stop=next(line.split("=",1)[1] for line in data.splitlines() if line.startswith("StopFile=")); Path(stop).touch(); print("Requested cooperative shutdown of this follow-up server only")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Requested cooperative shutdown of this follow-up server only

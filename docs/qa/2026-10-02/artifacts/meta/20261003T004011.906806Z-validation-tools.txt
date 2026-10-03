@@ -1,0 +1,37 @@
+UTC: 2026-10-03T00:40:11.906806+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'command -v gitleaks || true; command -v pre-commit || true; git status --short --branch; rg --files docs/qa/2026-10-02/scripts; nl -ba /Users/sellers/.codex/memories/MEMORY.md | sed -n "96,113p"'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+/opt/homebrew/bin/gitleaks
+/opt/homebrew/bin/pre-commit
+## qa/2026-10-02-sweep
+ M frontend/next-env.d.ts
+?? docs/qa/2026-10-02/
+?? frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+?? services/ingestion/tests/test_qa_sweep_20261002_contract.py
+?? tests/qa_sweep_20261002/
+docs/qa/2026-10-02/scripts/run_logged.py
+docs/qa/2026-10-02/scripts/ux-browser-pass.cjs
+docs/qa/2026-10-02/scripts/backend_pytest.py
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+    96	
+    97	- inbound_email, email_ingest, get_tenant_by_inbound_address, tenant_inbound_email_addresses, FORCE RLS, NOBYPASSRLS, 486eb6809921, PR #3153, PR #3150
+    98	
+    99	## User preferences
+   100	
+   101	- For API regressions, the user required route-level tests and a negative control showing the old 500 -> test through the endpoint, preserve a pre-fix failure demonstration, and keep tenant/source-file/evidence behavior in scope. [Task 1]
+   102	- For migration changes, the user required live-DB proof, exact downgrade/upgrade behavior, schema parity, grant-inventory review, and CI integration -> include those acceptance layers rather than only editing a revision. [Task 3]
+   103	- The user chose “(a) Delete it” rather than porting an insecure duplicate and required migration tests per `AGENTS.md` with no production changes -> remove redundant unsafe paths when the hardened equivalent exists, without widening production scope. [Task 4]
+   104	
+   105	## Reusable knowledge
+   106	
+   107	- `csv.DictReader` stores nonblank fields beyond the header under `None` as a list; blindly calling `.strip()` produces `AttributeError` and HTTP 500. Pre-read records, catch `csv.Error`, return line-specific errors, reject nonblank overflow and blank headers, and reject whole unreadable files before partial ingestion. [Task 1]
+   108	- A no-policy/no-privilege, FORCE RLS surface is intentional loud denial, not silent deny-all. The v104 guard should flag a role only when it has direct/PUBLIC/membership DML privilege but no applicable policy. [Task 2]
+   109	- In SQLAlchemy `text()`, `:payload::jsonb` can pass literally to PostgreSQL because the bind regex misses a name immediately followed by `:`. Use `CAST(:payload AS jsonb)`; inspect swallowed `enqueue_task` errors when a helper only returns `None`. [Task 2]
+   110	- For tables under FORCE RLS owned by a NOBYPASSRLS migrator, FK or row-count validation requires temporary NO FORCE on both child and parent tables within the migration transaction, then restoring FORCE. Run `PREDEPLOY_CHECK_SQL` as a superuser/BYPASSRLS read-only session; connect with `options="-c default_transaction_read_only=on -c statement_timeout=30s"`. [Task 3]
+   111	- The hardened `email_ingest` uses sender allowlisting and two-argument `fsma.get_tenant_by_inbound_address(text,text)`; recipient-only resolution enabled cross-tenant writes. A cleanup migration must refuse nonempty mappings and lift FORCE RLS before counting, otherwise the owner may falsely see zero rows. [Task 4]
+   112	
+   113	## Failures and how to do differently

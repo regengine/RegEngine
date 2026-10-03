@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:40:07.254000+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node -e 'const config=require("./frontend/next.config.js");config.headers().then(rules=>{for(const rule of rules){for(const header of rule.headers){if(header.key.toLowerCase()==="permissions-policy")console.log(JSON.stringify({source:rule.source,header:header.key,value:header.value}))}}})'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+{"source":"/(.*)","header":"Permissions-Policy","value":"camera=(), microphone=(), geolocation=()"}

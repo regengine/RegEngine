@@ -1,0 +1,311 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.7.0/bin/node",
+      "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/playwright/cli.js",
+      "test",
+      "--config",
+      "frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+      "--project=chromium"
+    ],
+    "configFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+    "rootDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/browser/fe-regression-chromium-third-run.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "fe-001-barcode.spec.ts",
+      "file": "fe-001-barcode.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [
+                {
+                  "type": "fail",
+                  "description": "FE-001: variable-length GS1 lot is truncated at AI-like digits.",
+                  "location": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                    "line": 42,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "failed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2482,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 3\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[2m  Array [\u001b[22m\n\u001b[32m-   \"LOT-10-ABC\",\u001b[39m\n\u001b[32m-   \"LOT-21-ABC\",\u001b[39m\n\u001b[32m-   \"LOT-17260930\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[2m  ]\u001b[22m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 3\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[2m  Array [\u001b[22m\n\u001b[32m-   \"LOT-10-ABC\",\u001b[39m\n\u001b[32m-   \"LOT-21-ABC\",\u001b[39m\n\u001b[32m-   \"LOT-17260930\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[2m  ]\u001b[22m\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:43:54",
+                    "location": {
+                      "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                      "column": 54,
+                      "line": 43
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 41 |\u001b[39m   \u001b[90m// Setup/controls/evidence are outside expected failure; only defect assertion is marked.\u001b[39m\n \u001b[90m 42 |\u001b[39m   test\u001b[33m.\u001b[39mfail(\u001b[36mtrue\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'FE-001: variable-length GS1 lot is truncated at AI-like digits.'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 43 |\u001b[39m   expect(observations\u001b[33m.\u001b[39mmap(value \u001b[33m=>\u001b[39m value\u001b[33m.\u001b[39mactualLot))\u001b[33m.\u001b[39mtoEqual(observations\u001b[33m.\u001b[39mmap(value \u001b[33m=>\u001b[39m value\u001b[33m.\u001b[39mexpectedLot))\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 44 |\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m 45 |\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                        "column": 54,
+                        "line": 43
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 3\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[2m  Array [\u001b[22m\n\u001b[32m-   \"LOT-10-ABC\",\u001b[39m\n\u001b[32m-   \"LOT-21-ABC\",\u001b[39m\n\u001b[32m-   \"LOT-17260930\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[31m+   \"LOT-\",\u001b[39m\n\u001b[2m  ]\u001b[22m\n\n  41 |   // Setup/controls/evidence are outside expected failure; only defect assertion is marked.\n  42 |   test.fail(true, 'FE-001: variable-length GS1 lot is truncated at AI-like digits.');\n> 43 |   expect(observations.map(value => value.actualLot)).toEqual(observations.map(value => value.expectedLot));\n     |                                                      ^\n  44 | });\n  45 |\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:43:54"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T02:07:13.578Z",
+                  "annotations": [
+                    {
+                      "type": "fail",
+                      "description": "FE-001: variable-length GS1 lot is truncated at AI-like digits.",
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                        "line": 42,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "fe-001",
+                      "contentType": "application/json",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-chromium/attachments/fe-001-201ca5196fd98585cebd4b7136525aa4bc03d801.json"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                    "column": 54,
+                    "line": 43
+                  }
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "abc432f325efb82bcee5-0138f4c25cd187538f45",
+          "file": "fe-001-barcode.spec.ts",
+          "line": 4,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "fe-004-offline-photo.spec.ts",
+      "file": "fe-004-offline-photo.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "FE-004 keeps account A offline photos out of account B replay requests",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [
+                {
+                  "type": "fail",
+                  "description": "FE-004: account B sends account A ownerless queued photo with its current cookie.",
+                  "location": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                    "line": 143,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "failed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2008,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 10\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"account\": \"b\",\u001b[39m\n\u001b[31m+     \"containsExactAccountAPhoto\": true,\u001b[39m\n\u001b[31m+     \"cookieIdentifiesAccountB\": true,\u001b[39m\n\u001b[31m+     \"includesOfflineSource\": true,\u001b[39m\n\u001b[31m+     \"multipartBytes\": 2032,\u001b[39m\n\u001b[31m+     \"path\": \"/api/ingestion/api/v1/ingest/csv\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 10\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"account\": \"b\",\u001b[39m\n\u001b[31m+     \"containsExactAccountAPhoto\": true,\u001b[39m\n\u001b[31m+     \"cookieIdentifiesAccountB\": true,\u001b[39m\n\u001b[31m+     \"includesOfflineSource\": true,\u001b[39m\n\u001b[31m+     \"multipartBytes\": 2032,\u001b[39m\n\u001b[31m+     \"path\": \"/api/ingestion/api/v1/ingest/csv\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:144:110",
+                    "location": {
+                      "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                      "column": 110,
+                      "line": 144
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 142 |\u001b[39m\n \u001b[90m 143 |\u001b[39m   test\u001b[33m.\u001b[39mfail(\u001b[36mtrue\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'FE-004: account B sends account A ownerless queued photo with its current cookie.'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 144 |\u001b[39m   expect(attempts\u001b[33m.\u001b[39mfilter(attempt \u001b[33m=>\u001b[39m attempt\u001b[33m.\u001b[39mcookieIdentifiesAccountB \u001b[33m&&\u001b[39m attempt\u001b[33m.\u001b[39mcontainsExactAccountAPhoto))\u001b[33m.\u001b[39mtoEqual([])\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                                                                              \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 145 |\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m 146 |\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                        "column": 110,
+                        "line": 144
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 10\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"account\": \"b\",\u001b[39m\n\u001b[31m+     \"containsExactAccountAPhoto\": true,\u001b[39m\n\u001b[31m+     \"cookieIdentifiesAccountB\": true,\u001b[39m\n\u001b[31m+     \"includesOfflineSource\": true,\u001b[39m\n\u001b[31m+     \"multipartBytes\": 2032,\u001b[39m\n\u001b[31m+     \"path\": \"/api/ingestion/api/v1/ingest/csv\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  142 |\n  143 |   test.fail(true, 'FE-004: account B sends account A ownerless queued photo with its current cookie.');\n> 144 |   expect(attempts.filter(attempt => attempt.cookieIdentifiesAccountB && attempt.containsExactAccountAPhoto)).toEqual([]);\n      |                                                                                                              ^\n  145 | });\n  146 |\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:144:110"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T02:07:16.167Z",
+                  "annotations": [
+                    {
+                      "type": "fail",
+                      "description": "FE-004: account B sends account A ownerless queued photo with its current cookie.",
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                        "line": 143,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "fe-004-account-a",
+                      "contentType": "application/json",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/attachments/fe-004-account-a-5bcb235ebf30b49b825bfd74954cdca14ca4788b.json"
+                    },
+                    {
+                      "name": "fe-004-account-b",
+                      "contentType": "application/json",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/attachments/fe-004-account-b-b4e070e453ebec1699a70b6b5137bb662cefa3bb.json"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                    "column": 110,
+                    "line": 144
+                  }
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a9bd36b5e3ca8ea0465a-4c2aaa8e68fb16753890",
+          "file": "fe-004-offline-photo.spec.ts",
+          "line": 28,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T02:07:13.340Z",
+    "duration": 4852.738,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

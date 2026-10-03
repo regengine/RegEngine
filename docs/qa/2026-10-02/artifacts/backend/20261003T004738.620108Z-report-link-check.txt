@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:47:38.620108+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re; p=Path("docs/qa/2026-10-02/BACKEND-REPORT.md"); print("QA reports:",[f.name for f in p.parent.glob("*REPORT.md")]); missing=[x for x in re.findall(r"\]\(([^)]+)\)",p.read_text()) if not (p.parent/x).exists()]; print("Missing links:",missing)'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+QA reports: ['FRONTEND-REPORT.md', 'BACKEND-REPORT.md', 'SECURITY-REPORT.md', 'GATE-REPORT.md']
+Missing links: ['artifacts/backend/20261003T004358.677606Z-guard-hardening-note.txt']

@@ -1,0 +1,12 @@
+UTC: 2026-10-03T00:49:26.712769+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-locked-deps:/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -c 'import fastapi,starlette,pydantic,pydantic_core; print("Previous readback tool invocation failed before command execution because cwd lacked leading slash; no process ran."); print("FastAPI",fastapi.__version__,fastapi.__file__); print("Starlette",starlette.__version__,starlette.__file__); print("Pydantic",pydantic.__version__,pydantic.__file__); print("Pydantic-core",pydantic_core.__version__,pydantic_core.__file__)'
+Exit: 0
+Duration: 0.23s
+Timeout: False
+
+Previous readback tool invocation failed before command execution because cwd lacked leading slash; no process ran.
+FastAPI 0.141.1 /private/tmp/regengine-qa-locked-deps/fastapi/__init__.py
+Starlette 1.6.0 /private/tmp/regengine-qa-locked-deps/starlette/__init__.py
+Pydantic 2.13.5 /private/tmp/regengine-qa-locked-deps/pydantic/__init__.py
+Pydantic-core 2.46.5 /private/tmp/regengine-qa-locked-deps/pydantic_core/__init__.py

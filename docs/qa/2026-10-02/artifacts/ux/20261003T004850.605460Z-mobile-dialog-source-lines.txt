@@ -1,0 +1,145 @@
+UTC: 2026-10-03T00:48:50.605460+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; print("\n".join(f"{i}: {l}" for i,l in enumerate(Path("frontend/src/components/layout/header/MobileMenu.tsx").read_text().splitlines(),1)))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+1: 'use client';
+2: 
+3: import { filterExperimentalLinks } from '@/lib/experimental-features';
+4: import Link from 'next/link';
+5: import { X } from 'lucide-react';
+6: import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
+7: import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+8: import { ThemeToggle } from '@/components/layout/theme-toggle';
+9: import { cn } from '@/lib/utils';
+10: import { MobileMenuCTA } from './MobileMenuCTA';
+11: import type { MobileMenuProps } from './types';
+12: 
+13: /**
+14:  * Mobile navigation drawer.
+15:  *
+16:  * Every one of the seventeen inline style objects this file used to carry is
+17:  * now a token utility. The contract kept intact: `role="dialog"` +
+18:  * `aria-label="Navigation menu"`, the `.marketing-mobile-drawer` class hook,
+19:  * the safe-area insets, and the parent's `re:mobile-menu-state` CustomEvent
+20:  * (AccessibilityWidget and CookieBanner both listen for it).
+21:  */
+22: const LOGGED_IN_LINKS = [
+23:     { label: 'Dashboard', href: '/dashboard' },
+24:     { label: 'Heartbeat', href: '/dashboard/heartbeat' },
+25:     { label: 'Compliance', href: '/dashboard/compliance' },
+26:     { label: 'Alerts', href: '/dashboard/alerts' },
+27:     { label: 'Suppliers', href: '/dashboard/suppliers' },
+28:     { label: 'Products', href: '/dashboard/products' },
+29:     { label: 'Settings', href: '/dashboard/settings' },
+30: ];
+31: 
+32: export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
+33:     return (
+34:         <>
+35:             {/* Drawer scrim */}
+36:             <div
+37:                 className={cn(
+38:                     'fixed inset-0 z-[var(--re-z-sticky)] bg-re-surface-overlay backdrop-blur-[4px] transition-[opacity,visibility] duration-240 motion-reduce:transition-none',
+39:                     mobileOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+40:                 )}
+41:                 onClick={() => setMobileOpen(false)}
+42:                 aria-hidden="true"
+43:             />
+44: 
+45:             {/* Drawer panel */}
+46:             <div
+47:                 className={cn(
+48:                     'marketing-mobile-drawer fixed bottom-0 right-0 top-0 z-[var(--re-z-modal)] flex w-[min(320px,85vw)] flex-col overflow-y-auto border-l border-[var(--re-mobile-border)] bg-[var(--re-mobile-menu-bg)] pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] transition-[transform,visibility] duration-240 motion-reduce:transition-none',
+49:                     mobileOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'
+50:                 )}
+51:                 role="dialog"
+52:                 aria-modal={mobileOpen ? true : undefined}
+53:                 aria-hidden={!mobileOpen}
+54:                 aria-label="Navigation menu"
+55:             >
+56:                 {/* Drawer header */}
+57:                 <div className="flex min-h-[56px] items-center justify-between border-b border-[var(--re-mobile-border)] px-5 py-4">
+58:                     <RegEngineWordmark size="sm" />
+59:                     <button
+60:                         type="button"
+61:                         onClick={() => setMobileOpen(false)}
+62:                         aria-label="Close menu"
+63:                         className="-mr-2 flex h-11 w-11 items-center justify-center rounded-md border-0 bg-transparent p-0 text-re-text-muted transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+64:                     >
+65:                         <X aria-hidden="true" size={20} strokeWidth={1.75} />
+66:                     </button>
+67:                 </div>
+68: 
+69:                 {/* Primary nav links */}
+70:                 <div className="px-3 py-2">
+71:                     {filterExperimentalLinks(user ? LOGGED_IN_LINKS : MARKETING_PRIMARY_NAV).map((item) => (
+72:                         <Link
+73:                             key={item.label}
+74:                             href={item.href}
+75:                             onClick={() => setMobileOpen(false)}
+76:                             aria-current={pathname === item.href ? 'page' : undefined}
+77:                             className={`relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline ${
+78:                                 pathname === item.href
+79:                                     ? 'bg-re-surface-inset font-medium text-re-text-primary'
+80:                                     : 'text-re-text-secondary'
+81:                             } transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none`}
+82:                         >
+83:                             {pathname === item.href && (
+84:                                 <span
+85:                                     aria-hidden="true"
+86:                                     className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-re-brand"
+87:                                 />
+88:                             )}
+89:                             {item.label}
+90:                         </Link>
+91:                     ))}
+92:                 </div>
+93: 
+94:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+95: 
+96:                 {/* Free tools */}
+97:                 <div className="px-3 py-2">
+98:                     <div className="px-3 pb-1 pt-2 text-label uppercase text-re-text-muted">
+99:                         FSMA 204 Compliance Tools
+100:                     </div>
+101:                     {[...MARKETING_FREE_TOOLS, MARKETING_ALL_TOOLS_LINK].map((tool) => (
+102:                         <Link
+103:                             key={tool.href}
+104:                             href={tool.href}
+105:                             onClick={() => setMobileOpen(false)}
+106:                             className="flex min-h-[48px] items-start gap-3 rounded-md p-3 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+107:                         >
+108:                             <tool.icon
+109:                                 aria-hidden="true"
+110:                                 size={16}
+111:                                 strokeWidth={1.75}
+112:                                 className="mt-0.5 shrink-0 text-re-text-tertiary"
+113:                             />
+114:                             <span className="min-w-0">
+115:                                 <span className="block text-ui font-medium text-re-text-primary">
+116:                                     {tool.href === '/tools' ? `${tool.label} →` : tool.label}
+117:                                 </span>
+118:                                 <span className="mt-0.5 block text-small text-re-text-tertiary">{tool.desc}</span>
+119:                             </span>
+120:                         </Link>
+121:                     ))}
+122:                 </div>
+123: 
+124:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+125: 
+126:                 {/* Theme */}
+127:                 <div className="flex items-center justify-between px-6 py-3">
+128:                     <span className="text-ui text-re-text-secondary">Theme</span>
+129:                     <ThemeToggle />
+130:                 </div>
+131: 
+132:                 <div className="flex-1" />
+133: 
+134:                 <MobileMenuCTA user={user} showLoggedIn={showLoggedIn} setMobileOpen={setMobileOpen} />
+135:             </div>
+136:         </>
+137:     );
+138: }

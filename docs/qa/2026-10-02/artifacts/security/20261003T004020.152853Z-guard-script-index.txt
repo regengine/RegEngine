@@ -1,0 +1,27 @@
+UTC: 2026-10-03T00:40:20.152853+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'ls docs/qa/2026-10-02/scripts; rg -n "pytest|socket|DATABASE|dotenv|usage|Usage" docs/qa/2026-10-02/scripts/*.py | head -85; git diff --stat; git status --short | head -30'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+backend_pytest.py
+node-isolation.cjs
+run_logged.py
+ux-browser-pass.cjs
+docs/qa/2026-10-02/scripts/run_logged.py:4:Usage: python3 docs/qa/2026-10-02/scripts/run_logged.py GROUP LABEL -- COMMAND ...
+docs/qa/2026-10-02/scripts/backend_pytest.py:2:"""Run explicitly selected pytest suites without network or credential-file access.
+docs/qa/2026-10-02/scripts/backend_pytest.py:6:socket connections, subprocesses, and reads of .env/credential files are denied.
+docs/qa/2026-10-02/scripts/backend_pytest.py:21:    "DATABASE_URL": "sqlite:///:memory:",
+docs/qa/2026-10-02/scripts/backend_pytest.py:33:    if event in {"socket.connect", "socket.getaddrinfo", "subprocess.Popen", "os.system"}:
+docs/qa/2026-10-02/scripts/backend_pytest.py:43:import pytest
+docs/qa/2026-10-02/scripts/backend_pytest.py:45:raise SystemExit(pytest.main([
+docs/qa/2026-10-02/scripts/backend_pytest.py:46:    "-p", "pytest_cov.plugin", "-p", "pytest_asyncio.plugin",
+docs/qa/2026-10-02/scripts/backend_pytest.py:47:    "-p", "hypothesis.extra.pytestplugin", *sys.argv[1:]
+ frontend/next-env.d.ts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+ M frontend/next-env.d.ts
+?? docs/qa/2026-10-02/
+?? frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+?? services/ingestion/tests/test_qa_sweep_20261002_contract.py
+?? tests/qa_sweep_20261002/

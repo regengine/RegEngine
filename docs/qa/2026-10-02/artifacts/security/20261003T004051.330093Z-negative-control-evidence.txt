@@ -1,0 +1,86 @@
+UTC: 2026-10-03T00:40:51.330093+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n -A16 -B2 "test_redacted_fda_export|test_streamed_body|bytes_read|failed,|passed" docs/qa/2026-10-02/artifacts/backend/20261003T004024.567761Z-exposed-defect-evidence.txt; nl -ba tests/qa_sweep_20261002/test_portal_export_disclosure.py | tail -20; nl -ba tests/qa_sweep_20261002/test_request_safety.py | tail -17'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+80-E   assert 200 == 400
+81-E    +  where 200 = <Response [200 OK]>.status_code
+82:_________ test_redacted_fda_export_does_not_disclose_portal_capability _________
+83:tests/qa_sweep_20261002/test_portal_export_disclosure.py:52: in test_redacted_fda_export_does_not_disclose_portal_capability
+84-    assert _SYNTHETIC_CAPABILITY not in exported
+85-E   assert 'qa-only-inv...l-capability' not in '"Traceabili...rue}",""\r\n'
+86-E     
+87-E     'qa-only-invalid-portal-capability' is contained here:
+88-E       l_id"": ""qa-only-invalid-portal-capability"", ""reference_document"": ""supplier-portal:qa-only-invalid-portal-capability"", ""tlc_source_reference"": ""QA supplier"", ""ftl_covered"": true}",""
+89-E     ?           +++++++++++++++++++++++++++++++++
+90:_____________ test_streamed_body_is_limited_without_content_length _____________
+91:tests/qa_sweep_20261002/test_request_safety.py:36: in test_streamed_body_is_limited_without_content_length
+92-    assert response.status_code == 413, response.text
+93:E   AssertionError: {"bytes_read":10}
+94-E   assert 200 == 413
+95-E    +  where 200 = <Response [200 OK]>.status_code
+96-=========================== short test summary info ============================
+97-FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - AssertionError: Internal Server Error
+98-assert 500 == 422
+99- +  where 500 = <Response [500 Internal Server Error]>.status_code
+100-FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - AssertionError: Internal Server Error
+101-assert 500 == 422
+102- +  where 500 = <Response [500 Internal Server Error]>.status_code
+103-FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - AssertionError: Internal Server Error
+104-assert 500 == 422
+105- +  where 500 = <Response [500 Internal Server Error]>.status_code
+106-FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[inf] - AssertionError: status=200; captured=1
+107-assert 200 == 400
+108- +  where 200 = <Response [200 OK]>.status_code
+109-FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[Infinity] - AssertionError: status=200; captured=1
+--
+128-assert 200 == 400
+129- +  where 200 = <Response [200 OK]>.status_code
+130:FAILED tests/qa_sweep_20261002/test_portal_export_disclosure.py::test_redacted_fda_export_does_not_disclose_portal_capability - assert 'qa-only-inv...l-capability' not in '"Traceabili...rue}",""\r\n'
+131-  
+132-  'qa-only-invalid-portal-capability' is contained here:
+133-    l_id"": ""qa-only-invalid-portal-capability"", ""reference_document"": ""supplier-portal:qa-only-invalid-portal-capability"", ""tlc_source_reference"": ""QA supplier"", ""ftl_covered"": true}",""
+134-  ?           +++++++++++++++++++++++++++++++++
+135:FAILED tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length - AssertionError: {"bytes_read":10}
+136-assert 200 == 413
+137- +  where 200 = <Response [200 OK]>.status_code
+138:13 failed, 12 passed in 1.12s
+    33	    event["event_timestamp"] = event["timestamp"]
+    34	    return _generate_csv([event], include_pii=False)
+    35	
+    36	
+    37	def test_portal_export_keeps_lot_and_redacts_location():
+    38	    """Positive control: the sample is an otherwise valid redacted FDA row."""
+    39	    row = next(csv.DictReader(io.StringIO(_exported_portal_event_csv())))
+    40	    assert row["Traceability Lot Code (TLC)"] == "QA-LOT-001"
+    41	    assert row["Location Name"] == "[REDACTED]"
+    42	    assert "QA origin" not in row["Additional KDEs (JSON)"]
+    43	
+    44	
+    45	@pytest.mark.xfail(
+    46	    strict=True,
+    47	    raises=AssertionError,
+    48	    reason="BE-011: supplier portal bearer capability is disclosed in exported KDEs",
+    49	)
+    50	def test_redacted_fda_export_does_not_disclose_portal_capability():
+    51	    exported = _exported_portal_event_csv()
+    52	    assert _SYNTHETIC_CAPABILITY not in exported
+    20	
+    21	def test_declared_oversized_body_rejected(body_client):
+    22	    assert body_client.post("/consume", content=b"123456789").status_code == 413
+    23	
+    24	
+    25	def test_body_at_limit_accepted(body_client):
+    26	    response = body_client.post("/consume", content=b"12345678")
+    27	    assert response.status_code == 200
+    28	    assert response.json() == {"bytes_read": 8}
+    29	
+    30	
+    31	@pytest.mark.xfail(strict=True, raises=AssertionError,
+    32	                   reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies")
+    33	def test_streamed_body_is_limited_without_content_length(body_client):
+    34	    response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+    35	    assert "content-length" not in response.request.headers
+    36	    assert response.status_code == 413, response.text

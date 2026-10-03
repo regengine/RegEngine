@@ -1,0 +1,127 @@
+UTC: 2026-10-03T00:39:34.370288+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/app/supplier_portal.py"); print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if i<=120))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+1: """
+2: Supplier Portal Router.
+3: 
+4: Provides a lightweight, link-based submission form for suppliers to submit
+5: shipping/receiving data without needing a RegEngine account.
+6: 
+7: A customer generates a portal link for their supplier. The supplier clicks
+8: the link, fills in TLC + shipment details, and the data is ingested directly
+9: into the customer's tenant as a Shipping CTE.
+10: """
+11: 
+12: from __future__ import annotations
+13: 
+14: import hashlib
+15: import logging
+16: import os
+17: import secrets
+18: from datetime import datetime, timedelta, timezone
+19: from typing import Optional
+20: from uuid import uuid4
+21: 
+22: from fastapi import APIRouter, Depends, Header, HTTPException
+23: from pydantic import BaseModel, Field
+24: from shared.database import get_db_safe
+25: from shared.env import is_production
+26: from shared.pagination import PaginationParams
+27: from shared.tenant_context import tenant_scope
+28: from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+29: from sqlalchemy import text
+30: 
+31: from .authz import IngestionPrincipal, require_permission
+32: from .inflow_workbench import (
+33:     CommitGateDecision,
+34:     CommitGateRequest,
+35:     ReadinessSummary,
+36:     build_readiness_summary,
+37:     decide_commit_gate,
+38: )
+39: from .sandbox.csv_parser import _normalize_for_rules
+40: from .sandbox.evaluators import _evaluate_event_stateless
+41: from .sandbox.models import EventEvaluationResponse, RuleResultResponse, SandboxResponse
+42: from .sandbox.validation import _validate_kdes
+43: from .shared.tenant_resolution import resolve_principal_tenant_id
+44: from .webhook_compat import ingest_events
+45: from .webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
+46: 
+47: logger = logging.getLogger("supplier-portal")
+48: 
+49: router = APIRouter(prefix="/api/v1/portal", tags=["Supplier Portal"])
+50: 
+51: # In-memory portal link store (fallback when DB is unavailable)
+52: _portal_links: dict[str, dict] = {}
+53: 
+54: 
+55: def _allow_memory_fallback() -> bool:
+56:     """Allow volatile portal-link fallback only outside production."""
+57:     return not is_production()
+58: 
+59: 
+60: # Issue #2508 — per-portal-link abuse controls.
+61: #
+62: # The public, link-authenticated portal endpoints declare no auth and were
+63: # covered only by the coarse per-IP global middleware (preflight) and the
+64: # victim-tenant-scoped webhook limiter (submit). Both backstops are evadable
+65: # and neither is scoped to the portal link itself. These per-link buckets are
+66: # keyed on ``portal:{portal_id}`` so abuse on one link cannot consume the
+67: # owning tenant's general ``webhooks.ingest`` budget.
+68: _PORTAL_PREFLIGHT_RATE_LIMIT_RPM = max(1, int(os.getenv("PORTAL_PREFLIGHT_RATE_LIMIT_RPM", "30")))
+69: _PORTAL_SUBMIT_RATE_LIMIT_RPM = max(1, int(os.getenv("PORTAL_SUBMIT_RATE_LIMIT_RPM", "20")))
+70: _PORTAL_RATE_LIMIT_WINDOW_SECS = max(1, int(os.getenv("PORTAL_RATE_LIMIT_WINDOW_SECONDS", "60")))
+71: 
+72: 
+73: def _enforce_portal_rate_limit(portal_id: str, tenant_id: str, *, scope: str, limit: int) -> None:
+74:     """Per-portal-link sliding-window limit. Raises HTTP 429 when exceeded.
+75: 
+76:     Keyed on ``portal:{portal_id}`` (not the bare tenant_id) so each link gets
+77:     its own bucket and one abused link does not starve the owning tenant's
+78:     other ingestion budgets.
+79:     """
+80:     allowed, _remaining = consume_tenant_rate_limit(
+81:         tenant_id=tenant_id,
+82:         bucket_suffix=f"portal:{portal_id}:{scope}",
+83:         limit=limit,
+84:         window=_PORTAL_RATE_LIMIT_WINDOW_SECS,
+85:     )
+86:     if not allowed:
+87:         raise HTTPException(
+88:             status_code=429,
+89:             detail=(f"Portal rate limit exceeded ({limit}/{_PORTAL_RATE_LIMIT_WINDOW_SECS}s for this link)"),
+90:             headers={
+91:                 "Retry-After": str(_PORTAL_RATE_LIMIT_WINDOW_SECS),
+92:                 "X-RateLimit-Limit": str(limit),
+93:                 "X-RateLimit-Remaining": "0",
+94:                 "X-RateLimit-Reset": str(rate_limit_reset_epoch(_PORTAL_RATE_LIMIT_WINDOW_SECS)),
+95:                 "X-RateLimit-Scope": f"portal:{portal_id}:{scope}",
+96:             },
+97:         )
+98: 
+99: 
+100: def _portal_subscription_active(tenant_id: str) -> Optional[bool]:
+101:     """Check the owning tenant's subscription status for a portal submission.
+102: 
+103:     Returns:
+104:       * ``True``  — tenant has an active/trialing subscription (allow).
+105:       * ``False`` — Redis is reachable but the tenant has no active subscription
+106:         (block before persistence).
+107:       * ``None``  — subscription checking is not configured for this deploy
+108:         (no Redis) OUTSIDE production; the caller skips the gate so local/dev
+109:         submissions are not broken.
+110: 
+111:     In production, uncertainty is never permissive: an unreachable Redis, an
+112:     open circuit, an unexpected error, or an unset ``REDIS_URL`` raises 503
+113:     rather than skipping the gate. This matches the documented contract for
+114:     every other paid surface — "Redis/circuit uncertainty returns 503 because
+115:     the service cannot confirm entitlement state" (README, Security And Tenant
+116:     Boundaries) and ``subscription_gate.require_active_subscription``. Before
+117:     this, a Redis incident silently downgraded the portal to ungated and
+118:     persisted supplier evidence for tenants with no active subscription.
+119: 
+120:     Mirrors ``subscription_gate.require_active_subscription`` but is callable

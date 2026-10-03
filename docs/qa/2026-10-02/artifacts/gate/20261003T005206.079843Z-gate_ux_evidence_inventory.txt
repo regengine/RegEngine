@@ -1,0 +1,76 @@
+UTC: 2026-10-03T00:52:06.079843+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/ux"); print("\n".join(str(x) for x in p.iterdir() if x.is_file())); q=Path("docs/qa/2026-10-02/UX-REPORT.md"); print(q.read_text() if q.exists() else "UX REPORT PENDING")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_verify-320-004936758162.json
+docs/qa/2026-10-02/artifacts/ux/20261003T003634.080185Z-orientation.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003729.722169Z-route-map.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004619.808124Z-chrome-axe-initial-results.txt
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_login-1728-1.json
+docs/qa/2026-10-02/artifacts/ux/ux-002-verifier-invisible-focus.jpg
+docs/qa/2026-10-02/artifacts/ux/smoke-results.json
+docs/qa/2026-10-02/artifacts/ux/20261003T003813.168920Z-verify-login-structure.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004130.248988Z-startup-assertion-requirements.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003753.511139Z-browsers-and-axe-setup.txt
+docs/qa/2026-10-02/artifacts/ux/guarded-server-output.txt
+docs/qa/2026-10-02/artifacts/ux/mobile-home-390-frame.jpg
+docs/qa/2026-10-02/artifacts/ux/20261003T003911.319085Z-restart-guarded-server.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004016.906152Z-mirror-route-manifest.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004123.566237Z-built-server-preflight.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003808.017325Z-journey-source.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004804.045958Z-stop-proxy-for-mobile-harness.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004004.438806Z-local-route-diagnostic.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003926.419777Z-stop-owned-listener.txt
+docs/qa/2026-10-02/artifacts/ux/guarded-server-metadata.txt
+docs/qa/2026-10-02/artifacts/ux/built-server-metadata.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004850.605460Z-mobile-dialog-source-lines.txt
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_verify-1728-1.json
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_-390-004818082219.json
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_demo-390-005044980842.json
+docs/qa/2026-10-02/artifacts/ux/20261003T004036.067108Z-guarded-server-v2.txt
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_contact-1728-005025461082.json
+docs/qa/2026-10-02/artifacts/ux/desktop-login-error.jpg
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_-1728-2.json
+docs/qa/2026-10-02/artifacts/ux/20261003T004837.146107Z-mobile-menu-and-axe-review.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003939.686220Z-reload-qa-mirror-server.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004841.156858Z-menu-keyboard-source.txt
+docs/qa/2026-10-02/artifacts/ux/desktop-contact-error.jpg
+docs/qa/2026-10-02/artifacts/ux/20261003T003720.959076Z-browser-guidance.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004624.441943Z-axe-first-node-details.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004143.828393Z-ready-server-preflight.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003735.618614Z-config-and-core-routes.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003717.191184Z-guidance.txt
+docs/qa/2026-10-02/artifacts/ux/mirror-path.txt
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_verify-320-005144063706.json
+docs/qa/2026-10-02/artifacts/ux/20261003T005102.929390Z-narrow-verifier-axe-evidence.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004845.116945Z-mobile-drawer-source.txt
+docs/qa/2026-10-02/artifacts/ux/ready-server-output.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004354.833024Z-managed-chrome-local-proxy.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003758.900557Z-browsers-and-axe-setup-retry.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004053.619301Z-stop-restarting-dev-server.txt
+docs/qa/2026-10-02/artifacts/ux/ux-004-demo-status-copy.jpg
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_-1728-1.json
+docs/qa/2026-10-02/artifacts/ux/built-server-output.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003957.463887Z-reload-guard-content-marker.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003741.931545Z-prepare-isolated-mirror.txt
+docs/qa/2026-10-02/artifacts/ux/ux-003-verifier-scroll-regions-320.jpg
+docs/qa/2026-10-02/artifacts/ux/desktop-home.jpg
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_tools_ftl-checker-390-005144797436.json
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_login-320-005126883759.json
+docs/qa/2026-10-02/artifacts/ux/20261003T004130.337915Z-stop-unconfigured-built-server.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004042.306831Z-guarded-server-v2-preflight.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003819.229011Z-server-preflight.txt
+docs/qa/2026-10-02/artifacts/ux/ux-001-mobile-menu-open.jpg
+docs/qa/2026-10-02/artifacts/ux/20261003T004150.831989Z-cross-browser-smoke.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T005056.866742Z-demo-status-source.txt
+docs/qa/2026-10-02/artifacts/ux/ready-server-metadata.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004205.747355Z-login-verify-control-source.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003706.795138Z-local-runner-and-routes.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003950.386865Z-reload-check.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003922.783060Z-owned-listener-id.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T004117.828789Z-guarded-built-server.txt
+docs/qa/2026-10-02/artifacts/ux/chrome-axe_contact-390-005121708715.json
+UX REPORT PENDING

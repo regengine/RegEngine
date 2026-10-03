@@ -409,6 +409,176 @@ def test_persists_custom_scenario_and_saved_run(tmp_path, monkeypatch):
     assert patch_resp.json()["owner"] == "Supplier A"
 
 
+def test_staging_commit_gate_rejects_blocked_evaluation_with_zero_issue_counts(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    result = _sandbox_result(blocked=False)
+    result["submission_blocked"] = True
+
+    response = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={"mode": "staging", "result": result},
+    )
+
+    assert response.status_code == 200, response.text
+    decision = response.json()
+    assert decision["allowed"] is False
+    assert decision["export_eligible"] is False
+    assert decision["next_state"] == "preflight"
+    assert "blocking rule failures" in " ".join(decision["reasons"])
+
+
+@pytest.mark.parametrize("kde_errors", [0, 1])
+def test_commit_gate_rejects_negative_fix_count(tmp_path, monkeypatch, kde_errors):
+    client = _client(tmp_path, monkeypatch)
+    result = _sandbox_result(blocked=False)
+    result["total_kde_errors"] = kde_errors
+
+    response = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={"mode": "staging", "result": result, "unresolved_fix_count": -1},
+    )
+
+    assert response.status_code == 422, response.text
+    assert any(
+        error["loc"] == ["body", "unresolved_fix_count"] and error["type"] == "greater_than_equal"
+        for error in response.json()["detail"]
+    )
+
+
+@pytest.mark.parametrize("unresolved_fix_count", [0, 1])
+def test_staging_commit_gate_preserves_clean_result_and_open_fix_boundary(tmp_path, monkeypatch, unresolved_fix_count):
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={
+            "mode": "staging",
+            "result": _sandbox_result(blocked=False),
+            "unresolved_fix_count": unresolved_fix_count,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    decision = response.json()
+    assert decision["allowed"] is (unresolved_fix_count == 0)
+    assert decision["export_eligible"] is False
+    assert decision["next_state"] == ("production_evidence" if unresolved_fix_count == 0 else "preflight")
+
+
+@pytest.mark.parametrize(
+    ("negative_count", "positive_count"),
+    [
+        ("total_kde_errors", "total_rule_failures"),
+        ("total_rule_failures", "total_kde_errors"),
+        ("non_compliant_events", "total_kde_errors"),
+    ],
+)
+def test_commit_gate_rejects_negative_result_counts_before_cancellation(
+    tmp_path, monkeypatch, negative_count, positive_count
+):
+    client = _client(tmp_path, monkeypatch)
+    result = _sandbox_result(blocked=False)
+    result[negative_count] = -1
+    result[positive_count] = 1
+
+    response = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={"mode": "staging", "result": result},
+    )
+
+    assert response.status_code == 422, response.text
+    assert any(
+        error["loc"] == ["body", "result"] and negative_count in error["msg"] for error in response.json()["detail"]
+    )
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+def test_preflight_commit_gate_allows_diagnosis_without_export(tmp_path, monkeypatch, blocked):
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={"mode": "preflight", "result": _sandbox_result(blocked=blocked)},
+    )
+
+    assert response.status_code == 200, response.text
+    decision = response.json()
+    assert decision["allowed"] is True
+    assert decision["export_eligible"] is False
+    assert decision["next_state"] == ("preflight" if blocked else "staging")
+
+
+@pytest.mark.parametrize("result_kind", ["omitted", "null", "empty"])
+def test_staging_commit_gate_preserves_optional_result_advisory_behavior(tmp_path, monkeypatch, result_kind):
+    client = _client(tmp_path, monkeypatch)
+    payload = {"mode": "staging"}
+    if result_kind == "null":
+        payload["result"] = None
+    elif result_kind == "empty":
+        result = _sandbox_result(blocked=False)
+        result.update(total_events=0, compliant_events=0, events=[])
+        payload["result"] = result
+
+    response = client.post("/api/v1/inflow-workbench/commit-gate", json=payload)
+
+    assert response.status_code == 200, response.text
+    decision = response.json()
+    assert decision["allowed"] is True
+    assert decision["export_eligible"] is False
+    assert decision["next_state"] == "production_evidence"
+
+
+@pytest.mark.parametrize("negative_count", ["total_kde_errors", "total_rule_failures", "non_compliant_events"])
+def test_saved_run_rejects_negative_result_count_before_persistence(tmp_path, monkeypatch, negative_count):
+    client = _client(tmp_path, monkeypatch)
+    result = _sandbox_result(blocked=False)
+    result[negative_count] = -1
+    persisted_runs = []
+
+    def capture_persistence(run):
+        persisted_runs.append(run)
+        return True
+
+    monkeypatch.setattr(workbench, "_db_save_run", capture_persistence)
+
+    response = client.post("/api/v1/inflow-workbench/runs", json={"result": result})
+
+    assert response.status_code == 422, response.text
+    assert persisted_runs == []
+    assert not any(tmp_path.glob("workbench*.json"))
+    assert any(
+        error["loc"] == ["body", "result"] and negative_count in error["msg"] for error in response.json()["detail"]
+    )
+
+
+def test_read_only_principal_cannot_request_commit_gate(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch, principal=_principal(scopes=["inflow.read"]))
+
+    response = client.post(
+        "/api/v1/inflow-workbench/commit-gate",
+        json={"mode": "staging", "result": _sandbox_result(blocked=False)},
+    )
+
+    assert response.status_code == 403, response.text
+
+
+@pytest.mark.parametrize("scopes", [["inflow.write"], ["*"]])
+@pytest.mark.parametrize("tenant_source", ["body", "header"])
+def test_commit_gate_rejects_cross_tenant_context(tmp_path, monkeypatch, scopes, tenant_source):
+    client = _client(tmp_path, monkeypatch, principal=_principal(scopes=scopes, tenant_id="tenant-a"))
+    payload = {"mode": "staging", "result": _sandbox_result(blocked=False)}
+    headers = {}
+    if tenant_source == "body":
+        payload["tenant_id"] = "tenant-b"
+    else:
+        headers["X-Tenant-ID"] = "tenant-b"
+
+    response = client.post("/api/v1/inflow-workbench/commit-gate", json=payload, headers=headers)
+
+    assert response.status_code == 403, response.text
+    assert "Tenant mismatch" in response.json()["detail"]
+
+
 def test_commit_gate_enforces_evidence_boundary(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
@@ -725,8 +895,9 @@ def test_demo_lot_0412_three_missing_ship_tos_blocks_readiness(tmp_path, monkeyp
     assert result["submission_blocked"] is True, "Submission must be blocked"
     assert result["non_compliant_events"] >= 3, "At least 3 non-compliant shipping events expected"
     assert result["total_kde_errors"] >= 3, "At least 3 KDE errors (ship_to_location) expected"
-    assert any("ship_to" in reason.lower() for reason in result["blocking_reasons"]), \
+    assert any("ship_to" in reason.lower() for reason in result["blocking_reasons"]), (
         "Blocking reasons must mention ship_to"
+    )
 
     client = _client(tmp_path, monkeypatch)
     run_resp = client.post(
@@ -744,19 +915,19 @@ def test_demo_lot_0412_three_missing_ship_tos_blocks_readiness(tmp_path, monkeyp
 
     # Readiness must be degraded, not fake green
     assert run["readiness"]["score"] < 100, "Readiness score must be below 100 (blocked condition)"
-    assert run["readiness"]["label"] in {"blocked", "needs remediation"}, \
+    assert run["readiness"]["label"] in {"blocked", "needs remediation"}, (
         f"Readiness label must indicate blocking, got: {run['readiness']['label']}"
+    )
 
     # Fix queue must have ≥3 items for the 3 shipping defects
     assert len(run["fix_queue"]) >= 3, f"Fix queue must have ≥3 items, got {len(run['fix_queue'])}"
     ship_to_fixes = [
-        item for item in run["fix_queue"]
+        item
+        for item in run["fix_queue"]
         if "ship" in item["title"].lower() and item["severity"] in {"blocked", "warning"}
     ]
-    assert len(ship_to_fixes) >= 3, \
-        f"At least 3 shipping fix items expected, found {len(ship_to_fixes)}"
+    assert len(ship_to_fixes) >= 3, f"At least 3 shipping fix items expected, found {len(ship_to_fixes)}"
 
     # Commit gate must remain closed
     assert run["commit_gate"]["allowed"] is False, "Commit gate must be closed"
     assert run["commit_gate"]["export_eligible"] is False, "Must NOT be export eligible"
-

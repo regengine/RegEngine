@@ -1,0 +1,36 @@
+UTC: 2026-10-03T00:45:40.374674+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py services/ingestion/tests/test_qa_sweep_20261002_contract.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-after.json
+Exit: 0
+Duration: 7.10s
+Timeout: False
+
+..................................................................xxxxxx [ 80%]
+xxxxx.....xxx....                                                        [100%]
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                       Stmts   Miss  Cover
+--------------------------------------------------------------
+services/ingestion/app/authz.py              157     68    57%
+services/ingestion/app/csv_templates.py      507    208    59%
+services/ingestion/app/webhook_models.py     152      0   100%
+--------------------------------------------------------------
+TOTAL                                        816    276    66%
+Coverage JSON written to file docs/qa/2026-10-02/artifacts/backend/coverage-ingest-after.json
+=========================== short test summary info ============================
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[inf] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[Infinity] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[1e309] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[nan] - BE-002: transformation input quantity accepts NaN/infinity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[inf] - BE-002: transformation input quantity accepts NaN/infinity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[1e309] - BE-002: transformation input quantity accepts NaN/infinity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[quantity] - BE-003: duplicate CSV columns silently discard an original quantity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[ Quantity ] - BE-003: duplicate CSV columns silently discard an original quantity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[\xff\xd8\xff\xe0] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[column\nCaf\xe9\n] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[\xff\xfec\x00o\x00l\x00] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+75 passed, 14 xfailed in 6.26s

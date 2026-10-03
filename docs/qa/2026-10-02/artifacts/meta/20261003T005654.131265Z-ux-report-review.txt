@@ -1,0 +1,88 @@
+UTC: 2026-10-03T00:56:54.131265+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat docs/qa/2026-10-02/UX-REPORT.md
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+# UX QA pass — 2026-10-02
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+Resumed 2026-10-03 00:36 UTC. UI exploration finished 00:54 UTC. This pass found **3 Medium and 2 Low** issues. No product code changed.
+
+## Method and environment
+
+Risk ranked journeys were anonymous entry, login, public export verification, a synthetic compliance demo, contact recovery, and the public FTL checker. These connect evaluation to the ingest/evidence/export spine. A timeboxed three-charter pass combined axe 4.13.0 WCAG 2.2 AA rules, native keyboard actions, browser accessibility semantics, responsive layouts, and Nielsen's ten heuristics.
+
+The isolated copy in `/private/tmp/regengine-qa-ux-u2059hm8` excludes `.env*`, credential files, and `.git`. It reused the frontend pass's successful production build. The actual Next app ran on `127.0.0.1:3104` with scrubbed environment, a hardened Node network/file guard, and an ephemeral synthetic CSRF value generated in memory and never recorded. No backend, database, billing, deployed environment, or actual credentials were used.
+
+All three installed Playwright browsers failed before navigation: Chromium failed a macOS MachPortRendezvous permission check; Firefox aborted; WebKit aborted. These are environment blocks, not product failures. [Cross-browser attempt](artifacts/ux/20261003T004150.831989Z-cross-browser-smoke.txt), [structured launch outcomes](artifacts/ux/smoke-results.json).
+
+Managed Chrome through CUA successfully rendered the **real built product**. Its separate localhost proxy on port 3105 added axe instrumentation, replaced API responses with synthetic 401/503 results, removed external preconnects, and enforced same-origin resource/connect CSP. External fonts were denied, so fallback font rendering is an evidence limitation. The proxy removed `X-Frame-Options` only in this test harness to permit an actual same-origin product iframe at 320 or 390 CSS pixels. Native viewport override reported success but had no effect; the iframe is a genuine constrained viewport, **not mobile device emulation**. No external navigation or real form delivery occurred. A later review added same-origin-only server redirect handling; the exercised routes showed no off-host redirects, and the final redirect guard passed a no-network unit probe.
+
+The user's Chrome extensions injected unrelated overlays. Raw axe reports retain this evidence; the Adobe `#aiFabShadowRoot` nested-interactive violation is explicitly excluded from product findings. This pass did not alter extensions or browser security settings.
+
+## Charters and outcomes
+
+| Charter | UTC session | Scope and outcome |
+|---|---|---|
+| UX-C1 — understand and enter the product | 00:44–00:47 | Homepage, login, proof verifier; readable heading hierarchy, named landmarks, explicit synthetic data, required-email native validation, and a recoverable synthetic login 503. |
+| UX-C2 — operate without a mouse and at narrow widths | 00:48–00:50 | Mobile menu open/close/focus, verifier upload focus, actual 320/390px app frames, axe; UX-001, UX-002, and UX-003 reproduced. |
+| UX-C3 — failure, empty, and status states | 00:50–00:52 | Contact required fields and synthetic 503 retain entries and expose alert; demo status text misleading (UX-004); FTL zero-match search lacks recovery feedback (UX-005). |
+
+Durable keyboard observations are in [manual-keyboard-evidence.json](artifacts/ux/manual-keyboard-evidence.json). Native browser commands and their outcomes are appended to [UX-SESSION-LOG.md](UX-SESSION-LOG.md). HTTP request timestamps are preserved in both local proxy logs.
+
+## Findings
+
+| ID | Severity | Group | Title | Exact repro | Expected vs actual | Evidence | Suggested fix |
+|---|---|---|---|---|---|---|---|
+| UX-001 | Medium | UX | Mobile navigation modal does not contain focus or close on Escape | At a 390px viewport, open `/`; activate **Open navigation menu**; Tab to **Close menu**; press Escape; then Shift+Tab. | Expected: Escape closes and restores focus; Tab/Shift+Tab stay within an open modal. Actual: Escape does nothing; Shift+Tab focuses the obscured background hamburger while `aria-modal=true` and drawer remains open. | `frontend/src/components/layout/header/MobileMenu.tsx:32`, `:51`, `:59`; [keyboard evidence](artifacts/ux/manual-keyboard-evidence.json); [screenshot](artifacts/ux/ux-001-mobile-menu-open.jpg). | Use the existing accessible Dialog primitive, or implement initial focus, focus containment, Escape close, and focus restoration together. |
+| UX-002 | Medium | UX | Export upload control has no visible keyboard focus | Open `/verify`; focus the **Download verify_chain.py** link inside the verifier explanation; press Tab to the file input. | Expected: a visible focus indicator around the file-picker/drop zone. Actual: `document.activeElement.id` is `verify-bundle-file`; its outline is clipped inside a 1×1px `sr-only` element, while the visible label has no outline or shadow. | `frontend/src/app/verify/page.tsx:223`, `:233`, `:238`; [keyboard evidence](artifacts/ux/manual-keyboard-evidence.json); [focused control screenshot](artifacts/ux/ux-002-verifier-invisible-focus.jpg). | Add a focus-within visible ring to the drop zone or render a visible keyboard-focusable file-picker control. |
+| UX-003 | Medium | UX | Narrow verifier code/table scroll regions are not keyboard focusable | Render `/verify` at 320 CSS pixels; run axe tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`; inspect `scrollable-region-focusable`. | Expected: keyboard users can reach and scroll overflowing code and the manifest table. Actual: axe reports six serious WCAG 2.1.1/2.1.3 nodes: two `pre` blocks, three command `code` blocks, and the table wrapper. | `frontend/src/app/verify/page.tsx:519`, `:547`, `:575`; `frontend/src/components/ui/table.tsx:17`; [axe report](artifacts/ux/chrome-axe_verify-320-004936758162.json); [repeat report](artifacts/ux/chrome-axe_verify-320-005144063706.json); [screenshot](artifacts/ux/ux-003-verifier-scroll-regions-320.jpg). | Give overflowing regions an accessible name and focusability where needed, with visible focus; verify actual arrow-key scrolling across browsers. Finding is automated; cross-browser keyboard scrolling was not verified. |
+| UX-004 | Low | UX | Synthetic demo announces a backend outage unconditionally | Open `/demo` with no account. | Expected: clearly label a deliberate synthetic demo without reporting an unmeasured outage. Actual: the static page always renders **Sample Data — Backend unavailable. Data will appear once services are connected**, while showing an intentionally populated fictional workspace. | `frontend/src/app/demo/page.tsx:86`; `frontend/src/components/control-plane/demo-banner.tsx:10`; [screenshot](artifacts/ux/ux-004-demo-status-copy.jpg). | Separate the intentional demo label from the unavailable-service fallback message; select wording using an explicit reason. |
+| UX-005 | Low | UX | FTL search has no zero-results explanation or recovery action | Open `/tools/ftl-checker`; enter `unlikely-nonexistent-product-qa` in **Search products**. | Expected: an explicit no-matches message and clear-search/filter recovery. Actual: category list becomes blank, still shows **0 categories selected**, and disables **Check Listed Groupings** without explaining the empty list. | `frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:779`, `:824`; [screenshot](artifacts/ux/ftl-empty-search-390.jpg). | Render a no-matches empty state with a clear-search action; announce changed result counts politely. |
+
+## Automated accessibility and responsive coverage
+
+Twelve axe runs covered six public routes and ten distinct route/viewport pairs. Repeat homepage and narrow-verifier runs were intentional. All observed document widths equaled their viewport widths (no whole-page horizontal overflow). The six nonfocusable verifier scroll regions are one repeated rule finding, not twelve separate defects.
+
+| Actual app route | Viewport(s), CSS px | Product axe violations |
+|---|---|---|
+| `/` | 1728, 390 | 0; extension-only nested-interactive excluded |
+| `/login` | 1728, 320 | 0 |
+| `/verify` | 1728, 320 | Desktop 0; narrow six `scrollable-region-focusable` nodes |
+| `/contact` | 1728, 390 | 0 |
+| `/demo` | 390 | 0 |
+| `/tools/ftl-checker` | 390 | 0 |
+
+Raw reports, including incomplete/manual-review results, are linked by [axe-summary.json](artifacts/ux/axe-summary.json). A zero count is not a WCAG certification. Native accessibility trees confirmed named main/navigation regions, associated login/contact labels, email-required validation, a disabled empty verifier action, and a login failure `role=alert` with `aria-live=polite`. Actual VoiceOver/NVDA speech was not tested.
+
+## Nielsen review
+
+| Heuristic | Observed assessment |
+|---|---|
+| Visibility of system status | Login/contact errors are visible and preserve input; synthetic demo misstates outage (UX-004); zero-match FTL search lacks feedback (UX-005). |
+| Match to users' language | Verifier accurately distinguishes self-consistency from publisher identity; CTE/KDE terminology remains specialized but explained near key workflows. |
+| User control and freedom | Clear verifier action is present after file selection in source; modal keyboard escape/control fails UX-001. No real file upload was attempted. |
+| Consistency and standards | Shared fields/buttons/headings are consistent; mobile modal semantics exceed its keyboard behavior (UX-001). |
+| Error prevention | Empty email/name native required checks stop submission; empty verifier and unselected FTL action disabled. |
+| Recognition rather than recall | Menus, headings, explicit sample indicators, and nearby offline verification instructions support recognition. |
+| Flexibility and efficiency | Keyboard accessibility has UX-001/002/003 gaps; device and screen-reader coverage remain incomplete. |
+| Minimal presentation | Responsive homepage and demo reflow without page overflow; copy is dense on narrow verifier, but describes a material trust limitation. |
+| Error diagnosis and recovery | Contact 503 gives retry/direct-email guidance and retains fields; login presents a live alert. FTL zero-results recovery is missing (UX-005). |
+| Help and documentation | Verifier includes offline commands, examples and manifest fields; scrolling these on a narrow keyboard viewport needs UX-003. |
+
+## Performance, console and limits
+
+Instrumented localhost observations, not a Lighthouse score: repeated desktop homepage LCP was 348ms then 196ms, CLS 0; desktop login 320ms, verifier 188ms, contact 300ms. Frame LCP ranged 532–968ms with CLS 0. These run under a warmed local production build, same-origin test proxy, axe instrumentation, desktop Chrome extensions, blocked external fonts and synthetic APIs. They do not establish mobile, field, deployment, or production performance. Twelve captured initial page `error` arrays were empty. Intentional CSP rejections and synthetic API 401/503 responses are environment evidence, not product regressions.
+
+Not tested: true Chromium/Firefox/WebKit E2E compatibility (launch blocked), actual mobile devices/zoom/orientation, VoiceOver speech, authenticated ingestion/export flows or persistent data, real email/passkeys/integrations, uploaded-bundle completion, sustained loading visuals, Lighthouse/TBT/INP, production font performance. Product validation and legal accuracy were outside this UI pass. Public browser screenshots are genuine product output, not mock screens.
+
+## Cleanup and reproducibility
+
+Six QA-created browser tabs were closed and viewport override reset at 00:53:55–00:54 UTC. Cooperative wrappers stopped the built server 3104 and proxy 3105; `lsof` confirmed no listeners at 00:54:07 UTC. **Residual cleanup:** the original unused Next dev process **PID 23587 on 127.0.0.1:3102 remains running**. Sandbox permission denied signaling it. Sending Ctrl-C to its owning tool session stopped the logger with KeyboardInterrupt but did not stop the child, so its former timeout no longer applies. The orchestrator must terminate this specific QA process. No browser tests used that server. See [cleanup readback](artifacts/ux/20261003T005406.952529Z-listener-cleanup-check.txt).
+
+The Playwright script is retained for rerun in a browser-capable runner, and the proxy/axe/screenshot harness is QA-only. Temporary mirror paths and stop filenames record this run; recreate the mirror or update the base path and use fresh stop filenames for a rerun. The report's blocked launch is not a successful cross-browser result.

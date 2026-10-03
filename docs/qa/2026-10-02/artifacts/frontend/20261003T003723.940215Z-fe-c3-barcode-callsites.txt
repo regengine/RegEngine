@@ -1,0 +1,416 @@
+UTC: 2026-10-03T00:37:23.940215+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; ranges={"frontend/src/lib/gs1-parser.test.ts":(1,240),"frontend/src/app/dashboard/receiving/page.tsx":(135,205),"frontend/src/components/mobile/FieldCaptureClient.tsx":(175,225),"frontend/src/app/tools/scan/page.tsx":(1,110),"docs/qa/2026-10-02/PLAN.md":(1,150)}; [(print("FILE",p),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p).read_text().splitlines(),1) if lo<=i<=hi))) for p,(lo,hi) in ranges.items()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE frontend/src/lib/gs1-parser.test.ts
+1: import { describe, it, expect } from 'vitest';
+2: import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+3: 
+4: describe('GS1-128 Parser', () => {
+5:     it('should parse a standard GS1-128 with brackets', () => {
+6:         const raw = "(01)10614141000019(10)TLC-3489";
+7:         const result = parseGS1(raw);
+8:         expect(result.gtin).toBe("10614141000019");
+9:         expect(result.tlc).toBe("TLC-3489");
+10:         expect(result.sourceFormat).toBe("gs1_ai");
+11:         expect(result.isValidGTIN).toBe(true);
+12:     });
+13: 
+14:     it('should parse a literal GS1-128 without brackets', () => {
+15:         const raw = "011061414100001910LOT-BETA-77";
+16:         const result = parseGS1(raw);
+17:         expect(result.gtin).toBe("10614141000019");
+18:         expect(result.tlc).toBe("LOT-BETA-77");
+19:     });
+20: 
+21:     it('should handle barcodes with only GTIN', () => {
+22:         const raw = "0110614141000019";
+23:         const result = parseGS1(raw);
+24:         expect(result.gtin).toBe("10614141000019");
+25:         expect(result.tlc).toBeUndefined();
+26:         expect(result.isValidGTIN).toBe(true);
+27:     });
+28: 
+29:     it('should handle barcodes with only TLC (fallback match)', () => {
+30:         const raw = "10TLC-9999";
+31:         const result = parseGS1(raw);
+32:         expect(result.tlc).toBe("TLC-9999");
+33:     });
+34: 
+35:     it('should parse AI 17 (expiry), AI 13 (pack date), and AI 21 (serial)', () => {
+36:         const raw = "(01)10614141000019(17)260930(13)260801(21)SN-4458";
+37:         const result = parseGS1(raw);
+38: 
+39:         expect(result.gtin).toBe("10614141000019");
+40:         expect(result.expiryDate).toBe("2026-09-30");
+41:         expect(result.packDate).toBe("2026-08-01");
+42:         expect(result.serial).toBe("SN-4458");
+43:     });
+44: 
+45:     it('should parse AI fields separated by GS separator characters', () => {
+46:         const raw = `011061414100001910LOT-99${String.fromCharCode(29)}1726093021SER-9`;
+47:         const result = parseGS1(raw);
+48: 
+49:         expect(result.gtin).toBe("10614141000019");
+50:         expect(result.tlc).toBe("LOT-99");
+51:         expect(result.expiryDate).toBe("2026-09-30");
+52:         expect(result.serial).toBe("SER-9");
+53:     });
+54: 
+55:     it('should parse GS1 Digital Link URLs', () => {
+56:         const raw = "https://id.example.com/01/09506000134352/10/LOT-2026-44/21/SER-778/17/260930";
+57:         const result = parseGS1(raw);
+58: 
+59:         expect(result.sourceFormat).toBe("digital_link");
+60:         expect(result.gtin).toBe("09506000134352");
+61:         expect(result.tlc).toBe("LOT-2026-44");
+62:         expect(result.serial).toBe("SER-778");
+63:         expect(result.expiryDate).toBe("2026-09-30");
+64:         expect(result.isValidGTIN).toBe(true);
+65:     });
+66: 
+67:     it('should parse GS1 Digital Link path-only payloads', () => {
+68:         const raw = "/01/09506000134352/10/LOT%2FALPHA/21/SN-001";
+69:         const result = parseGS1(raw);
+70: 
+71:         expect(result.sourceFormat).toBe("digital_link");
+72:         expect(result.gtin).toBe("09506000134352");
+73:         expect(result.tlc).toBe("LOT/ALPHA");
+74:         expect(result.serial).toBe("SN-001");
+75:     });
+76: });
+77: 
+78: describe('GTIN check digit validation', () => {
+79:     it('accepts valid GTIN-14 values', () => {
+80:         expect(isValidGTINCheckDigit("09506000134352")).toBe(true);
+81:         expect(isValidGTINCheckDigit("10614141000019")).toBe(true);
+82:     });
+83: 
+84:     it('rejects invalid GTIN-14 values', () => {
+85:         expect(isValidGTINCheckDigit("09506000134359")).toBe(false);
+86:         expect(isValidGTINCheckDigit("10614141000011")).toBe(false);
+87:         expect(isValidGTINCheckDigit("ABC9506000134352")).toBe(false);
+88:     });
+89: });
+FILE frontend/src/app/dashboard/receiving/page.tsx
+135:         toast({ title: 'Sample Receiving Session Started', description: 'Two expected items are ready to scan.' });
+136:     }, [poNumber, supplier, toast]);
+137: 
+138:     /* ─── Add expected item ─── */
+139:     const addExpectedItem = useCallback(() => {
+140:         if (!session || (!manualGtin && !manualLot)) return;
+141:         const item: LineItem = {
+142:             id: `exp-${Date.now()}`,
+143:             gtin: manualGtin,
+144:             lotCode: manualLot,
+145:             productName: manualProduct || `Product ${manualGtin || manualLot}`,
+146:             quantity: parseInt(manualQty) || 1,
+147:             expiryDate: '',
+148:             status: 'pending',
+149:         };
+150:         setSession({ ...session, expectedItems: [...session.expectedItems, item] });
+151:         setManualGtin(''); setManualLot(''); setManualProduct(''); setManualQty('1');
+152:         setShowAddExpected(false);
+153:     }, [session, manualGtin, manualLot, manualProduct, manualQty]);
+154: 
+155:     /* ─── Handle scan (keyboard wedge or manual) ─── */
+156:     const handleScan = useCallback((raw: string) => {
+157:         if (!session) return;
+158:         const parsed = parseGS1(raw);
+159:         const scannedGtin = parsed.gtin || '';
+160:         const scannedLot = parsed.tlc || '';
+161:         // The input invites typing a bare GTIN or lot code, but parseGS1 only
+162:         // extracts values from AI-encoded / Digital Link strings — so a user
+163:         // typing exactly what the Expected Items list displays never matched
+164:         // and every scan landed in Unexpected Items. scanMatchesItem also
+165:         // compares the raw string directly (matrix unit-tested in
+166:         // lib/scan-match.test.ts).
+167:         const scanCandidate = { gtin: parsed.gtin, lot: parsed.tlc, raw };
+168:         const now = new Date().toISOString();
+169: 
+170:         // Try to match against expected items
+171:         const updated = { ...session };
+172:         let matched = false;
+173: 
+174:         for (const item of updated.expectedItems) {
+175:             if (item.status !== 'pending') continue;
+176:             if (scanMatchesItem(item, scanCandidate)) {
+177:                 item.status = 'scanned';
+178:                 item.scannedAt = now;
+179:                 if (parsed.expiryDate) item.expiryDate = parsed.expiryDate;
+180:                 matched = true;
+181:                 toast({ title: '✓ Match', description: item.productName });
+182:                 break;
+183:             }
+184:         }
+185: 
+186:         if (!matched) {
+187:             // Unexpected scan — add to unexpected list
+188:             updated.unexpectedScans.push({
+189:                 id: `unx-${Date.now()}`,
+190:                 gtin: scannedGtin,
+191:                 lotCode: scannedLot || raw,
+192:                 productName: scannedGtin ? `GTIN ${scannedGtin}` : `Scan: ${raw.slice(0, 30)}`,
+193:                 quantity: 1,
+194:                 expiryDate: parsed.expiryDate || '',
+195:                 status: 'mismatch',
+196:                 scannedAt: now,
+197:             });
+198:             toast({ title: '⚠ Unexpected Item', description: raw.slice(0, 40), variant: 'destructive' });
+199:         }
+200: 
+201:         setSession(updated);
+202:         setScanInput('');
+203:         scanInputRef.current?.focus();
+204:     }, [session, toast]);
+205: 
+FILE frontend/src/components/mobile/FieldCaptureClient.tsx
+175:                 method: 'POST',
+176:                 credentials: 'include',
+177:                 headers: {
+178:                     'Content-Type': 'application/json',
+179:                 },
+180:                 body: JSON.stringify(eventPayload),
+181:             });
+182: 
+183:             if (!response.ok) {
+184:                 const detail = await response.text();
+185:                 throw new Error(detail || `Ingest failed with status ${response.status}`);
+186:             }
+187:         },
+188:         [effectiveTenantId],
+189:     );
+190: 
+191:     const handleScan = async (rawScan: string) => {
+192:         const parsed = parseGS1(rawScan);
+193:         const productDescription = resolveProductDescription(parsed, catalogByGtin);
+194: 
+195:         const parsedState: ParsedScanState = {
+196:             cteType: selectedCTEType,
+197:             raw: rawScan,
+198:             gtin: parsed.gtin,
+199:             traceabilityLotCode: parsed.tlc,
+200:             serial: parsed.serial,
+201:             expiryDate: parsed.expiryDate,
+202:             packDate: parsed.packDate,
+203:             productDescription,
+204:             validGTIN: parsed.isValidGTIN,
+205:         };
+206:         setLastParsedScan(parsedState);
+207: 
+208:         const timestamp = new Date().toLocaleTimeString();
+209:         setScannedData((prev) => [`[${timestamp}] ${cteLabel}: ${rawScan}`, ...prev]);
+210: 
+211:         // Build the ingest payload so we can replay it offline
+212:         const traceabilityLotCode =
+213:             parsedState.traceabilityLotCode ||
+214:             parsedState.serial ||
+215:             parsedState.gtin ||
+216:             `SCAN-${Date.now()}`;
+217: 
+218:         const offlinePayload = {
+219:             source: 'mobile_scanner_pwa',
+220:             tenant_id: effectiveTenantId,
+221:             events: [
+222:                 {
+223:                     cte_type: parsedState.cteType,
+224:                     traceability_lot_code: traceabilityLotCode,
+225:                     product_description: parsedState.productDescription,
+FILE frontend/src/app/tools/scan/page.tsx
+1: 'use client';
+2: 
+3: import { useState, useRef, useEffect } from 'react';
+4: import Link from 'next/link';
+5: import { Lock } from 'lucide-react';
+6: import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
+7: import { EmailGate } from '@/components/tools/EmailGate';
+8: import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+9: import type { GS1ParsedData } from '@/lib/gs1-parser';
+10: import styles from './scan.module.css';
+11: 
+12: export default function ScanPage() {
+13:   const [parsed, setParsed] = useState<GS1ParsedData | null>(null);
+14:   const [rawBarcode, setRawBarcode] = useState<string>('');
+15:   const [manualInput, setManualInput] = useState<string>('');
+16:   const [scanHistory, setScanHistory] = useState<string[]>([]);
+17:   const [isScanning, setIsScanning] = useState<boolean>(false);
+18:   const [cameraError, setCameraError] = useState<string | null>(null);
+19:   const [eventType, setEventType] = useState<string>('Receiving');
+20:   const [quantity, setQuantity] = useState<string>('');
+21:   const [uom, setUom] = useState<string>('cases');
+22:   const [locationGLN, setLocationGLN] = useState<string>('');
+23: 
+24:   const scannerRef = useRef<HTMLDivElement>(null);
+25:   const qrCodeRef = useRef<any>(null);
+26: 
+27:   const handleParse = (barcode: string): void => {
+28:     if (!barcode.trim()) return;
+29: 
+30:     const result = parseGS1(barcode);
+31:     setParsed(result);
+32:     setRawBarcode(barcode);
+33:     setManualInput('');
+34:     setCameraError(null);
+35: 
+36:     setScanHistory((prev) => {
+37:       const updated = [barcode, ...prev].slice(0, 5);
+38:       return updated;
+39:     });
+40:   };
+41: 
+42:   const startCamera = async (): Promise<void> => {
+43:     if (!scannerRef.current) return;
+44: 
+45:     try {
+46:       setCameraError(null);
+47:       const { Html5Qrcode } = await import('html5-qrcode');
+48:       const html5qrcode = new Html5Qrcode('scanner-container');
+49: 
+50:       qrCodeRef.current = html5qrcode;
+51: 
+52:       await html5qrcode.start(
+53:         { facingMode: 'environment' },
+54:         { fps: 10, qrbox: { width: 250, height: 250 } },
+55:         (decodedText: string) => {
+56:           handleParse(decodedText);
+57:         },
+58:         () => {}
+59:       );
+60: 
+61:       setIsScanning(true);
+62:     } catch (err) {
+63:       const errorMsg =
+64:         err instanceof Error ? err.message : 'Camera access denied or unavailable';
+65:       setCameraError(errorMsg);
+66:       setIsScanning(false);
+67:     }
+68:   };
+69: 
+70:   const stopCamera = async (): Promise<void> => {
+71:     if (qrCodeRef.current) {
+72:       try {
+73:         await qrCodeRef.current.stop();
+74:         await qrCodeRef.current.clear();
+75:       } catch (err) {
+76:         console.error('Error stopping camera:', err);
+77:       }
+78:       qrCodeRef.current = null;
+79:     }
+80:     setIsScanning(false);
+81:   };
+82: 
+83:   useEffect(() => {
+84:     return () => {
+85:       stopCamera();
+86:     };
+87:   }, []);
+88: 
+89:   const isCompatible = parsed ? isFSMACompatible(parsed) : false;
+90: 
+91:   const formatDate = (dateStr?: string): string => {
+92:     if (!dateStr) return 'Not provided';
+93:     try {
+94:       const date = new Date(dateStr);
+95:       return date.toLocaleDateString('en-US', {
+96:         year: 'numeric',
+97:         month: 'short',
+98:         day: 'numeric',
+99:       });
+100:     } catch {
+101:       return dateStr;
+102:     }
+103:   };
+104: 
+105:   return (
+106:     <EmailGate toolName="scan">
+107:       <FreeToolPageShell
+108:         title="Scan & Ingest"
+109:         subtitle="Scan a GS1 barcode with your camera or paste a barcode string to extract FSMA-compatible traceability data"
+110:         relatedToolIds={['cte-mapper', 'kde-checker', 'ftl-checker']}
+FILE docs/qa/2026-10-02/PLAN.md
+1: # RegEngine QA sweep — 2026-10-02
+2: 
+3: PR: opened by orchestrator
+4: 
+5: CI status: pending at time of writing
+6: 
+7: ## Scope and identity
+8: 
+9: - Checkout: `/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine`.
+10: - Branch: `qa/2026-10-02-sweep`; baseline HEAD `0927b85a` (full SHA in the scope-map artifact).
+11: - Origin: `https://github.com/regengine/RegEngine.git`. Identity verified locally; no remote queries.
+12: - Initial interrupted inventory: 2026-10-02 23:46 UTC. Resumed: 2026-10-03 00:35 UTC. The directory retains the requested local date, 2026-10-02 (America/Los_Angeles).
+13: - Preserve all earlier artifacts. Timebox resumed work to approximately 60–90 minutes, prioritizing production-spine risk over exhaustive suite count.
+14: - Three separate groups apply: Backend QA, Frontend QA, UX QA. Each has its own pass report, UTC command log, charters, and artifact directory. Passes can execute concurrently with disjoint ownership. Backend security review is a supporting lane, not a fourth substitute group.
+15: 
+16: ## Repository map
+17: 
+18: | Surface | Location | QA significance |
+19: | --- | --- | --- |
+20: | Consolidated FastAPI application | `server/main.py`, route policy/security manifests | Actual mounted surface, middleware ordering, auth policy |
+21: | Ingestion and exports | `services/ingestion/app/` | CSV/webhook/EPCIS normalization, validation, receipts, export integrity |
+22: | Shared evidence and tenancy | `services/shared/` | Canonical persistence, auth, tenant context, hash chains, retry/idempotency |
+23: | Administration | `services/admin/` | Users, sessions, API keys, privileges, audit records |
+24: | Compliance | `services/compliance/`, shared rules | Deterministic validation and explainable results |
+25: | Other service packages | `services/graph/`, `nlp/`, `scheduler/` | Secondary scope; do not confuse package boundaries with separate deployed services |
+26: | UI | `frontend/src/` | Next.js App Router, authenticated dashboard, ingestion workbench, public onboarding |
+27: | Existing tests | `tests/`, service test directories, `frontend/src/**/*.{test,spec}.*`, `frontend/tests/e2e/` | Unit/contract/security foundations plus expensive integration journeys |
+28: | Dependencies | `requirements.in`, `requirements.lock`, `frontend/package{,-lock}.json` | Reproducible install and advisory evidence |
+29: | Architecture guidance | `README.md`, `REPO_PURPOSE.md`, `ARCHITECTURE.md`, `CANONICAL_OWNERSHIP.md` | Current purpose; verify older implementation claims against source |
+30: 
+31: The shared default checkout and team commit rules are superseded by this task's explicit worktree and orchestrator handoff. `docs/specs/FSMA_204_MVP_SPEC.md` labels itself legacy; its older Neo4j/Kafka and route claims are not assumed current.
+32: 
+33: ## Risk ranking
+34: 
+35: Impact and likelihood use a 1–5 scale. Scores are planning judgments, not observed defect counts.
+36: 
+37: | Rank | Area | Impact | Likelihood | Score | Reason |
+38: | --- | --- | ---: | ---: | ---: | --- |
+39: | 1 | Tenant isolation and authorization | 5 | 4 | 20 | Shared infrastructure and many router guards; one wrong scope can expose another customer's records |
+40: | 2 | Ingestion validation and evidence integrity | 5 | 4 | 20 | Malformed boundary values or false successful writes compromise the product's primary guarantee |
+41: | 3 | Retry, duplicate submission and export correctness | 5 | 3 | 15 | Replays/concurrency can duplicate evidence; exports must accurately represent persisted events |
+42: | 4 | Build/dependency reproducibility and client contracts | 4 | 4 | 16 | An unreproducible build blocks every release and limits runtime verification |
+43: | 5 | Main user journeys and error recovery | 4 | 3 | 12 | Upload/login/validation failures can prevent a customer completing the workflow |
+44: | 6 | Keyboard, screen-reader semantics, responsive layouts | 3 | 4 | 12 | Dense forms and dashboard navigation can exclude users or hide critical actions |
+45: | 7 | Resource use, latency and optional modules | 3 | 3 | 9 | Useful supporting evidence after core correctness; local performance cannot establish production SLOs |
+46: 
+47: ## Methods and pass charters
+48: 
+49: Use the test pyramid: many isolated unit/schema/security checks, a smaller local API contract layer, and a few realistic browser journeys. Preserve existing failures. New defect witnesses are strict expected failures/skips carrying a finding ID; never loosen a product assertion to make a suite green. Distinguish verified bugs, source-supported risks, and unavailable checks.
+50: 
+51: ### Pass 1 — Backend QA
+52: 
+53: - **BE-C1, 15 minutes:** challenge tenant/auth boundary decisions using existing negative-path tests and an explicit permissions matrix. Trace guards through actual router mounting; review OWASP API Top 10 categories with evidence and residual limits.
+54: - **BE-C2, 20 minutes:** test CSV/schema equivalence classes and boundaries (empty, malformed, overflow, non-finite numeric values), canonical evidence and retry/idempotency behavior. Use property-based cases where a stable pure-function boundary exists; stub I/O and prohibit remote connections.
+55: - **BE-C3, 10 minutes:** run static analysis/type checks on meaningful core surfaces and inspect dependency audit feasibility. Record unresolved imports/tooling instead of presenting incomplete checks as clean.
+56: - Run existing selected suites with coverage before adding tests; repeat the identical measured source set plus new tests after. Publish denominators, line/branch differences and exclusions. Full database-backed RLS and concurrency cannot be inferred from mocks.
+57: 
+58: ### Pass 2 — Frontend QA
+59: 
+60: - **FE-C1, 15 minutes:** reproduce the checked-in dependency install and run lint, build/type checks, unit/component suites with coverage.
+61: - **FE-C2, 15 minutes:** inspect and test auth/session, client API/error handling and traceability input boundaries. Add minimal test-only witnesses as useful.
+62: - **FE-C3, 10 minutes, shared browser evidence:** local main-flow Playwright smoke on Chromium, Firefox and WebKit; capture console/network errors and performance observations. UX owns browser orchestration to avoid duplicate server/package installs.
+63: - Exact locked dependencies are essential for faithful results. If public packages are unavailable, do not silently substitute versions or report unrelated mock screens as the product. Record install blockers and continue executable source-level checks.
+64: 
+65: ### Pass 3 — UX QA
+66: 
+67: - **UX-C1, 15 minutes:** discover, sign in, navigate to ingestion and understand validation results; inspect loading/empty/error feedback and recovery. Use synthetic fixtures only.
+68: - **UX-C2, 15 minutes:** axe WCAG 2.2 A/AA plus manual keyboard focus, labels, headings, landmarks and screen-reader semantics. Automated checks do not certify WCAG compliance; actual assistive-technology speech output is a separate limitation.
+69: - **UX-C3, 10 minutes:** mobile and desktop responsive layouts, Nielsen's ten heuristics, action clarity and representative screenshots. Capture meaningful local render/performance evidence if the app can run; otherwise clearly label static review and unavailable screenshots.
+70: 
+71: ## Execution and evidence controls
+72: 
+73: - Use `scripts/run_logged.py GROUP LABEL -- COMMAND` for all shell work after bootstrap. It records UTC, command, working directory, exit, elapsed duration, timeout and redacted output. Keep per-group logs and link them from `SESSION-LOG.md`.
+74: - Scrub inherited environment variables; never open `.env` or credential files. Disable dotenv loading and telemetry in test processes. Prevent browser/server outbound calls; do not allow local defaults to contact real external services.
+75: - Network allowed only for installing dependencies and fetching public packages/browsers. Advisory API calls, CodeRabbit and Jev calls are excluded by this restriction. Report dependency audit limits explicitly.
+76: - No product changes, CI secret-scan changes, migrations, deploy configuration, environment-file edits, production/database/billing access, secret rotation, commits, pushes, PR operations, or changes to the excluded existing PR/branch.
+77: - Store compact useful screenshots/reports under `artifacts/`; refer to source locations and test names from findings. Do not commit caches, dependencies, virtualenvs, traces containing sensitive state, or huge generated HTML reports.
+78: 
+79: ## Completion and out-of-scope evidence
+80: 
+81: Produce `PLAN.md`, `SESSION-LOG.md`, `FINDINGS.md`, `COVERAGE.md`, `SUMMARY.md`, group reports/logs and focused tests. Independently review finding severity, repros, expected failures, scope and artifact hygiene. Leave everything uncommitted for orchestrator review, secret scan, commit, push and creation of the single draft PR. PR URL and CI result are unavailable until that handoff occurs.
+82: 
+83: Out of scope: deployed behavior, live RLS/database migrations, real email/payment/provider integrations, real credentials, production load/penetration testing, full WCAG certification, external review APIs, and already-known leaked-key investigation. Missing coverage of these surfaces is a limitation, not a passing result.

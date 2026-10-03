@@ -1,0 +1,27 @@
+UTC: 2026-10-03T00:45:59.647569+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_auth_1338.py services/shared/tests/test_permissions.py services/shared/tests/test_tenant_isolation.py services/shared/tests/test_tenant_context_set_guc.py tests/shared/test_idempotency_middleware_1338.py tests/shared/test_canonical_event_idempotency_key.py tests/shared/test_webhook_security.py tests/qa_sweep_20261002 -k 'not real_redis' --cov=shared.auth --cov=shared.idempotency --cov=shared.webhook_security --cov=shared.permissions --cov=shared.canonical_event --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-after.json
+Exit: 0
+Duration: 2.89s
+Timeout: False
+
+........................................................................ [ 33%]
+........................................................................ [ 66%]
+...................................................................x..x  [100%]
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                  Stmts   Miss  Cover
+---------------------------------------------------------
+services/shared/auth.py                 215     52    76%
+services/shared/canonical_event.py      478    305    36%
+services/shared/idempotency.py          183     26    86%
+services/shared/permissions.py           46     21    54%
+services/shared/webhook_security.py      91      2    98%
+---------------------------------------------------------
+TOTAL                                  1013    406    60%
+Coverage JSON written to file docs/qa/2026-10-02/artifacts/backend/coverage-shared-after.json
+=========================== short test summary info ============================
+XFAIL tests/qa_sweep_20261002/test_portal_export_disclosure.py::test_redacted_fda_export_does_not_disclose_portal_capability - BE-011: supplier portal bearer capability is disclosed in exported KDEs
+XFAIL tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length - BE-010: body limit trusts Content-Length and permits oversized chunked bodies
+213 passed, 1 deselected, 2 xfailed in 2.08s

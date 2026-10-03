@@ -1,0 +1,119 @@
+UTC: 2026-10-03T00:52:26.520469+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("frontend/src/components/layout/marketing-header.tsx"); print("\n".join(f"{i}: {x}" for i,x in enumerate(p.read_text().splitlines(),1) if i<=110)); import json; q=Path("docs/qa/2026-10-02/artifacts/ux/chrome-axe_verify-320-005144063706.json"); d=json.loads(q.read_text()); print("LATEST_AXE",[(x["id"],x["impact"],len(x["nodes"])) for x in d["axe"]["violations"]]); print("SAMPLE_KEYS",list(d))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+1: 'use client';
+2: 
+3: import { useEffect, useRef, useState } from 'react';
+4: import Link from 'next/link';
+5: import { usePathname } from 'next/navigation';
+6: import { useAuth } from '@/lib/auth-context';
+7: import { shouldHideMarketingChrome } from '@/lib/app-routes';
+8: import { Container } from '@/components/layout/container';
+9: import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+10: import { DesktopNav, MobileMenu, MobileHamburger } from '@/components/layout/header';
+11: 
+12: export function MarketingHeader() {
+13:     const pathname = usePathname();
+14:     const [mobileOpen, setMobileOpen] = useState(false);
+15:     const [toolsOpen, setToolsOpen] = useState(false);
+16:     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+17:     const toolsWrapperRef = useRef<HTMLDivElement | null>(null);
+18:     const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
+19:     const { user, isAuthenticated, isHydrated } = useAuth();
+20:     // Only show logged-in state when auth is fully verified
+21:     const showLoggedIn = isHydrated && isAuthenticated && !!user;
+22:     const hideHeader = shouldHideMarketingChrome(pathname);
+23: 
+24:     // Close mobile menu on route change
+25:     useEffect(() => {
+26:         queueMicrotask(() => setMobileOpen(false));
+27:     }, [pathname]);
+28: 
+29:     // Prevent body scroll when mobile menu is open
+30:     useEffect(() => {
+31:         window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: mobileOpen } }));
+32:         if (mobileOpen) {
+33:             document.body.style.overflow = 'hidden';
+34:         } else {
+35:             document.body.style.overflow = '';
+36:         }
+37:         return () => {
+38:             document.body.style.overflow = '';
+39:             window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: false } }));
+40:         };
+41:     }, [mobileOpen]);
+42: 
+43:     const handleToolsEnter = () => {
+44:         if (closeTimeoutRef.current) {
+45:             clearTimeout(closeTimeoutRef.current);
+46:             closeTimeoutRef.current = null;
+47:         }
+48:         setToolsOpen(true);
+49:     };
+50: 
+51:     const handleToolsLeave = () => {
+52:         if (toolsWrapperRef.current?.contains(document.activeElement)) {
+53:             return;
+54:         }
+55:         if (closeTimeoutRef.current) {
+56:             clearTimeout(closeTimeoutRef.current);
+57:         }
+58:         closeTimeoutRef.current = setTimeout(() => {
+59:             setToolsOpen(false);
+60:         }, 500);
+61:     };
+62: 
+63:     const focusFirstToolsItem = () => {
+64:         requestAnimationFrame(() => {
+65:             const firstItem = toolsWrapperRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+66:             firstItem?.focus();
+67:         });
+68:     };
+69: 
+70:     const handleToolsKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+71:         if (e.key === 'Escape') {
+72:             setToolsOpen(false);
+73:             toolsButtonRef.current?.focus();
+74:             return;
+75:         }
+76: 
+77:         if (!toolsOpen || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) {
+78:             return;
+79:         }
+80: 
+81:         const menuItems = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+82:         if (menuItems.length === 0) {
+83:             return;
+84:         }
+85: 
+86:         e.preventDefault();
+87:         const activeIndex = menuItems.findIndex((item) => item === document.activeElement);
+88: 
+89:         if (activeIndex === -1) {
+90:             const fallbackIndex = e.key === 'ArrowDown' ? 0 : menuItems.length - 1;
+91:             menuItems[fallbackIndex]?.focus();
+92:             return;
+93:         }
+94: 
+95:         const nextIndex =
+96:             e.key === 'ArrowDown'
+97:                 ? (activeIndex + 1) % menuItems.length
+98:                 : (activeIndex - 1 + menuItems.length) % menuItems.length;
+99:         menuItems[nextIndex]?.focus();
+100:     };
+101: 
+102:     useEffect(() => {
+103:         if (hideHeader) {
+104:             return;
+105:         }
+106: 
+107:         const handleOutsideInteraction = (event: MouseEvent | TouchEvent) => {
+108:             const target = event.target as Node;
+109:             if (!toolsWrapperRef.current?.contains(target)) {
+110:                 setToolsOpen(false);
+LATEST_AXE [('scrollable-region-focusable', 'serious', 6)]
+SAMPLE_KEYS ['errors', 'csp', 'requests', 'startedAt', 'lcp', 'cls', 'url', 'width', 'height', 'documentWidth', 'title', 'cameraAllowed', 'headings', 'inputs', 'buttons', 'navigation', 'paint', 'resources', 'axe']

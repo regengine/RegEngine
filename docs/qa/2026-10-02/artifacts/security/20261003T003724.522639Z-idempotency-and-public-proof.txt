@@ -1,0 +1,438 @@
+UTC: 2026-10-03T00:37:24.522639+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "242,405p" services/shared/idempotency.py; sed -n "1,155p" services/ingestion/app/proof_verify_router.py; rg -n "BaseModel|request\.body|request\.json|Body\(|Field\(|max_length|MaxLen" services/ingestion/app/proof* services/ingestion/app/epcis* services/ingestion/app/webhook_router_v2* -g "*.py" | head -90; sed -n "1,90p" server/route_security_policy.py'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+        # Bind the exact operation and credential, not just the tenant. Never
+        # persist raw credentials or body. JSON whitespace changes conflict too.
+        parts = [
+            request.method.upper(),
+            str(request.url),
+            request.headers.get("content-type", ""),
+            request.headers.get("authorization", ""),
+            request.headers.get("x-regengine-api-key", ""),
+            request.headers.get("x-regengine-internal-secret", ""),
+            request.headers.get("cookie", ""),
+            getattr(request.state, "idempotency_authorization_fingerprint", ""),
+        ]
+        if request.url.path.rstrip("/") == "/api/v1/webhooks/ingest":
+            # Same trimmed configuration as webhook_router_v2.security. Bind
+            # both proof and signing-key epoch so missing/rotated proof cannot
+            # bypass the route's HMAC validator through an old cached response.
+            parts.extend(
+                [
+                    request.headers.get("x-webhook-signature", ""),
+                    hashlib.sha256(os.getenv("WEBHOOK_HMAC_SECRET", "").strip().encode()).hexdigest(),
+                ]
+            )
+        digest = hashlib.sha256(json.dumps(parts).encode())
+        # This middleware is outside RequestSizeLimitMiddleware in the monolith.
+        # Bound actual streamed bytes before retaining a body for downstream use.
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 10 * 1024 * 1024:
+                raise ValueError("idempotency request body exceeds 10 MB")
+            body.extend(chunk)
+        # Starlette's _CachedRequest replays _body to call_next after consumption.
+        request._body = bytes(body)
+        digest.update(body)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _error(status: int, code: str) -> Response:
+        return Response(
+            json.dumps({"error": code}),
+            status_code=status,
+            media_type="application/json",
+            headers={"Retry-After": "30"} if status == 503 else {},
+        )
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """Bind retries to one operation; reserve its key before dispatch.
+
+        Reservations last for the retry window. A crash or uncertain cache
+        write leaves the reservation in place rather than dispatching twice.
+        This is cache-level protection, not exactly-once database execution.
+        Route dependencies still run only on the original request; callers
+        must not treat a tenant lookup as fresh route authorization.
+        """
+        if not self._should_cache(request.method):
+            return await call_next(request)
+        # Browser/session authority has revocation and single-use semantics
+        # beyond API-key scopes. Always let its canonical dependencies execute.
+        if (
+            "cookie" in request.headers
+            or "authorization" in request.headers
+            or request.url.path == "/auth"
+            or request.url.path.startswith("/auth/")
+            or request.url.path == "/v1/auth"
+            or request.url.path.startswith("/v1/auth/")
+        ):
+            return await call_next(request)
+        idempotency_key = request.headers.get("Idempotency-Key")
+        if not idempotency_key or len(idempotency_key) > 255:
+            return await call_next(request)
+        tenant_id = self._resolve_tenant_id(request)
+        if not tenant_id:
+            return await call_next(request)
+
+        client = await self._get_client()
+        closed = os.getenv("IDEMPOTENCY_FAIL_MODE", "degrade").strip().lower() == "closed"
+        if client is None:
+            if closed:
+                return self._error(503, "idempotency_backend_unavailable")
+            return await call_next(request)
+
+        try:
+            fingerprint = await asyncio.wait_for(self._request_fingerprint(request), timeout=120)
+        except ValueError:
+            return self._error(413, "payload_too_large")
+        except asyncio.TimeoutError:
+            return self._error(504, "request_timeout")
+        cache_key = self._get_cache_key(idempotency_key, tenant_id)
+        reservation = json.dumps({"fingerprint": fingerprint, "owner": uuid4().hex})
+        try:
+            cached_data = await client.get(cache_key)
+            if cached_data is None:
+                acquired = await client.set(
+                    cache_key,
+                    reservation,
+                    nx=True,
+                    ex=IDEMPOTENCY_TTL_SECONDS,
+                )
+                if not acquired:
+                    cached_data = await client.get(cache_key)
+                    if cached_data is None:
+                        return self._error(503, "idempotency_backend_unavailable")
+            if cached_data is not None:
+                cached = json.loads(cached_data)
+                # Old payloads lack operation binding. Do not replay them or
+                # silently re-execute a potentially committed operation.
+                if cached.get("fingerprint") != fingerprint:
+                    return self._error(409, "idempotency_key_conflict")
+                if "status" not in cached:
+                    return self._error(409, "idempotency_request_in_progress")
+                return Response(
+                    content=(
+                        cached["body"].encode("latin1") if cached.get("body_encoding") == "latin1" else cached["body"]
+                    ),
+                    status_code=cached["status"],
+                    headers=cached.get("headers", {}),
+                )
+        except Exception:
+            logger.warning("idempotency_cache_read_error", fail_closed=closed)
+            if closed:
+                return self._error(503, "idempotency_backend_unavailable")
+            # Do not overwrite a reservation/cache entry after an uncertain read.
+            return await call_next(request)
+
+        response = await call_next(request)
+        # Compare-and-set prevents an expired owner overwriting another request.
+        if not 200 <= response.status_code < 300:
+            try:
+                await client.eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0",
+                    1,
+                    cache_key,
+                    reservation,
+                )
+            except Exception:
+                logger.warning("idempotency_reservation_release_error")
+            return response
+
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        # JSON responses are the supported cache format. Preserve binary bytes
+        # exactly using latin1 as a reversible storage encoding.
+        payload = json.dumps(
+            {
+                "fingerprint": fingerprint,
+                "status": response.status_code,
+                "body": body.decode("latin1"),
+                "body_encoding": "latin1",
+                "headers": dict(response.headers),
+            }
+        )
+        try:
+            await client.eval(
+                "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                "return redis.call('setex', KEYS[1], ARGV[2], ARGV[3]) end return 0",
+                1,
+                cache_key,
+                reservation,
+                IDEMPOTENCY_TTL_SECONDS,
+                payload,
+            )
+        except Exception:
+            logger.warning("idempotency_cache_write_error")
+        return Response(content=body, status_code=response.status_code, headers=dict(response.headers))
+
+
+"""Public proof-of-export verification endpoint.
+
+Why this belongs in the FSMA pipeline (production-surface promotion rule
+per ``PRODUCTION_SURFACE.md``):
+
+The core production contract is::
+
+    ingest -> canonicalize -> validate -> persist evidence -> export
+
+This router adds a public, tenantless surface in front of the *export*
+stage. It is the FSMA pipeline's audit-chain attestation surface: an
+external auditor, regulator, retailer, or trade-partner who has been
+handed a RegEngine FDA export bundle (ZIP) can independently check its
+declared file hashes and Merkle root **without an account, without tenant
+context, and without reading any tenant data**. For FDA packages it also
+rejects a declared failed chain and cross-checks that summary against the
+hashed chain artifact. It does not independently recompute the persisted
+database chain or authenticate the package issuer. The endpoint operates
+purely on the bytes the caller uploaded.
+
+This is the public proof surface for exported artifact consistency. Because
+verification is structural (hash recompute, Merkle root recompute, manifest
+cross-check), there is nothing tenant-scoped to leak. The endpoint MUST NOT
+touch any database, queue, or tenant-scoped store; static analysis of this
+module should show zero imports of ``shared.database``, ``CTEPersistence``,
+or any tenant-scoped client.
+
+Endpoint: ``POST /api/v1/proof/verify``
+- ``multipart/form-data`` with a single ``bundle`` field (ZIP, <= 5 MB)
+- OR ``application/json`` with ``{manifest, events, merkle_root}``.
+- No auth. Rate-limited 10 requests/minute/IP via the shared slowapi
+  ``limiter`` (``shared.rate_limit``).
+
+Returned JSON::
+
+    {
+      "verified": bool,
+      "checks": [{"name": str, "passed": bool, "detail": str}, ...],
+      "merkle_root_recomputed": str,
+      "timestamp": iso8601
+    }
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import logging
+import re
+import zipfile
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from pydantic import BaseModel, Field
+from shared.merkle_tree import MerkleTree
+from shared.rate_limit import limiter
+
+logger = logging.getLogger("proof-verify")
+
+router = APIRouter(prefix="/api/v1/proof", tags=["Public Proof"])
+
+
+# ---------------------------------------------------------------------------
+# Hard limits — public surface, hostile callers assumed
+# ---------------------------------------------------------------------------
+MAX_BUNDLE_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_DECOMPRESSED_BYTES = 25 * 1024 * 1024  # 5x — defense against zip bombs
+MAX_ZIP_ENTRIES = 64
+ALLOWED_BUNDLE_CONTENT_TYPES = {
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream",  # browsers/curl often default to this for .zip
+    "multipart/form-data",
+}
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+# ---------------------------------------------------------------------------
+# Pydantic schemas
+# ---------------------------------------------------------------------------
+class JsonBundle(BaseModel):
+    """Lightweight JSON shape for callers who don't want to send a ZIP."""
+
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    events: list[dict[str, Any]] = Field(default_factory=list)
+    merkle_root: Optional[str] = None
+
+
+class VerifyCheck(BaseModel):
+    name: str
+    passed: bool
+    detail: str
+
+
+class VerifyResponse(BaseModel):
+    verified: bool
+    checks: list[VerifyCheck]
+    merkle_root_recomputed: str
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _hash_ip(client_host: Optional[str]) -> str:
+    """Anonymize the caller IP for log correlation."""
+    if not client_host:
+        return "unknown"
+    return hashlib.sha256(client_host.encode("utf-8")).hexdigest()[:16]
+
+
+def _is_sha256_hex(value: Any) -> bool:
+    """True only for a lowercase 64-char hex digest (the shape ``hexdigest`` emits)."""
+    return isinstance(value, str) and _SHA256_HEX_RE.fullmatch(value) is not None
+
+
+def _safe_zip_member(name: str) -> bool:
+    """Reject path-traversal and absolute-path entries."""
+    if not name or name.endswith("/"):
+        return False
+    if name.startswith("/") or name.startswith("\\"):
+        return False
+    if ".." in name.replace("\\", "/").split("/"):
+        return False
+    if ":" in name:  # Windows drive letters
+        return False
+    return True
+
+
+def _extract_event_hashes(events: list[dict[str, Any]]) -> list[str]:
+    """Pull ``event_hash`` / ``sha256_hash`` from event dicts in order.
+
+    Accepts either key — the FDA export embeds ``sha256_hash`` per event,
+    while a stripped-down JSON bundle may use ``event_hash``.
+    """
+    hashes: list[str] = []
+    for event in events:
+        h = event.get("event_hash") or event.get("sha256_hash") or event.get("hash")
+        if not _is_sha256_hex(h):
+            raise ValueError("events must each carry a 64-char hex 'event_hash' / 'sha256_hash'")
+        hashes.append(h)
+    return hashes
+
+
+def _verify_payload(
+    *,
+    manifest: dict[str, Any],
+    events: list[dict[str, Any]],
+    declared_root: Optional[str],
+services/ingestion/app/proof_verify_router.py:56:from pydantic import BaseModel, Field
+services/ingestion/app/proof_verify_router.py:83:class JsonBundle(BaseModel):
+services/ingestion/app/proof_verify_router.py:86:    manifest: dict[str, Any] = Field(default_factory=dict)
+services/ingestion/app/proof_verify_router.py:87:    events: list[dict[str, Any]] = Field(default_factory=list)
+services/ingestion/app/proof_verify_router.py:91:class VerifyCheck(BaseModel):
+services/ingestion/app/proof_verify_router.py:97:class VerifyResponse(BaseModel):
+services/ingestion/app/proof_verify_router.py:754:            raw_json = await request.body()
+services/ingestion/app/proof_recall_router.py:57:from pydantic import BaseModel, Field
+services/ingestion/app/proof_recall_router.py:129:class DrillStep(BaseModel):
+services/ingestion/app/proof_recall_router.py:131:    duration_ms: int = Field(..., ge=0)
+services/ingestion/app/proof_recall_router.py:136:class RecallDrillResponse(BaseModel):
+services/ingestion/app/epcis_export.py:18:from pydantic import BaseModel, Field
+services/ingestion/app/epcis_export.py:157:class ExportRequest(BaseModel):
+services/ingestion/app/epcis_export.py:160:    tenant_id: str = Field(..., description="Tenant ID")
+services/ingestion/app/epcis_export.py:161:    format: str = Field("epcis", description="Export format: epcis, fda, csv")
+services/ingestion/app/epcis_export.py:162:    lot_code: Optional[str] = Field(None, description="Filter by specific TLC")
+services/ingestion/app/epcis_export.py:163:    date_from: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
+services/ingestion/app/epcis_export.py:164:    date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
+services/ingestion/app/epcis/router.py:14:from pydantic import BaseModel, Field
+services/ingestion/app/epcis/router.py:84:class BatchIngestRequest(BaseModel):
+services/ingestion/app/epcis/router.py:85:    events: list[dict] = Field(default_factory=list)
+services/ingestion/app/webhook_router_v2/security.py:170:    raw_body = await request.body()
+"""Operation-level security classification and executable route adapters."""
+
+from __future__ import annotations
+
+import ast
+import inspect
+import textwrap
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal
+
+from fastapi.dependencies.models import Dependant
+from fastapi.routing import APIRoute
+
+from server.router_policy import PRODUCTION_ENABLED_ROUTERS, VALID_ROUTER_NAMES
+
+Classification = Literal["public", "tenant-scoped", "global-sysadmin", "workload-only"]
+
+ALWAYS_MOUNTED_OWNERS = frozenset(
+    {"core_ingest", "features", "health", "metrics", "root", "scheduler", "status", "webhook"}
+)
+PRODUCTION_OWNERS = PRODUCTION_ENABLED_ROUTERS | ALWAYS_MOUNTED_OWNERS
+OMITTED_ROUTER_OWNERS = VALID_ROUTER_NAMES - PRODUCTION_ENABLED_ROUTERS
+ALL_ROUTE_OWNERS = VALID_ROUTER_NAMES | ALWAYS_MOUNTED_OWNERS
+
+# Public operations are approved one at a time. Owner is part of the key so a
+# move between subsystems is security-review-visible too.
+PUBLIC_OPERATIONS = frozenset(
+    {
+        ("health", "GET", "/api/health"),
+        ("health", "GET", "/health"),
+        ("health", "GET", "/healthz"),
+        ("health", "GET", "/readiness"),
+        ("root", "GET", "/"),
+        ("proof_verify", "POST", "/api/v1/proof/verify"),
+        ("proof_recall", "POST", "/api/v1/proof/recall-drill"),
+        ("csv", "GET", "/api/v1/templates"),
+        ("csv", "GET", "/api/v1/templates/{cte_type}"),
+        ("portal", "GET", "/api/v1/portal/{portal_id}"),
+        ("portal", "POST", "/api/v1/portal/{portal_id}/preflight"),
+        ("portal", "POST", "/api/v1/portal/{portal_id}/submit"),
+        ("billing", "GET", "/api/v1/billing/plans"),
+        ("billing", "POST", "/api/v1/billing/checkout"),
+        ("billing", "GET", "/billing/plans"),
+        ("onboarding", "GET", "/api/v1/onboarding/steps"),
+        ("readiness", "GET", "/api/v1/fsma/export-jobs"),
+        ("readiness", "GET", "/api/v1/fsma/mappings"),
+        ("admin", "GET", "/ready"),
+        ("admin", "POST", "/auth/challenges"),
+        ("admin", "POST", "/auth/challenges/{challenge_id}/verify"),
+        ("admin", "POST", "/auth/refresh"),
+        ("admin", "POST", "/auth/webauthn/login/generate-options"),
+        ("admin", "POST", "/auth/webauthn/login/verify"),
+        ("admin", "POST", "/v1/auth/accept-invite"),
+        ("admin", "POST", "/api/v1/tools/verify-email"),
+        ("admin", "POST", "/api/v1/tools/confirm-code"),
+        ("admin", "POST", "/api/v1/tools/lead-erasure/request"),
+        ("admin", "POST", "/api/v1/tools/lead-erasure/confirm"),
+    }
+)
+
+OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS = frozenset(
+    {
+        ("billing", "POST", "/api/v1/billing/checkout"),
+    }
+)
+
+# These authenticate inside the endpoint rather than FastAPI's dependency
+# graph. Their adapter validates the declared header and handler delegation.
+STRIPE_WEBHOOK_OPERATIONS = frozenset(
+    {
+        ("billing", "POST", "/api/v1/billing/webhooks"),
+        ("billing", "POST", "/api/v1/billing/webhook/stripe"),
+    }
+)
+
+# Tenant-bound actors whose reviewed operation has an identity-global storage
+# effect. These routes remain tenant-scoped at the HTTP authority boundary,
+# while their dedicated adapters prove that the broader transaction target is
+# derived only from the authenticated identity.
+IDENTITY_GLOBAL_SELF_SERVICE_OPERATIONS = frozenset(
+    {
+        ("admin", "POST", "/v1/account/erasure"),
+    }
+)
+
+
+@dataclass(frozen=True)
+class TenantApiKeyRoutePolicy:

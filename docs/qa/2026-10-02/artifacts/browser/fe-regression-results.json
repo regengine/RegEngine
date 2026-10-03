@@ -1,0 +1,256 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.7.0/bin/node",
+      "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/playwright/cli.js",
+      "test",
+      "--config",
+      "frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+      "--project=chromium"
+    ],
+    "configFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+    "rootDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/browser/fe-regression-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "fe-001-barcode.spec.ts",
+      "file": "fe-001-barcode.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 10132,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: 'Scan & Ingest', exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('heading', { name: 'Scan & Ingest', exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: 'Scan & Ingest', exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: 'Scan & Ingest', exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('heading', { name: 'Scan & Ingest', exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: 'Scan & Ingest', exact: true })\u001b[22m\n\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:10:83",
+                    "location": {
+                      "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                      "column": 83,
+                      "line": 10
+                    },
+                    "snippet": "   8 |   const response = await page.goto('/tools/scan');\n   9 |   expect(response?.status()).toBe(200);\n> 10 |   await expect(page.getByRole('heading', { name: 'Scan & Ingest', exact: true })).toBeVisible();\n     |                                                                                   ^\n  11 |   const input = page.getByLabel('Paste or type barcode string…');\n  12 |   const lotField = page.getByLabel('Lot Code', { exact: true });\n  13 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                        "column": 83,
+                        "line": 10
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: 'Scan & Ingest', exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('heading', { name: 'Scan & Ingest', exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: 'Scan & Ingest', exact: true })\u001b[22m\n\n\n   8 |   const response = await page.goto('/tools/scan');\n   9 |   expect(response?.status()).toBe(200);\n> 10 |   await expect(page.getByRole('heading', { name: 'Scan & Ingest', exact: true })).toBeVisible();\n     |                                                                                   ^\n  11 |   const input = page.getByLabel('Paste or type barcode string…');\n  12 |   const lotField = page.getByLabel('Lot Code', { exact: true });\n  13 |\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:10:83"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T02:05:29.030Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts",
+                    "column": 83,
+                    "line": 10
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "abc432f325efb82bcee5-0138f4c25cd187538f45",
+          "file": "fe-001-barcode.spec.ts",
+          "line": 4,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "fe-004-offline-photo.spec.ts",
+      "file": "fe-004-offline-photo.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "FE-004 keeps account A offline photos out of account B replay requests",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 50,
+                  "error": {
+                    "message": "Error: browserContext.addCookies: Protocol error (Storage.setCookies): Invalid cookie fields",
+                    "stack": "Error: browserContext.addCookies: Protocol error (Storage.setCookies): Invalid cookie fields\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:55:17",
+                    "location": {
+                      "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                      "column": 17,
+                      "line": 55
+                    },
+                    "snippet": "  53 |     return false;\n  54 |   });\n> 55 |   await context.addCookies([{ name: '__Host-regengine_session', value: 'qa-only-a',\n     |                 ^\n  56 |     url: baseURL!, secure: true, httpOnly: true, sameSite: 'Lax' }]);\n  57 |   await context.addInitScript(() => {\n  58 |     // A generated local canvas supplies a deterministic fake camera stream."
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                        "column": 17,
+                        "line": 55
+                      },
+                      "message": "Error: browserContext.addCookies: Protocol error (Storage.setCookies): Invalid cookie fields\n\n  53 |     return false;\n  54 |   });\n> 55 |   await context.addCookies([{ name: '__Host-regengine_session', value: 'qa-only-a',\n     |                 ^\n  56 |     url: baseURL!, secure: true, httpOnly: true, sameSite: 'Lax' }]);\n  57 |   await context.addInitScript(() => {\n  58 |     // A generated local canvas supplies a deterministic fake camera stream.\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:55:17"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T02:05:39.449Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                    "column": 17,
+                    "line": 55
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "a9bd36b5e3ca8ea0465a-4c2aaa8e68fb16753890",
+          "file": "fe-004-offline-photo.spec.ts",
+          "line": 28,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T02:05:28.802Z",
+    "duration": 10785.365,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

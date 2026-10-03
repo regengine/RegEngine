@@ -1,0 +1,12 @@
+UTC: 2026-10-03T00:39:26.419777+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import os,signal; os.kill(23587,signal.SIGTERM); print("Sent SIGTERM to observed port-3102 QA listener 23587")'
+Exit: 1
+Duration: 0.03s
+Timeout: False
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import os,signal; os.kill(23587,signal.SIGTERM); print("Sent SIGTERM to observed port-3102 QA listener 23587")
+                      ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted

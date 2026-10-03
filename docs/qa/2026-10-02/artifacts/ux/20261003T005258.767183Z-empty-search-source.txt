@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:52:58.767183+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'filteredCategories|filteredProducts|No.*result|searchQuery|setSearch|categories.filter' frontend/src/app/tools/ftl-checker frontend/src/components/tools
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:460:    const [searchTerm, setSearchTerm] = useState('');
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:751:                                                    onChange={(e) => setSearchTerm(e.target.value)}

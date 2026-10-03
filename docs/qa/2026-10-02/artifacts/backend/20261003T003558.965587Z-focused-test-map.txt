@@ -1,0 +1,753 @@
+UTC: 2026-10-03T00:35:58.965587+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; subprocess.run(["rg","--files","services/ingestion/tests"],check=False); subprocess.run(["rg","-n","pytest|def |class |load_dotenv|connect\(|create_engine","tests/shared/test_idempotency_middleware_1338.py","tests/shared/test_webhook_security.py","tests/shared/test_canonical_event_idempotency_key.py","services/shared/tests/test_auth_fail_closed.py","services/shared/tests/test_auth_1338.py"],check=False); print("CONFTOP"); print(Path("conftest.py").read_text()[:6500]); print("TOOLS"); subprocess.run(["/Users/sellers/Projects/RegEngine/repo/.venv/bin/python","-c","import pytest,coverage,hypothesis; print(pytest.__version__,coverage.__version__,hypothesis.__version__)"],check=False)'
+Exit: 0
+Duration: 0.72s
+Timeout: False
+
+<string>:1: SyntaxWarning: "\(" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\("? A raw string is also an option.
+services/ingestion/tests/test_sla_tracking_1342.py
+services/ingestion/tests/test_stripe_checkout_public_contract.py
+services/ingestion/tests/test_label_billing_v121.py
+services/ingestion/tests/test_epcis_xml_parser_1342.py
+services/ingestion/tests/test_mock_audit_persistence.py
+services/ingestion/tests/remediation/test_remediation_intake.py
+services/ingestion/tests/remediation/test_suppression_gate.py
+services/ingestion/tests/remediation/test_remediation_corrections_evidence.py
+services/ingestion/tests/remediation/test_remediation_tokens_security.py
+services/ingestion/tests/remediation/test_remediation_outbox_delivery.py
+services/ingestion/tests/remediation/conftest.py
+services/ingestion/tests/test_edi_envelope_integrity.py
+services/ingestion/tests/test_email_ingest_tenant_lookup.py
+services/ingestion/tests/test_webhook_compat_1342.py
+services/ingestion/tests/test_webhook_hmac_and_replay.py
+services/ingestion/tests/test_fda_export_queries_1342.py
+services/ingestion/tests/test_fda_export_verify_roundtrip_2898.py
+services/ingestion/tests/test_sandbox_validation_1342.py
+services/ingestion/tests/test_alerts_1342.py
+services/ingestion/tests/test_compliance_score_2708.py
+services/ingestion/tests/test_identity_router.py
+services/ingestion/tests/test_stripe_webhook_verify_before_ratelimit_2929.py
+services/ingestion/tests/test_epcis_validation_1342.py
+services/ingestion/tests/test_fda_export_merkle_1342.py
+services/ingestion/tests/test_stripe_webhook_rate_limit_1198.py
+services/ingestion/tests/test_csv_input_quantities.py
+services/ingestion/tests/test_webhook_router_v2_enforcement.py
+services/ingestion/tests/test_merkle_tree.py
+services/ingestion/tests/test_audit_export_log_1342.py
+services/ingestion/tests/test_epcis_export_1342.py
+services/ingestion/tests/test_routes_scraping_1342.py
+services/ingestion/tests/test_pipeline_1342.py
+services/ingestion/tests/test_onboarding_1342.py
+services/ingestion/tests/test_export_monitoring_1342.py
+services/ingestion/tests/test_list_total_truncation_2864.py
+services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py
+services/ingestion/tests/test_upload_limits_1342.py
+services/ingestion/tests/test_boundaries.py
+services/ingestion/tests/test_epcis_batch_transaction_1156.py
+services/ingestion/tests/test_stripe_customers_1342.py
+services/ingestion/tests/test_kafka_utils_1342.py
+services/ingestion/tests/test_routes_scraping_task_queue.py
+services/ingestion/tests/test_epcis_persistence_enforcement.py
+services/ingestion/tests/data/supplier_sprint/06_unknown_product.csv
+services/ingestion/tests/data/supplier_sprint/03_approved_alias.csv
+services/ingestion/tests/data/supplier_sprint/02_whitespace_dates.csv
+services/ingestion/tests/data/supplier_sprint/01_valid.csv
+services/ingestion/tests/data/supplier_sprint/05_missing_tlc_source.csv
+services/ingestion/tests/data/supplier_sprint/08_duplicate_rows.csv
+services/ingestion/tests/data/supplier_sprint/07_invalid_quantity.csv
+services/ingestion/tests/data/supplier_sprint/04_missing_tlc.csv
+services/ingestion/tests/data/fsma_harvest_sample.csv
+services/ingestion/tests/test_stripe_customer_deleted_sticky_2953.py
+services/ingestion/tests/test_edi_golden.py
+services/ingestion/tests/test_dual_write_timeout_1335.py
+services/ingestion/tests/test_harvester_phone_contract_3041.py
+services/ingestion/tests/test_fda_export_recall_1342.py
+services/ingestion/tests/test_sandbox_rule_loader_1342.py
+services/ingestion/tests/test_rate_limit_leftovers_2711.py
+services/ingestion/tests/test_stripe_routes_1342.py
+services/ingestion/tests/test_disaster_recovery_1342.py
+services/ingestion/tests/test_recall_simulations_api.py
+services/ingestion/tests/test_edi_ingestion_api.py
+services/ingestion/tests/test_inflow_workbench.py
+services/ingestion/tests/test_integration_router_1342.py
+services/ingestion/tests/test_chain_verification_job_1342.py
+services/ingestion/tests/test_deduplication_logic.py
+services/ingestion/tests/test_hashing.py
+services/ingestion/tests/test_incident_router_1342.py
+services/ingestion/tests/test_fsma_readiness_compat_2893.py
+services/ingestion/tests/test_csv_templates.py
+services/ingestion/tests/test_supplier_portal_1342.py
+services/ingestion/tests/test_edi_rejection_log_1174.py
+services/ingestion/tests/test_fda_router_subscription_gate.py
+services/ingestion/tests/test_fda_export_timezone.py
+services/ingestion/tests/test_label_vision_1342.py
+services/ingestion/tests/test_epcis_normalization_1342.py
+services/ingestion/tests/test_stripe_billing_router.py
+services/ingestion/tests/test_fda_export_status_filter_2897.py
+services/ingestion/tests/test_legacy_router_tenant_context.py
+services/ingestion/tests/test_chain_verification_combine_2506.py
+services/ingestion/tests/test_webhook_compat_enforcement.py
+services/ingestion/tests/fixtures/edi_corpus/po_850.expected.json
+services/ingestion/tests/fixtures/edi_corpus/receiving_861.edi
+services/ingestion/tests/fixtures/edi_corpus/po_850.edi
+services/ingestion/tests/fixtures/edi_corpus/asn_856.expected.json
+services/ingestion/tests/fixtures/edi_corpus/invoice_810.edi
+services/ingestion/tests/fixtures/edi_corpus/asn_856.edi
+services/ingestion/tests/fixtures/edi_corpus/asn_856_batch.edi
+services/ingestion/tests/fixtures/edi_corpus/asn_856_multi_line.expected.json
+services/ingestion/tests/fixtures/edi_corpus/asn_856_batch.expected.json
+services/ingestion/tests/fixtures/edi_corpus/invoice_810.expected.json
+services/ingestion/tests/fixtures/edi_corpus/receiving_861.expected.json
+services/ingestion/tests/fixtures/edi_corpus/asn_856_multi_line.edi
+services/ingestion/tests/test_fda_export_formatters_1342.py
+services/ingestion/tests/test_webhook_verify_api_key_1888.py
+services/ingestion/tests/test_ratelimit_headers_2307.py
+services/ingestion/tests/test_epcis_bizstep_mapping_1153.py
+services/ingestion/tests/test_stripe_webhooks_1342.py
+services/ingestion/tests/test_routes_regulation_task_queue.py
+services/ingestion/tests/test_models_ssrf_1342.py
+services/ingestion/tests/test_epcis_persistence_1342.py
+services/ingestion/tests/test_fda_export_overflow_2860.py
+services/ingestion/tests/test_webhook_router_v2_idor_f1.py
+services/ingestion/tests/test_epcis_tenant_isolation.py
+services/ingestion/tests/test_tenant_resolution_1342.py
+services/ingestion/tests/test_email_ingest_router.py
+services/ingestion/tests/test_regulation_loader_hardening.py
+services/ingestion/tests/test_compliance_score_2960_2962.py
+services/ingestion/tests/test_webhook_router_v2_canonical_helper.py
+services/ingestion/tests/test_fda_export_service_1342.py
+services/ingestion/tests/test_routes_discovery_task_queue.py
+services/ingestion/tests/test_subscription_gate_event_loop_2849.py
+services/ingestion/tests/test_recall_simulations_1342.py
+services/ingestion/tests/test_browser_utils_1342.py
+services/ingestion/tests/test_jev_ask_script.py
+services/ingestion/tests/test_supplier_mgmt_1342.py
+services/ingestion/tests/test_fda_export_perf_2515_2516.py
+services/ingestion/tests/test_ingest_upload_streaming_size.py
+services/ingestion/tests/test_fda_export_pii_redaction.py
+services/ingestion/tests/test_routes_sources_task_queue.py
+services/ingestion/tests/tenant_context_overrides.py
+services/ingestion/tests/test_csv_templates_1342.py
+services/ingestion/tests/test_webhook_rate_limit.py
+services/ingestion/tests/test_webhook_replay_metric.py
+services/ingestion/tests/test_transformation_quantity_2970.py
+services/ingestion/tests/test_webhook_v2_alert_persistence_2901_2902.py
+services/ingestion/tests/test_email_ingest_auth.py
+services/ingestion/tests/test_fda_export_epic_l_1655.py
+services/ingestion/tests/test_csv_ingestion_receipt.py
+services/ingestion/tests/test_settings_1342.py
+services/ingestion/tests/test_stripe_webhook_idempotency.py
+services/ingestion/tests/README.md
+services/ingestion/tests/test_scraper_job_1342.py
+services/ingestion/tests/test_compliance_e2e.py
+services/ingestion/tests/test_format_extractors.py
+services/ingestion/tests/test_email_ingest_service.py
+services/ingestion/tests/test_webhook_idempotency.py
+services/ingestion/tests/test_sandbox_csv_parser_1342.py
+services/ingestion/tests/test_sandbox_tracer_1342.py
+services/ingestion/tests/test_task_handlers_sources_1342.py
+services/ingestion/tests/test_integration_webhook_1342.py
+services/ingestion/tests/test_sandbox_router_1342.py
+services/ingestion/tests/test_csv_malformed_input.py
+services/ingestion/tests/test_edi_gln_check_digit_consistency.py
+services/ingestion/tests/test_railway_warning_compat_routes.py
+services/ingestion/tests/test_sandbox_evaluators_1342.py
+services/ingestion/tests/test_epcis_conformance_2968_2970.py
+services/ingestion/tests/test_notification_prefs_1342.py
+services/ingestion/tests/test_webhook_router_v2_tenant_resolution.py
+services/ingestion/tests/test_audit_fixes_unsupported_cte_http_status.py
+services/ingestion/tests/test_audit_fixes_stripe_dedup_release.py
+services/ingestion/tests/test_routes_health_metrics_1342.py
+services/ingestion/tests/test_edi_utf8_decode_1170.py
+services/ingestion/tests/test_image_parser.py
+services/ingestion/tests/test_auditor_pagination_ties_pg.py
+services/ingestion/tests/test_routes_status_1342.py
+services/ingestion/tests/test_google_discovery_scraper_1342.py
+services/ingestion/tests/test_supplier_validation_1342.py
+services/ingestion/tests/test_billing_usage_core.py
+services/ingestion/tests/test_compliance_score_1342.py
+services/ingestion/tests/test_qr_decoder_api.py
+services/ingestion/tests/test_csv_jev_header_mapping.py
+services/ingestion/tests/test_fsma_validation_blocking.py
+services/ingestion/tests/test_identity_router_1342.py
+services/ingestion/tests/test_edi_segment_metrics.py
+services/ingestion/tests/suite-runs.toml
+services/ingestion/tests/test_subscription_gate_1342.py
+services/ingestion/tests/test_csv_ingest_response_model_2892.py
+services/ingestion/tests/test_metrics_router_1342.py
+services/ingestion/tests/test_billing_usage_reporting.py
+services/ingestion/tests/test_task_handlers_discovery_1342.py
+services/ingestion/tests/authz_overrides.py
+services/ingestion/tests/test_config_1342.py
+services/ingestion/tests/test_sensitech_parser_1342.py
+services/ingestion/tests/test_routes_discovery_1342.py
+services/ingestion/tests/test_sandbox_rate_limit_client_ip.py
+services/ingestion/tests/test_jev_header_preview_script.py
+services/ingestion/tests/test_epcis_extraction_1342.py
+services/ingestion/tests/test_fda_export_verification_1342.py
+services/ingestion/tests/test_task_handlers_scraping_1342.py
+services/ingestion/tests/test_billing_usage_routes.py
+services/ingestion/tests/test_authz_1342.py
+services/ingestion/tests/test_parsers.py
+services/ingestion/tests/test_sandbox_share_router.py
+services/ingestion/tests/test_sandbox_rate_limiting_1342.py
+services/ingestion/tests/test_state_generic_scraper_1342.py
+services/ingestion/tests/test_fda_export_router.py
+services/ingestion/tests/test_fda_export_completeness_2698.py
+services/ingestion/tests/test_inflow_lab_contract.py
+services/ingestion/tests/test_rules_router.py
+services/ingestion/tests/test_fda_export_router_1342.py
+services/ingestion/tests/test_epcis_ingestion_api.py
+services/ingestion/tests/security/test_ssrf_redirect.py
+services/ingestion/tests/security/__init__.py
+services/ingestion/tests/security/test_scrapers_ssrf.py
+services/ingestion/tests/security/test_fetch_fallback.py
+services/ingestion/tests/test_stripe_tenant_integrity.py
+services/ingestion/tests/test_canonical_router_1342.py
+services/ingestion/tests/test_tenant_validation_1342.py
+services/ingestion/tests/test_smoke_ingestion.py
+services/ingestion/tests/test_s3_utils_1342.py
+services/ingestion/tests/test_disclaimers.py
+services/ingestion/tests/test_routes_discovery_tenant_key_2921.py
+services/ingestion/tests/test_cte_persistence_e2e.py
+services/ingestion/tests/test_audit_log_1342.py
+services/ingestion/tests/test_readiness_router_1342.py
+services/ingestion/tests/test_exception_router.py
+services/ingestion/tests/test_canonical_router.py
+services/ingestion/tests/test_epcis_export.py
+services/ingestion/tests/test_format_extractors_1342.py
+services/ingestion/tests/test_auditor_router_1342.py
+services/ingestion/tests/test_jev_eval_script.py
+services/ingestion/tests/test_ingest_error_logging_2868.py
+services/ingestion/tests/test_fda_export_audit_logging.py
+services/ingestion/tests/test_authz_ratelimit_fallback_2847.py
+services/ingestion/tests/test_exception_router_1342.py
+services/ingestion/tests/test_audit_fixes_bizstep_mapping.py
+services/ingestion/tests/test_webhook_models.py
+services/ingestion/tests/test_redis_retry_cooldown_2699.py
+services/ingestion/tests/test_epcis_xml_strict_1151.py
+services/ingestion/tests/test_webhook_models_1342.py
+services/ingestion/tests/test_integration_federal.py
+services/ingestion/tests/test_fda_enforcement_scraper_1342.py
+services/ingestion/tests/test_cors_single_registration_1062.py
+services/ingestion/tests/test_webhook_funnel_events.py
+services/ingestion/tests/test_proof_recall_router.py
+services/ingestion/tests/test_normalization_1342.py
+services/ingestion/tests/test_mock_audit_1342.py
+services/ingestion/tests/test_request_workflow_router.py
+services/ingestion/tests/test_regulation_webhook_ssrf.py
+services/ingestion/tests/test_csv_jev_file_cte.py
+services/ingestion/tests/test_recall_report_1342.py
+services/ingestion/tests/test_stripe_plans_1342.py
+services/ingestion/tests/test_epcis_gln_check_digit.py
+services/ingestion/tests/test_reader_canonical_migration_2506.py
+services/ingestion/tests/test_correlation_middleware_2151.py
+services/ingestion/tests/test_qr_decoder_1342.py
+services/ingestion/tests/conftest.py
+services/ingestion/tests/test_epcis_xml_strict_validation_1151.py
+services/ingestion/tests/test_proof_verify_router.py
+services/ingestion/tests/test_exchange_api_1342.py
+services/ingestion/tests/test_subscription_gate.py
+services/ingestion/tests/test_webhook_trailing_lows_infos.py
+services/ingestion/tests/test_product_catalog_1342.py
+services/ingestion/tests/test_stripe_helpers_1342.py
+services/ingestion/tests/test_csv_safety_1342.py
+services/ingestion/tests/test_stripe_redirect_allowlist.py
+services/ingestion/tests/test_database_transaction_security.py
+services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py
+services/ingestion/tests/test_email_ingest_schemas.py
+services/ingestion/tests/test_sop_generator_1342.py
+services/ingestion/tests/test_stripe_state_1342.py
+services/ingestion/tests/test_request_workflow_router_1342.py
+services/ingestion/tests/test_epcis_router_1342.py
+services/ingestion/tests/test_webhook_router_v2_1342.py
+services/ingestion/tests/test_s3_integration_testcontainers.py
+services/ingestion/tests/test_team_mgmt_1342.py
+services/ingestion/tests/test_exchange_api.py
+services/ingestion/tests/test_task_handlers_regulation_1342.py
+services/ingestion/tests/test_stripe_subscription_period_end_2951.py
+services/ingestion/tests/test_edi_parser_segment_cap_1171.py
+services/ingestion/tests/test_subscription_gate_fail_closed.py
+tests/shared/test_canonical_event_idempotency_key.py:7:``TypeError`` mid-insert and lost the event — the same bug class as
+tests/shared/test_canonical_event_idempotency_key.py:25:import pytest
+tests/shared/test_canonical_event_idempotency_key.py:35:def _make_canonical_event(kdes: dict) -> TraceabilityEvent:
+tests/shared/test_canonical_event_idempotency_key.py:62:class TestCanonicalIdempotencyKey_Issue1313Mirror:
+tests/shared/test_canonical_event_idempotency_key.py:63:    def test_datetime_kde_does_not_raise(self):
+tests/shared/test_canonical_event_idempotency_key.py:68:    def test_decimal_kde_does_not_raise(self):
+tests/shared/test_canonical_event_idempotency_key.py:73:    def test_mixed_non_jsonable_kdes(self):
+tests/shared/test_canonical_event_idempotency_key.py:85:    def test_stable_across_kde_insertion_order(self):
+tests/shared/test_canonical_event_idempotency_key.py:96:    def test_key_diverges_from_cte_formula_documented(self):
+services/shared/tests/test_auth_fail_closed.py:8:import pytest
+services/shared/tests/test_auth_fail_closed.py:20:def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
+services/shared/tests/test_auth_fail_closed.py:54:class TestAuthConfigValidation:
+services/shared/tests/test_auth_fail_closed.py:57:    def test_starts_with_valid_config(self):
+services/shared/tests/test_auth_fail_closed.py:63:    def test_starts_in_dev_without_jwt_secret(self):
+services/shared/tests/test_auth_fail_closed.py:69:    def test_cloud_starts_without_supabase_creds(self):
+services/shared/tests/test_auth_fail_closed.py:84:    def test_rejects_short_jwt_secret_in_production(self):
+services/shared/tests/test_auth_fail_closed.py:104:    def test_rejects_default_jwt_secret_in_production(self):
+services/shared/tests/test_auth_fail_closed.py:119:    def test_rejects_bypass_token_in_production(self):
+services/shared/tests/test_auth_fail_closed.py:137:    def test_cloud_marker_non_production_env_with_ephemeral_secret_hard_fails(self):
+services/shared/tests/test_auth_fail_closed.py:160:    def test_cloud_marker_development_env_is_forced_production_with_explicit_secrets(self):
+services/shared/tests/test_auth_fail_closed.py:177:    def test_cloud_marker_with_explicit_secrets_starts(self):
+services/shared/tests/test_auth_fail_closed.py:193:    def test_no_cloud_marker_ephemeral_secret_still_starts(self):
+tests/shared/test_webhook_security.py:7:import pytest
+tests/shared/test_webhook_security.py:22:class TestGenerateSignature:
+tests/shared/test_webhook_security.py:25:    def test_generate_signature_basic(self):
+tests/shared/test_webhook_security.py:35:    def test_generate_signature_with_timestamp(self):
+tests/shared/test_webhook_security.py:45:    def test_generate_signature_deterministic(self):
+tests/shared/test_webhook_security.py:56:    def test_generate_signature_different_payloads(self):
+tests/shared/test_webhook_security.py:66:    def test_generate_signature_from_env(self, monkeypatch):
+tests/shared/test_webhook_security.py:75:    def test_generate_signature_no_secret_raises(self, monkeypatch):
+tests/shared/test_webhook_security.py:79:        with pytest.raises(ValueError, match="not configured"):
+tests/shared/test_webhook_security.py:83:class TestParseSignatureHeader:
+tests/shared/test_webhook_security.py:86:    def test_parse_valid_header(self):
+tests/shared/test_webhook_security.py:96:    def test_parse_header_with_spaces(self):
+tests/shared/test_webhook_security.py:105:    def test_parse_empty_header_raises(self):
+tests/shared/test_webhook_security.py:107:        with pytest.raises(WebhookSignatureError, match="Missing signature header"):
+tests/shared/test_webhook_security.py:110:    def test_parse_missing_timestamp_raises(self):
+tests/shared/test_webhook_security.py:112:        with pytest.raises(WebhookSignatureError, match="Missing timestamp"):
+tests/shared/test_webhook_security.py:115:    def test_parse_missing_signature_raises(self):
+tests/shared/test_webhook_security.py:117:        with pytest.raises(WebhookSignatureError, match="Missing v1 signature"):
+tests/shared/test_webhook_security.py:120:    def test_parse_invalid_timestamp_raises(self):
+tests/shared/test_webhook_security.py:122:        with pytest.raises(WebhookSignatureError, match="Invalid timestamp"):
+tests/shared/test_webhook_security.py:126:class TestVerifySignature:
+tests/shared/test_webhook_security.py:129:    def test_verify_valid_signature(self):
+tests/shared/test_webhook_security.py:141:    def test_verify_invalid_signature_raises(self):
+tests/shared/test_webhook_security.py:150:        with pytest.raises(WebhookSignatureError, match="Invalid webhook signature"):
+tests/shared/test_webhook_security.py:153:    def test_verify_tampered_payload_raises(self):
+tests/shared/test_webhook_security.py:160:        with pytest.raises(WebhookSignatureError, match="Invalid webhook signature"):
+tests/shared/test_webhook_security.py:163:    def test_verify_old_timestamp_raises(self):
+tests/shared/test_webhook_security.py:171:        with pytest.raises(WebhookTimestampError, match="too old"):
+tests/shared/test_webhook_security.py:174:    def test_verify_future_timestamp_raises(self):
+tests/shared/test_webhook_security.py:182:        with pytest.raises(WebhookTimestampError, match="too old or in future"):
+tests/shared/test_webhook_security.py:185:    def test_verify_with_secret_rotation(self, monkeypatch):
+tests/shared/test_webhook_security.py:205:class TestGetWebhookSecrets:
+tests/shared/test_webhook_security.py:208:    def test_get_single_secret(self, monkeypatch):
+tests/shared/test_webhook_security.py:217:    def test_get_both_secrets(self, monkeypatch):
+tests/shared/test_webhook_security.py:226:    def test_get_no_secrets(self, monkeypatch):
+tests/shared/test_webhook_security.py:236:class TestStripeSignature:
+tests/shared/test_webhook_security.py:239:    def test_verify_stripe_signature_valid(self, monkeypatch):
+tests/shared/test_webhook_security.py:253:    def test_verify_stripe_no_secret_raises(self, monkeypatch):
+tests/shared/test_webhook_security.py:257:        with pytest.raises(WebhookSignatureError, match="Stripe webhook secret"):
+tests/shared/test_webhook_security.py:261:class TestSignatureHeaderNames:
+tests/shared/test_webhook_security.py:264:    def test_regengine_header(self):
+tests/shared/test_webhook_security.py:268:    def test_stripe_header(self):
+tests/shared/test_webhook_security.py:272:    def test_github_header(self):
+tests/shared/test_webhook_security.py:276:    def test_unknown_provider_fallback(self):
+services/shared/tests/test_auth_1338.py:41:import pytest
+services/shared/tests/test_auth_1338.py:82:def _make_request(headers: dict[str, str] | None = None, path: str = "/x") -> MagicMock:
+services/shared/tests/test_auth_1338.py:91:def _run(coro):
+services/shared/tests/test_auth_1338.py:96:def _make_db_store_stub(*, validate_return=None, rate_limit_return=None):
+services/shared/tests/test_auth_1338.py:97:    """Create a real ``DatabaseAPIKeyStore`` subclass instance with stubs.
+services/shared/tests/test_auth_1338.py:110:@pytest.fixture(autouse=True)
+services/shared/tests/test_auth_1338.py:111:def _clean_auth_env(monkeypatch):
+services/shared/tests/test_auth_1338.py:131:class TestGetKeyStore:
+services/shared/tests/test_auth_1338.py:134:    def test_dev_returns_in_memory(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:138:    def test_test_env_returns_in_memory(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:142:    def test_production_returns_db_store(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:151:    def test_railway_staging_returns_db_store_even_when_legacy_flag_is_false(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:160:    def test_enable_db_api_keys_overrides_dev(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:173:class TestRequireApiKeyMissingHeader:
+services/shared/tests/test_auth_1338.py:174:    def test_missing_header_returns_401(self):
+services/shared/tests/test_auth_1338.py:175:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:187:class TestRequireApiKeyBypass:
+services/shared/tests/test_auth_1338.py:190:    def test_bypass_active_in_development(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:203:    def test_bypass_uses_overridden_tenant_id(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:210:    def test_bypass_key_satisfies_the_webhook_ingest_permission(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:224:    def test_bypass_blocked_when_token_does_not_match(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:228:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:232:    def test_bypass_blocked_in_production(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:238:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:248:class TestRequireApiKeyRetiredEnvironmentMaster:
+services/shared/tests/test_auth_1338.py:249:    @pytest.mark.parametrize("environment_name", ["API_KEY", "REGENGINE_API_KEY"])
+services/shared/tests/test_auth_1338.py:250:    def test_environment_value_is_not_an_authentication_source(self, monkeypatch, environment_name):
+services/shared/tests/test_auth_1338.py:257:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:269:class TestRequireApiKeyInMemoryStoreBranch:
+services/shared/tests/test_auth_1338.py:272:    def test_in_memory_validate_success(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:288:    def test_in_memory_validate_failure_returns_401(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:290:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:295:    def test_in_memory_rate_limit_exceeded(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:307:            with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:321:class TestRequireApiKeyDatabaseStoreBranch:
+services/shared/tests/test_auth_1338.py:324:    def test_db_store_invalid_key_returns_401(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:328:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:332:    def test_db_store_rate_limit_exceeded_returns_429(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:343:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:347:    def test_db_store_happy_path_returns_principal(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:363:    @pytest.mark.parametrize(
+services/shared/tests/test_auth_1338.py:370:    def test_workload_credential_rejected_by_generic_tenant_auth(self, monkeypatch, tenant_id, scopes):
+services/shared/tests/test_auth_1338.py:380:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:392:class TestOptionalApiKey:
+[REDACTED]    def test_no_key_returns_none(self):
+services/shared/tests/test_auth_1338.py:396:    def test_empty_presented_header_is_rejected(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:398:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:402:    def test_valid_key_returns_principal(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:414:    def test_invalid_key_re_raises_401(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:417:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:427:class TestVerifyJurisdictionAccess:
+services/shared/tests/test_auth_1338.py:430:    def _key(self, allowed: list[str]) -> APIKey:
+[REDACTED]    @pytest.mark.parametrize("jurisdiction", ["US", "EU", "UK"])
+services/shared/tests/test_auth_1338.py:440:    def test_federal_root_allowed_for_anyone(self, jurisdiction):
+services/shared/tests/test_auth_1338.py:444:    def test_state_blocked_without_entitlement(self):
+services/shared/tests/test_auth_1338.py:445:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:450:    def test_state_allowed_with_exact_entitlement(self):
+services/shared/tests/test_auth_1338.py:453:    def test_state_allowed_with_prefix_entitlement(self):
+services/shared/tests/test_auth_1338.py:457:    def test_state_blocked_when_only_other_state_allowed(self):
+services/shared/tests/test_auth_1338.py:458:        with pytest.raises(HTTPException):
+services/shared/tests/test_auth_1338.py:461:    def test_unknown_root_blocked(self):
+services/shared/tests/test_auth_1338.py:462:        with pytest.raises(HTTPException):
+services/shared/tests/test_auth_1338.py:465:    def test_empty_jurisdiction_blocked(self):
+services/shared/tests/test_auth_1338.py:466:        with pytest.raises(HTTPException):
+services/shared/tests/test_auth_1338.py:469:    def test_none_allowed_jurisdictions_treated_as_empty(self):
+services/shared/tests/test_auth_1338.py:478:        with pytest.raises(HTTPException):
+services/shared/tests/test_auth_1338.py:487:class TestInitDemoKeys:
+services/shared/tests/test_auth_1338.py:488:    def test_returns_demo_and_admin_keys(self, monkeypatch):
+services/shared/tests/test_auth_1338.py:513:class TestGetTenantId:
+services/shared/tests/test_auth_1338.py:514:    def test_returns_valid_uuid(self):
+services/shared/tests/test_auth_1338.py:517:    def test_missing_header_400(self):
+services/shared/tests/test_auth_1338.py:518:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:523:    def test_empty_header_400(self):
+services/shared/tests/test_auth_1338.py:524:        with pytest.raises(HTTPException) as exc:
+services/shared/tests/test_auth_1338.py:528:    def test_invalid_uuid_400(self):
+services/shared/tests/test_auth_1338.py:529:        with pytest.raises(HTTPException) as exc:
+tests/shared/test_idempotency_middleware_1338.py:15:Targets the #1338 acceptance goal (``pytest tests/shared
+tests/shared/test_idempotency_middleware_1338.py:29:import pytest
+tests/shared/test_idempotency_middleware_1338.py:45:class _FakeAsyncRedis:
+tests/shared/test_idempotency_middleware_1338.py:52:    def __init__(self, should_fail: bool = False):
+tests/shared/test_idempotency_middleware_1338.py:58:    async def ping(self):
+tests/shared/test_idempotency_middleware_1338.py:63:    async def get(self, key):
+tests/shared/test_idempotency_middleware_1338.py:71:    async def set(self, key, value, *, nx, ex):
+tests/shared/test_idempotency_middleware_1338.py:78:    async def eval(self, script, numkeys, key, expected, *args):
+tests/shared/test_idempotency_middleware_1338.py:87:    async def setex(self, key, ttl, value):
+tests/shared/test_idempotency_middleware_1338.py:110:@pytest.fixture(autouse=True)
+tests/shared/test_idempotency_middleware_1338.py:111:def _internal_secret_configured(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:115:def _tenant_headers(tenant: str) -> Dict[str, str]:
+tests/shared/test_idempotency_middleware_1338.py:123:def _patched_middleware(
+tests/shared/test_idempotency_middleware_1338.py:124:    monkeypatch: pytest.MonkeyPatch,
+tests/shared/test_idempotency_middleware_1338.py:134:    async def _fake_get_client(self):
+tests/shared/test_idempotency_middleware_1338.py:145:def _build_app(
+tests/shared/test_idempotency_middleware_1338.py:159:    async def echo(request: Request):
+tests/shared/test_idempotency_middleware_1338.py:166:    async def ping():
+tests/shared/test_idempotency_middleware_1338.py:181:class TestModuleConstants:
+tests/shared/test_idempotency_middleware_1338.py:184:    def test_key_prefix_is_idempotency_colon(self):
+tests/shared/test_idempotency_middleware_1338.py:189:    def test_ttl_is_24_hours(self):
+tests/shared/test_idempotency_middleware_1338.py:201:class TestShouldCache:
+tests/shared/test_idempotency_middleware_1338.py:204:    @pytest.fixture
+tests/shared/test_idempotency_middleware_1338.py:205:    def middleware(self):
+tests/shared/test_idempotency_middleware_1338.py:208:    @pytest.mark.parametrize("method", ["POST", "post", "Post", "PoSt"])
+tests/shared/test_idempotency_middleware_1338.py:209:    def test_post_is_cached_regardless_of_case(self, middleware, method):
+tests/shared/test_idempotency_middleware_1338.py:214:    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+tests/shared/test_idempotency_middleware_1338.py:215:    def test_non_post_methods_not_cached(self, middleware, method):
+tests/shared/test_idempotency_middleware_1338.py:226:class TestCacheKeyComposition:
+tests/shared/test_idempotency_middleware_1338.py:229:    @pytest.fixture
+tests/shared/test_idempotency_middleware_1338.py:230:    def middleware(self):
+tests/shared/test_idempotency_middleware_1338.py:233:    def test_key_contains_prefix_tenant_and_idempotency_key(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:237:    def test_different_tenants_produce_different_cache_keys(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:244:    def test_anonymous_sentinel_when_tenant_is_none(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:253:    def test_anonymous_sentinel_when_tenant_is_empty_string(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:258:    def test_key_stable_for_same_inputs(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:271:class TestResolveTenantId:
+tests/shared/test_idempotency_middleware_1338.py:277:    @pytest.fixture
+tests/shared/test_idempotency_middleware_1338.py:278:    def middleware(self):
+tests/shared/test_idempotency_middleware_1338.py:281:    def _request(
+tests/shared/test_idempotency_middleware_1338.py:306:    def test_principal_tenant_wins_over_header(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:314:    def test_raw_tenant_header_is_never_a_tenant_source(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:324:    def test_internal_tenant_header_used_when_no_principal(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:329:    def test_internal_tenant_header_ignored_without_the_secret(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:334:    def test_internal_tenant_header_ignored_with_a_wrong_secret(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:342:    def test_raw_header_cannot_override_the_api_key_tenant(self, middleware, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:356:    def test_api_key_lookup_used_when_no_principal_or_header(self, middleware, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:364:    def test_header_stripped_of_whitespace(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:370:    def test_none_when_neither_principal_nor_header(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:374:    def test_empty_principal_tenant_falls_through_to_next_trusted_source(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:382:    def test_empty_principal_tenant_does_not_fall_through_to_raw_header(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:386:    def test_missing_principal_attribute_is_safe(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:391:        class _Empty:
+tests/shared/test_idempotency_middleware_1338.py:398:    def test_principal_without_tenant_id_attr_falls_through(self, middleware):
+tests/shared/test_idempotency_middleware_1338.py:404:        class _PrincipalNoTenant:
+tests/shared/test_idempotency_middleware_1338.py:418:class TestIdempotencyDependency:
+tests/shared/test_idempotency_middleware_1338.py:421:    def _request(self, method: str, headers: Optional[Dict[str, str]] = None) -> Request:
+tests/shared/test_idempotency_middleware_1338.py:427:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:428:    async def test_strict_raises_400_on_missing_key_post(self):
+tests/shared/test_idempotency_middleware_1338.py:430:        with pytest.raises(HTTPException) as exc_info:
+tests/shared/test_idempotency_middleware_1338.py:435:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:436:    async def test_strict_returns_key_when_present(self):
+tests/shared/test_idempotency_middleware_1338.py:441:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:442:    async def test_non_strict_returns_none_on_missing_post_key(self):
+tests/shared/test_idempotency_middleware_1338.py:449:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:450:    async def test_non_strict_returns_key_when_present(self):
+tests/shared/test_idempotency_middleware_1338.py:455:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:456:    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+tests/shared/test_idempotency_middleware_1338.py:457:    async def test_non_post_returns_none_even_in_strict_mode(self, method):
+tests/shared/test_idempotency_middleware_1338.py:464:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:465:    async def test_key_over_255_chars_rejected_even_when_non_strict(self):
+tests/shared/test_idempotency_middleware_1338.py:471:        with pytest.raises(HTTPException) as exc_info:
+tests/shared/test_idempotency_middleware_1338.py:476:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:477:    async def test_key_exactly_255_chars_accepted(self):
+tests/shared/test_idempotency_middleware_1338.py:485:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:486:    async def test_strict_mode_matches_post_case_insensitively(self):
+tests/shared/test_idempotency_middleware_1338.py:491:        with pytest.raises(HTTPException):
+tests/shared/test_idempotency_middleware_1338.py:500:class TestDispatchPostOnly:
+tests/shared/test_idempotency_middleware_1338.py:503:    def test_get_request_bypasses_middleware(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:516:    def test_post_without_idempotency_header_skips_cache(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:529:    def test_post_with_overlong_idempotency_key_passes_through(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:547:class TestDispatchGracefulDegrade:
+tests/shared/test_idempotency_middleware_1338.py:551:    def test_redis_unavailable_request_still_succeeds(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:564:class TestDispatchCacheHit:
+tests/shared/test_idempotency_middleware_1338.py:567:    def test_second_request_returns_cached_body(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:576:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:593:    def test_cache_key_in_redis_matches_tenant_scoped_format(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:610:    def test_setex_uses_24_hour_ttl(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:628:    def test_cached_payload_preserves_status_and_body(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:652:class TestDispatch2xxOnlyCaching:
+tests/shared/test_idempotency_middleware_1338.py:656:    @pytest.mark.parametrize("status", [200, 201, 202, 299])
+tests/shared/test_idempotency_middleware_1338.py:657:    def test_2xx_status_codes_are_cached(self, monkeypatch, status):
+tests/shared/test_idempotency_middleware_1338.py:663:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:676:    @pytest.mark.parametrize("status", [300, 400, 401, 403, 404, 409, 500, 503])
+tests/shared/test_idempotency_middleware_1338.py:677:    def test_non_2xx_status_codes_are_not_cached(self, monkeypatch, status):
+tests/shared/test_idempotency_middleware_1338.py:685:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:699:class TestDispatchCrossTenantIsolation:
+tests/shared/test_idempotency_middleware_1338.py:703:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:704:    async def test_two_tenants_same_key_do_not_collide(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:710:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:734:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:735:    async def test_body_tenant_cannot_spoof_cache_namespace(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:744:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:775:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:776:    async def test_anonymous_request_is_not_cached(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:799:class TestDispatchCacheErrorResilience:
+tests/shared/test_idempotency_middleware_1338.py:802:    def test_cache_read_error_lets_request_proceed(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:807:        class _ReadFailingRedis(_FakeAsyncRedis):
+tests/shared/test_idempotency_middleware_1338.py:808:            async def get(self, key):  # type: ignore[override]
+tests/shared/test_idempotency_middleware_1338.py:816:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:830:    def test_cache_write_error_returns_original_response(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:834:        class _WriteFailingRedis(_FakeAsyncRedis):
+tests/shared/test_idempotency_middleware_1338.py:835:            async def setex(self, key, ttl, value):  # type: ignore[override]
+tests/shared/test_idempotency_middleware_1338.py:852:class TestOperationBinding:
+tests/shared/test_idempotency_middleware_1338.py:853:    @pytest.mark.parametrize(
+tests/shared/test_idempotency_middleware_1338.py:863:    def test_key_reuse_for_different_operation_conflicts(self, monkeypatch, path, body, extra):
+tests/shared/test_idempotency_middleware_1338.py:872:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:884:    def test_legacy_unbound_cache_entry_is_not_replayed_or_reexecuted(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:906:    @pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:907:    async def test_concurrent_identical_replay_only_dispatches_once(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:915:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:937:    def test_closed_mode_rejects_initial_connection_failure(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:945:    def test_binary_response_round_trips_exactly(self, monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:950:        async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:960:@pytest.fixture
+tests/shared/test_idempotency_middleware_1338.py:961:async def disposable_redis(tmp_path):
+tests/shared/test_idempotency_middleware_1338.py:972:        pytest.skip("redis-server executable is required for real Redis reservation tests")
+tests/shared/test_idempotency_middleware_1338.py:1001:                pytest.fail("Disposable Redis failed to start")
+tests/shared/test_idempotency_middleware_1338.py:1009:@pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:1010:async def test_real_redis_concurrent_replay(monkeypatch, disposable_redis):
+tests/shared/test_idempotency_middleware_1338.py:1017:    async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:1045:@pytest.mark.asyncio
+tests/shared/test_idempotency_middleware_1338.py:1046:async def test_streamed_oversized_body_rejected_before_reservation(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:1050:    async def chunks():
+tests/shared/test_idempotency_middleware_1338.py:1067:def test_handler_exception_retains_ambiguous_reservation(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:1072:    async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:1085:def test_uncertain_cache_write_does_not_redispatch(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:1086:    class FailingPublishRedis(_FakeAsyncRedis):
+tests/shared/test_idempotency_middleware_1338.py:1087:        async def eval(self, *args):
+tests/shared/test_idempotency_middleware_1338.py:1097:def test_failed_route_releases_reservation_for_retry(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:1101:    async def handler(request):
+tests/shared/test_idempotency_middleware_1338.py:1114:@pytest.mark.parametrize(
+tests/shared/test_idempotency_middleware_1338.py:1121:def test_authoritative_key_permission_narrowing_blocks_cached_replay(monkeypatch, changed_field, new_value):
+tests/shared/test_idempotency_middleware_1338.py:1130:    def execute(statement, parameters):
+tests/shared/test_idempotency_middleware_1338.py:1160:@pytest.mark.parametrize("signature_change", ["missing", "wrong", "rotated"])
+tests/shared/test_idempotency_middleware_1338.py:1161:@pytest.mark.parametrize("replay_suffix", ["", "/"])
+tests/shared/test_idempotency_middleware_1338.py:1162:def test_webhook_replay_cannot_bypass_real_signature_dependency(monkeypatch, signature_change, replay_suffix):
+tests/shared/test_idempotency_middleware_1338.py:1177:    async def webhook(_signature=Depends(_verify_webhook_signature)):
+tests/shared/test_idempotency_middleware_1338.py:1205:def test_revoked_cookie_session_rechecks_real_session_dependency(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:1224:    async def receipt(context=Depends(get_current_active_session_context)):
+tests/shared/test_idempotency_middleware_1338.py:1241:@pytest.mark.parametrize("path", ["/auth/refresh", "/v1/auth/accept-invite", "/session-protected"])
+tests/shared/test_idempotency_middleware_1338.py:1242:def test_single_use_authentication_is_never_cached(monkeypatch, path):
+tests/shared/test_idempotency_middleware_1338.py:1250:    async def single_use(request: Request):
+tests/shared/test_idempotency_middleware_1338.py:1257:    async def exchange(_auth=Depends(single_use)):
+tests/shared/test_idempotency_middleware_1338.py:1270:def test_real_refresh_route_ignores_preexisting_cached_token_response(monkeypatch):
+tests/shared/test_idempotency_middleware_1338.py:1282:    async def receive():
+9.0.3 7.13.5 6.152.4
+CONFTOP
+"""Root pytest configuration.
+
+This conftest exists to solve the multi-service ``app/`` collision problem:
+the repo has multiple service packages under ``services/<svc>/`` each with an
+``app/`` subpackage. When pytest collects tests across services, only one
+``app`` can live in ``sys.modules`` at a time, so tests from the "other"
+service fail with ``ModuleNotFoundError: No module named 'app.X'``.
+
+The fix: hook into pytest's collection so that immediately before we import a
+test module, we detect which service owns it and (a) invalidate the cached
+``app`` module, (b) reorder ``sys.path`` so that service's directory wins.
+
+This keeps feature code untouched while letting the full test suite collect
+in a single ``pytest`` run.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import re
+import sys
+from contextlib import suppress
+from pathlib import Path
+from types import ModuleType
+from typing import Optional
+
+import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parent
+_SERVICES_DIR = _REPO_ROOT / "services"
+
+# Known services that expose their own top-level ``app/`` package.
+_APP_BEARING_SERVICES = ("admin", "compliance", "graph", "ingestion", "nlp", "scheduler")
+
+# Tests under top-level ``tests/`` that reach into a specific service via
+# bare ``from app.X`` imports. The conftest flips sys.path to the named
+# service before the test module is imported so ``app`` resolves correctly.
+# Keys are path suffixes (as shipped, always POSIX); values are service
+# names from ``_APP_BEARING_SERVICES``.
+_TEST_TO_SERVICE_OVERRIDES = {
+    "tests/billing/test_stripe_billing.py": "ingestion",
+    "tests/billing/test_stripe_webhook_ordering_1196.py": "ingestion",
+    "tests/contract/test_admin_api_contract.py": "admin",
+    "tests/ingestion/test_ingest_url.py": "ingestion",
+    "tests/security/test_audit_integrity.py": "admin",
+    "tests/security/test_strict_ciam_compliance.py": "admin",
+    "tests/test_trace_engine.py": "ingestion",
+    "tests/test_compliance_control_plane_e2e.py": "ingestion",
+    "tests/test_rules_engine.py": "ingestion",
+    "tests/test_rules_engine_unit.py": "ingestion",
+    "tests/graph/test_hierarchy_builder_global_scope.py": "graph",
+}
+_KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {service: {} for service in _APP_BEARING_SERVICES}
+_KNOWN_SHARED_MODULES: dict[str, ModuleType] = {}
+
+
+def _service_from_module_file(module: ModuleType | None) -> Optional[str]:
+    """Infer which service owns an imported ``app`` module."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    if not mod_file:
+        return None
+
+    for service in _APP_BEARING_SERVICES:
+        service_root = str(_SERVICES_DIR / service)
+        if service_root and service_root in mod_file:
+            return service
+    return None
+
+
+def _evict_module(name: str) -> None:
+    """Remove a module and detach any lingering package attribute."""
+    sys.modules.pop(name, None)
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is None or not hasattr(parent, child_name):
+        return
+
+    with suppress(AttributeError):
+        delattr(parent, child_name)
+
+
+def _bind_module(name: str, module: ModuleType) -> None:
+    """Install a cached real module and reattach it to its parent package."""
+    sys.modules[name] = module
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is not None:
+        setattr(parent, child_name, module)
+
+
+def _remember_real_module(
+    cache: dict[str, ModuleType],
+    name: str,
+    module: ModuleType | None,
+    expected_root: str,
+) -> bool:
+    """Cache real modules so later stub cleanup can restore them."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    mod_spec = getattr(module, "__spec__", None)
+    if module is None or mod_spec is None:
+        return False
+    if expected_root:
+        try:
+            module_path = Path(mod_file).resolve()
+            expected_path = Path(expected_root).resolve()
+            module_path.relative_to(expected_path)
+        except (OSError, ValueError):
+            return False
+    cache[name] = module
+    return True
+
+
+def _repair_package_links(prefix: str) -> None:
+    """Reattach submodules to their live parent packages."""
+    names = sorted(
+        [name for name in sys.modules if name == prefix or name.startswith(f"{prefix}.")],
+        key=lambda value: value.count("."),
+    )
+    for name in names:
+        if "." not in name:
+            continue
+        parent_name, _, child_name = name.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        child = sys.modules.get(name)
+        if parent is not None and child is not None:
+            setattr(parent, child_name, child)
+
+
+def _service_for_path(path: Path) -> Optional[str]:
+    """Return the service name owning ``path``, or ``None`` if unowned."""
+    try:
+        rel = path.resolve().relative_to(_SERVICES_DIR)
+    except ValueError:
+        rel = None
+
+    if rel is not None:
+        parts = rel.parts
+        if parts and parts[0] in _APP_BEARING_SERVICES:
+            return parts[0]
+
+    # Check top-level tests/* overrides.
+    try:
+        rel_root = path.resolve().relative_to(_REPO_ROOT)
+    except ValueError:
+        return None
+    key = rel_root.as_posix()
+    return _TEST_TO_SERVICE_OVERRIDES.get(key)
+
+
+def _activate_service_for_path(path: Path) -> None:
+    """Flip import context for any test path owned by a service."""
+    service = _service_for_path(path)
+    if service is not None:
+        _switch_to_service(service)
+
+
+def _switch_to_service(service: str) -> None:
+    """Make ``services/<service>/`` the active site for the ``app`` package.
+
+    Python caches imported packages in ``sys.modules``. If ``app`` was
+    imported earlier from a sibling service, subsequent ``from app.X``
+    imports will resolve against that stale package. Evict the cache and
+    reorder ``sys.path`` so the fresh import resolves correctly.
+    """
+    service_dir = _SERVICES_DIR / service
+    service_dir_str = str(service_dir)
+    service_cache = _KNOWN_SERVICE_MODULES.setdefault(service, {})
+    _prepare_service_test_environment(service)
+
+    # Drop any cached bare ``main`` and ``app`` (plus app submodules) so
+    # reimport uses the correct service. Several service-local tests import
+    # ``from main import app`` at module scope, so only evict
+TOOLS

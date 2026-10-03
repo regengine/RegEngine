@@ -1,0 +1,633 @@
+UTC: 2026-10-03T00:37:17.191184+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["/Users/sellers/.codex/skills/playwright/SKILL.md","/Users/sellers/.agents/skills/synced/f39d0c09-f607-4b9c-bde5-dbea41e3781a_816383df-c749-4c89-9d32-137316881240/regengine-service-runner/SKILL.md","docs/qa/2026-10-02/scripts/node-isolation.cjs","frontend/package.json","frontend/next.config.ts","frontend/playwright.config.ts","frontend/node_modules/next/dist/docs/01-app/01-getting-started/01-installation.mdx"]; [print("FILE",p,"\n",Path(p).read_text()) for p in files if Path(p).is_file()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE /Users/sellers/.codex/skills/playwright/SKILL.md 
+ ---
+name: "playwright"
+description: "Use when the task requires automating a real browser from the terminal (navigation, form filling, snapshots, screenshots, data extraction, UI-flow debugging) via `playwright-cli` or the bundled wrapper script."
+---
+
+
+# Playwright CLI Skill
+
+Drive a real browser from the terminal using `playwright-cli`. Prefer the bundled wrapper script so the CLI works even when it is not globally installed.
+Treat this skill as CLI-first automation. Do not pivot to `@playwright/test` unless the user explicitly asks for test files.
+
+## Prerequisite check (required)
+
+Before proposing commands, check whether `npx` is available (the wrapper depends on it):
+
+```bash
+command -v npx >/dev/null 2>&1
+```
+
+If it is not available, pause and ask the user to install Node.js/npm (which provides `npx`). Provide these steps verbatim:
+
+```bash
+# Verify Node/npm are installed
+node --version
+npm --version
+
+# If missing, install Node.js/npm, then:
+npm install -g @playwright/cli@latest
+playwright-cli --help
+```
+
+Once `npx` is present, proceed with the wrapper script. A global install of `playwright-cli` is optional.
+
+## Skill path (set once)
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export PWCLI="$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
+```
+
+User-scoped skills install under `$CODEX_HOME/skills` (default: `~/.codex/skills`).
+
+## Quick start
+
+Use the wrapper script:
+
+```bash
+"$PWCLI" open https://playwright.dev --headed
+"$PWCLI" snapshot
+"$PWCLI" click e15
+"$PWCLI" type "Playwright"
+"$PWCLI" press Enter
+"$PWCLI" screenshot
+```
+
+If the user prefers a global install, this is also valid:
+
+```bash
+npm install -g @playwright/cli@latest
+playwright-cli --help
+```
+
+## Core workflow
+
+1. Open the page.
+2. Snapshot to get stable element refs.
+3. Interact using refs from the latest snapshot.
+4. Re-snapshot after navigation or significant DOM changes.
+5. Capture artifacts (screenshot, pdf, traces) when useful.
+
+Minimal loop:
+
+```bash
+"$PWCLI" open https://example.com
+"$PWCLI" snapshot
+"$PWCLI" click e3
+"$PWCLI" snapshot
+```
+
+## When to snapshot again
+
+Snapshot again after:
+
+- navigation
+- clicking elements that change the UI substantially
+- opening/closing modals or menus
+- tab switches
+
+Refs can go stale. When a command fails due to a missing ref, snapshot again.
+
+## Recommended patterns
+
+### Form fill and submit
+
+```bash
+"$PWCLI" open https://example.com/form
+"$PWCLI" snapshot
+"$PWCLI" fill e1 "user@example.com"
+"$PWCLI" fill e2 "password123"
+"$PWCLI" click e3
+"$PWCLI" snapshot
+```
+
+### Debug a UI flow with traces
+
+```bash
+"$PWCLI" open https://example.com --headed
+"$PWCLI" tracing-start
+# ...interactions...
+"$PWCLI" tracing-stop
+```
+
+### Multi-tab work
+
+```bash
+"$PWCLI" tab-new https://example.com
+"$PWCLI" tab-list
+"$PWCLI" tab-select 0
+"$PWCLI" snapshot
+```
+
+## Wrapper script
+
+The wrapper script uses `npx --package @playwright/cli playwright-cli` so the CLI can run without a global install:
+
+```bash
+"$PWCLI" --help
+```
+
+Prefer the wrapper unless the repository already standardizes on a global install.
+
+## References
+
+Open only what you need:
+
+- CLI command reference: `references/cli.md`
+- Practical workflows and troubleshooting: `references/workflows.md`
+
+## Guardrails
+
+- Always snapshot before referencing element ids like `e12`.
+- Re-snapshot when refs seem stale.
+- Prefer explicit commands over `eval` and `run-code` unless needed.
+- When you do not have a fresh snapshot, use placeholder refs like `eX` and say why; do not bypass refs with `run-code`.
+- Use `--headed` when a visual check will help.
+- When capturing artifacts in this repo, use `output/playwright/` and avoid introducing new top-level artifact folders.
+- Default to CLI commands and workflows, not Playwright test specs.
+
+FILE /Users/sellers/.agents/skills/synced/f39d0c09-f607-4b9c-bde5-dbea41e3781a_816383df-c749-4c89-9d32-137316881240/regengine-service-runner/SKILL.md 
+ ---
+name: regengine-service-runner
+description: |
+  Use this skill for ANY local development question involving running RegEngine. This includes:
+  running, starting, or launching the app (the consolidated monolith, or legacy per-service
+  entrypoints: admin, ingestion, compliance, graph, nlp, scheduler, frontend); asking about ports,
+  uvicorn/gunicorn commands, or startup scripts; CORS or proxy errors; ModuleNotFoundError or
+  import issues; setting up dependencies like Postgres, Redis, or Neo4j; health checks;
+  docker-compose; reading logs; or diagnosing why something crashes or won't start. If the user
+  mentions a RegEngine service or module and needs to run it, configure it, debug it, or
+  understand how it works locally — use this skill.
+---
+
+# RegEngine Runner & Debug
+
+> Verified against `main` @ `a655670` (2026-07-14). RegEngine is a **consolidated FastAPI
+> monolith** (`server/main.py`) + Next.js 16 frontend. The old 6-microservice runtime described in
+> earlier versions of this skill no longer exists in production. Former service directories remain
+> as code seams; their `main.py` entrypoints are debug-only.
+
+## Running the app
+
+```bash
+# From project root — THE production-shaped way to run RegEngine locally:
+export PYTHONPATH=$(pwd):$PYTHONPATH
+uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Production-equivalent (what the container runs):
+bash scripts/run-migrations.sh && \
+gunicorn server.main:app --worker-class uvicorn.workers.UvicornWorker \
+  --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:${PORT:-8000}
+
+# Frontend:
+cd frontend && npm run dev   # port 3000, proxies backend via /api/proxy
+```
+
+Legacy per-service entrypoints (`services/<name>/main.py`) still start standalone apps for
+focused debugging, but routes/behavior can differ from the monolith mount — prefer
+`server.main:app` unless you specifically need isolation.
+
+## Environment
+
+`.env.example` at repo root documents **55** vars. Minimum for local dev:
+
+```
+DATABASE_URL=postgresql://[REDACTED]@localhost:5432/regengine
+JWT_SECRET=[REDACTED]
+SUPABASE_URL=http://localhost:54321
+SUPABASE_KEY=<local-anon-key>
+```
+
+Optional (graceful degradation — readiness never fails on these): `REDIS_URL`, `NEO4J_URI`/
+`NEO4J_USER`/`NEO4J_PASSWORD` (graph mirror; graph routers are experimental and OFF in prod),
+`OBJECT_STORAGE_ENDPOINT_URL`/`..._ACCESS_KEY_ID`/`..._SECRET_ACCESS_KEY` (S3-compatible;
+checked via `services/ingestion/app/s3_utils.is_object_storage_configured`).
+
+## Router surface (which endpoints exist)
+
+`server/main.py` mounts: always-on core (`/health`, `/readiness`, `/metrics`, status, document
+ingestion, **webhooks**, FSMA-readiness compat) + every feature router unless disabled.
+
+- `DISABLED_ROUTERS=name1,name2` — disable by name (typos are logged as warnings).
+- `_EXPERIMENTAL_ROUTERS` (auto-OFF in production unless `ENABLE_EXPERIMENTAL_ROUTERS=true`):
+  scraping, discovery, sources, sandbox, sensitech, audit, sop, export, qr_decoder, label_vision,
+  exchange, recall_simulations, graph, nlp.
+- Reference: `docs/engineering/ROUTER_SURFACE.md`.
+
+Key production-default feature routers: csv, edi, epcis_ingestion, inflow_workbench, fda_export,
+proof_verify, score, portal, billing, alerts, onboarding, recall, supplier_mgmt, audit_log,
+product_catalog, team_mgmt, settings, integration.
+
+## Health checks
+
+```bash
+curl -s localhost:8000/health | python -m json.tool      # liveness
+curl -s localhost:8000/readiness | python -m json.tool   # deep probe
+```
+
+`/readiness`: **Postgres required (503 if down)**; Redis probed but non-fatal; Neo4j probed only
+when the graph subsystem is mounted, else reported `not_probed`.
+
+## Background work
+
+In-process: `server/workers/embedded_scheduler.py` + `task_processor.py`; pg_notify-based task
+queue (no Kafka in the deployed path). Scheduler status: `/v1/scheduler/status` and
+`server/routes_scheduler_status.py`.
+
+## Docker Compose
+
+`docker-compose.dev.yml` is the checked-in dev stack. Check the file before assuming which
+dependencies it starts.
+
+## Common startup failures
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `ModuleNotFoundError: shared` / `services` | PYTHONPATH not set | `export PYTHONPATH=$(pwd):$PYTHONPATH` from repo root |
+| `ConnectionRefusedError` on 5432 | Postgres not running | start Postgres (compose or local) |
+| `/readiness` 503 | DB down or migrations missing | `bash scripts/run-migrations.sh` |
+| Router missing in prod | it's in `_EXPERIMENTAL_ROUTERS` | set `ENABLE_EXPERIMENTAL_ROUTERS=true` (non-prod) |
+| `DISABLED_ROUTERS` typo warning | name doesn't match a router | check names in `server/main.py` |
+| `address already in use` | port conflict | `lsof -i :8000` |
+
+## Middleware stack (per request)
+
+Request ID → security headers → rate limiting (`RateLimitHeadersMiddleware`) → observability
+(OpenTelemetry) → CORS → request safety. Logs are structlog JSON — pipe through `jq` to read.
+
+FILE docs/qa/2026-10-02/scripts/node-isolation.cjs 
+ // QA-only process guard: do not read dotenv/credential files or connect off-host.
+// Load with NODE_OPTIONS=--require=/absolute/path/to/this/file.
+const fs = require('node:fs');
+const path = require('node:path');
+const net = require('node:net');
+const dns = require('node:dns');
+const { syncBuiltinESMExports } = require('node:module');
+
+function sensitive(file) {
+  if (typeof file !== 'string' && !(file instanceof URL)) return false;
+  const name = String(file);
+  return /(^|[/\\])\.env(?:[./\\]|$)/.test(name)
+    || /(^|[/\\])(?:\.npmrc|\.netrc|credentials|id_rsa|id_ed25519)(?:[/\\]|$)/.test(name);
+}
+function absent(file) {
+  const error = new Error('QA isolation: protected configuration file unavailable');
+  error.code = 'ENOENT';
+  return error;
+}
+for (const name of ['readFileSync', 'openSync', 'statSync', 'lstatSync', 'accessSync']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return original.call(this, file, ...args);
+  };
+}
+const existsSync = fs.existsSync;
+fs.existsSync = function (file) { return !sensitive(file) && existsSync.call(this, file); };
+for (const name of ['readFile', 'open', 'stat', 'lstat', 'access']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) {
+      const callback = args.at(-1);
+      if (typeof callback === 'function') return queueMicrotask(() => callback(absent(file)));
+      throw absent(file);
+    }
+    return original.call(this, file, ...args);
+  };
+  const promiseOriginal = fs.promises[name];
+  fs.promises[name] = async function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return promiseOriginal.call(this, file, ...args);
+  };
+}
+function local(host) {
+  return !host || ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
+}
+const connect = net.Socket.prototype.connect;
+net.Socket.prototype.connect = function (...args) {
+  const options = args[0];
+  const host = options && typeof options === 'object' ? options.host : typeof args[1] === 'string' ? args[1] : undefined;
+  if (!local(host)) throw new Error('QA isolation: off-host socket blocked');
+  return connect.apply(this, args);
+};
+for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny']) {
+  const original = dns[name];
+  dns[name] = function (hostname, ...args) {
+    if (!local(hostname)) throw new Error('QA isolation: off-host DNS blocked');
+    return original.call(this, hostname, ...args);
+  };
+}
+const fetch = globalThis.fetch;
+if (fetch) globalThis.fetch = async function (input, ...args) {
+  const raw = typeof input === 'string' || input instanceof URL ? input : input.url;
+  const target = new URL(raw, 'http://localhost');
+  if (!local(target.hostname)) throw new Error('QA isolation: off-host fetch blocked');
+  return fetch.call(this, input, ...args);
+};
+syncBuiltinESMExports();
+
+FILE frontend/package.json 
+ {
+  "name": "regengine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && node scripts/design-lint.mjs",
+    "design:lint": "node scripts/design-lint.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
+    "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
+  },
+  "knip": {
+    "entry": [
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
+    ]
+  },
+  "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@sentry/nextjs": "10.75.1",
+    "@supabase/ssr": "~0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@tanstack/react-query": "~5.103.2",
+    "@tanstack/react-table": "^9.2.4",
+    "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "~1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
+    "framer-motion": "~13.4.0",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "next-themes": "^0.4.6",
+    "posthog-js": "^1.434.5",
+    "qrcode": "^1.5.4",
+    "react": "~18.3.0",
+    "react-dom": "~18.3.0",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "autoprefixer": "^10.6.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "jsdom": "29.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.4"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.63.4",
+    "@rollup/rollup-linux-x64-musl": "4.63.4"
+  },
+  "overrides": {
+    "tar": ">=7.5.10",
+    "rollup": "4.59.0",
+    "esbuild": "0.27.3",
+    "fast-uri": "^3.1.5",
+    "minimatch": ">=3.1.3",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "7.0.3",
+    "workbox-build": {
+      "rollup": "2.79.2"
+    },
+    "yauzl": ">=2.10.1",
+    "next": {
+      "sharp": ">=0.35.0"
+    },
+    "brace-expansion": "^5.0.9"
+  }
+}
+
+FILE frontend/playwright.config.ts 
+ 
+import { defineConfig, devices } from '@playwright/test';
+
+if (process.env.FORCE_COLOR) {
+    delete process.env.NO_COLOR;
+}
+
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const localBaseURL = 'http://localhost:3001';
+const localJwtSigningKey =
+    process.env.JWT_SIGNING_KEY ||
+    process.env.AUTH_SECRET_KEY ||
+    'playwright-local-jwt-signing-key-2026';
+const localOtpHmacSecret =
+    [REDACTED] ||
+    'playwright-local-otp-hmac-secret-2026-minimum-32-bytes';
+const localTestUserEmail = process.env.TEST_USER_EMAIL || 'playwright-e2e@example.com';
+const localTestPassword = [REDACTED] || 'Trace204!Playwright1';
+const localTestAdminEmail =
+    process.env.TEST_ADMIN_EMAIL || 'playwright-sysadmin@example.com';
+const localTestAdminPassword =
+    [REDACTED] || 'Trace204!Playwright1';
+const localBackendBaseURL = 'http://localhost:8000';
+const localEmailOutboxPath =
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
+    '/tmp/regengine-playwright-email-outbox.jsonl';
+const localSharedDatabaseUrl =
+    process.env.DATABASE_URL || 'postgresql://[REDACTED]@127.0.0.1:5432/playwright_shared'; // pragma: allowlist secret — local test service
+const localAdminDatabaseUrl =
+    process.env.ADMIN_FALLBACK_SQLITE || 'sqlite:////tmp/regengine-playwright-admin.db';
+const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
+
+if (!externalBaseURL) {
+    process.env.REGENGINE_ENV = process.env.REGENGINE_ENV || 'development';
+    process.env.JWT_SIGNING_KEY = localJwtSigningKey;
+    process.env.AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY || localJwtSigningKey;
+    process.env.AUTH_OTP_HMAC_SECRET = [REDACTED];
+    process.env.CSRF_SECRET = [REDACTED] || localJwtSigningKey;
+    process.env.TEST_USER_EMAIL = localTestUserEmail;
+    process.env.TEST_PASSWORD = [REDACTED];
+    process.env.TEST_ADMIN_EMAIL = localTestAdminEmail;
+    process.env.TEST_ADMIN_PASSWORD = [REDACTED];
+    // Playwright local mode owns the backend webServer. Ignore externally
+    // provided service URLs so CI cannot accidentally mutate production.
+    process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
+    process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
+    process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
+    process.env.ENABLE_DB_API_KEYS = 'true';
+    process.env.REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379/0';
+    process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
+    process.env.DATABASE_URL = localSharedDatabaseUrl;
+    process.env.ADMIN_FALLBACK_SQLITE = localAdminDatabaseUrl;
+    process.env.WEBAUTHN_EXPECTED_ORIGIN =
+        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL;
+    process.env.WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+    process.env.DISABLE_TASK_WORKER = process.env.DISABLE_TASK_WORKER || 'true';
+    process.env.ALLOW_INMEMORY_SESSION_STORE =
+        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true';
+    // Every seeded passwordless user shares one org/tenant (one organization
+    // per email domain), so the suites' combined traffic exceeds the 100/min
+    // per-tenant production default.
+    process.env.TENANT_RATE_LIMIT_RPM = process.env.TENANT_RATE_LIMIT_RPM || '100000';
+    process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
+        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
+}
+
+const forwardedEnv = { ...process.env };
+delete forwardedEnv.NO_COLOR;
+
+/**
+ * See https://playwright.dev/docs/test-configuration.
+ */
+export default defineConfig({
+    testDir: './tests/e2e',
+    globalSetup: './tests/e2e/global-setup.ts',
+    /* The local webServer runs `next dev`, which compiles each route on
+     * first hit. A cold compile of a heavy page (dashboard, settings) can
+     * exceed Playwright's default 30s test / 5s expect timeouts on a slow
+     * runner, flaking auth-flow on unrelated PRs. Assertions still have to
+     * genuinely pass — this only stops first-render latency from failing
+     * the gate. */
+    timeout: 120_000,
+    expect: { timeout: 15_000 },
+    /* Run tests in files in parallel */
+    fullyParallel: true,
+    /* Fail the build on CI if you accidentally left test.only in the source code. */
+    forbidOnly: !!process.env.CI,
+    /* Retry on CI only — retries=1 handles genuine flakiness; backend-down failures
+     * are caught by the preflight health check before tests run, not by retrying. */
+    retries: process.env.CI ? 1 : 0,
+    /* 2 workers in CI — tests are independent, parallelism halves total run time. */
+    workers: process.env.CI ? 1 : externalBaseURL ? undefined : 1,
+    /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+    reporter: 'html',
+    /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+    use: {
+        /* Base URL — localhost is a secure context in Chromium, so Secure
+         * __Host-regengine_session cookies are accepted without local HTTPS.
+         * Override with PLAYWRIGHT_BASE_URL for staging/prod runs. */
+        baseURL: externalBaseURL || localBaseURL,
+
+        /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+        trace: 'on-first-retry',
+    },
+
+    /* Start the Next.js dev server before running tests in CI.
+     * env: explicitly forward secrets so the Next.js middleware can verify
+     * JWTs signed by the Railway admin service. Without this, the child
+     * process may not inherit CI env vars and every authenticated route
+     * redirects to /login?error=session_expired. */
+    webServer: externalBaseURL
+        ? undefined
+        : [
+            {
+                command: 'env -u NO_COLOR bash ../scripts/start-e2e-backend.sh',
+                url: localAdminHealthUrl,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    PORT: '8000',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
+                    REGENGINE_E2E_EMAIL_OUTBOX:
+                        process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
+                    DATABASE_URL: process.env.DATABASE_URL || localSharedDatabaseUrl,
+                    ADMIN_FALLBACK_SQLITE:
+                        process.env.ADMIN_FALLBACK_SQLITE || localAdminDatabaseUrl,
+                    WEBAUTHN_EXPECTED_ORIGIN:
+                        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL,
+                    WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || 'localhost',
+                    DISABLE_TASK_WORKER: process.env.DISABLE_TASK_WORKER || 'true',
+                    ALLOW_INMEMORY_SESSION_STORE:
+                        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true',
+                    INVITE_BASE_URL: process.env.INVITE_BASE_URL || localBaseURL,
+                },
+            },
+            {
+                command: 'env -u NO_COLOR npm run dev -- -p 3001',
+                url: localBaseURL,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    // Ensure JWT keys reach the dev server for middleware verification.
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    CSRF_SECRET: [REDACTED] || localJwtSigningKey,
+                    TEST_USER_EMAIL: process.env.TEST_USER_EMAIL || localTestUserEmail,
+                    TEST_PASSWORD: [REDACTED] || localTestPassword,
+                    TEST_ADMIN_EMAIL: process.env.TEST_ADMIN_EMAIL || localTestAdminEmail,
+                    TEST_ADMIN_PASSWORD:
+                        [REDACTED] || localTestAdminPassword,
+                    ADMIN_SERVICE_URL: localBackendBaseURL,
+                    INGESTION_SERVICE_URL: localBackendBaseURL,
+                    COMPLIANCE_SERVICE_URL: localBackendBaseURL,
+                    // Supabase config: intentionally omitted for JWT-only E2E mode.
+                    NEXT_PUBLIC_SUPABASE_URL: '',
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
+                    NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES:
+                        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true',
+                },
+            },
+        ],
+
+    /* Configure projects for major browsers */
+    projects: [
+        {
+            name: 'chromium',
+            use: { ...devices['Desktop Chrome'] },
+        },
+    ],
+});
+

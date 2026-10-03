@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "transport": "spy: no upstream network request",
+  "browserClient": "loopback-only HTTP client",
+  "results": [
+    {
+      "path": "/chain",
+      "status": 307,
+      "location": "http://127.0.0.1:3115/bad",
+      "csp": "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "body": ""
+    },
+    {
+      "path": "/bad",
+      "status": 502,
+      "location": null,
+      "csp": "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "body": "QA off-origin redirect blocked"
+    },
+    {
+      "path": "/good",
+      "status": 307,
+      "location": "http://127.0.0.1:3115/done",
+      "csp": "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "body": ""
+    },
+    {
+      "path": "/done",
+      "status": 200,
+      "location": null,
+      "csp": "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "body": "<html><head></head><body>local-only</body></html>"
+    }
+  ],
+  "upstreamCalls": [
+    {
+      "host": "127.0.0.1",
+      "port": 3114,
+      "method": "GET",
+      "path": "/chain"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 3114,
+      "method": "GET",
+      "path": "/bad"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 3114,
+      "method": "GET",
+      "path": "/good"
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 3114,
+      "method": "GET",
+      "path": "/done"
+    }
+  ]
+}

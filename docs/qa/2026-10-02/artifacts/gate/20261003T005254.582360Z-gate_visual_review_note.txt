@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:52:54.582360+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import datetime; p=Path("docs/qa/2026-10-02/GATE-SESSION-LOG.md"); stamp=datetime.datetime.now(datetime.timezone.utc).isoformat(); p.write_text(p.read_text()+f"\n- **{stamp}** Visual evidence review via view_image (local files only): ux-001-mobile-menu-open.jpg, ux-002-verifier-invisible-focus.jpg, ux-003-verifier-scroll-regions-320.jpg, ux-004-demo-status-copy.jpg. Images show real product UI, constrained narrow layouts, clipped code, and static backend-unavailable demo banner. Screenshots alone do not prove focus or Escape events; runtime observations/source must accompany them.\n"); print("Visual review recorded; no browser navigation or network involved.")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Visual review recorded; no browser navigation or network involved.

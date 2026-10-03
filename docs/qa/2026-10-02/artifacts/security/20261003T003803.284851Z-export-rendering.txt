@@ -1,0 +1,443 @@
+UTC: 2026-10-03T00:38:03.284851+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "reference_document|Additional KDEs|redact_pii_extras|json.dumps|def _generate_csv|def _build_fda_package" services/ingestion/app/fda_export_service.py; nl -ba services/ingestion/app/fda_export_service.py | sed -n "100,255p"; sed -n "1,170p" services/ingestion/tests/test_supplier_portal_1342.py; sed -n "1,100p" services/ingestion/tests/test_fda_export_pii_redaction.py'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+66:    "Additional KDEs (JSON)",
+74:    "reference_document_number": "Reference Document Number",
+90:# Reg). These must also be excluded from the "Additional KDEs (JSON)"
+277:    row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
+287:# KDE-key substrings that signal PII in the freeform "Additional KDEs
+326:def _generate_csv(events: list[dict], *, include_pii: bool = False) -> str:
+667:def _build_fda_package(
+698:    chain_bytes = json.dumps(chain_payload, indent=2, sort_keys=True).encode("utf-8")
+819:    manifest_bytes = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+891:def _generate_csv_v2(events: list[dict], *, include_pii: bool = False) -> str:
+   100	        "ship_to_location",
+   101	        "immediate_previous_source",
+   102	        "tlc_source_gln",
+   103	        "tlc_source_fda_reg",
+   104	    }
+   105	)
+   106	
+   107	
+   108	# ---------------------------------------------------------------------------
+   109	# PII Redaction (issue #1219)
+   110	# ---------------------------------------------------------------------------
+   111	# Facility *names* and street/shipping *locations* are customer PII: they
+   112	# identify the business that owns the lot, which is a competitive-intel
+   113	# leak when exports are shared outside the regulated entity (e.g.
+   114	# operator dashboards, exception workflows, downstream reviewers who
+   115	# aren't the FDA).
+   116	#
+   117	# GLN and FDA registration numbers are registered business identifiers —
+   118	# they're regulatory primary keys and the FDA's expected join-key. We
+   119	# keep them visible so the export is still usable for FSMA-204 recall
+   120	# scoping.
+   121	#
+   122	# Default behavior: redact these columns to ``[REDACTED]``. An export
+   123	# with ``include_pii=True`` (gated in the router by the ``fda.export.pii``
+   124	# permission and logged in the audit trail) emits full values.
+   125	
+   126	PII_REDACTION_PLACEHOLDER = "[REDACTED]"
+   127	
+   128	_PII_LOCATION_COLUMNS = frozenset(
+   129	    {
+   130	        "Location Name",
+   131	        "Ship From Name",
+   132	        "Ship To Name",
+   133	        "Immediate Previous Source",
+   134	        "Receiving Location",
+   135	    }
+   136	)
+   137	
+   138	
+   139	def _redact_location_value(value: str, column_name: str, include_pii: bool) -> str:
+   140	    """Redact customer-identifying location values unless ``include_pii=True``.
+   141	
+   142	    Returns ``PII_REDACTION_PLACEHOLDER`` when:
+   143	      • ``include_pii`` is False, AND
+   144	      • ``column_name`` is in :data:`_PII_LOCATION_COLUMNS`, AND
+   145	      • ``value`` is non-empty (empty strings stay empty so blank columns
+   146	        don't become a confusing "[REDACTED]" string in the CSV).
+   147	
+   148	    Otherwise returns ``value`` unchanged. The returned value is *not*
+   149	    re-passed through ``sanitize_cell`` — callers are expected to have
+   150	    already sanitized ``value`` before calling this helper.
+   151	    """
+   152	    if include_pii:
+   153	        return value
+   154	    if column_name not in _PII_LOCATION_COLUMNS:
+   155	        return value
+   156	    if not value:
+   157	        return value
+   158	    return PII_REDACTION_PLACEHOLDER
+   159	
+   160	
+   161	# Extended column spec: original FDA columns + compliance + traceability graph columns
+   162	FDA_COLUMNS_V2 = FDA_COLUMNS + [
+   163	    "Compliance Status",
+   164	    "Rule Failures",
+   165	    # Transformation traceability (added Phase 2)
+   166	    "Trace Relationship",  # "queried" | "linked_via_transformation"
+   167	    "Trace Seed TLC",  # The TLC originally queried (useful when this row is a linked lot)
+   168	]
+   169	
+   170	
+   171	def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
+   172	    """Convert a persisted CTE event to an FDA spreadsheet row.
+   173	
+   174	    Every string-valued cell passes through :func:`sanitize_cell` before
+   175	    being written so that any tenant-controlled free-text field (e.g.
+   176	    ``product_description``, ``ship_from_location``) cannot carry a
+   177	    spreadsheet formula into the FDA auditor's workstation. Hash fields
+   178	    are SHA-256 hex digests and cannot start with a formula prefix, but
+   179	    we sanitize them defensively for symmetry (issue #1081).
+   180	
+   181	    PII redaction (issue #1219): by default, facility *names* and
+   182	    shipping *location* strings are replaced with
+   183	    :data:`PII_REDACTION_PLACEHOLDER`. GLNs and FDA registration numbers
+   184	    remain visible because they are the regulatory primary keys the FDA
+   185	    uses to join exports to registered business entities. Pass
+   186	    ``include_pii=True`` (router-gated on ``fda.export.pii`` permission
+   187	    + audit-logged) to emit the raw values.
+   188	    """
+   189	    kdes = event.get("kdes", {})
+   190	    timestamp = event.get("event_timestamp", "")
+   191	
+   192	    # Split timestamp into date and time
+   193	    event_date = ""
+   194	    event_time = ""
+   195	    if timestamp:
+   196	        try:
+   197	            ts = str(timestamp)
+   198	            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+   199	            event_date = dt.strftime("%Y-%m-%d")
+   200	            event_time = dt.strftime("%H:%M:%S %Z")
+   201	        except (ValueError, AttributeError):
+   202	            event_date = str(timestamp)[:10]
+   203	
+   204	    # Sanitize first, then apply PII redaction. Order matters:
+   205	    # sanitize_cell neutralizes spreadsheet-formula prefixes on the raw
+   206	    # tenant value, and _redact_location_value then replaces the whole
+   207	    # sanitized string with the placeholder when include_pii=False.
+   208	    row = {
+   209	        "Traceability Lot Code (TLC)": sanitize_cell(event.get("traceability_lot_code", "")),
+   210	        "Product Description": sanitize_cell(event.get("product_description", "")),
+   211	        "Quantity": sanitize_cell(event.get("quantity", "")),
+   212	        "Unit of Measure": sanitize_cell(event.get("unit_of_measure", "")),
+   213	        "Event Type (CTE)": sanitize_cell(event.get("event_type", "")),
+   214	        "Event Date": sanitize_cell(event_date),
+   215	        "Event Time": sanitize_cell(event_time),
+   216	        "Location GLN": sanitize_cell(event.get("location_gln", "") or ""),
+   217	        "Location Name": _redact_location_value(
+   218	            sanitize_cell(event.get("location_name", "") or ""),
+   219	            "Location Name",
+   220	            include_pii,
+   221	        ),
+   222	        "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
+   223	        "Ship From Name": _redact_location_value(
+   224	            sanitize_cell(kdes.get("ship_from_location", "") or ""),
+   225	            "Ship From Name",
+   226	            include_pii,
+   227	        ),
+   228	        "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
+   229	        "Ship To Name": _redact_location_value(
+   230	            sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
+   231	            "Ship To Name",
+   232	            include_pii,
+   233	        ),
+   234	        "Immediate Previous Source": _redact_location_value(
+   235	            sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+   236	            "Immediate Previous Source",
+   237	            include_pii,
+   238	        ),
+   239	        "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
+   240	        "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
+   241	        "Source Document": sanitize_cell(event.get("source", "")),
+   242	        "Record Hash (SHA-256)": sanitize_cell(event.get("sha256_hash", "")),
+   243	        "Chain Hash": sanitize_cell(event.get("chain_hash", "")),
+   244	    }
+   245	
+   246	    # Map named KDE columns. Apply PII redaction on the named columns
+   247	    # that land in _PII_LOCATION_COLUMNS (e.g. "Receiving Location").
+   248	    for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
+   249	        raw = kdes.get(kde_key)
+   250	        sanitized = sanitize_cell(raw) if raw else ""
+   251	        row[col_name] = _redact_location_value(sanitized, col_name, include_pii)
+   252	
+   253	    # Remaining KDEs not in named columns → JSON blob.
+   254	    # A JSON-encoded string can still begin with ``=`` once a spreadsheet
+   255	    # renders it into a cell, so sanitize the whole blob as well.
+"""Regression tests for ``services/ingestion/app/supplier_portal.py``.
+
+Part of the #1342 ingestion coverage sweep. Covers link creation,
+listing, revocation, link-scoped detail lookup, and supplier submission
+with DB / in-memory fallback and expiry handling.
+"""
+
+from __future__ import annotations
+
+import importlib
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from typing import Any, Optional
+
+import pytest
+from app import integration_router as ir, supplier_portal as sp
+from app.authz import IngestionPrincipal, get_ingestion_principal
+from app.supplier_portal import (
+    CreatePortalLinkRequest,
+    PortalLinkResponse,
+    SubmissionResult,
+    SupplierSubmission,
+    _db_get_portal_link,
+    _db_store_portal_link,
+    _db_update_portal_link_status,
+    _get_active_portal_link,
+    # Bound before the autouse fixture stubs the module attribute, so the
+    # fail-closed tests below exercise the REAL gate.
+    _portal_subscription_active as _real_portal_subscription_active,
+    router,
+)
+from app.webhook_compat import _verify_api_key
+from app.webhook_models import EventResult, IngestResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+
+
+def _portal_integration_router():
+    return importlib.import_module(f"{sp.__package__}.integration_router")
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+def _reset_rate_limit_bucket():
+    """Clear the per-process rate-limit bucket so the per-link limits added in
+    #2508 do not leak hits across tests in this module."""
+    import shared.tenant_rate_limiting as srl
+
+    hits = getattr(srl._bucket, "_hits", None)
+    if hits is not None:
+        hits.clear()
+
+
+@pytest.fixture(autouse=True)
+def _subscription_gate_defaults_active(monkeypatch):
+    """Default the portal subscription gate to an active entitlement.
+
+    ``_portal_subscription_active`` reads live Redis when REDIS_URL is set
+    (as in CI service containers) and consults the subscription gate's
+    module-level circuit breaker, so unstubbed tests pass or fail depending
+    on breaker state left by earlier tests. Every test here exercises portal
+    behavior *behind* the gate; the gate itself is covered by the explicit
+    subscription tests below, whose own monkeypatch.setattr overrides this.
+    """
+    monkeypatch.setattr(sp, "_portal_subscription_active", lambda _tid: True)
+
+
+@pytest.fixture(autouse=True)
+def _clear_portal_links():
+    sp._portal_links.clear()
+    ir._profile_store.clear()
+    _portal_integration_router()._profile_store.clear()
+    _reset_rate_limit_bucket()
+    yield
+    sp._portal_links.clear()
+    ir._profile_store.clear()
+    _portal_integration_router()._profile_store.clear()
+    _reset_rate_limit_bucket()
+
+
+class _FakeResult:
+    def __init__(self, row=None, rows=None):
+        self._row = row
+        self._rows = rows or []
+
+    def fetchone(self):
+        return self._row
+
+    def fetchall(self):
+        return self._rows
+
+
+class _FakeSession:
+    def __init__(
+        self,
+        row=None,
+        rows=None,
+        raise_on_execute: Optional[Exception] = None,
+    ):
+        self._row = row
+        self._rows = rows or []
+        self._raise = raise_on_execute
+        self.executed: list[tuple] = []
+        self.committed = False
+        self.rolled_back = False
+        self.closed = False
+
+    def execute(self, stmt, params=None):
+        self.executed.append((str(stmt), dict(params or {})))
+        if self._raise:
+            raise self._raise
+        return _FakeResult(self._row, self._rows)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+    def close(self):
+        self.closed = True
+
+
+def _build_app(principal_tenant: Optional[str] = None) -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        tenant_id=principal_tenant,
+    )
+    return app
+
+
+# ---------------------------------------------------------------------------
+# _db_store_portal_link
+# ---------------------------------------------------------------------------
+
+
+class TestDbStorePortalLink:
+    def test_no_db(self, monkeypatch):
+        monkeypatch.setattr(sp, "get_db_safe", lambda: None)
+        ok = _db_store_portal_link(
+            "tok",
+            {
+                "tenant_id": "t1",
+                "supplier_name": "S",
+                "created_at": "2026-04-17",
+                "expires_at": "2026-05-17",
+            },
+        )
+        assert ok is False
+
+    def test_success(self, monkeypatch):
+        # UUID tenant so the GUC-before-write ordering invariant is
+        # observable: _set_tenant_context now delegates to the canonical
+        # set_tenant_guc_if_uuid (WS-4 #1934), which binds {"tid": ...} and
+        # deliberately skips the GUC for non-UUID slugs.
+        tenant = "5f0c6f6a-9a1e-4b7e-8a53-2f6a1c9d0e11"
+        session = _FakeSession()
+        monkeypatch.setattr(sp, "get_db_safe", lambda: session)
+        ok = _db_store_portal_link(
+            "tok",
+            {
+                "tenant_id": tenant,
+                "supplier_name": "S",
+"""FDA export PII redaction regression tests (#1219).
+
+Covers:
+
+  • By default (``include_pii=False``), facility *names* and shipping
+    *locations* are replaced with ``[REDACTED]`` in every CSV/PDF/ZIP
+    output path. GLNs and FDA registration numbers stay visible because
+    they are the regulatory primary keys the FDA joins on.
+
+  • The freeform "Additional KDEs (JSON)" blob strips values whose keys
+    contain address/contact signals.
+
+  • ``include_pii=true`` requires the ``fda.export.pii`` permission; the
+    endpoint returns 403 for callers who hold ``fda.export`` alone.
+
+  • Authorized ``include_pii=true`` requests emit full facility/location
+    values, set ``X-PII-Redacted: false``, and log
+    ``fda_export_pii_included`` to the audit logger.
+
+  • Manifest metadata in the ZIP package records the PII posture in
+    ``privacy.pii_redacted`` so downstream consumers can distinguish
+    redacted from full-PII exports when comparing content hashes.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import logging
+import sys
+import types
+import zipfile
+from pathlib import Path
+from typing import Any, Optional
+
+import pytest
+
+service_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(service_dir))
+
+pytest.importorskip("fastapi")
+
+import shared.cte_persistence as shared_cte_persistence
+from app.authz import IngestionPrincipal, get_ingestion_principal
+from app.fda_export.router import router as fda_router
+from app.fda_export_service import (
+    PII_REDACTION_PLACEHOLDER,
+    _event_to_fda_row,
+    _event_to_fda_row_v2,
+    _generate_csv,
+    _generate_csv_v2,
+    _redact_extra_kde_pii,
+    _redact_location_value,
+)
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+# ─────────────────────────────────────────────────────────────────────
+# Direct unit tests for the redaction helper
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_redact_location_value_redacts_pii_columns_by_default():
+    for col in (
+        "Location Name",
+        "Ship From Name",
+        "Ship To Name",
+        "Immediate Previous Source",
+        "Receiving Location",
+    ):
+        assert _redact_location_value("Valley Fresh Farms", col, include_pii=False) == PII_REDACTION_PLACEHOLDER
+
+
+def test_redact_location_value_passes_through_when_include_pii_true():
+    for col in (
+        "Location Name",
+        "Ship From Name",
+        "Ship To Name",
+        "Immediate Previous Source",
+        "Receiving Location",
+    ):
+        assert _redact_location_value("Valley Fresh Farms", col, include_pii=True) == "Valley Fresh Farms"
+
+
+def test_redact_location_value_does_not_touch_non_pii_columns():
+    """GLN, FDA registration, product fields must pass through unchanged."""
+    for col in (
+        "Location GLN",
+        "Ship From GLN",
+        "Ship To GLN",
+        "TLC Source GLN",
+        "TLC Source FDA Registration",
+        "Product Description",
+        "Traceability Lot Code (TLC)",
+    ):
+        assert _redact_location_value("0614141000005", col, include_pii=False) == "0614141000005"
+
+
+def test_redact_location_value_preserves_empty_strings():
+    """Empty column values must stay empty — a blank cell shouldn't become '[REDACTED]'."""

@@ -1,0 +1,204 @@
+UTC: 2026-10-03T00:39:54.939395+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "CSRF|csrf" server services/admin/main.py services/admin/app -g "*.py" | head -130; sed -n "1,125p" services/shared/middleware/security.py; sed -n "639,665p" /Users/sellers/.codex/skills/security-best-practices/references/python-fastapi-web-server-security.md; sed -n "203,254p" /Users/sellers/.codex/skills/security-best-practices/references/python-fastapi-web-server-security.md; sed -n "309,335p" /Users/sellers/.codex/skills/security-best-practices/references/python-fastapi-web-server-security.md'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+server/route_security_policy.py:487:            "tenant_dual_session_csrf",
+server/route_security_policy.py:668:def _adapt_tenant_dual_session_csrf(route: APIRoute) -> None:
+server/route_security_policy.py:674:            csrf_source = (repo_root / "frontend" / "src" / "lib" / "csrf.ts").read_text(encoding="utf-8")
+server/route_security_policy.py:676:            raise RouteManifestError("Frontend CSRF sources are missing; cookie mutations fail closed") from exc
+server/route_security_policy.py:677:        if "CSRF_PROTECTED_METHODS.has(request.method)" not in proxy_source:
+server/route_security_policy.py:678:            raise RouteManifestError("Frontend proxy no longer gates cookie-authenticated mutation methods with CSRF")
+server/route_security_policy.py:680:            if f"'{method}'" not in csrf_source and f'"{method}"' not in csrf_source:
+server/route_security_policy.py:681:                raise RouteManifestError(f"Frontend CSRF method set no longer covers {method}")
+server/route_security_policy.py:687:    _adapt_tenant_dual_session_csrf(route)
+server/route_security_policy.py:806:    "tenant_dual_session_csrf": _adapt_tenant_dual_session_csrf,
+from fastapi import FastAPI
+from shared.cors import (
+    get_allowed_headers,
+    get_allowed_origins,
+    should_allow_credentials,
+)
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+# Paths exempt from TrustedHost validation (infra probes, metrics).
+# Railway's internal health-checker may send a Host header that doesn't
+# match any configured domain (e.g. container IP or private hostname).
+_TRUSTED_HOST_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+
+# Single source of truth for the Host-header allowlist. Mirrors the hosts
+# each service is legitimately reached on (public domain, Railway internal
+# + public, local dev, inter-service names). Validating Host here is the
+# mitigation for PYSEC-2026-161 (starlette BadHost path poisoning) — it
+# rejects forged Host headers before any path-based logic runs.
+TRUSTED_HOST_ALLOWLIST = [
+    "*.regengine.co",
+    "*.up.railway.app",
+    "*.railway.internal",
+    "localhost",
+    # Loopback IPs: local dev self-calls (e.g. system-metrics → ingestion
+    # with *_SERVICE_URL=http://127.0.0.1:8000) 400'd with "Invalid host
+    # header" because only the "localhost" spelling was allowed.
+    "127.0.0.1",
+    "::1",
+    "testserver",
+    "ingestion-service",
+    "admin-api",
+    "billing-service",
+    "compliance-api",
+    "compliance-api-worker",
+    "nlp-service",
+    "graph-service",
+    "scheduler",
+    "otel-collector",
+    "gateway",
+]
+
+
+class _HealthBypassTrustedHostMiddleware:
+    """ASGI middleware: skip TrustedHost for health/readiness probes.
+
+    Delegates all other requests to Starlette's TrustedHostMiddleware unchanged.
+    """
+
+    def __init__(self, app, allowed_hosts=None):
+        self.app = app
+        self.trusted_host_app = TrustedHostMiddleware(app, allowed_hosts=allowed_hosts or [])
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("path", "") in _TRUSTED_HOST_EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+        else:
+            await self.trusted_host_app(scope, receive, send)
+
+
+def add_trusted_host(app: FastAPI):
+    """Add Host-header validation (TrustedHost) to the FastAPI app.
+
+    Split out from add_security so services that register their own CORS
+    (e.g. admin) can still get Host validation without double-registering
+    CORS. Uses the shared TRUSTED_HOST_ALLOWLIST as the single source.
+    """
+    app.add_middleware(_HealthBypassTrustedHostMiddleware, allowed_hosts=TRUSTED_HOST_ALLOWLIST)
+
+
+def add_security(app: FastAPI):
+    """Add CORS and TrustedHost security middleware to the FastAPI app."""
+    origins = get_allowed_origins()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=should_allow_credentials(),
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=get_allowed_headers(),
+    )
+    add_trusted_host(app)
+### FASTAPI-LIMITS-001: Request and multipart limits MUST be enforced to prevent DoS
+
+Severity: Low
+
+Required:
+
+* MUST enforce request size limits at the edge (reverse proxy/load balancer) and validate in app where needed.
+* MUST apply special scrutiny to multipart/form-data handling; historical vulnerabilities include unbounded buffering and DoS vectors. ([advisories.gitlab.com][9])
+* SHOULD rate limit and/or add per-IP/per-user throttles for expensive endpoints.
+
+Insecure patterns:
+
+* Accepting arbitrarily large JSON bodies or multipart forms.
+* Parsing multipart forms without size/field-count controls.
+
+Detection hints:
+
+* Identify file upload endpoints and `multipart/form-data` usage.
+* Look for missing proxy-level limits (nginx `client_max_body_size`, ALB limits, etc.) and missing app-level checks.
+
+Fix:
+
+* Enforce strict body limits and multipart constraints; keep Starlette and python-multipart updated to patched versions. ([advisories.gitlab.com][9])
+
+---
+
+### FASTAPI-FILES-001: Prevent path traversal and unsafe static file exposure
+### FASTAPI-AUTH-001: Authentication MUST be explicit and consistently enforced via dependencies
+
+Severity: High
+
+Required:
+
+* MUST implement authentication as a dependency (or router-level dependency) so that protected endpoints cannot “forget” auth.
+* MUST default to “deny” for privileged routers/endpoints; explicitly mark truly public routes.
+* SHOULD centralize auth enforcement at router boundaries (e.g., protected `APIRouter` for authenticated endpoints). ([FastAPI][7])
+
+Insecure patterns:
+
+* Per-route ad-hoc auth checks scattered through handlers (easy to miss).
+* A mix of protected/unprotected endpoints with no clear policy.
+
+Detection hints:
+
+* Identify routers and endpoints; check whether protected ones include `Depends(...)`/`Security(...)`.
+* Search for patterns like `if user is None: raise ...` inside handlers (instead of dependencies).
+
+Fix:
+
+* Move authentication into a dependency and attach it to the router/endpoint consistently using `Depends()`/`Security()`. ([FastAPI][7])
+
+---
+
+### FASTAPI-AUTH-002: Use standard auth transports; avoid secrets in URLs
+
+Severity: High
+
+Required:
+
+* SHOULD use the `Authorization: Bearer [REDACTED] header for token auth, not query parameters. ([FastAPI][11])
+* MUST NOT place secrets (tokens, reset links containing long-lived secrets, API keys) in query strings when avoidable.
+
+Insecure patterns:
+
+* `?token=...`, `?api_key=[REDACTED], `?auth=...` used for primary auth.
+* Long-lived access tokens embedded in URLs (leak via logs, referrers, caches).
+
+Detection hints:
+
+* Search for parameter names like `token`, `api_key`, `key`, `secret`, `password`.
+* Look for security schemes that use query API keys without justification.
+
+Fix:
+
+* Move tokens to Authorization headers; rotate/shorten lifetimes; use POST bodies for sensitive values.
+
+---
+
+### FASTAPI-AUTH-003: Password storage MUST be strongly hashed; never store plaintext passwords
+### FASTAPI-AUTHZ-001: Authorization MUST be enforced per-object and per-property
+
+Severity: High
+
+Required:
+
+* MUST perform object-level authorization whenever accessing a resource by user-controlled identifier (ID in path/query/body).
+* MUST perform property-level authorization and response shaping to prevent “excessive data exposure” (e.g., admin-only fields). ([OWASP Foundation][13])
+
+Insecure patterns:
+
+* `GET /users/{id}` returns user record without verifying caller can access that `id`.
+* Response models include internal fields (roles, permissions, billing data, password hashes).
+
+Detection hints:
+
+* Enumerate endpoints that accept IDs; trace whether an authz check is performed.
+* Compare response models for public vs internal fields.
+
+Fix:
+
+* Add object-level checks (ownership, ACLs, tenant boundaries).
+* Use dedicated response models that include only allowed fields.
+
+---
+
+### FASTAPI-SESS-001: If using cookie-based sessions and TLS, cookie attributes MUST be secure in production

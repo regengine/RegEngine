@@ -1,0 +1,291 @@
+UTC: 2026-10-03T00:37:53.471312+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "1,230p" services/shared/logging_config.py; sed -n "255,300p" services/shared/observability/context.py; sed -n "95,141p" services/shared/observability/log_config.py; sed -n "1,100p" server/main.py; nl -ba services/ingestion/app/supplier_portal.py | sed -n "497,535p"; rg -n "redact|[Rr]edaction|SensitiveData" server services/shared services/admin/app -g "*.py" | head -50'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+"""Backward-compat shim — moved to shared.observability.log_config"""
+
+from shared.observability.log_config import *  # noqa: F401,F403
+    event_dict.setdefault("service", os.getenv("SERVICE_NAME", "regengine"))
+
+    for key, ctx_var in (("tenant_id", _tenant_id_ctx), ("request_id", _request_id_ctx)):
+        bound = event_dict.get(key)
+        if bound and bound != "unknown":
+            # merge_contextvars (or an explicit bind on the call) already
+            # supplied a real value — never clobber it.
+            continue
+        value = ctx_var.get("unknown")
+        event_dict[key] = value if value else "unknown"
+
+    return event_dict
+
+
+def configure_context_logging() -> None:
+    """Install the context module's JSON/audit chain explicitly and repeatably."""
+    structlog.configure(
+        processors=[
+            otel_context_processor,
+            sampling_aware_filter,
+            # #2859: Merge before _inject_service_context. Without it bindings made by
+            # CorrelationIdMiddleware / RequestIDMiddleware / TenantContextMiddleware
+            # via structlog.contextvars.bind_contextvars is silently discarded and
+            # every log line reads tenant_id="unknown" / request_id="unknown".
+            # This means _inject_service_context sees the real values
+            # already present in the event dict and leaves them alone.
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            _inject_service_context,
+            # #2855: MUST run before the renderer. logger.exception() sets
+            # exc_info=True; without this processor JSONRenderer emits a bare
+            # {"exc_info": true} and the traceback never reaches production logs.
+            # (log_config.configure_logging has always had this — see #556.)
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+
+    os.environ.setdefault("SERVICE_NAME", service_name)
+
+    is_dev = os.getenv("REGENGINE_ENV", "").lower() == "development"
+
+    shared_processors: list = [
+        # Merge structlog contextvars (bind() fields) into the event dict
+        structlog.contextvars.merge_contextvars,
+        # Add stdlib log level name
+        structlog.processors.add_log_level,
+        # ISO-8601 UTC timestamp
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        # Inject service / request_id / tenant_id
+        _inject_context,
+        # Format exceptions into the event dict
+        structlog.processors.format_exc_info,
+    ]
+
+    if is_dev:
+        # Human-readable for local development
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+    else:
+        # Machine-readable JSON for production / staging
+        renderer = structlog.processors.JSONRenderer()
+
+    structlog.configure(
+        processors=shared_processors + [renderer],
+        wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        cache_logger_on_first_use=True,
+    )
+
+    # Mirror config to stdlib so third-party libraries (uvicorn, sqlalchemy, etc.)
+    # honour the same level and write to stdout.
+    logging.basicConfig(
+        format="%(message)s",
+        level=numeric_level,
+        handlers=[logging.StreamHandler(sys.stdout)],
+        force=True,
+    )
+
+    structlog.get_logger(service_name).info(
+        "logging_configured",
+        service=service_name,
+        level=resolved_level_str,
+        renderer="console" if is_dev else "json",
+    )
+"""RegEngine Consolidated API — single FastAPI monolith.
+
+Replaces 6 microservices (ingestion, admin, graph, nlp, compliance, scheduler)
+with a single process using router boundaries to preserve decomposition seams.
+
+Architecture decision: 2026-03-29
+See: alembic/versions/20260329_task_queue_v050.py for Kafka replacement
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from pathlib import Path
+from threading import BoundedSemaphore
+
+os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
+
+# ── Path bootstrap ───────────────────────────────────────────────
+# Ensure services/ and services/shared are importable
+_APP_DIR = Path(__file__).resolve().parent
+_ROOT_DIR = _APP_DIR.parent
+_SERVICES_DIR = _ROOT_DIR / "services"
+_INGESTION_DIR = _SERVICES_DIR / "ingestion"
+_ADMIN_DIR = _SERVICES_DIR / "admin"
+_GRAPH_DIR = _SERVICES_DIR / "graph"
+_NLP_DIR = _SERVICES_DIR / "nlp"
+_COMPLIANCE_DIR = _SERVICES_DIR / "compliance"
+
+for p in [
+    str(_ROOT_DIR),
+    str(_SERVICES_DIR),
+    str(_INGESTION_DIR),
+    str(_ADMIN_DIR),
+    str(_GRAPH_DIR),
+    str(_NLP_DIR),
+    str(_COMPLIANCE_DIR),
+]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+from shared.paths import ensure_shared_importable
+
+ensure_shared_importable()
+
+# ── Sentry (before app creation) ─────────────────────────────────
+from shared.error_handling import init_sentry
+
+init_sentry()
+
+# ── Logging ──────────────────────────────────────────────────────
+from shared.observability.context import setup_logging
+
+logger = setup_logging()
+
+# ── Imports ──────────────────────────────────────────────────────
+from fastapi import Depends, FastAPI, Request
+from shared.env import is_production
+from shared.middleware.security import add_security
+from shared.observability import add_observability
+from shared.rate_limit import add_rate_limiting
+
+from services.admin.app.e2e_safety import assert_e2e_mode_allowed
+
+assert_e2e_mode_allowed()
+_is_prod = is_production()
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# ── Lifespan ─────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("regengine_startup", mode="monolith")
+
+    # #2348: warn at boot if document-storage credentials are absent —
+    # /v1/ingest/{url,file,direct,regulation} return 503 until configured.
+    # Best-effort: a probe failure must never abort monolith startup. NOTE the
+    # fully-qualified import path (the standalone ingestion entrypoint uses the
+    # service-relative ``app.s3_utils``; the monolith must not).
+    try:
+        from services.ingestion.app.s3_utils import is_object_storage_configured
+
+        if not is_object_storage_configured():
+            logger.warning(
+                "object_storage_disabled",
+                detail="/v1/ingest/* endpoints will return 503; set "
+                "OBJECT_STORAGE_ACCESS_KEY_ID and OBJECT_STORAGE_SECRET_ACCESS_KEY to enable",
+            )
+    except Exception as exc:
+        logger.warning("object_storage_probe_failed", error=str(exc))
+
+   497	
+   498	    status: str
+   499	    message: str
+   500	    supplier_name: str
+   501	    result: SandboxResponse
+   502	    readiness: ReadinessSummary
+   503	    commit_gate: CommitGateDecision
+   504	
+   505	
+   506	def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+   507	    kdes: dict = {
+   508	        "ship_date": submission.ship_date,
+   509	        "ship_from_location": submission.ship_from_location,
+   510	        "ship_to_location": submission.ship_to_location,
+   511	        "supplier_name": link["supplier_name"],
+   512	        "submission_source": "supplier_portal",
+   513	        "portal_id": portal_id,
+   514	    }
+   515	    if submission.carrier_name:
+   516	        kdes["carrier_name"] = submission.carrier_name
+   517	    if submission.po_number:
+   518	        kdes["po_number"] = submission.po_number
+   519	    kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+   520	    kdes["tlc_source_reference"] = link["supplier_name"]
+   521	    kdes["ftl_covered"] = True
+   522	    if submission.temperature_celsius is not None:
+   523	        kdes["temperature_celsius"] = submission.temperature_celsius
+   524	    if submission.notes:
+   525	        kdes["notes"] = submission.notes
+   526	
+   527	    return {
+   528	        "cte_type": "shipping",
+   529	        "traceability_lot_code": submission.traceability_lot_code,
+   530	        "product_description": submission.product_description,
+   531	        "quantity": submission.quantity,
+   532	        "unit_of_measure": submission.unit_of_measure,
+   533	        "location_gln": submission.ship_from_gln,
+   534	        "location_name": submission.ship_from_location,
+   535	        "ship_from_location": submission.ship_from_location,
+services/shared/pii.py:3:Provides functions to redact personally identifiable information before
+services/shared/pii.py:15:# PII patterns for redaction before external API calls (#981)
+services/shared/pii.py:31:def redact_pii(text: str) -> str:
+services/admin/app/erasure_routes.py:7:an append-only audit redaction order, and queues graph cleanup.
+services/admin/app/erasure_routes.py:193:    actual schema and leaves a tamper-evident redaction order that audit exports
+services/admin/app/erasure_routes.py:315:                "redacted_user_id": str(user_id),
+services/admin/app/erasure_routes.py:316:                "redacted_tenant_id": str(marker_tenant_id),
+services/admin/app/erasure_routes.py:317:                "redacted_fields": [
+services/admin/app/dependencies.py:42:from .session_store import InMemorySessionStore, RedisSessionStore, redact_connection_url
+services/admin/app/dependencies.py:201:                redis_url=redact_connection_url(redis_url),
+services/admin/app/qa_health.py:281:        return _redact_string(value)
+services/admin/app/qa_health.py:285:def _redact_string(value: str) -> str:
+services/admin/app/qa_health.py:289:            lambda match: f"{match.group(1)}[redacted]" if match.lastindex else "[redacted]",
+services/admin/app/session_store.py:448:def redact_connection_url(url: str) -> str:
+services/admin/app/session_store.py:462:        return "<redacted>"
+services/admin/app/session_store.py:549:            "redis_session_store_init", redis_url=redact_connection_url(redis_url), default_ttl_days=default_ttl_days
+services/admin/app/audit_routes.py:24:- Audit metadata is redacted on export so raw payload fields such as
+services/admin/app/audit_routes.py:79:        "redacted_user_id",
+services/admin/app/audit_routes.py:93:    """Salted-hash a stable identifier for PII-redacted export."""
+services/admin/app/audit_routes.py:105:    """Salted-hash an email for PII-redacted export.
+services/admin/app/audit_routes.py:139:def _redact_metadata_value(value: Any, *, force: bool = False) -> Any:
+services/admin/app/audit_routes.py:140:    """Recursively redact PII from audit metadata export payloads."""
+services/admin/app/audit_routes.py:142:        redacted: dict[str, Any] = {}
+services/admin/app/audit_routes.py:146:                redacted[key] = _PII_REDACTION
+services/admin/app/audit_routes.py:148:                redacted[key] = _redact_metadata_value(nested_value, force=force or key_is_pii)
+services/admin/app/audit_routes.py:149:        return redacted
+services/admin/app/audit_routes.py:151:        return [_redact_metadata_value(item, force=force) for item in value]
+services/admin/app/audit_routes.py:153:        return [_redact_metadata_value(item, force=force) for item in value]
+services/admin/app/audit_routes.py:159:        redacted = _EMAIL_PATTERN.sub(lambda match: _mask_email(match.group(0)) or "", value)
+services/admin/app/audit_routes.py:160:        return _PHONE_PATTERN.sub(_PII_REDACTION, redacted)
+services/admin/app/audit_routes.py:164:def _redact_metadata_pii(metadata: Any, *, force: bool = False) -> dict[str, Any]:
+services/admin/app/audit_routes.py:166:    redacted = _redact_metadata_value(_metadata_as_dict(metadata), force=force)
+services/admin/app/audit_routes.py:167:    return redacted if isinstance(redacted, dict) else {"value": redacted}
+services/admin/app/audit_routes.py:184:        redacted_tenant_id = next(
+services/admin/app/audit_routes.py:185:            (payload.get("redacted_tenant_id") for payload in marker_payloads if payload.get("redacted_tenant_id")),
+services/admin/app/audit_routes.py:188:        if redacted_tenant_id and str(redacted_tenant_id) != tenant_text:
+services/admin/app/audit_routes.py:190:        redacted_user_id = next(
+services/admin/app/audit_routes.py:191:            (payload.get("redacted_user_id") for payload in marker_payloads if payload.get("redacted_user_id")),
+services/admin/app/audit_routes.py:194:        redacted_user_id = redacted_user_id or getattr(row, "resource_id", None)
+services/admin/app/audit_routes.py:195:        if redacted_user_id:
+services/admin/app/audit_routes.py:196:            anonymized_actor_ids.add(str(redacted_user_id))
+services/admin/app/audit_routes.py:319:    - Metadata runs through a recursive PII redaction pass so raw
+services/admin/app/audit_routes.py:437:                "metadata": _redact_metadata_pii(
+services/shared/fda_export/pii.py:1:"""PII redaction for FDA / FSMA-204 export rows.
+services/shared/fda_export/pii.py:7:and FDA registration numbers are — so by default it must be redacted
+services/shared/fda_export/pii.py:10:EPIC-L mandates one redaction strategy shared by every export path:
+services/shared/fda_export/pii.py:16:  ``fda.export``) opts out of redaction; every such call is audited
+services/shared/fda_export/pii.py:27:# Permission required to receive un-redacted PII in an FDA export.
+services/shared/fda_export/pii.py:36:# Placeholder text used when a redacted value is still non-empty.
+services/shared/fda_export/pii.py:42:# whose contents are customer PII. Covered by default redaction.

@@ -1,0 +1,37 @@
+UTC: 2026-10-03T00:41:11.056048+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import json;root=Path("docs/qa/2026-10-02/artifacts/frontend");before=json.loads((root/"coverage-node20-before-summary.json").read_text())["files"];after=json.loads((root/"coverage-node20-after-summary.json").read_text())["files"]; changed={p:{k:{"before":before[p][k]["covered"],"after":after[p][k]["covered"]} for k in ["lines","statements","functions","branches"] if before[p][k]["covered"]!=after[p][k]["covered"]} for p in before if before[p]!=after[p]};print(json.dumps(changed,indent=2));(root/"coverage-changed-files.json").write_text(json.dumps(changed,indent=2)+"\n");
+for phase in ["before","after"]:
+ source=root/f"coverage-node20-{phase}"; destination=Path(f"/private/tmp/regengine-qa-coverage-node20-{phase}-20261003"); source.rename(destination); print(f"Moved duplicate absolute-path raw summary {source} to {destination}; normalized per-file summaries retained")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+{
+  "frontend/src/app/api/developer/portal/keys/route.ts": {
+    "statements": {
+      "before": 33,
+      "after": 32
+    },
+    "branches": {
+      "before": 11,
+      "after": 10
+    }
+  },
+  "frontend/src/lib/gs1-parser.ts": {
+    "lines": {
+      "before": 92,
+      "after": 94
+    },
+    "statements": {
+      "before": 108,
+      "after": 112
+    },
+    "branches": {
+      "before": 82,
+      "after": 86
+    }
+  }
+}
+Moved duplicate absolute-path raw summary docs/qa/2026-10-02/artifacts/frontend/coverage-node20-before to /private/tmp/regengine-qa-coverage-node20-before-20261003; normalized per-file summaries retained
+Moved duplicate absolute-path raw summary docs/qa/2026-10-02/artifacts/frontend/coverage-node20-after to /private/tmp/regengine-qa-coverage-node20-after-20261003; normalized per-file summaries retained

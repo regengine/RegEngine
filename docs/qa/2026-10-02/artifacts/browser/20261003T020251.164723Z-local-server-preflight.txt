@@ -1,0 +1,18 @@
+UTC: 2026-10-03T02:02:51.164723+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import urllib.request; from pathlib import Path; print(Path("docs/qa/2026-10-02/artifacts/browser/followup-server-metadata.txt").read_text()); op=urllib.request.build_opener(urllib.request.ProxyHandler({})); [(print(route, op.open("http://127.0.0.1:3114"+route).status)) for route in ["/", "/tools/scan", "/fsma/field-capture"]]'
+Exit: 0
+Duration: 0.22s
+Timeout: False
+
+PID=96905
+Port=3114
+Mirror=/private/tmp/regengine-browser-followup-hz02qdqj/frontend
+StopFile=/private/tmp/regengine-browser-followup-hz02qdqj/stop
+Guard SHA256=174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031
+Build ID=B580X7GslEyeoUljQTLuv
+Runtime CSRF value: ephemeral synthetic, not recorded
+
+/ 200
+/tools/scan 200
+/fsma/field-capture 200

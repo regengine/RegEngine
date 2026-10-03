@@ -1,0 +1,18 @@
+UTC: 2026-10-03T00:40:05.376534+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+Committed manifest summary (inventory; not a runtime verdict): {"disabled_operation_count": 180, "disabled_unique_path_count": 163, "enabled_by_classification": {"global-sysadmin": 15, "public": 29, "tenant-scoped": 199, "workload-only": 7}, "enabled_operation_count": 250}
+Auth adapters: {'public_no_auth': 28, 'global_sysadmin_high_assurance': 15, 'tenant_api_key_postgres_rls': 117, 'public_optional_tenant_checkout': 1, 'workload_stripe_signature': 2, 'workload_metrics_key': 4, 'tenant_api_key_mixed_storage': 13, 'tenant_dual_session_csrf': 49, 'tenant_opaque_session': 2, 'tenant_high_assurance_session': 2, 'tenant_identity_global_self_erasure': 1, 'tenant_review_session': 9, 'tenant_api_key_ingestion_postgres_filter': 4, 'tenant_api_key_redis_job_owner': 2, 'workload_tenant_provisioner': 1}
+First test targets for isolated negative matrices:
+tests/security/test_route_security_manifest.py exists
+tests/security/test_auth_production_surface.py not present
+services/shared/tests/test_tenant_context.py exists
+services/admin/tests/test_privileged_auth.py exists
+services/admin/tests/test_session_auth.py exists
+services/ingestion/tests/test_webhook_router_v2_idor_f1.py exists
+services/ingestion/tests/test_epcis_tenant_isolation.py exists
+services/ingestion/tests/test_models_ssrf_1342.py exists

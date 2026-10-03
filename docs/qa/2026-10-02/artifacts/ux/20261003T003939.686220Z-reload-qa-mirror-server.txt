@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:39:39.686220+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import os; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend/next.config.js"); os.utime(p,None); print("Touched only QA mirror next.config.js to trigger guarded server restart; source content unchanged")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Touched only QA mirror next.config.js to trigger guarded server restart; source content unchanged

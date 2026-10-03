@@ -1,0 +1,733 @@
+UTC: 2026-10-03T00:37:05.439190+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=["frontend/src/lib/supplier-csv.ts","frontend/src/lib/validation.ts","frontend/src/lib/safe-redirect.ts","frontend/src/lib/fetch-with-csrf.ts","frontend/src/lib/client-session-profile.ts","frontend/src/app/ingest/sandbox-handoff.ts","frontend/src/lib/gs1-parser.ts"]; [(print("FILE",p),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p).read_text().splitlines(),1)))) for p in paths]'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+FILE frontend/src/lib/supplier-csv.ts
+1: /* ── FSMA 204 client-side validation (no auth required) ── */
+2: 
+3: const EVENT_TYPE_LABELS: Record<string, string> = {
+4:   receiving: 'Receiving', shipping: 'Shipping', transforming: 'Transforming',
+5:   cooling: 'Cooling', initial_packing: 'Initial Packing', harvesting: 'Harvesting', first_receiver: 'First Receiver',
+6: };
+7: // Keep aligned with admin bulk_upload.validators.normalize_cte_type.
+8: const EVENT_ALIASES: Record<string, string> = {
+9:   r: 'receiving', s: 'shipping', d: 'shipping', depletion: 'shipping', t: 'transforming', c: 'cooling', p: 'initial_packing', h: 'harvesting',
+10:   transformation: 'transforming', first_land_based_receiving: 'first_receiver',
+11:   harvest: 'harvesting', packing: 'initial_packing', pack: 'initial_packing', receive: 'receiving',
+12:   ship: 'shipping', transform: 'transforming', cool: 'cooling', creation: 'initial_packing', holding: 'receiving',
+13:   distribute: 'shipping', distribution: 'shipping', di: 'shipping', process: 'transforming', processing: 'transforming',
+14: };
+15: const eventType = (value: string) => {
+16:   const normalized = value.trim().toLowerCase();
+17:   return Object.hasOwn(EVENT_ALIASES, normalized) ? EVENT_ALIASES[normalized] : normalized;
+18: };
+19: const columnName = (value: string) => {
+20:   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+21:   const aliases: Record<string, string> = { cte_type: 'event_type', tlc_code: 'lot_number', traceability_lot_code: 'lot_number', lot_code: 'lot_number', tlc: 'lot_number', event_time: 'event_datetime', event_date: 'event_datetime', timestamp: 'event_datetime', cte_date: 'event_datetime' };
+22:   return Object.hasOwn(aliases, normalized) ? aliases[normalized] : normalized;
+23: };
+24: 
+25: /** Parse complete CSV records before interpreting columns. Reject ambiguous malformed input. */
+26: export function parseCSVRecords(text: string): string[][] {
+27:   const rows: string[][] = [];
+28:   let row: string[] = [], cell = '', quoted = false, closed = false;
+29:   const finishCell = () => { row.push(cell.trim()); cell = ''; closed = false; };
+30:   const finishRow = () => { finishCell(); if (row.some(value => value !== '')) rows.push(row); row = []; };
+31:   text = text.replace(/^\uFEFF/, '');
+32:   for (let i = 0; i < text.length; i++) {
+33:     const char = text[i];
+34:     if (quoted) {
+35:       if (char === '"') {
+36:         if (text[i + 1] === '"') { cell += '"'; i++; }
+37:         else { quoted = false; closed = true; }
+38:       } else { cell += char; }
+39:     } else if (char === ',') { finishCell(); }
+40:     else if (char === '\r' || char === '\n') {
+41:       finishRow(); if (char === '\r' && text[i + 1] === '\n') i++;
+42:     } else if (char === '"') {
+43:       if (cell || closed) throw new Error('Invalid quote in CSV field.');
+44:       quoted = true;
+45:     } else {
+46:       if (closed) throw new Error('Unexpected text after a quoted CSV field.');
+47:       cell += char;
+48:     }
+49:   }
+50:   if (quoted) throw new Error('Unclosed quoted CSV field.');
+51:   if (cell || row.length || closed) finishRow();
+52:   if (rows.length) {
+53:     const headers = rows[0].map(columnName);
+54:     if (headers.some(header => !header) || new Set(headers).size !== headers.length) throw new Error('CSV headers must be non-empty and unique, including column aliases.');
+55:     for (let i = 1; i < rows.length; i++) {
+56:       if (rows[i].length !== headers.length) throw new Error(`CSV record ${i + 1} has ${rows[i].length} fields; expected ${headers.length}.`);
+57:     }
+58:   }
+59:   return rows;
+60: }
+61: 
+62: const REQUIRED_COLUMNS = [
+63:   'event_type', 'product_name', 'lot_number',
+64: ];
+65: const RECOMMENDED_COLUMNS = [
+66:   'event_datetime', 'product_code', 'quantity', 'unit',
+67:   'origin_facility_code', 'origin_facility_name',
+68:   'destination_facility_code', 'destination_facility_name',
+69: ];
+70: 
+71: interface ValidationIssue {
+72:   severity: 'error' | 'warning';
+73:   row?: number;
+74:   column?: string;
+75:   message: string;
+76: }
+77: 
+78: export interface ClientValidationResult {
+79:   totalRows: number;
+80:   columnsFound: string[];
+81:   requiredColumnsPresent: string[];
+82:   requiredColumnsMissing: string[];
+83:   recommendedColumnsPresent: string[];
+84:   recommendedColumnsMissing: string[];
+85:   eventTypeCounts: Record<string, number>;
+86:   invalidEventTypes: { row: number; value: string }[];
+87:   issues: ValidationIssue[];
+88:   completenessScore: number; // 0-100
+89:   canProceed: boolean; // true if no errors (warnings ok)
+90:   productNames: string[];
+91:   lotNumbers: string[];
+92:   facilityNames: string[];
+93:   dateRange: { earliest: string | null; latest: string | null };
+94: }
+95: 
+96: export function validateCSVLocally(text: string): ClientValidationResult {
+97:   const lines = parseCSVRecords(text);
+98:   const result: ClientValidationResult = {
+99:     totalRows: 0, columnsFound: [], requiredColumnsPresent: [], requiredColumnsMissing: [],
+100:     recommendedColumnsPresent: [], recommendedColumnsMissing: [], eventTypeCounts: {},
+101:     invalidEventTypes: [], issues: [], completenessScore: 0, canProceed: true,
+102:     productNames: [], lotNumbers: [], facilityNames: [], dateRange: { earliest: null, latest: null },
+103:   };
+104: 
+105:   if (lines.length < 2) {
+106:     result.issues.push({ severity: 'error', message: 'File contains no data rows.' });
+107:     result.canProceed = false;
+108:     return result;
+109:   }
+110: 
+111:   const columns = lines[0].map(columnName);
+112:   result.columnsFound = lines[0];
+113:   const dataLines = lines.slice(1);
+114:   result.totalRows = dataLines.length;
+115: 
+116:   // Column presence checks
+117:   for (const req of REQUIRED_COLUMNS) {
+118:     if (columns.includes(req)) { result.requiredColumnsPresent.push(req); }
+119:     else { result.requiredColumnsMissing.push(req); result.issues.push({ severity: 'error', column: req, message: `Required FSMA 204 column "${req}" is missing.` }); }
+120:   }
+121:   for (const rec of RECOMMENDED_COLUMNS) {
+122:     if (columns.includes(rec)) { result.recommendedColumnsPresent.push(rec); }
+123:     else { result.recommendedColumnsMissing.push(rec); result.issues.push({ severity: 'warning', column: rec, message: `Recommended column "${rec}" not found. Data may be incomplete for full FSMA 204 compliance.` }); }
+124:   }
+125: 
+126:   // Index lookups
+127:   const idx = (name: string) => columns.indexOf(name);
+128:   const eventTypeIdx = idx('event_type');
+129:   const productNameIdx = idx('product_name');
+130:   const lotIdx = idx('lot_number');
+131:   const datetimeIdx = idx('event_datetime');
+132:   const origFacIdx = idx('origin_facility_name');
+133:   const destFacIdx = idx('destination_facility_name');
+134:   const qtyIdx = idx('quantity');
+135: 
+136:   const productSet = new Set<string>();
+137:   const lotSet = new Set<string>();
+138:   const facSet = new Set<string>();
+139:   const dates: string[] = [];
+140:   let emptyRequiredCells = 0;
+141:   let totalRequiredCells = 0;
+142: 
+143:   for (let i = 0; i < dataLines.length; i++) {
+144:     const cells = dataLines[i];
+145:     const rowNum = i + 2; // 1-indexed, header is row 1
+146: 
+147:     // Event type validation
+148:     if (eventTypeIdx >= 0) {
+149:       const et = cells[eventTypeIdx]?.trim();
+150:       totalRequiredCells++;
+151:       if (!et) {
+152:         emptyRequiredCells++;
+153:         if (i < 20) result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: 'Empty event_type.' });
+154:       } else if (!Object.hasOwn(EVENT_TYPE_LABELS, eventType(et))) {
+155:         result.invalidEventTypes.push({ row: rowNum, value: et });
+156:         if (result.invalidEventTypes.length <= 10) {
+157:           result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: `Invalid event type "${et}". Expected a supported event name or code: R, S, T, C, D (shipping), P, H, first_receiver.` });
+158:         }
+159:       } else {
+160:         const label = EVENT_TYPE_LABELS[eventType(et)] || et;
+161:         result.eventTypeCounts[label] = (result.eventTypeCounts[label] || 0) + 1;
+162:       }
+163:     }
+164: 
+165:     // Product name
+166:     if (productNameIdx >= 0) {
+167:       totalRequiredCells++;
+168:       const val = cells[productNameIdx]?.trim();
+169:       if (!val) { emptyRequiredCells++; }
+170:       else { productSet.add(val); }
+171:     }
+172: 
+173:     // Lot number
+174:     if (lotIdx >= 0) {
+175:       totalRequiredCells++;
+176:       const val = cells[lotIdx]?.trim();
+177:       if (!val) { emptyRequiredCells++; }
+178:       else { lotSet.add(val); }
+179:     }
+180: 
+181:     // Datetime
+182:     if (datetimeIdx >= 0) {
+183:       const val = cells[datetimeIdx]?.trim();
+184:       if (val) dates.push(val);
+185:     }
+186: 
+187:     // Facilities
+188:     if (origFacIdx >= 0) { const v = cells[origFacIdx]?.trim(); if (v) facSet.add(v); }
+189:     if (destFacIdx >= 0) { const v = cells[destFacIdx]?.trim(); if (v) facSet.add(v); }
+190: 
+191:     // Quantity should be numeric
+192:     if (qtyIdx >= 0) {
+193:       const val = cells[qtyIdx]?.trim();
+194:       if (val && isNaN(Number(val))) {
+195:         if (i < 10) result.issues.push({ severity: 'warning', row: rowNum, column: 'quantity', message: `Non-numeric quantity "${val}".` });
+196:       }
+197:     }
+198:   }
+199: 
+200:   if (emptyRequiredCells > 0) result.issues.push({ severity: 'error', message: `${emptyRequiredCells} required cells are empty.` });
+201: 
+202:   // Summary stats
+203:   result.productNames = Array.from(productSet).slice(0, 15);
+204:   result.lotNumbers = Array.from(lotSet).slice(0, 15);
+205:   result.facilityNames = Array.from(facSet).slice(0, 15);
+206: 
+207:   if (dates.length > 0) {
+208:     dates.sort();
+209:     result.dateRange = { earliest: dates[0], latest: dates[dates.length - 1] };
+210:   }
+211: 
+212:   // Truncation notices
+213:   if (result.invalidEventTypes.length > 10) {
+214:     result.issues.push({ severity: 'error', message: `${result.invalidEventTypes.length - 10} additional invalid event_type rows not shown.` });
+215:   }
+216: 
+217:   // Completeness score
+218:   const colScore = (result.requiredColumnsPresent.length / Math.max(REQUIRED_COLUMNS.length, 1)) * 40;
+219:   const recColScore = (result.recommendedColumnsPresent.length / Math.max(RECOMMENDED_COLUMNS.length, 1)) * 20;
+220:   const cellScore = totalRequiredCells > 0 ? ((totalRequiredCells - emptyRequiredCells) / totalRequiredCells) * 30 : 30;
+221:   const eventScore = result.invalidEventTypes.length === 0 ? 10 : Math.max(0, 10 - result.invalidEventTypes.length);
+222:   result.completenessScore = Math.round(colScore + recColScore + cellScore + eventScore);
+223: 
+224:   // Can proceed if no errors
+225:   result.canProceed = !result.issues.some(i => i.severity === 'error');
+226: 
+227:   return result;
+228: }
+229: 
+230: /* ── Client-side CSV preview (no auth required) ── */
+231: export interface CsvPreview {
+232:   totalRows: number;
+233:   columns: string[];
+234:   sampleRows: string[][];
+235:   eventTypeCounts: Record<string, number>;
+236:   productNames: string[];
+237:   lotNumbers: string[];
+238: }
+239: 
+240: export function parseCSVLocally(text: string): CsvPreview {
+241:   const lines = parseCSVRecords(text);
+242:   if (lines.length < 2) return { totalRows: 0, columns: [], sampleRows: [], eventTypeCounts: {}, productNames: [], lotNumbers: [] };
+243: 
+244:   const columns = lines[0];
+245:   const dataLines = lines.slice(1);
+246: 
+247:   const eventTypeIdx = columns.findIndex(c => columnName(c) === 'event_type');
+248:   const productIdx = columns.findIndex(c => columnName(c) === 'product_name');
+249:   const lotIdx = columns.findIndex(c => columnName(c) === 'lot_number');
+250: 
+251:   const eventTypeCounts: Record<string, number> = Object.create(null);
+252:   const productSet = new Set<string>();
+253:   const lotSet = new Set<string>();
+254: 
+255:   const sampleRows: string[][] = [];
+256: 
+257:   for (let i = 0; i < dataLines.length; i++) {
+258:     const cells = dataLines[i];
+259:     if (i < 5) sampleRows.push(cells);
+260: 
+261:     if (eventTypeIdx >= 0 && cells[eventTypeIdx]) {
+262:       const et = eventType(cells[eventTypeIdx]);
+263:       eventTypeCounts[et] = (eventTypeCounts[et] || 0) + 1;
+264:     }
+265:     if (productIdx >= 0 && cells[productIdx]) productSet.add(cells[productIdx]);
+266:     if (lotIdx >= 0 && cells[lotIdx]) lotSet.add(cells[lotIdx]);
+267:   }
+268: 
+269:   const mappedCounts: Record<string, number> = Object.create(null);
+270:   for (const [k, v] of Object.entries(eventTypeCounts)) {
+271:     mappedCounts[Object.hasOwn(EVENT_TYPE_LABELS, k) ? EVENT_TYPE_LABELS[k] : k] = v;
+272:   }
+273: 
+274:   return {
+275:     totalRows: dataLines.length,
+276:     columns,
+277:     sampleRows,
+278:     eventTypeCounts: mappedCounts,
+279:     productNames: Array.from(productSet).slice(0, 10),
+280:     lotNumbers: Array.from(lotSet).slice(0, 10),
+281:   };
+282: }
+FILE frontend/src/lib/validation.ts
+1: /**
+2:  * Shared validation utilities.
+3:  *
+4:  * Centralises common checks (email format, phone, etc.) so every form
+5:  * uses the same rules instead of ad-hoc string checks.
+6:  */
+7: 
+8: /** RFC-5322-ish email regex — catches the vast majority of invalid addresses. */
+9: const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+10: 
+11: /** Returns `true` when the value looks like a plausible email address. */
+12: export function isValidEmail(value: string): boolean {
+13:     return EMAIL_RE.test(value.trim());
+14: }
+FILE frontend/src/lib/safe-redirect.ts
+1: /**
+2:  * Validate a `next`-style relative-path redirect target. Returns the input
+3:  * if it's a same-app path; returns the fallback otherwise.
+4:  *
+5:  * Rejects:
+6:  *   - empty / null / undefined
+7:  *   - strings longer than 256 chars (defense in depth)
+8:  *   - strings not starting with `/` (relative path traversal)
+9:  *   - strings starting with `//` (protocol-relative URL bypass)
+10:  *   - strings containing `\` (Windows-style backslash bypass)
+11:  *   - strings containing `://` (absolute URLs, including `javascript:`/`data:`)
+12:  *
+13:  * Closes the audit's OQ-2 / RE-FE-AUDIT-002 (next-param redirect hygiene).
+14:  */
+15: export function safeNextPath(next: string | null | undefined, fallback: string): string {
+16:     if (!next) return fallback;
+17:     if (next.length > 256) return fallback;
+18:     if (!next.startsWith('/')) return fallback;
+19:     if (next.startsWith('//')) return fallback;
+20:     if (next.includes('\\')) return fallback;
+21:     if (next.includes('://')) return fallback;
+22:     return next;
+23: }
+FILE frontend/src/lib/fetch-with-csrf.ts
+1: import { CSRF_PROTECTED_METHODS, getCsrfHeaders } from './csrf';
+2: 
+3: export function withCsrfHeaders(options: RequestInit = {}): RequestInit {
+4:     const method = (options.method || 'GET').toUpperCase();
+5:     if (!CSRF_PROTECTED_METHODS.has(method)) {
+6:         return options;
+7:     }
+8: 
+9:     const headers = new Headers(options.headers);
+10:     for (const [name, value] of Object.entries(getCsrfHeaders())) {
+11:         headers.set(name, value);
+12:     }
+13: 
+14:     return {
+15:         ...options,
+16:         headers,
+17:     };
+18: }
+19: 
+20: export function fetchWithCsrf(input: RequestInfo | URL, options: RequestInit = {}) {
+21:     return fetch(input, withCsrfHeaders(options));
+22: }
+FILE frontend/src/lib/client-session-profile.ts
+1: import type { User } from '@/types/api';
+2: 
+3: export function seedClientSessionUser(email: string): void {
+4:   if (typeof window === 'undefined') return;
+5: 
+6:   const user: User = {
+7:     id: 'email-session',
+8:     email,
+9:     is_sysadmin: false,
+10:     status: 'active',
+11:     role_name: 'member',
+12:     permissions: [],
+13:   };
+14: 
+15:   window.localStorage.setItem('regengine_user', JSON.stringify(user));
+16: }
+FILE frontend/src/app/ingest/sandbox-handoff.ts
+1: export const SANDBOX_HANDOFF_STORAGE_KEY = 'regengine:sandbox-handoff';
+2: 
+3: export type SandboxOperationalHandoff = {
+4:   version: 1;
+5:   source: 'free-sandbox' | 'inflow-lab-feeder';
+6:   createdAt: string;
+7:   summary: {
+8:     totalEvents: number;
+9:     passedChecks: number;
+10:     needsWork: number;
+11:     blockers: number;
+12:   };
+13:   csv?: string;
+14:   detectedColumns?: string[];
+15:   diagnosis?: unknown;
+16:   corrections?: unknown;
+17: };
+18: 
+19: export type SandboxHandoffView = {
+20:   handoff: SandboxOperationalHandoff;
+21:   detectedColumns: string[];
+22:   totalEvents: number;
+23:   passedChecks: number;
+24:   needsWork: number;
+25:   blockerCount: number;
+26:   blockers: string[];
+27:   nextMappingAction: string;
+28: };
+29: 
+30: type ParseResult =
+31:   | { ok: true; view: SandboxHandoffView }
+32:   | { ok: false; error: string };
+33: 
+34: function isRecord(value: unknown): value is Record<string, unknown> {
+35:   return typeof value === 'object' && value !== null && !Array.isArray(value);
+36: }
+37: 
+38: function toNumber(value: unknown, fallback = 0) {
+39:   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+40: }
+41: 
+42: function toOptionalNumber(value: unknown) {
+43:   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+44: }
+45: 
+46: function csvColumns(csv?: string) {
+47:   const headerLine = csv?.split(/\r?\n/).find((line) => line.trim().length > 0);
+48:   if (!headerLine) return [];
+49: 
+50:   return headerLine
+51:     .split(',')
+52:     .map((column) => column.trim().replace(/^"|"$/g, ''))
+53:     .filter(Boolean);
+54: }
+55: 
+56: function diagnosisBlockers(diagnosis: unknown) {
+57:   if (!isRecord(diagnosis)) return [];
+58: 
+59:   const blockingReasons = diagnosis.blocking_reasons;
+60:   if (Array.isArray(blockingReasons)) {
+61:     return blockingReasons.filter((reason): reason is string => typeof reason === 'string' && reason.trim().length > 0);
+62:   }
+63: 
+64:   return [];
+65: }
+66: 
+67: function diagnosisEventCounts(diagnosis: unknown) {
+68:   if (!isRecord(diagnosis)) return {};
+69: 
+70:   return {
+71:     totalEvents: toOptionalNumber(diagnosis.total_events),
+72:     passedEvents: toOptionalNumber(diagnosis.compliant_events),
+73:     needsWorkEvents: toOptionalNumber(diagnosis.non_compliant_events),
+74:   };
+75: }
+76: 
+77: function nextMappingAction(handoff: SandboxOperationalHandoff, detectedColumns: string[], blockers: string[]) {
+78:   if (handoff.summary.blockers > 0 || blockers.length > 0) {
+79:     return 'Resolve sandbox blockers before creating a production import mapping.';
+80:   }
+81: 
+82:   if (detectedColumns.length === 0) {
+83:     return 'Add or confirm source headers, then map each column to a RegEngine field.';
+84:   }
+85: 
+86:   if (handoff.summary.needsWork > 0) {
+87:     return 'Review suggested corrections, then map detected source columns to canonical fields.';
+88:   }
+89: 
+90:   return 'Map detected columns to canonical fields and save this as a test-run source mapping.';
+91: }
+92: 
+93: export function parseSandboxHandoff(raw: string | null): ParseResult {
+94:   if (!raw) {
+95:     return { ok: false, error: 'No sandbox handoff was found in this browser session.' };
+96:   }
+97: 
+98:   let parsed: unknown;
+99:   try {
+100:     parsed = JSON.parse(raw);
+101:   } catch {
+102:     return { ok: false, error: 'The sandbox handoff could not be read. Return to the sandbox and save the test run again.' };
+103:   }
+104: 
+105:   if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.summary)) {
+106:     return { ok: false, error: 'The sandbox handoff uses an unsupported format.' };
+107:   }
+108: 
+109:   if (parsed.source !== 'free-sandbox' && parsed.source !== 'inflow-lab-feeder') {
+110:     return { ok: false, error: 'The sandbox handoff source is not recognized.' };
+111:   }
+112: 
+113:   const summary = parsed.summary;
+114:   const handoff: SandboxOperationalHandoff = {
+115:     version: 1,
+116:     source: parsed.source,
+117:     createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : '',
+118:     summary: {
+119:       totalEvents: toNumber(summary.totalEvents),
+120:       passedChecks: toNumber(summary.passedChecks),
+121:       needsWork: toNumber(summary.needsWork),
+122:       blockers: toNumber(summary.blockers),
+123:     },
+124:     csv: typeof parsed.csv === 'string' ? parsed.csv : undefined,
+125:     detectedColumns: Array.isArray(parsed.detectedColumns)
+126:       ? parsed.detectedColumns.filter((column): column is string => typeof column === 'string' && column.trim().length > 0)
+127:       : undefined,
+128:     diagnosis: parsed.diagnosis,
+129:     corrections: parsed.corrections,
+130:   };
+131: 
+132:   const detectedColumns = handoff.detectedColumns?.length ? handoff.detectedColumns : csvColumns(handoff.csv);
+133:   const diagnosisCounts = diagnosisEventCounts(handoff.diagnosis);
+134:   const blockers = diagnosisBlockers(handoff.diagnosis);
+135:   const blockerCount = Math.max(handoff.summary.blockers, blockers.length);
+136:   const totalEvents = diagnosisCounts.totalEvents ?? handoff.summary.totalEvents;
+137:   const needsWork = diagnosisCounts.needsWorkEvents ?? handoff.summary.needsWork;
+138:   const passedChecks = diagnosisCounts.passedEvents ?? handoff.summary.passedChecks;
+139: 
+140:   return {
+141:     ok: true,
+142:     view: {
+143:       handoff,
+144:       detectedColumns,
+145:       totalEvents,
+146:       passedChecks,
+147:       needsWork,
+148:       blockerCount,
+149:       blockers,
+150:       nextMappingAction: nextMappingAction(handoff, detectedColumns, blockers),
+151:     },
+152:   };
+153: }
+154: 
+155: export function readSandboxHandoffFromSession(): ParseResult {
+156:   if (typeof window === 'undefined') {
+157:     return { ok: false, error: 'Sandbox handoff is only available in the browser session.' };
+158:   }
+159: 
+160:   return parseSandboxHandoff(window.sessionStorage.getItem(SANDBOX_HANDOFF_STORAGE_KEY));
+161: }
+FILE frontend/src/lib/gs1-parser.ts
+1: /**
+2:  * GS1-128 Barcode Parser
+3:  *
+4:  * Extracts Application Identifiers (AIs) from a raw GS1 barcode string.
+5:  * Common AIs:
+6:  * (01) - GTIN (14 digits)
+7:  * (10) - Batch/Lot Number (Variable length, up to 20 chars)
+8:  * (13) - Packaging date (YYMMDD)
+9:  * (17) - Expiration date (YYMMDD)
+10:  * (21) - Serial number (Variable length, up to 20 chars)
+11:  */
+12: 
+13: export interface GS1ParsedData {
+14:     gtin?: string;
+15:     tlc?: string;
+16:     serial?: string;
+17:     packDate?: string;
+18:     expiryDate?: string;
+19:     sourceFormat?: 'gs1_ai' | 'digital_link' | 'unknown';
+20:     isValidGTIN?: boolean;
+21:     raw: string;
+22: }
+23: 
+24: const GROUP_SEPARATOR = String.fromCharCode(29);
+25: const AI_FIXED_LENGTH: Record<string, number> = {
+26:     '01': 14,
+27:     '13': 6,
+28:     '17': 6,
+29: };
+30: const AI_VARIABLE = new Set(['10', '21']);
+31: const AI_SUPPORTED = new Set([
+32:     ...Object.keys(AI_FIXED_LENGTH),
+33:     ...Array.from(AI_VARIABLE),
+34: ]);
+35: 
+36: function normalizeInput(raw: string): string {
+37:     return raw
+38:         .trim()
+39:         .replace(/\s+/g, '')
+40:         .replace(/[()]/g, '')
+41:         .replace(/\u00f1/gi, GROUP_SEPARATOR); // scanner FNC1 surrogate
+42: }
+43: 
+44: function parseYYMMDD(value?: string): string | undefined {
+45:     if (!value || !/^\d{6}$/.test(value)) return undefined;
+46: 
+47:     const year = 2000 + Number(value.slice(0, 2));
+48:     const month = Number(value.slice(2, 4));
+49:     const day = Number(value.slice(4, 6));
+50:     if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+51: 
+52:     const date = new Date(Date.UTC(year, month - 1, day));
+53:     if (
+54:         date.getUTCFullYear() !== year ||
+55:         date.getUTCMonth() !== month - 1 ||
+56:         date.getUTCDate() !== day
+57:     ) {
+58:         return undefined;
+59:     }
+60: 
+61:     const mm = String(month).padStart(2, '0');
+62:     const dd = String(day).padStart(2, '0');
+63:     return `${year}-${mm}-${dd}`;
+64: }
+65: 
+66: function maybeKnownAiAt(input: string, index: number): boolean {
+67:     const ai = input.slice(index, index + 2);
+68:     if (!AI_SUPPORTED.has(ai)) return false;
+69:     if (ai in AI_FIXED_LENGTH) {
+70:         return index + 2 + AI_FIXED_LENGTH[ai] <= input.length;
+71:     }
+72:     return index + 2 <= input.length;
+73: }
+74: 
+75: function findNextFieldBoundary(input: string, from: number): number {
+76:     for (let i = from; i < input.length; i += 1) {
+77:         if (input[i] === GROUP_SEPARATOR) return i;
+78:         if (maybeKnownAiAt(input, i)) return i;
+79:     }
+80:     return input.length;
+81: }
+82: 
+83: function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
+84:     const trimmed = raw.trim();
+85:     if (!trimmed) return null;
+86: 
+87:     let path = '';
+88:     if (/^https?:\/\//i.test(trimmed)) {
+89:         try {
+90:             const parsed = new URL(trimmed);
+91:             path = parsed.pathname;
+92:         } catch {
+93:             return null;
+94:         }
+95:     } else if (trimmed.startsWith('/')) {
+96:         path = trimmed.split('?')[0].split('#')[0];
+97:     } else {
+98:         return null;
+99:     }
+100: 
+101:     const segments = path.split('/').filter(Boolean);
+102:     if (!segments.includes('01')) return null;
+103: 
+104:     const fields: Partial<GS1ParsedData> = {};
+105:     for (let i = 0; i < segments.length - 1; i += 1) {
+106:         const ai = segments[i];
+107:         const value = decodeURIComponent(segments[i + 1]);
+108:         if (!value) continue;
+109: 
+110:         if (ai === '01' && !fields.gtin) fields.gtin = value;
+111:         if (ai === '10' && !fields.tlc) fields.tlc = value;
+112:         if (ai === '21' && !fields.serial) fields.serial = value;
+113:         if (ai === '13' && !fields.packDate) fields.packDate = parseYYMMDD(value);
+114:         if (ai === '17' && !fields.expiryDate) fields.expiryDate = parseYYMMDD(value);
+115:     }
+116: 
+117:     if (!fields.gtin && !fields.tlc && !fields.serial) return null;
+118: 
+119:     fields.sourceFormat = 'digital_link';
+120:     return fields;
+121: }
+122: 
+123: export function isValidGTINCheckDigit(gtin: string): boolean {
+124:     if (!/^\d{14}$/.test(gtin)) return false;
+125: 
+126:     const digits = gtin.split('').map((digit) => Number(digit));
+127:     const checkDigit = digits[13];
+128: 
+129:     let sum = 0;
+130:     let weight = 3;
+131:     for (let i = 12; i >= 0; i -= 1) {
+132:         sum += digits[i] * weight;
+133:         weight = weight === 3 ? 1 : 3;
+134:     }
+135: 
+136:     const expectedCheckDigit = (10 - (sum % 10)) % 10;
+137:     return expectedCheckDigit === checkDigit;
+138: }
+139: 
+140: export function parseGS1(raw: string): GS1ParsedData {
+141:     const data: GS1ParsedData = {
+142:         raw,
+143:         sourceFormat: 'unknown',
+144:     };
+145: 
+146:     const digitalLinkData = parseDigitalLink(raw);
+147:     if (digitalLinkData) {
+148:         Object.assign(data, digitalLinkData);
+149:     } else {
+150:         const working = normalizeInput(raw);
+151:         let index = 0;
+152:         data.sourceFormat = 'gs1_ai';
+153: 
+154:         while (index < working.length) {
+155:             if (working[index] === GROUP_SEPARATOR) {
+156:                 index += 1;
+157:                 continue;
+158:             }
+159: 
+160:             const ai = working.slice(index, index + 2);
+161:             if (!AI_SUPPORTED.has(ai)) {
+162:                 index += 1;
+163:                 continue;
+164:             }
+165: 
+166:             if (ai in AI_FIXED_LENGTH) {
+167:                 const length = AI_FIXED_LENGTH[ai];
+168:                 const value = working.slice(index + 2, index + 2 + length);
+169:                 if (value.length === length) {
+170:                     if (ai === '01' && !data.gtin) data.gtin = value;
+171:                     if (ai === '13' && !data.packDate) data.packDate = parseYYMMDD(value);
+172:                     if (ai === '17' && !data.expiryDate) data.expiryDate = parseYYMMDD(value);
+173:                 }
+174:                 index += 2 + length;
+175:                 continue;
+176:             }
+177: 
+178:             const start = index + 2;
+179:             const end = findNextFieldBoundary(working, start);
+180:             const value = working.slice(start, end);
+181:             if (value) {
+182:                 if (ai === '10' && !data.tlc) data.tlc = value;
+183:                 if (ai === '21' && !data.serial) data.serial = value;
+184:             }
+185:             index = end;
+186:         }
+187:     }
+188: 
+189:     if (data.gtin) {
+190:         data.isValidGTIN = isValidGTINCheckDigit(data.gtin);
+191:     }
+192: 
+193:     return data;
+194: }
+195: 
+196: /**
+197:  * Validates if the capture looks like a valid FSMA-relevant barcode
+198:  */
+199: export function isFSMACompatible(data: GS1ParsedData): boolean {
+200:     return !!(data.tlc || (data.gtin && data.isValidGTIN !== false));
+201: }

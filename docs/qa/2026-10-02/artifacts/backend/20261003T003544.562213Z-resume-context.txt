@@ -1,0 +1,873 @@
+UTC: 2026-10-03T00:35:44.562213+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["AGENTS.md","docs/qa/2026-10-02/META-SESSION-LOG.md","pyproject.toml","conftest.py","services/ingestion/conftest.py","services/ingestion/tests/conftest.py","/Users/sellers/.codex/skills/security-best-practices/SKILL.md","/Users/sellers/.codex/skills/review-pr/SKILL.md"]; [(print("\nFILE",p),print(Path(p).read_text()[:20000])) for p in files if Path(p).exists()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+
+FILE AGENTS.md
+# RegEngine Agent Guide
+
+## Mission
+
+RegEngine is a pre-production FSMA 204 traceability application. Agent work should strengthen the production spine:
+
+```text
+ingest -> normalize -> validate -> persist evidence -> export
+```
+
+If a change does not protect or improve that spine, mark it as experimental, docs-only, or out of scope.
+
+## Workspace Map
+
+- `repo/` (`~/Projects/RegEngine/repo`) is the production RegEngine application
+  repository and the default target for all work.
+- The directories beside it under `~/Projects/RegEngine/` are **git worktrees off
+  this same repo**, plus `_archive/` (snapshots and backups, reference only) and
+  `docs/` (founder/investor material). Many live worktrees exist across five
+  locations. Read `~/Projects/RegEngine/AGENTS.md` for the map, and run
+  `git worktree list` before editing so you know which checkout you are in.
+- The Inflow Lab simulator lives at `~/inflow-lab` (github.com/regengine/inflow-lab),
+  **not** beside this repo. A second checkout sits at
+  `~/Projects/conductor/repos/inflow-lab`. Do not mix Inflow Lab code into
+  `repo/` unless the task explicitly asks for an integration.
+
+## Source Of Truth
+
+Read these before large changes:
+
+- `README.md`
+- `REPO_PURPOSE.md`
+- `ARCHITECTURE.md`
+- `CANONICAL_OWNERSHIP.md`
+- `docs/specs/FSMA_204_MVP_SPEC.md`
+- `frontend/package.json` for frontend commands
+- `.github/copilot-instructions.md` for editor-agent guidance
+
+## Agent Roles
+
+Only three agent roles are supported:
+
+- `planner`: read-only research, path checks, and implementation plans.
+- `implementer`: small scoped code or documentation changes.
+- `security_review`: review for auth, tenant isolation, secrets, database fallback, logging, and deploy risk.
+
+Use plain work lanes such as backend, frontend, security, QA, infra, or docs when triaging tasks. These are labels, not bot identities.
+
+## Working Rules
+
+- Verify files and commands before acting. Do not follow stale paths from old audit docs.
+- Do not invent `.agent/` or `.agents/` directories to satisfy old instructions. Current agent specs live in `.github/agents/`.
+- Do not run the legacy `regengine.swarm` autonomous runtime unless a task explicitly approves `REGENGINE_ENABLE_LEGACY_SWARM=1`.
+- Prefer existing patterns from nearby service/frontend code.
+- Keep diffs small and tied to the assigned lane.
+- Preserve tenant isolation, audit evidence, and schema validation on ingestion paths.
+- Use `python3`, not `python`, in local commands unless a virtual environment explicitly provides `python`.
+- Use `npm` in `frontend/`; `package-lock.json` is checked in.
+- The repo has no `Makefile`, so do not suggest `make` commands.
+- Agents do not decide product direction. They execute scoped engineering tasks against the FSMA production spine.
+
+## Jev Sidecar
+
+Consult TypeSafe Jev alongside the user's requests.
+
+- When a request contains a judgment (which of these, is this true, how much), run `scripts/jev_ask.py` and report Jev's answer and confidence next to your own.
+- Run it with a Python that has `requirements.lock` installed. In Claude Code sessions that is `venv/bin/python`.
+- Follow `.claude/skills/jev-sidecar/SKILL.md` for when to ask, what never to send, and how to report.
+- It needs `TYPESAFE_API_KEY` in the environment. Without the key the script exits 2 and sends nothing: say so once and continue.
+
+## Secrets
+
+- Never ask the user to paste a key, token or password into chat, and never print, log or commit one.
+- To put a secret on Railway (RegEngine production or staging), send the user the RegEngine Key Drop page: https://claude.ai/artifact/83mnC2gozimcQ87KJFLAFt. It writes from their browser to Railway through their own Railway connector, so the agent never receives the value. The Railway dashboard (Variables → New Variable) is the other direct path.
+- After a secret is on Railway, ask the user to seal it (Variables → ⋯ → Seal). A sealed value reaches the app but cannot be read back through the UI or the API.
+- Keys for agent sessions (for example `TYPESAFE_API_KEY` for `scripts/jev_ask.py`) go in the claude.ai cloud environment settings: the environment menu in the session title bar → Edit → Environment variables. A new session picks them up.
+- Use one key per place (production, staging, agent sessions) so each can be revoked alone. A key that appeared in chat, a log or git history is exposed: revoke it and issue a new one.
+- Verify a secret by its name or its effect, never by reading its value. For Jev, that is the `jev_configured ... key_present=` line in the deploy log.
+
+## Verification
+
+Choose the smallest useful verification for the changed surface:
+
+```bash
+python3 -m pytest tests/swarm -q
+python3 -m pytest services/ingestion/tests -q --no-cov
+python3 -m pytest services/admin/tests -q --no-cov
+cd frontend && npm run lint
+cd frontend && npm run test:run
+cd frontend && npm run build
+```
+
+`frontend/` has no `typecheck` script. Use `npm run lint` (eslint + design-lint)
+and `npm run build` for type errors. Full script list is in
+`frontend/package.json`.
+
+Some integration tests require PostgreSQL, Redis, Neo4j, Docker, or live services. If a command is blocked by local infrastructure or secrets, say so explicitly.
+
+
+FILE docs/qa/2026-10-02/META-SESSION-LOG.md
+
+- **2026-10-02T23:46:05.036682+00:00** `inventory` — `sh -c 'git ls-files "*AGENTS.md"; rg --files -g "!**/.env*" -g "!**/package-lock.json" -g "!**/requirements.lock" -g "!*lock*" -g "!**/node_modules/**" -g "!**/.git/**" | rg "(^README.md$|^REPO_PURPOSE.md$|^ARCHITECTURE.md$|^CANONICAL_OWNERSHIP.md$|conftest.py$|pytest|pyproject|requirements|playwright|vitest|package.json$|crabbox|^server/|^tests/qa)"; for p in .venv/bin/python venv/bin/python frontend/node_modules/.bin/next frontend/node_modules/.bin/playwright; do test ! -e "$p" || ls -ld "$p"; done; git ls-files --others --exclude-standard'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261002T234605.036682Z-inventory.txt).
+
+- **2026-10-02T23:46:05.182552+00:00** `guides` — `sh -c 'cat AGENTS.md; cat frontend/package.json; cat pyproject.toml; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,120p" README.md; sed -n "1,120p" REPO_PURPOSE.md; sed -n "1,140p" ARCHITECTURE.md; sed -n "1,100p" CANONICAL_OWNERSHIP.md'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/meta/20261002T234605.182552Z-guides.txt).
+
+- **2026-10-03T00:35:16.224243+00:00** `resume-inspection` — `sh -c 'date -u; cat frontend/AGENTS.md; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,210p" conftest.py; sed -n "1,200p" frontend/playwright.config.ts; sed -n "1,180p" frontend/vitest.config.mts; command -v uv; command -v npx; command -v python3; command -v node; for p in .venv/bin/python venv/bin/python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python frontend/node_modules/.bin/next; do test ! -e "$p" || ls -ld "$p"; done'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/meta/20261003T003516.224243Z-resume-inspection.txt).
+
+
+FILE pyproject.toml
+[project]
+name = "regengine"
+version = "0.4.0"
+description = "API-first FSMA 204 food traceability, validation, tamper-evident audit evidence, and FDA-oriented exports"
+keywords = ["fsma-204", "food-traceability", "cte", "kde", "epcis", "audit-evidence", "supply-chain"]
+authors = [{ name = "RegEngine Engineering", email = "admin@regengine.co" }]
+license = { text = "Proprietary" }
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+
+# NOTE: Runtime/dev dependencies are NOT declared here. The single source of
+# truth is requirements.in (human-edited loose spec) compiled to
+# requirements.lock (fully pinned + hashed via pip-tools). Docker and CI install
+# exclusively from requirements.lock. This [project] table exists only for
+# package metadata and tool configuration ([tool.ruff], [tool.mypy],
+# [tool.pytest]); the root package is never built or installed (only the
+# separate regengine/ SDK is, via its own setup.py).
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["__pycache__", ".venv", "venv", "build", "dist"]
+
+[tool.ruff.lint]
+# Import sorting (isort replacement) lives here. The CI per-service "bug gate"
+# (see backend-ci.yml) runs ruff with an explicit narrow select
+# (E9,F63,F7,F82) and does not depend on this config.
+select = ["I"]
+
+[tool.ruff.lint.isort]
+# Match the previous isort profile = "black" behavior.
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+ignore_missing_imports = true
+# Non-blocking: mypy is available for local use but is not yet a CI gate.
+# Tighten incrementally (e.g. disallow_untyped_defs) per-module via overrides.
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --asyncio-mode=auto --import-mode=importlib"
+# Only the repo root + services package dir are globally on pythonpath.
+# Per-service ``app/`` resolution is handled by the root conftest.py hook
+# which switches sys.path to the active service before each test collector
+# runs. Listing multiple ``services/<svc>`` here would cause ``app`` to
+# permanently resolve against whichever service sorted first.
+pythonpath = [".", "services"]
+testpaths = [
+    "tests",
+    "regengine/tests",
+    "services/admin/tests",
+    "services/compliance/tests",
+    "services/graph/tests",
+    "services/ingestion/tests",
+    "services/nlp/tests",
+    "services/scheduler/tests",
+    # #2923: omitted until now, so the repo-root --collect-only import guard
+    # in test-suite-check.yml — the check whose stated job is to stop "N test
+    # files silently fail to import" — could not see these 53 files, and a
+    # bare `pytest` from the repo root skipped them.
+    "services/shared/tests",
+]
+asyncio_mode = "auto"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+markers = [
+    "integration: tests requiring docker/testcontainers or other live external services. Auto-skipped in services/graph/tests unless ``--run-integration`` is passed; opt in elsewhere via ``pytest -m integration``.",
+]
+
+[tool.coverage.run]
+# #2891: the coverage denominator must be PRODUCT code only.
+#
+# The `shared` matrix leg runs `--cov=.` from services/shared, and with no
+# omit configuration pytest's own test modules landed in the denominator.
+# They are fully executed by definition, so they entered the report at
+# ~86% covered and pulled the total up: 5,460 of 16,747 measured statements
+# (33%) were test code. The "~44% locally" note the 35% floor was set from
+# rested on that inflated basis.
+#
+# CI passes --cov-config=<repo root>/pyproject.toml because the matrix step
+# `cd`s into services/<svc> and coverage.py only looks for a config file in
+# the current directory — without the explicit flag this section would be
+# silently ignored, which is the same class of defect it exists to fix.
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/__pycache__/*",
+]
+
+
+FILE conftest.py
+"""Root pytest configuration.
+
+This conftest exists to solve the multi-service ``app/`` collision problem:
+the repo has multiple service packages under ``services/<svc>/`` each with an
+``app/`` subpackage. When pytest collects tests across services, only one
+``app`` can live in ``sys.modules`` at a time, so tests from the "other"
+service fail with ``ModuleNotFoundError: No module named 'app.X'``.
+
+The fix: hook into pytest's collection so that immediately before we import a
+test module, we detect which service owns it and (a) invalidate the cached
+``app`` module, (b) reorder ``sys.path`` so that service's directory wins.
+
+This keeps feature code untouched while letting the full test suite collect
+in a single ``pytest`` run.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import re
+import sys
+from contextlib import suppress
+from pathlib import Path
+from types import ModuleType
+from typing import Optional
+
+import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parent
+_SERVICES_DIR = _REPO_ROOT / "services"
+
+# Known services that expose their own top-level ``app/`` package.
+_APP_BEARING_SERVICES = ("admin", "compliance", "graph", "ingestion", "nlp", "scheduler")
+
+# Tests under top-level ``tests/`` that reach into a specific service via
+# bare ``from app.X`` imports. The conftest flips sys.path to the named
+# service before the test module is imported so ``app`` resolves correctly.
+# Keys are path suffixes (as shipped, always POSIX); values are service
+# names from ``_APP_BEARING_SERVICES``.
+_TEST_TO_SERVICE_OVERRIDES = {
+    "tests/billing/test_stripe_billing.py": "ingestion",
+    "tests/billing/test_stripe_webhook_ordering_1196.py": "ingestion",
+    "tests/contract/test_admin_api_contract.py": "admin",
+    "tests/ingestion/test_ingest_url.py": "ingestion",
+    "tests/security/test_audit_integrity.py": "admin",
+    "tests/security/test_strict_ciam_compliance.py": "admin",
+    "tests/test_trace_engine.py": "ingestion",
+    "tests/test_compliance_control_plane_e2e.py": "ingestion",
+    "tests/test_rules_engine.py": "ingestion",
+    "tests/test_rules_engine_unit.py": "ingestion",
+    "tests/graph/test_hierarchy_builder_global_scope.py": "graph",
+}
+_KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {service: {} for service in _APP_BEARING_SERVICES}
+_KNOWN_SHARED_MODULES: dict[str, ModuleType] = {}
+
+
+def _service_from_module_file(module: ModuleType | None) -> Optional[str]:
+    """Infer which service owns an imported ``app`` module."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    if not mod_file:
+        return None
+
+    for service in _APP_BEARING_SERVICES:
+        service_root = str(_SERVICES_DIR / service)
+        if service_root and service_root in mod_file:
+            return service
+    return None
+
+
+def _evict_module(name: str) -> None:
+    """Remove a module and detach any lingering package attribute."""
+    sys.modules.pop(name, None)
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is None or not hasattr(parent, child_name):
+        return
+
+    with suppress(AttributeError):
+        delattr(parent, child_name)
+
+
+def _bind_module(name: str, module: ModuleType) -> None:
+    """Install a cached real module and reattach it to its parent package."""
+    sys.modules[name] = module
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is not None:
+        setattr(parent, child_name, module)
+
+
+def _remember_real_module(
+    cache: dict[str, ModuleType],
+    name: str,
+    module: ModuleType | None,
+    expected_root: str,
+) -> bool:
+    """Cache real modules so later stub cleanup can restore them."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    mod_spec = getattr(module, "__spec__", None)
+    if module is None or mod_spec is None:
+        return False
+    if expected_root:
+        try:
+            module_path = Path(mod_file).resolve()
+            expected_path = Path(expected_root).resolve()
+            module_path.relative_to(expected_path)
+        except (OSError, ValueError):
+            return False
+    cache[name] = module
+    return True
+
+
+def _repair_package_links(prefix: str) -> None:
+    """Reattach submodules to their live parent packages."""
+    names = sorted(
+        [name for name in sys.modules if name == prefix or name.startswith(f"{prefix}.")],
+        key=lambda value: value.count("."),
+    )
+    for name in names:
+        if "." not in name:
+            continue
+        parent_name, _, child_name = name.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        child = sys.modules.get(name)
+        if parent is not None and child is not None:
+            setattr(parent, child_name, child)
+
+
+def _service_for_path(path: Path) -> Optional[str]:
+    """Return the service name owning ``path``, or ``None`` if unowned."""
+    try:
+        rel = path.resolve().relative_to(_SERVICES_DIR)
+    except ValueError:
+        rel = None
+
+    if rel is not None:
+        parts = rel.parts
+        if parts and parts[0] in _APP_BEARING_SERVICES:
+            return parts[0]
+
+    # Check top-level tests/* overrides.
+    try:
+        rel_root = path.resolve().relative_to(_REPO_ROOT)
+    except ValueError:
+        return None
+    key = rel_root.as_posix()
+    return _TEST_TO_SERVICE_OVERRIDES.get(key)
+
+
+def _activate_service_for_path(path: Path) -> None:
+    """Flip import context for any test path owned by a service."""
+    service = _service_for_path(path)
+    if service is not None:
+        _switch_to_service(service)
+
+
+def _switch_to_service(service: str) -> None:
+    """Make ``services/<service>/`` the active site for the ``app`` package.
+
+    Python caches imported packages in ``sys.modules``. If ``app`` was
+    imported earlier from a sibling service, subsequent ``from app.X``
+    imports will resolve against that stale package. Evict the cache and
+    reorder ``sys.path`` so the fresh import resolves correctly.
+    """
+    service_dir = _SERVICES_DIR / service
+    service_dir_str = str(service_dir)
+    service_cache = _KNOWN_SERVICE_MODULES.setdefault(service, {})
+    _prepare_service_test_environment(service)
+
+    # Drop any cached bare ``main`` and ``app`` (plus app submodules) so
+    # reimport uses the correct service. Several service-local tests import
+    # ``from main import app`` at module scope, so only evicting ``app.*`` is
+    # not enough during full-suite collection.
+    stale = sorted(
+        [name for name in sys.modules if name == "main" or name == "app" or name.startswith("app.")],
+        key=lambda value: value.count("."),
+        reverse=True,
+    )
+    for name in stale:
+        mod = sys.modules.get(name)
+        owner_service = _service_from_module_file(mod)
+        owner_cache = _KNOWN_SERVICE_MODULES.setdefault(owner_service, {}) if owner_service else None
+        if owner_cache is not None:
+            remembered = _remember_real_module(
+                owner_cache,
+                name,
+                mod,
+                str(_SERVICES_DIR / owner_service),
+            )
+            if remembered and owner_service == service:
+                continue
+
+        cached = service_cache.get(name)
+        if cached is not None:
+            _bind_module(name, cached)
+            continue
+
+        _evict_module(name)
+
+    # Also evict ``shared.*`` entries that resolved from an unknown/stale
+    # location (e.g. loaded before sys.path was correct).  If the module
+    # file is not under the current services dir, evict it so it re-resolves.
+    _shared_dir = str(_SERVICES_DIR / "shared")
+    stale_shared = sorted(
+        [name for name in sys.modules if name == "shared" or name.startswith("shared.")],
+        key=lambda value: value.count("."),
+        reverse=True,
+    )
+    for name in stale_shared:
+        mod = sys.modules.get(name)
+        if _remember_real_module(_KNOWN_SHARED_MODULES, name, mod, _shared_dir):
+            continue  # already correct
+
+        cached = _KNOWN_SHARED_MODULES.get(name)
+        if cached is not None:
+            _bind_module(name, cached)
+            continue
+
+        _evict_module(name)
+
+    if "main" not in sys.modules and (cached_main := service_cache.get("main")) is not None:
+        _bind_module("main", cached_main)
+    if "app" not in sys.modules and (cached_app := service_cache.get("app")) is not None:
+        _bind_module("app", cached_app)
+    if "shared" not in sys.modules and (cached_shared := _KNOWN_SHARED_MODULES.get("shared")) is not None:
+        _bind_module("shared", cached_shared)
+
+    # Restore the full cached module tree for the active service, not just
+    # names that happened to overlap with the previously active service.
+    # Without this, switching from e.g. scheduler -> admin restores ``app``
+    # but not deeper admin-only modules like ``app.erasure_routes``;
+    # a later import rebuilds those as fresh module objects, so test-time
+    # patches hit a different module identity than the already-collected
+    # router/handler objects.
+    for name, cached in sorted(service_cache.items(), key=lambda item: item[0].count(".")):
+        _bind_module(name, cached)
+
+    for prefix in ("app", "shared"):
+        _repair_package_links(prefix)
+
+    # Remove other service dirs from sys.path so only the current one wins
+    # when ``app`` is (re-)imported.
+    sys.path[:] = [
+        p for p in sys.path if not any(p == str(_SERVICES_DIR / s) for s in _APP_BEARING_SERVICES if s != service)
+    ]
+
+    # Place this service's dir at position 0.
+    if service_dir_str in sys.path:
+        sys.path.remove(service_dir_str)
+    sys.path.insert(0, service_dir_str)
+
+
+def _prepare_service_test_environment(service: str) -> None:
+    """Reset env that service-local tests expect before module import.
+
+    Some suites mutate process-wide env with plain ``os.environ`` assignments.
+    When pytest collects multiple services in one process, those mutations can
+    leak into later service imports. Compliance tests import ``main.app`` at
+    module scope and rely on test-mode API-key bypass, so pin its import-time
+    environment whenever the compliance service becomes active.
+    """
+    if service != "compliance":
+        return
+
+    os.environ["REGENGINE_ENV"] = "test"
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+    os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
+    os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-for-pytest")
+
+
+def _ensure_default_event_loop() -> None:
+    """Keep legacy sync tests that call ``asyncio.get_event_loop()`` stable."""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        return
+
+    if loop.is_closed():
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+
+@pytest.fixture(autouse=True)
+def _reset_in_process_tenant_rate_limit_bucket():
+    """Keep broad pytest runs from sharing anonymous TestClient rate buckets.
+
+    Individual rate-limit tests still exercise blocking behavior inside a
+    single test. This only clears state between tests, matching how isolated
+    test processes behaved before the full-suite runner was wired up.
+    """
+    try:
+        import shared.tenant_rate_limiting as tenant_rate_limiting
+
+        tenant_rate_limiting._bucket = tenant_rate_limiting._InMemoryBucket()
+    except Exception:
+        pass
+
+
+def pytest_collectstart(collector):  # type: ignore[no-untyped-def]
+    """Pytest hook: called before each collector (module/file) runs.
+
+    For test modules under ``services/<svc>/`` or in the overrides table,
+    flip sys.path/sys.modules so ``from app.X`` resolves inside that
+    service's ``app/`` tree.
+    """
+    fspath = getattr(collector, "path", None) or getattr(collector, "fspath", None)
+    if fspath is None:
+        return
+    _activate_service_for_path(Path(str(fspath)))
+
+
+def pytest_collect_file(file_path, parent):  # type: ignore[no-untyped-def]
+    """Switch service import context before pytest creates a file collector."""
+    _activate_service_for_path(Path(str(file_path)))
+    return None
+
+
+def pytest_pycollect_makemodule(module_path, parent):  # type: ignore[no-untyped-def]
+    """Switch service import context immediately before module import."""
+    _activate_service_for_path(Path(str(module_path)))
+    return None
+
+
+def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
+    """Switch service import context again before each test executes.
+
+    Collection-time switching is not sufficient because many tests perform
+    ``from app.X import ...`` imports inside the test body or fixture setup.
+    Without a runtime refresh, the final collected service can leave a stale
+    ``app`` package active in ``sys.modules``/``sys.path`` and poison later
+    tests that pass in isolation.
+    """
+    item_path = getattr(item, "path", None) or getattr(item, "fspath", None)
+    if item_path is None:
+        return
+    _activate_service_for_path(Path(str(item_path)))
+    _ensure_default_event_loop()
+
+
+FILE services/ingestion/conftest.py
+"""Test environment configuration for pytest.
+
+Automatically loads test environment variables before any test imports.
+"""
+
+import os
+
+# Set test environment variables BEFORE any imports
+os.environ.setdefault("ADMIN_SERVICE_URL", "http://localhost:8000")
+os.environ.setdefault("NLP_SERVICE_URL", "http://localhost:8002")
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+# Fixed HMAC key so the signing path in kafka_utils.send() works in
+# unit tests without hitting a real KMS / secret store (#1078).
+os.environ.setdefault("KAFKA_EVENT_SIGNING_KEY", "test-nlp-kafka-signing-key-ci-only")
+os.environ.setdefault("S3_BUCKET", "test-ingestion-bucket")
+os.environ.setdefault("OBJECT_STORAGE_ACCESS_KEY_ID", "test-key")
+os.environ.setdefault("OBJECT_STORAGE_SECRET_ACCESS_KEY", "test-secret")
+os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
+os.environ.setdefault("ENVIRONMENT", "test")
+os.environ.setdefault("LOG_LEVEL", "WARNING")
+# Subscription gate fails closed when Redis is unreachable (correct in
+# prod, wrong for tests that don't ship a Redis). Default to fail-open
+# here; the gate's own dedicated tests (test_subscription_gate_fail_closed.py)
+# patch os.getenv so they exercise both paths regardless of this default.
+os.environ.setdefault("SUBSCRIPTION_GATE_FAIL_OPEN", "true")
+
+# --- Standardized Bootstrap ---
+import sys
+from pathlib import Path
+
+_SERVICE_DIR = Path(__file__).resolve().parent  # services/ingestion/
+_SERVICES_DIR = _SERVICE_DIR.parent  # services/
+# The service dir goes in first so `from app.X import ...` resolves against
+# this service's app/. The services dir stays in path for shared/cross-
+# service imports.
+for _p in (_SERVICE_DIR, _SERVICES_DIR):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+from shared.paths import ensure_shared_importable
+
+ensure_shared_importable()
+# ------------------------------
+
+
+FILE services/ingestion/tests/conftest.py
+"""Ensure ``services/ingestion`` is on sys.path so bare ``from app.X`` imports
+resolve correctly when pytest collects from the repo root.
+
+The root conftest.py provides a ``pytest_collectstart`` hook for this, but
+``--import-mode=importlib`` can race ahead of the hook when conftest files are
+imported.  Placing an explicit sys.path insert here runs at conftest-import
+time, which is guaranteed to precede any test-module import in this directory.
+"""
+
+from __future__ import annotations
+
+import sys
+from contextlib import suppress
+from pathlib import Path
+from types import ModuleType
+
+_service_dir = str(Path(__file__).resolve().parents[1])  # services/ingestion
+if _service_dir not in sys.path:
+    sys.path.insert(0, _service_dir)
+
+_shared_dir = str(Path(__file__).resolve().parents[2] / "shared")
+_regengine_ingestion_dir = str(Path(_service_dir) / "regengine_ingestion")
+_REAL_MODULES: dict[str, ModuleType] = {}
+_MODULE_ROOTS = (
+    ("app", _service_dir),
+    ("shared", _shared_dir),
+    ("regengine_ingestion", _regengine_ingestion_dir),
+    ("redis", ""),
+)
+
+
+def _evict_module(name: str) -> None:
+    """Remove a module and detach it from its parent package, if any."""
+    sys.modules.pop(name, None)
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is None or not hasattr(parent, child_name):
+        return
+
+    with suppress(AttributeError):
+        delattr(parent, child_name)
+
+
+def _bind_module(name: str, module: ModuleType) -> None:
+    """Install a module into sys.modules and reattach it to its parent."""
+    sys.modules[name] = module
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is not None:
+        setattr(parent, child_name, module)
+
+
+def _remember_real_module(name: str, module: ModuleType | None, expected_root: str) -> bool:
+    """Cache real service/shared modules so we can restore them after stubs."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    mod_spec = getattr(module, "__spec__", None)
+    if module is None or mod_spec is None:
+        return False
+    if expected_root:
+        try:
+            Path(mod_file).resolve().relative_to(Path(expected_root).resolve())
+        except (OSError, ValueError):
+            return False
+    _REAL_MODULES[name] = module
+    return True
+
+
+def _repair_package_links(prefix: str) -> None:
+    """Reattach live submodules to their parent packages."""
+    names = sorted(
+        [k for k in sys.modules if k == prefix or k.startswith(f"{prefix}.")],
+        key=lambda value: value.count("."),
+    )
+    for name in names:
+        if "." not in name:
+            continue
+        parent_name, _, child_name = name.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        child = sys.modules.get(name)
+        if parent is not None and child is not None:
+            setattr(parent, child_name, child)
+
+
+def _purge_stale_modules() -> None:
+    """Keep ingestion tests bound to the real ingestion ``app`` package.
+
+    Some ingestion tests install synthetic ``app.*`` modules into sys.modules
+    at import time. Those stubs are fine for the test module that created them,
+    but they can poison later tests that expect the real ingestion package.
+    We evict:
+    - any ``app`` / ``shared`` module imported from outside the expected tree
+    - synthetic stubs with no import spec
+    """
+    for prefix, expected_root in _MODULE_ROOTS:
+        names = sorted(
+            [k for k in sys.modules if k == prefix or k.startswith(f"{prefix}.")],
+            key=lambda value: value.count("."),
+            reverse=True,
+        )
+        for name in names:
+            mod = sys.modules.get(name)
+            if _remember_real_module(name, mod, expected_root):
+                continue
+
+            cached = _REAL_MODULES.get(name)
+            if cached is not None:
+                _bind_module(name, cached)
+                continue
+
+            _evict_module(name)
+
+    for prefix, _expected_root in _MODULE_ROOTS:
+        cached = _REAL_MODULES.get(prefix)
+        if prefix not in sys.modules and cached is not None:
+            _bind_module(prefix, cached)
+        _repair_package_links(prefix)
+
+
+_purge_stale_modules()
+
+
+def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
+    _purge_stale_modules()
+
+
+FILE /Users/sellers/.codex/skills/security-best-practices/SKILL.md
+---
+name: "security-best-practices"
+description: "Perform language and framework specific security best-practice reviews and suggest improvements. Trigger only when the user explicitly requests security best practices guidance, a security review/report, or secure-by-default coding help. Trigger only for supported languages (python, javascript/typescript, go). Do not trigger for general code review, debugging, or non-security tasks."
+---
+
+# Security Best Practices
+
+## Overview
+
+This skill provides a description of how to identify the language and frameworks used by the current context, and then to load information from this skill's references directory about the security best practices for this language and or frameworks.
+
+This information, if present, can be used to write new secure by default code, or to passively detect major issues within existing code, or (if requested by the user) provide a vulnerability report and suggest fixes.
+
+## Workflow
+
+The initial step for this skill is to identify ALL languages and ALL frameworks which you are being asked to use or already exist in the scope of the project you are working in. Focus on the primary core frameworks. Often you will want to identify both frontend and backend languages and frameworks.
+
+Then check this skill's references directory to see if there are any relevant documentation for the language and or frameworks. Make sure you read ALL reference files which relate to the specific framework or language. The format of the filenames is `<language>-<framework>-<stack>-security.md`. You should also check if there is a `<language>-general-<stack>-security.md` which is agnostic to the framework you may be using.
+
+If working on a web application which includes a frontend and a backend, make sure you have checked for reference documents for BOTH the frontend and backend!
+
+If you are asked to make a web app which will include both a frontend and backend, but the frontend framework is not specified, also check out `javascript-general-web-frontend-security.md`. It is important that you understand how to secure both the frontend and backend.
+
+If no relevant information is available in the skill's references directory, think a little bit about what you know about the language, the framework, and all well known security best practices for it. If you are unsure you can try to search online for documentation on security best practices.
+
+From there it can operate in a few ways.
+
+1. The primary mode is to just use the information to write secure by default code from this point forward. This is useful for starting a new project or when writing new code.
+
+2. The secondary mode is to passively detect vulnerabilities while working in the project and writing code for the user. Critical or very important vulnerabilities or major issues going against security guidance can be flagged and the user can be told about them. This passive mode should focus on the largest impact vulnerabilities and secure defaults.
+
+3. The user can ask for a security report or to improve the security of the codebase. In this case a full report should be produced describe anyways the project fails to follow security best practices guidance. The report should be prioritized and have clear sections of severity and urgency. Then offer to start working on fixes for these issues. See #fixes below.
+
+## Workflow Decision Tree
+
+- If the language/framework is unclear, inspect the repo to determine it and list your evidence.
+- If matching guidance exists in `references/`, load only the relevant files and follow their instructions.
+- If no matching guidance exists, consider if you know any well known security best practices for the chosen language and or frameworks, but if asked to generate a report, let the user know that concrete guidance is not available (you can still generate the report or detect for sure critical vulnerabilities)
+
+# Overrides
+
+While these references contain the security best practices for languages and frameworks, customers may have cases where they need to bypass or override these practices. Pay attention to specific rules and instructions in the project's documentation and prompt files which may require you to override certain best practices. When overriding a best practice, you MAY report it to the user, but do not fight with them. If a security best practice needs to be bypassed / ignored for some project specific reason, you can also suggest to add documentation about this to the project so it is clear why the best practice is not being followed and to follow that bypass in the future.
+
+# Report Format
+
+When producing a report, you should write the report as a markdown file in `security_best_practices_report.md` or some other location if provided by the user. You can ask the user where they would like the report to be written to.
+
+The report should have a short executive summary at the top.
+
+The report should be clearly delineated into multiple sections based on severity of the vulnerability. The report should focus on the most critical findings as these have the highest impact for the user. All findings should be noted with an numeric ID to make them easier to reference.
+
+For critical findings include a one sentence impact statement.
+
+Once the report is written, also report it to the user directly, although you may be less verbose. You can offer to explain any of the findings or the reasons behind the security best practices guidance if the user wants more info on any findings.
+
+Important: When referencing code in the report, make sure to find and include line numbers for the code you are referencing.
+
+After you write the report file, summarize the findings to the user.
+
+Also tell the user where the final report was written to
+
+# Fixes
+
+If you produced a report, let the user read the report and ask to begin performing fixes.
+
+If you passively found a critical finding, notify the user and ask if they would like you to fix this finding.
+
+When producing fixes, focus on fixing a single finding at a time. The fixes should have concise clear comments explaining that the new code is based on the specific security best practice, and perhaps a very short reason why it would be dangerous to not do it in this way.
+
+Always consider if the changes you want to make will impact the functionality of the user's code. Consider if the changes may cause regressions with how the project works currently. It is often the case that insecure code is relied on for other reasons (and this is why insecure code lives on for so long). Avoid breaking the user's project as this may make them not want to apply security fixes in the future. It is better to write a well thought out, well informed by the rest of the project, fix, then a quick slapdash change.
+
+Always follow any normal change or commit flow the user has configured. If making git commits, provide clear commit messages explaining this is to align with security best practices. Try to avoid bunching a number of unrelated findings into a single commit.
+
+Always follow any normal testing flows the user has configured (if any) to confirm that your changes are not introducing regressions. Consider the second order impacts the changes may have and inform the user before making them if there are any.
+
+# General Security Advice
+
+Below is a few bits of secure coding advice that applies to almost any language or framework.
+
+### Avoid Using Incrementing IDs for Public IDs of Resources
+
+When assigning an ID for some resource, which will then be used by exposed to the internet, avoid using small auto-incrementing IDs. Use longer, random UUID4 or random hex string instead. This will prevent users from learning the quantity of a resource and being able to guess resource IDs.
+
+### A note on TLS
+
+While TLS is important for production deployments, most development work will be with TLS disabled or provided by some out-of-scope TLS proxy. Due to this, be very careful about not reporting lack of TLS as a security issue. Also be very careful around use of "secure" cookies. They should only be set if the application will actually be over TLS. If they are set on non-TLS applications (such as when deployed for local dev or testing), it will break the application. You can provide a env or other flag to override setting secure as a way to keep it off until on a TLS production deployment. Additionally avoid recommending HSTS. It is dangerous to use without full understanding of the lasting impacts (can cause major outages and user lockout) and it is not generally recommended for the scope of projects being reviewed by codex.
+
+
+FILE /Users/sellers/.codex/skills/review-pr/SKILL.md
+---
+name: review-pr
+description: Use when reviewing a pull request or local diff in any repository. Prioritize behavioral regressions, security flaws, data-integrity risks, missing tests, deployment risk, and product-scope creep.
+---
+
+# Review PR
+
+## Review Stance
+
+Findings come first. Prioritize concrete bugs, regressions, missing tests, and
+security or data-integrity risks over style commentary.
+
+## Process
+
+1. Read applicable `AGENTS.md` files.
+2. Inspect the diff and surrounding files it depends on.
+3. Separate docs claims from executable code and tests.
+4. Check auth, authorization, tenant isolation, billing, secrets, deployment,
+   migrations, tool execution, and data-integrity paths carefully.
+5. Verify changed behavior against tests.
+6. Call out missing tests when they create meaningful risk.
+7. Flag product-scope creep and unnecessary abstractions.
+
+## Findings Format
+
+Lead with findings ordered by severity:
+
+- `P0` exploitable data loss, fund loss, secret exposure, or production outage.
+- `P1` auth bypass, cross-tenant access, billing/data corruption, migration
+  breakage, or serious regression.
+- `P2` meaningful correctness, reliability, or missing-test risk.
+- `P3` maintainability issues worth fixing but not release-blocking.
+
+For each finding, cite exact files and line numbers when possible, explain the
+impact, and describe the smallest likely fix. If no issues are found, say so
+and state residual risk.
+
