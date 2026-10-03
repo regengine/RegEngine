@@ -13,12 +13,12 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from .webhook_compat import require_tenant_context
 
@@ -152,6 +152,12 @@ def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
         logger.warning("db_write_failed error=%s", str(exc))
         if db:
             db.rollback()
+        # A denied write must not be reported as a successful memory-only save.
+        # psycopg 3 exposes sqlstate; psycopg 2 exposes pgcode.
+        if isinstance(exc, DBAPIError):
+            sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+            if sqlstate == "42501":
+                raise HTTPException(status_code=503, detail="Supplier changes could not be saved") from exc
         return False
     finally:
         db.close()
@@ -244,6 +250,8 @@ async def send_portal_link(
 
     for supplier in suppliers:
         if supplier.id == supplier_id:
+            # Memory reads share record objects; publish changes only after the write.
+            supplier = supplier.model_copy()
             supplier.portal_link_id = f"portal-{supplier_id[-3:]}-new"
             supplier.portal_status = "active"
 
