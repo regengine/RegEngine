@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import io
 
+import pytest
 from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
 
 HEADER = (
@@ -98,3 +99,17 @@ def test_initial_packing_inputs_are_optional_and_silent_when_absent():
     assert errors == []
     assert events[0].kdes["input_lot_codes"] == ["FIELD-LOT-1"]
     assert not any("input_quantities" in w for w in warnings)
+
+
+@pytest.mark.parametrize("quantity", ["0", "0.25", "1000000"])
+def test_finite_nonnegative_input_quantities_remain_accepted(quantity):
+    # BE-002 preserves the existing input domain, including zero.
+    events, errors, _ = _parse(f"NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,{quantity},cases\n")
+    assert errors == []
+    assert events[0].kdes["inputs"][0]["quantity"] == float(quantity)
+
+
+def test_negative_input_quantity_remains_rejected():
+    events, errors, _ = _parse("NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,-1,cases\n")
+    assert events == []
+    assert "is negative" in errors[0]

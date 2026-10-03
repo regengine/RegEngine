@@ -95,6 +95,23 @@ class TestIngestEvent:
         assert event.cte_type == WebhookCTEType.SHIPPING
         assert event.quantity == 100.0
 
+    @pytest.mark.parametrize("quantity", [float("inf"), float("-inf"), float("nan"), "Infinity", "1e309"])
+    def test_rejects_nonfinite_quantity(self, quantity):
+        # BE-002: enforce finite output quantities for every model caller.
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(**_valid_event_kwargs(quantity=quantity))
+        assert exc_info.value.errors()[0]["type"] == "finite_number"
+
+    @pytest.mark.parametrize("quantity", [0.001, 1, 1_000_000])
+    def test_accepts_positive_finite_quantity(self, quantity):
+        assert IngestEvent(**_valid_event_kwargs(quantity=quantity)).quantity == quantity
+
+    @pytest.mark.parametrize("quantity", [0, -1])
+    def test_still_rejects_nonpositive_quantity(self, quantity):
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(**_valid_event_kwargs(quantity=quantity))
+        assert exc_info.value.errors()[0]["type"] == "greater_than"
+
     def test_rejects_future_timestamp(self):
         future = datetime.now(timezone.utc) + timedelta(hours=48)
         with pytest.raises(ValidationError) as exc_info:

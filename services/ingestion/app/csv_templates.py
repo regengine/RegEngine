@@ -14,6 +14,7 @@ import dataclasses
 import io
 import itertools
 import logging
+import math
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
@@ -696,6 +697,8 @@ def _parse_input_quantities(
             quantity = float(quantity_text)
         except ValueError:
             return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+        if not math.isfinite(quantity):
+            return [], f"input quantity {quantity_text!r} for input lot {lot} must be finite", None
         if quantity < 0:
             return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
         if not unit_text:
@@ -742,6 +745,20 @@ def parse_csv_rows(
     records: list[dict] = []
     try:
         header = reader.fieldnames
+        if header and any(name.strip() for name in header):
+            seen_columns: dict[str, int] = {}
+            for position, name in enumerate(header, start=1):
+                normalized = normalize_csv_header(name)
+                if normalized in seen_columns:
+                    return (
+                        [],
+                        [
+                            f"CSV has duplicate column {normalized!r} at positions "
+                            f"{seen_columns[normalized]} and {position}; column names must be unique"
+                        ],
+                        [],
+                    )
+                seen_columns[normalized] = position
         for record in reader:
             records.append(record)
             if len(records) > MAX_CSV_ROWS:
@@ -1368,7 +1385,13 @@ async def ingest_csv(
 
     # Read and parse CSV
     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
-    text = content.decode("utf-8-sig")  # Handle BOM
+    try:
+        text = content.decode("utf-8-sig")  # Handle BOM
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
+        ) from exc
     file_cte: Optional[CteClassificationResult] = None
     if fallback_cte is None:
         # Independent questions over the same upload: ask both at once.
