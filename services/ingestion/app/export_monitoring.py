@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from shared.tenant_context import TenantContext
 
+from .compliance_score import _query_required_kde_coverage
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("export-monitoring")
@@ -44,9 +45,8 @@ class ExportMetrics(BaseModel):
     exports_last_24h: int = 0
     exports_last_7d: int = 0
     avg_record_count: Optional[float] = None
-    avg_export_time_ms: Optional[float] = None
     last_export_at: Optional[str] = None
-    export_formats: Dict[str, int] = Field(default_factory=dict)
+    export_types: Dict[str, int] = Field(default_factory=dict)
 
 
 class HealthCheckResult(BaseModel):
@@ -93,11 +93,10 @@ def _query_export_logs(tenant_id: str) -> Optional[List[dict]]:
         try:
             rows = db.execute(
                 text("""
-                    SELECT id, tenant_id, export_type, record_count,
-                           export_time_ms, created_at, format
+                    SELECT id, tenant_id, export_type, record_count, generated_at
                     FROM fsma.fda_export_log
                     WHERE tenant_id = :tenant_id
-                    ORDER BY created_at DESC
+                    ORDER BY generated_at DESC
                 """),
                 {"tenant_id": tenant_id},
             ).fetchall()
@@ -105,12 +104,11 @@ def _query_export_logs(tenant_id: str) -> Optional[List[dict]]:
             return [
                 {
                     "id": str(row.id),
-                    "tenant_id": row.tenant_id,
-                    "export_type": getattr(row, "export_type", "unknown"),
-                    "record_count": getattr(row, "record_count", 0),
-                    "export_time_ms": getattr(row, "export_time_ms", None),
-                    "created_at": row.created_at.isoformat() if row.created_at else None,
-                    "format": getattr(row, "format", "csv"),
+                    "tenant_id": str(row.tenant_id),
+                    "export_type": row.export_type,
+                    "record_count": row.record_count,
+                    # UTC so the endpoints can compare these strings with their UTC cut-offs.
+                    "generated_at": row.generated_at.astimezone(timezone.utc).isoformat() if row.generated_at else None,
                 }
                 for row in rows
             ]
@@ -224,52 +222,18 @@ def _check_export_readiness(tenant_id: str) -> HealthCheckResult:
 
 
 def _check_kde_completeness(tenant_id: str) -> HealthCheckResult:
-    """Check that KDE completeness is above the 80% threshold."""
+    """Check that required-KDE completeness is above the 80% threshold.
+
+    Same measure the compliance score reports (#2962): required KDE fields
+    present over required KDE fields, per CTE type, read from
+    ``fsma.cte_events`` and ``fsma.cte_kdes``.
+    """
     try:
         from shared.database import SessionLocal
-        from sqlalchemy import text
 
         db = SessionLocal()
         try:
-            row = db.execute(
-                text("""
-                    SELECT
-                        COUNT(*) AS total,
-                        COUNT(*) FILTER (WHERE kde_data IS NOT NULL AND kde_data::text != '{}') AS with_kdes
-                    FROM fsma.cte_events
-                    WHERE tenant_id = :tenant_id
-                """),
-                {"tenant_id": tenant_id},
-            ).fetchone()
-
-            total = row.total if row else 0
-            with_kdes = row.with_kdes if row else 0
-
-            if total == 0:
-                return HealthCheckResult(
-                    name="kde_completeness",
-                    status="warning",
-                    message="No CTE events found for this tenant.",
-                    details={"total_events": 0, "completeness_pct": None},
-                )
-
-            completeness = with_kdes / total
-            pct = round(completeness * 100, 1)
-
-            if completeness >= KDE_COMPLETENESS_THRESHOLD:
-                return HealthCheckResult(
-                    name="kde_completeness",
-                    status="healthy",
-                    message=f"KDE completeness at {pct}% (threshold: {KDE_COMPLETENESS_THRESHOLD * 100}%).",
-                    details={"total_events": total, "with_kdes": with_kdes, "completeness_pct": pct},
-                )
-            else:
-                return HealthCheckResult(
-                    name="kde_completeness",
-                    status="warning",
-                    message=f"KDE completeness at {pct}% — below {KDE_COMPLETENESS_THRESHOLD * 100}% threshold.",
-                    details={"total_events": total, "with_kdes": with_kdes, "completeness_pct": pct},
-                )
+            coverage = _query_required_kde_coverage(db, tenant_id)
         finally:
             db.close()
     except Exception as exc:
@@ -278,6 +242,42 @@ def _check_kde_completeness(tenant_id: str) -> HealthCheckResult:
             status="warning",
             message=f"KDE completeness check unavailable: {exc}",
         )
+
+    total = coverage["required_kde_checks_total"]
+    present = coverage["required_kde_checks_passed"]
+    unchecked = coverage["events_unchecked_type"]
+    details: Dict[str, Any] = {
+        "required_fields": total,
+        "present_fields": present,
+        "events_unchecked_type": unchecked,
+        "completeness_pct": None,
+    }
+
+    if total == 0:
+        message = "No CTE events found for this tenant."
+        if unchecked:
+            message = (
+                f"No CTE events with a required-KDE checklist; {unchecked} event(s) have no required-KDE checklist."
+            )
+        return HealthCheckResult(name="kde_completeness", status="warning", message=message, details=details)
+
+    completeness = present / total
+    pct = round(completeness * 100, 1)
+    details["completeness_pct"] = pct
+
+    if completeness >= KDE_COMPLETENESS_THRESHOLD:
+        return HealthCheckResult(
+            name="kde_completeness",
+            status="healthy",
+            message=f"Required KDE completeness at {pct}% (threshold: {KDE_COMPLETENESS_THRESHOLD * 100}%).",
+            details=details,
+        )
+    return HealthCheckResult(
+        name="kde_completeness",
+        status="warning",
+        message=f"Required KDE completeness at {pct}% — below {KDE_COMPLETENESS_THRESHOLD * 100}% threshold.",
+        details=details,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -303,21 +303,18 @@ async def export_metrics(
     cutoff_7d = (now - timedelta(days=7)).isoformat()
 
     total = len(logs)
-    last_24h = sum(1 for l in logs if l.get("created_at") and l["created_at"] >= cutoff_24h)
-    last_7d = sum(1 for l in logs if l.get("created_at") and l["created_at"] >= cutoff_7d)
+    last_24h = sum(1 for l in logs if l.get("generated_at") and l["generated_at"] >= cutoff_24h)
+    last_7d = sum(1 for l in logs if l.get("generated_at") and l["generated_at"] >= cutoff_7d)
 
     record_counts = [l["record_count"] for l in logs if l.get("record_count")]
     avg_records = sum(record_counts) / len(record_counts) if record_counts else None
 
-    export_times = [l["export_time_ms"] for l in logs if l.get("export_time_ms")]
-    avg_time = sum(export_times) / len(export_times) if export_times else None
+    last_export = logs[0]["generated_at"] if logs else None
 
-    last_export = logs[0]["created_at"] if logs else None
-
-    format_counts: Dict[str, int] = {}
+    type_counts: Dict[str, int] = {}
     for l in logs:
-        fmt = l.get("format", "csv") or "csv"
-        format_counts[fmt] = format_counts.get(fmt, 0) + 1
+        export_type = l.get("export_type") or "unknown"
+        type_counts[export_type] = type_counts.get(export_type, 0) + 1
 
     metrics = ExportMetrics(
         tenant_id=tenant_id,
@@ -325,9 +322,8 @@ async def export_metrics(
         exports_last_24h=last_24h,
         exports_last_7d=last_7d,
         avg_record_count=round(avg_records, 1) if avg_records is not None else None,
-        avg_export_time_ms=round(avg_time, 1) if avg_time is not None else None,
         last_export_at=last_export,
-        export_formats=format_counts,
+        export_types=type_counts,
     )
 
     return metrics.model_dump()
@@ -397,7 +393,7 @@ async def monitoring_alerts(
     # Check for stale exports (no exports in 7 days)
     logs = _query_export_logs(tenant_id)
     if logs:
-        last_export_str = logs[0].get("created_at")
+        last_export_str = logs[0].get("generated_at")
         if last_export_str:
             try:
                 last_dt = datetime.fromisoformat(last_export_str)

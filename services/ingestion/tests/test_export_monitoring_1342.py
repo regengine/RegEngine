@@ -4,32 +4,36 @@ Locks:
 - Pydantic models (ExportMetrics, HealthCheckResult, ExportHealthCheck,
   MonitoringAlert) — defaults and required fields
 - _query_export_logs: happy path, DB exception → None, row w/ null
-  created_at, missing optional columns coalesced
+  generated_at, statement names only real fsma.fda_export_log columns
 - _check_db_connectivity: healthy, exception → critical
 - _check_chain_integrity: valid chain, invalid w/ errors, invalid w/o
   errors attr, exception → warning
 - _check_export_readiness: count>0 healthy, count=0 warning,
   exception → critical, empty row handled
 - _check_kde_completeness: 0 events → warning, above threshold → healthy,
-  below threshold → warning, exception → warning
+  below threshold → warning, unchecked-type events named, exception →
+  warning, reads fsma.cte_events / fsma.cte_kdes for the tenant
 - GET /exports/{tid}: DB unavailable, happy path w/ 24h+7d filtering,
-  avg/format computations, empty logs, format null coalesced
+  avg/type computations, empty logs, export_type null counted as unknown
 - GET /health/{tid}: overall healthy, warning wins, critical wins
 - GET /alerts/{tid}: critical/warning checks → alerts, stale export alert,
   naive datetime normalized, malformed timestamp silently skipped,
-  logs missing created_at skipped
+  logs missing generated_at skipped
 
 Issue: #1342
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 from app import export_monitoring as em
+from app.compliance_score import _required_fields_for
 from app.export_monitoring import (
     ExportHealthCheck,
     ExportMetrics,
@@ -74,22 +78,33 @@ def _row(**kwargs):
 
 
 class _FakeSession:
-    def __init__(self, *, rows=None, row=None, raises=None):
+    def __init__(self, *, rows=None, row=None, raises=None, results=None):
         self._rows = rows or []
         self._row = row
         self._raises = raises
+        self._results = list(results or [])  # per-call fetchall() results, consumed in order
+        self.calls: list[tuple[str, dict]] = []
         self.closed = False
 
     def execute(self, stmt, params=None):
+        self.calls.append((str(stmt), dict(params or {})))
         if self._raises:
             raise self._raises
+        rows = self._results.pop(0) if self._results else self._rows
         return SimpleNamespace(
-            fetchall=lambda: self._rows,
+            fetchall=lambda: rows,
             fetchone=lambda: self._row,
         )
 
     def close(self):
         self.closed = True
+
+
+def _ddl_columns(sql_file: str, table: str) -> set[str]:
+    """Column names of ``table`` as declared in an ``alembic/sql`` file."""
+    ddl = (Path(__file__).resolve().parents[3] / "alembic/sql" / sql_file).read_text()
+    body = ddl.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split("\n);", 1)[0]
+    return set(re.findall(r"^ {4}([a-z_]+) ", body, flags=re.MULTILINE))
 
 
 # ---------------------------------------------------------------------------
@@ -104,9 +119,8 @@ class TestPydanticModels:
         assert m.exports_last_24h == 0
         assert m.exports_last_7d == 0
         assert m.avg_record_count is None
-        assert m.avg_export_time_ms is None
         assert m.last_export_at is None
-        assert m.export_formats == {}
+        assert m.export_types == {}
 
     def test_health_check_result_fields(self):
         r = HealthCheckResult(
@@ -152,20 +166,16 @@ class TestQueryExportLogs:
                 _row(
                     id="e1",
                     tenant_id="t",
-                    export_type="fda",
+                    export_type="fda_spreadsheet",
                     record_count=5,
-                    export_time_ms=200.0,
-                    created_at=datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc),
-                    format="csv",
+                    generated_at=datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc),
                 ),
                 _row(
                     id="e2",
                     tenant_id="t",
-                    export_type="fda",
+                    export_type="fda_export_all",
                     record_count=10,
-                    export_time_ms=150.0,
-                    created_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
-                    format="json",
+                    generated_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
                 ),
             ]
         )
@@ -177,12 +187,18 @@ class TestQueryExportLogs:
         logs = _query_export_logs("t")
         assert logs is not None
         assert len(logs) == 2
-        assert logs[0]["id"] == "e1"
-        assert logs[0]["format"] == "csv"
-        assert logs[0]["created_at"] == "2026-04-17T10:00:00+00:00"
+        assert logs[0] == {
+            "id": "e1",
+            "tenant_id": "t",
+            "export_type": "fda_spreadsheet",
+            "record_count": 5,
+            "generated_at": "2026-04-17T10:00:00+00:00",
+        }
         assert session.closed
 
-    def test_null_created_at(self, monkeypatch):
+    def test_generated_at_is_normalised_to_utc(self, monkeypatch):
+        """A timestamptz read in another session time zone still compares with the UTC cut-offs."""
+        local = timezone(timedelta(hours=-7))
         session = _FakeSession(
             rows=[
                 _row(
@@ -190,9 +206,27 @@ class TestQueryExportLogs:
                     tenant_id="t",
                     export_type="fda",
                     record_count=5,
-                    export_time_ms=200.0,
-                    created_at=None,
-                    format="csv",
+                    generated_at=datetime(2026, 4, 17, 3, 0, tzinfo=local),
+                )
+            ]
+        )
+
+        import shared.database as db_mod
+
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
+
+        logs = _query_export_logs("t")
+        assert logs[0]["generated_at"] == "2026-04-17T10:00:00+00:00"
+
+    def test_null_generated_at(self, monkeypatch):
+        session = _FakeSession(
+            rows=[
+                _row(
+                    id="e1",
+                    tenant_id="t",
+                    export_type="fda",
+                    record_count=5,
+                    generated_at=None,
                 ),
             ]
         )
@@ -202,7 +236,41 @@ class TestQueryExportLogs:
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         logs = _query_export_logs("t")
-        assert logs[0]["created_at"] is None
+        assert logs[0]["generated_at"] is None
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The export-log statement names ``fsma.fda_export_log`` columns as V002 declares them.
+
+        It read ``export_time_ms``, ``created_at`` and ``format``. None of
+        them exists: the timestamp is ``generated_at``, and no column
+        records an export's duration or file format. Postgres raised
+        ``UndefinedColumn``, the except returned ``None``, and the metrics
+        endpoint reported zero exports for every tenant while the
+        stale-export alert never fired. The fake session above never parses
+        SQL. ``test_export_monitoring_pg.py`` runs the statement on a live
+        cluster; this is the copy that needs no database.
+        """
+        columns = _ddl_columns("V002__fsma_cte_persistence.sql", "fsma.fda_export_log")
+        assert "generated_at" in columns  # the DDL parse itself still works
+        assert not {"export_time_ms", "created_at", "format"} & columns
+
+        session = _FakeSession(rows=[])
+
+        import shared.database as db_mod
+
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
+        _query_export_logs("t")
+        sql, params = session.calls[0]
+
+        assert "FROM fsma.fda_export_log" in sql
+        assert "WHERE tenant_id = :tenant_id" in sql
+        assert params == {"tenant_id": "t"}
+
+        # Keywords are upper-case in the statement, so every lower-case word
+        # is an identifier. These are the ones that are not columns.
+        not_columns = {"fsma", "fda_export_log"}
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.fda_export_log: {sorted(referenced - columns)}"
 
     def test_db_exception_returns_none(self, monkeypatch):
         def _boom():
@@ -420,9 +488,19 @@ class TestCheckExportReadiness:
 # ---------------------------------------------------------------------------
 
 
+def _coverage_session(events: int, present: int) -> _FakeSession:
+    """Answers the two required-KDE coverage reads: ``events`` shipping events, ``present`` carrying each required field."""
+    return _FakeSession(
+        results=[
+            [("shipping", events)],  # events per CTE type
+            [("shipping", field, present) for field in _required_fields_for("shipping")],
+        ]
+    )
+
+
 class TestCheckKdeCompleteness:
     def test_no_events_warning(self, monkeypatch):
-        session = _FakeSession(row=_row(total=0, with_kdes=0))
+        session = _FakeSession(results=[[], []])
 
         import shared.database as db_mod
 
@@ -430,10 +508,17 @@ class TestCheckKdeCompleteness:
 
         result = _check_kde_completeness("t")
         assert result.status == "warning"
-        assert result.details == {"total_events": 0, "completeness_pct": None}
+        assert result.message == "No CTE events found for this tenant."
+        assert result.details == {
+            "required_fields": 0,
+            "present_fields": 0,
+            "events_unchecked_type": 0,
+            "completeness_pct": None,
+        }
+        assert session.closed
 
     def test_above_threshold_healthy(self, monkeypatch):
-        session = _FakeSession(row=_row(total=10, with_kdes=9))
+        session = _coverage_session(events=10, present=9)
 
         import shared.database as db_mod
 
@@ -442,10 +527,11 @@ class TestCheckKdeCompleteness:
         result = _check_kde_completeness("t")
         assert result.status == "healthy"
         assert result.details["completeness_pct"] == 90.0
+        assert result.details["required_fields"] == 10 * len(_required_fields_for("shipping"))
 
     def test_at_threshold_healthy(self, monkeypatch):
         """Exactly 80% should be healthy."""
-        session = _FakeSession(row=_row(total=10, with_kdes=8))
+        session = _coverage_session(events=10, present=8)
 
         import shared.database as db_mod
 
@@ -455,7 +541,7 @@ class TestCheckKdeCompleteness:
         assert result.status == "healthy"
 
     def test_below_threshold_warning(self, monkeypatch):
-        session = _FakeSession(row=_row(total=10, with_kdes=5))
+        session = _coverage_session(events=10, present=5)
 
         import shared.database as db_mod
 
@@ -465,8 +551,9 @@ class TestCheckKdeCompleteness:
         assert result.status == "warning"
         assert result.details["completeness_pct"] == 50.0
 
-    def test_empty_row_zero_events(self, monkeypatch):
-        session = _FakeSession(row=None)
+    def test_unchecked_event_types_are_named_never_counted_as_covered(self, monkeypatch):
+        """Events whose type has no required-KDE checklist are reported, not scored as complete."""
+        session = _FakeSession(results=[[("growing", 7)], []])
 
         import shared.database as db_mod
 
@@ -474,6 +561,38 @@ class TestCheckKdeCompleteness:
 
         result = _check_kde_completeness("t")
         assert result.status == "warning"
+        assert (
+            result.message == "No CTE events with a required-KDE checklist; 7 event(s) have no required-KDE checklist."
+        )
+        assert result.details["events_unchecked_type"] == 7
+        assert result.details["completeness_pct"] is None
+
+    def test_statements_read_real_tables_for_the_tenant(self, monkeypatch):
+        """The KDE check reads the tenant's ``fsma.cte_events`` / ``fsma.cte_kdes``, not ``kde_data``.
+
+        It counted ``cte_events`` rows ``WHERE kde_data IS NOT NULL``. No
+        such column exists — KDEs are ``fsma.cte_kdes`` rows — so Postgres
+        raised ``UndefinedColumn`` and the check always reported "check
+        unavailable". The measure itself ("event has any KDE") is the one
+        #2962 rejected as vacuous; the check now reuses the compliance
+        score's required-KDE coverage read, as ``disaster_recovery`` does.
+        The fake session never parses SQL; ``test_export_monitoring_pg.py``
+        runs it on a live cluster.
+        """
+        session = _FakeSession(results=[[], []])
+
+        import shared.database as db_mod
+
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
+        _check_kde_completeness("t")
+
+        assert len(session.calls) == 2, "the coverage read issues one statement per aggregate"
+        assert session.closed
+        for sql, params in session.calls:
+            assert "FROM fsma.cte_events WHERE tenant_id = :tid" in " ".join(sql.split())
+            assert "kde_data" not in sql
+            assert params == {"tid": "t"}
+        assert "fsma.cte_kdes" in session.calls[1][0]
 
     def test_exception_returns_warning(self, monkeypatch):
         def _boom():
@@ -520,29 +639,23 @@ class TestExportMetricsEndpoint:
             {  # 1h ago — counts for both 24h and 7d
                 "id": "e1",
                 "tenant_id": "t1",
-                "export_type": "fda",
+                "export_type": "fda_spreadsheet",
                 "record_count": 10,
-                "export_time_ms": 200.0,
-                "created_at": (now - timedelta(hours=1)).isoformat(),
-                "format": "csv",
+                "generated_at": (now - timedelta(hours=1)).isoformat(),
             },
             {  # 3d ago — counts for 7d only
                 "id": "e2",
                 "tenant_id": "t1",
-                "export_type": "fda",
+                "export_type": "fda_export_all",
                 "record_count": 20,
-                "export_time_ms": 400.0,
-                "created_at": (now - timedelta(days=3)).isoformat(),
-                "format": "json",
+                "generated_at": (now - timedelta(days=3)).isoformat(),
             },
             {  # 30d ago — counts for neither
                 "id": "e3",
                 "tenant_id": "t1",
-                "export_type": "fda",
+                "export_type": "fda_spreadsheet",
                 "record_count": 5,
-                "export_time_ms": 100.0,
-                "created_at": (now - timedelta(days=30)).isoformat(),
-                "format": "csv",
+                "generated_at": (now - timedelta(days=30)).isoformat(),
             },
         ]
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: logs)
@@ -553,27 +666,26 @@ class TestExportMetricsEndpoint:
         assert body["exports_last_24h"] == 1
         assert body["exports_last_7d"] == 2
         assert body["avg_record_count"] == round((10 + 20 + 5) / 3, 1)
-        assert body["avg_export_time_ms"] == round((200 + 400 + 100) / 3, 1)
-        assert body["export_formats"] == {"csv": 2, "json": 1}
+        assert body["last_export_at"] == logs[0]["generated_at"]
+        assert body["export_types"] == {"fda_spreadsheet": 2, "fda_export_all": 1}
+        assert "avg_export_time_ms" not in body  # no column records an export's duration
 
-    def test_null_format_coalesced_to_csv(self, client, monkeypatch):
+    def test_null_export_type_counted_as_unknown(self, client, monkeypatch):
         now = datetime.now(timezone.utc)
         logs = [
             {
                 "id": "e1",
                 "tenant_id": "t1",
-                "export_type": "fda",
+                "export_type": None,
                 "record_count": 10,
-                "export_time_ms": 200.0,
-                "created_at": now.isoformat(),
-                "format": None,
+                "generated_at": now.isoformat(),
             },
         ]
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: logs)
 
         r = client.get("/api/v1/monitoring/exports/t1")
         body = r.json()
-        assert body["export_formats"] == {"csv": 1}
+        assert body["export_types"] == {"unknown": 1}
 
     def test_missing_record_count_excluded_from_average(self, client, monkeypatch):
         """record_count=0 or missing should be excluded from avg to avoid bias."""
@@ -584,18 +696,14 @@ class TestExportMetricsEndpoint:
                 "tenant_id": "t1",
                 "export_type": "fda",
                 "record_count": 10,
-                "export_time_ms": None,
-                "created_at": now.isoformat(),
-                "format": "csv",
+                "generated_at": now.isoformat(),
             },
             {
                 "id": "e2",
                 "tenant_id": "t1",
                 "export_type": "fda",
-                "record_count": 0,
-                "export_time_ms": None,  # 0 is falsy → excluded
-                "created_at": now.isoformat(),
-                "format": "csv",
+                "record_count": 0,  # 0 is falsy → excluded
+                "generated_at": now.isoformat(),
             },
         ]
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: logs)
@@ -603,7 +711,6 @@ class TestExportMetricsEndpoint:
         r = client.get("/api/v1/monitoring/exports/t1")
         body = r.json()
         assert body["avg_record_count"] == 10.0  # only e1 counted
-        assert body["avg_export_time_ms"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -746,7 +853,7 @@ class TestAlertsEndpoint:
             em,
             "_query_export_logs",
             lambda tid: [
-                {"created_at": (now - timedelta(days=10)).isoformat()},
+                {"generated_at": (now - timedelta(days=10)).isoformat()},
             ],
         )
 
@@ -762,7 +869,7 @@ class TestAlertsEndpoint:
             em,
             "_query_export_logs",
             lambda tid: [
-                {"created_at": (now - timedelta(days=2)).isoformat()},
+                {"generated_at": (now - timedelta(days=2)).isoformat()},
             ],
         )
 
@@ -778,7 +885,7 @@ class TestAlertsEndpoint:
             em,
             "_query_export_logs",
             lambda tid: [
-                {"created_at": naive},
+                {"generated_at": naive},
             ],
         )
 
@@ -794,7 +901,7 @@ class TestAlertsEndpoint:
             em,
             "_query_export_logs",
             lambda tid: [
-                {"created_at": "not-a-date"},
+                {"generated_at": "not-a-date"},
             ],
         )
 
@@ -803,7 +910,7 @@ class TestAlertsEndpoint:
         # ValueError caught — no stale alert emitted
         assert body["count"] == 0
 
-    def test_logs_missing_created_at_skipped(self, client, monkeypatch):
+    def test_logs_missing_generated_at_skipped(self, client, monkeypatch):
         _stub_all_healthy(monkeypatch)
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: [{"id": "e1"}])
 
