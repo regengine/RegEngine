@@ -226,6 +226,77 @@ def test_send_portal_link_updates_the_persisted_row_in_place(seeded, caplog):
     assert datetime.fromisoformat(updated.last_submission) == datetime.fromisoformat(full.last_submission)
 
 
+@pytest.fixture(params=["SELECT", "SELECT, INSERT"], ids=["select-only", "missing-update"])
+def restricted_client(conn, seeded, request):
+    """Exercise real ACL failures in the enclosing rollback-only test transaction.
+
+    SELECT-only mirrors v111's supplier runtime grant; INSERT without UPDATE
+    also cannot execute the router's ON CONFLICT upsert. No existing role is
+    modified, and the synthetic role, grants and tenant-scoped SELECT policy
+    roll back with ``conn``. The policy lets this role read on migrated databases
+    whose RLS policies otherwise apply only to the named application roles.
+    """
+    from app import supplier_mgmt as sm
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy import text
+
+    tenant_id, full, bare = seeded
+    role = f"supplier_qa_{uuid.uuid4().hex}"
+    conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOSUPERUSER NOBYPASSRLS"))
+    conn.execute(text(f"GRANT USAGE ON SCHEMA fsma TO {role}"))
+    conn.execute(text(f"GRANT {request.param} ON fsma.tenant_suppliers TO {role}"))
+    conn.execute(
+        text(
+            f"CREATE POLICY {role} ON fsma.tenant_suppliers FOR SELECT TO {role} "
+            "USING (tenant_id::text = current_setting('app.tenant_id', true))"
+        )
+    )
+    conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant_id})
+    conn.execute(text(f"SET LOCAL ROLE {role}"))
+    assert conn.execute(text("SELECT current_user")).scalar() == role
+    assert conn.execute(text("SELECT has_table_privilege(current_user, 'fsma.tenant_suppliers', 'SELECT')")).scalar()
+    assert not conn.execute(
+        text("SELECT has_table_privilege(current_user, 'fsma.tenant_suppliers', 'UPDATE')")
+    ).scalar()
+    assert {record.id for record in sm._db_get_suppliers(tenant_id)} == {full.id, bare.id}
+
+    app = FastAPI()
+    app.include_router(sm.router)
+    app.dependency_overrides[sm.require_tenant_context] = lambda: SimpleNamespace(tenant_id=tenant_id)
+    with TestClient(app) as client:
+        yield client
+
+
+def test_permission_denied_create_reports_failure_without_memory_success(restricted_client, seeded):
+    from app import supplier_mgmt as sm
+
+    tenant_id, full, bare = seeded
+    response = restricted_client.post(
+        f"/api/v1/suppliers/{tenant_id}",
+        json={"name": "Denied Farms", "contact_email": "denied@example.test", "products": ["Kale"]},
+    )
+
+    assert response.status_code == 503, response.json()
+    assert response.json() == {"detail": "Supplier changes could not be saved"}
+    assert sm._suppliers_store == {}
+    assert {record.id for record in sm._db_get_suppliers(tenant_id)} == {full.id, bare.id}
+
+
+def test_permission_denied_send_link_does_not_report_sent_or_change_row(restricted_client, seeded):
+    from app import supplier_mgmt as sm
+
+    tenant_id, full, _ = seeded
+    response = restricted_client.post(f"/api/v1/suppliers/{tenant_id}/{full.id}/send-link")
+
+    assert response.status_code == 503, response.json()
+    assert response.json() == {"detail": "Supplier changes could not be saved"}
+    assert sm._suppliers_store == {}
+    persisted = next(record for record in sm._db_get_suppliers(tenant_id) if record.id == full.id)
+    assert persisted.portal_status == "no_link"
+    assert persisted.portal_link_id is None
+
+
 # ---------------------------------------------------------------------------
 # _fetch_suppliers and the validation endpoints (supplier_validation)
 # ---------------------------------------------------------------------------
