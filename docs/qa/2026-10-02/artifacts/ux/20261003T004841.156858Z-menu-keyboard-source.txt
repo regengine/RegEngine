@@ -1,0 +1,12 @@
+UTC: 2026-10-03T00:48:41.156858+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'function Mobile|Escape|keydown|aria-modal|role="dialog"|focus\(' frontend/src/components/layout/marketing-header.tsx frontend/src/components/layout/marketing-nav.ts
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+frontend/src/components/layout/marketing-header.tsx:66:            firstItem?.focus();
+frontend/src/components/layout/marketing-header.tsx:71:        if (e.key === 'Escape') {
+frontend/src/components/layout/marketing-header.tsx:73:            toolsButtonRef.current?.focus();
+frontend/src/components/layout/marketing-header.tsx:91:            menuItems[fallbackIndex]?.focus();
+frontend/src/components/layout/marketing-header.tsx:99:        menuItems[nextIndex]?.focus();

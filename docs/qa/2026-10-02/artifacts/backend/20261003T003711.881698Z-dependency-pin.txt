@@ -1,0 +1,24 @@
+UTC: 2026-10-03T00:37:11.881698+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -i 'typesafe|hypothesis|pytest-cov|ruff|mypy' requirements.in requirements.lock
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+requirements.in:132:# AI decisioning — TypeSafe AI "Jev" System One model (services/shared/jev/).
+requirements.in:134:# CTE-type suggestions; optional at runtime (no TYPESAFE_API_KEY -> disabled).
+requirements.in:140:typesafe-sdk>=0.7.2,<0.8
+requirements.in:162:pytest-cov>=7.1.0
+requirements.in:165:hypothesis>=6.168.0
+requirements.lock:811:    # via pytest-cov
+requirements.lock:1424:    #   typesafe-sdk
+requirements.lock:1429:hypothesis==6.168.0 \
+requirements.lock:2655:    #   pytest-cov
+requirements.lock:2914:    #   typesafe-sdk
+requirements.lock:3038:    #   typesafe-sdk
+requirements.lock:3104:    #   pytest-cov
+requirements.lock:3111:pytest-cov==7.1.0 \
+requirements.lock:3562:    # via hypothesis
+requirements.lock:3672:    #   typesafe-sdk
+requirements.lock:3691:typesafe-sdk==0.7.2 \
+requirements.lock:3731:    #   typesafe-sdk

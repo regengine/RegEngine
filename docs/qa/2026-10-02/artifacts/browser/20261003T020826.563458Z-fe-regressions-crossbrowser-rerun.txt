@@ -1,0 +1,34 @@
+UTC: 2026-10-03T02:08:26.563458+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ node frontend/node_modules/playwright/cli.js test --config frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts --project=firefox --project=webkit
+Exit: 1
+Duration: 5.45s
+Timeout: False
+
+
+Running 4 tests using 1 worker
+
+  ✘  1 [firefox] › frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (1.1s)
+  ✘  2 [firefox] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests (2.1s)
+  ✘  3 [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (768ms)
+  ✘  4 [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests (310ms)
+
+
+  1) [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests 
+
+    Error: page.evaluate: Error: Photo fixture write failed: undefined: undefined
+
+      78 |   // into REAL IndexedDB. Camera acquisition and data-URL capture are not part of
+      79 |   // this replay witness; all reads and upload/retry behavior use the built app.
+    > 80 |   await page.evaluate(async () => {
+         |              ^
+      81 |     const canvas = document.createElement('canvas');
+      82 |     canvas.width = 96; canvas.height = 64;
+      83 |     const drawing = canvas.getContext('2d')!;
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:80:14
+
+    Error Context: ../../../../../private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-08-30-752Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-webkit/error-context.md
+
+  1 failed
+    [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests 
+  3 passed (5.2s)

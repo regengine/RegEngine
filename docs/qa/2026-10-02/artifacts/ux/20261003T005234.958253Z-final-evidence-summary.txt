@@ -1,0 +1,270 @@
+UTC: 2026-10-03T00:52:34.958253+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json,re; out=Path("docs/qa/2026-10-02/artifacts/ux"); rows=[]
+for f in sorted(out.glob("chrome-axe*.json")):
+ d=json.loads(f.read_text()); violations=[{"id":v["id"],"impact":v["impact"],"nodes":[n for n in v["nodes"] if "aiFabShadowRoot" not in str(n["target"])]} for v in d["axe"]["violations"]]; violations=[v for v in violations if v["nodes"]]; rows.append({"artifact":f.name,"path":d["url"],"width":d["width"],"documentWidth":d["documentWidth"],"violations":[{"id":v["id"],"nodes":len(v["nodes"])} for v in violations],"passes":len(d["axe"]["passes"]),"incomplete":len(d["axe"]["incomplete"]),"lcp":d.get("lcp"),"cls":d.get("cls"),"navigation":d["navigation"],"errors":d["errors"]})
+(out/"axe-summary.json").write_text(json.dumps(rows,indent=2)); print(json.dumps(rows,indent=2)); print("SCREENSHOTS",[f.name for f in out.glob("*.jpg")]);
+for file in ["frontend/src/app/verify/page.tsx","frontend/src/components/ui/table.tsx","frontend/src/app/tools/ftl-checker/page.tsx","frontend/src/components/control-plane/demo-banner.tsx"]:
+ p=Path(file); print("SOURCE",file); print("\n".join(f"{i}: {l}" for i,l in enumerate(p.read_text().splitlines(),1) if re.search("overflow-auto|overflow-x|filtered|\.map\\(|No.*result|Backend unavailable|tabIndex",l)))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+<string>:6: SyntaxWarning: "\." is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\."? A raw string is also an option.
+[
+  {
+    "artifact": "chrome-axe_-1728-1.json",
+    "path": "/",
+    "width": 1728,
+    "documentWidth": 1728,
+    "violations": [],
+    "passes": 42,
+    "incomplete": 2,
+    "lcp": 348,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 18.100000001490116,
+        "domContentLoaded": 325.5,
+        "duration": 434.79999999701977
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_-1728-2.json",
+    "path": "/",
+    "width": 1728,
+    "documentWidth": 1728,
+    "violations": [],
+    "passes": 42,
+    "incomplete": 2,
+    "lcp": 196,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 18.099999994039536,
+        "domContentLoaded": 181.29999999701977,
+        "duration": 250.69999999552965
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_-390-004818082219.json",
+    "path": "/",
+    "width": 390,
+    "documentWidth": 390,
+    "violations": [],
+    "passes": 41,
+    "incomplete": 1,
+    "lcp": 532,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 24.5,
+        "domContentLoaded": 108.79999999701977,
+        "duration": 172.69999999552965
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_contact-1728-005025461082.json",
+    "path": "/contact",
+    "width": 1728,
+    "documentWidth": 1728,
+    "violations": [],
+    "passes": 43,
+    "incomplete": 1,
+    "lcp": 300,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 6.600000001490116,
+        "domContentLoaded": 286.80000000447035,
+        "duration": 390.30000000447035
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_contact-390-005121708715.json",
+    "path": "/contact",
+    "width": 390,
+    "documentWidth": 390,
+    "violations": [],
+    "passes": 43,
+    "incomplete": 1,
+    "lcp": 576,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 15.399999998509884,
+        "domContentLoaded": 118.69999999552965,
+        "duration": 176.39999999850988
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_demo-390-005044980842.json",
+    "path": "/demo",
+    "width": 390,
+    "documentWidth": 390,
+    "violations": [],
+    "passes": 41,
+    "incomplete": 1,
+    "lcp": 532,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 21.69999999552965,
+        "domContentLoaded": 84.69999999552965,
+        "duration": 131.89999999850988
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_login-1728-1.json",
+    "path": "/login",
+    "width": 1728,
+    "documentWidth": 1728,
+    "violations": [],
+    "passes": 39,
+    "incomplete": 0,
+    "lcp": 320,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 9,
+        "domContentLoaded": 304.09999999403954,
+        "duration": 402.5
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_login-320-005126883759.json",
+    "path": "/login",
+    "width": 320,
+    "documentWidth": 320,
+    "violations": [],
+    "passes": 39,
+    "incomplete": 0,
+    "lcp": 672,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 9.300000004470348,
+        "domContentLoaded": 115.10000000149012,
+        "duration": 172.80000000447035
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_tools_ftl-checker-390-005144797436.json",
+    "path": "/tools/ftl-checker",
+    "width": 390,
+    "documentWidth": 390,
+    "violations": [],
+    "passes": 45,
+    "incomplete": 1,
+    "lcp": 552,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 13,
+        "domContentLoaded": 138.20000000298023,
+        "duration": 210.89999999850988
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_verify-1728-1.json",
+    "path": "/verify",
+    "width": 1728,
+    "documentWidth": 1728,
+    "violations": [],
+    "passes": 48,
+    "incomplete": 2,
+    "lcp": 188,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 17.200000002980232,
+        "domContentLoaded": 167.20000000298023,
+        "duration": 267.20000000298023
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_verify-320-004936758162.json",
+    "path": "/verify",
+    "width": 320,
+    "documentWidth": 320,
+    "violations": [
+      {
+        "id": "scrollable-region-focusable",
+        "nodes": 6
+      }
+    ],
+    "passes": 47,
+    "incomplete": 1,
+    "lcp": 968,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 12.799999997019768,
+        "domContentLoaded": 83.09999999403954,
+        "duration": 136.19999999552965
+      }
+    ],
+    "errors": []
+  },
+  {
+    "artifact": "chrome-axe_verify-320-005144063706.json",
+    "path": "/verify",
+    "width": 320,
+    "documentWidth": 320,
+    "violations": [
+      {
+        "id": "scrollable-region-focusable",
+        "nodes": 6
+      }
+    ],
+    "passes": 47,
+    "incomplete": 1,
+    "lcp": 532,
+    "cls": 0,
+    "navigation": [
+      {
+        "responseStart": 12.399999998509884,
+        "domContentLoaded": 93,
+        "duration": 157.10000000149012
+      }
+    ],
+    "errors": []
+  }
+]
+SCREENSHOTS ['ux-002-verifier-invisible-focus.jpg', 'mobile-home-390-frame.jpg', 'desktop-login-error.jpg', 'desktop-contact-error.jpg', 'ux-004-demo-status-copy.jpg', 'ux-003-verifier-scroll-regions-320.jpg', 'desktop-home.jpg', 'ftl-empty-search-390.jpg', 'ux-001-mobile-menu-open.jpg']
+SOURCE frontend/src/app/verify/page.tsx
+306:                         {state.data.checks.map((c, i) => (
+489:                     {TRUST_MODEL.map((card) => (
+519:                     <pre className="m-0 max-h-[480px] overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
+520:                         {TERMINAL_OUTPUT.split('\n').map((line, i) => (
+537:                     {INSTALL_STEPS.map((step, i) => (
+547:                                     <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary">
+575:                     <pre className="m-0 overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
+576:                         {CODE_SAMPLE.split('\n').map((line, i) => (
+601:                         {BUNDLE_CHECK_STEPS.map((s) => (
+SOURCE frontend/src/components/ui/table.tsx
+17:     <div className="relative w-full overflow-x-auto">
+SOURCE frontend/src/app/tools/ftl-checker/page.tsx
+62:                     {Array.from({ length: 6 }).map((_, i) => (
+SOURCE frontend/src/components/control-plane/demo-banner.tsx
+10:         <strong className="font-medium text-re-text-primary">Sample Data</strong> — Backend unavailable.

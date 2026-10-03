@@ -1,0 +1,7 @@
+UTC: 2026-10-03T00:40:50.444244+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: node_modules/.bin/eslint src/__tests__/lib/qa-sweep-gs1.test.ts
+Exit: 0
+Duration: 1.33s
+Timeout: False
+

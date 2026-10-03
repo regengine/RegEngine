@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:37:17.222373+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: uv pip install --target /private/tmp/regengine-qa-backend-deps --no-deps typesafe-sdk==0.7.2
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+error: Failed to initialize cache at `/Users/sellers/.cache/uv`
+  Caused by: failed to open file `/Users/sellers/.cache/uv/sdists-v9/.git`: Operation not permitted (os error 1)

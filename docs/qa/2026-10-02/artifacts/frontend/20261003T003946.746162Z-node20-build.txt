@@ -1,0 +1,339 @@
+UTC: 2026-10-03T00:39:46.746162+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node node_modules/next/dist/bin/next build
+Exit: 0
+Duration: 14.49s
+Timeout: False
+
+▲ Next.js 16.3.5 (Turbopack)
+⚠ Warning: Next.js ignored package-lock.json in /Users/sellers because it is outside the current Git repository (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.js took 10ms
+Warning: Custom Cache-Control headers detected for the following routes:
+  - /_next/static/(.*)
+
+Setting a custom Cache-Control header can break Next.js development behavior.
+
+⚠ The Edge Runtime is deprecated. You can use the "nodejs" runtime instead. Learn more: https://nextjs.org/docs/messages/edge-runtime-deprecated
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.5s
+  Running TypeScript ...
+  Finished TypeScript in 5.1s ...
+  Collecting page data using 13 workers ...
+⚠ Using edge runtime on a page currently disables static generation for that page
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+  Generating static pages using 13 workers (0/187) ...
+  Generating static pages using 13 workers (46/187) 
+  Generating static pages using 13 workers (93/187) 
+  Generating static pages using 13 workers (140/187) 
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+✓ Generating static pages using 13 workers (187/187) in 1117ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /about
+├ ƒ /about/opengraph-image
+├ ƒ /accept-invite
+├ ƒ /admin
+├ ƒ /admin/api-console
+├ ƒ /alpha
+├ ƒ /api-keys
+├ ƒ /api/admin/[...path]
+├ ƒ /api/billing/checkout
+├ ƒ /api/client-errors
+├ ƒ /api/compliance/[...path]
+├ ƒ /api/contact
+├ ƒ /api/controls/[...path]
+├ ƒ /api/developer/portal/dashboard
+├ ƒ /api/developer/portal/keys
+├ ƒ /api/developer/portal/keys/[keyId]
+├ ƒ /api/developer/portal/usage
+├ ƒ /api/fsma/[...path]
+├ ƒ /api/graph/[...path]
+├ ƒ /api/health
+├ ƒ /api/inflow-lab/[...path]
+├ ƒ /api/ingestion/[...path]
+├ ƒ /api/nlp/ask
+├ ○ /api/openapi.json
+├ ƒ /api/proxy
+├ ƒ /api/review/[...path]
+├ ƒ /api/review/[id]/approve
+├ ƒ /api/review/[id]/reject
+├ ƒ /api/review/items
+├ ƒ /api/session
+├ ƒ /api/tools/check-access
+├ ƒ /api/tools/verify
+├ ƒ /api/v1/compliance/snapshots/[tenantId]
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/[snapshotId]/attest
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/[snapshotId]/audit-pack
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/[snapshotId]/export
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/[snapshotId]/fda-response
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/[snapshotId]/refreeze
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/[snapshotId]/verify
+├ ƒ /api/v1/compliance/snapshots/[tenantId]/diff
+├ ƒ /api/v1/compliance/status/[tenantId]
+├ ƒ /audit
+├ ƒ /auth/sso/mock
+├ ƒ /auth/verify
+├ ƒ /blog
+├ ƒ /blog/24-hour-rule
+├ ƒ /blog/24-hour-rule/opengraph-image
+├ ƒ /blog/fda-food-traceability-requirements
+├ ƒ /blog/fda-food-traceability-requirements/opengraph-image
+├ ƒ /blog/food-traceability-software
+├ ƒ /blog/food-traceability-software/opengraph-image
+├ ƒ /blog/fsma-204-compliance-checklist-2026
+├ ƒ /blog/fsma-204-compliance-checklist-2026/opengraph-image
+├ ƒ /blog/fsma-204-compliance-guide
+├ ƒ /blog/fsma-204-compliance-guide/opengraph-image
+├ ƒ /blog/fsma-204-cte-kde-guide
+├ ƒ /blog/fsma-204-cte-kde-guide/opengraph-image
+├ ƒ /blog/fsma-204-mid-market-guide
+├ ƒ /blog/fsma-204-mid-market-guide/opengraph-image
+├ ƒ /blog/fsma-204-traceability-lot-codes
+├ ƒ /blog/fsma-204-traceability-lot-codes/opengraph-image
+├ ƒ /blog/opengraph-image
+├ ƒ /blog/regengine-vs-spreadsheets-traceability
+├ ƒ /blog/regengine-vs-spreadsheets-traceability/opengraph-image
+├ ƒ /buyer-programs
+├ ƒ /buyer-programs/opengraph-image
+├ ƒ /case-studies
+├ ƒ /case-studies/opengraph-image
+├ ƒ /compare/foodlogiq
+├ ƒ /compare/foodlogiq/opengraph-image
+├ ƒ /compare/repositrak
+├ ƒ /compare/repositrak/opengraph-image
+├ ƒ /compare/tracegains
+├ ƒ /compare/tracegains/opengraph-image
+├ ƒ /compliance
+├ ƒ /compliance/labels
+├ ƒ /compliance/profile
+├ ƒ /compliance/snapshots
+├ ƒ /compliance/status
+├ ƒ /compliance/traceability-plan
+├ ƒ /contact
+├ ƒ /contact/opengraph-image
+├ ƒ /controls
+├ ƒ /dashboard
+├ ƒ /dashboard/agent-reviews
+├ ƒ /dashboard/alerts
+├ ƒ /dashboard/audit-log
+├ ƒ /dashboard/compliance
+├ ƒ /dashboard/export-jobs
+├ ƒ /dashboard/heartbeat
+├ ƒ /dashboard/inflow-lab
+├ ƒ /dashboard/integrations
+├ ƒ /dashboard/issues
+├ ƒ /dashboard/notifications
+├ ƒ /dashboard/products
+├ ƒ /dashboard/qa-health
+├ ƒ /dashboard/recall-drills
+├ ƒ /dashboard/recall-report
+├ ƒ /dashboard/recall-response
+├ ƒ /dashboard/receiving
+├ ƒ /dashboard/scan
+├ ƒ /dashboard/settings
+├ ƒ /dashboard/suppliers
+├ ƒ /dashboard/team
+├ ƒ /demo
+├ ƒ /demo/opengraph-image
+├ ƒ /design-system
+├ ƒ /developer/login
+├ ƒ /developer/portal
+├ ƒ /developer/portal/codegen
+├ ƒ /developer/portal/docs
+├ ƒ /developer/portal/docs/auth
+├ ƒ /developer/portal/docs/changelog
+├ ƒ /developer/portal/docs/endpoints
+├ ƒ /developer/portal/docs/errors
+├ ƒ /developer/portal/docs/sdks
+├ ƒ /developer/portal/docs/webhooks
+├ ƒ /developer/portal/keys
+├ ƒ /developer/portal/playground
+├ ƒ /developer/portal/usage
+├ ƒ /developer/register
+├ ƒ /developers
+├ ƒ /developers/compliance-verticals
+├ ƒ /developers/opengraph-image
+├ ƒ /docs
+├ ƒ /docs/api
+├ ƒ /docs/api/opengraph-image
+├ ƒ /docs/authentication
+├ ƒ /docs/authentication/opengraph-image
+├ ƒ /docs/changelog
+├ ƒ /docs/changelog/opengraph-image
+├ ƒ /docs/connectors/inflow-lab
+├ ƒ /docs/connectors/inflow-lab/opengraph-image
+├ ƒ /docs/errors
+├ ƒ /docs/errors/opengraph-image
+├ ƒ /docs/fsma-204
+├ ƒ /docs/fsma-204/opengraph-image
+├ ƒ /docs/opengraph-image
+├ ƒ /docs/quickstart
+├ ƒ /docs/quickstart/opengraph-image
+├ ƒ /docs/rate-limits
+├ ƒ /docs/rate-limits/opengraph-image
+├ ƒ /docs/sdks
+├ ƒ /docs/sdks/opengraph-image
+├ ƒ /docs/walkthrough
+├ ƒ /docs/walkthrough/opengraph-image
+├ ƒ /docs/webhooks
+├ ƒ /docs/webhooks/opengraph-image
+├ ƒ /dpa
+├ ƒ /dpa/opengraph-image
+├ ƒ /exceptions
+├ ƒ /fsma
+├ ƒ /fsma-204
+├ ƒ /fsma-204/[cte]
+├ ƒ /fsma-204/opengraph-image
+├ ƒ /fsma/assessment
+├ ƒ /fsma/field-capture
+├ ƒ /fsma/integration
+├ ƒ /identity
+├ ƒ /ingest
+├ ƒ /ingest/curation
+├   /ingest/results/[id]
+│ └ ● /ingest/results/_build
+├ ƒ /integrations
+├ ƒ /integrations/opengraph-image
+├ ƒ /legal/vulnerability-disclosure
+├ ƒ /legal/vulnerability-disclosure/opengraph-image
+├ ƒ /login
+├ ƒ /onboarding
+├ ƒ /onboarding/bulk-upload
+├ ƒ /onboarding/setup
+├ ƒ /onboarding/setup/facility
+├ ƒ /onboarding/setup/ftl-check
+├ ƒ /onboarding/setup/welcome
+├ ƒ /onboarding/supplier-flow
+├ ○ /openapi.json
+├ ƒ /portal/[portalId]
+├ ƒ /pricing
+├ ƒ /pricing/opengraph-image
+├ ƒ /privacy
+├ ƒ /privacy/opengraph-image
+├ ƒ /product
+├ ƒ /product/opengraph-image
+├ ƒ /proof
+├ ƒ /proof/opengraph-image
+├ ƒ /proof/recall-drill
+├ ƒ /proof/transformation
+├ ƒ /proof/transformation/opengraph-image
+├ ƒ /records
+├ ƒ /remediation
+├ ƒ /requests
+├ ƒ /requests/[id]
+├ ƒ /retailer-readiness
+├ ƒ /retailer-readiness/opengraph-image
+├ ƒ /review
+├ ○ /robots.txt
+├ ƒ /rules
+├ ƒ /sandbox
+├ ƒ /sandbox/opengraph-image
+├ ƒ /sandbox/results/[id]
+├ ƒ /security
+├ ƒ /security/opengraph-image
+├ ƒ /settings
+├ ƒ /settings/notifications
+├ ƒ /settings/profile
+├ ƒ /settings/security
+├ ƒ /settings/support
+├ ƒ /settings/users
+├ ƒ /signup
+├ ○ /sitemap.xml
+├ ƒ /status
+├ ƒ /supplier-compliance
+├ ƒ /supplier-compliance/opengraph-image
+├ ƒ /sysadmin
+├ ƒ /terms
+├ ƒ /terms/opengraph-image
+├ ƒ /tools
+├ ƒ /tools/anomaly-simulator
+├ ƒ /tools/ask
+├ ƒ /tools/ask/opengraph-image
+├ ƒ /tools/cte-mapper
+├ ƒ /tools/cte-mapper/opengraph-image
+├ ƒ /tools/data-import
+├ ƒ /tools/data-import/opengraph-image
+├ ƒ /tools/drill-simulator
+├ ƒ /tools/drill-simulator/opengraph-image
+├ ƒ /tools/export
+├ ƒ /tools/export/opengraph-image
+├ ƒ /tools/fsma-unified
+├ ƒ /tools/fsma-unified/opengraph-image
+├ ƒ /tools/ftl-checker
+├ ƒ /tools/ftl-checker/opengraph-image
+├ ƒ /tools/inflow-lab
+├ ƒ /tools/inflow-lab-dashboard-preview
+├ ƒ /tools/inflow-lab/opengraph-image
+├ ƒ /tools/kde-checker
+├ ƒ /tools/kde-checker/opengraph-image
+├ ƒ /tools/knowledge-graph
+├ ƒ /tools/knowledge-graph/opengraph-image
+├ ƒ /tools/label-scanner
+├ ƒ /tools/label-scanner/opengraph-image
+├ ƒ /tools/notice-validator
+├ ƒ /tools/obligation-scanner
+├ ƒ /tools/opengraph-image
+├ ƒ /tools/readiness-assessment
+├ ƒ /tools/readiness-assessment/opengraph-image
+├ ƒ /tools/recall-readiness
+├ ƒ /tools/recall-readiness/opengraph-image
+├ ƒ /tools/records-request-checklist
+├ ƒ /tools/records-request-checklist/opengraph-image
+├ ƒ /tools/retailer-readiness
+├ ƒ /tools/roi-calculator
+├ ƒ /tools/roi-calculator/opengraph-image
+├ ƒ /tools/scan
+├ ƒ /tools/scan/opengraph-image
+├ ƒ /tools/self-reported-checklist
+├ ƒ /tools/self-reported-checklist/opengraph-image
+├ ƒ /tools/sop-generator
+├ ƒ /tools/sop-generator/opengraph-image
+├ ƒ /tools/tlc-validator
+├ ƒ /tools/tlc-validator/opengraph-image
+├ ƒ /trace
+├ ƒ /trust
+├ ƒ /trust-center
+├ ƒ /trust/architecture
+├ ƒ /trust/architecture/opengraph-image
+├ ƒ /trust/opengraph-image
+├ ƒ /trust/retention
+├ ƒ /trust/retention/opengraph-image
+├ ƒ /trust/support
+├ ƒ /trust/support/opengraph-image
+├ ƒ /verify
+├ ƒ /verticals/food-safety
+├ ƒ /walkthrough
+├ ƒ /walkthrough/opengraph-image
+├ ƒ /why-regengine
+└ ƒ /why-regengine/opengraph-image
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -1,0 +1,24 @@
+{
+  "url": "http://127.0.0.1:3114/tools/scan",
+  "browser": "chromium",
+  "controlsPassed": 2,
+  "observations": [
+    {
+      "barcode": "010950600013435210LOT-10-ABC\u001d17260930",
+      "expectedLot": "LOT-10-ABC",
+      "actualLot": "LOT-"
+    },
+    {
+      "barcode": "010950600013435210LOT-21-ABC\u001d17260930",
+      "expectedLot": "LOT-21-ABC",
+      "actualLot": "LOT-"
+    },
+    {
+      "barcode": "010950600013435210LOT-17260930\u001d17260930",
+      "expectedLot": "LOT-17260930",
+      "actualLot": "LOT-"
+    }
+  ],
+  "pageErrors": [],
+  "boundary": "Real built scanner UI; no ingest or server persistence."
+}

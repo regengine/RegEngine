@@ -1,0 +1,38 @@
+[
+  {
+    "engine": "chromium",
+    "plainHtmlControl": true,
+    "tab": {
+      "tag": "BUTTON",
+      "id": "continue"
+    },
+    "altTab": {
+      "tag": "BUTTON",
+      "id": "continue"
+    }
+  },
+  {
+    "engine": "firefox",
+    "plainHtmlControl": true,
+    "tab": {
+      "tag": "BUTTON",
+      "id": "continue"
+    },
+    "altTab": {
+      "tag": "INPUT",
+      "id": "email"
+    }
+  },
+  {
+    "engine": "webkit",
+    "plainHtmlControl": true,
+    "tab": {
+      "tag": "BODY",
+      "id": ""
+    },
+    "altTab": {
+      "tag": "BUTTON",
+      "id": "continue"
+    }
+  }
+]

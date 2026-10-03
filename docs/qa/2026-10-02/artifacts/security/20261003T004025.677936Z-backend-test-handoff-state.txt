@@ -1,0 +1,135 @@
+UTC: 2026-10-03T00:40:25.677936+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'tail -18 docs/qa/2026-10-02/BACKEND-SESSION-LOG.md; sed -n "1,75p" docs/qa/2026-10-02/scripts/backend_pytest.py; nl -ba services/shared/request_safety.py | sed -n "29,88p"; rg -n "BE-010|chunked|request_size" tests/qa_sweep_20261002 -g "*.py"'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+
+- **2026-10-03T00:37:43.864053+00:00** `sdk-dependencies` — `python3 -c 'from pathlib import Path; print("\n".join(l for l in Path("/private/tmp/regengine-qa-backend-deps/typesafe_sdk-0.7.2.dist-info/METADATA").read_text().splitlines() if l.startswith("Requires-Dist"))); import subprocess; subprocess.run(["rg","-n","^(httpx2|httpcore2|truststore|brotli|brotlicffi|pydantic|typing-extensions|sniffio|anyio|certifi|h11)==","requirements.lock"],check=False)'`; cwd `.`; exit 0, 0.04s. [Output](artifacts/backend/20261003T003743.864053Z-sdk-dependencies.txt).
+
+- **2026-10-03T00:37:49.412998+00:00** `install-sdk-transitives` — `uv --cache-dir /private/tmp/regengine-qa-uv-cache pip install --target /private/tmp/regengine-qa-backend-deps --no-deps httpx2==2.12.0 httpcore2==2.12.0 truststore==0.10.4`; cwd `.`; exit 0, 0.20s. [Output](artifacts/backend/20261003T003749.412998Z-install-sdk-transitives.txt).
+
+- **2026-10-03T00:37:55.090249+00:00** `baseline-ingest-final` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-before.json`; cwd `.`; exit 0, 5.35s. [Output](artifacts/backend/20261003T003755.090249Z-baseline-ingest-final.txt).
+
+- **2026-10-03T00:38:05.444399+00:00** `route-surfaces` — `python3 -c 'from pathlib import Path; files=["services/ingestion/app/webhook_compat.py","services/ingestion/tests/test_webhook_router_v2_idor_f1.py","services/ingestion/tests/test_webhook_models.py"]; [(print("FILE",p),print(Path(p).read_text()[:6000])) for p in files]'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/backend/20261003T003805.444399Z-route-surfaces.txt).
+
+- **2026-10-03T00:38:27.342544+00:00** `baseline-shared` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_auth_1338.py services/shared/tests/test_permissions.py services/shared/tests/test_tenant_isolation.py services/shared/tests/test_tenant_context_set_guc.py tests/shared/test_idempotency_middleware_1338.py tests/shared/test_canonical_event_idempotency_key.py tests/shared/test_webhook_security.py -k 'not real_redis' --cov=shared.auth --cov=shared.idempotency --cov=shared.webhook_security --cov=shared.permissions --cov=shared.canonical_event --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-before.json`; cwd `.`; exit 0, 2.66s. [Output](artifacts/backend/20261003T003827.342544Z-baseline-shared.txt).
+
+- **2026-10-03T00:38:40.977928+00:00** `webhook-input-path` — `rg -n -A55 -B8 'async def ingest|def ingest|@router.post|def _get_db' services/ingestion/app/webhook_router_v2.py`; cwd `.`; exit 2, 0.00s. [Output](artifacts/backend/20261003T003840.977928Z-webhook-input-path.txt).
+
+- **2026-10-03T00:38:46.054592+00:00** `webhook-input-package` — `rg -n -A45 -B5 'async def ingest|def ingest|@router.post|def _get_db' services/ingestion/app/webhook_router_v2`; cwd `.`; exit 0, 0.01s. [Output](artifacts/backend/20261003T003846.054592Z-webhook-input-package.txt).
+
+- **2026-10-03T00:38:52.410114+00:00** `route-header` — `sed -n 15,86p services/ingestion/app/webhook_router_v2/routes.py`; cwd `.`; exit 0, 0.00s. [Output](artifacts/backend/20261003T003852.410114Z-route-header.txt).
+
+- **2026-10-03T00:39:59.582650+00:00** `added-regressions` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 --tb=short`; cwd `.`; exit 0, 4.48s. [Output](artifacts/backend/20261003T003959.582650Z-added-regressions.txt).
+#!/usr/bin/env python3
+"""Run explicitly selected pytest suites without network or credential-file access.
+
+Use through run_logged.py with a QA-only environment. This guard is deliberately
+stricter than the product: in-process ASGI transports and fake stores are allowed;
+socket connections, subprocesses, and reads of .env/credential files are denied.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import platform
+import sys
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path[:0] = [str(ROOT), str(ROOT / "services"), str(ROOT / "services/ingestion")]
+os.environ.update({
+    "PYTHON_DOTENV_DISABLED": "1",
+    "REGENGINE_ENV": "test",
+    "ENVIRONMENT": "test",
+    "DATABASE_URL": "sqlite:///:memory:",
+    "AWS_EC2_METADATA_DISABLED": "true",
+    "HYPOTHESIS_STORAGE_DIRECTORY": str(ROOT / ".hypothesis"),
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+})
+# Python on macOS obtains its processor label through a harmless uname command.
+# Cache platform metadata before the subprocess guard, then allow only the three
+# test plugins actually needed for this QA pass.
+platform.platform()
+
+
+def deny_external_io(event: str, args: tuple) -> None:
+    if event in {"socket.connect", "socket.getaddrinfo", "subprocess.Popen", "os.system"}:
+        raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+    if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
+        path = Path(os.fsdecode(args[0]))
+        if path.name.startswith(".env") or any(part in {".aws", ".ssh", ".gnupg"} for part in path.parts):
+            raise RuntimeError("QA safety guard denied credential/environment file access")
+
+
+sys.addaudithook(deny_external_io)
+
+import pytest
+
+raise SystemExit(pytest.main([
+    "-p", "pytest_cov.plugin", "-p", "pytest_asyncio.plugin",
+    "-p", "hypothesis.extra.pytestplugin", *sys.argv[1:]
+]))
+    29	
+    30	
+    31	# ---------------------------------------------------------------------------
+    32	# API-01: Request body size limiter
+    33	# ---------------------------------------------------------------------------
+    34	
+    35	
+    36	class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    37	    """Reject requests whose Content-Length exceeds *max_bytes*.
+    38	
+    39	    For chunked/streaming uploads where Content-Length is absent the
+    40	    middleware allows the request through (Starlette's own body reader
+    41	    will enforce memory limits downstream).
+    42	    """
+    43	
+    44	    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+    45	        super().__init__(app)
+    46	        self.max_bytes = max_bytes
+    47	
+    48	    async def dispatch(self, request: Request, call_next):
+    49	        if request.url.path in _EXEMPT_PATHS:
+    50	            return await call_next(request)
+    51	
+    52	        content_length = request.headers.get("content-length")
+    53	        if content_length is not None:
+    54	            try:
+    55	                length = int(content_length)
+    56	            except ValueError:
+    57	                return JSONResponse(
+    58	                    status_code=400,
+    59	                    content={
+    60	                        "error": "invalid_content_length",
+    61	                        "detail": "Content-Length header is not a valid integer.",
+    62	                    },
+    63	                )
+    64	            if length > self.max_bytes:
+    65	                mb = self.max_bytes / (1024 * 1024)
+    66	                # NOTE: this is the stdlib logger, not structlog — kwargs
+    67	                # here raised TypeError, turning every oversized request
+    68	                # into a 500 instead of the intended 413 (#2503).
+    69	                logger.warning(
+    70	                    "request_too_large: content_length=%s max_bytes=%s path=%s",
+    71	                    length,
+    72	                    self.max_bytes,
+    73	                    request.url.path,
+    74	                )
+    75	                return JSONResponse(
+    76	                    status_code=413,
+    77	                    content={
+    78	                        "error": "payload_too_large",
+    79	                        "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+    80	                    },
+    81	                )
+    82	        return await call_next(request)
+    83	
+    84	
+    85	# ---------------------------------------------------------------------------
+    86	# API-02: Global request timeout
+    87	# ---------------------------------------------------------------------------
+    88	
+tests/qa_sweep_20261002/test_request_safety.py:1:"""Local ASGI reproduction of BE-010; no sockets or real backend are used."""
+tests/qa_sweep_20261002/test_request_safety.py:32:                   reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies")

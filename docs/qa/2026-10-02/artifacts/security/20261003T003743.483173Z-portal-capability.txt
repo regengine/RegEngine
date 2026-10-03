@@ -1,0 +1,324 @@
+UTC: 2026-10-03T00:37:43.483173+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'nl -ba services/ingestion/app/supplier_portal.py | sed -n "638,692p"; nl -ba services/ingestion/app/supplier_portal.py | sed -n "835,990p"; nl -ba services/ingestion/app/supplier_portal.py | sed -n "352,380p"; rg -n "structlog|redact|portal_id|sensitive|SENSITIVE" services/shared/log* services/shared/observability -g "*.py" | head -90; rg --files services/shared | rg "log|redact"'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+   638	@router.post(
+   639	    "/links",
+   640	    response_model=PortalLinkResponse,
+   641	    summary="Create a supplier portal link",
+   642	    description="Generate a unique, expiring link that a supplier can use to submit shipping data.",
+   643	)
+   644	async def create_portal_link(
+   645	    request: CreatePortalLinkRequest,
+   646	    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+   647	    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+   648	) -> PortalLinkResponse:
+   649	    """Create a supplier portal link."""
+   650	    tenant_id = resolve_principal_tenant_id(request.tenant_id, x_tenant_id, principal.tenant_id)
+   651	    portal_id = secrets.token_urlsafe(16)
+   652	    now = datetime.now(timezone.utc)
+   653	    expires_at = (now + timedelta(days=request.expires_days)).isoformat()
+   654	
+   655	    link_data = {
+   656	        "tenant_id": tenant_id,
+   657	        "supplier_name": request.supplier_name,
+   658	        "supplier_email": request.supplier_email,
+   659	        "allowed_cte_types": request.allowed_cte_types,
+   660	        "integration_profile_id": request.integration_profile_id,
+   661	        "expires_at": expires_at,
+   662	        "created_at": now.isoformat(),
+   663	    }
+   664	
+   665	    # Try DB first, fall back to in-memory
+   666	    db_success = _db_store_portal_link(portal_id, link_data)
+   667	    if not db_success:
+   668	        if not _allow_memory_fallback():
+   669	            raise HTTPException(status_code=503, detail="Portal link persistence unavailable")
+   670	        logger.info("db_store_fallback using in-memory for portal_id=%s", portal_id)
+   671	    # Always store in-memory as well for supplemental fields (supplier_email, allowed_cte_types)
+   672	    _portal_links[portal_id] = link_data
+   673	
+   674	    logger.info(
+   675	        "portal_link_created",
+   676	        extra={
+   677	            "portal_id": portal_id,
+   678	            "tenant_id": tenant_id,
+   679	            "supplier_name": request.supplier_name,
+   680	        },
+   681	    )
+   682	
+   683	    return PortalLinkResponse(
+   684	        portal_id=portal_id,
+   685	        portal_url=f"https://regengine.co/portal/{portal_id}",
+   686	        supplier_name=request.supplier_name,
+   687	        tenant_id=tenant_id,
+   688	        expires_at=expires_at,
+   689	        allowed_cte_types=request.allowed_cte_types,
+   690	        integration_profile_id=request.integration_profile_id,
+   691	    )
+   692	
+   835	
+   836	
+   837	@router.get(
+   838	    "/{portal_id}",
+   839	    summary="Get portal link details",
+   840	    description="Retrieve portal link metadata (supplier name, allowed CTE types, etc.)",
+   841	)
+   842	async def get_portal_details(portal_id: str):
+   843	    """Get portal link details — used by the frontend to render the form."""
+   844	    link = _get_active_portal_link(portal_id)
+   845	    # #2461: public unauthenticated route — the tenant is unknown until
+   846	    # the portal-link row is read (via the SECURITY DEFINER
+   847	    # fsma.get_active_portal_link_by_token). Scope the remainder of the
+   848	    # handler to the link's tenant so the begin-hook covers all queries.
+   849	    with tenant_scope(link["tenant_id"]):
+   850	        profile = _db_get_integration_profile_summary(link["tenant_id"], link.get("integration_profile_id"))
+   851	
+   852	    return {
+   853	        "portal_id": portal_id,
+   854	        "supplier_name": link["supplier_name"],
+   855	        "allowed_cte_types": link["allowed_cte_types"],
+   856	        "integration_profile_id": link.get("integration_profile_id"),
+   857	        "integration_profile": profile,
+   858	        "status": "active",
+   859	    }
+   860	
+   861	
+   862	@router.post(
+   863	    "/{portal_id}/preflight",
+   864	    response_model=SupplierPreflightResult,
+   865	    summary="Preflight supplier data",
+   866	    description="Validate supplier-submitted shipment data before creating a persisted event.",
+   867	)
+   868	async def preflight_supplier_data(
+   869	    portal_id: str,
+   870	    submission: SupplierSubmission,
+   871	) -> SupplierPreflightResult:
+   872	    """Run the supplier submission through the Workbench validation gate."""
+   873	    link = _get_active_portal_link(portal_id)
+   874	    # #2461: public route — scope to the link's tenant (see get_portal_details).
+   875	    with tenant_scope(link["tenant_id"]):
+   876	        # Issue #2508 — per-link throttle for CPU-heavy sandbox validation, scoped
+   877	        # to the portal link so it cannot be driven at the full per-IP ceiling.
+   878	        _enforce_portal_rate_limit(
+   879	            portal_id,
+   880	            link["tenant_id"],
+   881	            scope="preflight",
+   882	            limit=_PORTAL_PREFLIGHT_RATE_LIMIT_RPM,
+   883	        )
+   884	        return _build_supplier_preflight(portal_id, link, submission)
+   885	
+   886	
+   887	@router.post(
+   888	    "/{portal_id}/submit",
+   889	    response_model=SubmissionResult,
+   890	    summary="Submit supplier data",
+   891	    description=(
+   892	        "Supplier submits shipping/receiving data through the portal. "
+   893	        "Data is validated, SHA-256 hashed, and ingested into the customer's tenant."
+   894	    ),
+   895	)
+   896	async def submit_supplier_data(
+   897	    portal_id: str,
+   898	    submission: SupplierSubmission,
+   899	) -> SubmissionResult:
+   900	    """Process a supplier submission — no auth required (link-based access)."""
+   901	    link = _get_active_portal_link(portal_id)
+   902	
+   903	    # #2461: public route — the portal-link row binds the token to exactly
+   904	    # one tenant; scope the remainder of the handler (including the
+   905	    # awaited ingest_events persistence) to it so the Engine begin-hook
+   906	    # applies app.tenant_id on every transaction.
+   907	    with tenant_scope(link["tenant_id"]):
+   908	        return await _submit_supplier_data_inner(portal_id, link, submission)
+   909	
+   910	
+   911	async def _submit_supplier_data_inner(
+   912	    portal_id: str,
+   913	    link: dict,
+   914	    submission: SupplierSubmission,
+   915	) -> SubmissionResult:
+   916	    """Body of submit_supplier_data — runs inside tenant_scope(link tenant)."""
+   917	    # Issue #2508 — per-link submission cap. Scoped to the portal link, not the
+   918	    # victim tenant's general ingest budget, and enforced BEFORE any persisted
+   919	    # write so abuse past the cap never reaches ``ingest_events``.
+   920	    _enforce_portal_rate_limit(
+   921	        portal_id,
+   922	        link["tenant_id"],
+   923	        scope="submit",
+   924	        limit=_PORTAL_SUBMIT_RATE_LIMIT_RPM,
+   925	    )
+   926	
+   927	    # Issue #2508 — gate persisted writes on the owning tenant's subscription.
+   928	    # The portal has no authenticated principal, so we check the link's tenant
+   929	    # directly. ``None`` means subscription checking is not configured for this
+   930	    # deploy (no Redis) and the gate is skipped.
+   931	    if _portal_subscription_active(link["tenant_id"]) is False:
+   932	        return SubmissionResult(
+   933	            status="error",
+   934	            message="Submission rejected: the receiving organization does not have an active subscription.",
+   935	            supplier_name=link["supplier_name"],
+   936	            submitted_at=datetime.now(timezone.utc).isoformat(),
+   937	        )
+   938	
+   939	    preflight = _build_supplier_preflight(portal_id, link, submission)
+   940	    if preflight.status == "blocked":
+   941	        return SubmissionResult(
+   942	            status="error",
+   943	            message=f"Submission blocked by preflight: {'; '.join(preflight.result.blocking_reasons)}",
+   944	            supplier_name=link["supplier_name"],
+   945	            submitted_at=datetime.now(timezone.utc).isoformat(),
+   946	        )
+   947	
+   948	    # Build KDEs
+   949	    event_data = _submission_event_dict(portal_id, link, submission)
+   950	    kdes: dict = event_data["kdes"]
+   951	
+   952	    # Create event
+   953	    event = IngestEvent(
+   954	        cte_type=WebhookCTEType.SHIPPING,
+   955	        traceability_lot_code=submission.traceability_lot_code,
+   956	        product_description=submission.product_description,
+   957	        quantity=submission.quantity,
+   958	        unit_of_measure=submission.unit_of_measure,
+   959	        location_gln=submission.ship_from_gln,
+   960	        location_name=submission.ship_from_location,
+   961	        timestamp=event_data["timestamp"],
+   962	        kdes=kdes,
+   963	    )
+   964	
+   965	    # Ingest into customer's tenant. The portal link record IS the
+   966	    # authenticated context here — the supplier's identity is verified
+   967	    # via the portal token, and the link binds that token to exactly
+   968	    # one customer tenant. Passing link["tenant_id"] as principal makes
+   969	    # the symmetric verification trivially pass while keeping the
+   970	    # contract enforceable for any future caller.
+   971	    payload = WebhookPayload(
+   972	        source="supplier_portal",
+   973	        events=[event],
+   974	        tenant_id=link["tenant_id"],
+   975	    )
+   976	    result = await ingest_events(payload, principal_tenant_id=link["tenant_id"])
+   977	
+   978	    submitted_at = datetime.now(timezone.utc).isoformat()
+   979	
+   980	    if result.accepted > 0:
+   981	        event_result = result.events[0]
+   982	        logger.info(
+   983	            "supplier_submission_accepted",
+   984	            extra={
+   985	                "portal_id": portal_id,
+   986	                "tenant_id": link["tenant_id"],
+   987	                "supplier": link["supplier_name"],
+   988	                "tlc": submission.traceability_lot_code,
+   989	            },
+   990	        )
+   352	    finally:
+   353	        db.close()
+   354	
+   355	
+   356	def _get_active_portal_link(portal_id: str) -> dict:
+   357	    # Try DB first, fall back to in-memory
+   358	    link = _db_get_portal_link(portal_id)
+   359	    if link is None and _allow_memory_fallback():
+   360	        link = _portal_links.get(portal_id)
+   361	    if not link:
+   362	        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+   363	
+   364	    expires_at_raw = link.get("expires_at")
+   365	    if not expires_at_raw:
+   366	        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+   367	
+   368	    try:
+   369	        expires_at = datetime.fromisoformat(str(expires_at_raw).replace("Z", "+00:00"))
+   370	    except ValueError:
+   371	        raise HTTPException(status_code=400, detail="Portal link has invalid expiry metadata")
+   372	
+   373	    if expires_at <= datetime.now(timezone.utc):
+   374	        _portal_links.pop(portal_id, None)
+   375	        _db_update_portal_link_status(portal_id, "expired", link["tenant_id"])
+   376	        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+   377	
+   378	    return link
+   379	
+   380	
+services/shared/observability/otel.py:25:import structlog
+services/shared/observability/otel.py:30:logger = structlog.get_logger("observability")
+services/shared/observability/correlation.py:7:import structlog
+services/shared/observability/correlation.py:13:# structlog processors, Sentry scope hooks, and Kafka producers can read the
+services/shared/observability/correlation.py:55:      structlog contextvars so every log line within the request carries it
+services/shared/observability/correlation.py:81:        # Also bind to structlog contextvars so emitted logs pick it up without
+services/shared/observability/correlation.py:83:        structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
+services/shared/observability/correlation.py:93:            structlog.contextvars.unbind_contextvars("correlation_id")
+services/shared/observability/context.py:13:import structlog
+services/shared/observability/context.py:46:    * ``structlog.contextvars`` — merged into the event dict by
+services/shared/observability/context.py:62:    structlog.contextvars.bind_contextvars(tenant_id=tenant_id)
+services/shared/observability/context.py:73:    structlog.contextvars.unbind_contextvars("tenant_id")
+services/shared/observability/context.py:128:    :func:`_inject_service_context` work) and the structlog contextvars (so
+services/shared/observability/context.py:130:    ``structlog.contextvars.merge_contextvars`` pick them up automatically).
+services/shared/observability/context.py:138:    structlog.contextvars.bind_contextvars(
+services/shared/observability/context.py:208:    task automatically. However, structlog's contextvars (stored separately via
+services/shared/observability/context.py:209:    ``structlog.contextvars.bind_contextvars``) are *not* thread-local — they
+services/shared/observability/context.py:229:        structlog.contextvars.bind_contextvars(correlation_id=child_cid)
+services/shared/observability/context.py:242:      1. Whatever ``structlog.contextvars.merge_contextvars`` already merged
+services/shared/observability/context.py:271:    structlog.configure(
+services/shared/observability/context.py:277:            # via structlog.contextvars.bind_contextvars is silently discarded and
+services/shared/observability/context.py:281:            structlog.contextvars.merge_contextvars,
+services/shared/observability/context.py:282:            structlog.stdlib.filter_by_level,
+services/shared/observability/context.py:283:            structlog.stdlib.add_logger_name,
+services/shared/observability/context.py:284:            structlog.stdlib.add_log_level,
+services/shared/observability/context.py:285:            structlog.stdlib.PositionalArgumentsFormatter(),
+services/shared/observability/context.py:286:            structlog.processors.TimeStamper(fmt="iso"),
+services/shared/observability/context.py:292:            structlog.processors.format_exc_info,
+services/shared/observability/context.py:293:            structlog.processors.JSONRenderer(),
+services/shared/observability/context.py:295:        logger_factory=structlog.stdlib.LoggerFactory(),
+services/shared/observability/context.py:296:        wrapper_class=structlog.stdlib.BoundLogger,
+services/shared/observability/context.py:301:logger = structlog.get_logger("regengine")
+services/shared/observability/context.py:331:    return structlog.get_logger(name)
+services/shared/observability/context.py:351:            raise structlog.DropEvent
+services/shared/observability/kafka_propagation.py:35:import structlog
+services/shared/observability/kafka_propagation.py:43:logger = structlog.get_logger("kafka.correlation")
+services/shared/observability/kafka_propagation.py:46:# read from structlog contextvars (set by TenantContextMiddleware).
+services/shared/observability/kafka_propagation.py:53:    """Best-effort tenant lookup from structlog contextvars.
+services/shared/observability/kafka_propagation.py:60:        from structlog.contextvars import get_contextvars
+services/shared/observability/kafka_propagation.py:199:    structlog_bindings: dict = {}
+services/shared/observability/kafka_propagation.py:202:        structlog_bindings["correlation_id"] = cid
+services/shared/observability/kafka_propagation.py:204:        structlog_bindings["tenant_id"] = tid
+services/shared/observability/kafka_propagation.py:206:    # Apply structlog contextvars if there's anything to bind
+services/shared/observability/kafka_propagation.py:207:    if structlog_bindings:
+services/shared/observability/kafka_propagation.py:209:            import structlog.contextvars as _sc
+services/shared/observability/kafka_propagation.py:211:            _sc.bind_contextvars(**structlog_bindings)
+services/shared/observability/kafka_propagation.py:223:        if structlog_bindings:
+services/shared/observability/kafka_propagation.py:225:                import structlog.contextvars as _sc
+services/shared/observability/kafka_propagation.py:227:                _sc.unbind_contextvars(*structlog_bindings.keys())
+services/shared/observability/dlq_producer.py:25:import structlog
+services/shared/observability/dlq_producer.py:30:logger = structlog.get_logger("shared.dlq_producer")
+services/shared/observability/fastapi_metrics.py:28:import structlog
+services/shared/observability/fastapi_metrics.py:31:logger = structlog.get_logger("observability.metrics")
+services/shared/observability/log_config.py:14:    ...extra structlog bind() fields...
+services/shared/observability/log_config.py:18:  Uses structlog ConsoleRenderer for human-readable output instead of JSON.
+services/shared/observability/log_config.py:28:import structlog
+services/shared/observability/log_config.py:77:    """Configure structlog for a RegEngine service.
+services/shared/observability/log_config.py:87:        - Configures both structlog and stdlib logging
+services/shared/observability/log_config.py:100:        # Merge structlog contextvars (bind() fields) into the event dict
+services/shared/observability/log_config.py:101:        structlog.contextvars.merge_contextvars,
+services/shared/observability/log_config.py:103:        structlog.processors.add_log_level,
+services/shared/observability/log_config.py:105:        structlog.processors.TimeStamper(fmt="iso", utc=True),
+services/shared/observability/log_config.py:109:        structlog.processors.format_exc_info,
+services/shared/observability/log_config.py:114:        renderer = structlog.dev.ConsoleRenderer(colors=True)
+services/shared/observability/log_config.py:117:        renderer = structlog.processors.JSONRenderer()
+services/shared/observability/log_config.py:119:    structlog.configure(
+services/shared/observability/log_config.py:121:        wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
+services/shared/observability/log_config.py:122:        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+services/shared/observability/log_config.py:135:    structlog.get_logger(service_name).info(
+services/shared/audit_logging/schema.py
+services/shared/audit_logging/integrity.py
+services/shared/audit_logging/writer.py
+services/shared/audit_logging/storage.py
+services/shared/audit_logging/__init__.py
+services/shared/observability/log_config.py
+services/shared/tests/test_cte_persistence_log_export_1655.py
+services/shared/logging_config.py

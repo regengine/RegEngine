@@ -1,0 +1,299 @@
+UTC: 2026-10-03T00:42:48.430861+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["rg","-n","RegEngineMobileDB|savePhoto|saveScan|indexedDB|db.delete|clear\(|logout|signOut|tenant_id","frontend/src/lib/auth-context.tsx","frontend/src/hooks/use-sync.ts","frontend/src/hooks/use-api.ts","frontend/src/components/mobile/FieldCaptureClient.tsx","frontend/src/lib/api-client.ts","frontend/src/lib/db.ts"],text=True));ranges={"frontend/src/hooks/use-sync.ts":(1,58),"frontend/src/hooks/use-api.ts":(20,65),"frontend/src/lib/auth-context.tsx":(385,460),"frontend/src/components/mobile/FieldCaptureClient.tsx":(270,340)};[(print("FILE",p),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p).read_text().splitlines(),1) if lo<=i<=hi))) for p,(lo,hi) in ranges.items()]'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+<string>:1: SyntaxWarning: "\(" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\("? A raw string is also an option.
+frontend/src/hooks/use-sync.ts:74:                            tenant_id: tenantId || undefined,
+frontend/src/lib/db.ts:65:        super('RegEngineMobileDB');
+frontend/src/lib/db.ts:75:export async function saveScan(content: string, payload?: Record<string, unknown>, cteType?: string) {
+frontend/src/lib/db.ts:86:export async function savePhoto(blob: Blob) {
+frontend/src/lib/auth-context.tsx:28:  logout: () => Promise<void>;
+frontend/src/lib/auth-context.tsx:45: * Non-sensitive data (tenant_id, onboarded, demo_mode, user profile)
+frontend/src/lib/auth-context.tsx:58:  TENANT_ID: 'regengine_tenant_id',
+frontend/src/lib/auth-context.tsx:84:  if (params.tenantId) body.tenant_id = params.tenantId;
+frontend/src/lib/auth-context.tsx:141:  tenant_id: string | null;
+frontend/src/lib/auth-context.tsx:235:  const logoutInProgressRef = useRef(false);
+frontend/src/lib/auth-context.tsx:288:        if (session.tenant_id && session.tenant_id !== storedTenantId) {
+frontend/src/lib/auth-context.tsx:289:          setTenantIdState(session.tenant_id);
+frontend/src/lib/auth-context.tsx:290:          localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.tenant_id);
+frontend/src/lib/auth-context.tsx:291:        } else if (!session.tenant_id && session.auth_method && storedTenantId) {
+frontend/src/lib/auth-context.tsx:395:    logoutInProgressRef.current = false;
+frontend/src/lib/auth-context.tsx:464:  const logout = useCallback(async () => {
+frontend/src/lib/auth-context.tsx:465:    logoutInProgressRef.current = true;
+frontend/src/lib/auth-context.tsx:467:    logoutInProgressRef.current = false;
+frontend/src/lib/auth-context.tsx:504:        logout,
+frontend/src/components/mobile/FieldCaptureClient.tsx:38:import { savePhoto, saveScan } from '@/lib/db';
+frontend/src/components/mobile/FieldCaptureClient.tsx:108:        setHintedTenantId(new URLSearchParams(window.location.search).get('tenant_id'));
+frontend/src/components/mobile/FieldCaptureClient.tsx:153:                tenant_id: effectiveTenantId,
+frontend/src/components/mobile/FieldCaptureClient.tsx:220:            tenant_id: effectiveTenantId,
+frontend/src/components/mobile/FieldCaptureClient.tsx:242:            await saveScan(rawScan, offlinePayload, parsedState.cteType);
+frontend/src/components/mobile/FieldCaptureClient.tsx:257:            await saveScan(rawScan, offlinePayload, parsedState.cteType);
+frontend/src/components/mobile/FieldCaptureClient.tsx:273:            await savePhoto(blob);
+frontend/src/components/mobile/FieldCaptureClient.tsx:304:                    tenant_id: effectiveTenantId,
+frontend/src/components/mobile/FieldCaptureClient.tsx:346:            await savePhoto(blob);
+frontend/src/lib/api-client.ts:84:  tenant_id?: string;
+frontend/src/lib/api-client.ts:132:    tenant_id: item.tenant_id || '',
+frontend/src/lib/api-client.ts:379:        tenant_id: params.tenantId,
+frontend/src/lib/api-client.ts:390:        tenant_id: tenantId,
+frontend/src/lib/api-client.ts:625:      { source, tenant_id: tenantId, events },
+frontend/src/lib/api-client.ts:873:      params: { tenant_id: tenantId },
+frontend/src/lib/api-client.ts:887:      tenant_id: tenantId,
+
+FILE frontend/src/hooks/use-sync.ts
+1: import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+2: 
+3: import { useCallback, useEffect, useRef, useState } from 'react';
+4: import {
+5:     markScanSynced,
+6:     markPhotoSynced,
+7:     markScanSyncFailed,
+8:     markPhotoSyncFailed,
+9:     getPendingUploads,
+10:     cleanupOfflineRecords,
+11: } from '@/lib/db';
+12: import { useIngestFile } from '@/hooks/use-api';
+13: import { useAuth } from '@/lib/auth-context';
+14: import { useToast } from '@/components/ui/use-toast';
+15: import { getServiceURL } from '@/lib/api-config';
+16: 
+17: export function useSync() {
+18:     const [isOnline, setIsOnline] = useState(true);
+19:     const [isSyncing, setIsSyncing] = useState(false);
+20:     const isSyncingRef = useRef(false);
+21:     const { isAuthenticated, tenantId } = useAuth();
+22:     const { toast } = useToast();
+23: 
+24:     const { mutateAsync: ingestFile } = useIngestFile();
+25: 
+26:     const syncEndpoint = useCallback(async (payload: string) => {
+27:         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+28:             method: 'POST',
+29:             credentials: 'include', // Send HTTP-only cookies
+30:             headers: {
+31:                 'Content-Type': 'application/json',
+32:             },
+33:             body: payload,
+34:         });
+35:         if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+36:     }, []);
+37: 
+38:     const sync = useCallback(async () => {
+39:         if (!isAuthenticated || isSyncingRef.current || !navigator.onLine) return;
+40: 
+41:         isSyncingRef.current = true;
+42:         setIsSyncing(true);
+43:         let failedUploads = 0;
+44:         let successfulUploads = 0;
+45:         try {
+46:             try {
+47:                 await cleanupOfflineRecords();
+48:             } catch {
+49:                 // cleanup is best-effort
+50:             }
+51: 
+52:             const { scans, photos } = await getPendingUploads();
+53: 
+54:             if (scans.length === 0 && photos.length === 0) {
+55:                 setIsSyncing(false);
+56:                 return;
+57:             }
+58: 
+FILE frontend/src/hooks/use-api.ts
+20:   chain_valid: false,
+21:   open_alerts: 0,
+22: };
+23: 
+24: const DEMO_STATUS: SystemStatusResponse & { _demo: true } = {
+25:   _demo: true,
+26:   overall_status: 'degraded',
+27:   services: [
+28:     { name: 'admin', status: 'unhealthy', details: { error: 'Service unreachable' } },
+29:     { name: 'ingestion', status: 'unhealthy', details: { error: 'Service unreachable' } },
+30:     { name: 'compliance', status: 'unhealthy', details: { error: 'Service unreachable' } },
+31:   ],
+32: };
+33: 
+34: // Health Checks
+35: export const useAdminHealth = () => {
+36:   return useQuery({
+37:     queryKey: ['admin', 'health'],
+38:     queryFn: () => apiClient.getAdminHealth(),
+39:     refetchInterval: POLL_HEALTH,
+40:   });
+41: };
+42: 
+43: export const useIngestionHealth = () => {
+44:   return useQuery({
+45:     queryKey: ['ingestion', 'health'],
+46:     queryFn: () => apiClient.getIngestionHealth(),
+47:     refetchInterval: POLL_HEALTH,
+48:   });
+49: };
+50: 
+51: export const useComplianceHealth = () => {
+52:   return useQuery({
+53:     queryKey: ['compliance', 'health'],
+54:     queryFn: () => apiClient.getComplianceHealth(),
+55:     refetchInterval: POLL_HEALTH,
+56:   });
+57: };
+58: 
+59: // System Status — aggregate individual /health endpoints (no auth required).
+60: // Previously this called /v1/system/status which requires auth and returned
+61: // 401 for expired sessions, causing the dashboard to show all services as
+62: // unhealthy even though Railway backends were running fine.
+63: async function fetchAggregatedStatus(): Promise<SystemStatusResponse> {
+64:   const serviceNames = ['admin', 'ingestion', 'compliance'] as const;
+65: 
+FILE frontend/src/lib/auth-context.tsx
+385:       }
+386:     }
+387:   }, []);
+388: 
+389:   const login = useCallback(async (
+390:     token: string,
+391:     loginUser: User,
+392:     loginTenantId?: string,
+393:     options?: LoginOptions,
+394:   ) => {
+395:     logoutInProgressRef.current = false;
+396:     const normalizedLoginUser = normalizeUserProfile(loginUser);
+397: 
+398:     // Non-React state — these don't trigger re-renders or effects.
+399:     apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
+400:     apiClient.setUser(normalizedLoginUser);
+401:     if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
+402: 
+403:     if (typeof window !== 'undefined') {
+404:       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedLoginUser));
+405:       if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
+406:     }
+407: 
+408:     // Set the HTTP-only cookie BEFORE updating React state.
+409:     //
+410:     // React state updates below can trigger navigation to /dashboard (or the
+411:     // ?next= path). The middleware runs on that navigation and checks
+412:     // re_access_token — if the cookie isn't in the browser yet, middleware
+413:     // rejects and redirects back to /login?next=/dashboard.
+414:     //
+415:     // Awaiting setSessionCookies first lets the Set-Cookie response be
+416:     // processed by the browser before any navigation can occur.
+417:     //
+418:     // #535: Check the return value — if the /api/session POST fails (network
+419:     // error, server error) we must throw rather than silently continue.
+420:     // A false return means the re_access_token cookie was never written, so
+421:     // the very next middleware check would reject the user and redirect back
+422:     // to /login, producing a confusing loop. Throwing here surfaces the
+423:     // problem immediately as an error in the login form instead.
+424:     const cookiesOk = await setSessionCookies({
+425:       accessToken: [REDACTED],
+426:       tenantId: loginTenantId,
+427:       user: normalizedLoginUser,
+428:       remember: options?.remember ?? true,
+429:     });
+430: 
+431:     if (!cookiesOk) {
+432:       throw new Error('Session could not be established. Please try again.');
+433:     }
+434: 
+435:     loginCompletedRef.current = true;
+436: 
+437:     // React state updates — triggers re-renders and the navigation useEffect.
+438:     // Cookie should be stored in the browser at this point.
+439:     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
+440:     setAuthMethodState(null);
+441:     setUserState(normalizedLoginUser);
+442:     if (loginTenantId) setTenantIdState(loginTenantId);
+443:   }, []);
+444: 
+445:   const clearCredentials = useCallback(async () => {
+446:     setApiKeyState(null);
+447:     setTenantIdState(null);
+448:     setAccessTokenState(null);
+449:     setAuthMethodState(null);
+450:     setUserState(null);
+451:     setIsOnboarded(false);
+452:     setDemoModeState(false);
+453: 
+454:     apiClient.setAccessToken(null);
+455:     apiClient.setUser(null);
+456:     apiClient.setCurrentTenant(null);
+457: 
+458:     if (typeof window !== 'undefined') {
+459:       Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+460:     }
+FILE frontend/src/components/mobile/FieldCaptureClient.tsx
+270:         const blob = await res.blob();
+271: 
+272:         if (!isOnline) {
+273:             await savePhoto(blob);
+274:             toast({
+275:                 title: 'Photo Saved Offline',
+276:                 description: 'Image saved locally. Will sync when online.',
+277:             });
+278:             return;
+279:         }
+280: 
+281:         // Send through label vision endpoint for AI extraction
+282:         const filename = `mobile_capture_${Date.now()}.jpg`;
+283:         const file = new File([blob], filename, { type: 'image/jpeg' });
+284: 
+285:         try {
+286:             const formData = new FormData();
+287:             formData.append('file', file);
+288: 
+289:             toast({ title: 'Analyzing Label...', description: 'Running computer vision extraction.' });
+290: 
+291:             const visionRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/vision/analyze-label`, {
+292:                 method: 'POST',
+293:                 credentials: 'include',
+294:                 body: formData,
+295:             });
+296: 
+297:             if (visionRes.ok) {
+298:                 const visionData = await visionRes.json();
+299:                 const productName = visionData.product_name || 'Photo capture';
+300:                 const lotCode = visionData.lot_code || visionData.gtin || `PHOTO-${Date.now()}`;
+301: 
+302:                 const payload = {
+303:                     source: 'mobile_capture_pwa_vision',
+304:                     tenant_id: effectiveTenantId,
+305:                     events: [{
+306:                         cte_type: selectedCTEType,
+307:                         traceability_lot_code: lotCode,
+308:                         product_description: productName,
+309:                         quantity: 1,
+310:                         unit_of_measure: 'cases',
+311:                         timestamp: new Date().toISOString(),
+312:                         location_name: 'Field Capture Mobile (Photo)',
+313:                         kdes: {
+314:                             gtin: visionData.gtin || undefined,
+315:                             lot_code: visionData.lot_code || undefined,
+316:                             expiry_date: visionData.expiry_date || undefined,
+317:                             pack_date: visionData.pack_date || undefined,
+318:                             brand: visionData.brand || undefined,
+319:                             facility_name: visionData.facility_name || undefined,
+320:                         },
+321:                     }],
+322:                 };
+323:                 const ingestRes = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+324:                     method: 'POST',
+325:                     credentials: 'include',
+326:                     headers: {
+327:                         'Content-Type': 'application/json',
+328:                     },
+329:                     body: JSON.stringify(payload),
+330:                 });
+331:                 if (!ingestRes.ok) {
+332:                     const detail = await ingestRes.text().catch(() => '');
+333:                     throw new Error(detail || `Event persistence failed with status ${ingestRes.status}`);
+334:                 }
+335: 
+336:                 toast({
+337:                     title: 'Label Analyzed & Ingested',
+338:                     description: `${productName} — ${visionData.fsma_kdes?.length || 0} KDEs extracted`,
+339:                 });
+340:             } else {

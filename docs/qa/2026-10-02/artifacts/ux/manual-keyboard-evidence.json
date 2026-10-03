@@ -1,0 +1,43 @@
+{
+  "recorded_at_utc": "2026-10-03T00:54:20Z",
+  "source": "CUA native keyboard actions and read-only DOM observations, recorded after exploration",
+  "environment": "Actual local production build behind QA proxy; mobile cases use an actual 390px same-origin iframe, not device emulation",
+  "UX-001": {
+    "observed_window_utc": "2026-10-03T00:48:20Z/2026-10-03T00:49:15Z",
+    "route": "/",
+    "viewport_width": 390,
+    "actions": ["Activate Open navigation menu", "Tab to Close menu", "Press Escape from Close menu", "Press Shift+Tab from Close menu"],
+    "escape_result": {"aria_hidden": "false", "focused_control": "Close menu", "dialog_remained_open": true},
+    "reverse_tab_result": {"aria_hidden": "false", "active_element_class": "marketing-mobile-toggle", "active_element_aria_label": "Close navigation menu", "active_element_inside_dialog": false},
+    "screenshot": "ux-001-mobile-menu-open.jpg"
+  },
+  "UX-002": {
+    "observed_window_utc": "2026-10-03T00:49:40Z/2026-10-03T00:50:10Z",
+    "route": "/verify",
+    "viewport_width": 1728,
+    "actions": ["Focus Download verify_chain.py link in verifier explanation", "Press Tab"],
+    "active_element_id": "verify-bundle-file",
+    "computed_input_style": {"width_px": 1, "height_px": 1, "clip": "rect(0px, 0px, 0px, 0px)", "outline": "rgb(4, 120, 87) solid 2px"},
+    "computed_label_style": {"outline": "rgb(20, 24, 31) none 3px", "boxShadow": "none"},
+    "screenshot": "ux-002-verifier-invisible-focus.jpg"
+  },
+  "login_error_state": {
+    "actions": ["Submit empty email", "Observe native required-field message", "Enter synthetic qa.user@example.invalid", "Submit to locally stubbed 503"],
+    "result": "Visible error, original email retained, Continue enabled for retry",
+    "alert_semantics": {"role": "alert", "aria-live": "polite", "text": "Synthetic QA service unavailable"},
+    "screenshot": "desktop-login-error.jpg"
+  },
+  "contact_error_state": {
+    "actions": ["Submit empty form", "Observe native required-name message", "Fill synthetic name/email/message", "Submit to locally stubbed 503"],
+    "result": "Fields retained, retry/direct-email explanation visible, no real message sent",
+    "screenshot": "desktop-contact-error.jpg"
+  },
+  "FTL_empty_search": {
+    "route": "/tools/ftl-checker",
+    "viewport_width": 390,
+    "search": "unlikely-nonexistent-product-qa",
+    "result": "All categories disappear; 0 categories selected and disabled Check Listed Groupings remain; no no-results message or clear-search control",
+    "screenshot": "ftl-empty-search-390.jpg"
+  },
+  "limitations": ["UX-003 is a repeated axe observation, not a verified cross-browser arrow-key-scrolling test", "Native screen-reader speech was not exercised", "Initial transfer of focus on mobile menu opening was observed on opener; Tab entered Close menu"]
+}

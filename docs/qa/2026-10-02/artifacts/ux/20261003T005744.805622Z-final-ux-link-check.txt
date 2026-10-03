@@ -1,0 +1,15 @@
+UTC: 2026-10-03T00:57:44.805622+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re,json; base=Path("docs/qa/2026-10-02"); missing=[]; count=0
+for name in ["UX-REPORT.md","UX-BROWSER-SESSION-LOG.md"]:
+ for link in re.findall(r"\]\(([^)]+)\)",(base/name).read_text()):
+  if not link.startswith(("http:","https:")):
+   count+=1
+   if not (base/link).exists(): missing.append((name,link))
+json.loads((base/"artifacts/ux/manual-keyboard-evidence.json").read_text()); print("Local links checked",count,"missing",missing); assert not missing; print("PASS manual evidence JSON parses")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Local links checked 22 missing []
+PASS manual evidence JSON parses

@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:41:47.082115+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: ruff format --no-cache services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+4 files reformatted

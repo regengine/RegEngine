@@ -1,0 +1,38 @@
+UTC: 2026-10-03T02:06:07.365599+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ QA_FE_RESULTS=docs/qa/2026-10-02/artifacts/browser/fe-regression-chromium-second-run.json node frontend/node_modules/playwright/cli.js test --config frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts --project=chromium
+Exit: 1
+Duration: 13.25s
+Timeout: False
+
+
+Running 2 tests using 1 worker
+
+  ✘  1 [chromium] › frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (2.5s)
+  ✘  2 [chromium] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests (10.2s)
+
+
+  1) [chromium] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      91 |   await page.getByRole('button', { name: 'Capture', exact: true }).click();
+      92 |   await page.getByRole('button', { name: 'Use Photo', exact: true }).click();
+    > 93 |   await expect.poll(() => photosInBrowser(page).then(photos => photos.length)).toBe(1);
+         |                                                                                ^
+      94 |   const queuedA = (await photosInBrowser(page))[0];
+      95 |   expect(queuedA.synced).toBe(0);
+      96 |   expect(queuedA.blob.type).toBe('image/jpeg');
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:93:80
+
+    Error Context: ../../../../../private/tmp/regengine-qa-fe-regression-test-results/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests 
+  1 passed (13.0s)

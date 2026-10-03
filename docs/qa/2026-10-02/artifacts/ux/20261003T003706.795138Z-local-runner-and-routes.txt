@@ -1,0 +1,1590 @@
+UTC: 2026-10-03T00:37:06.795138+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; files=["/Users/sellers/.codex/skills/playwright/SKILL.md","/Users/sellers/.agents/skills/synced/f39d0c09-f607-4b9c-bde5-dbea41e3781a_816383df-c749-4c89-9d32-137316881240/regengine-service-runner/SKILL.md","frontend/package.json","frontend/playwright.config.ts","frontend/next.config.ts","frontend/src/app/page.tsx","frontend/src/app/layout.tsx"]; [print("FILE",p,"\n",Path(p).read_text()) for p in files if Path(p).is_file()]; subprocess.run(["rg","--files","frontend/src/app","frontend/e2e","docs/qa/2026-10-02/scripts","-g","!*lock*","-g","!**/.env*"]); print("env_file_names",[p.name for p in Path("frontend").glob(".env*")]); print("nextdocs",list(Path("frontend/node_modules/next/dist/docs").glob("**/*getting*"))[:15])'
+Exit: 0
+Duration: 0.08s
+Timeout: False
+
+rg: frontend/e2e: No such file or directory (os error 2)
+frontend/src/app/verticals/food-safety/page.tsx
+frontend/src/app/developers/page.tsx
+frontend/src/app/developers/loading.tsx
+frontend/src/app/developers/error.tsx
+frontend/src/app/developers/layout.tsx
+frontend/src/app/developers/opengraph-image.tsx
+frontend/src/app/developers/compliance-verticals/page.tsx
+frontend/src/app/developers/compliance-verticals/error.tsx
+frontend/src/app/buyer-programs/page.tsx
+frontend/src/app/buyer-programs/opengraph-image.tsx
+frontend/src/app/remediation/page.tsx
+frontend/src/app/remediation/layout.tsx
+frontend/src/app/not-found.tsx
+frontend/src/app/global-error.tsx
+frontend/src/app/onboarding/page.tsx
+frontend/src/app/onboarding/supplier-flow/page.jsx
+frontend/src/app/onboarding/loading.tsx
+frontend/src/app/onboarding/error.tsx
+frontend/src/app/onboarding/bulk-upload/page.tsx
+frontend/src/app/onboarding/bulk-upload/error.tsx
+frontend/src/app/onboarding/layout.tsx
+frontend/src/app/onboarding/setup/ftl-check/page.tsx
+frontend/src/app/onboarding/setup/page.tsx
+frontend/src/app/onboarding/setup/layout.tsx
+frontend/src/app/onboarding/setup/facility/page.tsx
+frontend/src/app/onboarding/setup/welcome/page.tsx
+frontend/src/app/retailer-readiness/page.tsx
+frontend/src/app/retailer-readiness/error.tsx
+frontend/src/app/retailer-readiness/layout.tsx
+frontend/src/app/retailer-readiness/opengraph-image.tsx
+frontend/src/app/login/page.tsx
+frontend/src/app/login/error.tsx
+frontend/src/app/login/layout.tsx
+frontend/src/app/login/PasswordlessEntryClient.tsx
+frontend/src/app/globals.css
+frontend/src/app/openapi.json/route.ts
+frontend/src/app/pricing/page.tsx
+frontend/src/app/pricing/loading.tsx
+frontend/src/app/pricing/error.tsx
+frontend/src/app/pricing/opengraph-image.tsx
+frontend/src/app/design-system/page.tsx
+frontend/src/app/fsma/page.tsx
+frontend/src/app/fsma/field-capture/page.tsx
+frontend/src/app/fsma/field-capture/error.tsx
+frontend/src/app/fsma/error.tsx
+frontend/src/app/fsma/layout.tsx
+frontend/src/app/fsma/assessment/page.tsx
+frontend/src/app/fsma/assessment/error.tsx
+frontend/src/app/fsma/assessment/layout.tsx
+frontend/src/app/fsma/integration/page.tsx
+frontend/src/app/fsma/integration/error.tsx
+frontend/src/app/fsma/integration/layout.tsx
+frontend/src/app/alpha/page.tsx
+frontend/src/app/alpha/error.tsx
+frontend/src/app/page.tsx
+docs/qa/2026-10-02/scripts/run_logged.py
+docs/qa/2026-10-02/scripts/backend_pytest.py
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+frontend/src/app/trust-center/page.tsx
+frontend/src/app/legal/vulnerability-disclosure/page.tsx
+frontend/src/app/legal/vulnerability-disclosure/opengraph-image.tsx
+frontend/src/app/fsma-204/page.tsx
+frontend/src/app/fsma-204/[cte]/page.tsx
+frontend/src/app/fsma-204/error.tsx
+frontend/src/app/fsma-204/opengraph-image.tsx
+frontend/src/app/dpa/page.tsx
+frontend/src/app/dpa/opengraph-image.tsx
+frontend/src/app/accept-invite/page.tsx
+frontend/src/app/accept-invite/error.tsx
+frontend/src/app/accept-invite/AcceptInviteClient.tsx
+frontend/src/app/trust/page.tsx
+frontend/src/app/trust/error.tsx
+frontend/src/app/about/page.tsx
+frontend/src/app/about/opengraph-image.tsx
+frontend/src/app/trust/support/page.tsx
+frontend/src/app/trust/support/error.tsx
+frontend/src/app/trust/support/opengraph-image.tsx
+frontend/src/app/trust/architecture/page.tsx
+frontend/src/app/trust/architecture/error.tsx
+frontend/src/app/trust/architecture/opengraph-image.tsx
+frontend/src/app/trust/opengraph-image.tsx
+frontend/src/app/trust/retention/page.tsx
+frontend/src/app/trust/retention/error.tsx
+frontend/src/app/trust/retention/opengraph-image.tsx
+frontend/src/app/api-keys/page.tsx
+frontend/src/app/api-keys/error.tsx
+frontend/src/app/api/session/route.ts
+frontend/src/app/walkthrough/page.tsx
+frontend/src/app/walkthrough/error.tsx
+frontend/src/app/walkthrough/opengraph-image.tsx
+frontend/src/app/api/billing/checkout/route.ts
+frontend/src/app/api/openapi.json/route.ts
+frontend/src/app/admin/page.tsx
+frontend/src/app/admin/error.tsx
+frontend/src/app/admin/layout.tsx
+frontend/src/app/api/fsma/[...path]/route.ts
+frontend/src/app/admin/api-console/page.tsx
+frontend/src/app/admin/api-console/error.tsx
+frontend/src/app/api/nlp/ask/route.ts
+frontend/src/app/terms/page.tsx
+frontend/src/app/terms/TermsClient.tsx
+frontend/src/app/terms/error.tsx
+frontend/src/app/terms/opengraph-image.tsx
+frontend/src/app/api/review/[id]/approve/route.ts
+frontend/src/app/api/review/[id]/reject/route.ts
+frontend/src/app/api/review/items/route.ts
+frontend/src/app/supplier-compliance/page.tsx
+frontend/src/app/supplier-compliance/opengraph-image.tsx
+frontend/src/app/api/review/[...path]/route.ts
+frontend/src/app/api/__tests__/routes.test.ts
+frontend/src/app/api/controls/[...path]/route.ts
+frontend/src/app/ingest/page.tsx
+frontend/src/app/ingest/sandbox-handoff.ts
+frontend/src/app/ingest/loading.tsx
+frontend/src/app/ingest/error.tsx
+frontend/src/app/ingest/layout.tsx
+frontend/src/app/api/compliance/[...path]/route.ts
+frontend/src/app/api/admin/[...path]/route.ts
+frontend/src/app/api/graph/[...path]/route.ts
+frontend/src/app/api/inflow-lab/[...path]/route.ts
+frontend/src/app/api/health/route.ts
+frontend/src/app/ingest/results/[id]/page.tsx
+frontend/src/app/ingest/results/[id]/error.tsx
+frontend/src/app/ingest/results/[id]/AnalysisResultClient.tsx
+frontend/src/app/ingest/NormalizedDocumentViewer.tsx
+frontend/src/app/api/proxy/route.ts
+frontend/src/app/security/page.tsx
+frontend/src/app/security/error.tsx
+frontend/src/app/security/opengraph-image.tsx
+frontend/src/app/api/tools/check-access/route.ts
+frontend/src/app/ingest/curation/page.tsx
+frontend/src/app/ingest/curation/error.tsx
+frontend/src/app/portal/[portalId]/page.tsx
+frontend/src/app/api/tools/verify/route.ts
+frontend/src/app/verify/page.tsx
+frontend/src/app/verify/error.tsx
+frontend/src/app/signup/page.tsx
+frontend/src/app/api/ingestion/[...path]/route.ts
+frontend/src/app/identity/page.tsx
+frontend/src/app/identity/error.tsx
+frontend/src/app/identity/layout.tsx
+frontend/src/app/api/contact/route.ts
+frontend/src/app/privacy/page.tsx
+frontend/src/app/privacy/error.tsx
+frontend/src/app/privacy/opengraph-image.tsx
+frontend/src/app/auth/sso/mock/page.tsx
+frontend/src/app/trace/page.tsx
+frontend/src/app/trace/error.tsx
+frontend/src/app/trace/layout.tsx
+frontend/src/app/auth/verify/page.tsx
+frontend/src/app/auth/verify/VerifyClient.tsx
+frontend/src/app/tools/retailer-readiness/page.tsx
+frontend/src/app/tools/retailer-readiness/error.tsx
+frontend/src/app/audit/page.tsx
+frontend/src/app/audit/error.tsx
+frontend/src/app/audit/layout.tsx
+frontend/src/app/api/developer/portal/keys/[keyId]/route.ts
+frontend/src/app/api/developer/portal/keys/route.ts
+frontend/src/app/api/developer/portal/dashboard/route.ts
+frontend/src/app/sysadmin/page.tsx
+frontend/src/app/sysadmin/error.tsx
+frontend/src/app/sysadmin/layout.tsx
+frontend/src/app/api/developer/portal/usage/route.ts
+frontend/src/app/api/developer/portal/_utils.ts
+frontend/src/app/layout.tsx
+frontend/src/app/api/client-errors/route.ts
+frontend/src/app/error.tsx
+frontend/src/app/compare/foodlogiq/page.tsx
+frontend/src/app/compare/foodlogiq/opengraph-image.tsx
+frontend/src/app/compare/tracegains/page.tsx
+frontend/src/app/compare/tracegains/opengraph-image.tsx
+frontend/src/app/review/page.tsx
+frontend/src/app/review/error.tsx
+frontend/src/app/review/layout.tsx
+frontend/src/app/sitemap.ts
+frontend/src/app/compare/repositrak/page.tsx
+frontend/src/app/compare/repositrak/opengraph-image.tsx
+frontend/src/app/actions/submit-assessment.ts
+frontend/src/app/api/v1/compliance/status/[tenantId]/route.ts
+frontend/src/app/sandbox/page.tsx
+frontend/src/app/rules/page.tsx
+frontend/src/app/rules/error.tsx
+frontend/src/app/rules/layout.tsx
+frontend/src/app/tools/recall-readiness/page.tsx
+frontend/src/app/tools/recall-readiness/error.tsx
+frontend/src/app/sandbox/results/[id]/page.tsx
+frontend/src/app/sandbox/results/[id]/SharedSandboxResult.tsx
+frontend/src/app/sandbox/SandboxClient.tsx
+frontend/src/app/sandbox/opengraph-image.tsx
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/route.ts
+frontend/src/app/tools/recall-readiness/components/RecallReadinessClient.tsx
+frontend/src/app/tools/recall-readiness/opengraph-image.tsx
+frontend/src/app/tools/drill-simulator/page.tsx
+frontend/src/app/tools/inflow-lab/page.tsx
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/diff/route.ts
+frontend/src/app/tools/inflow-lab/lib/exception-grouping.ts
+frontend/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx
+frontend/src/app/tools/inflow-lab/components/InflowLabClient.tsx
+frontend/src/app/tools/inflow-lab/components/EvidenceChain.tsx
+frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx
+frontend/src/app/tools/inflow-lab/opengraph-image.tsx
+frontend/src/app/tools/opengraph-image.tsx
+frontend/src/app/tools/drill-simulator/opengraph-image.tsx
+frontend/src/app/tools/knowledge-graph/page.tsx
+frontend/src/app/tools/knowledge-graph/error.tsx
+frontend/src/app/tools/obligation-scanner/page.tsx
+frontend/src/app/tools/obligation-scanner/error.tsx
+frontend/src/app/tools/obligation-scanner/layout.tsx
+frontend/src/app/tools/page.tsx
+frontend/src/app/contact/page.tsx
+frontend/src/app/contact/error.tsx
+frontend/src/app/contact/layout.tsx
+frontend/src/app/contact/opengraph-image.tsx
+frontend/src/app/tools/knowledge-graph/components/KnowledgeGraphErrorBoundary.tsx
+frontend/src/app/tools/knowledge-graph/components/KnowledgeGraph.tsx
+frontend/src/app/tools/tlc-validator/page.tsx
+frontend/src/app/tools/tlc-validator/error.tsx
+frontend/src/app/tools/knowledge-graph/components/__tests__/KnowledgeGraph.test.ts
+frontend/src/app/tools/knowledge-graph/components/KnowledgeGraphClient.tsx
+frontend/src/app/tools/knowledge-graph/opengraph-image.tsx
+frontend/src/app/why-regengine/page.tsx
+frontend/src/app/why-regengine/opengraph-image.tsx
+frontend/src/app/tools/sop-generator/page.tsx
+frontend/src/app/tools/sop-generator/error.tsx
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx
+frontend/src/app/tools/tlc-validator/opengraph-image.tsx
+frontend/src/app/developer/login/page.tsx
+frontend/src/app/developer/login/error.tsx
+frontend/src/app/tools/sop-generator/components/SOPGeneratorClient.tsx
+frontend/src/app/tools/sop-generator/opengraph-image.tsx
+frontend/src/app/records/page.tsx
+frontend/src/app/records/error.tsx
+frontend/src/app/records/layout.tsx
+frontend/src/app/tools/export/page.tsx
+frontend/src/app/tools/export/error.tsx
+frontend/src/app/tools/export/layout.tsx
+frontend/src/app/tools/export/opengraph-image.tsx
+frontend/src/app/tools/inflow-lab-dashboard-preview/page.tsx
+frontend/src/app/tools/ftl-checker/page.tsx
+frontend/src/app/tools/ftl-checker/error.tsx
+frontend/src/app/developer/register/page.tsx
+frontend/src/app/developer/register/error.tsx
+frontend/src/app/tools/drill-simulator/components/DrillSimulatorClient.tsx
+frontend/src/app/tools/ask/page.tsx
+frontend/src/app/tools/ask/error.tsx
+frontend/src/app/tools/ask/layout.tsx
+frontend/src/app/tools/drill-simulator/error.tsx
+frontend/src/app/tools/ask/opengraph-image.tsx
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx
+frontend/src/app/tools/ftl-checker/opengraph-image.tsx
+frontend/src/app/tools/loading.tsx
+frontend/src/app/tools/error.tsx
+frontend/src/app/tools/kde-checker/page.tsx
+frontend/src/app/tools/kde-checker/error.tsx
+frontend/src/app/tools/kde-checker/opengraph-image.tsx
+frontend/src/app/tools/notice-validator/page.tsx
+frontend/src/app/tools/notice-validator/error.tsx
+frontend/src/app/tools/notice-validator/layout.tsx
+frontend/src/app/tools/kde-checker/components/KDECheckerClient.tsx
+frontend/src/app/tools/components/ToolsLandingClient.tsx
+frontend/src/app/developer/portal/page.tsx
+frontend/src/app/developer/portal/loading.tsx
+frontend/src/app/tools/self-reported-checklist/page.tsx
+frontend/src/app/tools/self-reported-checklist/error.tsx
+frontend/src/app/tools/readiness-assessment/page.tsx
+frontend/src/app/tools/readiness-assessment/error.tsx
+frontend/src/app/tools/self-reported-checklist/components/SelfReportedChecklistClient.tsx
+frontend/src/app/tools/self-reported-checklist/opengraph-image.tsx
+frontend/src/app/tools/readiness-assessment/components/ReadinessAssessmentClient.tsx
+frontend/src/app/tools/readiness-assessment/opengraph-image.tsx
+frontend/src/app/tools/fsma-unified/page.tsx
+frontend/src/app/tools/fsma-unified/error.tsx
+frontend/src/app/tools/label-scanner/page.tsx
+frontend/src/app/tools/label-scanner/error.tsx
+frontend/src/app/tools/label-scanner/layout.tsx
+frontend/src/app/tools/label-scanner/opengraph-image.tsx
+frontend/src/app/tools/fsma-unified/components/UnifiedDashboardClient.tsx
+frontend/src/app/tools/fsma-unified/components/AnomalySimulator.tsx
+frontend/src/app/tools/fsma-unified/opengraph-image.tsx
+frontend/src/app/exceptions/page.tsx
+frontend/src/app/exceptions/error.tsx
+frontend/src/app/exceptions/layout.tsx
+frontend/src/app/compliance/page.tsx
+frontend/src/app/compliance/error.tsx
+frontend/src/app/compliance/layout.tsx
+frontend/src/app/compliance/profile/page.tsx
+frontend/src/app/compliance/profile/error.tsx
+frontend/src/app/developer/portal/keys/page.tsx
+frontend/src/app/developer/portal/keys/error.tsx
+frontend/src/app/docs/authentication/page.tsx
+frontend/src/app/docs/authentication/error.tsx
+frontend/src/app/docs/authentication/layout.tsx
+frontend/src/app/docs/authentication/opengraph-image.tsx
+frontend/src/app/developer/portal/error.tsx
+frontend/src/app/developer/portal/layout.tsx
+frontend/src/app/docs/page.tsx
+frontend/src/app/compliance/status/page.tsx
+frontend/src/app/compliance/status/error.tsx
+frontend/src/app/status/page.tsx
+frontend/src/app/status/StatusBoard.tsx
+frontend/src/app/docs/layout.tsx
+frontend/src/app/docs/webhooks/page.tsx
+frontend/src/app/docs/webhooks/error.tsx
+frontend/src/app/docs/webhooks/opengraph-image.tsx
+frontend/src/app/developer/portal/codegen/page.tsx
+frontend/src/app/developer/portal/codegen/error.tsx
+frontend/src/app/compliance/traceability-plan/page.tsx
+frontend/src/app/compliance/traceability-plan/error.tsx
+frontend/src/app/docs/errors/page.tsx
+frontend/src/app/docs/errors/error.tsx
+frontend/src/app/docs/errors/opengraph-image.tsx
+frontend/src/app/developer/portal/docs/page.tsx
+frontend/src/app/compliance/labels/page.tsx
+frontend/src/app/compliance/labels/error.tsx
+frontend/src/app/docs/fsma-204/page.tsx
+frontend/src/app/docs/fsma-204/error.tsx
+frontend/src/app/docs/fsma-204/opengraph-image.tsx
+frontend/src/app/docs/loading.tsx
+frontend/src/app/developer/portal/docs/webhooks/page.tsx
+frontend/src/app/developer/portal/docs/webhooks/error.tsx
+frontend/src/app/compliance/snapshots/page.tsx
+frontend/src/app/compliance/snapshots/error.tsx
+frontend/src/app/product/page.tsx
+frontend/src/app/product/opengraph-image.tsx
+frontend/src/app/docs/quickstart/page.tsx
+frontend/src/app/docs/quickstart/error.tsx
+frontend/src/app/docs/quickstart/opengraph-image.tsx
+frontend/src/app/developer/portal/docs/errors/page.tsx
+frontend/src/app/developer/portal/docs/errors/error.tsx
+frontend/src/app/developer/portal/docs/error.tsx
+frontend/src/app/requests/page.tsx
+frontend/src/app/docs/api/page.tsx
+frontend/src/app/docs/api/ApiReferenceClient.tsx
+frontend/src/app/docs/api/opengraph-image.tsx
+frontend/src/app/docs/error.tsx
+frontend/src/app/requests/layout.tsx
+frontend/src/app/requests/[id]/page.tsx
+frontend/src/app/requests/[id]/error.tsx
+frontend/src/app/requests/error.tsx
+frontend/src/app/developer/portal/docs/auth/page.tsx
+frontend/src/app/developer/portal/docs/auth/error.tsx
+frontend/src/app/tools/data-import/page.tsx
+frontend/src/app/tools/data-import/error.tsx
+frontend/src/app/blog/fda-food-traceability-requirements/page.tsx
+frontend/src/app/blog/fda-food-traceability-requirements/opengraph-image.tsx
+frontend/src/app/blog/page.tsx
+frontend/src/app/developer/portal/docs/changelog/page.tsx
+frontend/src/app/developer/portal/docs/changelog/error.tsx
+frontend/src/app/case-studies/page.tsx
+frontend/src/app/docs/walkthrough/page.tsx
+frontend/src/app/case-studies/opengraph-image.tsx
+frontend/src/app/docs/walkthrough/opengraph-image.tsx
+frontend/src/app/docs/opengraph-image.tsx
+frontend/src/app/tools/data-import/components/DataImportClient.tsx
+frontend/src/app/tools/data-import/opengraph-image.tsx
+frontend/src/app/blog/24-hour-rule/page.tsx
+frontend/src/app/blog/24-hour-rule/opengraph-image.tsx
+frontend/src/app/developer/portal/docs/sdks/page.tsx
+frontend/src/app/developer/portal/docs/sdks/error.tsx
+frontend/src/app/dashboard/qa-health/page.tsx
+frontend/src/app/dashboard/not-found.tsx
+frontend/src/app/tools/records-request-checklist/page.tsx
+frontend/src/app/tools/records-request-checklist/error.tsx
+frontend/src/app/docs/changelog/page.tsx
+frontend/src/app/docs/changelog/error.tsx
+frontend/src/app/docs/changelog/opengraph-image.tsx
+frontend/src/app/blog/fsma-204-compliance-guide/page.tsx
+frontend/src/app/blog/fsma-204-compliance-guide/opengraph-image.tsx
+frontend/src/app/developer/portal/docs/endpoints/page.tsx
+frontend/src/app/developer/portal/docs/endpoints/error.tsx
+frontend/src/app/blog/fsma-204-cte-kde-guide/page.tsx
+frontend/src/app/dashboard/notifications/page.tsx
+frontend/src/app/dashboard/notifications/loading.tsx
+frontend/src/app/dashboard/notifications/error.tsx
+frontend/src/app/blog/fsma-204-cte-kde-guide/opengraph-image.tsx
+frontend/src/app/tools/records-request-checklist/components/RecordsRequestChecklistClient.tsx
+frontend/src/app/tools/records-request-checklist/opengraph-image.tsx
+frontend/src/app/docs/sdks/page.tsx
+frontend/src/app/blog/fsma-204-traceability-lot-codes/page.tsx
+frontend/src/app/docs/sdks/error.tsx
+frontend/src/app/blog/fsma-204-traceability-lot-codes/opengraph-image.tsx
+frontend/src/app/docs/sdks/opengraph-image.tsx
+frontend/src/app/blog/food-traceability-software/page.tsx
+frontend/src/app/blog/food-traceability-software/opengraph-image.tsx
+frontend/src/app/developer/portal/usage/page.tsx
+frontend/src/app/dashboard/issues/page.tsx
+frontend/src/app/dashboard/issues/loading.tsx
+frontend/src/app/dashboard/issues/error.tsx
+frontend/src/app/developer/portal/usage/error.tsx
+frontend/src/app/tools/anomaly-simulator/page.tsx
+frontend/src/app/tools/anomaly-simulator/error.tsx
+frontend/src/app/dashboard/page.tsx
+frontend/src/app/dashboard/loading.tsx
+frontend/src/app/blog/fsma-204-compliance-checklist-2026/page.tsx
+frontend/src/app/blog/fsma-204-compliance-checklist-2026/opengraph-image.tsx
+frontend/src/app/blog/opengraph-image.tsx
+frontend/src/app/blog/regengine-vs-spreadsheets-traceability/page.tsx
+frontend/src/app/blog/regengine-vs-spreadsheets-traceability/opengraph-image.tsx
+frontend/src/app/developer/portal/playground/page.tsx
+frontend/src/app/dashboard/recall-report/page.tsx
+frontend/src/app/dashboard/recall-report/loading.tsx
+frontend/src/app/developer/portal/playground/error.tsx
+frontend/src/app/dashboard/recall-report/error.tsx
+frontend/src/app/tools/cte-mapper/page.tsx
+frontend/src/app/tools/cte-mapper/error.tsx
+frontend/src/app/dashboard/agent-reviews/page.tsx
+frontend/src/app/dashboard/agent-reviews/loading.tsx
+frontend/src/app/blog/fsma-204-mid-market-guide/page.tsx
+frontend/src/app/docs/connectors/inflow-lab/page.tsx
+frontend/src/app/blog/fsma-204-mid-market-guide/opengraph-image.tsx
+frontend/src/app/docs/connectors/inflow-lab/opengraph-image.tsx
+frontend/src/app/tools/cte-mapper/components/CTEMapperClient.tsx
+frontend/src/app/tools/cte-mapper/opengraph-image.tsx
+frontend/src/app/dashboard/receiving/page.tsx
+frontend/src/app/dashboard/receiving/loading.tsx
+frontend/src/app/dashboard/receiving/error.tsx
+frontend/src/app/dashboard/error.tsx
+frontend/src/app/dashboard/compliance/page.tsx
+frontend/src/app/dashboard/compliance/loading.tsx
+frontend/src/app/dashboard/compliance/error.tsx
+frontend/src/app/proof/page.tsx
+frontend/src/app/tools/roi-calculator/page.tsx
+frontend/src/app/tools/roi-calculator/error.tsx
+frontend/src/app/dashboard/scan/page.tsx
+frontend/src/app/dashboard/scan/loading.tsx
+frontend/src/app/dashboard/scan/error.tsx
+frontend/src/app/proof/recall-drill/page.tsx
+frontend/src/app/dashboard/recall-response/page.tsx
+frontend/src/app/dashboard/recall-response/loading.tsx
+frontend/src/app/dashboard/recall-response/error.tsx
+frontend/src/app/dashboard/layout.tsx
+frontend/src/app/docs/rate-limits/page.tsx
+frontend/src/app/docs/rate-limits/error.tsx
+frontend/src/app/docs/rate-limits/layout.tsx
+frontend/src/app/docs/rate-limits/opengraph-image.tsx
+frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx
+frontend/src/app/tools/roi-calculator/opengraph-image.tsx
+frontend/src/app/dashboard/inflow-lab/page.tsx
+frontend/src/app/dashboard/export-jobs/page.tsx
+frontend/src/app/dashboard/export-jobs/loading.tsx
+frontend/src/app/dashboard/export-jobs/error.tsx
+frontend/src/app/dashboard/team/page.tsx
+frontend/src/app/proof/transformation/page.tsx
+frontend/src/app/proof/transformation/opengraph-image.tsx
+frontend/src/app/proof/opengraph-image.tsx
+frontend/src/app/dashboard/settings/page.tsx
+frontend/src/app/dashboard/settings/loading.tsx
+frontend/src/app/dashboard/settings/error.tsx
+frontend/src/app/dashboard/products/page.tsx
+frontend/src/app/dashboard/products/loading.tsx
+frontend/src/app/dashboard/products/error.tsx
+frontend/src/app/dashboard/audit-log/page.tsx
+frontend/src/app/dashboard/audit-log/loading.tsx
+frontend/src/app/dashboard/audit-log/error.tsx
+frontend/src/app/dashboard/recall-drills/page.tsx
+frontend/src/app/dashboard/recall-drills/loading.tsx
+frontend/src/app/dashboard/recall-drills/error.tsx
+frontend/src/app/dashboard/integrations/page.tsx
+frontend/src/app/dashboard/integrations/loading.tsx
+frontend/src/app/dashboard/integrations/error.tsx
+frontend/src/app/dashboard/suppliers/page.tsx
+frontend/src/app/dashboard/suppliers/loading.tsx
+frontend/src/app/dashboard/suppliers/error.tsx
+frontend/src/app/integrations/page.tsx
+frontend/src/app/integrations/opengraph-image.tsx
+frontend/src/app/settings/notifications/page.tsx
+frontend/src/app/settings/page.tsx
+frontend/src/app/settings/loading.tsx
+frontend/src/app/settings/error.tsx
+frontend/src/app/dashboard/alerts/page.tsx
+frontend/src/app/dashboard/alerts/loading.tsx
+frontend/src/app/dashboard/alerts/error.tsx
+frontend/src/app/dashboard/heartbeat/error.tsx
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/attest/route.ts
+frontend/src/app/dashboard/heartbeat/page.tsx
+frontend/src/app/dashboard/heartbeat/loading.tsx
+frontend/src/app/settings/layout.tsx
+frontend/src/app/settings/security/page.tsx
+frontend/src/app/settings/security/error.tsx
+frontend/src/app/robots.ts
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/export/route.ts
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/refreeze/route.ts
+frontend/src/app/settings/profile/page.tsx
+frontend/src/app/settings/profile/error.tsx
+frontend/src/app/settings/support/page.tsx
+frontend/src/app/settings/support/error.tsx
+frontend/src/app/demo/layout.tsx
+frontend/src/app/demo/opengraph-image.tsx
+frontend/src/app/demo/page.tsx
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/verify/route.ts
+frontend/src/app/tools/drill-simulator/lib/record-validator.ts
+frontend/src/app/controls/page.tsx
+frontend/src/app/controls/error.tsx
+frontend/src/app/controls/layout.tsx
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/audit-pack/route.ts
+frontend/src/app/tools/scan/page.tsx
+frontend/src/app/tools/scan/error.tsx
+frontend/src/app/tools/scan/layout.tsx
+frontend/src/app/tools/scan/opengraph-image.tsx
+frontend/src/app/tools/scan/scan.module.css
+frontend/src/app/settings/users/page.tsx
+frontend/src/app/settings/users/error.tsx
+frontend/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/fda-response/route.ts
+FILE /Users/sellers/.codex/skills/playwright/SKILL.md 
+ ---
+name: "playwright"
+description: "Use when the task requires automating a real browser from the terminal (navigation, form filling, snapshots, screenshots, data extraction, UI-flow debugging) via `playwright-cli` or the bundled wrapper script."
+---
+
+
+# Playwright CLI Skill
+
+Drive a real browser from the terminal using `playwright-cli`. Prefer the bundled wrapper script so the CLI works even when it is not globally installed.
+Treat this skill as CLI-first automation. Do not pivot to `@playwright/test` unless the user explicitly asks for test files.
+
+## Prerequisite check (required)
+
+Before proposing commands, check whether `npx` is available (the wrapper depends on it):
+
+```bash
+command -v npx >/dev/null 2>&1
+```
+
+If it is not available, pause and ask the user to install Node.js/npm (which provides `npx`). Provide these steps verbatim:
+
+```bash
+# Verify Node/npm are installed
+node --version
+npm --version
+
+# If missing, install Node.js/npm, then:
+npm install -g @playwright/cli@latest
+playwright-cli --help
+```
+
+Once `npx` is present, proceed with the wrapper script. A global install of `playwright-cli` is optional.
+
+## Skill path (set once)
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export PWCLI="$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
+```
+
+User-scoped skills install under `$CODEX_HOME/skills` (default: `~/.codex/skills`).
+
+## Quick start
+
+Use the wrapper script:
+
+```bash
+"$PWCLI" open https://playwright.dev --headed
+"$PWCLI" snapshot
+"$PWCLI" click e15
+"$PWCLI" type "Playwright"
+"$PWCLI" press Enter
+"$PWCLI" screenshot
+```
+
+If the user prefers a global install, this is also valid:
+
+```bash
+npm install -g @playwright/cli@latest
+playwright-cli --help
+```
+
+## Core workflow
+
+1. Open the page.
+2. Snapshot to get stable element refs.
+3. Interact using refs from the latest snapshot.
+4. Re-snapshot after navigation or significant DOM changes.
+5. Capture artifacts (screenshot, pdf, traces) when useful.
+
+Minimal loop:
+
+```bash
+"$PWCLI" open https://example.com
+"$PWCLI" snapshot
+"$PWCLI" click e3
+"$PWCLI" snapshot
+```
+
+## When to snapshot again
+
+Snapshot again after:
+
+- navigation
+- clicking elements that change the UI substantially
+- opening/closing modals or menus
+- tab switches
+
+Refs can go stale. When a command fails due to a missing ref, snapshot again.
+
+## Recommended patterns
+
+### Form fill and submit
+
+```bash
+"$PWCLI" open https://example.com/form
+"$PWCLI" snapshot
+"$PWCLI" fill e1 "user@example.com"
+"$PWCLI" fill e2 "password123"
+"$PWCLI" click e3
+"$PWCLI" snapshot
+```
+
+### Debug a UI flow with traces
+
+```bash
+"$PWCLI" open https://example.com --headed
+"$PWCLI" tracing-start
+# ...interactions...
+"$PWCLI" tracing-stop
+```
+
+### Multi-tab work
+
+```bash
+"$PWCLI" tab-new https://example.com
+"$PWCLI" tab-list
+"$PWCLI" tab-select 0
+"$PWCLI" snapshot
+```
+
+## Wrapper script
+
+The wrapper script uses `npx --package @playwright/cli playwright-cli` so the CLI can run without a global install:
+
+```bash
+"$PWCLI" --help
+```
+
+Prefer the wrapper unless the repository already standardizes on a global install.
+
+## References
+
+Open only what you need:
+
+- CLI command reference: `references/cli.md`
+- Practical workflows and troubleshooting: `references/workflows.md`
+
+## Guardrails
+
+- Always snapshot before referencing element ids like `e12`.
+- Re-snapshot when refs seem stale.
+- Prefer explicit commands over `eval` and `run-code` unless needed.
+- When you do not have a fresh snapshot, use placeholder refs like `eX` and say why; do not bypass refs with `run-code`.
+- Use `--headed` when a visual check will help.
+- When capturing artifacts in this repo, use `output/playwright/` and avoid introducing new top-level artifact folders.
+- Default to CLI commands and workflows, not Playwright test specs.
+
+FILE /Users/sellers/.agents/skills/synced/f39d0c09-f607-4b9c-bde5-dbea41e3781a_816383df-c749-4c89-9d32-137316881240/regengine-service-runner/SKILL.md 
+ ---
+name: regengine-service-runner
+description: |
+  Use this skill for ANY local development question involving running RegEngine. This includes:
+  running, starting, or launching the app (the consolidated monolith, or legacy per-service
+  entrypoints: admin, ingestion, compliance, graph, nlp, scheduler, frontend); asking about ports,
+  uvicorn/gunicorn commands, or startup scripts; CORS or proxy errors; ModuleNotFoundError or
+  import issues; setting up dependencies like Postgres, Redis, or Neo4j; health checks;
+  docker-compose; reading logs; or diagnosing why something crashes or won't start. If the user
+  mentions a RegEngine service or module and needs to run it, configure it, debug it, or
+  understand how it works locally — use this skill.
+---
+
+# RegEngine Runner & Debug
+
+> Verified against `main` @ `a655670` (2026-07-14). RegEngine is a **consolidated FastAPI
+> monolith** (`server/main.py`) + Next.js 16 frontend. The old 6-microservice runtime described in
+> earlier versions of this skill no longer exists in production. Former service directories remain
+> as code seams; their `main.py` entrypoints are debug-only.
+
+## Running the app
+
+```bash
+# From project root — THE production-shaped way to run RegEngine locally:
+export PYTHONPATH=$(pwd):$PYTHONPATH
+uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Production-equivalent (what the container runs):
+bash scripts/run-migrations.sh && \
+gunicorn server.main:app --worker-class uvicorn.workers.UvicornWorker \
+  --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:${PORT:-8000}
+
+# Frontend:
+cd frontend && npm run dev   # port 3000, proxies backend via /api/proxy
+```
+
+Legacy per-service entrypoints (`services/<name>/main.py`) still start standalone apps for
+focused debugging, but routes/behavior can differ from the monolith mount — prefer
+`server.main:app` unless you specifically need isolation.
+
+## Environment
+
+`.env.example` at repo root documents **55** vars. Minimum for local dev:
+
+```
+DATABASE_URL=postgresql://[REDACTED]@localhost:5432/regengine
+JWT_SECRET=[REDACTED]
+SUPABASE_URL=http://localhost:54321
+SUPABASE_KEY=<local-anon-key>
+```
+
+Optional (graceful degradation — readiness never fails on these): `REDIS_URL`, `NEO4J_URI`/
+`NEO4J_USER`/`NEO4J_PASSWORD` (graph mirror; graph routers are experimental and OFF in prod),
+`OBJECT_STORAGE_ENDPOINT_URL`/`..._ACCESS_KEY_ID`/`..._SECRET_ACCESS_KEY` (S3-compatible;
+checked via `services/ingestion/app/s3_utils.is_object_storage_configured`).
+
+## Router surface (which endpoints exist)
+
+`server/main.py` mounts: always-on core (`/health`, `/readiness`, `/metrics`, status, document
+ingestion, **webhooks**, FSMA-readiness compat) + every feature router unless disabled.
+
+- `DISABLED_ROUTERS=name1,name2` — disable by name (typos are logged as warnings).
+- `_EXPERIMENTAL_ROUTERS` (auto-OFF in production unless `ENABLE_EXPERIMENTAL_ROUTERS=true`):
+  scraping, discovery, sources, sandbox, sensitech, audit, sop, export, qr_decoder, label_vision,
+  exchange, recall_simulations, graph, nlp.
+- Reference: `docs/engineering/ROUTER_SURFACE.md`.
+
+Key production-default feature routers: csv, edi, epcis_ingestion, inflow_workbench, fda_export,
+proof_verify, score, portal, billing, alerts, onboarding, recall, supplier_mgmt, audit_log,
+product_catalog, team_mgmt, settings, integration.
+
+## Health checks
+
+```bash
+curl -s localhost:8000/health | python -m json.tool      # liveness
+curl -s localhost:8000/readiness | python -m json.tool   # deep probe
+```
+
+`/readiness`: **Postgres required (503 if down)**; Redis probed but non-fatal; Neo4j probed only
+when the graph subsystem is mounted, else reported `not_probed`.
+
+## Background work
+
+In-process: `server/workers/embedded_scheduler.py` + `task_processor.py`; pg_notify-based task
+queue (no Kafka in the deployed path). Scheduler status: `/v1/scheduler/status` and
+`server/routes_scheduler_status.py`.
+
+## Docker Compose
+
+`docker-compose.dev.yml` is the checked-in dev stack. Check the file before assuming which
+dependencies it starts.
+
+## Common startup failures
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `ModuleNotFoundError: shared` / `services` | PYTHONPATH not set | `export PYTHONPATH=$(pwd):$PYTHONPATH` from repo root |
+| `ConnectionRefusedError` on 5432 | Postgres not running | start Postgres (compose or local) |
+| `/readiness` 503 | DB down or migrations missing | `bash scripts/run-migrations.sh` |
+| Router missing in prod | it's in `_EXPERIMENTAL_ROUTERS` | set `ENABLE_EXPERIMENTAL_ROUTERS=true` (non-prod) |
+| `DISABLED_ROUTERS` typo warning | name doesn't match a router | check names in `server/main.py` |
+| `address already in use` | port conflict | `lsof -i :8000` |
+
+## Middleware stack (per request)
+
+Request ID → security headers → rate limiting (`RateLimitHeadersMiddleware`) → observability
+(OpenTelemetry) → CORS → request safety. Logs are structlog JSON — pipe through `jq` to read.
+
+FILE frontend/package.json 
+ {
+  "name": "regengine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && node scripts/design-lint.mjs",
+    "design:lint": "node scripts/design-lint.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
+    "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
+  },
+  "knip": {
+    "entry": [
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
+    ]
+  },
+  "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@sentry/nextjs": "10.75.1",
+    "@supabase/ssr": "~0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@tanstack/react-query": "~5.103.2",
+    "@tanstack/react-table": "^9.2.4",
+    "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "~1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
+    "framer-motion": "~13.4.0",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "next-themes": "^0.4.6",
+    "posthog-js": "^1.434.5",
+    "qrcode": "^1.5.4",
+    "react": "~18.3.0",
+    "react-dom": "~18.3.0",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "autoprefixer": "^10.6.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "jsdom": "29.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.4"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.63.4",
+    "@rollup/rollup-linux-x64-musl": "4.63.4"
+  },
+  "overrides": {
+    "tar": ">=7.5.10",
+    "rollup": "4.59.0",
+    "esbuild": "0.27.3",
+    "fast-uri": "^3.1.5",
+    "minimatch": ">=3.1.3",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "7.0.3",
+    "workbox-build": {
+      "rollup": "2.79.2"
+    },
+    "yauzl": ">=2.10.1",
+    "next": {
+      "sharp": ">=0.35.0"
+    },
+    "brace-expansion": "^5.0.9"
+  }
+}
+
+FILE frontend/playwright.config.ts 
+ 
+import { defineConfig, devices } from '@playwright/test';
+
+if (process.env.FORCE_COLOR) {
+    delete process.env.NO_COLOR;
+}
+
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const localBaseURL = 'http://localhost:3001';
+const localJwtSigningKey =
+    process.env.JWT_SIGNING_KEY ||
+    process.env.AUTH_SECRET_KEY ||
+    'playwright-local-jwt-signing-key-2026';
+const localOtpHmacSecret =
+    [REDACTED] ||
+    'playwright-local-otp-hmac-secret-2026-minimum-32-bytes';
+const localTestUserEmail = process.env.TEST_USER_EMAIL || 'playwright-e2e@example.com';
+const localTestPassword = [REDACTED] || 'Trace204!Playwright1';
+const localTestAdminEmail =
+    process.env.TEST_ADMIN_EMAIL || 'playwright-sysadmin@example.com';
+const localTestAdminPassword =
+    [REDACTED] || 'Trace204!Playwright1';
+const localBackendBaseURL = 'http://localhost:8000';
+const localEmailOutboxPath =
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
+    '/tmp/regengine-playwright-email-outbox.jsonl';
+const localSharedDatabaseUrl =
+    process.env.DATABASE_URL || 'postgresql://[REDACTED]@127.0.0.1:5432/playwright_shared'; // pragma: allowlist secret — local test service
+const localAdminDatabaseUrl =
+    process.env.ADMIN_FALLBACK_SQLITE || 'sqlite:////tmp/regengine-playwright-admin.db';
+const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
+
+if (!externalBaseURL) {
+    process.env.REGENGINE_ENV = process.env.REGENGINE_ENV || 'development';
+    process.env.JWT_SIGNING_KEY = localJwtSigningKey;
+    process.env.AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY || localJwtSigningKey;
+    process.env.AUTH_OTP_HMAC_SECRET = [REDACTED];
+    process.env.CSRF_SECRET = [REDACTED] || localJwtSigningKey;
+    process.env.TEST_USER_EMAIL = localTestUserEmail;
+    process.env.TEST_PASSWORD = [REDACTED];
+    process.env.TEST_ADMIN_EMAIL = localTestAdminEmail;
+    process.env.TEST_ADMIN_PASSWORD = [REDACTED];
+    // Playwright local mode owns the backend webServer. Ignore externally
+    // provided service URLs so CI cannot accidentally mutate production.
+    process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
+    process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
+    process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
+    process.env.ENABLE_DB_API_KEYS = 'true';
+    process.env.REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379/0';
+    process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
+    process.env.DATABASE_URL = localSharedDatabaseUrl;
+    process.env.ADMIN_FALLBACK_SQLITE = localAdminDatabaseUrl;
+    process.env.WEBAUTHN_EXPECTED_ORIGIN =
+        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL;
+    process.env.WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+    process.env.DISABLE_TASK_WORKER = process.env.DISABLE_TASK_WORKER || 'true';
+    process.env.ALLOW_INMEMORY_SESSION_STORE =
+        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true';
+    // Every seeded passwordless user shares one org/tenant (one organization
+    // per email domain), so the suites' combined traffic exceeds the 100/min
+    // per-tenant production default.
+    process.env.TENANT_RATE_LIMIT_RPM = process.env.TENANT_RATE_LIMIT_RPM || '100000';
+    process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
+        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
+}
+
+const forwardedEnv = { ...process.env };
+delete forwardedEnv.NO_COLOR;
+
+/**
+ * See https://playwright.dev/docs/test-configuration.
+ */
+export default defineConfig({
+    testDir: './tests/e2e',
+    globalSetup: './tests/e2e/global-setup.ts',
+    /* The local webServer runs `next dev`, which compiles each route on
+     * first hit. A cold compile of a heavy page (dashboard, settings) can
+     * exceed Playwright's default 30s test / 5s expect timeouts on a slow
+     * runner, flaking auth-flow on unrelated PRs. Assertions still have to
+     * genuinely pass — this only stops first-render latency from failing
+     * the gate. */
+    timeout: 120_000,
+    expect: { timeout: 15_000 },
+    /* Run tests in files in parallel */
+    fullyParallel: true,
+    /* Fail the build on CI if you accidentally left test.only in the source code. */
+    forbidOnly: !!process.env.CI,
+    /* Retry on CI only — retries=1 handles genuine flakiness; backend-down failures
+     * are caught by the preflight health check before tests run, not by retrying. */
+    retries: process.env.CI ? 1 : 0,
+    /* 2 workers in CI — tests are independent, parallelism halves total run time. */
+    workers: process.env.CI ? 1 : externalBaseURL ? undefined : 1,
+    /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+    reporter: 'html',
+    /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+    use: {
+        /* Base URL — localhost is a secure context in Chromium, so Secure
+         * __Host-regengine_session cookies are accepted without local HTTPS.
+         * Override with PLAYWRIGHT_BASE_URL for staging/prod runs. */
+        baseURL: externalBaseURL || localBaseURL,
+
+        /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+        trace: 'on-first-retry',
+    },
+
+    /* Start the Next.js dev server before running tests in CI.
+     * env: explicitly forward secrets so the Next.js middleware can verify
+     * JWTs signed by the Railway admin service. Without this, the child
+     * process may not inherit CI env vars and every authenticated route
+     * redirects to /login?error=session_expired. */
+    webServer: externalBaseURL
+        ? undefined
+        : [
+            {
+                command: 'env -u NO_COLOR bash ../scripts/start-e2e-backend.sh',
+                url: localAdminHealthUrl,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    PORT: '8000',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
+                    REGENGINE_E2E_EMAIL_OUTBOX:
+                        process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
+                    DATABASE_URL: process.env.DATABASE_URL || localSharedDatabaseUrl,
+                    ADMIN_FALLBACK_SQLITE:
+                        process.env.ADMIN_FALLBACK_SQLITE || localAdminDatabaseUrl,
+                    WEBAUTHN_EXPECTED_ORIGIN:
+                        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL,
+                    WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || 'localhost',
+                    DISABLE_TASK_WORKER: process.env.DISABLE_TASK_WORKER || 'true',
+                    ALLOW_INMEMORY_SESSION_STORE:
+                        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true',
+                    INVITE_BASE_URL: process.env.INVITE_BASE_URL || localBaseURL,
+                },
+            },
+            {
+                command: 'env -u NO_COLOR npm run dev -- -p 3001',
+                url: localBaseURL,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    // Ensure JWT keys reach the dev server for middleware verification.
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    CSRF_SECRET: [REDACTED] || localJwtSigningKey,
+                    TEST_USER_EMAIL: process.env.TEST_USER_EMAIL || localTestUserEmail,
+                    TEST_PASSWORD: [REDACTED] || localTestPassword,
+                    TEST_ADMIN_EMAIL: process.env.TEST_ADMIN_EMAIL || localTestAdminEmail,
+                    TEST_ADMIN_PASSWORD:
+                        [REDACTED] || localTestAdminPassword,
+                    ADMIN_SERVICE_URL: localBackendBaseURL,
+                    INGESTION_SERVICE_URL: localBackendBaseURL,
+                    COMPLIANCE_SERVICE_URL: localBackendBaseURL,
+                    // Supabase config: intentionally omitted for JWT-only E2E mode.
+                    NEXT_PUBLIC_SUPABASE_URL: '',
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
+                    NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES:
+                        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true',
+                },
+            },
+        ],
+
+    /* Configure projects for major browsers */
+    projects: [
+        {
+            name: 'chromium',
+            use: { ...devices['Desktop Chrome'] },
+        },
+    ],
+});
+
+FILE frontend/src/app/page.tsx 
+ import Link from "next/link";
+import type { Metadata } from "next";
+import {
+  ArrowRight,
+  Boxes,
+  CheckCircle2,
+  ClipboardCheck,
+  Database,
+  FileCheck2,
+  Gauge,
+  GitBranch,
+  PackageCheck,
+  ScanLine,
+  ShieldCheck,
+} from "lucide-react";
+import {
+  CommitGate,
+  ComplianceStateBadge,
+  EvidenceCard,
+  EvidencePackagePreview,
+  HashVerificationStrip,
+} from "@/components/compliance";
+import { sandboxCta } from "@/lib/sandbox-cta";
+import { Container } from "@/components/layout/container";
+import { Section } from "@/components/layout/section";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
+
+export const metadata: Metadata = {
+  title: "RegEngine — FSMA 204 traceability evidence layer",
+  description:
+    "Ingest CTE/KDE records, check coverage and completeness, commit append-only after checks you configure, export FDA-oriented and buyer-oriented spreadsheets. Early-stage. Design-partner. Pre-revenue. Not an FDA endorsement.",
+  openGraph: {
+    title: "RegEngine — FSMA 204 traceability evidence layer",
+    description:
+      "Ingest CTE/KDE records, check coverage and completeness, commit append-only after checks you configure, export FDA-oriented and buyer-oriented spreadsheets.",
+    url: "https://regengine.co",
+    type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 traceability evidence layer" }],
+  },
+};
+
+const demoMetrics = [
+  { label: "FTL list overlap", value: "91%", sublabel: "Example", state: "needs-correction" as const },
+  { label: "KDE completeness", value: "84%", sublabel: "Gaps flagged", state: "needs-correction" as const },
+  { label: "Export checklist", value: "72%", sublabel: "Items open", state: "blocked" as const },
+];
+
+const supplierChecklistExamples = [
+  {
+    supplier: "FreshPack Central",
+    issue: "Ship-to location missing for 3 lots",
+    state: "blocked" as const,
+  },
+  {
+    supplier: "Valley Farms",
+    issue: "Harvest date and quantity validated",
+    state: "committed" as const,
+  },
+  {
+    supplier: "Cold Dock 7",
+    issue: "Temperature note requires review",
+    state: "needs-correction" as const,
+  },
+];
+
+const evidenceCards = [
+  {
+    title: "Ingest workspace",
+    description: "CTE/KDE records arrive through webhooks, CSV, EPCIS, or EDI and enter the inflow workbench for coverage checking.",
+    state: "needs-correction" as const,
+    meta: "Inflow workbench",
+    icon: Gauge,
+  },
+  {
+    title: "Commit ledger",
+    description: "After checks you configure, accepted records enter the append-only evidence ledger with provenance and workspace scope.",
+    state: "committed" as const,
+    meta: "Evidence ledger",
+    icon: GitBranch,
+  },
+  {
+    title: "Export package state",
+    description: "Drafted, blocked on checklist, or exported. §1.1455 is the FDA records-request rule. This card does not claim we meet that clock.",
+    state: "needs-correction" as const,
+    meta: "Package state",
+    icon: PackageCheck,
+  },
+];
+
+const workflow = [
+  { label: "Ingest", detail: "Webhooks, CSV, EPCIS, or EDI files enter the workbench.", icon: ScanLine },
+  { label: "Check", detail: "CTE/KDE coverage and completeness are flagged in the inflow workbench.", icon: Database },
+  { label: "Fix", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
+  { label: "Commit", detail: "Commit is our append-only step. After the checks you configure, accepted records enter the evidence ledger. Commit is not a certification, not an FDA gate, and not a retailer gate.", icon: ShieldCheck },
+  { label: "Export", detail: "FDA-oriented, buyer-oriented, or internal packets with a hash manifest where enabled.", icon: PackageCheck },
+];
+
+const destinations = [
+  { label: "Product", href: "/product", icon: Database, note: "Command Center workflows" },
+  { label: "Tools", href: "/tools", icon: Gauge, note: "Compliance instruments" },
+  { label: "Security", href: "/security", icon: FileCheck2, note: "Evidence Ledger controls" },
+  { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Verification posture" },
+];
+
+function MetricRail() {
+  return (
+    <div className="mt-8">
+      <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
+        Synthetic demo · example numbers · not a customer workspace
+      </p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {demoMetrics.map((metric) => (
+          <StatTile
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            status={<ComplianceStateBadge state={metric.state} />}
+          >
+            <p className="text-small text-re-text-tertiary">{metric.sublabel}</p>
+          </StatTile>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChecklistRadar() {
+  return (
+    <Card padding="compact">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-label uppercase text-re-text-muted">Demo workspace · synthetic data · 3 open checklist items</p>
+          <h2 className="mt-2 text-heading text-re-text-primary">What the export checklist still flags</h2>
+        </div>
+        <Boxes className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+      </div>
+      <div className="mt-4 grid gap-3">
+        {supplierChecklistExamples.map((item) => (
+          <Card key={item.supplier} variant="inset" padding="compact">
+            <article className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-subheading text-re-text-primary">{item.supplier}</h3>
+                  <ComplianceStateBadge state={item.state} />
+                </div>
+                <p className="mt-2 text-ui text-re-text-secondary">{item.issue}</p>
+              </div>
+            </article>
+          </Card>
+        ))}
+      </div>
+      <div className="mt-4 border-t border-re-border-subtle pt-3">
+        <p className="text-small text-re-text-tertiary">
+          Export checklist (advisory) — checks configured in the workspace, not FDA certification, not retailer approval.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+function CommandCenterPreview() {
+  return (
+    <div className="rounded-lg border border-re-border bg-re-surface-inset p-3">
+      <div className="mb-3 flex justify-end">
+        <span className="font-mono text-label uppercase text-re-text-muted">
+          Demo workspace
+        </span>
+      </div>
+      <ChecklistRadar />
+      <div className="mt-3 grid gap-3">
+        <CommitGate
+          status="blocked"
+          title="Export checklist (advisory)"
+          description="The export package can build after missing ship-to locations are corrected and revalidated. Checklist is advisory; passing it is not FDA certification or retailer approval."
+          criteria={[
+            { label: "Workspace identity resolved", passed: true },
+            { label: "CTE/KDE coverage above threshold", passed: true },
+            { label: "Supplier gaps cleared", passed: false, detail: "FreshPack Central has 3 unresolved shipping lots." },
+          ]}
+        />
+        <HashVerificationStrip
+          hash="sample-demo-chain-hash-example"
+          verifiedAt="example/synthetic"
+          state="committed"
+        />
+      </div>
+    </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <div className="re-compliance-os min-h-screen">
+      <Container as="section" width="marketing" className="grid items-start gap-10 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:py-16">
+        <div>
+          <p className="mb-4 font-mono text-label uppercase text-re-text-muted">
+            FSMA 204 evidence layer · design-partner · pre-revenue
+          </p>
+          <h1 className="max-w-[720px] font-display text-display text-re-text-primary">
+            FSMA 204 traceability evidence layer.
+          </h1>
+          <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
+            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
+          </p>
+          <Callout tone="neutral" className="mt-6 max-w-[68ch]">
+            <p>
+              The federal compliance date for the Food Traceability Rule is <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. That is the FDA date. Buyer programs are separate and must be confirmed with your buyer.
+            </p>
+          </Callout>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild size="lg">
+              <Link href="/verify">
+                Verify a sample export
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/contact">Book a 30-min call</Link>
+            </Button>
+          </div>
+          <MetricRail />
+        </div>
+
+        <CommandCenterPreview />
+      </Container>
+
+      <section className="border-y border-re-border-subtle">
+        <Container width="marketing">
+          <ol className="grid md:grid-cols-5">
+            {workflow.map((step, index) => (
+              <li key={step.label} className="border-b border-re-border-subtle py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0 md:last:pr-0">
+                <div className="flex items-center justify-between gap-3">
+                  <step.icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                  <span className="font-mono text-label tabular-nums text-re-text-muted">{String(index + 1).padStart(2, "0")}</span>
+                </div>
+                <h2 className="mt-5 text-heading text-re-text-primary">{step.label}</h2>
+                <p className="mt-2 text-ui text-re-text-secondary">{step.detail}</p>
+              </li>
+            ))}
+          </ol>
+        </Container>
+      </section>
+
+      <Section width="marketing" flush>
+        <div className="grid gap-10 lg:grid-cols-[0.72fr_1fr]">
+          <div>
+            <h2 className="max-w-[20ch] font-display text-heading-lg text-re-text-primary">
+              Make every compliance object show its state.
+            </h2>
+            <p className="mt-5 max-w-[68ch] text-body text-re-text-secondary">
+              Teams can see blocked, needs correction, corrected, committed, or exported. These statuses do not establish readiness for a recall, a retailer, or an FDA request.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {evidenceCards.map((card) => (
+              <EvidenceCard key={card.title} {...card}>
+                <p className="text-small text-re-text-tertiary">Object state drives badge, border, copy, and next action.</p>
+              </EvidenceCard>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      <Section width="marketing" tone="inset">
+        <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
+          <div className="grid gap-4">
+            <EvidencePackagePreview
+              packageId="RE-DEMO-PKG-0427"
+              status="building"
+              records={1284}
+              kdeCoverage={94}
+              generatedAt="example/synthetic"
+              items={["Facility scope manifest", "Committed CTE/KDE records", "Supplier correction log", "Hash verification strip"]}
+            />
+            <HashVerificationStrip
+              hash="demo-example-chain-hash-synthetic"
+              verifiedAt="example/synthetic"
+              state="signed"
+            />
+          </div>
+          <div>
+            <Card padding="compact">
+              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
+                What this is not
+              </p>
+              <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
+                <li>Not FDA endorsement</li>
+                <li>Not a claim we meet §1.1455 24-hour request</li>
+                <li>Not retailer-readiness score</li>
+                <li>Not a commit-gate that certifies</li>
+                <li>Not a 24-hour Recall Clock product</li>
+                <li>Not live customer metrics</li>
+                <li>Not legal advice</li>
+              </ul>
+            </Card>
+            <div className="mt-5">
+              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
+                Sample data · illustrative · synthetic
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  ["Records with full provenance", "1,184"],
+                  ["Open supplier blockers", "3"],
+                  ["Facilities scoped", "12/14"],
+                ].map(([label, value]) => (
+                  <StatTile key={label} label={label} value={value} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section id="sandbox" width="marketing">
+        <h2 className="font-display text-heading-lg text-re-text-primary">
+          Walk the synthetic workspace
+        </h2>
+        <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
+          {sandboxCta().blurb}
+        </p>
+        <div className="mt-6">
+          <Button asChild size="lg">
+            <Link href={sandboxCta().href}>
+              {sandboxCta().label}
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+      </Section>
+
+      <Section width="marketing" className="pb-20 sm:pb-24">
+        <div className="grid gap-5 md:grid-cols-4">
+          {destinations.map(({ label, href, icon: Icon, note }) => (
+            <Link key={label} href={href} className="group border-t border-re-border-strong pt-4 no-underline">
+              <div className="flex items-center justify-between">
+                <Icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <ArrowRight className="h-4 w-4 text-re-text-tertiary transition-transform duration-120 group-hover:translate-x-1 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden="true" />
+              </div>
+              <span className="mt-10 block text-heading text-re-text-primary">{label}</span>
+              <span className="mt-2 block text-ui text-re-text-secondary">{note}</span>
+            </Link>
+          ))}
+        </div>
+      </Section>
+
+      <footer className="border-t border-re-border-subtle py-8">
+        <Container width="marketing">
+          <p className="text-ui text-re-text-secondary">
+            RegEngine · Pasadena, CA · early-stage · design-partner · pre-revenue
+          </p>
+          <p className="mt-2 text-small text-re-text-muted">
+            FDA date July 20, 2028. Buyer programs are not FDA. No seals, certifications, or FDA logo.
+          </p>
+        </Container>
+      </footer>
+    </div>
+  );
+}
+
+FILE frontend/src/app/layout.tsx 
+ import { Providers } from '@/lib/providers'
+import './globals.css'
+import { MarketingHeader } from '@/components/layout/marketing-header'
+import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
+import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
+import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
+import { StepUpModal } from '@/components/auth/StepUpModal'
+import { JSONLD } from '@/components/seo/json-ld'
+import type { Metadata, Viewport } from 'next'
+import { headers } from 'next/headers'
+
+// Analytics are mounted by CookieBanner only after the user accepts consent (#552).
+const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+}
+
+export const metadata: Metadata = {
+  metadataBase: new URL('https://regengine.co'),
+  title: 'RegEngine — Food Traceability That Protects Your Brand',
+  description: 'Supply chain traceability infrastructure for food companies. Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements, and build the visibility your brand depends on.',
+  icons: {
+    icon: '/icon.png',
+    apple: '/icon.png',
+  },
+  alternates: {
+    canonical: './',
+  },
+  openGraph: {
+    title: 'RegEngine — Food Traceability That Protects Your Brand',
+    description: 'FSMA 204 Food Traceability Compliance',
+    siteName: 'RegEngine',
+    // Relative, like alternates.canonical above: pages that do not declare
+    // their own openGraph inherit this block, and an absolute root URL made
+    // every one of them claim og:url = the homepage.
+    url: './',
+    type: 'website',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'RegEngine FSMA 204 traceability compliance' }],
+  },
+}
+
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
+  return (
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+        {/* PWA manifest (#568) */}
+        <link rel="manifest" href="/manifest.json" />
+        {/* OpenDyslexic font is lazy-loaded by AccessibilityWidget when needed */}
+        {/* nonce attr required for enforced CSP (unsafe-inline removed, #543) */}
+
+        {/* Organization schema */}
+        <JSONLD
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            name: 'RegEngine',
+            url: 'https://regengine.co',
+            logo: 'https://regengine.co/icon.png',
+            description: 'FSMA 204 food traceability platform. Ingest supplier data, verify chain of custody, and export review-ready records.',
+            sameAs: [],
+          }}
+        />
+
+        {/* WebSite schema */}
+        <JSONLD
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: 'RegEngine',
+            url: 'https://regengine.co',
+          }}
+        />
+
+        {/* BreadcrumbList schema (#568) — top-level site sections */}
+        <JSONLD
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://regengine.co' },
+              { '@type': 'ListItem', position: 2, name: 'Pricing', item: 'https://regengine.co/pricing' },
+              { '@type': 'ListItem', position: 3, name: 'Product', item: 'https://regengine.co/product' },
+              { '@type': 'ListItem', position: 4, name: 'Docs', item: 'https://regengine.co/docs' },
+              { '@type': 'ListItem', position: 5, name: 'FSMA 204 Guide', item: 'https://regengine.co/fsma-204' },
+              { '@type': 'ListItem', position: 6, name: 'About', item: 'https://regengine.co/about' },
+              { '@type': 'ListItem', position: 7, name: 'Free Tools', item: 'https://regengine.co/tools' },
+            ],
+          }}
+        />
+
+        {/* Product schema (#568) */}
+        <JSONLD
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            name: 'RegEngine FSMA 204 Compliance Platform',
+            description: 'FSMA 204 food traceability software. Ingest supplier data, hash-chain records, and produce FDA-oriented sortable exports where configured data supports the request. Your operation remains responsible for compliance.',
+            url: 'https://regengine.co',
+            brand: {
+              '@type': 'Brand',
+              name: 'RegEngine',
+            },
+            offers: {
+              '@type': 'AggregateOffer',
+              priceCurrency: 'USD',
+              lowPrice: '425',
+              highPrice: '1499',
+              offerCount: 3,
+              offers: [
+                { '@type': 'Offer', name: 'Base Plan', price: '425', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
+                { '@type': 'Offer', name: 'Standard Plan', price: '549', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
+                { '@type': 'Offer', name: 'Premium Plan', price: '639', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
+              ],
+            },
+          }}
+        />
+      </head>
+      <body
+        className="min-h-screen flex flex-col bg-background text-foreground re-page"
+        suppressHydrationWarning
+      >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-[var(--re-brand)] focus:text-[var(--re-surface-base)] focus:text-sm focus:font-semibold focus:outline-none"
+        >
+          Skip to content
+        </a>
+        <Providers nonce={nonce}>
+          <MarketingHeader />
+          <main id="main-content" aria-label="Page content" className="flex-grow re-app-surface">
+            {children}
+          </main>
+          <AuthAwareFooter />
+          <StepUpModal />
+        </Providers>
+        <AccessibilityWidget />
+        <CookieBanner enableAnalytics={enableVercelAnalytics} />
+      </body>
+    </html>
+  )
+}
+
+env_file_names ['.env.test.example', '.env.example']
+nextdocs [PosixPath('frontend/node_modules/next/dist/docs/02-pages/01-getting-started'), PosixPath('frontend/node_modules/next/dist/docs/01-app/01-getting-started')]

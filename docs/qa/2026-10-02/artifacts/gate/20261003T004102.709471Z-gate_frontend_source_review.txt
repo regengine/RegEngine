@@ -1,0 +1,210 @@
+UTC: 2026-10-03T00:41:02.709471+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("frontend/src/lib/gs1-parser.ts"); print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1))); print("CONFIG CAMERA"); q=Path("frontend/next.config.js"); print("\n".join(f"{i}: {line}" for i,line in enumerate(q.read_text().splitlines(),1) if "camera" in line or "Permissions-Policy" in line))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+1: /**
+2:  * GS1-128 Barcode Parser
+3:  *
+4:  * Extracts Application Identifiers (AIs) from a raw GS1 barcode string.
+5:  * Common AIs:
+6:  * (01) - GTIN (14 digits)
+7:  * (10) - Batch/Lot Number (Variable length, up to 20 chars)
+8:  * (13) - Packaging date (YYMMDD)
+9:  * (17) - Expiration date (YYMMDD)
+10:  * (21) - Serial number (Variable length, up to 20 chars)
+11:  */
+12: 
+13: export interface GS1ParsedData {
+14:     gtin?: string;
+15:     tlc?: string;
+16:     serial?: string;
+17:     packDate?: string;
+18:     expiryDate?: string;
+19:     sourceFormat?: 'gs1_ai' | 'digital_link' | 'unknown';
+20:     isValidGTIN?: boolean;
+21:     raw: string;
+22: }
+23: 
+24: const GROUP_SEPARATOR = String.fromCharCode(29);
+25: const AI_FIXED_LENGTH: Record<string, number> = {
+26:     '01': 14,
+27:     '13': 6,
+28:     '17': 6,
+29: };
+30: const AI_VARIABLE = new Set(['10', '21']);
+31: const AI_SUPPORTED = new Set([
+32:     ...Object.keys(AI_FIXED_LENGTH),
+33:     ...Array.from(AI_VARIABLE),
+34: ]);
+35: 
+36: function normalizeInput(raw: string): string {
+37:     return raw
+38:         .trim()
+39:         .replace(/\s+/g, '')
+40:         .replace(/[()]/g, '')
+41:         .replace(/\u00f1/gi, GROUP_SEPARATOR); // scanner FNC1 surrogate
+42: }
+43: 
+44: function parseYYMMDD(value?: string): string | undefined {
+45:     if (!value || !/^\d{6}$/.test(value)) return undefined;
+46: 
+47:     const year = 2000 + Number(value.slice(0, 2));
+48:     const month = Number(value.slice(2, 4));
+49:     const day = Number(value.slice(4, 6));
+50:     if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+51: 
+52:     const date = new Date(Date.UTC(year, month - 1, day));
+53:     if (
+54:         date.getUTCFullYear() !== year ||
+55:         date.getUTCMonth() !== month - 1 ||
+56:         date.getUTCDate() !== day
+57:     ) {
+58:         return undefined;
+59:     }
+60: 
+61:     const mm = String(month).padStart(2, '0');
+62:     const dd = String(day).padStart(2, '0');
+63:     return `${year}-${mm}-${dd}`;
+64: }
+65: 
+66: function maybeKnownAiAt(input: string, index: number): boolean {
+67:     const ai = input.slice(index, index + 2);
+68:     if (!AI_SUPPORTED.has(ai)) return false;
+69:     if (ai in AI_FIXED_LENGTH) {
+70:         return index + 2 + AI_FIXED_LENGTH[ai] <= input.length;
+71:     }
+72:     return index + 2 <= input.length;
+73: }
+74: 
+75: function findNextFieldBoundary(input: string, from: number): number {
+76:     for (let i = from; i < input.length; i += 1) {
+77:         if (input[i] === GROUP_SEPARATOR) return i;
+78:         if (maybeKnownAiAt(input, i)) return i;
+79:     }
+80:     return input.length;
+81: }
+82: 
+83: function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
+84:     const trimmed = raw.trim();
+85:     if (!trimmed) return null;
+86: 
+87:     let path = '';
+88:     if (/^https?:\/\//i.test(trimmed)) {
+89:         try {
+90:             const parsed = new URL(trimmed);
+91:             path = parsed.pathname;
+92:         } catch {
+93:             return null;
+94:         }
+95:     } else if (trimmed.startsWith('/')) {
+96:         path = trimmed.split('?')[0].split('#')[0];
+97:     } else {
+98:         return null;
+99:     }
+100: 
+101:     const segments = path.split('/').filter(Boolean);
+102:     if (!segments.includes('01')) return null;
+103: 
+104:     const fields: Partial<GS1ParsedData> = {};
+105:     for (let i = 0; i < segments.length - 1; i += 1) {
+106:         const ai = segments[i];
+107:         const value = decodeURIComponent(segments[i + 1]);
+108:         if (!value) continue;
+109: 
+110:         if (ai === '01' && !fields.gtin) fields.gtin = value;
+111:         if (ai === '10' && !fields.tlc) fields.tlc = value;
+112:         if (ai === '21' && !fields.serial) fields.serial = value;
+113:         if (ai === '13' && !fields.packDate) fields.packDate = parseYYMMDD(value);
+114:         if (ai === '17' && !fields.expiryDate) fields.expiryDate = parseYYMMDD(value);
+115:     }
+116: 
+117:     if (!fields.gtin && !fields.tlc && !fields.serial) return null;
+118: 
+119:     fields.sourceFormat = 'digital_link';
+120:     return fields;
+121: }
+122: 
+123: export function isValidGTINCheckDigit(gtin: string): boolean {
+124:     if (!/^\d{14}$/.test(gtin)) return false;
+125: 
+126:     const digits = gtin.split('').map((digit) => Number(digit));
+127:     const checkDigit = digits[13];
+128: 
+129:     let sum = 0;
+130:     let weight = 3;
+131:     for (let i = 12; i >= 0; i -= 1) {
+132:         sum += digits[i] * weight;
+133:         weight = weight === 3 ? 1 : 3;
+134:     }
+135: 
+136:     const expectedCheckDigit = (10 - (sum % 10)) % 10;
+137:     return expectedCheckDigit === checkDigit;
+138: }
+139: 
+140: export function parseGS1(raw: string): GS1ParsedData {
+141:     const data: GS1ParsedData = {
+142:         raw,
+143:         sourceFormat: 'unknown',
+144:     };
+145: 
+146:     const digitalLinkData = parseDigitalLink(raw);
+147:     if (digitalLinkData) {
+148:         Object.assign(data, digitalLinkData);
+149:     } else {
+150:         const working = normalizeInput(raw);
+151:         let index = 0;
+152:         data.sourceFormat = 'gs1_ai';
+153: 
+154:         while (index < working.length) {
+155:             if (working[index] === GROUP_SEPARATOR) {
+156:                 index += 1;
+157:                 continue;
+158:             }
+159: 
+160:             const ai = working.slice(index, index + 2);
+161:             if (!AI_SUPPORTED.has(ai)) {
+162:                 index += 1;
+163:                 continue;
+164:             }
+165: 
+166:             if (ai in AI_FIXED_LENGTH) {
+167:                 const length = AI_FIXED_LENGTH[ai];
+168:                 const value = working.slice(index + 2, index + 2 + length);
+169:                 if (value.length === length) {
+170:                     if (ai === '01' && !data.gtin) data.gtin = value;
+171:                     if (ai === '13' && !data.packDate) data.packDate = parseYYMMDD(value);
+172:                     if (ai === '17' && !data.expiryDate) data.expiryDate = parseYYMMDD(value);
+173:                 }
+174:                 index += 2 + length;
+175:                 continue;
+176:             }
+177: 
+178:             const start = index + 2;
+179:             const end = findNextFieldBoundary(working, start);
+180:             const value = working.slice(start, end);
+181:             if (value) {
+182:                 if (ai === '10' && !data.tlc) data.tlc = value;
+183:                 if (ai === '21' && !data.serial) data.serial = value;
+184:             }
+185:             index = end;
+186:         }
+187:     }
+188: 
+189:     if (data.gtin) {
+190:         data.isValidGTIN = isValidGTINCheckDigit(data.gtin);
+191:     }
+192: 
+193:     return data;
+194: }
+195: 
+196: /**
+197:  * Validates if the capture looks like a valid FSMA-relevant barcode
+198:  */
+199: export function isFSMACompatible(data: GS1ParsedData): boolean {
+200:     return !!(data.tlc || (data.gtin && data.isValidGTIN !== false));
+201: }
+CONFIG CAMERA
+52:                     { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },

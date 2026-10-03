@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:39:12.837095+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node -e 'const fs=require("fs"),ts=require("./frontend/node_modules/typescript");const source="frontend/src/lib/gs1-parser.ts",m={exports:{}};new Function("exports","require","module",ts.transpileModule(fs.readFileSync(source,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(m.exports,require,m);const cases=["010950600013435210LOT-10-ABC\x1d17260930","010950600013435210LOT-21-ABC\x1d17260930","010950600013435210LOT-17260930\x1d17260930","/01/09506000134352/10/%","/01/09506000134352/10/%ZZ","/01/09506000134352/10/%E0%A4"];for(const input of cases){try{console.log(JSON.stringify({input,result:m.exports.parseGS1(input)}))}catch(e){console.log(JSON.stringify({input,error:e.name,message:e.message}))}}'
+Exit: 0
+Duration: 0.15s
+Timeout: False
+
+{"input":"010950600013435210LOT-10-ABC\u001d17260930","result":{"raw":"010950600013435210LOT-10-ABC\u001d17260930","sourceFormat":"gs1_ai","gtin":"09506000134352","tlc":"LOT-","expiryDate":"2026-09-30","isValidGTIN":true}}
+{"input":"010950600013435210LOT-21-ABC\u001d17260930","result":{"raw":"010950600013435210LOT-21-ABC\u001d17260930","sourceFormat":"gs1_ai","gtin":"09506000134352","tlc":"LOT-","serial":"-ABC","expiryDate":"2026-09-30","isValidGTIN":true}}
+{"input":"010950600013435210LOT-17260930\u001d17260930","result":{"raw":"010950600013435210LOT-17260930\u001d17260930","sourceFormat":"gs1_ai","gtin":"09506000134352","tlc":"LOT-","expiryDate":"2026-09-30","isValidGTIN":true}}
+{"input":"/01/09506000134352/10/%","error":"URIError","message":"URI malformed"}
+{"input":"/01/09506000134352/10/%ZZ","error":"URIError","message":"URI malformed"}
+{"input":"/01/09506000134352/10/%E0%A4","error":"URIError","message":"URI malformed"}

@@ -1,0 +1,44 @@
+UTC: 2026-10-03T00:37:56.213004+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re,subprocess; p=Path("docs/qa/2026-10-02/artifacts/frontend/20261003T003655.183624Z-frontend-baseline-coverage.txt"); print("\n".join(s for s in p.read_text().splitlines() if re.search(r"Test Files|Tests |All files|Start at|Duration",s))); print("STATUS",subprocess.check_output(["git","status","--short"],text=True)); print("VERSIONS"); [subprocess.run(c) for c in [["node","--version"],["npm","--version"]]]; print("CI VERSIONS",subprocess.check_output(["rg","-n","node-version|npm ci|npm run",".github/workflows/frontend-ci.yml"],text=True))'
+Exit: 0
+Duration: 0.16s
+Timeout: False
+
+v26.7.0
+11.19.0
+Duration: 22.43s
+[2m Test Files [22m [1m[32m136 passed[39m[22m[90m (136)[39m
+[2m      Tests [22m [1m[32m1027 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (1029)[39m
+[2m   Start at [22m 17:36:58
+[2m   Duration [22m 19.03s[2m (transform 8.41s, setup 32.58s, import 26.95s, tests 36.39s, environment 107.24s)[22m
+All files          |   67.68 |    60.12 |   59.99 |   69.96 |                   
+STATUS  M frontend/next-env.d.ts
+?? docs/qa/2026-10-02/
+
+VERSIONS
+CI VERSIONS 84:          node-version-file: .nvmrc
+91:          npm ci
+96:          npm run promise:audit
+112:          node-version-file: .nvmrc
+119:          npm ci
+131:          npm run build
+156:          node-version-file: .nvmrc
+163:          npm ci
+173:          npm run lint
+189:          node-version-file: .nvmrc
+196:          npm ci
+205:          npm run test:coverage
+218:          node-version-file: .nvmrc
+225:          npm ci
+230:          npm run test:run -- \
+246:          node-version-file: .nvmrc
+253:          npm ci
+263:          npm run security-gate:audit
+275:          node-version-file: .nvmrc
+282:          npm ci
+287:          npm run readiness:production
+385:          node-version: '24'
+405:          npm ci
+474:          npm run test:e2e -- \
+

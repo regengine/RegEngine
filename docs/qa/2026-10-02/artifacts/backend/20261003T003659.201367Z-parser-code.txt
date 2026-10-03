@@ -1,0 +1,569 @@
+UTC: 2026-10-03T00:36:59.201367+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/app/csv_templates.py"); lines=p.read_text().splitlines(); print("\n".join(f"{i+1}: {line}" for i,line in enumerate(lines) if i>=540 and i<900)); p=Path("services/ingestion/app/webhook_models.py"); print("\nWEBHOOK MODELS\n"+"\n".join(f"{i+1}: {line}" for i,line in enumerate(p.read_text().splitlines()) if i<200))'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+541: 
+542: def _normalize_uom(raw: str) -> str:
+543:     """Map common UOM abbreviations/typos to canonical FSMA 204 units.
+544: 
+545:     Falls back to the lowercased input so the model validator can still
+546:     warn about truly unknown values rather than crashing on abbreviations.
+547:     """
+548:     normalized = raw.strip().lower().rstrip(".")
+549:     return _UOM_ALIASES.get(normalized, normalized)
+550: 
+551: 
+552: # ── Location / string normalisation ─────────────────────────────────────────
+553: _LOCATION_ABBREV_PATTERNS: list[tuple[str, str]] = [
+554:     (r"\bwhse\b", "Warehouse"),
+555:     (r"\bwhs\b", "Warehouse"),
+556:     (r"\bdist\.?\b", "Distribution"),
+557:     (r"\bmfg\.?\b", "Manufacturing"),
+558:     (r"\bfac\.?\b", "Facility"),
+559:     (r"\bpkg\.?\b", "Packaging"),
+560:     (r"\brecv\.?\b", "Receiving"),
+561:     (r"\bshpg\.?\b", "Shipping"),
+562:     (r"\bctr\.?\b", "Center"),
+563:     (r"\bcntr\.?\b", "Center"),
+564:     (r"\bhdqtrs?\b", "Headquarters"),
+565:     (r"\bblvd\.?\b", "Boulevard"),
+566:     (r"\bave\.?\b", "Avenue"),
+567: ]
+568: 
+569: 
+570: def _normalize_location(raw: str) -> str:
+571:     """Strip whitespace, collapse runs, and expand common abbreviations."""
+572:     val = " ".join(raw.strip().split())
+573:     for pattern, replacement in _LOCATION_ABBREV_PATTERNS:
+574:         val = re.sub(pattern, replacement, val, flags=re.IGNORECASE)
+575:     return val
+576: 
+577: 
+578: # ── Flexible date parsing ────────────────────────────────────────────────────
+579: 
+580: 
+581: def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, str | None]:
+582:     """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
+583: 
+584:     Handles YYYY-MM-DD, M/D/YY, April 2nd 2026, 04-01-2026, and more.
+585: 
+586:     Returns:
+587:         (iso_ts, warning)  — warning is None on success, or a human-readable
+588:         message describing why the date could not be parsed.  In that case
+589:         iso_ts is None: an unreadable date yields no timestamp. Rows ingested
+590:         before this change may carry the old ``1970-01-01T00:00:00Z``
+591:         placeholder.
+592:     """
+593:     if not raw or not raw.strip():
+594:         return None, "date field was empty"
+595: 
+596:     raw = raw.strip()
+597: 
+598:     # Fast-path: already an ISO timestamp
+599:     try:
+600:         dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+601:         if dt.tzinfo is None:
+602:             dt = dt.replace(tzinfo=timezone.utc)
+603:         return dt.isoformat().replace("+00:00", "Z"), None
+604:     except (ValueError, AttributeError):
+605:         pass
+606: 
+607:     # Flexible parsing: handles M/D/YY, "April 2nd", "04-01-2026", etc.
+608:     try:
+609:         dt = _dateutil_parser.parse(raw, fuzzy=True, dayfirst=False)
+610:         # Merge in a separate event_time field if provided
+611:         if event_time:
+612:             try:
+613:                 t = _dateutil_parser.parse(event_time)
+614:                 dt = dt.replace(hour=t.hour, minute=t.minute, second=t.second)
+615:             except (_DateParserError, ValueError):
+616:                 pass
+617:         if dt.tzinfo is None:
+618:             dt = dt.replace(tzinfo=timezone.utc)
+619:         return dt.isoformat().replace("+00:00", "Z"), None
+620:     except (_DateParserError, ValueError, OverflowError):
+621:         pass
+622: 
+623:     return None, f"INVALID_FORMAT: could not parse date '{raw}'"
+624: 
+625: 
+626: # ── Lot-code integrity checks ────────────────────────────────────────────────
+627: _LOT_DIGIT_ADJACENT = re.compile(r"(?<=[0-9])[OI]|[OI](?=[0-9])", re.IGNORECASE)
+628: 
+629: 
+630: def _check_lot_code_integrity(lot_code: str) -> list[str]:
+631:     """Flag likely O↔0 and I↔1 character swaps in a Traceability Lot Code.
+632: 
+633:     Returns a (possibly empty) list of human-readable integrity warnings.
+634:     These are advisory — the row is still ingested.
+635:     """
+636:     if not lot_code:
+637:         return []
+638:     warnings: list[str] = []
+639:     suspicious = _LOT_DIGIT_ADJACENT.findall(lot_code)
+640:     if suspicious:
+641:         chars = ", ".join(f"'{c}'" for c in set(s.upper() for s in suspicious))
+642:         warnings.append(
+643:             f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — verify O vs 0 or I vs 1)"
+644:         )
+645:     # All-alpha codes longer than 3 chars have no digits — flag for review
+646:     if lot_code.isalpha() and len(lot_code) > 3:
+647:         warnings.append(f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error")
+648:     return warnings
+649: 
+650: 
+651: def _parse_input_quantities(
+652:     row: dict, input_lot_codes: list[str], row_cte: str
+653: ) -> tuple[list[dict], Optional[str], Optional[str]]:
+654:     """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
+655: 
+656:     Returns ``(inputs, error, warning)``. ``inputs`` is a list of
+657:     ``{"traceability_lot_code", "quantity", "unit_of_measure"}`` aligned with
+658:     ``input_lot_codes``. ``error`` rejects the row (misaligned or non-numeric
+659:     values); ``warning`` is advisory (a transformation row that names input
+660:     lots without their quantities).
+661:     """
+662:     quantities_raw = (row.get("input_quantities") or "").strip()
+663:     units_raw = (row.get("input_units_of_measure") or "").strip()
+664:     if not quantities_raw and not units_raw:
+665:         if input_lot_codes and row_cte == "transformation":
+666:             return (
+667:                 [],
+668:                 None,
+669:                 "input_quantities missing: 21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of "
+670:                 "measure of each input lot (add input_quantities and input_units_of_measure)",
+671:             )
+672:         return [], None, None
+673:     if not input_lot_codes:
+674:         return [], "input_quantities given without input_lot_codes", None
+675:     quantities = [q.strip() for q in quantities_raw.split(",")] if quantities_raw else []
+676:     units = [u.strip() for u in units_raw.split(",")] if units_raw else []
+677:     if len(quantities) != len(input_lot_codes):
+678:         return (
+679:             [],
+680:             f"input_quantities lists {len(quantities)} value(s) for {len(input_lot_codes)} input lot(s); "
+681:             "give one quantity per input lot in the same order as input_lot_codes",
+682:             None,
+683:         )
+684:     if len(units) == 1 and len(input_lot_codes) > 1:
+685:         units = units * len(input_lot_codes)
+686:     if len(units) != len(input_lot_codes):
+687:         return (
+688:             [],
+689:             f"input_units_of_measure lists {len(units)} value(s) for {len(input_lot_codes)} input lot(s); "
+690:             "give one unit per input lot, or a single unit that applies to all",
+691:             None,
+692:         )
+693:     inputs: list[dict] = []
+694:     for lot, quantity_text, unit_text in zip(input_lot_codes, quantities, units):
+695:         try:
+696:             quantity = float(quantity_text)
+697:         except ValueError:
+698:             return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+699:         if quantity < 0:
+700:             return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
+701:         if not unit_text:
+702:             return [], f"input unit of measure for input lot {lot} is blank", None
+703:         inputs.append(
+704:             {"traceability_lot_code": lot, "quantity": quantity, "unit_of_measure": _normalize_uom(unit_text)}
+705:         )
+706:     return inputs, None, None
+707: 
+708: 
+709: def parse_csv_rows(
+710:     text: str,
+711:     fallback_cte: Optional[str] = None,
+712:     header_mapping: Optional[Mapping[str, str]] = None,
+713: ) -> tuple[list[IngestEvent], list[str], list[str]]:
+714:     """Parse CSV text into ``IngestEvent`` objects.
+715: 
+716:     Shared by the ``/ingest/csv`` upload route and any other ingestion
+717:     entrypoint (e.g. the Postmark inbound-email webhook) that needs to accept
+718:     the same CSV structure and produce identical validation results — this
+719:     is the single place CTE/KDE row-mapping logic lives.
+720: 
+721:     ``header_mapping`` (``normalised source column -> canonical column``) is
+722:     the set of Jev header suggestions that passed the apply policy in
+723:     ``shared.jev.header_mapping``. Each mapped value is copied under the
+724:     canonical key before the row is read, unless the row already provides
+725:     that field through the canonical key or a column the parser consults
+726:     after it (``_row_provides``): a mapping never replaces a value the file
+727:     carries. The source column is left in place so the raw column still
+728:     reaches ``kdes`` and nothing is lost.
+729: 
+730:     Returns ``(events, parse_errors, kde_warnings)``.
+731:     """
+732:     reader = csv.DictReader(io.StringIO(text))
+733: 
+734:     events: list[IngestEvent] = []
+735:     parse_errors: list[str] = []
+736:     kde_warnings: list[str] = []
+737: 
+738:     # Read the header and every record the loop below can reach before
+739:     # touching any row: a file the csv module cannot read (CR-only line
+740:     # endings, a field over csv.field_size_limit(), usually from an unclosed
+741:     # quote) is rejected whole with its line named, never partially ingested.
+742:     records: list[dict] = []
+743:     try:
+744:         header = reader.fieldnames
+745:         for record in reader:
+746:             records.append(record)
+747:             if len(records) > MAX_CSV_ROWS:
+748:                 break
+749:     except csv.Error as exc:
+750:         line = reader.reader.line_num
+751:         logger.warning("csv_unreadable line=%s error=%s", line, exc)
+752:         return (
+753:             [],
+754:             [
+755:                 f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
+756:                 f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
+757:             ],
+758:             [],
+759:         )
+760:     if header is not None and not any(name.strip() for name in header):
+761:         return [], ["CSV has no header row: the first line must list the column names"], []
+762: 
+763:     for row_num, row in enumerate(records, start=2):
+764:         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
+765:         if row_num - 1 > MAX_CSV_ROWS:
+766:             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
+767:             break
+768:         # DictReader files values past the last header column under the None
+769:         # restkey. A non-blank one rejects the row below rather than being
+770:         # dropped; blank ones (a trailing comma) carry nothing and are ignored.
+771:         extra_values = row.pop(None, None) or []
+772:         row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+773:         if header_mapping:
+774:             for source_key, canonical_field in header_mapping.items():
+775:                 value = row.get(source_key)
+776:                 if value and not _row_provides(row, canonical_field):
+777:                     row[canonical_field] = value
+778:         first_val = next(iter(row.values()), "")
+779:         if first_val and str(first_val).startswith("#"):
+780:             continue
+781:         if any(value.strip() for value in extra_values):
+782:             parse_errors.append(
+783:                 f"Row {row_num}: has more fields than the header "
+784:                 f"({len(header) + len(extra_values)} fields, header has {len(header)})"
+785:             )
+786:             continue
+787:         if not any(row.values()):
+788:             continue
+789: 
+790:         try:
+791:             row_cte = _detect_row_cte_type(row, fallback_cte)
+792:             if not row_cte:
+793:                 parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
+794:                 continue
+795: 
+796:             # ── Phase 1: Ingestion — flexible on format, strict on presence ──
+797:             # Date: accept any human format. An unreadable or empty date
+798:             # rejects the row; a placeholder timestamp would enter the hash
+799:             # chain as evidence of when the event happened.
+800:             raw_date = _first_present(row, _DATE_FIELDS)
+801:             event_time_raw = (row.get("event_time") or "").strip()
+802:             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
+803:             if ts is None:
+804:                 parse_errors.append(f"Row {row_num}: {date_warning}")
+805:                 continue
+806: 
+807:             # Location: strip whitespace and expand abbreviations
+808:             loc_gln = _first_present(row, _LOCATION_GLN_COLUMNS) or None
+809:             _loc_raw = _first_present(row, _LOCATION_NAME_COLUMNS)
+810:             loc_name = _normalize_location(_loc_raw) if _loc_raw else None
+811: 
+812:             # Unit of measure: map abbreviations before Pydantic sees them.
+813:             # No default: a unit the uploader did not record is not "units".
+814:             uom_raw = _first_present(row, _UNIT_COLUMNS)
+815:             if not uom_raw:
+816:                 parse_errors.append(f"Row {row_num}: unit_of_measure is required")
+817:                 continue
+818:             uom = _normalize_uom(uom_raw)
+819: 
+820:             # Quantity: required and numeric. The generic exception handler
+821:             # below would reject the row too, but with an opaque message.
+822:             quantity_raw = _first_present(row, _QUANTITY_COLUMNS)
+823:             if not quantity_raw:
+824:                 parse_errors.append(f"Row {row_num}: quantity is required")
+825:                 continue
+826:             try:
+827:                 quantity = float(quantity_raw)
+828:             except ValueError:
+829:                 parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
+830:                 continue
+831: 
+832:             # Lot code: extract and run integrity checks
+833:             lot_code = _first_present(row, _LOT_CODE_COLUMNS)
+834:             for integrity_warn in _check_lot_code_integrity(lot_code):
+835:                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
+836: 
+837:             kdes: dict = {}
+838:             skip_fields = {
+839:                 "traceability_lot_code",
+840:                 "product_description",
+841:                 "quantity",
+842:                 "unit_of_measure",
+843:                 "location_gln",
+844:                 "location_name",
+845:                 "cte_type",
+846:                 "event_type",
+847:                 "type",
+848:                 "cte",
+849:                 "input_lot_codes",
+850:                 "input_quantities",
+851:                 "input_units_of_measure",
+852:                 "event_time",
+853:             }
+854:             for key, val in row.items():
+855:                 if key and val and key not in skip_fields:
+856:                     kdes[key] = val
+857: 
+858:             # Parse input_lot_codes (comma-separated) if present
+859:             input_lot_codes: list[str] = []
+860:             input_lot_codes_raw = row.get("input_lot_codes")
+861:             if input_lot_codes_raw:
+862:                 input_lot_codes = [c.strip() for c in input_lot_codes_raw.split(",") if c.strip()]
+863:                 if input_lot_codes:
+864:                     kdes["input_lot_codes"] = input_lot_codes
+865: 
+866:             # Per-input quantity and unit (21 CFR 1.1350(a)(1)(iii)), aligned with
+867:             # input_lot_codes. A list that cannot be attributed to its lots rejects
+868:             # the row: guessing which quantity belongs to which lot would fabricate
+869:             # a KDE. Rows without the columns still ingest (older templates) with a
+870:             # warning for transformations.
+871:             inputs, input_error, input_warning = _parse_input_quantities(row, input_lot_codes, row_cte)
+872:             if input_error:
+873:                 parse_errors.append(f"Row {row_num}: {input_error}")
+874:                 continue
+875:             if inputs:
+876:                 kdes["inputs"] = inputs
+877:             if input_warning:
+878:                 kde_warnings.append(f"Row {row_num}: {input_warning}")
+879: 
+880:             # Auto-inject CTE-specific required KDEs from generic CSV columns
+881:             _inject_required_kdes(kdes, row_cte, row, loc_name, raw_date)
+882: 
+883:             event = IngestEvent(
+884:                 cte_type=WebhookCTEType(row_cte),
+885:                 traceability_lot_code=lot_code,
+886:                 product_description=_first_present(row, _PRODUCT_COLUMNS),
+887:                 quantity=quantity,
+888:                 unit_of_measure=uom,
+889:                 location_gln=loc_gln,
+890:                 location_name=loc_name,
+891:                 timestamp=ts,
+892:                 kdes=kdes,
+893:             )
+894:             events.append(event)
+895: 
+896:             # KDE completeness validation (warn, don't reject)
+897:             missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
+898:             if missing_kdes:
+899:                 kde_warnings.append(f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}")
+900:         except Exception as e:
+
+WEBHOOK MODELS
+1: """
+2: Webhook Ingestion Models.
+3: 
+4: Pydantic models for the webhook ingestion endpoint.
+5: Defines the payload structure for external systems to push
+6: FSMA 204 traceability events into RegEngine.
+7: """
+8: 
+9: from __future__ import annotations
+10: 
+11: import logging
+12: import os
+13: import re
+14: from datetime import datetime, timedelta, timezone
+15: from enum import Enum
+16: from typing import Any, Dict, List, Optional
+17: from uuid import uuid4
+18: 
+19: from pydantic import BaseModel, Field, field_validator, model_validator
+20: from shared.fsma_validation import calculate_gs1_check_digit
+21: 
+22: _gln_logger = logging.getLogger("gln-validation")
+23: 
+24: 
+25: def validate_gln(gln: str) -> tuple[bool, str | None]:
+26:     """Validate a GS1 Global Location Number (13-digit with mod-10 check digit).
+27: 
+28:     Returns (is_valid, error_message). Standalone helper for use outside Pydantic.
+29:     Delegates the GS1 mod-10 check-digit math to the shared canonical helper so
+30:     ingestion and the rest of the platform share a single source of truth.
+31:     """
+32:     clean = re.sub(r"\D", "", gln)
+33:     if len(clean) != 13:
+34:         return False, f"GLN must be exactly 13 digits, got {len(clean)}"
+35:     expected = calculate_gs1_check_digit(clean[:-1])
+36:     if int(clean[-1]) != expected:
+37:         return False, f"GLN check digit invalid: expected {expected}, got {clean[-1]}"
+38:     return True, None
+39: 
+40: 
+41: class WebhookCTEType(str, Enum):
+42:     """CTE types accepted by the webhook endpoint.
+43: 
+44:     The 7 canonical FSMA 204 CTEs (per 21 CFR 1.1310) are: harvesting,
+45:     cooling, initial_packing, first_land_based_receiving, shipping,
+46:     receiving, transformation.  GROWING is accepted for ingest
+47:     backwards-compatibility but normalizes to farm metadata, not a CTE.
+48:     """
+49: 
+50:     GROWING = "growing"  # legacy/internal — not an FDA-defined CTE
+51:     HARVESTING = "harvesting"
+52:     COOLING = "cooling"
+53:     INITIAL_PACKING = "initial_packing"
+54:     FIRST_LAND_BASED_RECEIVING = "first_land_based_receiving"
+55:     SHIPPING = "shipping"
+56:     RECEIVING = "receiving"
+57:     TRANSFORMATION = "transformation"
+58: 
+59: 
+60: # Valid units of measure for FSMA 204 traceability records
+61: VALID_UNITS_OF_MEASURE = {
+62:     "lbs",
+63:     "kg",
+64:     "oz",
+65:     "g",
+66:     "tons",
+67:     "mt",  # weight
+68:     "cases",
+69:     "cartons",
+70:     "boxes",
+71:     "crates",
+72:     "bins",  # containers
+73:     "pallets",
+74:     "totes",
+75:     "bags",
+76:     "sacks",  # bulk
+77:     "each",
+78:     "units",
+79:     "pieces",
+80:     "count",  # discrete
+81:     "gallons",
+82:     "liters",
+83:     "barrels",
+84:     "bushels",  # volume
+85: }
+86: 
+87: 
+88: # The ingest contract version advertised to integrators (notably the
+89: # inflow-lab simulator, which pins the same value in app/contract.py).
+90: # Bump BOTH sides together whenever the wire contract changes in a way an
+91: # integrator must react to: this REQUIRED_KDES_BY_CTE table, required
+92: # headers (API key / tenant / Idempotency-Key / HMAC), payload shape, or
+93: # validation semantics. Exposed via /health as inflow_contract_version so
+94: # deployed instances can detect skew; the Inflow Lab Contract CI asserts
+95: # cross-repo equality.
+96: INFLOW_CONTRACT_VERSION = "2"
+97: 
+98: 
+99: # Required KDEs per CTE type (§1.1325–§1.1350)
+100: REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
+101:     WebhookCTEType.HARVESTING: [
+102:         "traceability_lot_code",
+103:         "product_description",
+104:         "quantity",
+105:         "unit_of_measure",
+106:         "harvest_date",
+107:         "location_name",
+108:         "reference_document",  # §1.1325(a)(1)(viii)
+109:     ],
+110:     WebhookCTEType.COOLING: [
+111:         "traceability_lot_code",
+112:         "product_description",
+113:         "quantity",
+114:         "unit_of_measure",
+115:         "cooling_date",
+116:         "location_name",
+117:         "reference_document",  # §1.1325(b)(1)(vii)
+118:     ],
+119:     WebhookCTEType.INITIAL_PACKING: [
+120:         "traceability_lot_code",
+121:         "product_description",
+122:         "quantity",
+123:         "unit_of_measure",
+124:         "packing_date",
+125:         "location_name",
+126:         "reference_document",  # §1.1330(a)(16)
+127:         "harvester_business_name",  # §1.1330(a)(7)
+128:         "harvester_business_phone",  # §1.1330(a)(7); contract v2
+129:     ],
+130:     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
+131:         "traceability_lot_code",
+132:         "product_description",
+133:         "quantity",
+134:         "unit_of_measure",
+135:         "landing_date",
+136:         "receiving_location",
+137:         "reference_document",  # §1.1335(g)
+138:     ],
+139:     WebhookCTEType.SHIPPING: [
+140:         "traceability_lot_code",
+141:         "product_description",
+142:         "quantity",
+143:         "unit_of_measure",
+144:         "ship_date",
+145:         "ship_from_location",
+146:         "ship_to_location",
+147:         "reference_document",  # §1.1340(a)(8)
+148:         "tlc_source_reference",  # §1.1340(a)(7)
+149:     ],
+150:     WebhookCTEType.RECEIVING: [
+151:         "traceability_lot_code",
+152:         "product_description",
+153:         "quantity",
+154:         "unit_of_measure",
+155:         "receive_date",
+156:         "receiving_location",
+157:         "immediate_previous_source",  # §1.1345(a)(4)
+158:         "reference_document",  # §1.1345(a)(8)
+159:         "tlc_source_reference",  # §1.1345(a)(7)
+160:     ],
+161:     WebhookCTEType.TRANSFORMATION: [
+162:         "traceability_lot_code",
+163:         "product_description",
+164:         "quantity",
+165:         "unit_of_measure",
+166:         "transformation_date",
+167:         "location_name",
+168:         "reference_document",  # §1.1350(a)(2)(vi)
+169:     ],
+170: }
+171: 
+172: 
+173: class IngestEvent(BaseModel):
+174:     """A single CTE event to ingest."""
+175: 
+176:     cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
+177:     traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
+178:     product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
+179:     quantity: float = Field(..., description="Numeric quantity", gt=0)
+180:     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
+181:     location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+182:     location_name: Optional[str] = Field(None, description="Human-readable location name")
+183:     timestamp: str = Field(..., description="ISO 8601 timestamp of the event")
+184:     kdes: Dict[str, Any] = Field(
+185:         default_factory=dict, description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
+186:     )
+187:     input_traceability_lot_codes: Optional[list[str]] = Field(
+188:         None,
+189:         description=(
+190:             "For transformation CTEs (21 CFR §1.1350): list of input TLCs that were "
+191:             "combined/transformed into the new traceability_lot_code. Required per "
+192:             "§1.1350(a)(1) to link each new TLC to all input TLCs."
+193:         ),
+194:     )
+195: 
+196:     @field_validator("timestamp")
+197:     @classmethod
+198:     def validate_timestamp(cls, v: str) -> str:
+199:         """Ensure timestamp is parseable and within reasonable bounds."""
+200:         try:

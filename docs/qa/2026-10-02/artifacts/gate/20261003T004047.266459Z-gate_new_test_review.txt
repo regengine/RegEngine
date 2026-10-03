@@ -1,0 +1,143 @@
+UTC: 2026-10-03T00:40:47.266459+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=list(Path("tests/qa_sweep_20261002").glob("*.py"))+[Path("frontend/src/__tests__/lib/qa-sweep-gs1.test.ts")]; [(print("FILE",p),print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1)))) for p in paths if p.is_file()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE tests/qa_sweep_20261002/test_portal_export_disclosure.py
+1: """QA BE-011: exported evidence must not disclose a portal bearer capability.
+2: 
+3: Uses an invalid synthetic identifier only. No portal link is created and no
+4: storage, provider, or network operation is called.
+5: """
+6: 
+7: import csv
+8: import io
+9: 
+10: import pytest
+11: 
+12: _SYNTHETIC_CAPABILITY = "qa-only-invalid-portal-capability"
+13: 
+14: 
+15: def _exported_portal_event_csv():
+16:     from services.ingestion.app.fda_export_service import _generate_csv
+17:     from services.ingestion.app.supplier_portal import SupplierSubmission, _submission_event_dict
+18: 
+19:     submission = SupplierSubmission(
+20:         traceability_lot_code="QA-LOT-001",
+21:         product_description="QA lettuce",
+22:         quantity=2,
+23:         unit_of_measure="cases",
+24:         ship_date="2026-10-02",
+25:         ship_from_location="QA origin",
+26:         ship_to_location="QA destination",
+27:     )
+28:     event = _submission_event_dict(
+29:         _SYNTHETIC_CAPABILITY, {"supplier_name": "QA supplier"}, submission
+30:     )
+31:     # Match the persisted event field names consumed by the FDA formatter.
+32:     event["event_type"] = event["cte_type"]
+33:     event["event_timestamp"] = event["timestamp"]
+34:     return _generate_csv([event], include_pii=False)
+35: 
+36: 
+37: def test_portal_export_keeps_lot_and_redacts_location():
+38:     """Positive control: the sample is an otherwise valid redacted FDA row."""
+39:     row = next(csv.DictReader(io.StringIO(_exported_portal_event_csv())))
+40:     assert row["Traceability Lot Code (TLC)"] == "QA-LOT-001"
+41:     assert row["Location Name"] == "[REDACTED]"
+42:     assert "QA origin" not in row["Additional KDEs (JSON)"]
+43: 
+44: 
+45: @pytest.mark.xfail(
+46:     strict=True,
+47:     raises=AssertionError,
+48:     reason="BE-011: supplier portal bearer capability is disclosed in exported KDEs",
+49: )
+50: def test_redacted_fda_export_does_not_disclose_portal_capability():
+51:     exported = _exported_portal_event_csv()
+52:     assert _SYNTHETIC_CAPABILITY not in exported
+FILE tests/qa_sweep_20261002/test_request_safety.py
+1: """Local ASGI reproduction of BE-010; no sockets or real backend are used."""
+2: import pytest
+3: from fastapi import FastAPI, Request
+4: from fastapi.testclient import TestClient
+5: from shared.request_safety import RequestSizeLimitMiddleware
+6: 
+7: 
+8: @pytest.fixture
+9: def body_client():
+10:     app = FastAPI()
+11:     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
+12: 
+13:     @app.post("/consume")
+14:     async def consume(request: Request):
+15:         return {"bytes_read": len(await request.body())}
+16: 
+17:     with TestClient(app) as client:
+18:         yield client
+19: 
+20: 
+21: def test_declared_oversized_body_rejected(body_client):
+22:     assert body_client.post("/consume", content=b"123456789").status_code == 413
+23: 
+24: 
+25: def test_body_at_limit_accepted(body_client):
+26:     response = body_client.post("/consume", content=b"12345678")
+27:     assert response.status_code == 200
+28:     assert response.json() == {"bytes_read": 8}
+29: 
+30: 
+31: @pytest.mark.xfail(strict=True, raises=AssertionError,
+32:                    reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies")
+33: def test_streamed_body_is_limited_without_content_length(body_client):
+34:     response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+35:     assert "content-length" not in response.request.headers
+36:     assert response.status_code == 413, response.text
+FILE frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+1: import { describe, expect, it } from 'vitest';
+2: import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+3: 
+4: describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
+5:     it('keeps Digital Link lot values intact across encoded delimiters', () => {
+6:         for (const lot of ['LOT-10', 'LOT-21', 'LOT/ALPHA', 'LOT%PERCENT', 'LOT A']) {
+7:             const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+8:             expect(parsed.tlc).toBe(lot);
+9:             expect(parsed.isValidGTIN).toBe(true);
+10:         }
+11:     });
+12: 
+13:     it('checks every possible check digit for 100 generated GTIN bodies', () => {
+14:         for (let index = 0; index < 100; index += 1) {
+15:             const body = String(950600010000 + index).padStart(13, '0');
+16:             const weightedSum = [...body].reduce(
+17:                 (total, digit, position) => total + Number(digit) * (position % 2 === 0 ? 3 : 1),
+18:                 0,
+19:             );
+20:             const expected = (10 - weightedSum % 10) % 10;
+21:             for (let candidate = 0; candidate < 10; candidate += 1) {
+22:                 expect(isValidGTINCheckDigit(`${body}${candidate}`)).toBe(candidate === expected);
+23:             }
+24:         }
+25:     });
+26: 
+27:     it.each(['260230', '260431', '261300', '260000'])('rejects impossible calendar date %s', (value) => {
+28:         expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+29:     });
+30: 
+31:     // FE-001: a variable-length lot ends only at its explicit delimiter/end.
+32:     // Existing parser wrongly treats AI-like digits inside the lot as a new AI.
+33:     it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+34:         const input = `010950600013435210${lot}\x1d17260930`;
+35:         const parsed = parseGS1(input);
+36:         expect(parsed.tlc).toBe(lot);
+37:         expect(parsed.expiryDate).toBe('2026-09-30');
+38:     });
+39: 
+40:     // FE-002: invalid percent encodings must become a rejected scan, not an
+41:     // uncaught URIError in receiving, field capture, or the public scanner.
+42:     it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+43:         expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
+44:     });
+45: });

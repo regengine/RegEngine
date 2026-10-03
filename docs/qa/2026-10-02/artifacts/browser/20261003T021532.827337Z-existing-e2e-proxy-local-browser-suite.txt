@@ -1,0 +1,1008 @@
+UTC: 2026-10-03T02:15:32.827337+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env CI= NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3115 QA_E2E_RUN=proxy-local-browser node node_modules/playwright/cli.js test --config=../docs/qa/2026-10-02/scripts/existing-e2e.config.cjs
+Exit: 1
+Duration: 139.40s
+Timeout: False
+
+[globalSetup] JWT_SIGNING_KEY (or AUTH_SECRET_KEY) is not set.
+  The Next.js middleware needs this to verify tokens from the admin service.
+  Without it, authenticated routes redirect to /login?error=session_expired.
+  Local run: authenticated specs will be skipped; unauthenticated specs can still run.
+  CI run: add JWT_SIGNING_KEY to GitHub Secrets (must match Railway's value).
+
+Running 270 tests using 3 workers
+
+  -    1 [chromium] › tests/e2e/auth-diagnostic.spec.ts:22:9 › Auth Smoke › login API → session cookie → authenticated page
+  -    4 [chromium] › tests/e2e/authenticated-core-journeys.spec.ts:248:9 › Authenticated core journeys › primary resource create -> list -> open -> edit -> delete with UI and backend assertions
+  -    5 [chromium] › tests/e2e/authenticated-core-journeys.spec.ts:295:9 › Authenticated core journeys › settings change persists across logout and API login
+  -    6 [chromium] › tests/e2e/authenticated-core-journeys.spec.ts:356:9 › Authenticated core journeys › search/filter on populated dataset returns expected results and backend pagination
+  -    7 [chromium] › tests/e2e/authenticated-core-journeys.spec.ts:400:9 › Authenticated core journeys › invite collaborator -> email sent -> accept invite -> appears in member list
+  -    8 [chromium] › tests/e2e/authenticated-core-journeys.spec.ts:450:9 › Authenticated core journeys › billing/plan change -> account state and Stripe state
+  -    9 [chromium] › tests/e2e/authenticated-core-journeys.spec.ts:454:9 › Authenticated core journeys › bulk action on 50+ items -> progress and backend completion
+  ✘    2 [chromium] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy (92ms)
+  -   11 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:52:9 › Dashboard Inflow Lab › renders the sandbox-first inflow workspace for authenticated users
+  -   12 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:68:9 › Dashboard Inflow Lab › leads with the evidence chain, not an explanation of it
+  -   13 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:89:9 › Dashboard Inflow Lab › states the export verdict before any scrolling
+  -   14 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:109:9 › Dashboard Inflow Lab › keeps sandbox evaluation gated behind local CSV input
+  -   15 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:120:9 › Dashboard Inflow Lab › records a saved workbench run only after the explicit save action
+  -   16 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:148:9 › Dashboard Inflow Lab › shows a write-access note when the workbench save path is denied
+  -   17 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:173:9 › Dashboard Inflow Lab › reloads the latest saved workbench run after a successful save
+  -   18 [chromium] › tests/e2e/inflow-lab-dashboard.spec.ts:196:9 › Dashboard Inflow Lab › disables save before any POST when the logged-in user lacks inflow.write
+  ✘    3 [chromium] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up (92ms)
+  -   10 [chromium] › tests/e2e/demo-smoke.spec.ts:191:9 › Design-partner demo smoke › runs the Inflow Workbench preflight loop and supplier portal handoff
+  ✓   19 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:137:13 › guided tours (desktop) › dashboard preview: the spotlighted control is clickable while the tour stays open (1.7s)
+  ✓   21 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › standalone workbench: every step keeps the tooltip on-screen and the spotlight on target (4.1s)
+  ✓   20 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (7.1s)
+  ✓   23 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (narrow) › standalone workbench: every step keeps the tooltip on-screen and the spotlight on target (4.0s)
+  -   25 [chromium] › tests/e2e/invite_flow.spec.ts:22:9 › User Invite Flow › Admin can invite user and user can accept
+  -   26 [chromium] › tests/e2e/login-dashboard.spec.ts:40:9 › Login → Dashboard Flow › successful email OTP login redirects to dashboard
+  -   27 [chromium] › tests/e2e/login-dashboard.spec.ts:54:9 › Login → Dashboard Flow › wrong verification code shows an error and does not authenticate
+  ✓   22 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (narrow) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (7.1s)
+  ✓   28 [chromium] › tests/e2e/login-dashboard.spec.ts:71:9 › Login → Dashboard Flow › login form has proper accessibility and autofill-friendly controls (179ms)
+  -   29 [chromium] › tests/e2e/login-dashboard.spec.ts:91:9 › Login → Dashboard Flow › rapid double submit starts only one sign-in challenge
+  -   31 [chromium] › tests/e2e/login-dashboard.spec.ts:129:9 › Login → Dashboard Flow › logout from dashboard redirects to login
+  ✓   24 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:137:13 › guided tours (narrow) › dashboard preview: the spotlighted control is clickable while the tour stays open (1.5s)
+  -   32 [chromium] › tests/e2e/login-dashboard.spec.ts:145:9 › Login → Dashboard Flow › back after logout does not restore a protected dashboard from cache
+  -   34 [chromium] › tests/e2e/login-dashboard.spec.ts:172:9 › Protected deep links › deep link is reachable after API login
+  ✓   30 [chromium] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error (223ms)
+  -   36 [chromium] › tests/e2e/login-dashboard.spec.ts:208:9 › Dashboard Features › dashboard displays user information
+  -   37 [chromium] › tests/e2e/login-dashboard.spec.ts:218:9 › Dashboard Features › dashboard has navigation links
+  -   38 [chromium] › tests/e2e/login-dashboard.spec.ts:230:9 › Dashboard Features › navigation links work correctly
+  -   35 [chromium] › tests/e2e/login-dashboard.spec.ts:182:9 › Login session cookie mode › email OTP login sets a persistent opaque session cookie
+  ✓   33 [chromium] › tests/e2e/login-dashboard.spec.ts:165:9 › Protected deep links › unauthenticated deep link redirects to login preserving next (143ms)
+  ✓   40 [chromium] › tests/e2e/rbac-gates.spec.ts:58:9 › RBAC Gates › Unauthenticated cannot access sysadmin (168ms)
+  ✓   41 [chromium] › tests/e2e/rbac-gates.spec.ts:65:9 › RBAC Gates › Unauthenticated cannot access user settings (158ms)
+  -   42 [chromium] › tests/e2e/rbac-gates.spec.ts:72:9 › RBAC Gates › Admin can access sysadmin dashboard
+  -   43 [chromium] › tests/e2e/rbac-gates.spec.ts:102:9 › RBAC Gates › Admin can access user management
+  ✓   44 [chromium] › tests/e2e/rbac-gates.spec.ts:122:9 › RBAC Gates › Protected API calls return 401 without auth (64ms)
+  -   45 [chromium] › tests/e2e/rbac-gates.spec.ts:130:9 › RBAC Gates › Session persists across navigation
+  ✓   46 [chromium] › tests/e2e/sandbox-front-door.spec.ts:36:9 › sandbox front door (#2757) › /sandbox is a real route, never a 404 (206ms)
+  ✓   47 [chromium] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/tracegains CTA copy matches where it goes (313ms)
+  ✓   48 [chromium] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/foodlogiq CTA copy matches where it goes (334ms)
+  ✓   49 [chromium] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/repositrak CTA copy matches where it goes (326ms)
+  ✓   50 [chromium] › tests/e2e/sandbox-front-door.spec.ts:68:9 › sandbox front door (#2757) › homepage #sandbox anchor resolves to the same destination (1.2s)
+  -   52 [chromium] › tests/e2e/sandbox-front-door.spec.ts:97:9 › sandbox front door (#2757) › unmounted evaluator explains itself instead of hanging
+  ✓   53 [chromium] › tests/e2e/security-audit-fixes.spec.ts:113:13 › Security Audit Fixes › SEC-19 Production Client Logging › Error boundaries do not log raw Error objects in production (65ms)
+  -   54 [chromium] › tests/e2e/security-audit-fixes.spec.ts:145:13 › Security Audit Fixes › SEC-02/SEC-23 XSS Coverage › Dashboard scan ignores malicious stored tenant IDs before QR/link rendering
+  -   55 [chromium] › tests/e2e/security-audit-fixes.spec.ts:177:13 › Security Audit Fixes › SEC-02/SEC-23 XSS Coverage › Authenticated text inputs do not render XSS payloads as active DOM
+  -   56 [chromium] › tests/e2e/security-audit-fixes.spec.ts:310:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › No tokens stored in localStorage after login
+  -   57 [chromium] › tests/e2e/security-audit-fixes.spec.ts:323:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › HTTP-only cookies are set after login
+  -   58 [chromium] › tests/e2e/security-audit-fixes.spec.ts:342:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › Session persists across page navigation via cookies
+  -   59 [chromium] › tests/e2e/security-audit-fixes.spec.ts:371:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › Logout clears HTTP-only cookies
+  -   60 [chromium] › tests/e2e/security-audit-fixes.spec.ts:407:13 › Security Audit Fixes › Security Settings Page (PR #325) › Security settings page renders without dead stubs
+  -   61 [chromium] › tests/e2e/security-audit-fixes.spec.ts:432:13 › Security Audit Fixes › Security Settings Page (PR #325) › 2FA section renders correctly
+  -   62 [chromium] › tests/e2e/security-audit-fixes.spec.ts:465:13 › Security Audit Fixes › Security Settings Page (PR #325) › Session management section shows real data or proper messaging
+  -   63 [chromium] › tests/e2e/security-audit-fixes.spec.ts:491:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Sysadmin status reflected in UI after login
+  -   64 [chromium] › tests/e2e/security-audit-fixes.spec.ts:519:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Non-sysadmin cannot access /sysadmin routes
+  -   65 [chromium] › tests/e2e/security-audit-fixes.spec.ts:549:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Sysadmin role persists across page reloads
+  -   66 [chromium] › tests/e2e/security-audit-fixes.spec.ts:580:13 › Security Audit Fixes › CSRF Protection (PR #329) › State-changing forms include CSRF tokens
+  -   67 [chromium] › tests/e2e/security-audit-fixes.spec.ts:611:13 › Security Audit Fixes › CSRF Protection (PR #329) › API calls include CSRF header for state-changing methods
+  -   68 [chromium] › tests/e2e/security-audit-fixes.spec.ts:654:13 › Security Audit Fixes › CSRF Protection (PR #329) › POST requests without CSRF token are rejected
+  ✓   69 [chromium] › tests/e2e/security-audit-fixes.spec.ts:682:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Unauthenticated users redirected from protected routes (1.3s)
+  ✓   70 [chromium] › tests/e2e/security-audit-fixes.spec.ts:712:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Protected API responses do not leak data in error messages (63ms)
+  ✘   71 [chromium] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information (692ms)
+  -   72 [chromium] › tests/e2e/security-audit-fixes.spec.ts:768:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Login page redirects authenticated users
+  -   73 [chromium] › tests/e2e/security-audit-fixes.spec.ts:808:13 › Security Audit Fixes › Integration: Full Auth & Security Flow › Complete login, navigate, security settings, logout flow
+  -   74 [chromium] › tests/e2e/security-audit-fixes.spec.ts:851:13 › Security Audit Fixes › Integration: Full Auth & Security Flow › Sysadmin can access admin routes, regular user cannot
+  ✘   75 [chromium] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration (59ms)
+  ✘   76 [chromium] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion (85ms)
+  ✘   77 [chromium] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate (87ms)
+  ✓   78 [chromium] › tests/e2e/security-release-gate.spec.ts:54:9 › Security release gate › release-disabled graph surface returns exact 404 for reads and writes (70ms)
+  -   79 [chromium] › tests/e2e/snapshot-creation.spec.ts:91:9 › Compliance Snapshot Workspace › renders the real snapshots workspace state
+  -   80 [chromium] › tests/e2e/snapshot-creation.spec.ts:109:9 › Compliance Snapshot Workspace › can create a manual compliance snapshot
+  -   81 [chromium] › tests/e2e/snapshot-creation.spec.ts:119:9 › Compliance Snapshot Workspace › can open an FDA response template from the workspace
+  -   82 [chromium] › tests/e2e/snapshot-creation.spec.ts:139:9 › Compliance Snapshot Workspace › can download a zero-trust audit pack from the workspace
+  -   83 [chromium] › tests/e2e/snapshot-creation.spec.ts:157:9 › Compliance Snapshot Workspace › can verify snapshot integrity from the workspace
+  -   84 [chromium] › tests/e2e/snapshot-creation.spec.ts:180:9 › Compliance Snapshot Workspace › can compare two snapshots from the workspace
+  -   85 [chromium] › tests/e2e/tenant-isolation.spec.ts:43:9 › Tenant Isolation › Tenant switcher is visible after login
+  -   86 [chromium] › tests/e2e/tenant-isolation.spec.ts:69:9 › Tenant Isolation › Tenant context persists in navigation
+  -   87 [chromium] › tests/e2e/tenant-isolation.spec.ts:85:9 › Tenant Isolation › API calls include tenant context
+  -   88 [chromium] › tests/e2e/tenant-isolation.spec.ts:109:9 › Tenant Isolation › Cannot inject arbitrary tenant_id via URL
+  -   89 [chromium] › tests/e2e/tenant-isolation.spec.ts:136:9 › Tenant Isolation › Review queue shows tenant-specific data
+  -   90 [chromium] › tests/e2e/tenant-isolation.spec.ts:150:9 › Tenant Isolation › Overlay controls are tenant-scoped
+  -   91 [firefox] › tests/e2e/auth-diagnostic.spec.ts:22:9 › Auth Smoke › login API → session cookie → authenticated page
+  ✘   92 [firefox] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy (521ms)
+  ✘   93 [firefox] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up (510ms)
+  -   94 [firefox] › tests/e2e/authenticated-core-journeys.spec.ts:248:9 › Authenticated core journeys › primary resource create -> list -> open -> edit -> delete with UI and backend assertions
+  -   95 [firefox] › tests/e2e/authenticated-core-journeys.spec.ts:295:9 › Authenticated core journeys › settings change persists across logout and API login
+  -   96 [firefox] › tests/e2e/authenticated-core-journeys.spec.ts:356:9 › Authenticated core journeys › search/filter on populated dataset returns expected results and backend pagination
+  -   97 [firefox] › tests/e2e/authenticated-core-journeys.spec.ts:400:9 › Authenticated core journeys › invite collaborator -> email sent -> accept invite -> appears in member list
+  -   98 [firefox] › tests/e2e/authenticated-core-journeys.spec.ts:450:9 › Authenticated core journeys › billing/plan change -> account state and Stripe state
+  -   99 [firefox] › tests/e2e/authenticated-core-journeys.spec.ts:454:9 › Authenticated core journeys › bulk action on 50+ items -> progress and backend completion
+  -  100 [firefox] › tests/e2e/demo-smoke.spec.ts:191:9 › Design-partner demo smoke › runs the Inflow Workbench preflight loop and supplier portal handoff
+  -  101 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:52:9 › Dashboard Inflow Lab › renders the sandbox-first inflow workspace for authenticated users
+  -  102 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:68:9 › Dashboard Inflow Lab › leads with the evidence chain, not an explanation of it
+  -  103 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:89:9 › Dashboard Inflow Lab › states the export verdict before any scrolling
+  -  104 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:109:9 › Dashboard Inflow Lab › keeps sandbox evaluation gated behind local CSV input
+  -  105 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:120:9 › Dashboard Inflow Lab › records a saved workbench run only after the explicit save action
+  -  106 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:148:9 › Dashboard Inflow Lab › shows a write-access note when the workbench save path is denied
+  -  107 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:173:9 › Dashboard Inflow Lab › reloads the latest saved workbench run after a successful save
+  -  108 [firefox] › tests/e2e/inflow-lab-dashboard.spec.ts:196:9 › Dashboard Inflow Lab › disables save before any POST when the logged-in user lacks inflow.write
+  ✓  109 [firefox] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (7.6s)
+  ✓  110 [firefox] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › standalone workbench: every step keeps the tooltip on-screen and the spotlight on target (4.5s)
+  ✓  111 [firefox] › tests/e2e/inflow-lab-tour.spec.ts:137:13 › guided tours (desktop) › dashboard preview: the spotlighted control is clickable while the tour stays open (2.3s)
+  ✓  112 [firefox] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (narrow) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (7.4s)
+  ✘   51 [chromium] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis (30.2s)
+  ✓  114 [firefox] › tests/e2e/inflow-lab-tour.spec.ts:137:13 › guided tours (narrow) › dashboard preview: the spotlighted control is clickable while the tour stays open (2.9s)
+  -  115 [firefox] › tests/e2e/invite_flow.spec.ts:22:9 › User Invite Flow › Admin can invite user and user can accept
+  -  116 [firefox] › tests/e2e/login-dashboard.spec.ts:40:9 › Login → Dashboard Flow › successful email OTP login redirects to dashboard
+  -  117 [firefox] › tests/e2e/login-dashboard.spec.ts:54:9 › Login → Dashboard Flow › wrong verification code shows an error and does not authenticate
+  ✓  113 [firefox] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (narrow) › standalone workbench: every step keeps the tooltip on-screen and the spotlight on target (4.2s)
+  -  119 [firefox] › tests/e2e/login-dashboard.spec.ts:91:9 › Login → Dashboard Flow › rapid double submit starts only one sign-in challenge
+  ✓  118 [firefox] › tests/e2e/login-dashboard.spec.ts:71:9 › Login → Dashboard Flow › login form has proper accessibility and autofill-friendly controls (287ms)
+  -  121 [firefox] › tests/e2e/login-dashboard.spec.ts:129:9 › Login → Dashboard Flow › logout from dashboard redirects to login
+  -  122 [firefox] › tests/e2e/login-dashboard.spec.ts:145:9 › Login → Dashboard Flow › back after logout does not restore a protected dashboard from cache
+  ✓  123 [firefox] › tests/e2e/login-dashboard.spec.ts:165:9 › Protected deep links › unauthenticated deep link redirects to login preserving next (228ms)
+  -  124 [firefox] › tests/e2e/login-dashboard.spec.ts:172:9 › Protected deep links › deep link is reachable after API login
+  -  125 [firefox] › tests/e2e/login-dashboard.spec.ts:182:9 › Login session cookie mode › email OTP login sets a persistent opaque session cookie
+  -  126 [firefox] › tests/e2e/login-dashboard.spec.ts:208:9 › Dashboard Features › dashboard displays user information
+  -  127 [firefox] › tests/e2e/login-dashboard.spec.ts:218:9 › Dashboard Features › dashboard has navigation links
+  -  128 [firefox] › tests/e2e/login-dashboard.spec.ts:230:9 › Dashboard Features › navigation links work correctly
+  ✘   39 [chromium] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login (45.1s)
+  ✓  130 [firefox] › tests/e2e/rbac-gates.spec.ts:58:9 › RBAC Gates › Unauthenticated cannot access sysadmin (690ms)
+  ✓  131 [firefox] › tests/e2e/rbac-gates.spec.ts:65:9 › RBAC Gates › Unauthenticated cannot access user settings (240ms)
+  -  132 [firefox] › tests/e2e/rbac-gates.spec.ts:72:9 › RBAC Gates › Admin can access sysadmin dashboard
+  -  133 [firefox] › tests/e2e/rbac-gates.spec.ts:102:9 › RBAC Gates › Admin can access user management
+  ✓  134 [firefox] › tests/e2e/rbac-gates.spec.ts:122:9 › RBAC Gates › Protected API calls return 401 without auth (136ms)
+  -  135 [firefox] › tests/e2e/rbac-gates.spec.ts:130:9 › RBAC Gates › Session persists across navigation
+  ✓  136 [firefox] › tests/e2e/sandbox-front-door.spec.ts:36:9 › sandbox front door (#2757) › /sandbox is a real route, never a 404 (275ms)
+  ✓  137 [firefox] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/tracegains CTA copy matches where it goes (429ms)
+  ✓  138 [firefox] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/foodlogiq CTA copy matches where it goes (408ms)
+  ✓  139 [firefox] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/repositrak CTA copy matches where it goes (770ms)
+  ✓  140 [firefox] › tests/e2e/sandbox-front-door.spec.ts:68:9 › sandbox front door (#2757) › homepage #sandbox anchor resolves to the same destination (457ms)
+  ✘  120 [firefox] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error (15.3s)
+  -  142 [firefox] › tests/e2e/sandbox-front-door.spec.ts:97:9 › sandbox front door (#2757) › unmounted evaluator explains itself instead of hanging
+  ✓  143 [firefox] › tests/e2e/security-audit-fixes.spec.ts:113:13 › Security Audit Fixes › SEC-19 Production Client Logging › Error boundaries do not log raw Error objects in production (162ms)
+  -  144 [firefox] › tests/e2e/security-audit-fixes.spec.ts:145:13 › Security Audit Fixes › SEC-02/SEC-23 XSS Coverage › Dashboard scan ignores malicious stored tenant IDs before QR/link rendering
+  -  145 [firefox] › tests/e2e/security-audit-fixes.spec.ts:177:13 › Security Audit Fixes › SEC-02/SEC-23 XSS Coverage › Authenticated text inputs do not render XSS payloads as active DOM
+  -  146 [firefox] › tests/e2e/security-audit-fixes.spec.ts:310:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › No tokens stored in localStorage after login
+  -  147 [firefox] › tests/e2e/security-audit-fixes.spec.ts:323:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › HTTP-only cookies are set after login
+  -  148 [firefox] › tests/e2e/security-audit-fixes.spec.ts:342:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › Session persists across page navigation via cookies
+  -  149 [firefox] › tests/e2e/security-audit-fixes.spec.ts:371:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › Logout clears HTTP-only cookies
+  -  150 [firefox] › tests/e2e/security-audit-fixes.spec.ts:407:13 › Security Audit Fixes › Security Settings Page (PR #325) › Security settings page renders without dead stubs
+  -  151 [firefox] › tests/e2e/security-audit-fixes.spec.ts:432:13 › Security Audit Fixes › Security Settings Page (PR #325) › 2FA section renders correctly
+  -  152 [firefox] › tests/e2e/security-audit-fixes.spec.ts:465:13 › Security Audit Fixes › Security Settings Page (PR #325) › Session management section shows real data or proper messaging
+  -  153 [firefox] › tests/e2e/security-audit-fixes.spec.ts:491:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Sysadmin status reflected in UI after login
+  -  154 [firefox] › tests/e2e/security-audit-fixes.spec.ts:519:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Non-sysadmin cannot access /sysadmin routes
+  -  155 [firefox] › tests/e2e/security-audit-fixes.spec.ts:549:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Sysadmin role persists across page reloads
+  -  156 [firefox] › tests/e2e/security-audit-fixes.spec.ts:580:13 › Security Audit Fixes › CSRF Protection (PR #329) › State-changing forms include CSRF tokens
+  -  157 [firefox] › tests/e2e/security-audit-fixes.spec.ts:611:13 › Security Audit Fixes › CSRF Protection (PR #329) › API calls include CSRF header for state-changing methods
+  -  158 [firefox] › tests/e2e/security-audit-fixes.spec.ts:654:13 › Security Audit Fixes › CSRF Protection (PR #329) › POST requests without CSRF token are rejected
+  ✓  159 [firefox] › tests/e2e/security-audit-fixes.spec.ts:682:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Unauthenticated users redirected from protected routes (1.5s)
+  ✓  160 [firefox] › tests/e2e/security-audit-fixes.spec.ts:712:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Protected API responses do not leak data in error messages (151ms)
+  ✘  161 [firefox] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information (813ms)
+  -  162 [firefox] › tests/e2e/security-audit-fixes.spec.ts:768:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Login page redirects authenticated users
+  -  163 [firefox] › tests/e2e/security-audit-fixes.spec.ts:808:13 › Security Audit Fixes › Integration: Full Auth & Security Flow › Complete login, navigate, security settings, logout flow
+  -  164 [firefox] › tests/e2e/security-audit-fixes.spec.ts:851:13 › Security Audit Fixes › Integration: Full Auth & Security Flow › Sysadmin can access admin routes, regular user cannot
+  ✘  165 [firefox] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration (120ms)
+  ✘  166 [firefox] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion (511ms)
+  ✘  167 [firefox] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate (581ms)
+  ✓  168 [firefox] › tests/e2e/security-release-gate.spec.ts:54:9 › Security release gate › release-disabled graph surface returns exact 404 for reads and writes (550ms)
+  -  169 [firefox] › tests/e2e/snapshot-creation.spec.ts:91:9 › Compliance Snapshot Workspace › renders the real snapshots workspace state
+  -  170 [firefox] › tests/e2e/snapshot-creation.spec.ts:109:9 › Compliance Snapshot Workspace › can create a manual compliance snapshot
+  -  171 [firefox] › tests/e2e/snapshot-creation.spec.ts:119:9 › Compliance Snapshot Workspace › can open an FDA response template from the workspace
+  -  172 [firefox] › tests/e2e/snapshot-creation.spec.ts:139:9 › Compliance Snapshot Workspace › can download a zero-trust audit pack from the workspace
+  -  173 [firefox] › tests/e2e/snapshot-creation.spec.ts:157:9 › Compliance Snapshot Workspace › can verify snapshot integrity from the workspace
+  -  174 [firefox] › tests/e2e/snapshot-creation.spec.ts:180:9 › Compliance Snapshot Workspace › can compare two snapshots from the workspace
+  -  175 [firefox] › tests/e2e/tenant-isolation.spec.ts:43:9 › Tenant Isolation › Tenant switcher is visible after login
+  -  176 [firefox] › tests/e2e/tenant-isolation.spec.ts:69:9 › Tenant Isolation › Tenant context persists in navigation
+  -  177 [firefox] › tests/e2e/tenant-isolation.spec.ts:85:9 › Tenant Isolation › API calls include tenant context
+  -  178 [firefox] › tests/e2e/tenant-isolation.spec.ts:109:9 › Tenant Isolation › Cannot inject arbitrary tenant_id via URL
+  -  179 [firefox] › tests/e2e/tenant-isolation.spec.ts:136:9 › Tenant Isolation › Review queue shows tenant-specific data
+  -  180 [firefox] › tests/e2e/tenant-isolation.spec.ts:150:9 › Tenant Isolation › Overlay controls are tenant-scoped
+  -  181 [webkit] › tests/e2e/auth-diagnostic.spec.ts:22:9 › Auth Smoke › login API → session cookie → authenticated page
+  ✘  182 [webkit] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy (457ms)
+  ✘  183 [webkit] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up (303ms)
+  -  184 [webkit] › tests/e2e/authenticated-core-journeys.spec.ts:248:9 › Authenticated core journeys › primary resource create -> list -> open -> edit -> delete with UI and backend assertions
+  -  185 [webkit] › tests/e2e/authenticated-core-journeys.spec.ts:295:9 › Authenticated core journeys › settings change persists across logout and API login
+  -  186 [webkit] › tests/e2e/authenticated-core-journeys.spec.ts:356:9 › Authenticated core journeys › search/filter on populated dataset returns expected results and backend pagination
+  -  187 [webkit] › tests/e2e/authenticated-core-journeys.spec.ts:400:9 › Authenticated core journeys › invite collaborator -> email sent -> accept invite -> appears in member list
+  -  188 [webkit] › tests/e2e/authenticated-core-journeys.spec.ts:450:9 › Authenticated core journeys › billing/plan change -> account state and Stripe state
+  -  189 [webkit] › tests/e2e/authenticated-core-journeys.spec.ts:454:9 › Authenticated core journeys › bulk action on 50+ items -> progress and backend completion
+  -  190 [webkit] › tests/e2e/demo-smoke.spec.ts:191:9 › Design-partner demo smoke › runs the Inflow Workbench preflight loop and supplier portal handoff
+  -  191 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:52:9 › Dashboard Inflow Lab › renders the sandbox-first inflow workspace for authenticated users
+  -  192 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:68:9 › Dashboard Inflow Lab › leads with the evidence chain, not an explanation of it
+  -  193 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:89:9 › Dashboard Inflow Lab › states the export verdict before any scrolling
+  -  194 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:109:9 › Dashboard Inflow Lab › keeps sandbox evaluation gated behind local CSV input
+  -  195 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:120:9 › Dashboard Inflow Lab › records a saved workbench run only after the explicit save action
+  -  196 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:148:9 › Dashboard Inflow Lab › shows a write-access note when the workbench save path is denied
+  -  197 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:173:9 › Dashboard Inflow Lab › reloads the latest saved workbench run after a successful save
+  -  198 [webkit] › tests/e2e/inflow-lab-dashboard.spec.ts:196:9 › Dashboard Inflow Lab › disables save before any POST when the logged-in user lacks inflow.write
+  ✘  199 [webkit] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (1.5s)
+  ✓  200 [webkit] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › standalone workbench: every step keeps the tooltip on-screen and the spotlight on target (4.4s)
+  ✓  201 [webkit] › tests/e2e/inflow-lab-tour.spec.ts:137:13 › guided tours (desktop) › dashboard preview: the spotlighted control is clickable while the tour stays open (1.7s)
+  ✓  202 [webkit] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (narrow) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (7.1s)
+  ✘  141 [firefox] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis (30.3s)
+  ✘  129 [firefox] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login (45.1s)
+  ✓  203 [webkit] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (narrow) › standalone workbench: every step keeps the tooltip on-screen and the spotlight on target (4.2s)
+  -  205 [webkit] › tests/e2e/login-dashboard.spec.ts:40:9 › Login → Dashboard Flow › successful email OTP login redirects to dashboard
+  -  207 [webkit] › tests/e2e/login-dashboard.spec.ts:54:9 › Login → Dashboard Flow › wrong verification code shows an error and does not authenticate
+  ✓  204 [webkit] › tests/e2e/inflow-lab-tour.spec.ts:137:13 › guided tours (narrow) › dashboard preview: the spotlighted control is clickable while the tour stays open (1.8s)
+  -  206 [webkit] › tests/e2e/invite_flow.spec.ts:22:9 › User Invite Flow › Admin can invite user and user can accept
+  -  209 [webkit] › tests/e2e/login-dashboard.spec.ts:91:9 › Login → Dashboard Flow › rapid double submit starts only one sign-in challenge
+  -  211 [webkit] › tests/e2e/login-dashboard.spec.ts:129:9 › Login → Dashboard Flow › logout from dashboard redirects to login
+  -  212 [webkit] › tests/e2e/login-dashboard.spec.ts:145:9 › Login → Dashboard Flow › back after logout does not restore a protected dashboard from cache
+  ✓  213 [webkit] › tests/e2e/login-dashboard.spec.ts:165:9 › Protected deep links › unauthenticated deep link redirects to login preserving next (250ms)
+  -  214 [webkit] › tests/e2e/login-dashboard.spec.ts:172:9 › Protected deep links › deep link is reachable after API login
+  -  215 [webkit] › tests/e2e/login-dashboard.spec.ts:182:9 › Login session cookie mode › email OTP login sets a persistent opaque session cookie
+  -  216 [webkit] › tests/e2e/login-dashboard.spec.ts:208:9 › Dashboard Features › dashboard displays user information
+  -  217 [webkit] › tests/e2e/login-dashboard.spec.ts:218:9 › Dashboard Features › dashboard has navigation links
+  -  218 [webkit] › tests/e2e/login-dashboard.spec.ts:230:9 › Dashboard Features › navigation links work correctly
+  ✘  208 [webkit] › tests/e2e/login-dashboard.spec.ts:71:9 › Login → Dashboard Flow › login form has proper accessibility and autofill-friendly controls (15.4s)
+  ✘  210 [webkit] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error (15.3s)
+  ✓  220 [webkit] › tests/e2e/rbac-gates.spec.ts:58:9 › RBAC Gates › Unauthenticated cannot access sysadmin (336ms)
+  -  222 [webkit] › tests/e2e/rbac-gates.spec.ts:72:9 › RBAC Gates › Admin can access sysadmin dashboard
+  -  223 [webkit] › tests/e2e/rbac-gates.spec.ts:102:9 › RBAC Gates › Admin can access user management
+  ✓  221 [webkit] › tests/e2e/rbac-gates.spec.ts:65:9 › RBAC Gates › Unauthenticated cannot access user settings (348ms)
+  -  225 [webkit] › tests/e2e/rbac-gates.spec.ts:130:9 › RBAC Gates › Session persists across navigation
+  ✓  224 [webkit] › tests/e2e/rbac-gates.spec.ts:122:9 › RBAC Gates › Protected API calls return 401 without auth (174ms)
+  ✓  226 [webkit] › tests/e2e/sandbox-front-door.spec.ts:36:9 › sandbox front door (#2757) › /sandbox is a real route, never a 404 (332ms)
+  ✓  227 [webkit] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/tracegains CTA copy matches where it goes (450ms)
+  ✓  228 [webkit] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/foodlogiq CTA copy matches where it goes (456ms)
+  ✓  229 [webkit] › tests/e2e/sandbox-front-door.spec.ts:46:13 › sandbox front door (#2757) › /compare/repositrak CTA copy matches where it goes (454ms)
+  ✓  230 [webkit] › tests/e2e/sandbox-front-door.spec.ts:68:9 › sandbox front door (#2757) › homepage #sandbox anchor resolves to the same destination (587ms)
+  -  232 [webkit] › tests/e2e/sandbox-front-door.spec.ts:97:9 › sandbox front door (#2757) › unmounted evaluator explains itself instead of hanging
+  ✓  233 [webkit] › tests/e2e/security-audit-fixes.spec.ts:113:13 › Security Audit Fixes › SEC-19 Production Client Logging › Error boundaries do not log raw Error objects in production (164ms)
+  -  234 [webkit] › tests/e2e/security-audit-fixes.spec.ts:145:13 › Security Audit Fixes › SEC-02/SEC-23 XSS Coverage › Dashboard scan ignores malicious stored tenant IDs before QR/link rendering
+  -  235 [webkit] › tests/e2e/security-audit-fixes.spec.ts:177:13 › Security Audit Fixes › SEC-02/SEC-23 XSS Coverage › Authenticated text inputs do not render XSS payloads as active DOM
+  -  236 [webkit] › tests/e2e/security-audit-fixes.spec.ts:310:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › No tokens stored in localStorage after login
+  -  237 [webkit] › tests/e2e/security-audit-fixes.spec.ts:323:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › HTTP-only cookies are set after login
+  -  238 [webkit] › tests/e2e/security-audit-fixes.spec.ts:342:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › Session persists across page navigation via cookies
+  -  239 [webkit] › tests/e2e/security-audit-fixes.spec.ts:371:13 › Security Audit Fixes › Cookie-Based Auth (PR #327) › Logout clears HTTP-only cookies
+  -  240 [webkit] › tests/e2e/security-audit-fixes.spec.ts:407:13 › Security Audit Fixes › Security Settings Page (PR #325) › Security settings page renders without dead stubs
+  -  241 [webkit] › tests/e2e/security-audit-fixes.spec.ts:432:13 › Security Audit Fixes › Security Settings Page (PR #325) › 2FA section renders correctly
+  -  242 [webkit] › tests/e2e/security-audit-fixes.spec.ts:465:13 › Security Audit Fixes › Security Settings Page (PR #325) › Session management section shows real data or proper messaging
+  -  243 [webkit] › tests/e2e/security-audit-fixes.spec.ts:491:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Sysadmin status reflected in UI after login
+  -  244 [webkit] › tests/e2e/security-audit-fixes.spec.ts:519:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Non-sysadmin cannot access /sysadmin routes
+  -  245 [webkit] › tests/e2e/security-audit-fixes.spec.ts:549:13 › Security Audit Fixes › Sysadmin Cache & Access Control (PR #325) › Sysadmin role persists across page reloads
+  -  246 [webkit] › tests/e2e/security-audit-fixes.spec.ts:580:13 › Security Audit Fixes › CSRF Protection (PR #329) › State-changing forms include CSRF tokens
+  -  247 [webkit] › tests/e2e/security-audit-fixes.spec.ts:611:13 › Security Audit Fixes › CSRF Protection (PR #329) › API calls include CSRF header for state-changing methods
+  -  248 [webkit] › tests/e2e/security-audit-fixes.spec.ts:654:13 › Security Audit Fixes › CSRF Protection (PR #329) › POST requests without CSRF token are rejected
+  ✓  249 [webkit] › tests/e2e/security-audit-fixes.spec.ts:682:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Unauthenticated users redirected from protected routes (1.5s)
+  ✓  250 [webkit] › tests/e2e/security-audit-fixes.spec.ts:712:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Protected API responses do not leak data in error messages (160ms)
+  ✘  251 [webkit] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information (855ms)
+  -  252 [webkit] › tests/e2e/security-audit-fixes.spec.ts:768:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Login page redirects authenticated users
+  -  253 [webkit] › tests/e2e/security-audit-fixes.spec.ts:808:13 › Security Audit Fixes › Integration: Full Auth & Security Flow › Complete login, navigate, security settings, logout flow
+  -  254 [webkit] › tests/e2e/security-audit-fixes.spec.ts:851:13 › Security Audit Fixes › Integration: Full Auth & Security Flow › Sysadmin can access admin routes, regular user cannot
+  ✘  255 [webkit] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration (166ms)
+  ✘  256 [webkit] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion (315ms)
+  ✘  257 [webkit] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate (327ms)
+  ✓  258 [webkit] › tests/e2e/security-release-gate.spec.ts:54:9 › Security release gate › release-disabled graph surface returns exact 404 for reads and writes (294ms)
+  -  259 [webkit] › tests/e2e/snapshot-creation.spec.ts:91:9 › Compliance Snapshot Workspace › renders the real snapshots workspace state
+  -  260 [webkit] › tests/e2e/snapshot-creation.spec.ts:109:9 › Compliance Snapshot Workspace › can create a manual compliance snapshot
+  -  261 [webkit] › tests/e2e/snapshot-creation.spec.ts:119:9 › Compliance Snapshot Workspace › can open an FDA response template from the workspace
+  -  262 [webkit] › tests/e2e/snapshot-creation.spec.ts:139:9 › Compliance Snapshot Workspace › can download a zero-trust audit pack from the workspace
+  -  263 [webkit] › tests/e2e/snapshot-creation.spec.ts:157:9 › Compliance Snapshot Workspace › can verify snapshot integrity from the workspace
+  -  264 [webkit] › tests/e2e/snapshot-creation.spec.ts:180:9 › Compliance Snapshot Workspace › can compare two snapshots from the workspace
+  -  265 [webkit] › tests/e2e/tenant-isolation.spec.ts:43:9 › Tenant Isolation › Tenant switcher is visible after login
+  -  266 [webkit] › tests/e2e/tenant-isolation.spec.ts:69:9 › Tenant Isolation › Tenant context persists in navigation
+  -  267 [webkit] › tests/e2e/tenant-isolation.spec.ts:85:9 › Tenant Isolation › API calls include tenant context
+  -  268 [webkit] › tests/e2e/tenant-isolation.spec.ts:109:9 › Tenant Isolation › Cannot inject arbitrary tenant_id via URL
+  -  269 [webkit] › tests/e2e/tenant-isolation.spec.ts:136:9 › Tenant Isolation › Review queue shows tenant-specific data
+  -  270 [webkit] › tests/e2e/tenant-isolation.spec.ts:150:9 › Tenant Isolation › Overlay controls are tenant-scoped
+  ✘  219 [webkit] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login (45.1s)
+  ✘  231 [webkit] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis (30.4s)
+
+
+  1) [chromium] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-flow.spec.ts:13:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-email-OTP-login--d283f-ey-step-up-for-admin-policy-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-email-OTP-login--d283f-ey-step-up-for-admin-policy-chromium/error-context.md
+
+  2) [chromium] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-flow.spec.ts:32:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-pre-provisioned--1aff6-e-passkey-completes-step-up-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-pre-provisioned--1aff6-e-passkey-completes-step-up-chromium/error-context.md
+
+  3) [chromium] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login 
+
+    Test timeout of 45000ms exceeded.
+
+    Error: locator.click: Test timeout of 45000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /^Password$/ })
+
+
+       at support/ui-auth.ts:4
+
+      2 |
+      3 | export async function selectPasswordLogin(page: Page): Promise<void> {
+    > 4 |     await page.getByRole('button', { name: /^Password$/ }).click();
+        |                                                            ^
+      5 |     await expect(page.locator('input[type="password"]')).toBeVisible();
+      6 | }
+      7 |
+        at selectPasswordLogin (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/support/ui-auth.ts:4:60)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/rbac-gates.spec.ts:54:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/rbac-gates-RBAC-Gates-Unau-eaf24-ers-are-redirected-to-login-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/rbac-gates-RBAC-Gates-Unau-eaf24-ers-are-redirected-to-login-chromium/error-context.md
+
+  4) [chromium] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FSMA 204 Sandbox Diagnosis')
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('FSMA 204 Sandbox Diagnosis') with timeout 30000ms
+      - waiting for getByText('FSMA 204 Sandbox Diagnosis')
+
+
+      87 |         await page.getByRole('button', { name: /Run a sample FTL chain/i }).click();
+      88 |
+    > 89 |         await expect(page.getByText('FSMA 204 Sandbox Diagnosis')).toBeVisible({ timeout: 30_000 });
+         |                                                                    ^
+      90 |
+      91 |         // The sample chain is deliberately imperfect — a clean result would mean
+      92 |         // the rules did not run.
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/sandbox-front-door.spec.ts:89:68
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/sandbox-front-door-sandbox-2901b-tes-and-renders-a-diagnosis-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/sandbox-front-door-sandbox-2901b-tes-and-renders-a-diagnosis-chromium/error-context.md
+
+  5) [chromium] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information 
+
+    Error: expect(received).toBeFalsy()
+
+    Received: ["config"]
+
+      763 |             );
+      764 |
+    > 765 |             expect(leaksSensitiveInfo).toBeFalsy();
+          |                                        ^
+      766 |         });
+      767 |
+      768 |         test('Login page redirects authenticated users', async ({ page }) => {
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-audit-fixes.spec.ts:765:40
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-audit-fixes-Secur-9c316-xpose-sensitive-information-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-audit-fixes-Secur-9c316-xpose-sensitive-information-chromium/error-context.md
+
+  6) [chromium] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:12:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-21527-gh-assurance-administration-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-21527-gh-assurance-administration-chromium/error-context.md
+
+  7) [chromium] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion 
+
+    Error: QA environment restriction: database/bootstrap helper is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13
+
+      11 |   childProcess[method] = function (...args) {
+      12 |     if (args.slice(0, 2).flat().some(value => /seed_passwordless_e2e_user|start-e2e-backend|sqlite|alembic/.test(String(value)))) {
+    > 13 |       throw new Error('QA environment restriction: database/bootstrap helper is outside browser-only scope');
+         |             ^
+      14 |     }
+      15 |     return original.apply(this, args);
+      16 |   };
+        at childProcess.<computed> (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13:13)
+        at seedPasswordlessUser (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:64:32)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:27:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-0ef1a-eplaced-by-a-path-assertion-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-0ef1a-eplaced-by-a-path-assertion-chromium/error-context.md
+
+  8) [chromium] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:39:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-2fb12-s-rejected-by-the-CSRF-gate-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-2fb12-s-rejected-by-the-CSRF-gate-chromium/error-context.md
+
+  9) [firefox] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-flow.spec.ts:13:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-email-OTP-login--d283f-ey-step-up-for-admin-policy-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-email-OTP-login--d283f-ey-step-up-for-admin-policy-firefox/error-context.md
+
+  10) [firefox] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-flow.spec.ts:32:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-pre-provisioned--1aff6-e-passkey-completes-step-up-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-pre-provisioned--1aff6-e-passkey-completes-step-up-firefox/error-context.md
+
+  11) [firefox] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('#login-error')
+    Expected pattern: /failed to fetch|unable to start sign-in/i
+    Received string:  "NetworkError when attempting to fetch resource."
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" locator('#login-error') with timeout 15000ms
+      - waiting for locator('#login-error')
+        34 × locator resolved to <div role="alert" id="login-error" aria-live="polite" class="flex gap-3 rounded-md border border-l-[3px] border-re-border px-4 py-3 text-ui text-re-text-secondary border-l-re-danger bg-re-danger-bg mb-4">…</div>
+           - unexpected value "NetworkError when attempting to fetch resource."
+
+
+      122 |         // Chromium surfaces aborted fetches as "Failed to fetch"; the client
+      123 |         // falls back to its own copy when the error carries no message.
+    > 124 |         await expect(page.locator('#login-error')).toContainText(/failed to fetch|unable to start sign-in/i);
+          |                                                    ^
+      125 |         await expect(page).toHaveURL(/\/login/);
+      126 |         await expect(page.getByLabel(/email address/i)).toHaveValue(email);
+      127 |     });
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/login-dashboard.spec.ts:124:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/login-dashboard-Login-→-Da-efd4f-led-and-shows-a-clear-error-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/login-dashboard-Login-→-Da-efd4f-led-and-shows-a-clear-error-firefox/error-context.md
+
+  12) [firefox] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login 
+
+    Test timeout of 45000ms exceeded.
+
+    Error: locator.click: Test timeout of 45000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /^Password$/ })
+
+
+       at support/ui-auth.ts:4
+
+      2 |
+      3 | export async function selectPasswordLogin(page: Page): Promise<void> {
+    > 4 |     await page.getByRole('button', { name: /^Password$/ }).click();
+        |                                                            ^
+      5 |     await expect(page.locator('input[type="password"]')).toBeVisible();
+      6 | }
+      7 |
+        at selectPasswordLogin (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/support/ui-auth.ts:4:60)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/rbac-gates.spec.ts:54:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/rbac-gates-RBAC-Gates-Unau-eaf24-ers-are-redirected-to-login-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/rbac-gates-RBAC-Gates-Unau-eaf24-ers-are-redirected-to-login-firefox/error-context.md
+
+  13) [firefox] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FSMA 204 Sandbox Diagnosis')
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('FSMA 204 Sandbox Diagnosis') with timeout 30000ms
+      - waiting for getByText('FSMA 204 Sandbox Diagnosis')
+
+
+      87 |         await page.getByRole('button', { name: /Run a sample FTL chain/i }).click();
+      88 |
+    > 89 |         await expect(page.getByText('FSMA 204 Sandbox Diagnosis')).toBeVisible({ timeout: 30_000 });
+         |                                                                    ^
+      90 |
+      91 |         // The sample chain is deliberately imperfect — a clean result would mean
+      92 |         // the rules did not run.
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/sandbox-front-door.spec.ts:89:68
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/sandbox-front-door-sandbox-2901b-tes-and-renders-a-diagnosis-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/sandbox-front-door-sandbox-2901b-tes-and-renders-a-diagnosis-firefox/error-context.md
+
+  14) [firefox] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information 
+
+    Error: expect(received).toBeFalsy()
+
+    Received: ["config"]
+
+      763 |             );
+      764 |
+    > 765 |             expect(leaksSensitiveInfo).toBeFalsy();
+          |                                        ^
+      766 |         });
+      767 |
+      768 |         test('Login page redirects authenticated users', async ({ page }) => {
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-audit-fixes.spec.ts:765:40
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-audit-fixes-Secur-9c316-xpose-sensitive-information-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-audit-fixes-Secur-9c316-xpose-sensitive-information-firefox/error-context.md
+
+  15) [firefox] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:12:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-21527-gh-assurance-administration-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-21527-gh-assurance-administration-firefox/error-context.md
+
+  16) [firefox] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion 
+
+    Error: QA environment restriction: database/bootstrap helper is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13
+
+      11 |   childProcess[method] = function (...args) {
+      12 |     if (args.slice(0, 2).flat().some(value => /seed_passwordless_e2e_user|start-e2e-backend|sqlite|alembic/.test(String(value)))) {
+    > 13 |       throw new Error('QA environment restriction: database/bootstrap helper is outside browser-only scope');
+         |             ^
+      14 |     }
+      15 |     return original.apply(this, args);
+      16 |   };
+        at childProcess.<computed> (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13:13)
+        at seedPasswordlessUser (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:64:32)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:27:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-0ef1a-eplaced-by-a-path-assertion-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-0ef1a-eplaced-by-a-path-assertion-firefox/error-context.md
+
+  17) [firefox] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:39:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-2fb12-s-rejected-by-the-CSRF-gate-firefox/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-2fb12-s-rejected-by-the-CSRF-gate-firefox/error-context.md
+
+  18) [webkit] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-flow.spec.ts:13:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-email-OTP-login--d283f-ey-step-up-for-admin-policy-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-email-OTP-login--d283f-ey-step-up-for-admin-policy-webkit/error-context.md
+
+  19) [webkit] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-flow.spec.ts:32:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-pre-provisioned--1aff6-e-passkey-completes-step-up-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/auth-flow-pre-provisioned--1aff6-e-passkey-completes-step-up-webkit/error-context.md
+
+  20) [webkit] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target 
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 901
+    Received:    918.15625
+
+      74 |     expect(tooltipBox!.y).toBeGreaterThanOrEqual(0);
+      75 |     expect(tooltipBox!.x + tooltipBox!.width).toBeLessThanOrEqual(viewport!.width + 1);
+    > 76 |     expect(tooltipBox!.y + tooltipBox!.height).toBeLessThanOrEqual(viewport!.height + 1);
+         |                                                ^
+      77 |     expect(tooltipBox!.width, 'tooltip must be a card, not a full-width bar').toBeLessThan(
+      78 |         viewport!.width * 0.75,
+      79 |     );
+        at assertStepGeometry (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/inflow-lab-tour.spec.ts:76:48)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/inflow-lab-tour.spec.ts:111:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/inflow-lab-tour-guided-tou-4a9c6-and-the-spotlight-on-target-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/inflow-lab-tour-guided-tou-4a9c6-and-the-spotlight-on-target-webkit/error-context.md
+
+  21) [webkit] › tests/e2e/login-dashboard.spec.ts:71:9 › Login → Dashboard Flow › login form has proper accessibility and autofill-friendly controls 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: /^continue/i })
+    Expected: focused
+    Received: inactive
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('button', { name: /^continue/i }) with timeout 15000ms
+      - waiting for getByRole('button', { name: /^continue/i })
+        34 × locator resolved to <button type="submit" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border text-ui font-medium transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none [&_svg]:size-4 [&_svg]:shrink-0 border-transparent bg-re-brand text-re-brand-foreground hover:bg-re-brand-dark acti…>…</button>
+           - unexpected value "inactive"
+
+
+      86 |         await expect(emailInput).toBeFocused();
+      87 |         await page.keyboard.press('Tab');
+    > 88 |         await expect(continueButton).toBeFocused();
+         |                                      ^
+      89 |     });
+      90 |
+      91 |     test('rapid double submit starts only one sign-in challenge', async ({ page }) => {
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/login-dashboard.spec.ts:88:38
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/login-dashboard-Login-→-Da-27822--autofill-friendly-controls-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/login-dashboard-Login-→-Da-27822--autofill-friendly-controls-webkit/error-context.md
+
+  22) [webkit] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('#login-error')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('#login-error') with timeout 15000ms
+      - waiting for locator('#login-error')
+
+
+      119 |         await page.getByRole('button', { name: /^continue/i }).click();
+      120 |
+    > 121 |         await expect(page.locator('#login-error')).toBeVisible();
+          |                                                    ^
+      122 |         // Chromium surfaces aborted fetches as "Failed to fetch"; the client
+      123 |         // falls back to its own copy when the error carries no message.
+      124 |         await expect(page.locator('#login-error')).toContainText(/failed to fetch|unable to start sign-in/i);
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/login-dashboard.spec.ts:121:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/login-dashboard-Login-→-Da-efd4f-led-and-shows-a-clear-error-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/login-dashboard-Login-→-Da-efd4f-led-and-shows-a-clear-error-webkit/error-context.md
+
+  23) [webkit] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login 
+
+    Test timeout of 45000ms exceeded.
+
+    Error: locator.click: Test timeout of 45000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /^Password$/ })
+
+
+       at support/ui-auth.ts:4
+
+      2 |
+      3 | export async function selectPasswordLogin(page: Page): Promise<void> {
+    > 4 |     await page.getByRole('button', { name: /^Password$/ }).click();
+        |                                                            ^
+      5 |     await expect(page.locator('input[type="password"]')).toBeVisible();
+      6 | }
+      7 |
+        at selectPasswordLogin (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/support/ui-auth.ts:4:60)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/rbac-gates.spec.ts:54:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/rbac-gates-RBAC-Gates-Unau-eaf24-ers-are-redirected-to-login-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/rbac-gates-RBAC-Gates-Unau-eaf24-ers-are-redirected-to-login-webkit/error-context.md
+
+  24) [webkit] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FSMA 204 Sandbox Diagnosis')
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('FSMA 204 Sandbox Diagnosis') with timeout 30000ms
+      - waiting for getByText('FSMA 204 Sandbox Diagnosis')
+
+
+      87 |         await page.getByRole('button', { name: /Run a sample FTL chain/i }).click();
+      88 |
+    > 89 |         await expect(page.getByText('FSMA 204 Sandbox Diagnosis')).toBeVisible({ timeout: 30_000 });
+         |                                                                    ^
+      90 |
+      91 |         // The sample chain is deliberately imperfect — a clean result would mean
+      92 |         // the rules did not run.
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/sandbox-front-door.spec.ts:89:68
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/sandbox-front-door-sandbox-2901b-tes-and-renders-a-diagnosis-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/sandbox-front-door-sandbox-2901b-tes-and-renders-a-diagnosis-webkit/error-context.md
+
+  25) [webkit] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information 
+
+    Error: expect(received).toBeFalsy()
+
+    Received: ["config"]
+
+      763 |             );
+      764 |
+    > 765 |             expect(leaksSensitiveInfo).toBeFalsy();
+          |                                        ^
+      766 |         });
+      767 |
+      768 |         test('Login page redirects authenticated users', async ({ page }) => {
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-audit-fixes.spec.ts:765:40
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-audit-fixes-Secur-9c316-xpose-sensitive-information-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-audit-fixes-Secur-9c316-xpose-sensitive-information-webkit/error-context.md
+
+  26) [webkit] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:12:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-21527-gh-assurance-administration-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-21527-gh-assurance-administration-webkit/error-context.md
+
+  27) [webkit] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion 
+
+    Error: QA environment restriction: database/bootstrap helper is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13
+
+      11 |   childProcess[method] = function (...args) {
+      12 |     if (args.slice(0, 2).flat().some(value => /seed_passwordless_e2e_user|start-e2e-backend|sqlite|alembic/.test(String(value)))) {
+    > 13 |       throw new Error('QA environment restriction: database/bootstrap helper is outside browser-only scope');
+         |             ^
+      14 |     }
+      15 |     return original.apply(this, args);
+      16 |   };
+        at childProcess.<computed> (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13:13)
+        at seedPasswordlessUser (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:64:32)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:27:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-0ef1a-eplaced-by-a-path-assertion-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-0ef1a-eplaced-by-a-path-assertion-webkit/error-context.md
+
+  28) [webkit] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate 
+
+    Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope
+
+       at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21
+
+      19 | fs.rmSync = function (file, ...args) {
+      20 |   if (String(file).includes('regengine-playwright-email-outbox')) {
+    > 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+         |           ^
+      22 |   }
+      23 |   return rmSync.call(this, file, ...args);
+      24 | };
+        at fs.rmSync (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21:11)
+        at resetOtpOutbox (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-helpers.ts:57:11)
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/security-release-gate.spec.ts:39:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-2fb12-s-rejected-by-the-CSRF-gate-webkit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/security-release-gate-Secu-2fb12-s-rejected-by-the-CSRF-gate-webkit/error-context.md
+
+  28 failed
+    [chromium] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy 
+    [chromium] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up 
+    [chromium] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login 
+    [chromium] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis 
+    [chromium] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information 
+    [chromium] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration 
+    [chromium] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion 
+    [chromium] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate 
+    [firefox] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy 
+    [firefox] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up 
+    [firefox] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error 
+    [firefox] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login 
+    [firefox] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis 
+    [firefox] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information 
+    [firefox] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration 
+    [firefox] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion 
+    [firefox] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate 
+    [webkit] › tests/e2e/auth-flow.spec.ts:11:5 › email OTP login hydrates profile and requires passkey step-up for admin policy 
+    [webkit] › tests/e2e/auth-flow.spec.ts:30:5 › pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up 
+    [webkit] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target 
+    [webkit] › tests/e2e/login-dashboard.spec.ts:71:9 › Login → Dashboard Flow › login form has proper accessibility and autofill-friendly controls 
+    [webkit] › tests/e2e/login-dashboard.spec.ts:113:9 › Login → Dashboard Flow › challenge network failure keeps the form filled and shows a clear error 
+    [webkit] › tests/e2e/rbac-gates.spec.ts:45:9 › RBAC Gates › Unauthenticated users are redirected to login 
+    [webkit] › tests/e2e/sandbox-front-door.spec.ts:80:9 › sandbox front door (#2757) › sample FTL CSV evaluates and renders a diagnosis 
+    [webkit] › tests/e2e/security-audit-fixes.spec.ts:749:13 › Security Audit Fixes › Auth Guard Visibility & Error Handling › Error pages do not expose sensitive information 
+    [webkit] › tests/e2e/security-release-gate.spec.ts:10:9 › Security release gate › email-code-only sysadmin cannot use high-assurance administration 
+    [webkit] › tests/e2e/security-release-gate.spec.ts:23:9 › Security release gate › session tenant cannot be replaced by a path assertion 
+    [webkit] › tests/e2e/security-release-gate.spec.ts:37:9 › Security release gate › cross-origin cookie mutation is rejected by the CSRF gate 
+  183 skipped
+  59 passed (2.3m)

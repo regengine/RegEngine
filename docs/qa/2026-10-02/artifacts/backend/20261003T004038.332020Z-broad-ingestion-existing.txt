@@ -1,0 +1,396 @@
+UTC: 2026-10-03T00:40:38.332020+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests --ignore=services/ingestion/tests/test_qa_sweep_20261002_contract.py -m 'not integration' --continue-on-collection-errors --maxfail=20 --tb=short --cov=app --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingestion-broad.json
+Exit: 1
+Duration: 71.91s
+Timeout: False
+
+ssssssssssssssssssssssssssssssssssssssssssssssssss....FF.......FF.FF.... [  1%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+........................................................................ [  9%]
+...............EEEEEEEEEE
+==================================== ERRORS ====================================
+_ ERROR collecting services/ingestion/tests/test_ingest_upload_streaming_size.py _
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_ingest_upload_streaming_size.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_ingest_upload_streaming_size.py:20: in <module>
+    from app import routes_ingest
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+______ ERROR collecting services/ingestion/tests/test_kafka_utils_1342.py ______
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_kafka_utils_1342.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_kafka_utils_1342.py:32: in <module>
+    from app import kafka_utils as ku
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_ ERROR collecting services/ingestion/tests/test_routes_regulation_task_queue.py _
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_routes_regulation_task_queue.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_routes_regulation_task_queue.py:20: in <module>
+    import app.routes_ingest as routes_ingest
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_____ ERROR collecting services/ingestion/tests/test_routes_status_1342.py _____
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_routes_status_1342.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_routes_status_1342.py:27: in <module>
+    from app import routes_status as rs
+services/ingestion/app/routes_status.py:23: in <module>
+    from .routes import get_db_manager
+services/ingestion/app/routes.py:26: in <module>
+    from .routes_ingest import (  # noqa: F401
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_________ ERROR at setup of TestValidateUrl.test_https_scheme_allowed __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_http_scheme_allowed __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_ftp_scheme_blocked ___________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_file_scheme_blocked __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_______ ERROR at setup of TestValidateUrl.test_javascript_scheme_blocked _______
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_data_scheme_blocked __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_____ ERROR at setup of TestValidateUrl.test_url_with_credentials_blocked ______
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+____ ERROR at setup of TestValidateUrl.test_url_with_username_only_blocked _____
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+___________ ERROR at setup of TestValidateUrl.test_localhost_blocked ___________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+___________ ERROR at setup of TestValidateUrl.test_127_0_0_1_blocked ___________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+=================================== FAILURES ===================================
+_________________ test_ssrf_does_not_trigger_browser_fallback __________________
+services/ingestion/regengine_ingestion/utils/fetch_utils.py:50: in fetch_content
+    return safe_fetch_content(url, timeout=timeout, headers=STANDARD_HEADERS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/safe_http.py:385: in safe_fetch_content
+    url = validate_url(url)
+          ^^^^^^^^^^^^^^^^^
+services/shared/url_validation.py:120: in validate_url
+    _check_resolved_ip(hostname)
+services/shared/url_validation.py:145: in _check_resolved_ip
+    infos = socket.getaddrinfo(hostname, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:34: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+
+During handling of the above exception, another exception occurred:
+services/ingestion/tests/security/test_fetch_fallback.py:33: in test_ssrf_does_not_trigger_browser_fallback
+    fetch_utils.fetch_content("https://example.com/foo")
+services/ingestion/regengine_ingestion/utils/fetch_utils.py:74: in fetch_content
+    raise browser_e
+services/ingestion/regengine_ingestion/utils/fetch_utils.py:71: in fetch_content
+    return _fetch_with_browser_sync(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/unittest/mock.py:1124: in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/unittest/mock.py:1128: in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/unittest/mock.py:1183: in _execute_mock_call
+    raise effect
+E   AssertionError: browser must not run
+------------------------------ Captured log call -------------------------------
+WARNING  ingestion.fetch:fetch_utils.py:69 {"url": "https://example.com/foo", "error": "QA safety guard denied socket.getaddrinfo; use an in-process mock", "event": "fetch_failed_falling_back_to_browser", "trace_sampled": false, "logger": "ingestion.fetch", "level": "warning", "timestamp": "2026-10-03T00:41:18.318215Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+ERROR    ingestion.fetch:fetch_utils.py:73 {"url": "https://example.com/foo", "error": "browser must not run", "event": "all_fetch_methods_failed", "trace_sampled": false, "logger": "ingestion.fetch", "level": "error", "timestamp": "2026-10-03T00:41:18.318368Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+___________ test_wrapped_ssrf_value_error_does_not_trigger_fallback ____________
+services/ingestion/regengine_ingestion/utils/fetch_utils.py:50: in fetch_content
+    return safe_fetch_content(url, timeout=timeout, headers=STANDARD_HEADERS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/safe_http.py:385: in safe_fetch_content
+    url = validate_url(url)
+          ^^^^^^^^^^^^^^^^^
+services/shared/url_validation.py:120: in validate_url
+    _check_resolved_ip(hostname)
+services/shared/url_validation.py:145: in _check_resolved_ip
+    infos = socket.getaddrinfo(hostname, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:34: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+
+During handling of the above exception, another exception occurred:
+services/ingestion/tests/security/test_fetch_fallback.py:53: in test_wrapped_ssrf_value_error_does_not_trigger_fallback
+    fetch_utils.fetch_content("https://example.com/foo")
+services/ingestion/regengine_ingestion/utils/fetch_utils.py:74: in fetch_content
+    raise browser_e
+services/ingestion/regengine_ingestion/utils/fetch_utils.py:71: in fetch_content
+    return _fetch_with_browser_sync(url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/unittest/mock.py:1124: in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/unittest/mock.py:1128: in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/unittest/mock.py:1183: in _execute_mock_call
+    raise effect
+E   AssertionError: browser must not run
+------------------------------ Captured log call -------------------------------
+WARNING  ingestion.fetch:fetch_utils.py:69 {"url": "https://example.com/foo", "error": "QA safety guard denied socket.getaddrinfo; use an in-process mock", "event": "fetch_failed_falling_back_to_browser", "trace_sampled": false, "logger": "ingestion.fetch", "level": "warning", "timestamp": "2026-10-03T00:41:18.573909Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+ERROR    ingestion.fetch:fetch_utils.py:73 {"url": "https://example.com/foo", "error": "browser must not run", "event": "all_fetch_methods_failed", "trace_sampled": false, "logger": "ingestion.fetch", "level": "error", "timestamp": "2026-10-03T00:41:18.574037Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+__________________ test_fda_enforcement_fetch_uses_safe_http ___________________
+services/ingestion/tests/security/test_scrapers_ssrf.py:152: in test_fda_enforcement_fetch_uses_safe_http
+    assert m.call_count == 1
+E   AssertionError: assert 0 == 1
+E    +  where 0 = <MagicMock name='safe_httpx_get_sync' id='4741584144'>.call_count
+------------------------------ Captured log call -------------------------------
+ERROR    ingestion.scrapers.fda_enforcement:fda_enforcement.py:130 {"url": "https://www.fda.gov/warning-letter/abc", "error": "QA safety guard denied socket.getaddrinfo; use an in-process mock", "event": "fda_fetch_failed", "trace_sampled": false, "logger": "ingestion.scrapers.fda_enforcement", "level": "error", "timestamp": "2026-10-03T00:41:19.113376Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+______________ test_fda_enforcement_pdf_deep_fetch_uses_safe_http ______________
+services/ingestion/tests/security/test_scrapers_ssrf.py:173: in test_fda_enforcement_pdf_deep_fetch_uses_safe_http
+    assert m.call_count == 2
+E   AssertionError: assert 0 == 2
+E    +  where 0 = <MagicMock name='safe_httpx_get_sync' id='4751608656'>.call_count
+------------------------------ Captured log call -------------------------------
+ERROR    ingestion.scrapers.fda_enforcement:fda_enforcement.py:130 {"url": "https://www.fda.gov/warning-letter/abc", "error": "QA safety guard denied socket.getaddrinfo; use an in-process mock", "event": "fda_fetch_failed", "trace_sampled": false, "logger": "ingestion.scrapers.fda_enforcement", "level": "error", "timestamp": "2026-10-03T00:41:19.175420Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+_____________________ test_redirect_to_metadata_ip_blocked _____________________
+services/ingestion/tests/security/test_ssrf_redirect.py:91: in test_redirect_to_metadata_ip_blocked
+    safe_httpx_get_sync(url, validator=patched, max_redirects=3)
+services/shared/safe_http.py:189: in safe_httpx_get_sync
+    pinned_ip, host = _validate_and_pin(current_url)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/safe_http.py:124: in _validate_and_pin
+    infos = socket.getaddrinfo(host, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:34: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+_____ test_redirect_to_internal_canary_is_blocked_before_outbound_request ______
+services/ingestion/tests/security/test_ssrf_redirect.py:113: in test_redirect_to_internal_canary_is_blocked_before_outbound_request
+    safe_httpx_get_sync(source_url, validator=allow_test_source, max_redirects=3)
+services/shared/safe_http.py:189: in safe_httpx_get_sync
+    pinned_ip, host = _validate_and_pin(current_url)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/safe_http.py:124: in _validate_and_pin
+    infos = socket.getaddrinfo(host, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:34: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+=========================== short test summary info ============================
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:50: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:90: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:123: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:146: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:182: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:203: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:234: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:261: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:282: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:294: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:324: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_corrections_evidence.py:354: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:19: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:30: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:40: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:58: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:69: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:85: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:92: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:102: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:109: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:118: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:126: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:134: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:152: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_intake.py:170: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:91: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:145: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:157: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:176: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:202: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:215: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:228: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:257: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:275: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:309: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_outbox_delivery.py:322: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:44: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:58: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:67: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:74: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:85: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:96: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:123: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:134: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:154: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:173: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:238: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:258: remediation scratch Postgres not available
+SKIPPED [1] services/ingestion/tests/remediation/test_remediation_tokens_security.py:277: remediation scratch Postgres not available
+ERROR services/ingestion/tests/test_ingest_upload_streaming_size.py
+ERROR services/ingestion/tests/test_kafka_utils_1342.py
+ERROR services/ingestion/tests/test_routes_regulation_task_queue.py
+ERROR services/ingestion/tests/test_routes_status_1342.py
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_https_scheme_allowed - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_http_scheme_allowed - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_ftp_scheme_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_file_scheme_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_javascript_scheme_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_data_scheme_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_url_with_credentials_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_url_with_username_only_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_localhost_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+ERROR services/ingestion/tests/test_boundaries.py::TestValidateUrl::test_127_0_0_1_blocked - ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+FAILED services/ingestion/tests/security/test_fetch_fallback.py::test_ssrf_does_not_trigger_browser_fallback - AssertionError: browser must not run
+FAILED services/ingestion/tests/security/test_fetch_fallback.py::test_wrapped_ssrf_value_error_does_not_trigger_fallback - AssertionError: browser must not run
+FAILED services/ingestion/tests/security/test_scrapers_ssrf.py::test_fda_enforcement_fetch_uses_safe_http - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='safe_httpx_get_sync' id='4741584144'>.call_count
+FAILED services/ingestion/tests/security/test_scrapers_ssrf.py::test_fda_enforcement_pdf_deep_fetch_uses_safe_http - AssertionError: assert 0 == 2
+ +  where 0 = <MagicMock name='safe_httpx_get_sync' id='4751608656'>.call_count
+FAILED services/ingestion/tests/security/test_ssrf_redirect.py::test_redirect_to_metadata_ip_blocked - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+FAILED services/ingestion/tests/security/test_ssrf_redirect.py::test_redirect_to_internal_canary_is_blocked_before_outbound_request - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 20 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+6 failed, 463 passed, 50 skipped, 15 deselected, 14 errors in 70.25s (0:01:10)

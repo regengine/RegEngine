@@ -1,0 +1,43 @@
+UTC: 2026-10-03T00:41:23.566237+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import urllib.request,urllib.error; print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-output.txt").read_text()[-3000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'
+Exit: 1
+Duration: 0.09s
+Timeout: False
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from pathlib import Path; import urllib.request,urllib.error; print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-output.txt").read_text()[-3000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))
+                                                                                                                                                                                                                                                                                                                           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 493, in open
+    response = meth(req, response)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 602, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 531, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 500: Internal Server Error
+PID=31057
+Port=3104
+Guard SHA256=174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031
+Mirror=/private/tmp/regengine-qa-ux-u2059hm8/app-built
+Command=['node', '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3104']
+
+▲ Next.js 16.3.5
+- Local:         http://127.0.0.1:3104
+- Network:       http://127.0.0.1:3104
+✓ Ready in 137ms
+✓ Running next.config.js took 7ms
+[startup-assertion] CSRF_SECRET must be set in production
+Failed to prepare server Error: An error occurred while loading instrumentation hook: Startup assertions failed:
+  - CSRF_SECRET must be set in production
+    at Module.o [as register] (.next/server/chunks/[root-of-the-server]__0n76lde._.js:1:3012)
+⨯ unhandledRejection: Error: An error occurred while loading instrumentation hook: Startup assertions failed:
+  - CSRF_SECRET must be set in production
+    at Module.o [as register] (.next/server/chunks/[root-of-the-server]__0n76lde._.js:1:3012)
+

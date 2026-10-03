@@ -162,4 +162,33 @@ describe('useSync', () => {
         expect(mockMutateAsync).not.toHaveBeenCalled();
         expect(dbMocks.getPendingUploads).not.toHaveBeenCalled();
     });
+
+    it.fails('FE-004 does not replay a previous tenant photo after an account switch', async () => {
+        // PhotoRecord/savePhoto currently persist no owner. The same IndexedDB
+        // queue survives logout, so this fixture models a photo captured by A.
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [],
+            photos: [{
+                id: 9,
+                blob: new Blob(['tenant-a-label'], { type: 'image/jpeg' }),
+                timestamp: Date.now(),
+            }],
+        });
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, tenantId: 'tenant-a' });
+        const previousAccount = renderHook(() => useSync());
+        previousAccount.unmount();
+
+        // A signs out while offline; B next opens field capture on the same
+        // browser. No product code partitions or clears the photo queue.
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, tenantId: 'tenant-b' });
+        const { result } = renderHook(() => useSync());
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        // Ownerless legacy entries must be quarantined until ownership can be
+        // established; never submit them with the next account's session.
+        expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
 });

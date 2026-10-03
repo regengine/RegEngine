@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:38:38.470696+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env HOME=/private/tmp/regengine-qa-npm-home NPM_CONFIG_USERCONFIG=/dev/null npm exec --yes --registry=https://registry.npmjs.org --package=node@20 -- node --version
+Exit: 0
+Duration: 3.62s
+Timeout: False
+
+v20.20.2

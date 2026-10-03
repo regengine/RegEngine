@@ -1,0 +1,327 @@
+UTC: 2026-10-03T00:36:21.689257+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=["frontend/vitest.config.mts","frontend/vitest.setup.ts","frontend/src/test-utils/setup.ts","frontend/node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/env.md"]; [(print("FILE",p),print(Path(p).read_text() if Path(p).exists() else "MISSING")) for p in paths]; print("Tests"); print("\n".join(str(p) for p in Path("frontend/src").rglob("*.test.*"))); print("Helpers"); print("\n".join(str(p) for p in Path("frontend/src/lib").glob("*.ts")))'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+FILE frontend/vitest.config.mts
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+    plugins: [react()],
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        setupFiles: ['./src/__tests__/setup.ts'],
+        include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        coverage: {
+            provider: 'v8',
+            reporter: ['text', 'json', 'html', 'lcov'],
+            exclude: [
+                'node_modules/',
+                'src/__tests__/',
+                'src/test/',
+                '**/*.d.ts',
+                '**/*.config.*',
+                '**/types/**',
+                '.next/**',
+                'out/**',
+            ],
+            // Issue #2845: these were 20 while real coverage sat in the
+            // 59-69% range, so the gate had ~40 points of slack and could not
+            // have caught any realistic regression. `npm run test:coverage`
+            // now runs in CI (frontend-ci.yml), so the numbers finally matter.
+            //
+            // Each floor is set ~6 points below the value measured on
+            // 2026-08-27 — enough headroom that ordinary churn does not trip
+            // the build, tight enough that a meaningful drop does:
+            //
+            //   statements 66.56%  branches 59.68%
+            //   functions  59.40%  lines    68.75%
+            //
+            // Raise these as coverage improves. Lowering one to make a build
+            // pass reinstates exactly the false assurance this replaced.
+            thresholds: {
+                statements: 60,
+                branches: 53,
+                functions: 53,
+                lines: 62,
+            },
+        },
+        testTimeout: 10000,
+    },
+    resolve: {
+        alias: {
+            '@': path.resolve(__dirname, './src'),
+        },
+    },
+});
+
+FILE frontend/vitest.setup.ts
+MISSING
+FILE frontend/src/test-utils/setup.ts
+MISSING
+FILE frontend/node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/env.md
+---
+title: env
+description: Learn to add and access environment variables in your Next.js application at build time.
+version: legacy
+---
+
+{/* The content of this doc is shared between the app and pages router. You can use the `<PagesOnly>Content</PagesOnly>` component to add content that is specific to the Pages Router. Any shared content should not be wrapped in a component. */}
+
+<AppOnly>
+
+> Since the release of [Next.js 9.4](https://nextjs.org/blog/next-9-4) we now have a more intuitive and ergonomic experience for [adding environment variables](/docs/app/guides/environment-variables). Give it a try!
+
+</AppOnly>
+
+<PagesOnly>
+
+> Since the release of [Next.js 9.4](https://nextjs.org/blog/next-9-4) we now have a more intuitive and ergonomic experience for [adding environment variables](/docs/pages/guides/environment-variables). Give it a try!
+
+</PagesOnly>
+
+<AppOnly>
+
+> **Good to know**: environment variables specified in this way will **always** be included in the JavaScript bundle, prefixing the environment variable name with `NEXT_PUBLIC_` only has an effect when specifying them [through the environment or .env files](/docs/app/guides/environment-variables).
+
+</AppOnly>
+
+<PagesOnly>
+
+> **Good to know**: environment variables specified in this way will **always** be included in the JavaScript bundle, prefixing the environment variable name with `NEXT_PUBLIC_` only has an effect when specifying them [through the environment or .env files](/docs/pages/guides/environment-variables).
+
+</PagesOnly>
+
+To add environment variables to the JavaScript bundle, open `next.config.js` and add the `env` config:
+
+```js filename="next.config.js"
+module.exports = {
+  env: {
+    customKey: 'my-value',
+  },
+}
+```
+
+Now you can access `process.env.customKey` in your code. For example:
+
+```jsx
+function Page() {
+  return <h1>The value of customKey is: {process.env.customKey}</h1>
+}
+
+export default Page
+```
+
+Next.js will replace `process.env.customKey` with `'my-value'` at build time. Trying to destructure `process.env` variables won't work due to the nature of webpack [DefinePlugin](https://webpack.js.org/plugins/define-plugin/).
+
+For example, the following line:
+
+```jsx
+return <h1>The value of customKey is: {process.env.customKey}</h1>
+```
+
+Will end up being:
+
+```jsx
+return <h1>The value of customKey is: {'my-value'}</h1>
+```
+
+Tests
+frontend/src/__tests__/proxy-gated-dev-routes.test.ts
+frontend/src/__tests__/proxy-tenant-gate.test.ts
+frontend/src/__tests__/developer-portal-layout.test.tsx
+frontend/src/__tests__/public-site-fixes.test.tsx
+frontend/src/__tests__/instrumentation.test.ts
+frontend/src/__tests__/proxy-csrf.test.ts
+frontend/src/__tests__/supplier-csv.test.ts
+frontend/src/__tests__/health-route.test.ts
+frontend/src/__tests__/proxy-csp-nonce.test.ts
+frontend/src/__tests__/package-pins.test.ts
+frontend/src/lib/gs1-parser.test.ts
+frontend/src/lib/csp.test.ts
+frontend/src/lib/customer-readiness.test.ts
+frontend/src/lib/scan-match.test.ts
+frontend/src/__tests__/app/root-layout-csp-nonce.test.tsx
+frontend/src/__tests__/auth/step-up-modal.test.tsx
+frontend/src/__tests__/auth/step-up.test.tsx
+frontend/src/__tests__/auth/login.test.tsx
+frontend/src/__tests__/auth/accept-invite.test.tsx
+frontend/src/__tests__/styles/globals-css-invariants.test.ts
+frontend/src/__tests__/components/qa-health-widget.test.tsx
+frontend/src/__tests__/components/fsma-checklist-pii.test.tsx
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx
+frontend/src/__tests__/components/admin-page-auth.test.tsx
+frontend/src/__tests__/components/workflow-stepper.test.tsx
+frontend/src/__tests__/components/core.test.tsx
+frontend/src/__tests__/components/compliance-primitives.test.tsx
+frontend/src/__tests__/components/evidence-chain.test.tsx
+frontend/src/__tests__/components/dashboard-error-boundary.test.tsx
+frontend/src/__tests__/components/scan-history-widget.test.tsx
+frontend/src/__tests__/components/agent-review-dashboard.test.tsx
+frontend/src/__tests__/components/json-ld-component.test.tsx
+frontend/src/__tests__/components/sandbox-diagnosis.test.ts
+frontend/src/__tests__/components/curator-review.test.tsx
+frontend/src/__tests__/components/demo-banner.test.tsx
+frontend/src/__tests__/public/service-worker-retention.test.ts
+frontend/src/__tests__/hooks/useAuth.test.tsx
+frontend/src/__tests__/hooks/useControlPlane.test.tsx
+frontend/src/__tests__/hooks/useFsma.test.tsx
+frontend/src/__tests__/hooks/use-fsma-unbacked-endpoints.test.ts
+frontend/src/__tests__/hooks/use-agent-reviews.test.ts
+frontend/src/__tests__/hooks/useSync.test.tsx
+frontend/src/__tests__/hooks/useApiQuery.test.tsx
+frontend/src/__tests__/lib/api-config.test.ts
+frontend/src/__tests__/lib/proxy-ip-attestation.test.ts
+frontend/src/__tests__/lib/app-routes.test.ts
+frontend/src/__tests__/lib/compliance-os.test.ts
+frontend/src/__tests__/lib/fetch-with-csrf.test.ts
+frontend/src/__tests__/lib/column-suggestions.test.ts
+frontend/src/__tests__/lib/csrf-exempt-prefixes.test.ts
+frontend/src/__tests__/lib/experimental-features.test.ts
+frontend/src/__tests__/lib/db-retention.test.ts
+frontend/src/__tests__/lib/inflow-error.test.ts
+frontend/src/__tests__/lib/prod-inert-gates.test.ts
+frontend/src/__tests__/lib/inflow-lab-exception-grouping.test.ts
+frontend/src/__tests__/lib/safe-redirect.test.ts
+frontend/src/__tests__/lib/public-openapi.test.ts
+frontend/src/__tests__/lib/cte-suggestion.test.ts
+frontend/src/__tests__/lib/cn-type-scale.test.ts
+frontend/src/__tests__/lib/json-ld.test.ts
+frontend/src/__tests__/lib/api-client-graph-labels.test.ts
+frontend/src/__tests__/lib/csrf-secret.test.ts
+frontend/src/__tests__/lib/api-hooks.test.ts
+frontend/src/__tests__/lib/api-client-review.test.ts
+frontend/src/__tests__/lib/permissions.test.ts
+frontend/src/__tests__/lib/security-public-contract.test.ts
+frontend/src/__tests__/lib/admin-targets.test.ts
+frontend/src/__tests__/lib/providers-csp-nonce.test.tsx
+frontend/src/__tests__/api/client-errors.test.ts
+frontend/src/__tests__/api/nlp-ask-proxy.test.ts
+frontend/src/__tests__/api/privileged-session-routes.test.ts
+frontend/src/__tests__/api/inflow-lab-proxy.test.ts
+frontend/src/__tests__/api/compliance-proxy-auth-boundary.test.ts
+frontend/src/__tests__/api/ingestion-proxy-auth.test.ts
+frontend/src/__tests__/api/inflow-workbench-read-proxy.test.ts
+frontend/src/__tests__/api/billing-checkout-route.test.ts
+frontend/src/__tests__/api/graph-release-disabled.test.ts
+frontend/src/__tests__/api/enforce-tenant-match.test.ts
+frontend/src/__tests__/api/admin.test.ts
+frontend/src/__tests__/api/backend-route-mapping.test.ts
+frontend/src/__tests__/api/compliance-snapshots-proxy.test.ts
+frontend/src/__tests__/api/session-origin.test.ts
+frontend/src/__tests__/api/proxy-sanitization.test.ts
+frontend/src/__tests__/api/developer-portal-utils.test.ts
+frontend/src/__tests__/api/developer-key-create.test.ts
+frontend/src/__tests__/api/contact.test.ts
+frontend/src/__tests__/api/compliance-proxy-not-configured.test.ts
+frontend/src/__tests__/api/review-id-validation.test.ts
+frontend/src/__tests__/api/tools-verify-route.test.ts
+frontend/src/__tests__/seo/crawl-surface.test.ts
+frontend/src/__tests__/pages/developer-portal-clicks.test.tsx
+frontend/src/__tests__/pages/curation.test.tsx
+frontend/src/__tests__/pages/compliance-profile.test.tsx
+frontend/src/__tests__/pages/exceptions.test.tsx
+frontend/src/__tests__/pages/recall-report.test.tsx
+frontend/src/__tests__/pages/issues.test.tsx
+frontend/src/__tests__/pages/compliance-status.test.tsx
+frontend/src/__tests__/pages/ingest-sandbox-handoff.test.ts
+frontend/src/__tests__/pages/sandbox-shared-result-base-url.test.ts
+frontend/src/__tests__/pages/dashboard.test.tsx
+frontend/src/__tests__/pages/ingest-csv.test.tsx
+frontend/src/__tests__/pages/compliance.test.tsx
+frontend/src/__tests__/pages/controls.test.tsx
+frontend/src/__tests__/pages/data-import.test.tsx
+frontend/src/__tests__/pages/recall-drills.test.tsx
+frontend/src/__tests__/pages/scan.test.tsx
+frontend/src/__tests__/pages/qa-health.test.tsx
+frontend/src/__tests__/pages/ingest-handoff.test.tsx
+frontend/src/__tests__/pages/sandbox-front-door.test.tsx
+frontend/src/__tests__/pages/experimental-gating.test.tsx
+frontend/src/__tests__/pages/requests.test.tsx
+frontend/src/__tests__/pages/identity.test.tsx
+frontend/src/__tests__/pages/review.test.tsx
+frontend/src/__tests__/pages/evidence-integrity-3044.test.tsx
+frontend/src/__tests__/pages/export-jobs.test.tsx
+frontend/src/__tests__/pages/dashboard-navigation.test.tsx
+frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx
+frontend/src/__tests__/pages/audit.test.tsx
+frontend/src/__tests__/pages/proof-recall-drill.test.tsx
+frontend/src/__tests__/pages/trace.test.tsx
+frontend/src/__tests__/pages/audit-log.test.tsx
+frontend/src/__tests__/pages/product.test.tsx
+frontend/src/__tests__/pages/homepage.test.tsx
+frontend/src/__tests__/pages/supplier-bulk-upload.test.tsx
+frontend/src/__tests__/pages/rules.test.tsx
+frontend/src/__tests__/pages/proof-trust-copy.test.tsx
+frontend/src/__tests__/pages/playground-csrf.test.tsx
+frontend/src/__tests__/pages/docs-contract.test.tsx
+frontend/src/__tests__/pages/receiving.test.tsx
+frontend/src/__tests__/pages/inflow-lab.test.tsx
+frontend/src/__tests__/lib/__snapshots__/csrf-exempt-prefixes.test.ts.snap
+frontend/src/test/security/rbac.test.ts
+frontend/src/test/security/audit-trail.test.ts
+frontend/src/test/security/api-security.test.ts
+frontend/src/test/compliance/data-protection.test.ts
+frontend/src/app/api/__tests__/routes.test.ts
+frontend/src/app/tools/knowledge-graph/components/__tests__/KnowledgeGraph.test.ts
+Helpers
+frontend/src/lib/api-client.ts
+frontend/src/lib/validation.ts
+frontend/src/lib/api-hooks.ts
+frontend/src/lib/cookie-consent.ts
+frontend/src/lib/step-up-events.ts
+frontend/src/lib/passwordless-auth.ts
+frontend/src/lib/proxy-factory.ts
+frontend/src/lib/mock-tenants.ts
+frontend/src/lib/gs1-parser.test.ts
+frontend/src/lib/analytics.ts
+frontend/src/lib/csp.test.ts
+frontend/src/lib/fetch-with-csrf.ts
+frontend/src/lib/inflow-workbench-proxy.ts
+frontend/src/lib/permissions.ts
+frontend/src/lib/fsma-enforcement.ts
+frontend/src/lib/api-proxy.ts
+frontend/src/lib/admin-targets.ts
+frontend/src/lib/customer-readiness.test.ts
+frontend/src/lib/customer-readiness.ts
+frontend/src/lib/jwt-claims.ts
+frontend/src/lib/utils.ts
+frontend/src/lib/inflow-error.ts
+frontend/src/lib/api-config.ts
+frontend/src/lib/compliance-os.ts
+frontend/src/lib/polling-config.ts
+frontend/src/lib/experimental-features.ts
+frontend/src/lib/ftl-data.ts
+frontend/src/lib/roi-calculator-data.ts
+frontend/src/lib/safe-redirect.ts
+frontend/src/lib/csp.ts
+frontend/src/lib/scan-match.test.ts
+frontend/src/lib/sandbox-cta.ts
+frontend/src/lib/cte-suggestion.ts
+frontend/src/lib/client-session-profile.ts
+frontend/src/lib/constants.ts
+frontend/src/lib/column-suggestions.ts
+frontend/src/lib/supplier-csv.ts
+frontend/src/lib/pdf-report.ts
+frontend/src/lib/trust-subprocessors.ts
+frontend/src/lib/public-openapi.ts
+frontend/src/lib/scan-match.ts
+frontend/src/lib/csrf.ts
+frontend/src/lib/json-ld.ts
+frontend/src/lib/doc-pages.ts
+frontend/src/lib/dev-compliance-snapshots.ts
+frontend/src/lib/mock-dashboard-data.ts
+frontend/src/lib/gs1-parser.ts
+frontend/src/lib/api-base.ts
+frontend/src/lib/blog-jsonld.ts
+frontend/src/lib/admin-session-fetch.ts
+frontend/src/lib/db.ts
+frontend/src/lib/fsma-tools-data.ts
+frontend/src/lib/blog-posts.ts
+frontend/src/lib/proxy-ip-attestation.ts
+frontend/src/lib/app-routes.ts

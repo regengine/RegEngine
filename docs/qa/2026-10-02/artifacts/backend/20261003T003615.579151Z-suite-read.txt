@@ -1,0 +1,1436 @@
+UTC: 2026-10-03T00:36:15.579151+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; fs=["services/ingestion/tests/test_csv_malformed_input.py","services/ingestion/tests/test_csv_input_quantities.py","services/ingestion/tests/test_webhook_router_v2_idor_f1.py","services/ingestion/tests/test_webhook_models.py","services/shared/tests/test_auth_fail_closed.py","tests/shared/test_idempotency_middleware_1338.py"]; [(print("\nFILE",p),print(Path(p).read_text()[:14500])) for p in fs]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+
+FILE services/ingestion/tests/test_csv_malformed_input.py
+"""Malformed CSV structure is a 400 from POST /api/v1/ingest/csv, never a 500.
+
+Three kinds of input crashed ``parse_csv_rows`` and surfaced as HTTP 500:
+
+- a data row with more fields than the header: ``csv.DictReader`` files the
+  overflow as a list under the ``None`` restkey and the row normalisation
+  called ``.strip()`` on it;
+- a file whose first line is blank: the header comes out empty, so every
+  field of every row is overflow;
+- anything the csv module refuses with ``csv.Error``: carriage-return-only
+  line endings, or a field over ``csv.field_size_limit()``.
+
+Extra values are evidence the uploader supplied, so a row that carries a
+non-blank one is rejected (listed in the receipt) instead of silently
+truncated. Blank overflow cells (a trailing comma) carry no data and are
+ignored. The inbound-email route calls the same parser, so it gets the same
+behaviour: quarantine with the error instead of a 500 retry loop.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+
+import pytest
+from app import csv_templates as ct
+from app.authz import IngestionPrincipal, get_ingestion_principal
+from app.webhook_compat import _verify_api_key
+from app.webhook_models import EventResult, IngestResponse
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+HEADER = (
+    "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document"
+)
+ROW = "TLC1,Kale,10,lbs,2026-04-17,Farm A,REF"
+ROW_2 = "TLC2,Kale,10,lbs,2026-04-17,Farm A,REF"
+NO_HEADER = "CSV has no header row: the first line must list the column names"
+
+
+@pytest.fixture
+def upload(monkeypatch):
+    """POST a CSV through the real route; ``ingest_events`` is stubbed and records the receipt."""
+    captured: dict = {}
+
+    async def _fake_ingest_events(payload, **kwargs):
+        captured["source_file"] = kwargs["source_file"]
+        return IngestResponse(
+            accepted=len(payload.events),
+            rejected=0,
+            total=len(payload.events),
+            events=[
+                EventResult(traceability_lot_code=e.traceability_lot_code, cte_type=e.cte_type.value, status="accepted")
+                for e in payload.events
+            ],
+            ingestion_run_id="run-1",
+        )
+
+    monkeypatch.setattr(ct, "ingest_events", _fake_ingest_events)
+    app = FastAPI()
+    app.include_router(ct.router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="key-1", scopes=["*"], tenant_id="t1"
+    )
+    # raise_server_exceptions=False: a parser crash must show up as a 500
+    # response here, exactly as a caller sees it, not as a test error.
+    client = TestClient(app, raise_server_exceptions=False)
+
+    def _post(text: str):
+        return client.post(
+            "/api/v1/ingest/csv",
+            files={"file": ("upload.csv", text.encode(), "text/csv")},
+            data={"cte_type": "harvesting"},
+        )
+
+    return _post, captured
+
+
+# ---------------------------------------------------------------------------
+# More fields than the header
+# ---------------------------------------------------------------------------
+
+
+def test_row_with_extra_value_is_rejected_and_the_file_is_still_retained(upload):
+    post, captured = upload
+    text = f"{HEADER}\n{ROW}\n{ROW_2},unexpected\n"
+    resp = post(text)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["accepted"] == 1 and body["rejected"] == 1
+    error = "Row 3: has more fields than the header (8 fields, header has 7)"
+    assert [e["errors"] for e in body["events"] if e["status"] == "rejected"] == [[error]]
+    # The rejected row, extra value included, stays in the retained file.
+    receipt = captured["source_file"]
+    assert receipt.raw_bytes == text.encode()
+    assert receipt.parse_errors == [error]
+    assert receipt.record_count == 2
+
+
+def test_every_row_with_extra_values_is_a_400_naming_each_row(upload):
+    post, captured = upload
+    resp = post(f"{HEADER}\n{ROW},x\n{ROW_2},y,z\n")
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["errors"] == [
+        "Row 2: has more fields than the header (8 fields, header has 7)",
+        "Row 3: has more fields than the header (9 fields, header has 7)",
+    ]
+    assert captured == {}
+
+
+def test_blank_overflow_cells_from_a_trailing_comma_are_ignored(upload):
+    post, _ = upload
+    resp = post(f"{HEADER}\n{ROW},\n{ROW_2},, \n")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["accepted"] == 2 and resp.json()["rejected"] == 0
+
+
+def test_comment_row_with_extra_commas_is_still_skipped(upload):
+    post, _ = upload
+    resp = post(f"{HEADER}\n# note, with, more, commas, than, the, header, has\n{ROW}\n")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["accepted"] == 1 and resp.json()["rejected"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Empty or blank header row
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [f"\n{HEADER}\n{ROW}\n", f",,,,,,\n{ROW}\n", f" , \n{ROW}\n"],
+    ids=["blank-first-line", "only-commas", "only-whitespace-cells"],
+)
+def test_blank_header_row_is_a_400(upload, text):
+    post, captured = upload
+    resp = post(text)
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["errors"] == [NO_HEADER]
+    assert captured == {}
+
+
+def test_empty_file_keeps_its_existing_400(upload):
+    post, _ = upload
+    resp = post("")
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"] == "CSV contained no data rows"
+
+
+# ---------------------------------------------------------------------------
+# csv.Error: the csv module cannot read the file
+# ---------------------------------------------------------------------------
+
+
+def test_carriage_return_only_line_endings_are_a_400_naming_the_line(upload):
+    post, captured = upload
+    resp = post(f"{HEADER}\r{ROW}\r")
+    assert resp.status_code == 400, resp.text
+    [error] = resp.json()["detail"]["errors"]
+    assert error.startswith("Line 1: CSV could not be read")
+    assert "line endings" in error
+    assert captured == {}
+
+
+def test_field_over_the_size_limit_is_a_400_naming_the_line(upload):
+    post, captured = upload
+    oversized = "x" * (csv.field_size_limit() + 1)
+    resp = post(f"{HEADER}\n{ROW}\nTLC2,{oversized},10,lbs,2026-04-17,Farm A,REF\n")
+    assert resp.status_code == 400, resp.text
+    [error] = resp.json()["detail"]["errors"]
+    assert error.startswith("Line 3: CSV could not be read")
+    # A file the csv module cannot read is not partially ingested: row 2
+    # parsed, but nothing reached ingest_events.
+    assert captured == {}
+
+
+# ---------------------------------------------------------------------------
+# Parser contract and negative control
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{HEADER}\n{ROW},unexpected\n",
+        f"\n{HEADER}\n{ROW}\n",
+        f"{HEADER}\r{ROW}\r",
+        f"{HEADER}\nTLC2,{'x' * (csv.field_size_limit() + 1)},10,lbs,2026-04-17,Farm A,REF\n",
+    ],
+    ids=["extra-fields", "blank-first-line", "cr-only", "oversized-field"],
+)
+def test_parse_csv_rows_never_raises_on_malformed_input(text):
+    """The inbound-email route calls the parser directly; it must get errors back, not an exception."""
+    events, parse_errors, _ = ct.parse_csv_rows(text, fallback_cte="harvesting")
+    assert events == []
+    assert len(parse_errors) == 1
+
+
+def test_negative_control_pre_fix_row_normalisation_returns_500(upload, monkeypatch):
+    """The pre-fix normalisation, run through the same route, is a 500.
+
+    Shows the harness reports a parser crash as a 500, so the 400s above
+    come from the fix and not from something else in the route.
+    """
+
+    def _pre_fix_parse_csv_rows(text, fallback_cte=None, header_mapping=None):
+        for row in csv.DictReader(io.StringIO(text)):
+            row = {ct.normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+        return [], [], []
+
+    monkeypatch.setattr(ct, "parse_csv_rows", _pre_fix_parse_csv_rows)
+    post, _ = upload
+    resp = post(f"{HEADER}\n{ROW},unexpected\n")
+    assert resp.status_code == 500
+
+
+FILE services/ingestion/tests/test_csv_input_quantities.py
+"""Per-input quantities on transformation / initial packing CSV rows.
+
+21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of measure of each
+input lot. The template gains ``input_quantities`` and
+``input_units_of_measure`` aligned with ``input_lot_codes``; the parser folds
+them into ``kdes.inputs`` and rejects rows whose values cannot be attributed
+to a lot rather than guessing.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+
+from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
+
+HEADER = (
+    "traceability_lot_code,product_description,quantity,unit_of_measure,"
+    "transformation_date,location_name,reference_document,input_lot_codes,"
+    "input_quantities,input_units_of_measure\n"
+)
+
+
+def _parse(row: str, cte: str = "transformation"):
+    return parse_csv_rows(HEADER + row, cte)
+
+
+def test_template_serves_the_new_columns_with_example_values():
+    for cte in ("transformation", "initial_packing"):
+        header, example = list(csv.reader(io.StringIO(_generate_csv_template(cte))))[:2]
+        by_col = dict(zip(header, example))
+        assert "input_quantities" in header and "input_units_of_measure" in header, cte
+        assert by_col["input_quantities"].strip() and by_col["input_units_of_measure"].strip(), cte
+        # One quantity per input lot in the example row.
+        lots = [c for c in by_col["input_lot_codes"].split(",") if c.strip()]
+        assert len(by_col["input_quantities"].split(",")) == len(lots), cte
+    assert [c[0] for c in CTE_COLUMNS["transformation"]].index("input_quantities") > [
+        c[0] for c in CTE_COLUMNS["transformation"]
+    ].index("input_lot_codes")
+
+
+def test_aligned_quantities_become_kdes_inputs():
+    events, errors, warnings = _parse('NEW1,Mix,100,bags,2026-04-17,Plant A,REF,"LOT1,LOT2","600,400","cases,lb"\n')
+    assert errors == []
+    assert not any("input_quantities" in w for w in warnings)
+    ev = events[0]
+    assert ev.kdes["input_lot_codes"] == ["LOT1", "LOT2"]
+    assert ev.kdes["inputs"] == [
+        {"traceability_lot_code": "LOT1", "quantity": 600.0, "unit_of_measure": "cases"},
+        {"traceability_lot_code": "LOT2", "quantity": 400.0, "unit_of_measure": "lbs"},  # alias normalised
+    ]
+    # The raw columns are folded into inputs, not copied as loose KDEs.
+    assert "input_quantities" not in ev.kdes and "input_units_of_measure" not in ev.kdes
+
+
+def test_single_unit_applies_to_every_input_lot():
+    events, errors, _ = _parse('NEW1,Mix,100,bags,2026-04-17,Plant A,REF,"LOT1,LOT2","600,400",cases\n')
+    assert errors == []
+    assert [i["unit_of_measure"] for i in events[0].kdes["inputs"]] == ["cases", "cases"]
+
+
+def test_misaligned_quantities_reject_the_row_instead_of_guessing():
+    events, errors, _ = _parse('NEW1,Mix,100,bags,2026-04-17,Plant A,REF,"LOT1,LOT2",600,cases\n')
+    assert events == []
+    assert len(errors) == 1
+    assert "1 value(s) for 2 input lot(s)" in errors[0]
+
+
+def test_non_numeric_quantity_rejects_the_row():
+    events, errors, _ = _parse('NEW1,Mix,100,bags,2026-04-17,Plant A,REF,"LOT1,LOT2","six hundred,400",cases\n')
+    assert events == []
+    assert "not a number" in errors[0] and "LOT1" in errors[0]
+
+
+def test_quantities_without_lots_reject_the_row():
+    events, errors, _ = _parse("NEW1,Mix,100,bags,2026-04-17,Plant A,REF,,600,cases\n")
+    assert events == []
+    assert "without input_lot_codes" in errors[0]
+
+
+def test_transformation_without_input_quantities_ingests_with_a_warning():
+    events, errors, warnings = _parse('NEW1,Mix,100,bags,2026-04-17,Plant A,REF,"LOT1,LOT2",,\n')
+    assert errors == []
+    assert events[0].kdes["input_lot_codes"] == ["LOT1", "LOT2"]
+    assert "inputs" not in events[0].kdes
+    assert any("input_quantities missing" in w and "1.1350(a)(1)(iii)" in w for w in warnings)
+
+
+def test_initial_packing_inputs_are_optional_and_silent_when_absent():
+    header = (
+        "traceability_lot_code,product_description,quantity,unit_of_measure,packing_date,location_name,"
+        "input_lot_codes,reference_document,harvester_business_name,harvester_business_phone\n"
+    )
+    events, errors, warnings = parse_csv_rows(
+        header + "PACK1,Tomatoes,200,cases,2026-02-26,Packhouse,FIELD-LOT-1,PACK-1,Farm LLC,+1-202-555-0100\n",
+        "initial_packing",
+    )
+    assert errors == []
+    assert events[0].kdes["input_lot_codes"] == ["FIELD-LOT-1"]
+    assert not any("input_quantities" in w for w in warnings)
+
+
+FILE services/ingestion/tests/test_webhook_router_v2_idor_f1.py
+"""F-1 / F-4 (re-audit): cross-tenant IDOR + read rate-limit on
+``/api/v1/webhooks/recent`` and ``/api/v1/webhooks/chain/verify``.
+
+Before this PR these two routes only required ``Depends(_verify_api_key)``
+— a header-presence gate that does NOT validate the key. Any caller with
+ANY non-empty API key value could pass ``?tenant_id=<victim>`` and read
+recent CTE rows + chain integrity status for any tenant.
+
+Fix mirrors PR #2249 (stripe-portal IDOR): bind the URL ``tenant_id`` to
+the authenticated principal's tenant, return **404** on mismatch (avoid
+tenant-existence oracle), and apply a tighter read-side rate limit.
+"""
+
+from __future__ import annotations
+
+import sys
+import types
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+service_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(service_dir))
+
+pytest.importorskip("fastapi")
+
+import app.webhook_router_v2 as wr  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.subscription_gate import require_active_subscription  # noqa: E402
+from shared.database import get_db_session  # noqa: E402
+
+TENANT_A = "00000000-0000-0000-0000-0000000000aa"
+TENANT_B = "00000000-0000-0000-0000-0000000000bb"
+
+
+# ---------------------------------------------------------------------------
+# Fakes
+# ---------------------------------------------------------------------------
+
+
+class _FakeExecuteResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class _FakeSession:
+    def __init__(self, rows=None):
+        self._rows = rows or []
+        self.closed = False
+
+    def execute(self, _stmt, _params=None):
+        return _FakeExecuteResult(self._rows)
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeChainResult:
+    def __init__(self):
+        self.valid = True
+        self.chain_length = 1
+        self.errors: list[str] = []
+        self.checked_at = "2026-05-09T00:00:00+00:00"
+
+
+class _FakePersistence:
+    def __init__(self, _session):
+        pass
+
+    def verify_chain(self, _tenant_id):
+        return _FakeChainResult()
+
+
+# ---------------------------------------------------------------------------
+# App harness
+# ---------------------------------------------------------------------------
+
+
+def _install_db_stubs(monkeypatch):
+    session = _FakeSession(
+        rows=[
+            (
+                "evt-1",
+                "shipping",
+                "TLC-1",
+                "Romaine",
+                10.0,
+                "cases",
+                "Valley Fresh",
+                "test",
+                datetime(2026, 5, 9, 0, 0, 0, tzinfo=timezone.utc),
+            )
+        ]
+    )
+    fake_db = types.ModuleType("shared.database")
+    fake_db.SessionLocal = lambda: _FakeSession(rows=session._rows)
+    fake_db.get_db_session = lambda: iter([session])
+    monkeypatch.setitem(sys.modules, "shared.database", fake_db)
+
+    fake_cte = types.ModuleType("shared.cte_persistence")
+    fake_cte.CTEPersistence = _FakePersistence
+    monkeypatch.setitem(sys.modules, "shared.cte_persistence", fake_cte)
+    return session
+
+
+def _build_app(*, principal: Optional[IngestionPrincipal]) -> FastAPI:
+    app = FastAPI()
+    app.include_router(wr.router)
+    if principal is not None:
+        app.dependency_overrides[get_ingestion_principal] = lambda: principal
+    # Header-presence gate is covered separately; bypass it here so we
+    # exercise the principal binding logic.
+    app.dependency_overrides[wr._verify_api_key_present] = lambda: None
+    app.dependency_overrides[wr._verify_api_key] = lambda: None
+    app.dependency_overrides[require_active_subscription] = lambda: None
+    return app
+
+
+def _client(monkeypatch, *, principal, allow_rate_limit: bool = True):
+    _install_db_stubs(monkeypatch)
+    if allow_rate_limit:
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+    return TestClient(_build_app(principal=principal))
+
+
+def _scoped_principal(tenant_id: str) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id="key-scoped",
+        scopes=["webhooks.read"],
+        tenant_id=tenant_id,
+        auth_mode="test",
+    )
+
+
+# ---------------------------------------------------------------------------
+# F-1: tenant binding
+# ---------------------------------------------------------------------------
+
+
+class TestRecentTenantBinding:
+    def test_recent_rejects_cross_tenant_read(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
+        # Must NOT leak victim tenant data.
+        assert "events" not in resp.json() or resp.json().get("events") in (None, [])
+
+    def test_recent_succeeds_for_own_tenant(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A, "limit": 5},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["tenant_id"] == TENANT_A
+        assert isinstance(body["events"], list)
+
+
+class TestChainVerifyTenantBinding:
+    def test_chain_verify_rejects_cross_tenant(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/chain/verify",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
+
+    def test_chain_verify_succeeds_for_own_tenant(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/chain/verify",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["tenant_id"] == TENANT_A
+        assert body["chain_valid"] is True
+
+
+class TestPermissionEnforced:
+    def test_recent_rejects_principal_without_permission(self, monkeypatch):
+        principal = IngestionPrincipal(
+            key_id="key-noperms",
+            scopes=["webhooks.ingest"],  # ingest only — no read
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 403, resp.text
+
+    def test_chain_verify_rejects_principal_without_permission(self, monkeypatch):
+        principal = IngestionPrincipal(
+            key_id="key-noperms",
+            scopes=["webhooks.ingest"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/chain/verify",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 403
+
+
+class TestWildcardPrincipalBypass:
+    """Wildcard ``*`` is permission BREADTH, not tenant BREADTH.
+
+    Only the local dev-open principal (``tenant_id=None``) keeps cross-tenant
+    access. A tenant-bound key carrying
+    ``*`` or ``admin.*`` MUST NOT pivot to another tenant — that was
+    the third instance of the antipattern fixed in PR #2328.
+    """
+
+    def test_dev_open_can_query_any_tenant(self, monkeypatch):
+        """The explicitly local dev-open principal can select a test tenant."""
+        principal = IngestionPrincipal(
+            key_id="dev-open",
+            scopes=["*"],
+            tenant_id=None,
+            auth_mode="dev_open",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 200
+
+    def test_wildcard_cannot_pivot_cross_tenant(self, monkeypatch):
+        """Tenant-bound key with ``*`` MUST NOT read another tenant's webhooks."""
+        principal = IngestionPrincipal(
+            key_id="tenant-a-wildcard",
+            scopes=["*"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
+
+    def test_wildcard_same_tenant_still_works(self, monkeypatch):
+        """Tenant-bound key with ``*`` reading its OWN tenant still succeeds."""
+        principal = IngestionPrincipal(
+            key_id="tenant-a-wildcard",
+            scopes=["*"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_admin_wildcard_cannot_pivot_cross_tenant(self, monkeypatch):
+        """``admin.*`` scope follows the same rule — no cross-tenant pivot."""
+        principal = IngestionPrincipal(
+            key_id="tenant-a-admin",
+            scopes=["webhooks.read", "admin.*"],
+            tenant_id=TENANT_A,
+            auth_mode="test",
+        )
+        client = _client(monkeypatch, principal=principal)
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
+
+
+# ---------------------------------------------------------------------------
+# F-4: read-side rate limit
+# ---------------------------------------------------------------------------
+
+
+class TestReadRateLimit:
+    def test_recent_rate_limited(self, monkeypatch):
+        _install_db_stubs(monkeypatch)
+        # Force the bucket to deny.
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (False, 0))
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+        client = TestClient(_build_app(principal=_scoped_principal(TENANT_A)))
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 429
+        assert resp.headers.get("X-RateLimit-Scope", "").startswith("webhooks.read.")
+
+    def test_chain_verify_rate_limited(self, monkeypatch):
+        _install_db_stubs(monkeypatch)
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (False, 0))
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+        client = TestClient(_build_app(principal=_scoped_principal(TENANT_A)))
+        resp = client.get(
+            "/api/v1/webhooks/chain/verify",
+            params={"tenant_id": TENANT_A},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 429
+        assert "webhooks.read." in resp.headers.get("X-RateLimit-Scope", "")
+
+
+# ---------------------------------------------------------------------------
+# Header-presence gate still enforced
+# ---------------------------------------------------------------------------
+
+
+class TestUnauthenticated:
+    def test_unauthenticated_request_rejected(self, monkeypatch):
+        # Build app without overriding the presence gate so we exercise it.
+        _install_db_stubs(monkeypatch)
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+        monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+
+        app = FastAPI()
+        app.include_router(wr.router)
+        # Override the principal so we don't hit the real auth resolver, but
+        # leave _verify_api_key_present intact so missing header → 401.
+        app.dependency_overrides[get_ingestion_principal] = lambda: _scoped_principal(TENANT_A)
+        app.dependency_overrides[require_active_subscription] = lambda: None
+        client = TestClient(app)
+
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A},
+        )
+        assert resp.status_code == 401
+
+        resp2 = client.get(
+            "/api/v1/webhooks/chain/verify",
+            params={"tenant_id": TENANT_A},
+        )
+        assert resp2.status_code == 401
+
+
+FILE services/ingestion/tests/test_webhook_models.py
+"""Unit tests for webhook ingestion models (app/webhook_models.py)."""
+
+import sys
+from pathlib import Path
+
+_ingestion_dir = Path(__file__).resolve().parent.parent
+if str(_ingestion_dir) not in sys.path:
+    sys.path.insert(0, str(_ingestion_dir))
+
+_services_dir = _ingestion_dir.parent
+if str(_services_dir) not in sys.path:
+    sys.path.insert(0, str(_services_dir))
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from app.webhook_models import IngestEvent, WebhookCTEType, validate_gln
+from pydantic import ValidationError
+
+
+def _valid_event_kwargs(**overrides):
+    """Return a minimal valid IngestEvent dict, with optional overrides."""
+    now = datetime.now(timezone.utc)
+    base = {
+        "cte_type": "shipping",
+        "traceability_lot_code": "LOT-001",
+        "product_description": "Roma Tomatoes",
+        "quantity": 100.0,
+        "unit_of_measure": "cases",
+        "location_name": "Warehouse A",
+        "timestamp": now.isoformat(),
+    }
+    base.update(overrides)
+    return base
+
+
+class TestValidateGln:
+    """Tests for the standalone validate_gln helper."""
+
+    def test_valid_gln(self):
+        # 0614141000036 is a well-known GS1 example GLN
+        is_valid, err = validate_gln("0614141000036")
+        assert is_valid is True
+        assert err is None
+
+    def test_wrong_check_digit(self):
+        # Change last digit from 6 to 0
+        is_valid, err = validate_gln("0614141000030")
+        assert is_valid is False
+        assert "check digit" in err.lower()
+
+    def test_wrong_length_short(self):
+        is_valid, err = validate_gln("061414")
+        assert is_valid is False
+        assert "13 digits" in err
+
+    def test_wrong_length_long(self):
+        is_valid, err = validate_gln("06141410000361")
+        assert is_valid is False
+        assert "13 digits" in err
+
+    def test_strips_non_digit_characters(self):
+        # validate_gln strips non-digits; "0614-1410-0003-6" has 13 digits
+        is_valid, err = validate_gln("0614-1410-0003-6")
+        assert is_valid is True
+
+
+class TestWebhookCTEType:
+    """Tests for WebhookCTEType enum."""
+
+    def test_has_all_cte_types(self):
+        # 7 canonical FSMA 204 CTEs + "growing" (legacy/internal, not an FDA CTE)
+        assert len(WebhookCTEType) == 8
+
+    def test_expected_members(self):
+        expected = {
+            "growing",  # legacy/internal — normalizes to farm metadata
+            "harvesting",
+            "cooling",
+            "initial_packing",
+            "first_land_based_receiving",
+            "shipping",
+            "receiving",
+            "transformation",
+        }
+        actual = {m.value for m in WebhookCTEType}
+        assert actual == expected
+
+
+class TestIngestEvent:
+    """Tests for IngestEvent Pydantic model."""
+
+    def test_accepts_valid_event(self):
+        event = IngestEvent(**_valid_event_kwargs())
+        assert event.cte_type == WebhookCTEType.SHIPPING
+        assert event.quantity == 100.0
+
+    def test_rejects_future_timestamp(self):
+        future = datetime.now(timezone.utc) + timedelta(hours=48)
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(**_valid_event_kwargs(timestamp=future.isoformat()))
+        errors = exc_info.value.errors()
+        assert any("future" in str(e["msg"]).lower() for e in errors)
+
+    def test_accepts_unknown_unit_of_measure_with_normalization(self):
+        """Unknown units are accepted (warning-only) and lowercased."""
+        event = IngestEvent(**_valid_event_kwargs(unit_of_measure="bushels_of_fun"))
+        assert event.unit_of_measure == "bushels_of_fun"
+
+    def test_accepts_valid_units(self):
+        for unit in ["lbs", "kg", "cases", "pallets", "each"]:
+            event = IngestEvent(**_valid_event_kwargs(unit_of_measure=unit))
+            assert event.unit_of_measure == unit
+
+    def test_requires_location_gln_or_name(self):
+        """FSMA 204 requires at least one location identifier."""
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(
+                **_valid_event_kwargs(
+                    location_name=None,
+                    location_gln=None,
+                )
+            )
+        errors = exc_info.value.errors()
+        assert any("location" in str(e["msg"]).lower() for e in errors)
+
+    def test_location_kde_satisfies_requirement(self):
+        """A location KDE (e.g. ship_from_location) should satisfy the location check."""
+        event = IngestEvent(
+            **_valid_event_kwargs(
+                location_name=None,
+                location_gln=None,
+                kdes={"ship_from_location": "Some Warehouse"},
+            )
+        )
+        assert event.location_name is None
+        assert event.kdes["ship_from_location"] == "Some Warehouse"
+
+    def test_accepts_historical_timestamp(self):
+        past = datetime.now(timezone.utc) - timedelta(days=180)
+        event = IngestEvent(**_valid_event_kwargs(timestamp=past.isoformat()))
+        assert event.timestamp == past.isoformat()
+
+    def test_rejects_invalid_iso_timestamp(self):
+        with pytest.raises(ValidationError):
+            IngestEvent(**_valid_event_kwargs(timestamp="not-a-date"))
+
+
+FILE services/shared/tests/test_auth_fail_closed.py
+"""Tests for auth config validation at service startup."""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+SERVICES_DIR = Path(__file__).resolve().parents[2]
+VALIDATE_SCRIPT = (
+    "import os, sys; "
+    f"sys.path.insert(0, {str(SERVICES_DIR)!r}); "
+    "from shared.auth import validate_auth_config; "
+    "validate_auth_config(); "
+    "print('STARTED_OK')"
+)
+
+
+def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
+    """Run validate_auth_config() in a subprocess with the given env vars."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k
+        not in (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_ENVIRONMENT_NAME",
+            "RAILWAY_ENVIRONMENT_ID",
+            "RAILWAY_PROJECT_NAME",
+            "RAILWAY_PROJECT_ID",
+            "RAILWAY_SERVICE_NAME",
+            "RAILWAY_SERVICE_ID",
+            "VERCEL_ENV",
+            "AUTH_SECRET_KEY",
+            "JWT_SECRET",
+            "REGENGINE_ENV",
+            "AUTH_TEST_BYPASS_TOKEN",
+            "REGENGINE_AUTH_STRICT",
+            "REGENGINE_API_KEY",
+            "API_KEY",
+        )
+    }
+    env.update(env_overrides)
+    env.setdefault("REGENGINE_ENV", "development")
+    return subprocess.run(
+        [sys.executable, "-c", VALIDATE_SCRIPT],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+class TestAuthConfigValidation:
+    """Validate auth config catches misconfigurations at startup."""
+
+    def test_starts_with_valid_config(self):
+        """Valid JWT secret should start cleanly."""
+        result = _run_validate({"AUTH_SECRET_KEY": "a-valid-secret-key-long-enough"})
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_starts_in_dev_without_jwt_secret(self):
+        """Dev mode without JWT secret should start (warns but no crash)."""
+        result = _run_validate({})
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_cloud_starts_without_supabase_creds(self):
+        """Cloud env should start fine without Supabase — no longer checked.
+
+        Supabase credential validation was removed after it caused production
+        outages. SupabaseManager.get_client() handles missing creds gracefully.
+        """
+        result = _run_validate(
+            {
+                "RAILWAY_ENVIRONMENT": "production",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_rejects_short_jwt_secret_in_production(self):
+        """Production with a too-short JWT secret logs the issue.
+
+        Startup only hard-fails outside CI when REGENGINE_ENV is explicitly
+        production. The shared CI shard runs with CI/GITHUB_ACTIONS set, so we
+        assert the validation signal rather than a subprocess exit.
+        """
+        result = _run_validate(
+            {
+                "CI": "true",
+                "GITHUB_ACTIONS": "true",
+                "REGENGINE_ENV": "production",
+                "AUTH_SECRET_KEY": "short",
+            }
+        )
+        assert result.returncode == 0
+        assert "auth_config_validation_failed" in result.stdout
+        assert "AUTH_SECRET_KEY is too short" in result.stdout
+        assert "STARTED_OK" in result.stdout
+
+    def test_rejects_default_jwt_secret_in_production(self):
+        """Production with a known-default JWT secret logs the issue."""
+        result = _run_validate(
+            {
+                "CI": "true",
+                "GITHUB_ACTIONS": "true",
+                "REGENGINE_ENV": "production",
+                "AUTH_SECRET_KEY": "changeme",
+            }
+        )
+        assert result.returncode == 0
+        assert "auth_config_validation_failed" in result.stdout
+        assert "AUTH_SECRET_KEY is too short" in result.stdout
+        assert "STARTED_OK" in result.stdout
+
+    def test_rejects_bypass_token_in_production(self):
+        """Production with AUTH_TEST_BYPASS_TOKEN logs the issue."""
+        result = _run_validate(
+            {
+                "CI": "true",
+                "GITHUB_ACTIONS": "true",
+                "REGENGINE_ENV": "production",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+                "AUTH_TEST_BYPASS_TOKEN": "some-bypass-token",
+            }
+        )
+        assert result.returncode == 0
+        assert "auth_config_validation_failed" in result.stdout
+        assert "AUTH_TEST_BYPASS_TOKEN is set in a strict auth environment" in result.stdout
+        assert "STARTED_OK" in result.stdout
+
+    # ── #2512: cloud-marker + ephemeral-secret fail-fast ─────────────────────
+
+    def test_cloud_marker_non_production_env_with_ephemeral_secret_hard_fails(self):
+        """Defense-in-depth: a cloud marker present with an explicit
+        non-production environment the central gate leaves alone (staging on a
+        non-Railway host) AND an ephemeral signing key active (no AUTH_SECRET_KEY
+        / TOOL_ACCESS_SECRET) must refuse to boot rather than serve
+        restart-forgeable sessions (#2512). Outside CI.
+
+        Note REGENGINE_ENV=development would be *forced* to production by the
+        central gate (and thus start cleanly); staging is the genuine bypass
+        case the gate intentionally does not force."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "RENDER": "1",
+                "REGENGINE_ENV": "staging",
+            }
+        )
+        assert result.returncode != 0
+        assert "Auth config validation failed" in result.stderr
+        assert "AUTH_SECRET_KEY / JWT_SECRET not set" in result.stderr
+        assert "STARTED_OK" not in result.stdout
+
+    def test_cloud_marker_development_env_is_forced_production_with_explicit_secrets(self):
+        """A cloud marker with REGENGINE_ENV=development is forced to production
+        by the central gate, so the ephemeral-secret branch is skipped and
+        startup proceeds — proving the fail-fast aligns with the gate (#2512)."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "RENDER": "1",
+                "REGENGINE_ENV": "development",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+                "TOOL_ACCESS_SECRET": "another-valid-secret-key-long-enough",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_cloud_marker_with_explicit_secrets_starts(self):
+        """The same bypass-shaped config is fine once real secrets are provided —
+        only the ephemeral-key case fails (#2512)."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "RENDER": "1",
+                "REGENGINE_ENV": "staging",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+                "TOOL_ACCESS_SECRET": "another-valid-secret-key-long-enough",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_no_cloud_marker_ephemeral_secret_still_starts(self):
+        """Truly-local dev (no cloud marker) with no secrets keeps starting —
+        the fail-fast must not regress local development (#2512)."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "REGENGINE_ENV": "development",
+                # Clear any cloud markers the CI host itself might inject so the
+                # "truly local" assertion is honest.
+                "RENDER": "",
+                "FLY_APP_NAME": "",
+                "KUBERNETES_SERVICE_HOST": "",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+
+FILE tests/shared/test_idempotency_middleware_1338.py
+"""Dedicated test suite for ``services/shared/idempotency.py`` — #1338.
+
+Context
+-------
+``services/shared/idempotency.py`` provides the POST-dedup middleware
+that every service layer relies on. It had no dedicated test suite
+prior to this file — the only coverage lived inside
+``services/ingestion/tests/test_webhook_idempotency.py`` which
+exercised two very specific scenarios (tenant-scoped cache key +
+strict dependency) but left the surrounding contract untested.
+
+This suite locks in the full middleware + dependency contract so
+future changes to graceful-degrade behavior, 2xx-only caching,
+tenant-scoped cache keys, or the 255-char ceiling fail loudly.
+Targets the #1338 acceptance goal (``pytest tests/shared
+--cov=services/shared --cov-fail-under=70``) for this module — the
+assertions below drive idempotency.py coverage to ~100 percent.
+
+All tests are pure-Python: we stand in for Redis with an async in-
+memory dict and monkeypatch ``_get_client``. No live Redis needed.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, Optional
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from shared.idempotency import (
+    IDEMPOTENCY_KEY_PREFIX,
+    IDEMPOTENCY_TTL_SECONDS,
+    IdempotencyDependency,
+    IdempotencyMiddleware,
+)
+
+# ---------------------------------------------------------------------------
+# Test fixtures
+# ---------------------------------------------------------------------------
+
+
+class _FakeAsyncRedis:
+    """Minimal async Redis stand-in for middleware testing.
+
+    Stores bytes-keyed bytes values and tracks setex TTL arguments so
+    tests can assert the 24-hour expiry is applied.
+    """
+
+    def __init__(self, should_fail: bool = False):
+        self.store: Dict[bytes, bytes] = {}
+        self.setex_calls: list[tuple[bytes, int, bytes]] = []
+        self.get_calls: list[bytes] = []
+        self.should_fail = should_fail
+
+    async def ping(self):
+        if self.should_fail:
+            raise ConnectionError("fake redis down")
+        return True
+
+    async def get(self, key):
+        if isinstance(key, str):
+            key = key.encode()
+        self.get_calls.append(key)
+        if self.should_fail:
+            raise ConnectionError("fake redis down")
+        return self.store.get(key)
+
+    async def set(self, key, value, *, nx, ex):
+        key = key.encode() if isinstance(key, str) else key
+        if nx and key in self.store:
+            return False
+        self.store[key] = value.encode() if isinstance(value, str) else value
+        return True
+
+    async def eval(self, script, numkeys, key, expected, *args):
+        key = key.encode() if isinstance(key, str) else key
+        if self.store.get(key) != expected.encode():
+            return 0
+        if args:
+            return await self.setex(key, int(args[0]), args[1])
+        del self.store[key]
+        return 1
+
+    async def setex(self, key, ttl, value):
+        if isinstance(key, str):
+            key = key.encode()
+        if isinstance(value, str):
+            value = value.encode()
+        self.setex_calls.append((key, ttl, value))
+        if self.should_fail:
+            raise ConnectionError("fake redis down")
+        self.store[key] = value
+
+
+# ---------------------------------------------------------------------------
+# Trusted tenant headers (#2841)
+# ---------------------------------------------------------------------------
+#
+# The raw ``X-Tenant-ID`` header is no longer a tenant source: it is client
+# input, and this middleware serves cache hits before any authentication runs.
+# Tests that merely need *a* tenant now present the secret-gated internal
+# service header that ``shared/middleware/tenant_context.py`` already treats as
+# the only trustworthy pre-auth tenant claim.
+_INTERNAL_SECRET = [REDACTED]
+
+
+@pytest.fixture(autouse=True)
+def _internal_secret_configured(monkeypatch):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", _INTERNAL_SECRET)
+
+
+def _tenant_headers(tenant: str) -> Dict[str, str]:
+    """Headers that authenticate an internal caller as ``tenant``."""
+    return {
+        "X-RegEngine-Tenant-ID": tenant,
+        "X-RegEngine-Internal-Secret": _INTERNAL_SECRET,
+    }
+
+
+def _patched_middleware(
+    monkeypatch: pytest.MonkeyPatch,
+    fake: Optional[_FakeAsyncRedis] = None,
+) -> _FakeAsyncRedis:
+    """Patch ``_get_client`` so every middleware instance uses ``fake``.
+
+    If ``fake`` is ``None``, simulates Redis unavailable by returning
+    ``None`` (the documented graceful-degrade path).
+    """
+    import shared.idempotency as idemp_mod
+
+    async def _fake_get_client(self):
+        if fake is None:
+            self._redis_available = False
+            return None
+        self._redis_available = True
+        return fake
+
+    monkeypatch.setattr(idemp_mod.IdempotencyMiddleware, "_get_client", _fake_get_client)
+    return fake  # type: ignore[return-value]
+
+
+def _build_app(
+    handler=None,
+    *,
+    pre_middleware=None,
+) -> FastAPI:
+    """Construct a FastAPI app mounting IdempotencyMiddleware.
+
+    ``pre_middleware`` runs before idempotency in the inbound direction
+    so tests can plant ``request.state.principal`` before the
+    middleware resolves the tenant.
+    """
+    app = FastAPI()
+
+    @app.post("/echo")
+    async def echo(request: Request):
+        if handler is not None:
+            return await handler(request)
+        body = await request.body()
+        return {"body": body.decode() if body else ""}
+
+    @app.get("/ping")
+    async def ping():
+        return {"status": "ok"}
+
+    app.add_middleware(IdempotencyMiddleware)
+    if pre_middleware is not None:
+        app.add_middleware(pre_middleware)
+
+    return app
+
+
+# ---------------------------------------------------------------------------
+# Module-level constants (regression anchors)
+# ---------------------------------------------------------------------------
+
+
+class TestModuleConstants:
+    """Lock critical constants so silent edits are flagged."""
+
+    def test_key_prefix_is_idempotency_colon(self):
+        """The cache-key prefix is part of the #1237 contract — do not
+        move or rename without coordinating rollout."""
+        assert IDEMPOTENCY_KEY_PREFIX == "idempotency:"
+
+    def test_ttl_is_24_hours(self):
+        """24h TTL is documented behaviour. Halving this breaks safe
+        client retry windows, doubling it grows cache memory."""
+        assert IDEMPOTENCY_TTL_SECONDS == 86400
+        assert IDEMPOTENCY_TTL_SECONDS == 24 * 60 * 60
+
+
+# ---------------------------------------------------------------------------
+# _should_cache — POST-only gate
+# ---------------------------------------------------------------------------
+
+
+class TestShouldCache:
+    """Idempotency only applies to POST; other verbs bypass."""
+
+    @pytest.fixture
+    def middleware(self):
+        return IdempotencyMiddleware(app=MagicMock())
+
+    @pytest.mark.parametrize("method", ["POST", "post", "Post", "PoSt"])
+    def test_post_is_cached_regardless_of_case(self, middleware, method):
+        """HTTP methods are case-insensitive per RFC 9110, and the
+        middleware should normalize before comparing."""
+        assert middleware._should_cache(method) is True
+
+    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+    def test_non_post_methods_not_cached(self, middleware, method):
+        """PUT and DELETE are idempotent by RFC but that's a different
+        kind of idempotency — we only cache replay-safe POSTs."""
+        assert middleware._should_cache(method) is False
+
+
+# ---------------------------------------------------------------------------
+# _get_cache_key — tenant-scoped cache keys (#1237)
+# ---------------------------------------------------------------------------
+
+
+class TestCacheKeyComposition:
+    """Lock the cache-key format so #1237's isolation can't regress."""
+
+    @pytest.fixture
+    def middleware(self):
+        return IdempotencyMiddleware(app=MagicMock())
+
+    def test_key_contains_prefix_tenant_and_idempotency_key(self, middleware):
+        key = middleware._get_cache_key("abc-123", tenant_id="tenant-x")
+        assert key == "idempotency:tenant-x:abc-123"
+
+    def test_different_tenants_produce_different_cache_keys(self, middleware):
+        """Same idempotency key under two tenants MUST produce two
+        distinct cache keys (#1237 — cross-tenant bleed fix)."""
+        a = middleware._get_cache_key("batch-key", tenant_id="tenant-a")
+        b = middleware._get_cache_key("batch-key", tenant_id="tenant-b")
+        assert a != b
+
+    def test_anonymous_sentinel_when_tenant_is_none(self, middleware):
+        """Without a tenant, a namespace sentinel is used so anonymous
+        callers can never inhabit the same namespace as an authenticated
+        tenant."""
+        anon = middleware._get_cache_key("x")
+        tenant = middleware._get_cache_key("x", tenant_id="real")
+        assert anon != tenant
+        assert "_anonymous_" in anon
+
+    def test_anonymous_sentinel_when_tenant_is_empty_string(self, middleware):
+        """Empty-string tenant is treated as anonymous (falsy)."""
+        key = middleware._get_cache_key("x", tenant_id="")
+        assert "_anonymous_" in key
+
+    def test_key_stable_for_same_inputs(self, middleware):
+        """Deterministic hashing contract — cache hits only work if the
+        same inputs map to the same key every time."""
+        k1 = middleware._get_cache_key("abc", tenant_id="t1")
+        k2 = middleware._get_cache_key("abc", tenant_id="t1")
+        assert k1 == k2
+
+
+# ---------------------------------------------------------------------------
+# _resolve_tenant_id — principal > header > None (#1237 spoof guard)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveTenantId:
+    """Tenant must come from the authenticated principal (or header as
+    a fallback), NEVER from the request body — else a caller could
+    inject ``tenant_id`` in JSON and spoof the cache namespace.
+    """
+
+    @pytest.fixture
+    def middleware(self):
+        return IdempotencyMiddleware(app=MagicMock())
+
+    def _request(
+        self,
+        *,
+        principal_tenant: Optional[str] = None,
+        header_tenant: Optional[str] = None,
+        internal_tenant: Optional[str] = None,
+    ) -> Request:
+        """``header_tenant`` is the UNTRUSTED ``X-Tenant-ID``; ``internal_tenant``
+        is the secret-gated ``X-RegEngine-Tenant-ID``."""
+        request = MagicMock(spec=Request)
+        request.state = MagicMock()
+        request.state.tenant_id = None
+        if principal_tenant is None:
+            # Principal attribute exists but holds None.
+            request.state.principal = None
+        else:
+            request.state.principal = MagicMock(tenant_id=principal_tenant)
+        headers = {}
+        if header_tenant is not None:
+            headers["X-Tenant-ID"] = header_tenant
+        if internal_tenant is not None:
+            headers.update(_tenant_headers(internal_tenant))
+        request.headers = headers
+        return request  # type: ignore[return-value]
+
+    def test_principal_tenant_wins_over_header(self, middleware):
+        """RBAC-resolved tenant always beats client-supplied header."""
+        req = self._request(
+            principal_tenant="principal-wins",
+            header_tenant="attacker-choice",
+        )
+        assert middleware._resolve_tenant_id(req) == "principal-wins"
+
+    def test_raw_tenant_header_is_never_a_tenant_source(self, middleware):
+        """#2841: ``X-Tenant-ID`` is client input and must not name a namespace.
+
+        This case previously asserted the opposite (``== "from-header"``) —
+        it encoded the vulnerability. Resolution must now fail closed so
+        ``dispatch`` skips the cache entirely.
+        """
+        req = self._request(header_tenant="from-header")
+        assert middleware._resolve_tenant_id(req) is None
+
+    def test_internal_tenant_header_used_when_no_principal(self, middleware):
+        """The secret-gated internal header keeps service-to-service dedup."""
+        req = self._request(internal_tenant="from-internal-header")
+        assert middleware._resolve_tenant_id(req) == "from-internal-header"
+
+    def test_internal_tenant_header_ignored_without_the_secret(self, middleware):
+        req = self._request()
+        req.headers = {"X-RegEngine-Tenant-ID": "unproven"}
+        assert middleware._resolve_tenant_id(req) is None
+
+    def test_internal_tenant_header_ignored_with_a_wrong_secret(self, middleware):
+        req = self._request()
+        req.headers = {
+            "X-RegEngine-Tenant-ID": "unproven",
+            "X-RegEngine-Internal-Secret": "not-the-secret",
+        }
+        assert middleware._resolve_tenant_id(req) is None
+
+    def test_raw_header_cannot_override_the_api_key_tenant(self, middleware, monkeypatch):
+        """#2841's cleanest exploit: authenticated as A, forging B.
+
+        The header branch used to sit *above* the API-key lookup, so a
+        legitimate caller could redirect their namespace into another
+        tenant's. The authenticated key must now win.
+        """
+        import shared.idempotency as idemp_mod
+
+        monkeypatch.setattr(idemp_mod, "_lookup_api_key_context", lambda raw: ("tenant-attacker", "auth-snapshot"))
+        req = self._request(header_tenant="tenant-victim")
+        req.headers = {"X-Tenant-ID": "tenant-victim", "X-RegEngine-API-Key": "rge_attacker.secret"}
+        assert middleware._resolve_tenant_id(req) == "tenant-attacker"
+
+    def test_api_key_lookup_used_when_no_principal_or_header(self, middleware, monkeypatch):
+        import shared.idempotency as idemp_mod
+
+        monkeypatch.setattr(idemp_mod, "_lookup_api_key_context", lambda raw: ("tenant-from-key", "auth-snapshot"))
+        req = self._request()
+        req.headers = {"X-RegEngine-API-Key": "rge_test.secret"}
+        assert middleware._resolve_tenant_id(req) == "tenant-from-key"
+
+    def test_header_stripped_of_whitespace(self, middleware):
+        """Header value should be trimmed — otherwise ``" tenant"`` and
+        ``"tenant"`` would land in different cache namespaces."""
+        req = self._request(internal_tenant="  spaced-tenant  ")
+        assert middleware._resolve_tenant_id(req) == "spaced-tenant"
+
+    def test_none_when_neither_principal_nor_header

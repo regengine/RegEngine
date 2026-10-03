@@ -1,0 +1,87 @@
+UTC: 2026-10-03T00:40:40.244597+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["rg","-n","Permissions-Policy|camera=|traceability_lot_code:|parseGS1|findNextFieldBoundary|decodeURIComponent","frontend/next.config.js","frontend/src/lib/gs1-parser.ts","frontend/src/components/mobile/FieldCaptureClient.tsx","frontend/src/app/tools/scan/page.tsx","frontend/src/app/dashboard/receiving/page.tsx"],text=True)); p=Path("frontend/src/__tests__/lib/qa-sweep-gs1.test.ts");print("\n".join(f"{n}: {l}" for n,l in enumerate(p.read_text().splitlines(),1))); print("LINT TEST FILE"); subprocess.run(["frontend/node_modules/.bin/eslint",str(p)],check=False)'
+Exit: 0
+Duration: 0.34s
+Timeout: False
+
+
+Oops! Something went wrong! :(
+
+ESLint: 9.39.5
+
+ESLint couldn't find an eslint.config.(js|mjs|cjs) file.
+
+From ESLint v9.0.0, the default configuration file is now eslint.config.js.
+If you are using a .eslintrc.* file, please follow the migration guide
+to update your configuration file to the new format:
+
+https://eslint.org/docs/latest/use/configure/migration-guide
+
+If you still have problems after following the migration guide, please stop by
+https://eslint.org/chat/help to chat with the team.
+
+frontend/next.config.js:52:                    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+frontend/src/app/dashboard/receiving/page.tsx:30:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/app/dashboard/receiving/page.tsx:158:        const parsed = parseGS1(raw);
+frontend/src/app/dashboard/receiving/page.tsx:161:        // The input invites typing a bare GTIN or lot code, but parseGS1 only
+frontend/src/app/dashboard/receiving/page.tsx:242:                traceability_lot_code: item.lotCode || item.gtin || `RCV-${Date.now()}`,
+frontend/src/app/tools/scan/page.tsx:8:import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:30:    const result = parseGS1(barcode);
+frontend/src/components/mobile/FieldCaptureClient.tsx:39:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/components/mobile/FieldCaptureClient.tsx:73:    parsed: ReturnType<typeof parseGS1>,
+frontend/src/components/mobile/FieldCaptureClient.tsx:157:                        traceability_lot_code: traceabilityLotCode,
+frontend/src/components/mobile/FieldCaptureClient.tsx:192:        const parsed = parseGS1(rawScan);
+frontend/src/components/mobile/FieldCaptureClient.tsx:224:                    traceability_lot_code: traceabilityLotCode,
+frontend/src/components/mobile/FieldCaptureClient.tsx:307:                        traceability_lot_code: lotCode,
+frontend/src/lib/gs1-parser.ts:75:function findNextFieldBoundary(input: string, from: number): number {
+frontend/src/lib/gs1-parser.ts:107:        const value = decodeURIComponent(segments[i + 1]);
+frontend/src/lib/gs1-parser.ts:140:export function parseGS1(raw: string): GS1ParsedData {
+frontend/src/lib/gs1-parser.ts:179:            const end = findNextFieldBoundary(working, start);
+
+1: import { describe, expect, it } from 'vitest';
+2: import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+3: 
+4: describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
+5:     it('keeps Digital Link lot values intact across encoded delimiters', () => {
+6:         for (const lot of ['LOT-10', 'LOT-21', 'LOT/ALPHA', 'LOT%PERCENT', 'LOT A']) {
+7:             const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+8:             expect(parsed.tlc).toBe(lot);
+9:             expect(parsed.isValidGTIN).toBe(true);
+10:         }
+11:     });
+12: 
+13:     it('checks every possible check digit for 100 generated GTIN bodies', () => {
+14:         for (let index = 0; index < 100; index += 1) {
+15:             const body = String(950600010000 + index).padStart(13, '0');
+16:             const weightedSum = [...body].reduce(
+17:                 (total, digit, position) => total + Number(digit) * (position % 2 === 0 ? 3 : 1),
+18:                 0,
+19:             );
+20:             const expected = (10 - weightedSum % 10) % 10;
+21:             for (let candidate = 0; candidate < 10; candidate += 1) {
+22:                 expect(isValidGTINCheckDigit(`${body}${candidate}`)).toBe(candidate === expected);
+23:             }
+24:         }
+25:     });
+26: 
+27:     it.each(['260230', '260431', '261300', '260000'])('rejects impossible calendar date %s', (value) => {
+28:         expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+29:     });
+30: 
+31:     // FE-001: a variable-length lot ends only at its explicit delimiter/end.
+32:     // Existing parser wrongly treats AI-like digits inside the lot as a new AI.
+33:     it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+34:         const input = `010950600013435210${lot}\x1d17260930`;
+35:         const parsed = parseGS1(input);
+36:         expect(parsed.tlc).toBe(lot);
+37:         expect(parsed.expiryDate).toBe('2026-09-30');
+38:     });
+39: 
+40:     // FE-002: invalid percent encodings must become a rejected scan, not an
+41:     // uncaught URIError in receiving, field capture, or the public scanner.
+42:     it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+43:         expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
+44:     });
+45: });
+LINT TEST FILE

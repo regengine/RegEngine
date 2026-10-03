@@ -1,0 +1,418 @@
+UTC: 2026-10-03T00:36:02.391499+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git rev-parse HEAD; git ls-files "**/AGENTS.md"; sed -n "1,170p" frontend/AGENTS.md; sed -n "1,90p" README.md; sed -n "1,140p" docs/specs/FSMA_204_MVP_SPEC.md; cat /Users/sellers/.codex/skills/security-best-practices/SKILL.md; rg --files tests services frontend/src frontend/tests server -g "!**/.env*" -g "!**/node_modules/**" -g "!**/package-lock.json" | awk -F/ "{print \$1\"/\"\$2}" | sort | uniq -c'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+0927b85a8f934889bab73a0f0a94562e10a3c3aa
+docs/archive/AGENTS.md
+docs/engineering/AGENTS.md
+frontend/AGENTS.md
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+# RegEngine
+
+**FSMA 204 food traceability: supplier data in, verifiable evidence out.**
+
+RegEngine is an API-first traceability evidence platform for food supply chains. It ingests supplier and ERP records, normalizes Critical Tracking Events (CTEs) and Key Data Elements (KDEs), evaluates versioned rules, and produces tenant-scoped records, tamper-evident audit evidence, and FDA-oriented exports.
+
+Inflow Workbench prepares data with preflight checks, readiness scores, a fix queue, and a commit gate. Optional Jev assistance suggests CSV column mappings and missing event types; deterministic validation and authenticated tenant boundaries remain authoritative.
+
+[Website](https://regengine.co) · [Public proof](https://regengine.co/proof) · [Verify a bundle](https://regengine.co/verify) · [Product description](docs/PRODUCT_DESCRIPTION.md) · [Python SDK](regengine/README.md)
+
+This is a pre-production application with deployed public proof surfaces. The capability inventory below describes checked-in implementation and release policy, not proof of customer adoption or live configuration.
+
+## Public proof surface
+
+You don't have to take our word for any of this — try it yourself:
+
+- [regengine.co/proof](https://regengine.co/proof) — download a synthetic FSMA CSV, EPCIS 2.0 JSON-LD bundle, and audit evidence ZIP.
+- [regengine.co/verify](https://regengine.co/verify) — drop the public audit bundle into the verifier and confirm file-hash and Merkle-root integrity.
+- [regengine.co/proof/recall-drill](https://regengine.co/proof/recall-drill) — call the public recall-drill endpoint against a frozen synthetic dataset and reproduce the case-study metrics.
+
+This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
+
+## Current Status
+
+- Stage: pre-production.
+- Backend deploy target in checked-in Railway config: one consolidated FastAPI app in [server/main.py](server/main.py), built by the repo-root [Dockerfile](Dockerfile).
+- Frontend: Next.js App Router app in [frontend/](frontend/).
+- Database migrations: Alembic at [alembic/versions/](alembic/versions/).
+- Tenant isolation posture: tenant authority is derived from authenticated principal state; caller-supplied tenant IDs are assertions only.
+- Primary domain: FSMA 204 food traceability. Other regulatory, document, NLP, and graph modules exist, but FSMA ingestion and compliance are the best-evidenced product path in this repository.
+
+## What The Product Does
+
+Implemented capabilities in the current tree. Route availability is controlled by [server/router_policy.py](server/router_policy.py); a module or UI page existing does not mean its API is enabled in production.
+
+| Capability | Evidence |
+| --- | --- |
+| API key protected webhook CTE ingest | [services/ingestion/app/webhook_router_v2/routes.py](services/ingestion/app/webhook_router_v2/routes.py) |
+| Canonical tenant context for API-key, JWT, and ingestion RBAC callers | [services/shared/tenant_context.py](services/shared/tenant_context.py) |
+| Legacy ingestion route tenant-context migration inventory | [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) |
+| Paid endpoint subscription gate | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) |
+| CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
+| EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
+| EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
+| GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
+| Optional Jev CSV column mapping and file-CTE suggestions, confidence-based review, upload UI prompts, and operator preview/evaluation tools; automatic application defaults off | [services/shared/jev/](services/shared/jev/), [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) |
+| Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
+| Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
+| Supplier CSV manifest remediation (implemented; excluded from the production router allowlist): byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles, scheduler-drained correction-link email delivery | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
+| Buyer remediation dashboard (requires the remediation API to be enabled; manifest list, per-record case status, release and correction-link actions) | [frontend/src/app/remediation/page.tsx](frontend/src/app/remediation/page.tsx) |
+| CTE persistence, hash-chain storage, and verification (legacy and canonical stores; dual-write retirement mid-cutover) | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py), [services/shared/canonical_persistence/writer.py](services/shared/canonical_persistence/writer.py), [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md) |
+| Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
+| FDA-oriented CSV and evidence-bundle export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
+| Request-response cases, scoped evidence package assembly, and auditor workflows | [services/ingestion/app/request_workflow_router.py](services/ingestion/app/request_workflow_router.py), [services/ingestion/app/auditor_router.py](services/ingestion/app/auditor_router.py) |
+| Recall readiness assessments, gap checklists, and recall reports | [services/ingestion/app/readiness_router.py](services/ingestion/app/readiness_router.py), [services/ingestion/app/recall_report.py](services/ingestion/app/recall_report.py) |
+| Public synthetic recall drill and independently verifiable sample bundles | [services/ingestion/app/proof_recall_router.py](services/ingestion/app/proof_recall_router.py), [frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py) |
+| EPCIS JSON-LD export and broader recall simulations (experimental routers; excluded from the production allowlist) | [services/ingestion/app/epcis_export.py](services/ingestion/app/epcis_export.py), [services/ingestion/app/recall_simulations.py](services/ingestion/app/recall_simulations.py) |
+| Subscription-gated access and persisted usage metering; Stripe usage reporting requires an operator call | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py), [DESIGN_metering-billing.md](DESIGN_metering-billing.md) |
+| Tenant/admin/user/API-key management | [services/admin/app/](services/admin/app/) |
+| Persisted admin tenant provisioning | [services/admin/app/routes.py](services/admin/app/routes.py) |
+| Tamper-evident admin audit log hashing | [services/admin/app/audit.py](services/admin/app/audit.py) |
+| Audit-chain verification for admin audit exports | [services/admin/app/audit_integrity.py](services/admin/app/audit_integrity.py) |
+| Passwordless email-OTP and passkey login | [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts) |
+| Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
+| Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
+| Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
+| Inbound email ingestion: Postmark inbound-parse webhook, Basic-Auth + per-tenant sender allowlist, CSV attachments routed through the existing CSV ingest path, claim-then-act idempotent audit trail. Built and unit-tested; **not enabled in production** and has no admin/self-service provisioning UI — see [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) | [services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/) |
+
+## Production Spine
+
+```text
+ingest source record
+  -> preflight in Inflow Workbench
+  -> normalize to CTE/KDE shape
+  -> score readiness and route fix queue items
+  -> pass commit gate
+  -> persist tenant-scoped event data
+  -> evaluate rules
+  -> expose compliance/audit/export views
+```
+
+The diagram describes the Workbench workflow. Direct webhook, CSV, EPCIS, and EDI intake has route-specific validation and persistence; it does not universally pass through Workbench. Event persistence is mid-migration from a legacy CTE store to a canonical hash-chain store: some write paths still write both stores, newer paths write canonical-only, and read paths have consumer-specific cutover flags. Chain verification defaults to canonical reads; FDA CSV export v1 retains a legacy code default. Historical rollout observations are recorded in the cutover runbook; current deployment flags must be read back separately (see [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)). Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
+
+## Architecture
+
+### Runtime Shape
+
+The repo still contains six service directories:
+
+| Directory | Purpose |
+# FSMA 204 MVP Specification (Glass Box)
+
+> Status: legacy planning spec. The current production spine is
+> ingestion -> canonical PostgreSQL traceability events -> compliance
+> evaluation -> audit output -> FDA export. Neo4j/Kafka sections below are
+> retained as legacy integration notes, not the source of truth for new work.
+
+## April 30, 2026 Implementation Milestone
+
+RegEngine now includes the first operational Inflow Workbench loop for design-partner validation:
+
+- Preflight Mode validates supplier data before evidence persistence.
+- Commit Gate separates `simulation`, `preflight`, `staging`, and `production_evidence` decisions.
+- Fix Queue converts validation failures into tenant-scoped remediation work.
+- Scenario Library preserves replayable runs for demos, onboarding, and regression checks.
+- Readiness Score is exposed to Inflow Lab plus dashboard compliance and supplier views.
+- Workbench persistence has a Postgres-backed path with tenant RLS and audit-oriented append-only controls, with file-backed storage retained only as local/demo fallback.
+
+This milestone shifts the MVP from a rules engine plus simulator toward an operational traceability data workbench: messy supplier data can be preflighted, scored, fixed, and gated before it becomes trusted FSMA evidence.
+
+## Scope and Goals
+- Deliver demo-ready FSMA 204 traceability with 24-hour FDA spreadsheet, mock recall, and visual E2E trace.
+- Phase focus: Shipping CTE first (fastest path to one-up/one-down), then compliance/reporting, then mock recall/visualizer.
+- Transparency (“glass box”): deterministic rules + confidence scores + auditable transformations.
+
+## CTEs (Critical Tracking Events)
+- Shipping (Phase 1 focus): movement of a traceability lot between facilities.
+- Future (not in this MVP but referenced): Receiving, Transformation, Creation, Depletion. Keep schema extensible with `CTEType` enum.
+
+## KDEs (Key Data Elements)
+**Shipping mandatory KDEs (7):**
+1) Traceability Lot Code (TLC) — GTIN-14 + variable lot code; pattern: `^\d{14}[A-Za-z0-9\-\.]+$`
+2) Quantity
+3) Product Description
+4) Unit of Measure
+5) Ship-from Location
+6) Ship-to Location
+7) Event Date (ship date)
+
+**Additional useful KDEs (optional for enrichment):**
+- SKU/GTIN, Batch aliases, PO number, BOL number, Carrier, ASN/Invoice IDs, Document hash, Confidence scores.
+
+## Legacy Graph Schema (Neo4j)
+- Nodes
+  - `Lot { tlc }`
+  - `TraceEvent { type, date }` (type = "SHIPPING" for Phase 1)
+  - `Facility { gln, name, address }`
+  - `Document { source, hash }`
+- Relationships (Shipping ingest)
+  - `MERGE (l:Lot { tlc: $tlc })`
+  - `CREATE (e:TraceEvent { type: "SHIPPING", date: $date })`
+  - `MERGE (from:Facility { gln: $ship_from_gln })`
+  - `MERGE (to:Facility { gln: $ship_to_gln })`
+  - `MERGE (from)-[:SHIPPED]->(e)-[:INCLUDED]->(l)`
+  - `MERGE (e)-[:SHIPPED_TO]->(to)`
+- Extension hooks: add properties for quantity, unit, product_description on `TraceEvent` or edge metadata if needed; support multi-tenant via existing `Neo4jClient` patterns.
+
+## Legacy Kafka Contract (fsma.events.extracted)
+- Topic: `fsma.events.extracted`
+- Message schema (JSON):
+  { 
+    "tlc": "string (required)",
+    "quantity": "number | null",
+    "unit": "string | null",
+    "product_description": "string | null",
+    "ship_from_gln": "string | null",
+    "ship_from_address": "string | null",
+    "ship_to_gln": "string | null",
+    "ship_to_address": "string | null",
+    "date": "ISO 8601 string (required)",
+    "document_source": "string | null",  // e.g., s3://... or URL
+    "document_hash": "string | null",
+    "confidence": "0-1 float",
+    "raw_row_index": "int | null"        // line-item index from table extraction
+  }
+- Emitted by: `FSMAExtractor` (services/nlp) after validation and confidence scoring; high-confidence can also mirror to `graph.update` if reusing existing patterns.
+
+## Extractor Requirements (FSMAExtractor)
+- Location: `services/nlp/app/extractors/fsma_extractor.py`
+- Base: `BaseExtractor`
+- Inputs: text + layout (OCR with line clustering / table detection)
+- Outputs: list of FSMA events (one per table row when tabular structure detected) with confidence scores.
+- TLC detection: regex for labels ("Lot:", "L/C:", "Batch:") and GTIN-14 + variable lot; allow hyphen/dot. Fallback SKU/GTIN heuristics when TLC not explicitly labeled.
+- Table/line-item analysis: detect rows via existing OCR line clustering; each row yields a candidate event; attach row index.
+- Confidence: elevate when TLC + product + from/to present in same row; reduce when inferred across rows.
+- Mandatory KDE enforcement: TLC and date must be present to emit; log/route low-confidence to review if pipeline supports.
+
+## Pydantic Models (shared/schemas.py additions)
+- `class CTEType(str, Enum): SHIPPING = "SHIPPING"` (extensible)
+- `class Location(BaseModel): gln: Optional[str]; name: Optional[str]; address: Optional[str]`
+- `class ProductDescription(BaseModel): text: str; sku: Optional[str] = None; gtin: Optional[str] = None`
+- `class KDE(BaseModel): name: str; value: Any; confidence: Optional[float] = None`
+- `class FSMAEvent(BaseModel): tlc: str; cte_type: CTEType = CTEType.SHIPPING; date: datetime; quantity: Optional[float]; unit: Optional[str]; product: Optional[ProductDescription]; ship_from: Optional[Location]; ship_to: Optional[Location]; document_source: Optional[str]; document_hash: Optional[str]; raw_row_index: Optional[int]; kdes: List[KDE] = []`
+- Ensure JSON-serializable; use canonical shared import pattern.
+
+## FDA 24-Hour Spreadsheet Mapping (CSV)
+- Generator: `services/compliance/fsma_spreadsheet.py` → `generate_fda_spreadsheet(tlc, start_date, end_date)` using Pandas.
+- Columns (flattened rows ordered by event date):
+  - Traceability Lot Code
+  - Event Type (SHIPPING)
+  - Event Date (ISO8601)
+  - Quantity
+  - Unit
+  - Product Description
+  - Ship From GLN
+  - Ship From Name
+  - Ship From Address
+  - Ship To GLN
+  - Ship To Name
+  - Ship To Address
+  - Source Document
+  - Document Hash
+  - Confidence
+- REST: `GET /fsma/audit/spreadsheet?tlc={id}&start_date={...}&end_date={...}` returns downloadable `.csv` (auth via `X-RegEngine-API-Key`).
+
+## Validation Rules
+- TLC format regex: `^\d{14}[A-Za-z0-9\-\.]+$` (use in `services/compliance/fsma_engine.py` and plugin rule `invalid_tlc_format` in `industry_plugins/food_beverage/fsma_204.yaml`).
+- Required KDEs for Shipping: TLC and Date; warn if missing ship_from/ship_to/product/quantity.
+
+## Trace Forward (One-Up/One-Down)
+- Function: `trace_forward(tlc_id)` in `services/graph/app/fsma_utils.py` returns ordered hops (facility chain) following `SHIPPED`/`SHIPPED_TO` relationships from the lot’s shipping events.
+
+## Demo/Testing Artifacts
+- Golden sample test: `services/nlp/tests/test_fsma_extractor.py` using provided BOL PDF; assert TLC extraction `GTIN-14 + Lot-123` and presence of 7 KDEs.
+- Demo data seeder: `scripts/demo/seed_fsma_data.py` to create Farm → Packer → Distributor → Retailer chain with ~50 events.
+
+## Global Harmonization & Impact Analysis (Phase 29-30)
+- **Semantic Mapping** – Using `MappingEngine` (shared/graph/mapping_engine.py) to link FSMA 204 obligations to equivalent requirements in other jurisdictions (e.g., EMA, PMDA).
+- **Supply Chain Linking** – Using `TraceabilityLinker` (shared/graph/traceability_linker.py) to establish `GOVERNS` relationships between obligations and `TraceEvent`/`Lot` nodes.
+- **Impact Querying** – Sub-second identification of shipments impacted by specific regulatory updates.
+
+**New Linkage Metadata:**
+- Relationship: `(Obligation)-[:GOVERNS {link_type: 'keyword_match', confidence: float}]->(TraceEvent)`
+- Relationship: `(Obligation)-[:MAPPED_TO {justification: string}]->(Obligation)`
+
+## Security & Logging
+- All service endpoints: require `X-RegEngine-API-Key` (use `require_api_key`).
+- Structured logging via `structlog` with `request_id`/`correlation_id`; avoid logging raw PII.
+- Tenant isolation: follow existing `Neo4jClient` tenant routing; scope queries appropriately.
+
+---
+name: "security-best-practices"
+description: "Perform language and framework specific security best-practice reviews and suggest improvements. Trigger only when the user explicitly requests security best practices guidance, a security review/report, or secure-by-default coding help. Trigger only for supported languages (python, javascript/typescript, go). Do not trigger for general code review, debugging, or non-security tasks."
+---
+
+# Security Best Practices
+
+## Overview
+
+This skill provides a description of how to identify the language and frameworks used by the current context, and then to load information from this skill's references directory about the security best practices for this language and or frameworks.
+
+This information, if present, can be used to write new secure by default code, or to passively detect major issues within existing code, or (if requested by the user) provide a vulnerability report and suggest fixes.
+
+## Workflow
+
+The initial step for this skill is to identify ALL languages and ALL frameworks which you are being asked to use or already exist in the scope of the project you are working in. Focus on the primary core frameworks. Often you will want to identify both frontend and backend languages and frameworks.
+
+Then check this skill's references directory to see if there are any relevant documentation for the language and or frameworks. Make sure you read ALL reference files which relate to the specific framework or language. The format of the filenames is `<language>-<framework>-<stack>-security.md`. You should also check if there is a `<language>-general-<stack>-security.md` which is agnostic to the framework you may be using.
+
+If working on a web application which includes a frontend and a backend, make sure you have checked for reference documents for BOTH the frontend and backend!
+
+If you are asked to make a web app which will include both a frontend and backend, but the frontend framework is not specified, also check out `javascript-general-web-frontend-security.md`. It is important that you understand how to secure both the frontend and backend.
+
+If no relevant information is available in the skill's references directory, think a little bit about what you know about the language, the framework, and all well known security best practices for it. If you are unsure you can try to search online for documentation on security best practices.
+
+From there it can operate in a few ways.
+
+1. The primary mode is to just use the information to write secure by default code from this point forward. This is useful for starting a new project or when writing new code.
+
+2. The secondary mode is to passively detect vulnerabilities while working in the project and writing code for the user. Critical or very important vulnerabilities or major issues going against security guidance can be flagged and the user can be told about them. This passive mode should focus on the largest impact vulnerabilities and secure defaults.
+
+3. The user can ask for a security report or to improve the security of the codebase. In this case a full report should be produced describe anyways the project fails to follow security best practices guidance. The report should be prioritized and have clear sections of severity and urgency. Then offer to start working on fixes for these issues. See #fixes below.
+
+## Workflow Decision Tree
+
+- If the language/framework is unclear, inspect the repo to determine it and list your evidence.
+- If matching guidance exists in `references/`, load only the relevant files and follow their instructions.
+- If no matching guidance exists, consider if you know any well known security best practices for the chosen language and or frameworks, but if asked to generate a report, let the user know that concrete guidance is not available (you can still generate the report or detect for sure critical vulnerabilities)
+
+# Overrides
+
+While these references contain the security best practices for languages and frameworks, customers may have cases where they need to bypass or override these practices. Pay attention to specific rules and instructions in the project's documentation and prompt files which may require you to override certain best practices. When overriding a best practice, you MAY report it to the user, but do not fight with them. If a security best practice needs to be bypassed / ignored for some project specific reason, you can also suggest to add documentation about this to the project so it is clear why the best practice is not being followed and to follow that bypass in the future.
+
+# Report Format
+
+When producing a report, you should write the report as a markdown file in `security_best_practices_report.md` or some other location if provided by the user. You can ask the user where they would like the report to be written to.
+
+The report should have a short executive summary at the top.
+
+The report should be clearly delineated into multiple sections based on severity of the vulnerability. The report should focus on the most critical findings as these have the highest impact for the user. All findings should be noted with an numeric ID to make them easier to reference.
+
+For critical findings include a one sentence impact statement.
+
+Once the report is written, also report it to the user directly, although you may be less verbose. You can offer to explain any of the findings or the reasons behind the security best practices guidance if the user wants more info on any findings.
+
+Important: When referencing code in the report, make sure to find and include line numbers for the code you are referencing.
+
+After you write the report file, summarize the findings to the user.
+
+Also tell the user where the final report was written to
+
+# Fixes
+
+If you produced a report, let the user read the report and ask to begin performing fixes.
+
+If you passively found a critical finding, notify the user and ask if they would like you to fix this finding.
+
+When producing fixes, focus on fixing a single finding at a time. The fixes should have concise clear comments explaining that the new code is based on the specific security best practice, and perhaps a very short reason why it would be dangerous to not do it in this way.
+
+Always consider if the changes you want to make will impact the functionality of the user's code. Consider if the changes may cause regressions with how the project works currently. It is often the case that insecure code is relied on for other reasons (and this is why insecure code lives on for so long). Avoid breaking the user's project as this may make them not want to apply security fixes in the future. It is better to write a well thought out, well informed by the rest of the project, fix, then a quick slapdash change.
+
+Always follow any normal change or commit flow the user has configured. If making git commits, provide clear commit messages explaining this is to align with security best practices. Try to avoid bunching a number of unrelated findings into a single commit.
+
+Always follow any normal testing flows the user has configured (if any) to confirm that your changes are not introducing regressions. Consider the second order impacts the changes may have and inform the user before making them if there are any.
+
+# General Security Advice
+
+Below is a few bits of secure coding advice that applies to almost any language or framework.
+
+### Avoid Using Incrementing IDs for Public IDs of Resources
+
+When assigning an ID for some resource, which will then be used by exposed to the internet, avoid using small auto-incrementing IDs. Use longer, random UUID4 or random hex string instead. This will prevent users from learning the quantity of a resource and being able to guess resource IDs.
+
+### A note on TLS
+
+While TLS is important for production deployments, most development work will be with TLS disabled or provided by some out-of-scope TLS proxy. Due to this, be very careful about not reporting lack of TLS as a security issue. Also be very careful around use of "secure" cookies. They should only be set if the application will actually be over TLS. If they are set on non-TLS applications (such as when deployed for local dev or testing), it will break the application. You can provide a env or other flag to override setting secure as a way to keep it off until on a TLS production deployment. Additionally avoid recommending HSTS. It is dangerous to use without full understanding of the lasting impacts (can cause major outages and user lockout) and it is not generally recommended for the scope of projects being reviewed by codex.
+ 816 frontend/src
+  20 frontend/tests
+   1 server/__init__.py
+   1 server/main.py
+   1 server/route_ownership.py
+   1 server/route_security_manifest.py
+   1 server/route_security_policy.py
+   1 server/router_policy.py
+   1 server/routes_scheduler_status.py
+   3 server/workers
+   1 services/__init__.py
+ 194 services/admin
+  24 services/compliance
+ 100 services/graph
+ 474 services/ingestion
+  83 services/nlp
+  58 services/scheduler
+ 253 services/shared
+  25 services/test_data
+   3 tests/admin
+   2 tests/audit
+   5 tests/billing
+   3 tests/compliance
+   1 tests/conftest.py
+   5 tests/contract
+   6 tests/data_integrity
+   5 tests/e2e
+   1 tests/env_defaults.py
+   2 tests/graph
+   1 tests/infra
+   2 tests/ingestion
+   8 tests/integration
+   1 tests/integration_requirements.py
+  10 tests/invariants
+   6 tests/load
+  35 tests/migrations
+   1 tests/nlp
+   3 tests/recall_reconstruction
+  28 tests/scripts
+   6 tests/sdk
+  21 tests/security
+  96 tests/shared
+   3 tests/swarm
+   1 tests/test_canonical_event.py
+   1 tests/test_compliance_control_plane_e2e.py
+   1 tests/test_compliance_router_guard.py
+   1 tests/test_discovery_hardening.py
+   1 tests/test_e2e_deadline_breach.py
+   1 tests/test_e2e_fda_request.py
+   1 tests/test_e2e_identity_ambiguity.py
+   1 tests/test_e2e_package_manifest.py
+   1 tests/test_e2e_stale_evaluations.py
+   1 tests/test_e2e_tenant_isolation.py
+   1 tests/test_embedded_scheduler.py
+   1 tests/test_fsma_happy_path_e2e.py
+   1 tests/test_fsma_plan_builder.py
+   1 tests/test_fsma_validation.py
+   1 tests/test_guard_canonical.py
+   1 tests/test_guard_text_bind_casts.py
+   1 tests/test_identity_resolution_nway_merge_1195.py
+   1 tests/test_identity_service_unit.py
+   1 tests/test_idres_merge_direction_1193.py
+   1 tests/test_logging_binding_guard.py
+   1 tests/test_monolith_observability_drift.py
+   1 tests/test_monolith_route_parity.py
+   1 tests/test_nlp_to_compliance_e2e_1134.py
+   1 tests/test_recall_tenant_fallback_regression.py
+   1 tests/test_request_workflow_unit.py
+   1 tests/test_root_conftest_shared_symlink.py
+   1 tests/test_root_dockerfile_context.py
+   1 tests/test_router_policy.py
+   1 tests/test_rules_engine.py
+   1 tests/test_rules_engine_unit.py
+   1 tests/test_server_idempotency_cross_tenant_2841.py
+   1 tests/test_server_idempotency_middleware.py
+   1 tests/test_server_import_smoke.py
+   1 tests/test_server_readiness_probe.py
+   8 tests/test_shared
+   1 tests/test_shared_collection_isolation.py
+   1 tests/test_trace_engine.py
+   3 tests/unit
+   2 tests/vertical_services

@@ -1,0 +1,26 @@
+UTC: 2026-10-03T00:48:17.835517+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 --tb=short
+Exit: 0
+Duration: 2.44s
+Timeout: False
+
+.xxxxxxxxxxx.....xxx.....x..x                                            [100%]
+=========================== short test summary info ============================
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[inf] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[Infinity] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[1e309] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[nan] - BE-002: transformation input quantity accepts NaN/infinity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[inf] - BE-002: transformation input quantity accepts NaN/infinity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[1e309] - BE-002: transformation input quantity accepts NaN/infinity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[quantity] - BE-003: duplicate CSV columns silently discard an original quantity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[ Quantity ] - BE-003: duplicate CSV columns silently discard an original quantity
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[\xff\xd8\xff\xe0] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[column\nCaf\xe9\n] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[\xff\xfec\x00o\x00l\x00] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL tests/qa_sweep_20261002/test_portal_export_disclosure.py::test_redacted_fda_export_does_not_disclose_portal_capability - BE-011: supplier portal bearer capability is disclosed in exported KDEs
+XFAIL tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length - BE-010: body limit trusts Content-Length and permits oversized chunked bodies
+13 passed, 16 xfailed in 1.64s

@@ -1,0 +1,272 @@
+UTC: 2026-10-03T00:36:43.323378+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg --files services/ingestion/app services/shared | rg "(fda|export|authz|webhook_compat|idempot|api_key|tenant).*py$"; rg -n "@router|require_permission|Depends|tenant" services/ingestion/app/fda_export_router.py | head -100; sed -n "230,425p" services/ingestion/app/authz.py; rg -n "size|MAX|BodySize|limit|middleware" server/main.py | head -80'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+services/shared/tenant_models.py
+services/shared/agent_org/authz.py
+services/shared/maintenance_tenants.py
+services/shared/api_key_store.py
+services/shared/validators/tenant_validator.py
+services/ingestion/app/epcis_export.py
+services/ingestion/app/audit_export_log.py
+services/ingestion/app/webhook_compat.py
+services/ingestion/app/authz.py
+services/ingestion/app/email_ingest/tenant_lookup.py
+services/shared/tenant_settings.py
+services/ingestion/app/scrapers/state_adaptors/fda_enforcement.py
+services/ingestion/app/fda_export_service.py
+services/shared/cte_persistence/exports.py
+services/shared/tenant_rate_limiting.py
+services/shared/workflows/export_output.py
+services/ingestion/app/tenant_validation.py
+services/ingestion/app/shared/tenant_resolution.py
+services/ingestion/app/export_models.py
+services/ingestion/app/fda_export/router.py
+services/ingestion/app/fda_export/queries.py
+services/ingestion/app/fda_export/coverage.py
+services/ingestion/app/fda_export/__init__.py
+services/ingestion/app/fda_export/merkle.py
+services/ingestion/app/fda_export/recall.py
+services/ingestion/app/fda_export/formatters.py
+services/ingestion/app/fda_export/verification.py
+services/shared/tests/test_tenant_context_2696.py
+services/shared/tests/test_api_key_store_liveness_connect_args.py
+services/shared/tests/test_tenant_context.py
+services/shared/tests/test_tenant_models_cypher_scoping_1413.py
+services/shared/tests/test_tenant_guc_hook.py
+services/shared/tests/test_api_key_store_usage_throttle.py
+services/ingestion/app/webhook_router_v2/tenant.py
+services/shared/tests/test_cte_persistence_log_export_1655.py
+services/shared/tests/test_api_key_response_null_coercion.py
+services/shared/tests/test_agent_org_authz.py
+services/shared/tests/test_tenant_isolation.py
+services/shared/tests/test_api_key_store_set_context.py
+services/shared/tests/test_api_key_store_pgbouncer_compat.py
+services/shared/tests/test_auth_preshared_tenant_required_1068.py
+services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py
+services/shared/tests/test_tenant_context_set_guc.py
+services/shared/tests/test_fda_export_shared.py
+services/ingestion/app/export_monitoring.py
+services/shared/idempotency.py
+services/shared/middleware/tenant_context.py
+services/shared/tenant_context.py
+services/shared/fda_export/pii.py
+services/shared/fda_export/pagination.py
+services/shared/fda_export/windows.py
+services/shared/fda_export/__init__.py
+services/shared/fda_export/filenames.py
+services/shared/fda_export/csv_safety.py
+services/shared/neo4j_tenant_context.py
+rg: services/ingestion/app/fda_export_router.py: IO error for operation on services/ingestion/app/fda_export_router.py: No such file or directory (os error 2)
+
+    return query_tenant or header_tenant
+
+
+def _principal_from_api_key(api_key: [REDACTED] | APIKeyResponse) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id=api_key.key_id,
+        scopes=list(api_key.scopes or []),
+        tenant_id=api_key.tenant_id,
+        auth_mode="scoped_key",
+    )
+
+
+async def get_ingestion_principal(
+    request: Request,
+    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+) -> IngestionPrincipal:
+    """
+    Authenticate caller and return principal context.
+
+    Production accepts only database-backed, credential-bound API keys.
+    Explicit development/test mode retains the historical open fallback.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Check if this IP is temporarily blocked due to repeated auth failures
+    _check_auth_rate_limit(client_ip)
+
+    _dev = _is_dev_env()
+    if not x_regengine_api_key:
+        [REDACTED] not _dev:
+            _record_auth_failure(client_ip)
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        logger.warning(
+            "dev_open_auth_activated: path=%s client_ip=%s - "
+            "Request authenticated with dev-open fallback; "
+            "this MUST NOT appear outside local development",
+            request.url.path,
+            client_ip,
+        )
+        return IngestionPrincipal(
+            key_id="dev-open",
+            scopes=["*"],
+            tenant_id=None,
+            auth_mode="dev_open",
+        )
+
+    # Once a credential is presented, never downgrade a rejected credential to
+    # dev-open access.  This preserves workload/tenant key separation in every
+    # environment and prevents rate-limit/backend failures being bypassed by a
+    # second, weaker lookup path.
+    try:
+        api_key = [REDACTED] require_api_key(
+            request=request,
+            x_regengine_api_key=[REDACTED],
+        )
+        return _principal_from_api_key(api_key)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            _record_auth_failure(client_ip)
+        raise
+
+
+async def get_optional_ingestion_principal(
+    request: Request,
+    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+) -> Optional[IngestionPrincipal]:
+    """Authenticate a presented tenant key without requiring one.
+
+    Only absence is anonymous. A present invalid, expired, revoked,
+    rate-limited, tenantless, or backend-unverifiable credential preserves the
+    canonical error from :func:`shared.auth.require_api_key` and can never be
+    downgraded to the anonymous path.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    _check_auth_rate_limit(client_ip)
+
+    # The retired shared administrative credential must not acquire meaning
+    # merely because this route also permits a truly anonymous caller. Read it
+    # directly from the request so X-Admin-Key stays absent from OpenAPI.
+    if "x-admin-key" in request.headers:
+        _record_auth_failure(client_ip)
+        raise HTTPException(status_code=401, detail="X-Admin-Key is not an accepted authentication method")
+
+    try:
+        api_key = [REDACTED] optional_api_key(
+            request=request,
+            x_regengine_api_key=[REDACTED],
+        )
+        if api_key is None:
+            return None
+        return _principal_from_api_key(api_key)
+    except HTTPException as exc:
+        # 401 is an invalid/expired/revoked key. The canonical tenant-key
+        # dependency uses 403 when a workload credential is presented on a
+        # tenant surface; that is also a rejected credential for this realm.
+        if exc.status_code in {401, 403}:
+            _record_auth_failure(client_ip)
+        raise
+
+
+def require_permission(required_permission: str):
+    """FastAPI dependency factory enforcing a required permission scope.
+
+    Also cross-checks the authenticated principal's tenant against any
+    tenant_id query/header context to prevent cross-tenant data access.
+    """
+
+    async def _dependency(
+        request: Request,
+        response: Response,
+        principal: IngestionPrincipal = Depends(get_ingestion_principal),
+    ) -> IngestionPrincipal:
+        request.state.principal = principal
+        if has_permission(principal.scopes, required_permission):
+            # Cross-check: if the principal has a tenant_id AND the request
+            # specifies a different tenant_id, reject. Wildcard ``*`` scope
+            # grants permission BREADTH (which actions), not tenant BREADTH
+            # (which tenants) — a tenant-scoped key with ``*`` MUST NOT be
+            # able to pivot to another tenant by passing ``?tenant_id=other``.
+            #
+            # The explicit local-development fallback carries
+            # ``tenant_id=None`` and therefore bypasses this check through
+            # the ``principal.tenant_id`` guard below. Production callers
+            # are always bound to a tenant by their database-backed key.
+            #
+            # Fixes the wildcard-bypass finding in the 2026-05 audit
+            # (services/ingestion/app/authz.py:385).
+            requested_tenant = _requested_tenant_context(request)
+            if requested_tenant and principal.tenant_id and requested_tenant != principal.tenant_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Tenant mismatch: your API key does not have access to this tenant.",
+                )
+
+            tenant_id = _tenant_for_rate_limit(request, principal)
+            window = _rate_limit_window_seconds()
+            rpm = _rpm_for_permission(required_permission, principal)
+            role = _principal_rate_limit_role(principal)
+            scope = _normalize_permission(required_permission)
+
+            allowed, remaining = consume_tenant_rate_limit(
+                tenant_id=tenant_id,
+                bucket_suffix=f"rbac.{scope}.{role}",
+                limit=rpm,
+                window=window,
+            )
+            if not allowed:
+                reset = str(rate_limit_reset_epoch(window))
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded for tenant '{tenant_id}' on '{scope}'",
+                    headers={
+                        "Retry-After": str(window),
+                        "X-RateLimit-Limit": str(rpm),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": reset,
+                        "X-RateLimit-Tenant": tenant_id,
+                        "X-RateLimit-Scope": scope,
+                    },
+                )
+
+            _store_rate_limit_headers(
+                request,
+                response,
+                limit=rpm,
+                remaining=remaining,
+                tenant_id=tenant_id,
+                scope=scope,
+                window=window,
+            )
+            return principal
+        raise HTTPException(
+            status_code=403,
+            detail=f"Insufficient permissions: requires '{required_permission}'",
+        )
+
+    return _dependency
+62:from shared.middleware.security import add_security
+64:from shared.rate_limit import add_rate_limiting
+311:# CORS is handled by add_security() via shared middleware (single source of truth).
+313:add_rate_limiting(app)
+316:from shared.middleware import RequestIDMiddleware, TenantContextMiddleware
+317:from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+319:from services.admin.app.audit_middleware import AuditContextMiddleware
+325:app.add_middleware(AuditContextMiddleware)
+326:app.add_middleware(RequestIDMiddleware)
+327:app.add_middleware(TenantContextMiddleware)
+332:app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+334:# ``request.state.rate_limit_*`` (populated by authz/routes_ingest/webhook
+335:# rate-limit guards) onto the outbound response. Read-only: never consumes
+337:from services.ingestion.app.middleware import RateLimitHeadersMiddleware
+339:app.add_middleware(RateLimitHeadersMiddleware)
+343:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+344:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+352:app.add_middleware(IdempotencyMiddleware)
+354:# EPIC-I (#1316): correlation-id middleware. Registered last so Starlette's
+355:# reverse-LIFO middleware stack runs it FIRST — every downstream handler,
+363:app.add_middleware(CorrelationIdMiddleware)
+367:# admin service applied this via @app.middleware; per-app middleware does not
+371:@app.middleware("http")
+554:    # Public hash-chain verifier. Tenantless, no auth, rate-limited.
+1174:    # --- Rate-limiter storage (#2711) ---
+1177:    # limiting; production running on memory:// means every such budget is
+1181:        from shared.rate_limit import slowapi_storage_backend
+1185:            checks["rate_limiter"] = {
+1188:                "error": "slowapi rate limits are per-process (no Redis storage configured)",
+1191:            checks["rate_limiter"] = {"status": "ok", "backend": _rl_backend}
+1193:        checks["rate_limiter"] = {"status": "error", "error": type(exc).__name__}

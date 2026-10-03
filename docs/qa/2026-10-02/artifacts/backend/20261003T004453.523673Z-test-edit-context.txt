@@ -1,0 +1,70 @@
+UTC: 2026-10-03T00:44:53.523673+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 38,100p services/ingestion/tests/test_qa_sweep_20261002_contract.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+    writer.writerow(header)
+    writer.writerow(row)
+    return stream.getvalue()
+
+
+@pytest.fixture
+def csv_upload(monkeypatch):
+    captured = []
+
+    async def fake_ingest(payload, **kwargs):
+        captured.extend(payload.events)
+        return IngestResponse(
+            accepted=len(payload.events),
+            total=len(payload.events),
+            events=[
+                EventResult(traceability_lot_code=e.traceability_lot_code, cte_type=e.cte_type.value, status="accepted")
+                for e in payload.events
+            ],
+        )
+
+    monkeypatch.setattr(ct, "ingest_events", fake_ingest)
+    app = FastAPI()
+    app.include_router(ct.router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+
+        def upload(text, cte="harvesting"):
+            return client.post(
+                "/api/v1/ingest/csv", data={"cte_type": cte}, files={"file": ("qa.csv", text.encode(), "text/csv")}
+            )
+
+        yield upload, captured
+
+
+@pytest.fixture
+def webhook_client():
+    app = FastAPI()
+    app.include_router(routes.router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
+    )
+    for dependency in (
+        routes._verify_api_key,
+        routes._verify_webhook_signature,
+        routes.require_active_subscription,
+        routes.get_db_session,
+    ):
+        app.dependency_overrides[dependency] = lambda: None
+    with TestClient(app, raise_server_exceptions=False) as client:
+        yield client
+
+
+def _payload(timestamp):
+    return {
+        "source": "qa-local",
+        "events": [
+            {
+                "cte_type": "harvesting",
+                "traceability_lot_code": "LOT-QA-001",
+                "product_description": "Kale",

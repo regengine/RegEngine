@@ -1,0 +1,14 @@
+UTC: 2026-10-03T00:54:06.952529+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess; from pathlib import Path; import datetime; print("UTC",datetime.datetime.now(datetime.timezone.utc).isoformat());
+for port in [3102,3104,3105]:
+ r=subprocess.run(["lsof","-n","-P",f"-iTCP:{port}","-sTCP:LISTEN"],capture_output=True,text=True); print("port",port,"exit",r.returncode,"output",r.stdout.strip())'
+Exit: 0
+Duration: 0.24s
+Timeout: False
+
+UTC 2026-10-03T00:54:06.977905+00:00
+port 3102 exit 0 output COMMAND   PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+node    23587 sellers   13u  IPv4 0xe5cfeef3057f77dc      0t0  TCP 127.0.0.1:3102 (LISTEN)
+port 3104 exit 1 output 
+port 3105 exit 1 output 

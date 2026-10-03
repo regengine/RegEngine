@@ -1,0 +1,111 @@
+UTC: 2026-10-03T00:55:29.064256+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/scripts/ux-local-proxy.py"); print("\n".join(f"{i}: {s}" for i,s in enumerate(p.read_text().splitlines(),1) if i<=42)); print("VALIDATOR"); print(Path("docs/qa/2026-10-02/scripts/validate_handoff.py").read_text()[:6500])'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+1: """QA-only proxy for the managed Chrome fallback; all nonlocal resources denied.
+2: 
+3: Preserves the built app HTML while adding same-origin axe instrumentation.
+4: All API routes are synthetic. The report/save UI stores screenshots locally.
+5: """
+6: from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+7: from pathlib import Path
+8: import base64
+9: import datetime
+10: import json
+11: import re
+12: import threading
+13: import urllib.error
+14: import urllib.request
+15: from urllib.parse import parse_qs, urlsplit
+16: 
+17: ROOT = Path(__file__).resolve().parents[4]
+18: OUT = ROOT / 'docs/qa/2026-10-02/artifacts/ux'
+19: BASE = Path('/private/tmp/regengine-qa-ux-u2059hm8')
+20: class LocalRedirectsOnly(urllib.request.HTTPRedirectHandler):
+21:     def redirect_request(self, request, response, code, message, headers, newurl):
+22:         target = urlsplit(newurl)
+23:         if target.scheme != 'http' or target.hostname != '127.0.0.1' or target.port != 3104:
+24:             raise urllib.error.HTTPError(request.full_url, 502, 'QA off-origin redirect blocked', headers, None)
+25:         return super().redirect_request(request, response, code, message, headers, newurl)
+26: 
+27: OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), LocalRedirectsOnly())
+28: COUNTERS = {}
+29: INSTRUMENT = r"""
+30: const qa = {errors:[], csp:[], requests:[], startedAt:new Date().toISOString(), lcp:null, cls:0};
+31: window.addEventListener('error',e=>qa.errors.push(e.message));
+32: window.addEventListener('securitypolicyviolation',e=>qa.csp.push({directive:e.violatedDirective,uri:e.blockedURI}));
+33: try{new PerformanceObserver(l=>qa.lcp=l.getEntries().at(-1).startTime).observe({type:'largest-contentful-paint',buffered:true});}catch{}
+34: try{new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)qa.cls+=e.value;}).observe({type:'layout-shift',buffered:true});}catch{}
+35: window.addEventListener('load',()=>setTimeout(async()=>{
+36:  const result=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']}});
+37:  const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length);
+38:  const report={...qa,url:location.pathname,width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,title:document.title,cameraAllowed:document.featurePolicy?.allowsFeature('camera'),headings:[...document.querySelectorAll('h1,h2,h3')].map(e=>({level:e.tagName,text:e.textContent.trim()})),inputs:[...document.querySelectorAll('input,textarea,select')].filter(visible).map(e=>({tag:e.tagName,id:e.id,type:e.type,required:e.required,labels:[...(e.labels||[])].map(l=>l.textContent.trim())})),buttons:[...document.querySelectorAll('button')].filter(visible).map(e=>({text:e.textContent.trim(),name:e.getAttribute('aria-label'),disabled:e.disabled})),navigation:performance.getEntriesByType('navigation').map(e=>({responseStart:e.responseStart,domContentLoaded:e.domContentLoadedEventEnd,duration:e.duration})),paint:performance.getEntriesByType('paint').map(e=>({name:e.name,startTime:e.startTime})),resources:performance.getEntriesByType('resource').map(e=>({name:e.name.split('?')[0],duration:e.duration})),axe:{version:result.testEngine.version,violations:result.violations,incomplete:result.incomplete,passes:result.passes.map(e=>e.id)}};
+39:  await fetch('/__qa/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});
+40: },1200));
+41: """
+42: SAVE_UI = b'''<!doctype html><title>Local QA artifact saver</title><h1>Local QA artifact saver</h1><p>Only writes the named audit artifact on this localhost process.</p><form method="post" action="/__qa/screenshot"><label>Name <input name="name" required></label><label>Screenshot bytes <textarea name="data" required></textarea></label><button>Save screenshot</button></form>'''
+VALIDATOR
+#!/usr/bin/env python3
+"""Validate the local QA handoff without changing git or contacting a service."""
+from collections import Counter
+from pathlib import Path
+import re
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[4]
+QA = ROOT / "docs/qa/2026-10-02"
+
+
+def git(*args: str) -> str:
+    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+
+
+def main() -> None:
+    assert git("branch", "--show-current") == "qa/2026-10-02-sweep"
+    required = ["PLAN.md", "SESSION-LOG.md", "FINDINGS.md", "COVERAGE.md", "SUMMARY.md"]
+    for name in required:
+        assert (QA / name).is_file(), f"Missing {name}"
+        assert (QA / name).stat().st_size > 100, f"Empty report {name}"
+    rows = []
+    for line in (QA / "FINDINGS.md").read_text().splitlines():
+        if re.match(r"\| (?:BE|FE|UX)-\d{3} \|", line):
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            assert len(cells) == 9, f"Incorrect columns: {cells[0]}"
+            assert all(cells), f"Empty finding field: {cells[0]}"
+            rows.append(cells)
+    assert rows, "No finding rows found"
+    assert len({r[0] for r in rows}) == len(rows), "Duplicate finding IDs"
+    counts = Counter(r[1] for r in rows)
+    assert not (set(counts) - {"Critical", "High", "Medium", "Low"})
+    count_line = "Counts: " + " ".join(f"{s}={counts[s]}" for s in ("Critical", "High", "Medium", "Low"))
+    summary = (QA / "SUMMARY.md").read_text()
+    assert count_line in summary, f"Expected {count_line}"
+    assert "PR: opened by orchestrator" in summary
+    assert "CI status: pending at time of writing" in summary
+    for group in ("BACKEND", "FRONTEND", "UX"):
+        for suffix in ("REPORT", "SESSION-LOG"):
+            assert (QA / f"{group}-{suffix}.md").is_file()
+    changed = set(filter(None, git("diff", "--name-only", "HEAD").splitlines()))
+    changed.update(filter(None, git("ls-files", "--others", "--exclude-standard").splitlines()))
+    allowed = (
+        "docs/qa/2026-10-02/", "tests/qa_sweep_20261002/",
+        "services/ingestion/tests/test_qa_sweep_20261002_",
+        "frontend/src/__tests__/lib/qa-sweep-",
+        "frontend/src/__tests__/hooks/useSync.test.tsx",
+    )
+    unexpected = [p for p in sorted(changed) if not p.startswith(allowed)]
+    assert not unexpected, f"Unexpected changed files: {unexpected}"
+    oversized = [str(p.relative_to(ROOT)) for p in QA.rglob("*") if p.is_file() and p.stat().st_size > 5_000_000]
+    assert not oversized, f"Oversized artifact(s): {oversized}"
+    print(count_line)
+    print("Groups:", dict(Counter(r[2] for r in rows)))
+    print(f"PASS: mandatory docs, group reports/logs, findings, branch and {len(changed)} allowed files")
+    print("PR/CI remain orchestrator-owned; this check does not establish remote status.")
+
+
+if __name__ == "__main__":
+    main()
+

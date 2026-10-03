@@ -1,0 +1,17 @@
+UTC: 2026-10-03T02:20:30.966307+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import shlex; p=Path("docs/qa/2026-10-02/artifacts/browser/20261003T021959.581784Z-final-browser-handoff-validation.txt"); command=p.read_text().split("Command: ",1)[1].split("\nExit:",1)[0]; code=shlex.split(command)[2]; old="set(git(\"ls-files\", \"--others\", \"--exclude-standard\").splitlines())"; new="set(filter(None, subprocess.check_output([\"git\", \"ls-files\", \"--others\", \"--exclude-standard\", \"-z\"], text=True).split(\"\\0\")))"; assert old in code; code=code.replace(old,new); oldclass="t[\"classification\"].split(\":\")[0]"; assert oldclass in code; code=code.replace(oldclass,oldclass+".split()[0]"); print("Validator normalizes NUL-delimited Git paths and the product UX-008 classification label"); exec(compile(code,"<qa-handoff-validator>","exec"))'
+Exit: 0
+Duration: 0.21s
+Timeout: False
+
+Validator normalizes NUL-delimited Git paths and the product UX-008 classification label
+Counts: Critical=0 High=3 Medium=11 Low=4
+PASS: five follow-up docs; 18 unique finding IDs; exact count line; 85 local links
+PASS: 270 original cases; 19 environment / 8 harness / 1 product failures
+PASS: 5 expected regression failures / 1 environment skip; 42 true viewport PNGs
+PASS: original product/tests/artifacts preserved; only authorized docs/new QA tests changed
+PASS: no deletions, no artifact over 5 MB, git diff --check
+Branch qa/2026-10-02-sweep HEAD c98e1a305a8a7d4e1b50e086fdcf7891127ddfac
+Changed/untracked files 523
+This validates local browser evidence only; PR/CI and secret scan remain orchestrator-owned.
