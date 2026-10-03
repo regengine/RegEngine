@@ -1,0 +1,156 @@
+UTC: 2026-10-03T03:14:24.602587+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["docs/qa/2026-10-02/scripts/run_logged.py","frontend/vitest.config.ts","frontend/tests/e2e/qa-2026-10-02/fe-regression-support.ts","frontend/tests/e2e/qa-2026-10-02/playwright.config.ts"]; [(print("FILE: "+f),print(Path(f).read_text() if Path(f).is_file() else "MISSING")) for f in files]; print("Next guides:"); [print(p) for p in Path("frontend/node_modules/next/dist/docs").rglob("*vitest*")]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE: docs/qa/2026-10-02/scripts/run_logged.py
+#!/usr/bin/env python3
+"""Run an explicitly selected local QA command with UTC timing and redacted output.
+
+Usage: python3 docs/qa/2026-10-02/scripts/run_logged.py GROUP LABEL -- COMMAND ...
+Set QA_TIMEOUT_SECONDS for the time limit (default 900 seconds).
+"""
+from __future__ import annotations
+
+import datetime as dt
+import os
+from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[4]
+QA = ROOT / "docs/qa/2026-10-02"
+
+
+def redact(text: str) -> str:
+    text = re.sub(r"(?i)(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,\"']+", r"\1[REDACTED]", text)
+    text = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk_(?:live|test)_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})", "[REDACTED]", text)
+    text = re.sub(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[REDACTED]", text)
+    text = re.sub(r"(?i)((?:api[_-]?key|access[_-]?token|secret|password)\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(\w+://)[^/@\s]+:[^/@\s]+@", r"\1[REDACTED]@", text)
+    return text
+
+
+def main() -> int:
+    group, label, *command = sys.argv[1:]
+    if command and command[0] == "--":
+        command.pop(0)
+    if not command or not re.fullmatch(r"[a-z0-9_-]+", group + label):
+        raise SystemExit("Expected GROUP LABEL -- COMMAND, using lowercase safe labels")
+    now = dt.datetime.now(dt.timezone.utc)
+    stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+    artifacts = QA / "artifacts" / group
+    artifacts.mkdir(parents=True, exist_ok=True)
+    report = artifacts / f"{stamp}-{label}.txt"
+    log = QA / f"{group.upper()}-SESSION-LOG.md"
+    env = {k: v for k, v in os.environ.items() if k in {
+        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TERM", "SHELL",
+        "SYSTEMROOT", "WINDIR", "COMSPEC",
+    }}
+    env.update({"PYTHON_DOTENV_DISABLED": "1", "NEXT_TELEMETRY_DISABLED": "1",
+                "DO_NOT_TRACK": "1", "CI": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+                "PIP_CONFIG_FILE": os.devnull, "UV_NO_CONFIG": "1",
+                "NPM_CONFIG_USERCONFIG": os.devnull,
+                "NPM_CONFIG_GLOBALCONFIG": os.devnull})
+    started = time.monotonic()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               env=env, start_new_session=True)
+    timed_out = False
+    try:
+        output, _ = process.communicate(timeout=int(os.environ.get("QA_TIMEOUT_SECONDS", "900")))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            output, _ = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            output, _ = process.communicate()
+    result = 124 if timed_out else process.returncode
+    safe = redact(output.decode("utf-8", errors="replace"))
+    cmd = redact(shlex.join(command))
+    duration = time.monotonic() - started
+    header = (f"UTC: {now.isoformat()}\nCWD: {Path.cwd()}\nCommand: {cmd}\n"
+              f"Exit: {result}\nDuration: {duration:.2f}s\nTimeout: {timed_out}\n\n")
+    report.write_text(header + safe)
+    with log.open("a") as handle:
+        handle.write(f"\n- **{now.isoformat()}** `{label}` — `{cmd}`; "
+                     f"cwd `{Path.cwd().relative_to(ROOT) if Path.cwd().is_relative_to(ROOT) else Path.cwd()}`; "
+                     f"exit {result}, {duration:.2f}s. "
+                     f"[Output]({report.relative_to(QA)}).\n")
+    print(header + safe[-20000:])
+    print(f"Full redacted report: {report.relative_to(ROOT)}")
+    return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+FILE: frontend/vitest.config.ts
+MISSING
+FILE: frontend/tests/e2e/qa-2026-10-02/fe-regression-support.ts
+import { expect, type BrowserContext, type Route, type TestInfo } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+export const syntheticUser = (account: string) => ({
+  id: `qa-user-${account}`, email: `qa-${account}@example.invalid`,
+  is_sysadmin: false, status: 'active', role_name: 'member', permissions: [],
+});
+
+export async function isolateRegressionBrowser(
+  context: BrowserContext,
+  baseURL: string,
+  api?: (route: Route, url: URL) => Promise<boolean>,
+) {
+  const origin = new URL(baseURL).origin;
+  expect(['localhost', '127.0.0.1', '[::1]']).toContain(new URL(origin).hostname);
+  await context.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origin) return route.abort('blockedbyclient');
+    if (url.pathname.startsWith('/api/')) {
+      if (api && await api(route, url)) return;
+      return route.fulfill({ status: 200, json: url.pathname === '/api/session'
+        ? { authenticated: false, has_api_key: [REDACTED], has_credentials: false, tenant_id: null, user: null }
+        : { hasAccess: false, products: [] } });
+    }
+    if (route.request().resourceType() === 'document') {
+      // Prevent preconnect/DNS hints as well as ordinary browser requests.
+      const response = await route.fetch({ maxRedirects: 0 });
+      const location = response.headers().location;
+      if (location) {
+        expect(new URL(location, origin).origin).toBe(origin);
+        return route.continue(); // WebKit cannot fulfill a redirect response.
+      }
+      const body = (await response.text()).replace(/<link\b[^>]*rel=["'](?:preconnect|dns-prefetch)["'][^>]*>/gi, '');
+      return route.fulfill({ response, body, headers: {
+        ...response.headers(),
+        'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'",
+        'x-dns-prefetch-control': 'off',
+      } });
+    }
+    return route.continue();
+  });
+}
+
+export async function writeRegressionEvidence(testInfo: TestInfo, name: string, evidence: unknown) {
+  const directory = path.resolve(__dirname, '../../../../docs/qa/2026-10-02/artifacts/browser');
+  await mkdir(directory, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = path.join(directory, `${name}-${testInfo.project.name}-${stamp}.json`);
+  await writeFile(file, JSON.stringify(evidence, null, 2) + '\n');
+  await testInfo.attach(name, { path: file, contentType: 'application/json' });
+  return file.replace(/\.json$/, '.png');
+}
+
+FILE: frontend/tests/e2e/qa-2026-10-02/playwright.config.ts
+MISSING
+Next guides:
+frontend/node_modules/next/dist/docs/01-app/02-guides/testing/vitest.md
+frontend/node_modules/next/dist/docs/02-pages/02-guides/testing/vitest.md

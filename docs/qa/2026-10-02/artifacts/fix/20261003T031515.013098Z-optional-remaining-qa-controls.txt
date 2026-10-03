@@ -1,0 +1,62 @@
+UTC: 2026-10-03T03:15:15.013098+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 179,250p services/ingestion/tests/test_qa_sweep_20261002_contract.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
+)
+@pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
+def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
+    upload, captured = csv_upload
+    response = upload(raw)
+    if captured:
+        pytest.fail("Invalid encoding reached persistence; encoding-error reproduction no longer applies")
+    assert response.status_code in (400, 415, 422), response.text
+
+
+def test_csv_utf8_bom_is_accepted(csv_upload):
+    upload, captured = csv_upload
+    response = upload(b"\xef\xbb\xbf" + _csv(HEADER, ROW).encode())
+    assert response.status_code == 200
+    assert len(captured) == 1
+
+
+@given(st.integers(min_value=1, max_value=1_000_000))
+@settings(max_examples=60, derandomize=True, deadline=None, database=None)
+def test_positive_finite_csv_quantities_round_trip(quantity):
+    row = list(ROW)
+    row[2] = str(quantity)
+    events, errors, _ = ct.parse_csv_rows(_csv(HEADER, row), "harvesting")
+    assert errors == []
+    assert len(events) == 1
+    assert math.isfinite(events[0].quantity)
+    assert events[0].quantity == quantity
+
+
+@given(st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=100))
+@settings(max_examples=80, derandomize=True, deadline=None, database=None)
+def test_csv_arbitrary_short_input_returns_structured_result(text):
+    events, errors, warnings = ct.parse_csv_rows(text, "harvesting")
+    assert isinstance(events, list) and isinstance(errors, list) and isinstance(warnings, list)
+
+
+def test_openapi_batch_contract_matches_runtime_boundaries(webhook_client):
+    schema = webhook_client.app.openapi()["components"]["schemas"]["WebhookPayload"]
+    assert schema["properties"]["events"]["minItems"] == 1
+    assert schema["properties"]["events"]["maxItems"] == 500
+    payload = _payload("2026-04-17T12:00:00Z")
+    assert len(WebhookPayload(**{**payload, "events": payload["events"] * 500}).events) == 500
+    for events in ([], payload["events"] * 501):
+        response = webhook_client.post(
+            "/api/v1/webhooks/ingest",
+            json={**payload, "events": events},
+            headers={"Idempotency-Key": "qa-batch-boundary"},
+        )
+        assert response.status_code == 422

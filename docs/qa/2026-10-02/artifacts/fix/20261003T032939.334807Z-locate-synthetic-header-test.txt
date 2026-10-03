@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:29:39.334807+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'session-protected|def test_' services/shared/tests/test_auth_dependency_session_fallback.py
+Exit: 2
+Duration: 0.00s
+Timeout: False
+
+rg: services/shared/tests/test_auth_dependency_session_fallback.py: IO error for operation on services/shared/tests/test_auth_dependency_session_fallback.py: No such file or directory (os error 2)

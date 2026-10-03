@@ -1,0 +1,156 @@
+UTC: 2026-10-03T03:24:33.268261+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import json;art=Path("docs/qa/2026-10-02/artifacts/fix");print("build logs",[p.name for p in art.glob("*build*")]);j=json.loads((art/"frontend-final-qa-regressions.json").read_text());rows=[]
+def visit(s):
+ for p in s.get("specs",[]):
+  for t in p["tests"]: rows.append({"file":p["file"],"title":p["title"],"project":t["projectName"],"expectedStatus":t["expectedStatus"],"status":t["results"][-1]["status"],"annotations":t.get("annotations",[]),"attachments":t["results"][-1].get("attachments",[])})
+ for x in s.get("suites",[]):visit(x)
+visit(j);print(json.dumps(rows,indent=2));print("untouched frontend diff",__import__("subprocess").check_output(["git","diff","--name-only","--","frontend"],text=True))'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+build logs ['20261003T031544.406432Z-frontend-fe001-build.txt', '20261003T031611.035424Z-frontend-build-generated-restore.txt', '20261003T032015.374020Z-test-and-sdk-build-inventory.txt']
+[
+  {
+    "file": "fe-001-barcode.spec.ts",
+    "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+    "project": "chromium",
+    "expectedStatus": "passed",
+    "status": "passed",
+    "annotations": [],
+    "attachments": [
+      {
+        "name": "fe-001",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-15-238Z/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-chromium/attachments/fe-001-93ae004144d317b5e9c5ba78a962837c42a12d47.json"
+      }
+    ]
+  },
+  {
+    "file": "fe-001-barcode.spec.ts",
+    "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+    "project": "firefox",
+    "expectedStatus": "passed",
+    "status": "passed",
+    "annotations": [],
+    "attachments": [
+      {
+        "name": "fe-001",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-18-346Z/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-firefox/attachments/fe-001-3b3286f222201f3aa1d8959720e6a5066adf5edf.json"
+      }
+    ]
+  },
+  {
+    "file": "fe-001-barcode.spec.ts",
+    "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+    "project": "webkit",
+    "expectedStatus": "passed",
+    "status": "passed",
+    "annotations": [],
+    "attachments": [
+      {
+        "name": "fe-001",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-22-360Z/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-webkit/attachments/fe-001-34a73e7a6df0105f432c8f598c342801374bf842.json"
+      }
+    ]
+  },
+  {
+    "file": "fe-004-offline-photo.spec.ts",
+    "title": "FE-004 keeps account A offline photos out of account B replay requests",
+    "project": "chromium",
+    "expectedStatus": "failed",
+    "status": "failed",
+    "annotations": [
+      {
+        "type": "fail",
+        "description": "FE-004: account B sends account A ownerless queued photo with its current cookie.",
+        "location": {
+          "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+          "line": 178,
+          "column": 8
+        }
+      }
+    ],
+    "attachments": [
+      {
+        "name": "fe-004-account-a",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-15-238Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/attachments/fe-004-account-a-9617cc15d88156aabd5261b500d942f4ae87d748.json"
+      },
+      {
+        "name": "fe-004-account-b",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-15-238Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/attachments/fe-004-account-b-3abdf6fbd06460d51f8d34accd6cba75d9e69976.json"
+      },
+      {
+        "name": "error-context",
+        "contentType": "text/markdown",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-15-238Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-chromium/error-context.md"
+      }
+    ]
+  },
+  {
+    "file": "fe-004-offline-photo.spec.ts",
+    "title": "FE-004 keeps account A offline photos out of account B replay requests",
+    "project": "firefox",
+    "expectedStatus": "failed",
+    "status": "failed",
+    "annotations": [
+      {
+        "type": "fail",
+        "description": "FE-004: account B sends account A ownerless queued photo with its current cookie.",
+        "location": {
+          "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+          "line": 178,
+          "column": 8
+        }
+      }
+    ],
+    "attachments": [
+      {
+        "name": "fe-004-account-a",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-18-346Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-firefox/attachments/fe-004-account-a-18bfa2631c904da941b2756f028db957d019dcd1.json"
+      },
+      {
+        "name": "fe-004-account-b",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-18-346Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-firefox/attachments/fe-004-account-b-f7f43dcfd7b9ecc88f2ac7e6dc3fbcec819c8190.json"
+      },
+      {
+        "name": "error-context",
+        "contentType": "text/markdown",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-18-346Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-firefox/error-context.md"
+      }
+    ]
+  },
+  {
+    "file": "fe-004-offline-photo.spec.ts",
+    "title": "FE-004 keeps account A offline photos out of account B replay requests",
+    "project": "webkit",
+    "expectedStatus": "skipped",
+    "status": "skipped",
+    "annotations": [
+      {
+        "type": "skip",
+        "description": "WebKit server native IndexedDB Blob storage fails UnknownError; separate string control passes. FE-004 replay remains unverified here.",
+        "location": {
+          "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+          "line": 132,
+          "column": 10
+        }
+      }
+    ],
+    "attachments": [
+      {
+        "name": "fe-004-webkit-environment",
+        "contentType": "application/json",
+        "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-22-22-360Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-webkit/attachments/fe-004-webkit-environment-2bf0de09eb457dbe3af53ff14ecdce25cd0df1b9.json"
+      }
+    ]
+  }
+]
+untouched frontend diff

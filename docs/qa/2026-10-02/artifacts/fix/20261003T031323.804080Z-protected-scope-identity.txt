@@ -1,0 +1,11 @@
+UTC: 2026-10-03T03:13:23.804080+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'pwd; git worktree list; git branch --show-current; git remote get-url origin'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine b5dd065e [qa/2026-10-02-fixes]
+qa/2026-10-02-fixes
+https://github.com/regengine/RegEngine.git

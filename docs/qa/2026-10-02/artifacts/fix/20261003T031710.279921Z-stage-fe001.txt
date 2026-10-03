@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:17:10.279921+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git diff --check -- frontend/src/lib/gs1-parser.ts frontend/src/__tests__/lib/qa-sweep-gs1.test.ts frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts && git add frontend/src/lib/gs1-parser.ts frontend/src/__tests__/lib/qa-sweep-gs1.test.ts frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts && git diff --cached --stat && git diff --cached --name-only'
+Exit: 0
+Duration: 0.08s
+Timeout: False
+
+ frontend/src/__tests__/lib/qa-sweep-gs1.test.ts    | 32 ++++++++++++++++++++--
+ frontend/src/lib/gs1-parser.ts                     | 17 ++----------
+ .../tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts |  2 --
+ 3 files changed, 33 insertions(+), 18 deletions(-)
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+frontend/src/lib/gs1-parser.ts
+frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts

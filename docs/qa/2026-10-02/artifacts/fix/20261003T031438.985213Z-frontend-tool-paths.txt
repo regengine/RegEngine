@@ -1,0 +1,39 @@
+UTC: 2026-10-03T03:14:38.985213+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import shutil,subprocess; print("node",shutil.which("node")); subprocess.run(["node","--version"]); print("npm",shutil.which("npm")); print("Cached Node20 candidates:"); bases=[Path("/private/tmp"),Path("/usr/local/Cellar/node@20"),Path("/opt/homebrew/Cellar/node@20")]; [print(p) for base in bases if base.exists() for p in base.glob("**/node/bin/node")]; print("temp frontend harnesses:");[print(p) for p in Path("/private/tmp").glob("*regengine*")]'
+Exit: 0
+Duration: 3.41s
+Timeout: False
+
+v26.7.0
+node /opt/homebrew/bin/node
+npm /opt/homebrew/bin/npm
+Cached Node20 candidates:
+/private/tmp/supportcarr-qa-npm-cache/_npx/ff69c6a369e141b2/node_modules/node/bin/node
+/private/tmp/sentinel-qa-node22-cache/_npx/52027bd8fc0022aa/node_modules/node/bin/node
+/private/tmp/obsong-qa-node20/node_modules/node/bin/node
+/private/tmp/sentinel-qa-npm-cache/_npx/52027bd8fc0022aa/node_modules/node/bin/node
+/private/tmp/sentinel-qa-npm-cache/_npx/a3fa3c0cdcf9d736/node_modules/node/bin/node
+/private/tmp/sentinel-qa-npm-cache/_npx/387698761821791d/node_modules/node/bin/node
+/private/tmp/chrissellers-qa-node20/node_modules/node/bin/node
+temp frontend harnesses:
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-58-491Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-07-37-709Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-08-27-026Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-55-607Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-07-31-655Z
+/private/tmp/regengine_ingest
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-07-31-484Z
+/private/tmp/regengine-browser-ux-tools
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-08-26-788Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-10-02-100Z
+/private/tmp/regengine-qa-fe-regression-test-results
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-788Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-07-36-320Z
+/private/tmp/regengine-browser-followup-m35my_kb
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-557Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-07-40-750Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-07-51-539Z
+/private/tmp/regengine-browser-followup-hz02qdqj
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-55-827Z
+/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-08-30-752Z

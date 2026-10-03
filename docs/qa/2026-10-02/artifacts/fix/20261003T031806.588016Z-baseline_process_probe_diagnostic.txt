@@ -1,0 +1,12 @@
+UTC: 2026-10-03T03:18:06.588016+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess; r=subprocess.run(["pgrep","-f","docs/qa/2026-10-02/scripts/backend_pytest.py"],capture_output=True,text=True); print("pgrep_exit",r.returncode); print("pgrep_stderr",r.stderr); print("process_identifiers",r.stdout)'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+pgrep_exit 3
+pgrep_stderr sysmon request failed with error: sysmond service not found
+pgrep: Cannot get process list
+
+process_identifiers

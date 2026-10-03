@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:24:07.886850+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -m mypy --follow-imports=skip services/ingestion/app/csv_templates.py services/ingestion/app/webhook_models.py services/shared/error_handling.py
+Exit: 1
+Duration: 0.02s
+Timeout: False
+
+/Users/sellers/Projects/RegEngine/repo/.venv/bin/python: No module named mypy

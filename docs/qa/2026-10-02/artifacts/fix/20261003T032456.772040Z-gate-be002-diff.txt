@@ -1,0 +1,198 @@
+UTC: 2026-10-03T03:24:56.772040+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff -- services/ingestion/app/csv_templates.py services/ingestion/app/webhook_models.py services/shared/error_handling.py services/ingestion/tests/test_qa_sweep_20261002_contract.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_csv_input_quantities.py tests/shared/test_error_handling.py
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+diff --git a/services/ingestion/app/csv_templates.py b/services/ingestion/app/csv_templates.py
+index 3b2c0b08..55ec0b71 100644
+--- a/services/ingestion/app/csv_templates.py
++++ b/services/ingestion/app/csv_templates.py
+@@ -14,6 +14,7 @@ import dataclasses
+ import io
+ import itertools
+ import logging
++import math
+ import re
+ from collections.abc import Mapping, Sequence
+ from datetime import datetime, timezone
+@@ -696,6 +697,8 @@ def _parse_input_quantities(
+             quantity = float(quantity_text)
+         except ValueError:
+             return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
++        if not math.isfinite(quantity):
++            return [], f"input quantity {quantity_text!r} for input lot {lot} must be finite", None
+         if quantity < 0:
+             return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
+         if not unit_text:
+diff --git a/services/ingestion/app/webhook_models.py b/services/ingestion/app/webhook_models.py
+index a63c0524..c34676bc 100644
+--- a/services/ingestion/app/webhook_models.py
++++ b/services/ingestion/app/webhook_models.py
+@@ -176,7 +176,7 @@ class IngestEvent(BaseModel):
+     cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
+     traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
+     product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
+-    quantity: float = Field(..., description="Numeric quantity", gt=0)
++    quantity: float = Field(..., description="Numeric quantity", gt=0, allow_inf_nan=False)
+     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
+     location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+     location_name: Optional[str] = Field(None, description="Human-readable location name")
+diff --git a/services/ingestion/tests/test_csv_input_quantities.py b/services/ingestion/tests/test_csv_input_quantities.py
+index 6ca7c472..79762ab8 100644
+--- a/services/ingestion/tests/test_csv_input_quantities.py
++++ b/services/ingestion/tests/test_csv_input_quantities.py
+@@ -12,6 +12,7 @@ from __future__ import annotations
+ import csv
+ import io
+
++import pytest
+ from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
+
+ HEADER = (
+@@ -98,3 +99,17 @@ def test_initial_packing_inputs_are_optional_and_silent_when_absent():
+     assert errors == []
+     assert events[0].kdes["input_lot_codes"] == ["FIELD-LOT-1"]
+     assert not any("input_quantities" in w for w in warnings)
++
++
++@pytest.mark.parametrize("quantity", ["0", "0.25", "1000000"])
++def test_finite_nonnegative_input_quantities_remain_accepted(quantity):
++    # BE-002 preserves the existing input domain, including zero.
++    events, errors, _ = _parse(f"NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,{quantity},cases\n")
++    assert errors == []
++    assert events[0].kdes["inputs"][0]["quantity"] == float(quantity)
++
++
++def test_negative_input_quantity_remains_rejected():
++    events, errors, _ = _parse("NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,-1,cases\n")
++    assert events == []
++    assert "is negative" in errors[0]
+diff --git a/services/ingestion/tests/test_qa_sweep_20261002_contract.py b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+index 0d844873..5cb0903f 100644
+--- a/services/ingestion/tests/test_qa_sweep_20261002_contract.py
++++ b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+@@ -8,7 +8,9 @@ from __future__ import annotations
+
+ import csv
+ import io
++import json
+ import math
++from unittest.mock import AsyncMock
+
+ import pytest
+ from app import csv_templates as ct
+@@ -19,6 +21,7 @@ from app.webhook_router_v2 import routes
+ from fastapi import FastAPI
+ from fastapi.testclient import TestClient
+ from hypothesis import given, settings, strategies as st
++from shared.error_handling import install_exception_handlers
+
+ HEADER = [
+     "traceability_lot_code",
+@@ -78,6 +81,7 @@ def csv_upload(monkeypatch):
+ def webhook_client():
+     app = FastAPI()
+     app.include_router(routes.router)
++    install_exception_handlers(app)
+     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+         key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
+     )
+@@ -129,9 +133,7 @@ def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timest
+     assert response.status_code == 422, response.text
+
+
+-@pytest.mark.xfail(
+-    strict=True, raises=AssertionError, reason="BE-002: CSV accepts nonfinite output quantity into persistence boundary"
+-)
++# BE-002: quantities reaching persistence must be finite.
+ @pytest.mark.parametrize("quantity", ["inf", "Infinity", "1e309"])
+ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
+     upload, captured = csv_upload
+@@ -142,9 +144,7 @@ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
+     assert not captured
+
+
+-@pytest.mark.xfail(
+-    strict=True, raises=AssertionError, reason="BE-002: transformation input quantity accepts NaN/infinity"
+-)
++# BE-002: quantities reaching persistence must be finite.
+ @pytest.mark.parametrize("quantity", ["nan", "inf", "1e309"])
+ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+     upload, captured = csv_upload
+@@ -155,6 +155,25 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+     assert not captured
+
+
++@pytest.mark.parametrize("raw_quantity", ["1e309", "-1e309", "NaN"])
++def test_webhook_nonfinite_quantity_returns_validation_error_before_ingest(webhook_client, monkeypatch, raw_quantity):
++    # BE-002: numeric overflow in valid JSON must retain the structured 422.
++    enter_ingest = AsyncMock(side_effect=AssertionError("Invalid quantity reached ingestion"))
++    monkeypatch.setattr(routes._pkg, "resolve_tenant_context", enter_ingest)
++    raw = json.dumps(_payload("2026-04-17T12:00:00Z")).replace('"quantity": 10', f'"quantity": {raw_quantity}')
++    response = webhook_client.post(
++        "/api/v1/webhooks/ingest",
++        content=raw,
++        headers={"Content-Type": "application/json", "Idempotency-Key": "qa-nonfinite-quantity"},
++    )
++    assert response.status_code == 422, response.text
++    [error] = response.json()["error"]["details"]
++    assert error["type"] == "finite_number"
++    assert error["loc"] == ["body", "events", 0, "quantity"]
++    assert isinstance(error["input"], str)
++    enter_ingest.assert_not_called()
++
++
+ # BE-003: ambiguous columns must be rejected before quantities can be overwritten.
+ @pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
+ def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
+diff --git a/services/ingestion/tests/test_webhook_models.py b/services/ingestion/tests/test_webhook_models.py
+index c0ad2593..a2cd8d4c 100644
+--- a/services/ingestion/tests/test_webhook_models.py
++++ b/services/ingestion/tests/test_webhook_models.py
+@@ -95,6 +95,23 @@ class TestIngestEvent:
+         assert event.cte_type == WebhookCTEType.SHIPPING
+         assert event.quantity == 100.0
+
++    @pytest.mark.parametrize("quantity", [float("inf"), float("-inf"), float("nan"), "Infinity", "1e309"])
++    def test_rejects_nonfinite_quantity(self, quantity):
++        # BE-002: enforce finite output quantities for every model caller.
++        with pytest.raises(ValidationError) as exc_info:
++            IngestEvent(**_valid_event_kwargs(quantity=quantity))
++        assert exc_info.value.errors()[0]["type"] == "finite_number"
++
++    @pytest.mark.parametrize("quantity", [0.001, 1, 1_000_000])
++    def test_accepts_positive_finite_quantity(self, quantity):
++        assert IngestEvent(**_valid_event_kwargs(quantity=quantity)).quantity == quantity
++
++    @pytest.mark.parametrize("quantity", [0, -1])
++    def test_still_rejects_nonpositive_quantity(self, quantity):
++        with pytest.raises(ValidationError) as exc_info:
++            IngestEvent(**_valid_event_kwargs(quantity=quantity))
++        assert exc_info.value.errors()[0]["type"] == "greater_than"
++
+     def test_rejects_future_timestamp(self):
+         future = datetime.now(timezone.utc) + timedelta(hours=48)
+         with pytest.raises(ValidationError) as exc_info:
+diff --git a/services/shared/error_handling.py b/services/shared/error_handling.py
+index 5eaaac3e..14837b56 100644
+--- a/services/shared/error_handling.py
++++ b/services/shared/error_handling.py
+@@ -11,6 +11,7 @@ Usage:
+
+ from __future__ import annotations
+
++import math
+ import os
+
+ import structlog
+@@ -120,6 +121,8 @@ def _json_safe(value: object) -> object:
+         return {str(key): _json_safe(item) for key, item in value.items()}
+     if isinstance(value, (list, tuple)):
+         return [_json_safe(item) for item in value]
++    if isinstance(value, float) and not math.isfinite(value):
++        return str(value)
+     if isinstance(value, (str, int, float, bool)) or value is None:
+         return value
+     return str(value)

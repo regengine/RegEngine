@@ -1,0 +1,347 @@
+UTC: 2026-10-03T03:14:04.154688+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["frontend/src/lib/gs1-parser.ts","frontend/src/__tests__/lib/qa-sweep-gs1.test.ts","frontend/src/lib/gs1-parser.test.ts"]; [(print("FILE: "+f),print(Path(f).read_text())) for f in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE: frontend/src/lib/gs1-parser.ts
+/**
+ * GS1-128 Barcode Parser
+ *
+ * Extracts Application Identifiers (AIs) from a raw GS1 barcode string.
+ * Common AIs:
+ * (01) - GTIN (14 digits)
+ * (10) - Batch/Lot Number (Variable length, up to 20 chars)
+ * (13) - Packaging date (YYMMDD)
+ * (17) - Expiration date (YYMMDD)
+ * (21) - Serial number (Variable length, up to 20 chars)
+ */
+
+export interface GS1ParsedData {
+    gtin?: string;
+    tlc?: string;
+    serial?: string;
+    packDate?: string;
+    expiryDate?: string;
+    sourceFormat?: 'gs1_ai' | 'digital_link' | 'unknown';
+    isValidGTIN?: boolean;
+    raw: string;
+}
+
+const GROUP_SEPARATOR = String.fromCharCode(29);
+const AI_FIXED_LENGTH: Record<string, number> = {
+    '01': 14,
+    '13': 6,
+    '17': 6,
+};
+const AI_VARIABLE = new Set(['10', '21']);
+const AI_SUPPORTED = new Set([
+    ...Object.keys(AI_FIXED_LENGTH),
+    ...Array.from(AI_VARIABLE),
+]);
+
+function normalizeInput(raw: string): string {
+    return raw
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/[()]/g, '')
+        .replace(/\u00f1/gi, GROUP_SEPARATOR); // scanner FNC1 surrogate
+}
+
+function parseYYMMDD(value?: string): string | undefined {
+    if (!value || !/^\d{6}$/.test(value)) return undefined;
+
+    const year = 2000 + Number(value.slice(0, 2));
+    const month = Number(value.slice(2, 4));
+    const day = Number(value.slice(4, 6));
+    if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
+        return undefined;
+    }
+
+    const mm = String(month).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+}
+
+function maybeKnownAiAt(input: string, index: number): boolean {
+    const ai = input.slice(index, index + 2);
+    if (!AI_SUPPORTED.has(ai)) return false;
+    if (ai in AI_FIXED_LENGTH) {
+        return index + 2 + AI_FIXED_LENGTH[ai] <= input.length;
+    }
+    return index + 2 <= input.length;
+}
+
+function findNextFieldBoundary(input: string, from: number): number {
+    for (let i = from; i < input.length; i += 1) {
+        if (input[i] === GROUP_SEPARATOR) return i;
+        if (maybeKnownAiAt(input, i)) return i;
+    }
+    return input.length;
+}
+
+function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    let path = '';
+    if (/^https?:\/\//i.test(trimmed)) {
+        try {
+            const parsed = new URL(trimmed);
+            path = parsed.pathname;
+        } catch {
+            return null;
+        }
+    } else if (trimmed.startsWith('/')) {
+        path = trimmed.split('?')[0].split('#')[0];
+    } else {
+        return null;
+    }
+
+    const segments = path.split('/').filter(Boolean);
+    if (!segments.includes('01')) return null;
+
+    const fields: Partial<GS1ParsedData> = {};
+    for (let i = 0; i < segments.length - 1; i += 1) {
+        const ai = segments[i];
+        const value = decodeURIComponent(segments[i + 1]);
+        if (!value) continue;
+
+        if (ai === '01' && !fields.gtin) fields.gtin = value;
+        if (ai === '10' && !fields.tlc) fields.tlc = value;
+        if (ai === '21' && !fields.serial) fields.serial = value;
+        if (ai === '13' && !fields.packDate) fields.packDate = parseYYMMDD(value);
+        if (ai === '17' && !fields.expiryDate) fields.expiryDate = parseYYMMDD(value);
+    }
+
+    if (!fields.gtin && !fields.tlc && !fields.serial) return null;
+
+    fields.sourceFormat = 'digital_link';
+    return fields;
+}
+
+export function isValidGTINCheckDigit(gtin: string): boolean {
+    if (!/^\d{14}$/.test(gtin)) return false;
+
+    const digits = gtin.split('').map((digit) => Number(digit));
+    const checkDigit = digits[13];
+
+    let sum = 0;
+    let weight = 3;
+    for (let i = 12; i >= 0; i -= 1) {
+        sum += digits[i] * weight;
+        weight = weight === 3 ? 1 : 3;
+    }
+
+    const expectedCheckDigit = (10 - (sum % 10)) % 10;
+    return expectedCheckDigit === checkDigit;
+}
+
+export function parseGS1(raw: string): GS1ParsedData {
+    const data: GS1ParsedData = {
+        raw,
+        sourceFormat: 'unknown',
+    };
+
+    const digitalLinkData = parseDigitalLink(raw);
+    if (digitalLinkData) {
+        Object.assign(data, digitalLinkData);
+    } else {
+        const working = normalizeInput(raw);
+        let index = 0;
+        data.sourceFormat = 'gs1_ai';
+
+        while (index < working.length) {
+            if (working[index] === GROUP_SEPARATOR) {
+                index += 1;
+                continue;
+            }
+
+            const ai = working.slice(index, index + 2);
+            if (!AI_SUPPORTED.has(ai)) {
+                index += 1;
+                continue;
+            }
+
+            if (ai in AI_FIXED_LENGTH) {
+                const length = AI_FIXED_LENGTH[ai];
+                const value = working.slice(index + 2, index + 2 + length);
+                if (value.length === length) {
+                    if (ai === '01' && !data.gtin) data.gtin = value;
+                    if (ai === '13' && !data.packDate) data.packDate = parseYYMMDD(value);
+                    if (ai === '17' && !data.expiryDate) data.expiryDate = parseYYMMDD(value);
+                }
+                index += 2 + length;
+                continue;
+            }
+
+            const start = index + 2;
+            const end = findNextFieldBoundary(working, start);
+            const value = working.slice(start, end);
+            if (value) {
+                if (ai === '10' && !data.tlc) data.tlc = value;
+                if (ai === '21' && !data.serial) data.serial = value;
+            }
+            index = end;
+        }
+    }
+
+    if (data.gtin) {
+        data.isValidGTIN = isValidGTINCheckDigit(data.gtin);
+    }
+
+    return data;
+}
+
+/**
+ * Validates if the capture looks like a valid FSMA-relevant barcode
+ */
+export function isFSMACompatible(data: GS1ParsedData): boolean {
+    return !!(data.tlc || (data.gtin && data.isValidGTIN !== false));
+}
+
+FILE: frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+import { describe, expect, it } from 'vitest';
+import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+
+describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
+    it('keeps Digital Link lot values intact across encoded delimiters', () => {
+        for (const lot of ['LOT-10', 'LOT-21', 'LOT/ALPHA', 'LOT%PERCENT', 'LOT A']) {
+            const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+            expect(parsed.tlc).toBe(lot);
+            expect(parsed.isValidGTIN).toBe(true);
+        }
+    });
+
+    it('checks every possible check digit for 100 generated GTIN bodies', () => {
+        for (let index = 0; index < 100; index += 1) {
+            const body = String(950600010000 + index).padStart(13, '0');
+            const weightedSum = [...body].reduce(
+                (total, digit, position) => total + Number(digit) * (position % 2 === 0 ? 3 : 1),
+                0,
+            );
+            const expected = (10 - weightedSum % 10) % 10;
+            for (let candidate = 0; candidate < 10; candidate += 1) {
+                expect(isValidGTINCheckDigit(`${body}${candidate}`)).toBe(candidate === expected);
+            }
+        }
+    });
+
+    it.each(['260230', '260431', '261300', '260000'])('rejects impossible calendar date %s', (value) => {
+        expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+    });
+
+    // FE-001: a variable-length lot ends only at its explicit delimiter/end.
+    // Existing parser wrongly treats AI-like digits inside the lot as a new AI.
+    it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+        const input = `010950600013435210${lot}\x1d17260930`;
+        const parsed = parseGS1(input);
+        expect(parsed.tlc).toBe(lot);
+        expect(parsed.expiryDate).toBe('2026-09-30');
+    });
+
+    // FE-002: invalid percent encodings must become a rejected scan, not an
+    // uncaught URIError in receiving, field capture, or the public scanner.
+    it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+        expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
+    });
+});
+
+FILE: frontend/src/lib/gs1-parser.test.ts
+import { describe, it, expect } from 'vitest';
+import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+
+describe('GS1-128 Parser', () => {
+    it('should parse a standard GS1-128 with brackets', () => {
+        const raw = "(01)10614141000019(10)TLC-3489";
+        const result = parseGS1(raw);
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBe("TLC-3489");
+        expect(result.sourceFormat).toBe("gs1_ai");
+        expect(result.isValidGTIN).toBe(true);
+    });
+
+    it('should parse a literal GS1-128 without brackets', () => {
+        const raw = "011061414100001910LOT-BETA-77";
+        const result = parseGS1(raw);
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBe("LOT-BETA-77");
+    });
+
+    it('should handle barcodes with only GTIN', () => {
+        const raw = "0110614141000019";
+        const result = parseGS1(raw);
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBeUndefined();
+        expect(result.isValidGTIN).toBe(true);
+    });
+
+    it('should handle barcodes with only TLC (fallback match)', () => {
+        const raw = "10TLC-9999";
+        const result = parseGS1(raw);
+        expect(result.tlc).toBe("TLC-9999");
+    });
+
+    it('should parse AI 17 (expiry), AI 13 (pack date), and AI 21 (serial)', () => {
+        const raw = "(01)10614141000019(17)260930(13)260801(21)SN-4458";
+        const result = parseGS1(raw);
+
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.expiryDate).toBe("2026-09-30");
+        expect(result.packDate).toBe("2026-08-01");
+        expect(result.serial).toBe("SN-4458");
+    });
+
+    it('should parse AI fields separated by GS separator characters', () => {
+        const raw = `011061414100001910LOT-99${String.fromCharCode(29)}1726093021SER-9`;
+        const result = parseGS1(raw);
+
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBe("LOT-99");
+        expect(result.expiryDate).toBe("2026-09-30");
+        expect(result.serial).toBe("SER-9");
+    });
+
+    it('should parse GS1 Digital Link URLs', () => {
+        const raw = "https://id.example.com/01/09506000134352/10/LOT-2026-44/21/SER-778/17/260930";
+        const result = parseGS1(raw);
+
+        expect(result.sourceFormat).toBe("digital_link");
+        expect(result.gtin).toBe("09506000134352");
+        expect(result.tlc).toBe("LOT-2026-44");
+        expect(result.serial).toBe("SER-778");
+        expect(result.expiryDate).toBe("2026-09-30");
+        expect(result.isValidGTIN).toBe(true);
+    });
+
+    it('should parse GS1 Digital Link path-only payloads', () => {
+        const raw = "/01/09506000134352/10/LOT%2FALPHA/21/SN-001";
+        const result = parseGS1(raw);
+
+        expect(result.sourceFormat).toBe("digital_link");
+        expect(result.gtin).toBe("09506000134352");
+        expect(result.tlc).toBe("LOT/ALPHA");
+        expect(result.serial).toBe("SN-001");
+    });
+});
+
+describe('GTIN check digit validation', () => {
+    it('accepts valid GTIN-14 values', () => {
+        expect(isValidGTINCheckDigit("09506000134352")).toBe(true);
+        expect(isValidGTINCheckDigit("10614141000019")).toBe(true);
+    });
+
+    it('rejects invalid GTIN-14 values', () => {
+        expect(isValidGTINCheckDigit("09506000134359")).toBe(false);
+        expect(isValidGTINCheckDigit("10614141000011")).toBe(false);
+        expect(isValidGTINCheckDigit("ABC9506000134352")).toBe(false);
+    });
+});

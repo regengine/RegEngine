@@ -1,0 +1,16 @@
+UTC: 2026-10-03T03:37:43.099444+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import datetime,json; findings=json.loads(Path("/private/tmp/regengine-fix-final-raw-scan.json").read_text()); grouped={}
+for f in findings:
+ assert f["RuleID"]=="generic-api-key"; grouped.setdefault(f["File"],set()).update(range(f["StartLine"],f["EndLine"]+1))
+for filename,numbers in grouped.items():
+ p=Path(filename); assert p.is_relative_to(Path("docs/qa/2026-10-02/artifacts/fix")); lines=p.read_text().splitlines(keepends=True)
+ for n in numbers:
+  assert "session-protected" in lines[n-1] and "headers=" in lines[n-1]; lines[n-1]="[REDACTED] Test-client request header diagnostic omitted; test outcome unchanged.\n"
+ p.write_text("".join(lines))
+now=datetime.datetime.now(datetime.timezone.utc).isoformat(); Path("docs/qa/2026-10-02/FIX-SESSION-LOG.md").open("a").write("\n- **"+now+"** Final full-suite artifact scan found the same two local test-client session-header diagnostic strings as the initial run. Entire diagnostic lines redacted without displaying their values. No baseline/ignore rule or product file changed; all test identities and totals retained.\n"); print("Redacted",sum(map(len,grouped.values())),"repeated local test diagnostic lines")'
+Exit: 0
+Duration: 0.12s
+Timeout: False
+
+Redacted 2 repeated local test diagnostic lines

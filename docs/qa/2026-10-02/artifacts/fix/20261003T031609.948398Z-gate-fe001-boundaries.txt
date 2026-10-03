@@ -1,0 +1,23 @@
+UTC: 2026-10-03T03:16:09.948398+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node --experimental-strip-types --input-type=module -e 'import { parseGS1 } from "./frontend/src/lib/gs1-parser.ts"; for (const size of [19,20,21]) { const lot = "172610" + "X".repeat(size - 6); for (const end of ["", "\u001d17260930", "(17)260930", "17260930"]) { const parsed = parseGS1("010950600013435210" + lot + end); console.log(JSON.stringify({size,end,tlc:parsed.tlc,expiryDate:parsed.expiryDate,serial:parsed.serial})); } }'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+(node:78556) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/gs1-parser.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"size":19,"end":"","tlc":"172610XXXXXXXXXXXXX"}
+{"size":19,"end":"\u001d17260930","tlc":"172610XXXXXXXXXXXXX","expiryDate":"2026-09-30"}
+{"size":19,"end":"(17)260930","tlc":"172610XXXXXXXXXXXXX","expiryDate":"2026-09-30"}
+{"size":19,"end":"17260930","tlc":"172610XXXXXXXXXXXXX17260930"}
+{"size":20,"end":"","tlc":"172610XXXXXXXXXXXXXX"}
+{"size":20,"end":"\u001d17260930","tlc":"172610XXXXXXXXXXXXXX","expiryDate":"2026-09-30"}
+{"size":20,"end":"(17)260930","tlc":"172610XXXXXXXXXXXXXX","expiryDate":"2026-09-30"}
+{"size":20,"end":"17260930","tlc":"172610XXXXXXXXXXXXXX17260930"}
+{"size":21,"end":"","tlc":"172610XXXXXXXXXXXXXXX"}
+{"size":21,"end":"\u001d17260930","tlc":"172610XXXXXXXXXXXXXXX","expiryDate":"2026-09-30"}
+{"size":21,"end":"(17)260930","tlc":"172610XXXXXXXXXXXXXXX","expiryDate":"2026-09-30"}
+{"size":21,"end":"17260930","tlc":"172610XXXXXXXXXXXXXXX17260930"}

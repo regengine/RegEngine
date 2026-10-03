@@ -1,0 +1,18 @@
+[
+  {
+    "original_output_path": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png",
+    "archive": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png.gz",
+    "raw_bytes": 1040515,
+    "gzip_bytes": 775582,
+    "raw_sha256": "53ab9b219172655b0afdb00b37462e279b9fa1f774f6b7aeed2df68dbbcd7632",
+    "local_original": "/private/tmp/regengine-fix-large-screenshots/fe-001-webkit-2026-10-03T03-16-25-413Z.png"
+  },
+  {
+    "original_output_path": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-22-23-231Z.png",
+    "archive": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-22-23-231Z.png.gz",
+    "raw_bytes": 1039565,
+    "gzip_bytes": 775186,
+    "raw_sha256": "ec673a3caa020284ba66098b36bee1e17f40fc995196d06b0af59719780ede38",
+    "local_original": "/private/tmp/regengine-fix-large-screenshots/fe-001-webkit-2026-10-03T03-22-23-231Z.png"
+  }
+]

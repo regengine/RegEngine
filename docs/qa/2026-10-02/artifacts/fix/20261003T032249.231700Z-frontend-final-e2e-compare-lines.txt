@@ -1,0 +1,37 @@
+UTC: 2026-10-03T03:22:49.231700+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+import json,collections,datetime
+art=Path("docs/qa/2026-10-02/artifacts/fix")
+base=json.loads(Path("docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-summary.json").read_text())
+raw=json.loads((art/"frontend-final-existing-e2e.json").read_text())
+rows=[]
+def visit(suite):
+    for spec in suite.get("specs",[]):
+        for test in spec["tests"]:
+            r=test["results"][-1]
+            rows.append(dict(project=test["projectName"],file=Path(spec["file"]).name,line=spec["line"],title=spec["title"],status=r["status"],expectedStatus=test["expectedStatus"],error="\n".join(e.get("message","") for e in r.get("errors",[])),annotations=test.get("annotations",[])))
+    for child in suite.get("suites",[]): visit(child)
+visit(raw)
+key=lambda r:(r["project"],Path(r["file"]).name,r["line"],r["title"])
+before={key(r):r for r in base["tests"]}
+after={key(r):r for r in rows}
+assert len(rows)==len(after)==len(before)==270,(len(rows),len(after),len(before))
+changes=[{"project":k[0],"file":k[1],"line":k[2],"title":k[3],"before":before[k]["status"],"after":r["status"],"error":r["error"]} for k,r in after.items() if k not in before or before[k]["status"]!=r["status"]]
+for r in rows:
+    prior=before[key(r)]
+    r["baseline_status"]=prior["status"]
+    r["baseline_classification"]=prior["classification"]
+summary={"capturedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),"source":"frontend-final-existing-e2e.json","baseline":"../browser/existing-e2e-proxy-local-browser-summary.json","counts":dict(collections.Counter(r["status"] for r in rows)),"projects":{p:dict(collections.Counter(r["status"] for r in rows if r["project"]==p)) for p in ["chromium","firefox","webkit"]},"test_identity_set_unchanged":set(before)==set(after),"changes":changes,"tests":rows}
+(art/"frontend-final-existing-e2e-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
+print(json.dumps({k:v for k,v in summary.items() if k!="tests"},indent=2))
+'
+Exit: 1
+Duration: 0.04s
+Timeout: False
+
+Traceback (most recent call last):
+  File "<string>", line 17, in <module>
+    assert len(rows)==len(after)==len(before)==270,(len(rows),len(after),len(before))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (270, 261, 261)

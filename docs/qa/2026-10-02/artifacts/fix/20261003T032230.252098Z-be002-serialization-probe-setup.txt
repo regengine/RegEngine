@@ -1,0 +1,28 @@
+UTC: 2026-10-03T03:22:30.252098+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("/private/tmp/test_be002_validation_probe.py"); p.write_text("""import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import Field
+from app.webhook_models import IngestEvent
+from shared.error_handling import install_exception_handlers
+
+class FiniteEvent(IngestEvent):
+    quantity: float = Field(..., gt=0, allow_inf_nan=False)
+
+def test_finite_event_overflow_has_validation_response():
+    app = FastAPI()
+    install_exception_handlers(app)
+    @app.post(\"/probe\")
+    def probe(event: FiniteEvent):
+        return {\"accepted\": True}
+    raw = b\x27{\"cte_type\":\"harvesting\",\"traceability_lot_code\":\"LOT-QA\",\"product_description\":\"Kale\",\"quantity\":1e309,\"unit_of_measure\":\"lbs\",\"location_name\":\"Farm\",\"timestamp\":\"2026-04-17T00:00:00Z\"}\x27
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(\"/probe\", content=raw, headers={\"Content-Type\":\"application/json\"})
+    assert response.status_code == 422, response.text
+"""); print("Wrote isolated in-process raw numeric overflow regression probe; no product edits.")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Wrote isolated in-process raw numeric overflow regression probe; no product edits.

@@ -1,0 +1,262 @@
+UTC: 2026-10-03T03:14:17.257003+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "1,180p" docs/qa/2026-10-02/BACKEND-REPORT.md; sed -n "1,160p" docs/qa/2026-10-02/FRONTEND-REPORT.md; sed -n "285,355p" .github/workflows/backend-ci.yml; rg -n "mypy|tsc --|ruff|compileall|python.*build" docs/qa/2026-10-02/*SESSION-LOG.md'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+# Backend QA pass
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+## Result and scope
+
+Four Medium input-integrity/error-handling findings were reproduced through the real ingestion routers with authentication and persistence replaced by local fakes. Two High security findings, BE-010 and BE-011, were independently reproduced with the security reviewer; see [SECURITY-REPORT.md](SECURITY-REPORT.md) for their complete impact analysis. Product code was not modified.
+
+The added backend tests comprise 29 cases: **13 passing controls and 16 strict expected failures**, covering six findings. The two Hypothesis properties additionally execute 60 positive finite quantity examples and 80 arbitrary short Unicode input examples, deterministically and without a persistent example database. An unexpected pass fails CI; only `AssertionError` is accepted by the expected-failure markers. Fixture/setup failures remain failures.
+
+These are local unit/ASGI results. Real PostgreSQL RLS, transactions, Redis reservations, Kafka delivery, object storage, billing, external providers, customer data and deployments were not validated. The CSV tests prove what crosses the mocked persistence boundary; they do **not** prove committed database corruption.
+
+## Risk selection and exploratory charters
+
+| Charter | UTC session | Risk / methods | Outcome |
+|---|---|---|---|
+| BE-C1: ingest/evidence trust boundary | 2026-10-03 00:35–00:38 | High impact × high likelihood: inspect CSV and webhook validators, existing malformed-input/receipt/tenant tests, baseline statement coverage | 65 ingestion tests and 210 shared auth/idempotency/HMAC tests passed; missing local SDK dependency repaired in `/private/tmp` only |
+| BE-C2: adversarial input equivalence classes | 00:38–00:46 | High impact × medium likelihood: timestamp timezone classes, finite/nonfinite quantities, duplicate normalized headers, encodings, 0/500/501 event boundaries, deterministic Hypothesis | BE-001 through BE-004 reproduced; source header and numeric ambiguity can reach accepted-event boundary; malformed dates/encodings return 500 |
+| BE-C3: auth, retry, resource and export controls | 00:38–00:46 | High impact × medium likelihood: existing permission matrix, HMAC and replay revocation, fake Redis concurrency, tiny chunked body boundary, synthetic portal export | Existing auth/retry tests passed; BE-010 and BE-011 have strict expected-failure witnesses and positive controls |
+| BE-C4: breadth and static analysis | 00:40–00:46 | Lower pyramid breadth: guarded existing ingestion/shared suites, admin session/privilege matrix, Ruff bug gate, scoped mypy | Broad results expose test isolation/infrastructure limits; no guard-caused failure is presented as a product vulnerability |
+
+The test pyramid favors inexpensive schema/function tests and in-process ASGI contracts here because real data stores and production connections were explicitly excluded. The highest-impact boundaries received route-level negative cases and positive controls; whole-application/database coverage is not claimed.
+
+## Findings
+
+Run reproductions through `scripts/backend_pytest.py` using the same interpreter and temporary dependency path shown in [BACKEND-SESSION-LOG.md](BACKEND-SESSION-LOG.md). Use `--runxfail --tb=short` to expose the observed failures; omit `--runxfail` for the intended green QA regression run.
+
+| ID | Severity | Group | Title | Exact reproduction | Expected vs actual | Evidence | Suggested fix |
+|---|---|---|---|---|---|---|---|
+| BE-001 | Medium | Backend | Timezone-naive webhook timestamps produce HTTP 500 | POST `/api/v1/webhooks/ingest` with the valid harvesting payload in `_payload`, `timestamp="2026-04-17T12:00:00"`, and a valid idempotency header. Run `test_webhook_naive_timestamp_is_a_validation_response`. Date-only and fractional naive timestamps also reproduce. | Expected explicit 422 timezone validation; actual 500 `Internal Server Error`. Invalid non-date input correctly returns 422 in the positive control. | `services/ingestion/app/webhook_models.py:201` parses naive datetime; line 209 compares it to aware UTC; `services/ingestion/tests/test_qa_sweep_20261002_contract.py:125`; [observed failure](artifacts/backend/20261003T004024.567761Z-exposed-defect-evidence.txt) | Require a timezone and raise `ValueError` before comparison, or explicitly document/normalize a timezone policy. Preserve a 4xx error for invalid input. |
+| BE-002 | Medium | Backend | CSV numeric validation accepts infinity and NaN | POST a one-row harvesting CSV using the fixture header with quantity `inf`, `Infinity`, or `1e309`; separately post transformation CSV with `input_lot_codes=INPUT-QA-001`, `input_quantities=nan/inf/1e309`, `input_units_of_measure=lbs`. Run the two `test_csv_rejects_nonfinite_*` tests. | Expected row rejection before persistence; actual 200 and one invalid event forwarded to fake ingestion. Zero/negative/non-numeric/empty output quantities correctly return 400. Real database outcome is untested. | `csv_templates.py:696`, `:699`, `:827`; `webhook_models.py:179`; [observed failure](artifacts/backend/20261003T004024.567761Z-exposed-defect-evidence.txt) | Enforce finite numbers at both top-level schema and nested input-quantity parser (`allow_inf_nan=False` / `math.isfinite`), then apply positive/nonnegative domain limits. |
+| BE-003 | Medium | Backend | Conflicting duplicate CSV headers silently choose the final value | Add a second `quantity` or ` Quantity ` header to the fixture CSV, with original quantity 10 and appended quantity 999. POST `/api/v1/ingest/csv`; run `test_csv_rejects_conflicting_duplicate_headers`. | Expected actionable duplicate-header 400; actual 200 with ingested quantity 999. DictReader/normalization overwrites 10 without reporting a conflict. This is a normalized-event ambiguity, not a claim that retained raw bytes disappear. | `csv_templates.py:732`, `:744`, `:772`; [observed quantity](artifacts/backend/20261003T004024.567761Z-exposed-defect-evidence.txt) | Validate duplicate raw and normalized headers before constructing row dictionaries; reject ambiguous conflicts and identify offending columns. |
+| BE-004 | Medium | Backend | Non-UTF8 CSV or photo upload returns HTTP 500 | POST `/api/v1/ingest/csv` with bytes `FF D8 FF E0` (synthetic JPEG prefix), Latin-1 `column\nCaf E9\n`, or UTF-16 prefix. Run `test_csv_non_utf8_upload_returns_client_error`. | Expected encoding/content-type 400/415/422 before persistence; actual 500. UTF-8 BOM control returns 200. No event reaches fake persistence for these invalid encodings. | `csv_templates.py:1371` unguarded `decode("utf-8-sig")`; `test_qa_sweep_20261002_contract.py:187`; [observed HTTP 500](artifacts/backend/20261003T004624.437197Z-invalid-encoding-evidence.txt) | Catch `UnicodeDecodeError` and return a concise client error naming supported encoding; explicitly reject unsupported media types if required by the upload contract. |
+
+BE-010 witness: `tests/qa_sweep_20261002/test_request_safety.py` sends 10 chunked bytes through an 8-byte limiter without Content-Length; actual 200 with `bytes_read=10`, expected 413. Declared oversized and exact-boundary controls pass. No large payload or real network is used.
+
+BE-011 witness: `tests/qa_sweep_20261002/test_portal_export_disclosure.py` constructs a supplier submission with a clearly synthetic capability and generates a redacted FDA CSV. The capability remains in both `portal_id` and `reference_document`. No actual portal token was accessed. Its positive control verifies the lot survives and normal location PII is redacted.
+
+## Verification results
+
+| Selection | Result | Evidence |
+|---|---|---|
+| Added tests with locked FastAPI/Starlette/Pydantic runtime overlay | 13 passed,16 strict xfailed; all six findings persist | [compatibility run](artifacts/backend/20261003T004902.545619Z-locked-runtime-added-tests.txt) |
+| Focused ingestion baseline, 7 existing files | 65 passed | [baseline](artifacts/backend/20261003T003755.090249Z-baseline-ingest-final.txt) |
+| Focused ingestion baseline + QA contract tests | 75 passed, 14 strict xfailed | [after](artifacts/backend/20261003T004540.374674Z-ingest-after-final.txt) |
+| Focused shared auth/permission/tenant/idempotency/HMAC/canonical baseline | 210 passed, 1 real-Redis case deselected | [baseline](artifacts/backend/20261003T003827.342544Z-baseline-shared.txt) |
+| Same shared baseline + export/body-size QA tests | 213 passed, 2 strict xfailed, 1 deselected | [after](artifacts/backend/20261003T004559.647569Z-shared-after.txt) |
+| Initial broad existing ingestion | 463 passed, 6 failed, 14 errors, 50 skipped, 15 deselected; stopped at 20 failures | [full attempt](artifacts/backend/20261003T004038.332020Z-broad-ingestion-existing.txt) |
+| Initial broad existing shared | 746 passed, 15 subprocess-guard failures, 1 skipped; stopped at 15 | [full attempt](artifacts/backend/20261003T004202.181410Z-broad-shared-existing.txt) |
+| Broad shared, omitting live/subprocess-only files | 886 passed, 3 DNS-guard failures, 16 skipped | [in-process scope](artifacts/backend/20261003T004222.708785Z-broad-shared-inprocess.txt) |
+| Admin session/privilege + route-manifest checks | 55 passed, 3 failed: two manifest drift assertions and one subprocess guard | [matrix](artifacts/backend/20261003T004257.713724Z-admin-auth-matrix.txt) |
+| Admin privilege/session modules alone, final guard | 34 passed; 286/370 statements (77.2973%) | [isolated matrix](artifacts/backend/20261003T004754.305855Z-admin-auth-final.txt) |
+| Narrow Ruff bug rules (`E9,F63,F7,F82`) across ingestion/shared/admin/server | Passed | [Ruff](artifacts/backend/20261003T004114.745845Z-static-bug-gate.txt) |
+| Focused mypy on csv_templates/webhook_models/request_safety | One existing error: Optional header passed to `len` at csv_templates.py:784 | [mypy](artifacts/backend/20261003T004115.045419Z-typecheck-focus.txt) |
+
+Counts above overlap; they must not be summed into a unique test count. Coverage belongs to the named scopes, not the whole repository. The route-manifest runtime differs only on disabled `graph:GET:/api/v1/provisions/by-request` (179 runtime vs 180 committed omitted operations); enabled classifications remain 250. See the security review for independent source validation and disposition.
+
+The ingestion broad run's 14 collection/setup errors come from `test_boundaries.py:45–58` inserting partial OpenTelemetry modules globally, leaving `opentelemetry.sdk.trace.sampling` unavailable. Six failures involve the intentional DNS/network guard. The shared broad scope's three remaining failures are alternate-loopback URL tests that call real DNS resolution. Fifteen task-queue cases require Docker/testcontainers/Postgres and one database-URL case requires PostgreSQL. None establishes a product defect independently of those limits.
+
+## Coverage
+
+| Product-code scope | Before | After | Delta |
+|---|---|---|---|
+| Ingestion csv_templates + webhook_models + authz | 531/816 statements = 65.0735% | 540/816 = 66.1765% | +9 statements / +1.103 percentage points |
+| Shared auth + idempotency + webhook_security + permissions + canonical_event | 607/1013 = 59.9210% | 607/1013 = 59.9210% | No statement increase; new witnesses exercise previously uncovered input classes |
+| Broad shared module inventory, partial existing run | 4400/14143 = 31.1108% | No comparable after measurement | Includes unexecuted shared modules in denominator |
+
+Raw JSON: [ingestion before](artifacts/backend/coverage-ingest-before.json), [ingestion after](artifacts/backend/coverage-ingest-after.json), [shared before](artifacts/backend/coverage-shared-before.json), [shared after](artifacts/backend/coverage-shared-after.json), [shared broad partial](artifacts/backend/coverage-shared-broad.json). These measure statements, not branch coverage. `webhook_models.py` already had 100% statement coverage before the naive-timestamp defect was found: line coverage does not establish input-class correctness.
+
+## Environment, interruptions, and safety limitations
+
+- Resumed the interrupted sweep in the named worktree at 2026-10-03 00:35 UTC. Existing logs/artifacts/scripts were retained. Branch `qa/2026-10-02-sweep`, origin RegEngine, HEAD `0927b85a` were checked before edits. No commits, pushes, PR creation, deploys or product fixes occurred.
+- The main checkout's existing Python 3.11.15 environment was used read-only. Observed versions: pytest 9.0.3, coverage 7.13.5, Hypothesis 6.152.4, FastAPI 0.136.0, Pydantic 2.13.2, httpx 0.28.1. This is not a clean install of `requirements.lock`, whose Hypothesis/Pydantic versions are newer; dependency-exact CI remains pending.
+- `typesafe-sdk==0.7.2`, `httpx2==2.12.0`, `httpcore2==2.12.0`, and `truststore==0.10.4` were missing and installed from public packages into `/private/tmp/regengine-qa-backend-deps`. A default uv-cache permission error was resolved by using `/private/tmp/regengine-qa-uv-cache`. Neither the application dependency files nor the existing environment were changed.
+- `run_logged.py` scrubs inherited credentials and redacts output. `backend_pytest.py` disables dotenv and plugin autoload, permits only pytest-cov/asyncio/Hypothesis plugins, denies socket connections/DNS/subprocesses/credential-file reads, and now denies SQLAlchemy/native-driver connections. Only local `.coverage*` SQLite artifact files are allowed. Initial over-broad SQLite denial caused two coverage-finalization errors, recorded in the log, then was narrowed to permit those QA artifacts.
+- The first broad ingestion collection loaded a remediation fixture that attempted its hardcoded localhost scratch-Postgres availability probe. It reported unavailable and skipped 50 cases; no successful database read/write is evidenced. Native drivers can bypass Python socket audit events, so native/SQLAlchemy connection guards were then added before subsequent collection. This limitation and the corrective guard are preserved in [the guard note](artifacts/backend/20261003T004358.677870Z-guard-hardening-note.txt).
+- `.env` files, real credentials and known leaked keys were not read or re-investigated. Tests use only synthetic identifiers and local stubs. Direct production service, database, billing, secret rotation and provider validation remain out of scope.
+
+## Next fix order within this pass
+
+1. Remove the bearer portal capability from exportable evidence (BE-011).
+2. Enforce streamed body byte limits independently of Content-Length (BE-010).
+3. Reject nonfinite quantities and conflicting CSV headers before accepted-event construction (BE-002, BE-003).
+4. Return actionable 4xx validation errors for naive timestamps and unsupported encodings (BE-001, BE-004).
+5. Resolve manifest drift/test collection isolation and run the resulting fixes in dependency-exact CI and disposable PostgreSQL/Redis integration environments.
+
+## Locked runtime compatibility check
+
+To rule out the principal framework-version differences, the added tests were rerun with FastAPI 0.141.1, Starlette 1.6.0, Pydantic 2.13.5, pydantic-core 2.46.5, typing-extensions 4.16.0, typing-inspection 0.4.4, annotated-types 0.8.0, annotated-doc 0.0.5 and anyio 4.14.2 installed into a separate `/private/tmp/regengine-qa-locked-deps` overlay. All pins come from the committed requirements.lock. [Import readback](artifacts/backend/20261003T004926.712769Z-locked-runtime-readback.txt) confirms the four core runtime packages loaded from that overlay. Result:13 passed and16 strict xfailed; all six reproduced findings persist. This is a targeted compatibility check, not a clean installation of the entire dependency lock, and it does not replace the original before/after coverage measurements.
+# Frontend QA pass
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+## Scope and outcome
+
+Verified checkout, branch `qa/2026-10-02-sweep`, origin and worktree before edits. Resumed prior inventory on 2026-10-03 at 00:35:41 UTC. No product behavior, dependencies, lockfiles or configuration were changed. Frontend test changes are the new `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts` and one appended expected-failure case in existing `frontend/src/__tests__/hooks/useSync.test.tsx`.
+
+The locked install, lint, production build/TypeScript check and complete Vitest unit/component suite pass locally. Two new GS1 parser defects are reproduced with six strict expected-failure cases. An additional expected-failure hook case demonstrates an ownerless offline photo being dispatched after an account switch. Local HTTP confirms the camera policy denies camera access on the scanner page.
+
+Counts: Critical=0 High=1 Medium=3 Low=0
+
+The review-pr skill was applied to prioritize executable correctness and data-integrity evidence. FE-C1 covered build/dependency reproducibility; FE-C2 focused on traceability input boundaries and the existing auth/session/API contract suites. FE-C3 browser execution is shared with the UX group, which owns isolated local server, browser/network control, screenshots and performance artifacts. See [UX-REPORT.md](UX-REPORT.md).
+
+## Executed checks
+
+| Check | Outcome | Evidence |
+| --- | --- | --- |
+| Locked `npm ci --ignore-scripts --no-audit --no-fund` | Pass; 793 packages, 6.95s; package files unchanged | [Install](artifacts/frontend/20261003T003557.257409Z-locked-install.txt) |
+| `npm run lint` | Pass; 0 errors, 41 existing warnings; design-lint clean across 676 files | [Lint](artifacts/frontend/20261003T003655.183617Z-frontend-lint.txt) |
+| `npm run build` on local Node 26.7.0 | Pass; optimized build, TypeScript and all 187 static pages generated | [Build](artifacts/frontend/20261003T003655.185291Z-frontend-build.txt) |
+| CI-family Node 20.20.2 production build | Pass; same package lock and product sources; Node 20 matches `.nvmrc` major version | [Node 20 build](artifacts/frontend/20261003T003946.746162Z-node20-build.txt) |
+| Baseline full Vitest/coverage, Node 20 | 136 files passed; **1027 passed, 2 skipped**; configured coverage thresholds passed | [Before](artifacts/frontend/20261003T003945.430584Z-node20-baseline-coverage.txt) |
+| Added traceability boundary tests | **6 passed, 6 expected fail**; includes 1,000 generated GTIN check-digit checks | [New tests](artifacts/frontend/20261003T003816.353936Z-fe-c2-gs1-regressions.txt) |
+| Offline account-switch regression | **3 existing passed, 1 new expected fail**; unwrapped temporary copy fails at the intended assertion and shows exactly one upload call | [Expected-failure run](artifacts/frontend/20261003T004333.208567Z-fe-c2-offline-tenant-regression.txt), [raw assertion evidence](artifacts/frontend/20261003T004541.557371Z-fe004-unwrapped-negative-control-local-setup.txt) |
+| Final full Vitest/coverage, Node 20 | 137 files passed; **1033 passed, 7 expected fail, 2 skipped**; configured coverage thresholds passed | [Final after](artifacts/frontend/20261003T004435.934209Z-node20-final-coverage.txt) |
+| ESLint on both changed test files | Pass | [Focused lint](artifacts/frontend/20261003T004437.368428Z-final-added-tests-lint.txt) |
+
+The test pyramid is appropriate here: the existing suite exercises the client/server proxy contracts and form state cheaply, while browser checks cover browser-only headers, keyboard behavior and rendering. Added bounded generation avoids an extra dependency: 100 independent GTIN bodies each test all ten candidate check digits; equivalence classes cover encoded lot delimiters and invalid calendar dates. Expected failures assert the intended behavior and will fail on an unexpected pass, prompting their conversion into ordinary regression tests after a product fix.
+
+Existing passing security/contract suites include `enforce-tenant-match.test.ts` (13), `compliance-proxy-auth-boundary.test.ts` (11), `review-id-validation.test.ts` (18), `inflow-workbench-read-proxy.test.ts` (9), `public-openapi.test.ts` (4), RBAC tests (10), and the CSRF/session/auth suites. These isolated tests do not establish live backend authorization or database isolation.
+
+## Findings
+
+| ID | Severity | Group | Title | Exact reproduction | Expected vs actual | Evidence | Suggested fix |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| FE-001 | High | Frontend | Scanning valid lot codes silently truncates the lot identifier | Execute `qa-sweep-gs1.test.ts`, cases named `FE-001`; pass `010950600013435210LOT-10-ABC\x1d17260930` to `parseGS1`, where `\x1d` is the ASCII group separator. Repeat with `LOT-21-ABC` and `LOT-17260930`. | Expected lot preserved through its explicit group separator. Actual `tlc` is `LOT-`; `LOT-21-ABC` also invents serial `-ABC`. Field capture copies the truncated identifier into the ingest payload. Persistence was not exercised. | `frontend/src/lib/gs1-parser.ts:75` and `:179`; `frontend/src/components/mobile/FieldCaptureClient.tsx:192` and `:224`; test `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:33`; [actual results](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt) | Respect variable-length AI boundaries: explicit FNC1/group separator, preserved parenthesized AI delimiters, end-of-input and the field's maximum length; do not treat ordinary AI-like digits within lot text as delimiters. |
+| FE-002 | Medium | Frontend | Malformed Digital Link encoding throws out of scan handlers | Execute the three `FE-002` cases; parse `/01/09506000134352/10/%`, then `%ZZ` and `%E0%A4`. These can be pasted into the public scanner or supplied to receiving/field capture handlers. | Expected rejected input with recoverable feedback. Actual uncaught `URIError: URI malformed` from `decodeURIComponent`; the callers invoke the parser without a catch. | `frontend/src/lib/gs1-parser.ts:107`; `frontend/src/app/tools/scan/page.tsx:30`; `frontend/src/app/dashboard/receiving/page.tsx:158`; test `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:42`; [actual results](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt) | Catch malformed URI decoding at the parser boundary and return an explicit invalid-scan result; display a recoverable validation error in callers. |
+| FE-003 | Medium | Frontend | Global Permissions-Policy disables the camera scanner | Evaluate exported `next.config.js.headers()` or GET local `http://127.0.0.1:3104/tools/scan`; HTTP 200 emits `camera=()`. The scanner calls `Html5Qrcode.start` with `facingMode: environment`. | Expected scanner pages can request same-origin camera permission. Actual site policy denies camera regardless of a user's permission choice. Physical camera capture is not tested. | `frontend/next.config.js:52`; `frontend/src/app/tools/scan/page.tsx:42`; [configuration execution](artifacts/frontend/20261003T004007.254000Z-fe-c2-camera-policy-evidence.txt); [local response header](artifacts/meta/20261003T004328.548570Z-local-camera-policy.txt) | Permit `camera=(self)` on the narrow set of camera-scanner routes, while retaining denial elsewhere and keeping microphone/geolocation restrictions. |
+| FE-004 | Medium | Frontend | Offline photos lose tenant ownership and are replayed after an account switch | Execute `useSync.test.tsx` case `FE-004`: queue a synthetic ownerless photo while tenant A is offline, unmount A, mount authenticated B with the same queue, bring online and invoke manual sync. | Expected queued A data remains isolated from B; legacy ownerless data is quarantined. Actual mocked upload mutation is called once in B's hook. Source shows shared IndexedDB without owner fields and current-session cookie requests. This proves client dispatch only, not actual IndexedDB/login/server roundtrip or persisted cross-tenant disclosure. | `frontend/src/lib/db.ts:23`, `:65`, `:86`, `:95`; `frontend/src/hooks/use-sync.ts:108`; `frontend/src/lib/auth-context.tsx:445`; `frontend/src/lib/api-client.ts:282`; `frontend/src/__tests__/hooks/useSync.test.tsx:166`; [unwrapped assertion evidence](artifacts/frontend/20261003T004541.557371Z-fe004-unwrapped-negative-control-local-setup.txt) | Store user/tenant ownership on offline entries, scope every read/replay to the current session, quarantine unowned legacy entries, and invalidate active replay on logout/account switch. Preserve unsynced evidence rather than silently deleting it. |
+
+FE-001 is prioritized over UI polish because it can produce an incorrect traceability identifier before submission. For FE-004, the present upload client sends photos to the CSV endpoint; backend source review identifies unhandled UTF-8 decoding before normal event persistence (BE-004; see the backend report for its route-test outcome). That limits the demonstrated consequence; it does not establish a successful upload into B. No bug fix was applied.
+
+## Coverage and gaps
+
+The authoritative comparison uses **Node 20.20.2 for both runs**, the identical 196 instrumented product files, the existing coverage exclusions, and unchanged coverage thresholds. Before was captured before FE-004 was appended and excluded the new GS1 QA test; final after includes all thirteen added cases. Summary JSON includes per-file denominators, so the measurement is auditable.
+
+| Metric | Before covered/total | Before | After covered/total | After |
+| --- | ---: | ---: | ---: | ---: |
+| Statements | 6215/9184 | 67.67% | 6219/9184 | 67.71% |
+| Branches | 4664/7755 | 60.14% | 4668/7755 | 60.19% |
+| Functions | 1285/2142 | 59.99% | 1285/2142 | 59.99% |
+| Lines | 5825/8327 | 69.95% | 5827/8327 | 69.97% |
+
+GS1 parser lines improve **92/96 → 94/96** (95.83% → 97.91%), statements **108/120 → 112/120**, and branches **82/99 → 86/99**. This is the only per-file coverage change in the final comparison. An intermediate run varied by one statement/branch in the unchanged developer-key route; its original artifact is retained, but it is not the final comparison. The ownership test exercises already-covered lines while asserting a new security invariant. See [comparison](artifacts/frontend/coverage-comparison.json), [changed files](artifacts/frontend/coverage-changed-files.json), [before per-file summary](artifacts/frontend/coverage-node20-before-summary.json), and [after per-file summary](artifacts/frontend/coverage-node20-after-summary.json).
+
+These percentages describe Vitest's collected files, **not the entire frontend**. The source inventory found 672 TS/TSX files excluding test files and declarations, including type-only files; many public routes, loading/error boundaries, camera components, auth-provider integrations and helper modules are absent from this coverage report. Weak measured areas include dashboard heartbeat (2% lines), alerts (10.76%), hooks `use-api` (25.97%), `use-fsma` (32.35%), and API-client lines (52.73%). Those are residual risks, not newly proven defects.
+
+Full HTML coverage reports created by this pass were moved to `/private/tmp`; compact totals/per-file summaries and complete redacted console reports are retained in the QA artifact directory. Earlier interrupted artifacts were preserved.
+
+## Execution limitations and dead ends
+
+- All service and provider effects were stubbed/disabled. No deployed app, production database, credentials, billing or actual provider was exercised. Advisory-network calls are outside this task's allowed network use, so no claim of a clean dependency vulnerability audit is made here; the backend security report documents audit limits.
+- Browser flows and screenshots are recorded by UX; native camera devices, actual assistive-technology speech, authenticated backend persistence and production performance remain outside this frontend pass.
+- Initial lint/build/coverage used local Node 26.7.0; build and full before/after coverage were repeated on the CI-family Node 20.20.2 with the corrected Node isolation guard. CI itself remains pending. Node 20 build prints an upstream Supabase deprecation warning; it still passes.
+- Gate review found a normalized-argument-array gap in the first QA-only socket guard. It was fixed immediately and six call shapes were validated using a fake socket spy, without making a network request. The authoritative Node 20 runs use the fixed guard. [Guard evidence](artifacts/frontend/20261003T003858.351825Z-network-guard-safe-spy.txt).
+- The first public dependency install used scrubbed environment variables but inherited `HOME`; ordinary npm user-config discovery was not independently excluded for that initial install. No credentials were directly read or displayed. The shared logger was subsequently hardened to disable user/global npm config discovery for future installs.
+- One focused ESLint invocation was nested inside a source-index command run from the repository root. ESLint could not locate the frontend config; the wrapper's outer command exited zero, but this inner lint check failed. The correction runs from `frontend/` and passes. Both outputs are retained.
+- The first temporary unwrapped FE-004 witness failed during setup because Vitest could not load a setup file outside its temporary root; that failure is not defect proof. Copying the unchanged hook and setup locally fixed the harness, and the second run failed at the intended `not.toHaveBeenCalled` assertion, with exactly one upload call. The committed repository test retains its expected-failure marker.
+- Next builds regenerate `frontend/next-env.d.ts`; both generated changes were inspected and restored to the exact baseline bytes. No product diff remains from build execution.
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run linting
+        # F821 (undefined name) is now load-bearing — it caught the runtime
+        # NameError bugs that were hidden in services/nlp/app/extractors/
+        # llm_extractor.py for months before PR #1482 fixed them. Scope
+        # expanded from ``app/`` only to the whole service directory so
+        # ``main.py`` / ``api.py`` / ``conftest.py`` at service root are
+        # also covered, plus this job now gates merges (see ci-status).
+        run: |
+          pip install ruff==0.15.5
+          cd services/${{ matrix.service }}
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist \
+            --statistics
+
+  # ── Lint shared/ ─────────────────────────────────────────
+  # ``services/shared/`` isn't in the service matrix but is imported by
+  # every service. F821 regressions there silently break downstream
+  # callers at runtime — lint it explicitly.
+  lint-shared:
+    name: Lint shared/
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run linting
+        run: |
+          pip install ruff==0.15.5
+          cd services/shared
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist \
+            --statistics
+
+  # ── Lint repo roots (scripts/, cli/, server/, alembic/, …) ─
+  # The per-service matrix + lint-shared only cover services/. Python
+  # outside services/ was ungated — that gap let a NameError (missing
+  # ``import time``) sit in scripts/verify_compliance_lineage.py. This job
+  # runs the same bug-gate over everything EXCEPT services/, so the gap
+  # closes for current and future top-level Python without enumerating
+  # roots by hand.
+  lint-repo-roots:
+    name: Lint repo roots
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run linting
+        run: |
+          pip install ruff==0.15.5
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist,services \
+            --statistics
+
+  # ── RLS fallback-UUID guard (hard gate) ──────────────────
+  # Scans migrations for the fail-open RLS pattern that #1091 fixed.
+  # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`
+  # or `COALESCE(current_setting(...), tenant_id)` will fail CI.
+  rls-fallback-check:
+docs/qa/2026-10-02/UX-SESSION-LOG.md:34:- **2026-10-03T00:39:50.386865+00:00** `reload-check` — `python3 -c 'import subprocess,urllib.request,urllib.error; subprocess.run(["lsof","-n","-P","-iTCP:3102","-sTCP:LISTEN"]); request=urllib.request.Request("http://127.0.0.1:3102"); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+docs/qa/2026-10-02/UX-SESSION-LOG.md:42:- **2026-10-03T00:40:04.438806+00:00** `local-route-diagnostic` — `python3 -c 'import subprocess,urllib.request,urllib.error,re; subprocess.run(["lsof","-n","-P","-iTCP:3102","-sTCP:LISTEN"]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+docs/qa/2026-10-02/UX-SESSION-LOG.md:52:- **2026-10-03T00:40:42.306831+00:00** `guarded-server-v2-preflight` — `python3 -c 'from pathlib import Path; import urllib.request,urllib.error; print(Path("docs/qa/2026-10-02/artifacts/ux/guarded-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/guarded-server-output.txt").read_text()[-5000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+docs/qa/2026-10-02/UX-SESSION-LOG.md:62:- **2026-10-03T00:41:23.566237+00:00** `built-server-preflight` — `python3 -c 'from pathlib import Path; import urllib.request,urllib.error; print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-output.txt").read_text()[-3000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'`; cwd `.`; exit 1, 0.09s. [Output](artifacts/ux/20261003T004123.566237Z-built-server-preflight.txt).
+docs/qa/2026-10-02/UX-SESSION-LOG.md:70:- **2026-10-03T00:41:43.828393+00:00** `ready-server-preflight` — `python3 -c 'from pathlib import Path; import urllib.request; print(Path("docs/qa/2026-10-02/artifacts/ux/ready-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/ready-server-output.txt").read_text()[-2000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'`; cwd `.`; exit 0, 0.25s. [Output](artifacts/ux/20261003T004143.828393Z-ready-server-preflight.txt).
+docs/qa/2026-10-02/FIX-SESSION-LOG.md:52:- **2026-10-03T03:13:53.168339+00:00** `baseline_inspect` — `sh -c 'cat docs/qa/2026-10-02/COVERAGE.md docs/qa/2026-10-02/scripts/backend_pytest.py; cat pyproject.toml frontend/package.json; rg -n "backend_pytest|pytest|overlay|mypy|ruff|build" docs/qa/2026-10-02/SESSION-LOG.md'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/fix/20261003T031353.168339Z-baseline_inspect.txt).
+docs/qa/2026-10-02/FIX-SESSION-LOG.md:54:- **2026-10-03T03:13:57.945392+00:00** `baseline_commands` — `sh -c 'sed -n "1,85p" docs/qa/2026-10-02/COVERAGE.md; rg -n "backend_pytest|PYTHONPATH|overlay|pytest.*no-cov|ruff|mypy|tsc" docs/qa/2026-10-02/artifacts/backend docs/qa/2026-10-02/artifacts/frontend docs/qa/2026-10-02/scripts .github/workflows/backend-ci.yml .pre-commit-config.yaml --glob "*.md" --glob "*.py" --glob "*.txt" --glob "*.yml" --glob "*.yaml"'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/fix/20261003T031357.945392Z-baseline_commands.txt).
+docs/qa/2026-10-02/FIX-SESSION-LOG.md:62:- **2026-10-03T03:14:03.397468+00:00** `baseline_settings` — `sh -c 'sed -n "1,75p" docs/qa/2026-10-02/COVERAGE.md; sed -n "1,150p" docs/qa/2026-10-02/scripts/run_logged.py; rg -n "ruff|mypy|build|typecheck" .github/workflows/backend-ci.yml .pre-commit-config.yaml; ls -ld /private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python'`; cwd `.`; exit 1, 0.02s. [Output](artifacts/fix/20261003T031403.397468Z-baseline_settings.txt).
+docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md:32:- **2026-10-03T00:38:16.192568+00:00** `generated-build-diff` — `python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["git","diff","--","frontend/next-env.d.ts"],text=True)); print("NVMRC",Path(".nvmrc").read_text() if Path(".nvmrc").exists() else Path("frontend/.nvmrc").read_text()); Path("frontend/next-env.d.ts").write_bytes(subprocess.check_output(["git","show","HEAD:frontend/next-env.d.ts"])); print("Restored only next-env.d.ts generated by this pass build to baseline bytes")'`; cwd `.`; exit 0, 0.06s. [Output](artifacts/frontend/20261003T003816.192568Z-generated-build-diff.txt).
+docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md:54:- **2026-10-03T00:40:31.182068+00:00** `restore-generated-ci-build-output` — `python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["git","diff","--","frontend/next-env.d.ts"],text=True)); Path("frontend/next-env.d.ts").write_bytes(subprocess.check_output(["git","show","HEAD:frontend/next-env.d.ts"])); print("Restored only build-generated next-env.d.ts baseline bytes")'`; cwd `.`; exit 0, 0.13s. [Output](artifacts/frontend/20261003T004031.182068Z-restore-generated-ci-build-output.txt).
+docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md:73:- **2026-10-03T00:42:09.358044+00:00** `charter-and-report-closeout` — `python3 -c 'from pathlib import Path; import datetime; p=Path("docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md");now=datetime.datetime.now(datetime.timezone.utc).isoformat();p.open("a").write(f"\n- **{now}** Pass notes: resumed interrupted work at 00:35:41 UTC. FE-C1 charter (maximum 15 min): checked install/build/lint/full-suite baseline from 00:35:57 to 00:37:26; repeated build/full coverage on CI-family Node 20 from 00:39:45 to 00:40:46 after guard review. FE-C2 charter (maximum 15 min): input boundary exploration from 00:37:05 to 00:41:11 reproduced FE-001/FE-002 and added six passing plus six strict expected-failure cases; camera policy FE-003 delegated for runtime confirmation to UX. FE-C3 browser charter runs in UX group. Added report and test via apply_patch; no product changes. Dead end: nested focused ESLint inside findings-evidence-index failed to find config despite outer exit 0; corrected cwd run passed. QA guard normalized-array gap corrected and safe-spy verified. Full HTML reports generated only by this pass moved to temporary storage; original interrupted artifacts retained.\n"); print("Report and charter notes written"); print("report_bytes",Path("docs/qa/2026-10-02/FRONTEND-REPORT.md").stat().st_size)'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/frontend/20261003T004209.358044Z-charter-and-report-closeout.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:24:- **2026-10-03T00:37:11.881698+00:00** `dependency-pin` — `rg -n -i 'typesafe|hypothesis|pytest-cov|ruff|mypy' requirements.in requirements.lock`; cwd `.`; exit 0, 0.01s. [Output](artifacts/backend/20261003T003711.881698Z-dependency-pin.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:56:- **2026-10-03T00:40:57.798697+00:00** `tool-versions` — `/Users/sellers/Projects/RegEngine/repo/.venv/bin/python -c 'import importlib.metadata as m; pkgs=["pytest","coverage","hypothesis","fastapi","pydantic","httpx","ruff","mypy"]; [(print(p,m.version(p))) for p in pkgs if m.packages_distributions().get(p.replace("-","_"))]'`; cwd `.`; exit 0, 0.61s. [Output](artifacts/backend/20261003T004057.798697Z-tool-versions.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:58:- **2026-10-03T00:41:09.105323+00:00** `available-static-tools` — `python3 -c 'import shutil; print("ruff",shutil.which("ruff")); print("mypy",shutil.which("mypy")); print("uv",shutil.which("uv"))'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/backend/20261003T004109.105323Z-available-static-tools.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:60:- **2026-10-03T00:41:14.745845+00:00** `static-bug-gate` — `ruff check --no-cache --select E9,F63,F7,F82 services/ingestion services/shared services/admin server tests/qa_sweep_20261002 services/ingestion/tests/test_qa_sweep_20261002_contract.py`; cwd `.`; exit 0, 0.24s. [Output](artifacts/backend/20261003T004114.745845Z-static-bug-gate.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:62:- **2026-10-03T00:41:15.045419+00:00** `typecheck-focus` — `mypy --follow-imports=skip --ignore-missing-imports --cache-dir /private/tmp/regengine-qa-mypy-cache services/ingestion/app/webhook_models.py services/ingestion/app/csv_templates.py services/shared/request_safety.py`; cwd `.`; exit 1, 1.00s. [Output](artifacts/backend/20261003T004115.045419Z-typecheck-focus.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:66:- **2026-10-03T00:41:46.950681+00:00** `added-tests-import-order` — `ruff check --no-cache --select I --fix services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py`; cwd `.`; exit 0, 0.05s. [Output](artifacts/backend/20261003T004146.950681Z-added-tests-import-order.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:68:- **2026-10-03T00:41:47.082115+00:00** `added-tests-format` — `ruff format --no-cache services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py`; cwd `.`; exit 0, 0.01s. [Output](artifacts/backend/20261003T004147.082115Z-added-tests-format.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:110:- **2026-10-03T00:47:55.459244+00:00** `final-format` — `ruff format --no-cache services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py`; cwd `.`; exit 0, 0.05s. [Output](artifacts/backend/20261003T004755.459244Z-final-format.txt).
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md:116:- **2026-10-03T00:48:18.992560+00:00** `final-added-lint` — `ruff check --no-cache --select E9,F63,F7,F82,I services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py`; cwd `.`; exit 0, 0.07s. [Output](artifacts/backend/20261003T004818.992560Z-final-added-lint.txt).
+docs/qa/2026-10-02/BROWSER-SESSION-LOG.md:2:- **2026-10-03T02:02:51.164723+00:00** `local-server-preflight` — `python3 -c 'import urllib.request; from pathlib import Path; print(Path("docs/qa/2026-10-02/artifacts/browser/followup-server-metadata.txt").read_text()); op=urllib.request.build_opener(urllib.request.ProxyHandler({})); [(print(route, op.open("http://127.0.0.1:3114"+route).status)) for route in ["/", "/tools/scan", "/fsma/field-capture"]]'`; cwd `.`; exit 0, 0.22s. [Output](artifacts/browser/20261003T020251.164723Z-local-server-preflight.txt).

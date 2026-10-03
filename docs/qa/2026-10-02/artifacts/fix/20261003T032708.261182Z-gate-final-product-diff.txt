@@ -1,0 +1,259 @@
+UTC: 2026-10-03T03:27:08.261182+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff b5dd065e..HEAD -- services/shared/request_safety.py services/shared/error_handling.py services/ingestion/app/csv_templates.py services/ingestion/app/webhook_models.py frontend/src/lib/gs1-parser.ts
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+diff --git a/frontend/src/lib/gs1-parser.ts b/frontend/src/lib/gs1-parser.ts
+index f249e7f6..3b2f3579 100644
+--- a/frontend/src/lib/gs1-parser.ts
++++ b/frontend/src/lib/gs1-parser.ts
+@@ -37,6 +37,7 @@ function normalizeInput(raw: string): string {
+     return raw
+         .trim()
+         .replace(/\s+/g, '')
++        .replace(/\((01|10|13|17|21)\)/g, `${GROUP_SEPARATOR}$1`)
+         .replace(/[()]/g, '')
+         .replace(/\u00f1/gi, GROUP_SEPARATOR); // scanner FNC1 surrogate
+ }
+@@ -63,21 +64,9 @@ function parseYYMMDD(value?: string): string | undefined {
+     return `${year}-${mm}-${dd}`;
+ }
+
+-function maybeKnownAiAt(input: string, index: number): boolean {
+-    const ai = input.slice(index, index + 2);
+-    if (!AI_SUPPORTED.has(ai)) return false;
+-    if (ai in AI_FIXED_LENGTH) {
+-        return index + 2 + AI_FIXED_LENGTH[ai] <= input.length;
+-    }
+-    return index + 2 <= input.length;
+-}
+-
+ function findNextFieldBoundary(input: string, from: number): number {
+-    for (let i = from; i < input.length; i += 1) {
+-        if (input[i] === GROUP_SEPARATOR) return i;
+-        if (maybeKnownAiAt(input, i)) return i;
+-    }
+-    return input.length;
++    const separator = input.indexOf(GROUP_SEPARATOR, from);
++    return separator === -1 ? input.length : separator;
+ }
+
+ function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
+diff --git a/services/ingestion/app/csv_templates.py b/services/ingestion/app/csv_templates.py
+index 0e32d178..b4e8a07e 100644
+--- a/services/ingestion/app/csv_templates.py
++++ b/services/ingestion/app/csv_templates.py
+@@ -14,6 +14,7 @@ import dataclasses
+ import io
+ import itertools
+ import logging
++import math
+ import re
+ from collections.abc import Mapping, Sequence
+ from datetime import datetime, timezone
+@@ -696,6 +697,8 @@ def _parse_input_quantities(
+             quantity = float(quantity_text)
+         except ValueError:
+             return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
++        if not math.isfinite(quantity):
++            return [], f"input quantity {quantity_text!r} for input lot {lot} must be finite", None
+         if quantity < 0:
+             return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
+         if not unit_text:
+@@ -742,6 +745,20 @@ def parse_csv_rows(
+     records: list[dict] = []
+     try:
+         header = reader.fieldnames
++        if header and any(name.strip() for name in header):
++            seen_columns: dict[str, int] = {}
++            for position, name in enumerate(header, start=1):
++                normalized = normalize_csv_header(name)
++                if normalized in seen_columns:
++                    return (
++                        [],
++                        [
++                            f"CSV has duplicate column {normalized!r} at positions "
++                            f"{seen_columns[normalized]} and {position}; column names must be unique"
++                        ],
++                        [],
++                    )
++                seen_columns[normalized] = position
+         for record in reader:
+             records.append(record)
+             if len(records) > MAX_CSV_ROWS:
+@@ -1368,7 +1385,13 @@ async def ingest_csv(
+
+     # Read and parse CSV
+     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
+-    text = content.decode("utf-8-sig")  # Handle BOM
++    try:
++        text = content.decode("utf-8-sig")  # Handle BOM
++    except UnicodeDecodeError as exc:
++        raise HTTPException(
++            status_code=400,
++            detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
++        ) from exc
+     file_cte: Optional[CteClassificationResult] = None
+     if fallback_cte is None:
+         # Independent questions over the same upload: ask both at once.
+diff --git a/services/ingestion/app/webhook_models.py b/services/ingestion/app/webhook_models.py
+index a63c0524..c34676bc 100644
+--- a/services/ingestion/app/webhook_models.py
++++ b/services/ingestion/app/webhook_models.py
+@@ -176,7 +176,7 @@ class IngestEvent(BaseModel):
+     cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
+     traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
+     product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
+-    quantity: float = Field(..., description="Numeric quantity", gt=0)
++    quantity: float = Field(..., description="Numeric quantity", gt=0, allow_inf_nan=False)
+     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
+     location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+     location_name: Optional[str] = Field(None, description="Human-readable location name")
+diff --git a/services/shared/error_handling.py b/services/shared/error_handling.py
+index 5eaaac3e..14837b56 100644
+--- a/services/shared/error_handling.py
++++ b/services/shared/error_handling.py
+@@ -11,6 +11,7 @@ Usage:
+
+ from __future__ import annotations
+
++import math
+ import os
+
+ import structlog
+@@ -120,6 +121,8 @@ def _json_safe(value: object) -> object:
+         return {str(key): _json_safe(item) for key, item in value.items()}
+     if isinstance(value, (list, tuple)):
+         return [_json_safe(item) for item in value]
++    if isinstance(value, float) and not math.isfinite(value):
++        return str(value)
+     if isinstance(value, (str, int, float, bool)) or value is None:
+         return value
+     return str(value)
+diff --git a/services/shared/request_safety.py b/services/shared/request_safety.py
+index ef98f331..d076d59d 100644
+--- a/services/shared/request_safety.py
++++ b/services/shared/request_safety.py
+@@ -22,6 +22,7 @@ from typing import Optional
+ from starlette.middleware.base import BaseHTTPMiddleware
+ from starlette.requests import Request
+ from starlette.responses import JSONResponse
++from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+ logger = logging.getLogger(__name__)
+
+@@ -33,53 +34,83 @@ _EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+ # ---------------------------------------------------------------------------
+
+
+-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+-    """Reject requests whose Content-Length exceeds *max_bytes*.
++class RequestSizeLimitMiddleware:
++    """Reject requests whose declared or actual body exceeds *max_bytes*.
+
+-    For chunked/streaming uploads where Content-Length is absent the
+-    middleware allows the request through (Starlette's own body reader
+-    will enforce memory limits downstream).
++    Check each received chunk before retaining it, then replay the bounded
++    body downstream. Content-Length is only an early rejection shortcut.
+     """
+
+-    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+-        super().__init__(app)
++    def __init__(self, app: ASGIApp, max_bytes: int = 10 * 1024 * 1024):
++        self.app = app
+         self.max_bytes = max_bytes
+
+-    async def dispatch(self, request: Request, call_next):
+-        if request.url.path in _EXEMPT_PATHS:
+-            return await call_next(request)
++    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++        if scope["type"] != "http" or scope["path"] in _EXEMPT_PATHS:
++            await self.app(scope, receive, send)
++            return
+
++        request = Request(scope)
+         content_length = request.headers.get("content-length")
+         if content_length is not None:
+             try:
+                 length = int(content_length)
+             except ValueError:
+-                return JSONResponse(
++                response = JSONResponse(
+                     status_code=400,
+                     content={
+                         "error": "invalid_content_length",
+                         "detail": "Content-Length header is not a valid integer.",
+                     },
+                 )
++                await response(scope, receive, send)
++                return
+             if length > self.max_bytes:
+-                mb = self.max_bytes / (1024 * 1024)
+-                # NOTE: this is the stdlib logger, not structlog — kwargs
+-                # here raised TypeError, turning every oversized request
+-                # into a 500 instead of the intended 413 (#2503).
+-                logger.warning(
+-                    "request_too_large: content_length=%s max_bytes=%s path=%s",
+-                    length,
+-                    self.max_bytes,
+-                    request.url.path,
+-                )
+-                return JSONResponse(
+-                    status_code=413,
+-                    content={
+-                        "error": "payload_too_large",
+-                        "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+-                    },
+-                )
+-        return await call_next(request)
++                await self._too_large(request, length)(scope, receive, send)
++                return
++
++        body = bytearray()
++        while True:
++            message = await receive()
++            if message["type"] == "http.disconnect":
++                return
++            chunk = message.get("body", b"")
++            length = len(body) + len(chunk)
++            if length > self.max_bytes:
++                await self._too_large(request, length)(scope, receive, send)
++                return
++            body.extend(chunk)
++            if not message.get("more_body", False):
++                break
++
++        buffered_body: bytes | None = bytes(body)
++        del body
++
++        async def replay_body() -> Message:
++            nonlocal buffered_body
++            if buffered_body is not None:
++                message: Message = {"type": "http.request", "body": buffered_body, "more_body": False}
++                buffered_body = None
++                return message
++            return await receive()
++
++        await self.app(scope, replay_body, send)
++
++    def _too_large(self, request: Request, length: int) -> JSONResponse:
++        mb = self.max_bytes / (1024 * 1024)
++        logger.warning(
++            "request_too_large: body_bytes=%s max_bytes=%s path=%s",
++            length,
++            self.max_bytes,
++            request.url.path,
++        )
++        return JSONResponse(
++            status_code=413,
++            content={
++                "error": "payload_too_large",
++                "detail": f"Request body exceeds the {mb:.0f} MB limit.",
++            },
++        )
+
+
+ # ---------------------------------------------------------------------------

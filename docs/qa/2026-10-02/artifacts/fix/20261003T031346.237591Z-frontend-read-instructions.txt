@@ -1,0 +1,48 @@
+UTC: 2026-10-03T03:13:46.237591+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["frontend/AGENTS.md","/Users/sellers/.codex/skills/debug-bug/SKILL.md"]; [(print("FILE: "+f),print(Path(f).read_text() if Path(f).is_file() else "MISSING")) for f in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE: frontend/AGENTS.md
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+FILE: /Users/sellers/.codex/skills/debug-bug/SKILL.md
+---
+name: debug-bug
+description: Use when diagnosing and fixing a bug in any repository. Prioritize reproduction, root cause, minimal fix, regression tests, negative-path coverage, and verification.
+---
+
+# Debug Bug
+
+## Process
+
+1. Reproduce the failure or locate the failing path from tests, logs, reports,
+   routes, services, or docs.
+2. Inspect related code before changing anything.
+3. Identify the smallest likely root cause.
+4. Make the minimal fix.
+5. Add a regression test when practical.
+6. Add negative-path tests if the bug touches auth, authorization, tenant
+   isolation, billing, secrets, deployment, tool execution, or data integrity.
+7. Run targeted tests first, then broader checks if the changed surface is
+   shared.
+8. Explain root cause, fix, verification, untested areas, remaining risk, and
+   next step.
+
+## Rules
+
+- Do not rewrite surrounding systems just to fix one bug.
+- Do not mask errors without understanding them.
+- Do not delete or weaken tests to make the suite pass.
+- If the issue cannot be reproduced, state that clearly and provide the closest
+  evidence found.

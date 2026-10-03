@@ -1,0 +1,226 @@
+UTC: 2026-10-03T03:14:48.195698+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'cat frontend/package.json && sed -n "1,220p" docs/qa/2026-10-02/scripts/node-isolation.cjs && rg --files docs/qa/2026-10-02/scripts && rg -n "Node 20|node20|production-build|typecheck|lint" docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+{
+  "name": "regengine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && node scripts/design-lint.mjs",
+    "design:lint": "node scripts/design-lint.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
+    "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
+  },
+  "knip": {
+    "entry": [
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
+    ]
+  },
+  "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@sentry/nextjs": "10.75.1",
+    "@supabase/ssr": "~0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@tanstack/react-query": "~5.103.2",
+    "@tanstack/react-table": "^9.2.4",
+    "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "~1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
+    "framer-motion": "~13.4.0",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "next-themes": "^0.4.6",
+    "posthog-js": "^1.434.5",
+    "qrcode": "^1.5.4",
+    "react": "~18.3.0",
+    "react-dom": "~18.3.0",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "autoprefixer": "^10.6.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "jsdom": "29.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.4"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.63.4",
+    "@rollup/rollup-linux-x64-musl": "4.63.4"
+  },
+  "overrides": {
+    "tar": ">=7.5.10",
+    "rollup": "4.59.0",
+    "esbuild": "0.27.3",
+    "fast-uri": "^3.1.5",
+    "minimatch": ">=3.1.3",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "7.0.3",
+    "workbox-build": {
+      "rollup": "2.79.2"
+    },
+    "yauzl": ">=2.10.1",
+    "next": {
+      "sharp": ">=0.35.0"
+    },
+    "brace-expansion": "^5.0.9"
+  }
+}
+// QA-only process guard: do not read dotenv/credential files or connect off-host.
+// Load with NODE_OPTIONS=--require=/absolute/path/to/this/file.
+const fs = require('node:fs');
+const net = require('node:net');
+const dns = require('node:dns');
+const { syncBuiltinESMExports } = require('node:module');
+
+function sensitive(file) {
+  if (typeof file !== 'string' && !(file instanceof URL)) return false;
+  const name = String(file);
+  return /(^|[/\\])\.env(?:[./\\]|$)/.test(name)
+    || /(^|[/\\])(?:\.npmrc|\.netrc|credentials|id_rsa|id_ed25519)(?:[/\\]|$)/.test(name);
+}
+function absent(file) {
+  const error = new Error('QA isolation: protected configuration file unavailable');
+  error.code = 'ENOENT';
+  return error;
+}
+for (const name of ['readFileSync', 'openSync', 'statSync', 'lstatSync', 'accessSync']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return original.call(this, file, ...args);
+  };
+}
+const existsSync = fs.existsSync;
+fs.existsSync = function (file) { return !sensitive(file) && existsSync.call(this, file); };
+for (const name of ['readFile', 'open', 'stat', 'lstat', 'access']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) {
+      const callback = args.at(-1);
+      if (typeof callback === 'function') return queueMicrotask(() => callback(absent(file)));
+      throw absent(file);
+    }
+    return original.call(this, file, ...args);
+  };
+  const promiseOriginal = fs.promises[name];
+  fs.promises[name] = async function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return promiseOriginal.call(this, file, ...args);
+  };
+}
+function local(host) {
+  return !host || ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
+}
+const connect = net.Socket.prototype.connect;
+net.Socket.prototype.connect = function (...args) {
+  // net.connect()/http.request() may supply Node's normalized [options, cb]
+  // argument array rather than the public positional/options call shape.
+  const normalized = Array.isArray(args[0]) ? args[0] : args;
+  const options = normalized[0];
+  const host = options && typeof options === 'object'
+    ? options.host || options.hostname
+    : typeof normalized[1] === 'string' ? normalized[1] : undefined;
+  if (!local(host)) throw new Error('QA isolation: off-host socket blocked');
+  return connect.apply(this, args);
+};
+for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny']) {
+  const original = dns[name];
+  dns[name] = function (hostname, ...args) {
+    if (!local(hostname)) throw new Error('QA isolation: off-host DNS blocked');
+    return original.call(this, hostname, ...args);
+  };
+}
+const fetch = globalThis.fetch;
+if (fetch) globalThis.fetch = async function (input, ...args) {
+  const raw = typeof input === 'string' || input instanceof URL ? input : input.url;
+  const target = new URL(raw, 'http://localhost');
+  if (!local(target.hostname)) throw new Error('QA isolation: off-host fetch blocked');
+  return fetch.call(this, input, ...args);
+};
+syncBuiltinESMExports();
+docs/qa/2026-10-02/scripts/existing-e2e-tour-probe.cjs
+docs/qa/2026-10-02/scripts/validate_handoff.py
+docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs
+docs/qa/2026-10-02/scripts/existing-e2e-proxy-check.py
+docs/qa/2026-10-02/scripts/run_logged.py
+docs/qa/2026-10-02/scripts/ux-browser-pass.cjs
+docs/qa/2026-10-02/scripts/ux-local-proxy.py
+docs/qa/2026-10-02/scripts/backend_pytest.py
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+docs/qa/2026-10-02/scripts/ux-server.py
+docs/qa/2026-10-02/scripts/browser-followup-server.py
+docs/qa/2026-10-02/scripts/browser-ux-followup.cjs
+docs/qa/2026-10-02/scripts/existing-e2e.config.cjs
+docs/qa/2026-10-02/scripts/existing-e2e-summarize.cjs
+docs/qa/2026-10-02/scripts/existing-e2e-proxy.py
+22:- **2026-10-03T00:36:55.183617+00:00** `frontend-lint` — `env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs npm run lint --prefix frontend`; cwd `.`; exit 0, 25.37s. [Output](artifacts/frontend/20261003T003655.183617Z-frontend-lint.txt).
+38:- **2026-10-03T00:38:38.470696+00:00** `ci-node20-package` — `env HOME=/private/tmp/regengine-qa-npm-home NPM_CONFIG_USERCONFIG=/dev/null npm exec --yes --registry=https://registry.npmjs.org --package=node@20 -- node --version`; cwd `.`; exit 0, 3.62s. [Output](artifacts/frontend/20261003T003838.470696Z-ci-node20-package.txt).
+44:- **2026-10-03T00:39:26.243074+00:00** `ci-node20-path` — `env HOME=/private/tmp/regengine-qa-npm-home NPM_CONFIG_USERCONFIG=/dev/null npm exec --offline --package=node@20 -- node -p process.execPath`; cwd `.`; exit 0, 1.24s. [Output](artifacts/frontend/20261003T003926.243074Z-ci-node20-path.txt).
+46:- **2026-10-03T00:39:46.746162+00:00** `node20-build` — `env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node node_modules/next/dist/bin/next build`; cwd `frontend`; exit 0, 14.49s. [Output](artifacts/frontend/20261003T003946.746162Z-node20-build.txt).
+48:- **2026-10-03T00:39:45.430584+00:00** `node20-baseline-coverage` — `env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node node_modules/vitest/vitest.mjs run --coverage --exclude src/__tests__/lib/qa-sweep-gs1.test.ts --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/qa/2026-10-02/artifacts/frontend/coverage-node20-before`; cwd `frontend`; exit 0, 18.67s. [Output](artifacts/frontend/20261003T003945.430584Z-node20-baseline-coverage.txt).
+56:- **2026-10-03T00:40:40.244597+00:00** `findings-evidence-index` — `python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["rg","-n","Permissions-Policy|camera=|traceability_lot_code:|parseGS1|findNextFieldBoundary|decodeURIComponent","frontend/next.config.js","frontend/src/lib/gs1-parser.ts","frontend/src/components/mobile/FieldCaptureClient.tsx","frontend/src/app/tools/scan/page.tsx","frontend/src/app/dashboard/receiving/page.tsx"],text=True)); p=Path("frontend/src/__tests__/lib/qa-sweep-gs1.test.ts");print("\n".join(f"{n}: {l}" for n,l in enumerate(p.read_text().splitlines(),1))); print("LINT TEST FILE"); subprocess.run(["frontend/node_modules/.bin/eslint",str(p)],check=False)'`; cwd `.`; exit 0, 0.34s. [Output](artifacts/frontend/20261003T004040.244597Z-findings-evidence-index.txt).
+58:- **2026-10-03T00:40:30.008573+00:00** `node20-after-coverage` — `env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node node_modules/vitest/vitest.mjs run --coverage --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/qa/2026-10-02/artifacts/frontend/coverage-node20-after`; cwd `frontend`; exit 0, 16.26s. [Output](artifacts/frontend/20261003T004030.008573Z-node20-after-coverage.txt).
+60:- **2026-10-03T00:40:50.444244+00:00** `added-test-lint-correct-cwd` — `node_modules/.bin/eslint src/__tests__/lib/qa-sweep-gs1.test.ts`; cwd `frontend`; exit 0, 1.33s. [Output](artifacts/frontend/20261003T004050.444244Z-added-test-lint-correct-cwd.txt).
+64: p=prefix/f"coverage-node20-{phase}/coverage-summary.json"; raw=json.loads(p.read_text()); data={"total":raw["total"],"files":{str(Path(k).relative_to(root)):v for k,v in raw.items() if k!="total"}}; (prefix/f"coverage-node20-{phase}-summary.json").write_text(json.dumps(data,indent=2)+"\n"); reports[phase]=data;sets.append(set(data["files"]));result[phase]={"total":data["total"],"files":len(data["files"]),"gs1":data["files"].get("frontend/src/lib/gs1-parser.ts")};
+67:- **2026-10-03T00:41:11.056048+00:00** `coverage-change-attribution` — `python3 -c 'from pathlib import Path;import json;root=Path("docs/qa/2026-10-02/artifacts/frontend");before=json.loads((root/"coverage-node20-before-summary.json").read_text())["files"];after=json.loads((root/"coverage-node20-after-summary.json").read_text())["files"]; changed={p:{k:{"before":before[p][k]["covered"],"after":after[p][k]["covered"]} for k in ["lines","statements","functions","branches"] if before[p][k]["covered"]!=after[p][k]["covered"]} for p in before if before[p]!=after[p]};print(json.dumps(changed,indent=2));(root/"coverage-changed-files.json").write_text(json.dumps(changed,indent=2)+"\n");
+69: source=root/f"coverage-node20-{phase}"; destination=Path(f"/private/tmp/regengine-qa-coverage-node20-{phase}-20261003"); source.rename(destination); print(f"Moved duplicate absolute-path raw summary {source} to {destination}; normalized per-file summaries retained")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/frontend/20261003T004111.056048Z-coverage-change-attribution.txt).
+71:- **2026-10-03T00:42:09.380249+00:00** Pass notes: resumed interrupted work at 00:35:41 UTC. FE-C1 charter (maximum 15 min): checked install/build/lint/full-suite baseline from 00:35:57 to 00:37:26; repeated build/full coverage on CI-family Node 20 from 00:39:45 to 00:40:46 after guard review. FE-C2 charter (maximum 15 min): input boundary exploration from 00:37:05 to 00:41:11 reproduced FE-001/FE-002 and added six passing plus six strict expected-failure cases; camera policy FE-003 delegated for runtime confirmation to UX. FE-C3 browser charter runs in UX group. Added report and test via apply_patch; no product changes. Dead end: nested focused ESLint inside findings-evidence-index failed to find config despite outer exit 0; corrected cwd run passed. QA guard normalized-array gap corrected and safe-spy verified. Full HTML reports generated only by this pass moved to temporary storage; original interrupted artifacts retained.
+73:- **2026-10-03T00:42:09.358044+00:00** `charter-and-report-closeout` — `python3 -c 'from pathlib import Path; import datetime; p=Path("docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md");now=datetime.datetime.now(datetime.timezone.utc).isoformat();p.open("a").write(f"\n- **{now}** Pass notes: resumed interrupted work at 00:35:41 UTC. FE-C1 charter (maximum 15 min): checked install/build/lint/full-suite baseline from 00:35:57 to 00:37:26; repeated build/full coverage on CI-family Node 20 from 00:39:45 to 00:40:46 after guard review. FE-C2 charter (maximum 15 min): input boundary exploration from 00:37:05 to 00:41:11 reproduced FE-001/FE-002 and added six passing plus six strict expected-failure cases; camera policy FE-003 delegated for runtime confirmation to UX. FE-C3 browser charter runs in UX group. Added report and test via apply_patch; no product changes. Dead end: nested focused ESLint inside findings-evidence-index failed to find config despite outer exit 0; corrected cwd run passed. QA guard normalized-array gap corrected and safe-spy verified. Full HTML reports generated only by this pass moved to temporary storage; original interrupted artifacts retained.\n"); print("Report and charter notes written"); print("report_bytes",Path("docs/qa/2026-10-02/FRONTEND-REPORT.md").stat().st_size)'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/frontend/20261003T004209.358044Z-charter-and-report-closeout.txt).
+85:- **2026-10-03T00:44:37.368428+00:00** `final-added-tests-lint` — `node_modules/.bin/eslint src/__tests__/lib/qa-sweep-gs1.test.ts src/__tests__/hooks/useSync.test.tsx`; cwd `frontend`; exit 0, 2.37s. [Output](artifacts/frontend/20261003T004437.368428Z-final-added-tests-lint.txt).
+87:- **2026-10-03T00:44:35.934209+00:00** `node20-final-coverage` — `env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node node_modules/vitest/vitest.mjs run --coverage --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/qa/2026-10-02/artifacts/frontend/coverage-node20-final`; cwd `frontend`; exit 0, 17.62s. [Output](artifacts/frontend/20261003T004435.934209Z-node20-final-coverage.txt).
+97:- **2026-10-03T00:45:52.922047+00:00** `final-coverage-delta` — `python3 -c 'from pathlib import Path;import json;root=Path.cwd();base=root/"docs/qa/2026-10-02/artifacts/frontend";raw=json.loads((base/"coverage-node20-final/coverage-summary.json").read_text());after={"total":raw["total"],"files":{str(Path(k).relative_to(root)):v for k,v in raw.items() if k!="total"}};(base/"coverage-node20-after-summary.json").rename(base/"coverage-node20-interim-after-summary.json");(base/"coverage-node20-after-summary.json").write_text(json.dumps(after,indent=2)+"\n");before=json.loads((base/"coverage-node20-before-summary.json").read_text());result={phase:{"total":data["total"],"files":len(data["files"]),"gs1":data["files"]["frontend/src/lib/gs1-parser.ts"]} for phase,data in [("before",before),("after",after)]};result["same_source_set"]=set(before["files"])==set(after["files"]);(base/"coverage-comparison.json").write_text(json.dumps(result,indent=2)+"\n");changed={p:{k:{"before":before["files"][p][k]["covered"],"after":after["files"][p][k]["covered"]} for k in ["lines","statements","functions","branches"] if before["files"][p][k]["covered"]!=after["files"][p][k]["covered"]} for p in before["files"] if before["files"][p]!=after["files"][p]};(base/"coverage-changed-files.json").write_text(json.dumps(changed,indent=2)+"\n");(base/"coverage-node20-final").rename(Path("/private/tmp/regengine-qa-coverage-node20-final-20261003"));print(json.dumps({"comparison":result,"changed":changed},indent=2))'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/frontend/20261003T004552.922047Z-final-coverage-delta.txt).
+99:- **2026-10-03T00:46:40.574421+00:00** Final FE-C2 extension completed: reviewed offline replay through 00:45:52 UTC; added FE-004 strict expected-failure hook witness and bounded Medium finding. Negative-control first attempt failed setup only; second temporary unwrapped run failed the intended assertion with exactly one photo upload call. Final complete suite 137 files, 1033 passed, 7 expected fail, 2 skipped; both modified test files lint clean. Report totals/per-file coverage updated from final run; product behavior untouched. FE-003 now has local HTTP header proof.
+104:print("Report link targets pending/missing:",missing);now=datetime.datetime.now(datetime.timezone.utc).isoformat();Path("docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md").open("a").write(f"\n- **{now}** Final FE-C2 extension completed: reviewed offline replay through 00:45:52 UTC; added FE-004 strict expected-failure hook witness and bounded Medium finding. Negative-control first attempt failed setup only; second temporary unwrapped run failed the intended assertion with exactly one photo upload call. Final complete suite 137 files, 1033 passed, 7 expected fail, 2 skipped; both modified test files lint clean. Report totals/per-file coverage updated from final run; product behavior untouched. FE-003 now has local HTTP header proof.\n")'`; cwd `.`; exit 0, 0.10s. [Output](artifacts/frontend/20261003T004640.477728Z-final-scope-and-report-check.txt).

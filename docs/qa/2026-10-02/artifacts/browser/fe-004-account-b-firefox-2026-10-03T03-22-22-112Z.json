@@ -1,0 +1,34 @@
+{
+  "sessionReads": [
+    "a",
+    "b"
+  ],
+  "queuedASha256": "eee5473e85ac3de122ced34b6babc004afb071c2e57133c097e72d4c1e7554eb",
+  "attempts": [
+    {
+      "account": "b",
+      "path": "/api/ingestion/api/v1/ingest/csv",
+      "cookieIdentifiesAccountB": true,
+      "containsExactAccountAPhoto": true,
+      "includesOfflineSource": true,
+      "multipartBytes": 1937
+    }
+  ],
+  "retainedB": [
+    {
+      "blob": {
+        "type": "image/jpeg",
+        "size": 1566,
+        "base64": "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"
+      },
+      "timestamp": 1790997740357,
+      "synced": 0,
+      "syncAttempts": 1,
+      "id": 1,
+      "lastSyncAttemptAt": 1790997740586,
+      "syncError": "QA synthetic boundary: photo persistence is not exercised."
+    }
+  ],
+  "pageErrors": [],
+  "boundary": "Actual built FieldCapture, AuthProvider, useSync and IndexedDB; synthetic legacy photo seeded offline; synthetic session replacement; uploads intercepted and rejected 422. Camera, real login/logout and server persistence not exercised."
+}

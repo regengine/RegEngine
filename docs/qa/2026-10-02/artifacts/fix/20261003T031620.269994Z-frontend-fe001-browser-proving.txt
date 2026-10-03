@@ -1,0 +1,15 @@
+UTC: 2026-10-03T03:16:20.269994+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3821/ QA_BROWSER_BASE_URL=http://127.0.0.1:3115 QA_FE_RESULTS=../docs/qa/2026-10-02/artifacts/fix/fe001-browser-proving-results.json /private/tmp/obsong-qa-node20/node_modules/node/bin/node node_modules/playwright/cli.js test --config=tests/e2e/qa-2026-10-02/fe-regressions.config.ts fe-001-barcode.spec.ts
+Exit: 0
+Duration: 5.39s
+Timeout: False
+
+
+Running 3 tests using 1 worker
+
+  ✓  1 [chromium] › tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (756ms)
+  ✓  2 [firefox] › tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (1.1s)
+  ✓  3 [webkit] › tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (1.2s)
+
+  3 passed (5.1s)

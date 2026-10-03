@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:14:32.614864+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node node_modules/vitest/vitest.mjs run src/lib/gs1-parser.test.ts src/__tests__/lib/qa-sweep-gs1.test.ts
+Exit: 127
+Duration: 0.00s
+Timeout: False
+
+env: /private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node: No such file or directory

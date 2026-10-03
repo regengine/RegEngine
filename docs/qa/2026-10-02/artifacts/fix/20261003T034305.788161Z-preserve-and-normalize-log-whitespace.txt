@@ -1,0 +1,20 @@
+UTC: 2026-10-03T03:43:05.788161+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import gzip,hashlib,io,json,tarfile,datetime,subprocess; root=Path("docs/qa/2026-10-02/artifacts/fix"); records=[]; pending=[]; stream=io.BytesIO(); archive=root/"original-command-log-whitespace.tar.gz"
+with tarfile.open(fileobj=stream,mode="w") as bundle:
+ for p in sorted(root.glob("*.txt")):
+  raw=p.read_bytes(); normalized=b"\n".join(line.rstrip(b" \t\r") for line in raw.replace(b"\r\n",b"\n").split(b"\n")).rstrip(b"\n")+b"\n"
+  if normalized==raw: continue
+  info=tarfile.TarInfo(p.name); info.size=len(raw); info.mtime=0; info.mode=0o644; bundle.addfile(info,io.BytesIO(raw)); records.append({"display_log":str(p),"archive_member":p.name,"raw_bytes":len(raw),"raw_sha256":hashlib.sha256(raw).hexdigest()}); pending.append((p,normalized))
+archive.write_bytes(gzip.compress(stream.getvalue(),compresslevel=9,mtime=0)); assert archive.stat().st_size<=1000*1024
+with tarfile.open(archive,mode="r:gz") as bundle:
+ for record in records: assert hashlib.sha256(bundle.extractfile(record["archive_member"]).read()).hexdigest()==record["raw_sha256"]
+for p,normalized in pending: p.write_bytes(normalized)
+index=root/"original-command-log-whitespace-index.json"; index.write_text(json.dumps({"archive":str(archive),"reason":"Display logs normalize trailing whitespace and final blank lines; complete original bytes retained in archive.","members":records},indent=2)+"\n"); now=datetime.datetime.now(datetime.timezone.utc).isoformat(); Path("docs/qa/2026-10-02/FIX-SESSION-LOG.md").open("a").write("\n- **"+now+"** Staged diff check flagged whitespace in captured git-diff/test output and extra blank EOF lines, not product source. Preserved complete original bytes of affected new text logs in original-command-log-whitespace.tar.gz with verified member hashes, then normalized display-only trailing whitespace/LF endings. No checks weakened; no source or prior QA artifact modified.\n"); subprocess.run(["git","add","--",*[str(p) for p,_ in pending],str(archive),str(index)],check=True); print("display_logs_normalized",len(records)); print("raw_archive_bytes",archive.stat().st_size); print("raw_roundtrip_verified",True)'
+Exit: 0
+Duration: 0.15s
+Timeout: False
+
+display_logs_normalized 65
+raw_archive_bytes 149464
+raw_roundtrip_verified True

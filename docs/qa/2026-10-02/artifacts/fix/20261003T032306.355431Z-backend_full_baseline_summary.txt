@@ -1,0 +1,19 @@
+UTC: 2026-10-03T03:23:06.355431+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; from collections import Counter; text=Path("docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt").read_text(); lines=text.splitlines(); summary=[l for l in lines if l.startswith(("FAILED ","ERROR "))]; print("Summary entries",len(summary)); groups=Counter(); modules=Counter(); guards=Counter();
+for line in summary:
+ kind,_,detail=line.partition(" - "); groups[detail.split(":",1)[0] if detail else "no detail"]+=1; modules[kind.split(" ",1)[1].split("::")[0]]+=1
+ for label in ["database connection","socket.getaddrinfo","socket.connect","subprocess.Popen","credential/environment file access"]:
+  if "QA safety guard denied "+label in line: guards[label]+=1
+print("Reason categories",groups.most_common(20)); print("Safety guard summary counts",dict(guards)); print("Modules with most failure/error entries",modules.most_common(20)); print("\n".join(l for l in lines if " passed" in l and " errors" in l)[-2000:]); print("QA summary entries"); print("\n".join(l for l in summary if "qa_sweep_20261002" in l))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Summary entries 726
+Reason categories [('RuntimeError', 536), ('ModuleNotFoundError', 128), ('AssertionError', 29), ('no detail', 17), ('Failed', 12), ('assert 0.0 == 0.92 ± 9.2e-07', 2), ('assert 0.0 == 0.95 ± 9.5e-07', 1), ('assert 0.0 == 0.5 ± 5.0e-07', 1)]
+Safety guard summary counts {'socket.getaddrinfo': 63, 'subprocess.Popen': 113, 'database connection': 354, 'credential/environment file access': 6}
+Modules with most failure/error entries [('tests/security/test_security_audit_fixes.py', 42), ('services/compliance/tests/test_snapshots_router.py', 37), ('services/admin/tests/test_supplier_facilities_routes_1342.py', 25), ('tests/security/test_route_security_manifest.py', 24), ('tests/contract/test_service_contracts.py', 21), ('services/graph/tests/test_fsma_metrics.py', 19), ('tests/e2e/test_inter_service_resilience.py', 18), ('tests/test_monolith_observability_drift.py', 17), ('services/admin/tests/test_transaction_manager_1342.py', 16), ('services/admin/tests/test_bulk_upload_routes_1342.py', 15), ('services/admin/tests/test_session_cookie_fallback.py', 15), ('services/admin/tests/test_webhook_outbox_1408.py', 15), ('tests/security/test_repo_visibility_claims_2811.py', 15), ('services/admin/tests/test_graph_outbox.py', 14), ('services/admin/tests/test_supplier_onboarding_routes.py', 14), ('services/compliance/tests/test_tenant_isolation_1130.py', 13), ('services/scheduler/tests/test_state_manager.py', 13), ('tests/scripts/test_verify_audit_chain_cli.py', 13), ('services/admin/tests/test_bulk_upload_e2e.py', 12), ('tests/shared/test_canonical_graph_outbox_1276.py', 12)]
+246 failed, 10644 passed, 541 skipped, 3 xfailed, 4 warnings, 480 errors in 512.99s (0:08:32)
+QA summary entries
+ERROR services/ingestion/tests/test_qa_sweep_20261002_contract.py

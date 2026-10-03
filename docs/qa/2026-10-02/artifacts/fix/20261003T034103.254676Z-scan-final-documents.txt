@@ -1,0 +1,10 @@
+UTC: 2026-10-03T03:41:03.254676+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess,json; from pathlib import Path; paths=["docs/qa/2026-10-02/FIXES.md","docs/qa/2026-10-02/FIX-SESSION-LOG.md","docs/qa/2026-10-02/SUMMARY.md"]; combined=Path("/private/tmp/regengine-fix-documents-for-scan.txt"); combined.write_text("\n".join(Path(p).read_text() for p in paths)); result=subprocess.run(["gitleaks","dir",str(combined),"--config","/private/tmp/regengine-fix-default-gitleaks.toml","--redact=100","--no-banner","--gitleaks-ignore-path","/dev/null","--ignore-gitleaks-allow"],check=False); print("document_scan_exit",result.returncode); raise SystemExit(result.returncode)'
+Exit: 0
+Duration: 0.20s
+Timeout: False
+
+[90m8:41PM[0m [32mINF[0m [1mscanned ~239491 bytes (239.49 KB) in 148ms[0m
+[90m8:41PM[0m [32mINF[0m [1mno leaks found[0m
+document_scan_exit 0

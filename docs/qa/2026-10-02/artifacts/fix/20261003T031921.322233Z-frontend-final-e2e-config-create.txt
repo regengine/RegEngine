@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:19:21.322233+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; root=Path.cwd(); p=Path("/private/tmp/regengine-fix-existing-e2e.config.cjs"); original=root/"docs/qa/2026-10-02/scripts/existing-e2e.config.cjs"; out=root/"docs/qa/2026-10-02/artifacts/fix"; p.write_text("const base = require("+json.dumps(str(original))+");\nmodule.exports = {...base,outputDir: \"/private/tmp/regengine-fix-existing-e2e-details\",reporter:[[\"list\"],[\"json\",{outputFile:"+json.dumps(str(out/"frontend-final-existing-e2e.json"))+"}]]};\n");print(p.read_text())'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+const base = require("/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e.config.cjs");
+module.exports = {...base,outputDir: "/private/tmp/regengine-fix-existing-e2e-details",reporter:[["list"],["json",{outputFile:"/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/fix/frontend-final-existing-e2e.json"}]]};

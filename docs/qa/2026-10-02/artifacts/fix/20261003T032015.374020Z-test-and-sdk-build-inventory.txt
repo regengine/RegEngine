@@ -1,0 +1,38 @@
+UTC: 2026-10-03T03:20:15.374020+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "python.*build|mypy|ruff check|testpaths|pytest" regengine/pyproject.toml regengine/setup.py .github/workflows/test-suite-check.yml .github/workflows/python-sdk.yml .github/workflows/sdk-ci.yml 2>/dev/null; git status --short; git log -3 --oneline'
+Exit: 0
+Duration: 0.11s
+Timeout: False
+
+regengine/setup.py:81:            "pytest>=7.0",
+regengine/setup.py:82:            "pytest-cov",
+regengine/setup.py:84:            "mypy",
+.github/workflows/sdk-ci.yml:49:          python -m pip install pytest pytest-asyncio httpx requests
+.github/workflows/sdk-ci.yml:52:          PYTHONPATH= python -m pytest "$REPO_ROOT/tests/sdk" -q
+.github/workflows/test-suite-check.yml:41:  # Runs ``pytest --collect-only`` across the whole repo. Any collection
+.github/workflows/test-suite-check.yml:73:          # --continue-on-collection-errors: pytest otherwise aborts at the
+.github/workflows/test-suite-check.yml:79:          # which only holds while collection prints nodeids; stock pytest
+.github/workflows/test-suite-check.yml:85:          OUTPUT=$(python3 -m pytest -o addopts= --import-mode=importlib --asyncio-mode=auto --collect-only -q --continue-on-collection-errors 2>&1)
+.github/workflows/test-suite-check.yml:88:          echo "--- pytest output (tail) ---"
+.github/workflows/test-suite-check.yml:91:            echo "::error::pytest collection failed (exit $STATUS)"
+.github/workflows/test-suite-check.yml:100:            echo "::error::$ERRORS test files failed to collect. Fix the imports — see ERROR lines above. Re-run locally with:  python3 -m pytest --collect-only"
+.github/workflows/test-suite-check.yml:110:          # Issue #2923: adding services/shared/tests to pyproject testpaths
+.github/workflows/test-suite-check.yml:124:          # total. Add a root here whenever ``testpaths`` gains one.
+.github/workflows/test-suite-check.yml:135:            echo "::error::Collection produced no tests from:$MISSING_ROOTS. A whole directory dropped out of pyproject testpaths."
+.github/workflows/test-suite-check.yml:138:          echo "✓ $COUNT tests collected, 0 collection errors, all testpaths roots represented"
+.github/workflows/test-suite-check.yml:169:          python3 -m pytest \
+.github/workflows/test-suite-check.yml:249:          python3 -m pytest --collect-only tests/ || {
+.github/workflows/test-suite-check.yml:290:          python3 -m pytest "${smoke_tests[@]}" -v
+?? docs/qa/2026-10-02/FIX-SESSION-LOG.md
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png
+?? docs/qa/2026-10-02/artifacts/browser/followup-server-20261003T031612Z-metadata.txt
+?? docs/qa/2026-10-02/artifacts/fix/
+dbdacb67 fix(BE-010): enforce request limits on actual ASGI bytes
+a7f001fc fix(FE-001): preserve complete GS1 lot identifiers
+b5dd065e QA sweep 2026-10-02: RegEngine browser follow-up docs/tests

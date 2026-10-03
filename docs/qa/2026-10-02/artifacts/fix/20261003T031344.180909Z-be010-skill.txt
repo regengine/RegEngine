@@ -1,0 +1,36 @@
+UTC: 2026-10-03T03:13:44.180909+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat /Users/sellers/.codex/skills/debug-bug/SKILL.md
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+---
+name: debug-bug
+description: Use when diagnosing and fixing a bug in any repository. Prioritize reproduction, root cause, minimal fix, regression tests, negative-path coverage, and verification.
+---
+
+# Debug Bug
+
+## Process
+
+1. Reproduce the failure or locate the failing path from tests, logs, reports,
+   routes, services, or docs.
+2. Inspect related code before changing anything.
+3. Identify the smallest likely root cause.
+4. Make the minimal fix.
+5. Add a regression test when practical.
+6. Add negative-path tests if the bug touches auth, authorization, tenant
+   isolation, billing, secrets, deployment, tool execution, or data integrity.
+7. Run targeted tests first, then broader checks if the changed surface is
+   shared.
+8. Explain root cause, fix, verification, untested areas, remaining risk, and
+   next step.
+
+## Rules
+
+- Do not rewrite surrounding systems just to fix one bug.
+- Do not mask errors without understanding them.
+- Do not delete or weaken tests to make the suite pass.
+- If the issue cannot be reproduced, state that clearly and provide the closest
+  evidence found.

@@ -1,0 +1,204 @@
+UTC: 2026-10-03T03:16:04.933403+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'cat services/shared/request_safety.py && sed -n "140,215p" frontend/src/lib/gs1-parser.ts && rg -n "RequestSizeLimitMiddleware|max_body_bytes|request.stream|StreamingResponse" server/main.py services/shared/idempotency.py tests/qa_sweep_20261002/test_request_safety.py services/shared/tests/test_request_safety.py'
+Exit: 2
+Duration: 0.02s
+Timeout: False
+
+"""
+API-01 / API-02: Request body size limiting and global request timeout.
+
+Middleware that protects services from oversized payloads and runaway
+requests.  Wire these into each service's ``main.py`` via
+``app.add_middleware(...)``.
+
+Usage::
+
+    from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+    app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Optional
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
+
+_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+
+
+# ---------------------------------------------------------------------------
+# API-01: Request body size limiter
+# ---------------------------------------------------------------------------
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose declared or actual body exceeds *max_bytes*.
+
+    Check each received chunk before retaining it, then replay the bounded
+    body downstream. Content-Length is only an early rejection shortcut.
+    """
+
+    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                length = int(content_length)
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_content_length",
+                        "detail": "Content-Length header is not a valid integer.",
+                    },
+                )
+            if length > self.max_bytes:
+                return self._too_large(request, length)
+
+        body = bytearray()
+        async for chunk in request.stream():
+            length = len(body) + len(chunk)
+            if length > self.max_bytes:
+                return self._too_large(request, length)
+            body.extend(chunk)
+        # BaseHTTPMiddleware's cached request replays this body to call_next.
+        request._body = bytes(body)
+        return await call_next(request)
+
+    def _too_large(self, request: Request, length: int) -> JSONResponse:
+        mb = self.max_bytes / (1024 * 1024)
+        logger.warning(
+            "request_too_large: body_bytes=%s max_bytes=%s path=%s",
+            length,
+            self.max_bytes,
+            request.url.path,
+        )
+        return JSONResponse(
+            status_code=413,
+            content={
+                "error": "payload_too_large",
+                "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
+# API-02: Global request timeout
+# ---------------------------------------------------------------------------
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Cancel request processing after *timeout_seconds*.
+
+    Returns 504 Gateway Timeout if the handler doesn't complete in time.
+    Health/metrics endpoints are exempt.
+    """
+
+    def __init__(self, app, timeout_seconds: float = 120.0):
+        super().__init__(app)
+        self.timeout_seconds = timeout_seconds
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
+        try:
+            return await asyncio.wait_for(
+                call_next(request),
+                timeout=self.timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            # Same stdlib-logger kwargs bug as above: the structlog-style
+            # call raised TypeError, turning every timed-out request into
+            # a 500 instead of the intended 504 (#2503).
+            logger.error(
+                "request_timeout: path=%s method=%s timeout_seconds=%s",
+                request.url.path,
+                request.method,
+                self.timeout_seconds,
+            )
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "error": "request_timeout",
+                    "detail": f"Request timed out after {self.timeout_seconds:.0f} seconds.",
+                },
+            )
+        let index = 0;
+        data.sourceFormat = 'gs1_ai';
+
+        while (index < working.length) {
+            if (working[index] === GROUP_SEPARATOR) {
+                index += 1;
+                continue;
+            }
+
+            const ai = working.slice(index, index + 2);
+            if (!AI_SUPPORTED.has(ai)) {
+                index += 1;
+                continue;
+            }
+
+            if (ai in AI_FIXED_LENGTH) {
+                const length = AI_FIXED_LENGTH[ai];
+                const value = working.slice(index + 2, index + 2 + length);
+                if (value.length === length) {
+                    if (ai === '01' && !data.gtin) data.gtin = value;
+                    if (ai === '13' && !data.packDate) data.packDate = parseYYMMDD(value);
+                    if (ai === '17' && !data.expiryDate) data.expiryDate = parseYYMMDD(value);
+                }
+                index += 2 + length;
+                continue;
+            }
+
+            const start = index + 2;
+            const end = findNextFieldBoundary(working, start);
+            const value = working.slice(start, end);
+            if (value) {
+                if (ai === '10' && !data.tlc) data.tlc = value;
+                if (ai === '21' && !data.serial) data.serial = value;
+            }
+            index = end;
+        }
+    }
+
+    if (data.gtin) {
+        data.isValidGTIN = isValidGTINCheckDigit(data.gtin);
+    }
+
+    return data;
+}
+
+/**
+ * Validates if the capture looks like a valid FSMA-relevant barcode
+ */
+export function isFSMACompatible(data: GS1ParsedData): boolean {
+    return !!(data.tlc || (data.gtin && data.isValidGTIN !== false));
+}
+rg: services/shared/tests/test_request_safety.py: No such file or directory (os error 2)
+services/shared/idempotency.py:265:        # This middleware is outside RequestSizeLimitMiddleware in the monolith.
+services/shared/idempotency.py:268:        async for chunk in request.stream():
+server/main.py:341:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+server/main.py:343:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+tests/qa_sweep_20261002/test_request_safety.py:6:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+tests/qa_sweep_20261002/test_request_safety.py:14:    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
+tests/qa_sweep_20261002/test_request_safety.py:104:    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(headers), receive, send)
+tests/qa_sweep_20261002/test_request_safety.py:129:    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
+tests/qa_sweep_20261002/test_request_safety.py:147:    await RequestSizeLimitMiddleware(handler, max_bytes=8)(
+tests/qa_sweep_20261002/test_request_safety.py:172:        await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
+tests/qa_sweep_20261002/test_request_safety.py:191:        RequestSizeLimitMiddleware(handler, max_bytes=8), timeout_seconds=0.01

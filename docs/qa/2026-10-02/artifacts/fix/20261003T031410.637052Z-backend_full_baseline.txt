@@ -1,0 +1,48 @@
+UTC: 2026-10-03T03:14:10.637052+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py --no-cov --continue-on-collection-errors --tb=short
+Exit: 1
+Duration: 516.89s
+Timeout: False
+
+Full redacted command output is retained losslessly in 20261003T031410.637052Z-backend_full_baseline.txt.gz.
+Raw UTF-8 bytes: 1029631
+Raw SHA-256: 3f33c6157f094d9ef3bb87bb72a19b2a446ad15fcc68836f93763416a3afeafc
+Compression: gzip, verified byte-for-byte round trip.
+
+Final output excerpt:
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_cloud_marker_development_env_is_forced_production_with_explicit_secrets - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_cloud_marker_with_explicit_secrets_starts - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_no_cloud_marker_ephemeral_secret_still_starts - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_funnel_events.py::test_emit_funnel_event_is_idempotent_per_tenant - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_funnel_events.py::test_get_funnel_stage_metrics_reports_counts_and_conversion - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_funnel_events.py::test_get_funnel_stage_metrics_requires_tenant - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_no_op_outside_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_secure_values_pass_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_insecure_default_is_rejected_in_production[NEO4J_PASSWORD-neo4j] - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_insecure_default_is_rejected_in_production[OBJECT_STORAGE_ACCESS_KEY_ID-test] - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_skip_flag_cannot_disable_the_check_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_unset_secrets_fail_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_default_is_none - AssertionError: assert 'explicit' is None
+ +  where 'explicit' = <function get_rls_tenant_id at 0x10b19cea0>()
+ +    where <function get_rls_tenant_id at 0x10b19cea0> = tc.get_rls_tenant_id
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_set_str_coerces_uuid_instances - AssertionError: assert 'explicit' is None
+ +  where 'explicit' = <function get_rls_tenant_id at 0x10b19cea0>()
+ +    where <function get_rls_tenant_id at 0x10b19cea0> = tc.get_rls_tenant_id
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_tenant_scope_sets_and_resets - AssertionError: assert 'explicit' is None
+ +  where 'explicit' = <function get_rls_tenant_id at 0x10b19cea0>()
+ +    where <function get_rls_tenant_id at 0x10b19cea0> = tc.get_rls_tenant_id
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestContextvarSemantics::test_tenant_scope_resets_on_exception - AssertionError: assert 'explicit' is None
+ +  where 'explicit' = <function get_rls_tenant_id at 0x10b19cea0>()
+ +    where <function get_rls_tenant_id at 0x10b19cea0> = tc.get_rls_tenant_id
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestSqliteNoop::test_no_set_config_emitted_on_sqlite - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestHookInstallation::test_install_is_idempotent - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestHookInstallation::test_class_level_listener_fires_for_engine_created_before_listen - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestTaskWorkerDispatchSeeding::test_dispatch_seeds_tenant_from_row - AssertionError: assert 'explicit' is None
+ +  where 'explicit' = <function get_rls_tenant_id at 0x10b19cea0>()
+ +    where <function get_rls_tenant_id at 0x10b19cea0> = tc.get_rls_tenant_id
+FAILED services/shared/tests/test_tenant_guc_hook.py::TestTaskWorkerDispatchSeeding::test_dispatch_without_tenant_runs_unseeded - AssertionError: assert 'explicit' is None
+FAILED services/shared/tests/test_url_validation.py::test_alternate_loopback_encodings_are_blocked[http://2130706433/] - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+FAILED services/shared/tests/test_url_validation.py::test_alternate_loopback_encodings_are_blocked[http://0x7f000001/] - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+FAILED services/shared/tests/test_url_validation.py::test_alternate_loopback_encodings_are_blocked[http://127.1/] - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+246 failed, 10644 passed, 541 skipped, 3 xfailed, 4 warnings, 480 errors in 512.99s (0:08:32)

@@ -1,0 +1,26 @@
+UTC: 2026-10-03T03:15:29.483852+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+p=Path("frontend/src/lib/gs1-parser.ts")
+text=p.read_text()
+text=text.replace("        .replace(/[()]/g, '"'"''"'"')", "        .replace(/\\((01|10|13|17|21)\\)/g, `${GROUP_SEPARATOR}$1`)\n        .replace(/[()]/g, '"'"''"'"')")
+start=text.index("function maybeKnownAiAt(")
+end=text.index("function parseDigitalLink(",start)
+text=text[:start]+"""function findNextFieldBoundary(input: string, from: number): number {
+    const separator = input.indexOf(GROUP_SEPARATOR, from);
+    return separator === -1 ? input.length : separator;
+}
+
+"""+text[end:]
+p.write_text(text)
+p=Path("frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts")
+text=p.read_text()
+text=text.replace("  // Setup/controls/evidence are outside expected failure; only defect assertion is marked.\n  test.fail(true, '"'"'FE-001: variable-length GS1 lot is truncated at AI-like digits.'"'"');\n", "")
+p.write_text(text)
+print("FE-001 root-cause fix: preserve explicit parenthesized AI boundaries; consume variable fields through separator/end without digit heuristics. Browser witness now ordinary passing regression.")
+'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+FE-001 root-cause fix: preserve explicit parenthesized AI boundaries; consume variable fields through separator/end without digit heuristics. Browser witness now ordinary passing regression.

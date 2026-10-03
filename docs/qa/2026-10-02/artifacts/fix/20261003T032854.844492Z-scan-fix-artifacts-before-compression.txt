@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:28:54.844492+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: gitleaks dir docs/qa/2026-10-02/artifacts/fix --config /private/tmp/regengine-fix-default-gitleaks.toml --redact=100 --no-banner --gitleaks-ignore-path /dev/null --ignore-gitleaks-allow --report-format json --report-path /private/tmp/regengine-fix-artifacts-prescan.json
+Exit: 1
+Duration: 1.39s
+Timeout: False
+
+[90m8:28PM[0m [32mINF[0m [1mscanned ~7679306 bytes (7.68 MB) in 1.33s[0m
+[90m8:28PM[0m [33mWRN[0m [1mleaks found: 2[0m

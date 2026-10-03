@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:15:02.358686+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'qa-sweep|review-pr|negative control|QA' /Users/sellers/.codex/memories/MEMORY.md
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+101:- For API regressions, the user required route-level tests and a negative control showing the old 500 -> test through the endpoint, preserve a pre-fix failure demonstration, and keep tenant/source-file/evidence behavior in scope. [Task 1]

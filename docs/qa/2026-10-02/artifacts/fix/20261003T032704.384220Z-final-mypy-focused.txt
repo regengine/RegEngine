@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:27:04.384220+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Library/Frameworks/Python.framework/Versions/3.12/bin/mypy --python-executable /Users/sellers/Projects/RegEngine/repo/.venv/bin/python --follow-imports=skip --ignore-missing-imports --cache-dir /private/tmp/regengine-qa-fix-mypy-focused-cache services/ingestion/app/webhook_models.py services/ingestion/app/csv_templates.py services/shared/request_safety.py
+Exit: 1
+Duration: 0.81s
+Timeout: False
+
+services/ingestion/app/csv_templates.py:801: error: Argument 1 to "len" has incompatible type "Sequence[str] | None"; expected "Sized"  [arg-type]
+Found 1 error in 1 file (checked 3 source files)

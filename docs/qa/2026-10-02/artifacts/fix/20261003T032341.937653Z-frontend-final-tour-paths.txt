@@ -1,0 +1,17 @@
+UTC: 2026-10-03T03:23:41.937653+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files frontend/src -g '*tour*' -g '*Tour*' -g '*Inflow*' -g '*inflow*'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+frontend/src/__tests__/lib/inflow-lab-exception-grouping.test.ts
+frontend/src/__tests__/lib/inflow-error.test.ts
+frontend/src/lib/inflow-error.ts
+frontend/src/lib/inflow-workbench-proxy.ts
+frontend/src/__tests__/api/inflow-workbench-read-proxy.test.ts
+frontend/src/__tests__/api/inflow-lab-proxy.test.ts
+frontend/src/__tests__/pages/inflow-lab.test.tsx
+frontend/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx
+frontend/src/app/tools/inflow-lab/components/InflowLabClient.tsx
+frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx

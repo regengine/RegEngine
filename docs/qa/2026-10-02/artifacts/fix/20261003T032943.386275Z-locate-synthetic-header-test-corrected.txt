@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:29:43.386275+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -l session-protected services tests --glob '*.py'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+tests/shared/test_idempotency_middleware_1338.py

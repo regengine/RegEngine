@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:13:44.158247+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git worktree list
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine b5dd065e [qa/2026-10-02-fixes]

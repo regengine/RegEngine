@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:19:24.679669+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Library/Frameworks/Python.framework/Versions/3.12/bin/ruff check services/shared/request_safety.py tests/qa_sweep_20261002/test_request_safety.py
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+All checks passed!

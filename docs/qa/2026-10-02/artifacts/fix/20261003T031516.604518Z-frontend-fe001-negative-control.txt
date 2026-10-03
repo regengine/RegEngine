@@ -1,0 +1,188 @@
+UTC: 2026-10-03T03:15:16.604518+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/obsong-qa-node20/node_modules/node/bin/node node_modules/vitest/vitest.mjs run src/lib/gs1-parser.test.ts src/__tests__/lib/qa-sweep-gs1.test.ts
+Exit: 1
+Duration: 0.92s
+Timeout: False
+
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.mts:50:31). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend[39m
+
+ [32m✓[39m src/lib/gs1-parser.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [31m❯[39m src/__tests__/lib/qa-sweep-gs1.test.ts [2m([22m[2m18 tests[22m[2m | [22m[31m9 failed[39m[2m)[22m[32m 16[2mms[22m[39m
+     [32m✓[39m keeps Digital Link lot values intact across encoded delimiters[32m 1[2mms[22m[39m
+     [32m✓[39m checks every possible check digit for 100 generated GTIN bodies[32m 6[2mms[22m[39m
+     [32m✓[39m rejects impossible calendar date 260230[32m 0[2mms[22m[39m
+     [32m✓[39m rejects impossible calendar date 260431[32m 0[2mms[22m[39m
+     [32m✓[39m rejects impossible calendar date 261300[32m 0[2mms[22m[39m
+     [32m✓[39m rejects impossible calendar date 260000[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves lot LOT-10-ABC through the group separator[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves lot LOT-21-ABC through the group separator[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves lot LOT-17260930 through the group separator[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves final lot LOT-10-ABC without inferring another AI[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves final lot LOT-21-ABC without inferring another AI[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves final lot LOT-17260930 without inferring another AI[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves parenthesized boundaries after variable-length fields[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves scanner FNC1 surrogate boundaries after variable-length fields[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m FE-001 preserves a maximum-length lot and parses the explicitly separated date[39m[32m 1[2mms[22m[39m
+     [32m✓[39m FE-002 handles malformed Digital Link escape % without throwing[32m 1[2mms[22m[39m
+     [32m✓[39m FE-002 handles malformed Digital Link escape %ZZ without throwing[32m 0[2mms[22m[39m
+     [32m✓[39m FE-002 handles malformed Digital Link escape %E0%A4 without throwing[32m 0[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 9 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves lot LOT-10-ABC through the group separator
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-10-ABC' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m10-ABC[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m35:28[22m[39m
+    [90m 33|[39m         [35mconst[39m input [33m=[39m [32m`010950600013435210[39m[36m${[39mlot[36m}[39m[32m\x1d17260930`[39m[33m;[39m
+    [90m 34|[39m         [35mconst[39m parsed [33m=[39m [34mparseGS1[39m(input)[33m;[39m
+    [90m 35|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 36|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBe[39m([32m'2026-09-30'[39m)[33m;[39m
+    [90m 37|[39m     })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves lot LOT-21-ABC through the group separator
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-21-ABC' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m21-ABC[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m35:28[22m[39m
+    [90m 33|[39m         [35mconst[39m input [33m=[39m [32m`010950600013435210[39m[36m${[39mlot[36m}[39m[32m\x1d17260930`[39m[33m;[39m
+    [90m 34|[39m         [35mconst[39m parsed [33m=[39m [34mparseGS1[39m(input)[33m;[39m
+    [90m 35|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 36|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBe[39m([32m'2026-09-30'[39m)[33m;[39m
+    [90m 37|[39m     })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves lot LOT-17260930 through the group separator
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-17260930' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m17260930[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m35:28[22m[39m
+    [90m 33|[39m         [35mconst[39m input [33m=[39m [32m`010950600013435210[39m[36m${[39mlot[36m}[39m[32m\x1d17260930`[39m[33m;[39m
+    [90m 34|[39m         [35mconst[39m parsed [33m=[39m [34mparseGS1[39m(input)[33m;[39m
+    [90m 35|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 36|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBe[39m([32m'2026-09-30'[39m)[33m;[39m
+    [90m 37|[39m     })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves final lot LOT-10-ABC without inferring another AI
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-10-ABC' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m10-ABC[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m41:28[22m[39m
+    [90m 39|[39m     it.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 pres…
+    [90m 40|[39m         [35mconst[39m parsed [33m=[39m [34mparseGS1[39m([32m`010950600013435210[39m[36m${[39mlot[36m}[39m[32m`[39m)[33m;[39m
+    [90m 41|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 42|[39m         [34mexpect[39m(parsed[33m.[39mserial)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+    [90m 43|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves final lot LOT-21-ABC without inferring another AI
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-21-ABC' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m21-ABC[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m41:28[22m[39m
+    [90m 39|[39m     it.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 pres…
+    [90m 40|[39m         [35mconst[39m parsed [33m=[39m [34mparseGS1[39m([32m`010950600013435210[39m[36m${[39mlot[36m}[39m[32m`[39m)[33m;[39m
+    [90m 41|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 42|[39m         [34mexpect[39m(parsed[33m.[39mserial)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+    [90m 43|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves final lot LOT-17260930 without inferring another AI
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-17260930' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m17260930[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m41:28[22m[39m
+    [90m 39|[39m     it.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 pres…
+    [90m 40|[39m         [35mconst[39m parsed [33m=[39m [34mparseGS1[39m([32m`010950600013435210[39m[36m${[39mlot[36m}[39m[32m`[39m)[33m;[39m
+    [90m 41|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 42|[39m         [34mexpect[39m(parsed[33m.[39mserial)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+    [90m 43|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves parenthesized boundaries after variable-length fields
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-21-ABC' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m21-ABC[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m48:28[22m[39m
+    [90m 46|[39m     it('FE-001 preserves parenthesized boundaries after variable-lengt…
+    [90m 47|[39m         const parsed = parseGS1('(01)09506000134352(10)LOT-21-ABC(21)S…
+    [90m 48|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m([32m'LOT-21-ABC'[39m)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 49|[39m         [34mexpect[39m(parsed[33m.[39mserial)[33m.[39m[34mtoBe[39m([32m'SER-10-ABC'[39m)[33m;[39m
+    [90m 50|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBe[39m([32m'2026-09-30'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves scanner FNC1 surrogate boundaries after variable-length fields
+[31m[1mAssertionError[22m: expected 'LOT-' to be 'LOT-10-ABC' // Object.is equality[39m
+
+Expected: [32m"LOT-[7m10-ABC[27m"[39m
+Received: [31m"LOT-"[39m
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m55:28[22m[39m
+    [90m 53|[39m     it('FE-001 preserves scanner FNC1 surrogate boundaries after varia…
+    [90m 54|[39m         const parsed = parseGS1('010950600013435210LOT-10-ABCñ21SER-17…
+    [90m 55|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m([32m'LOT-10-ABC'[39m)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 56|[39m         [34mexpect[39m(parsed[33m.[39mserial)[33m.[39m[34mtoBe[39m([32m'SER-17-ABC'[39m)[33m;[39m
+    [90m 57|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBe[39m([32m'2026-09-30'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/lib/qa-sweep-gs1.test.ts[2m > [22m2026-10-02 QA: GS1 traceability input boundaries[2m > [22mFE-001 preserves a maximum-length lot and parses the explicitly separated date
+[31m[1mAssertionError[22m: expected undefined to be '10172101131710172101' // Object.is equality[39m
+
+[32m- Expected:[39m
+"10172101131710172101"
+
+[31m+ Received:[39m
+undefined
+
+[36m [2m❯[22m src/__tests__/lib/qa-sweep-gs1.test.ts:[2m64:28[22m[39m
+    [90m 62|[39m         [34mexpect[39m(lot)[33m.[39m[34mtoHaveLength[39m([34m20[39m)[33m;[39m
+    [90m 63|[39m         const parsed = parseGS1(`010950600013435210${lot}\x1d17260930`…
+    [90m 64|[39m         [34mexpect[39m(parsed[33m.[39mtlc)[33m.[39m[34mtoBe[39m(lot)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m 65|[39m         [34mexpect[39m(parsed[33m.[39mexpiryDate)[33m.[39m[34mtoBe[39m([32m'2026-09-30'[39m)[33m;[39m
+    [90m 66|[39m     })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m9 failed[39m[22m[2m | [22m[1m[32m16 passed[39m[22m[2m | [22m[36m3 expected fail[39m[90m (28)[39m
+[2m   Start at [22m 20:15:16
+[2m   Duration [22m 707ms[2m (transform 51ms, setup 188ms, import 32ms, tests 20ms, environment 685ms)[22m

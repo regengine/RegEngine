@@ -1,0 +1,351 @@
+UTC: 2026-10-03T03:17:43.987230+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff -- services/shared/request_safety.py tests/qa_sweep_20261002/test_request_safety.py
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+diff --git a/services/shared/request_safety.py b/services/shared/request_safety.py
+index ef98f331..1be822c4 100644
+--- a/services/shared/request_safety.py
++++ b/services/shared/request_safety.py
+@@ -22,6 +22,7 @@ from typing import Optional
+ from starlette.middleware.base import BaseHTTPMiddleware
+ from starlette.requests import Request
+ from starlette.responses import JSONResponse
++from starlette.types import ASGIApp, Receive, Scope, Send
+
+ logger = logging.getLogger(__name__)
+
+@@ -33,53 +34,83 @@ _EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+ # ---------------------------------------------------------------------------
+
+
+-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+-    """Reject requests whose Content-Length exceeds *max_bytes*.
++class RequestSizeLimitMiddleware:
++    """Reject requests whose declared or actual body exceeds *max_bytes*.
+
+-    For chunked/streaming uploads where Content-Length is absent the
+-    middleware allows the request through (Starlette's own body reader
+-    will enforce memory limits downstream).
++    Check each received chunk before retaining it, then replay the bounded
++    body downstream. Content-Length is only an early rejection shortcut.
+     """
+
+-    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+-        super().__init__(app)
++    def __init__(self, app: ASGIApp, max_bytes: int = 10 * 1024 * 1024):
++        self.app = app
+         self.max_bytes = max_bytes
+
+-    async def dispatch(self, request: Request, call_next):
+-        if request.url.path in _EXEMPT_PATHS:
+-            return await call_next(request)
++    async def __call__(self, scope: Scope, receive: Receive, send: Send):
++        if scope["type"] != "http" or scope["path"] in _EXEMPT_PATHS:
++            await self.app(scope, receive, send)
++            return
+
++        request = Request(scope)
+         content_length = request.headers.get("content-length")
+         if content_length is not None:
+             try:
+                 length = int(content_length)
+             except ValueError:
+-                return JSONResponse(
++                response = JSONResponse(
+                     status_code=400,
+                     content={
+                         "error": "invalid_content_length",
+                         "detail": "Content-Length header is not a valid integer.",
+                     },
+                 )
++                await response(scope, receive, send)
++                return
+             if length > self.max_bytes:
+-                mb = self.max_bytes / (1024 * 1024)
+-                # NOTE: this is the stdlib logger, not structlog — kwargs
+-                # here raised TypeError, turning every oversized request
+-                # into a 500 instead of the intended 413 (#2503).
+-                logger.warning(
+-                    "request_too_large: content_length=%s max_bytes=%s path=%s",
+-                    length,
+-                    self.max_bytes,
+-                    request.url.path,
+-                )
+-                return JSONResponse(
+-                    status_code=413,
+-                    content={
+-                        "error": "payload_too_large",
+-                        "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+-                    },
+-                )
+-        return await call_next(request)
++                await self._too_large(request, length)(scope, receive, send)
++                return
++
++        body = bytearray()
++        while True:
++            message = await receive()
++            if message["type"] == "http.disconnect":
++                return
++            chunk = message.get("body", b"")
++            length = len(body) + len(chunk)
++            if length > self.max_bytes:
++                await self._too_large(request, length)(scope, receive, send)
++                return
++            body.extend(chunk)
++            if not message.get("more_body", False):
++                break
++
++        buffered_body: bytes | None = bytes(body)
++        del body
++
++        async def replay_body():
++            nonlocal buffered_body
++            if buffered_body is not None:
++                message = {"type": "http.request", "body": buffered_body, "more_body": False}
++                buffered_body = None
++                return message
++            return await receive()
++
++        await self.app(scope, replay_body, send)
++
++    def _too_large(self, request: Request, length: int) -> JSONResponse:
++        mb = self.max_bytes / (1024 * 1024)
++        logger.warning(
++            "request_too_large: body_bytes=%s max_bytes=%s path=%s",
++            length,
++            self.max_bytes,
++            request.url.path,
++        )
++        return JSONResponse(
++            status_code=413,
++            content={
++                "error": "payload_too_large",
++                "detail": f"Request body exceeds the {mb:.0f} MB limit.",
++            },
++        )
+
+
+ # ---------------------------------------------------------------------------
+diff --git a/tests/qa_sweep_20261002/test_request_safety.py b/tests/qa_sweep_20261002/test_request_safety.py
+index f0ad8920..33b02ea5 100644
+--- a/tests/qa_sweep_20261002/test_request_safety.py
++++ b/tests/qa_sweep_20261002/test_request_safety.py
+@@ -3,18 +3,31 @@
+ import pytest
+ from fastapi import FastAPI, Request
+ from fastapi.testclient import TestClient
+-from shared.request_safety import RequestSizeLimitMiddleware
++from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
++from starlette.responses import JSONResponse
+
+
+ @pytest.fixture
+ def body_client():
+     app = FastAPI()
+     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
++    app.state.handled = False
+
+     @app.post("/consume")
+     async def consume(request: Request):
++        app.state.handled = True
+         return {"bytes_read": len(await request.body())}
+
++    @app.post("/parse")
++    async def parse(payload: dict):
++        app.state.handled = True
++        return payload
++
++    @app.post("/ignore")
++    async def ignore():
++        app.state.handled = True
++        return {"ok": True}
++
+     with TestClient(app) as client:
+         yield client
+
+@@ -29,13 +42,176 @@ def test_body_at_limit_accepted(body_client):
+     assert response.json() == {"bytes_read": 8}
+
+
+-@pytest.mark.xfail(
+-    strict=True,
+-    raises=AssertionError,
+-    reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies",
+-)
+ def test_streamed_body_is_limited_without_content_length(body_client):
+     response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+     if "content-length" in response.request.headers:
+         pytest.fail("Fixture unexpectedly added Content-Length; chunked-body repro is invalid")
+     assert response.status_code == 413, response.text
++    assert body_client.app.state.handled is False
++
++
++@pytest.mark.parametrize("path", ["/consume", "/parse", "/ignore"])
++@pytest.mark.parametrize("declared_length", ["0", "1", "8"])
++def test_deceptive_content_length_rejected_before_handler(body_client, path, declared_length):
++    """BE-010: parsers and handlers must never see an oversized request."""
++    response = body_client.post(
++        path,
++        content=b'{"x":123}',
++        headers={"Content-Length": declared_length, "Content-Type": "application/json"},
++    )
++    assert response.status_code == 413
++    assert response.json()["error"] == "payload_too_large"
++    assert body_client.app.state.handled is False
++
++
++def test_valid_json_body_replayed_to_parser(body_client):
++    response = body_client.post("/parse", content=b'{"x":1}', headers={"Content-Type": "application/json"})
++    assert response.status_code == 200
++    assert response.json() == {"x": 1}
++
++
++def _http_scope(headers=(), path="/consume"):
++    return {
++        "type": "http",
++        "asgi": {"version": "3.0", "spec_version": "2.4"},
++        "method": "POST",
++        "path": path,
++        "query_string": b"",
++        "headers": list(headers),
++    }
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("declared_length", [None, b"0", b"8"])
++async def test_actual_asgi_chunks_stop_at_limit_before_dispatch(declared_length):
++    """TestClient may combine chunks; assert real receive-message boundaries."""
++    received = []
++    sent = []
++    messages = iter(
++        [
++            {"type": "http.request", "body": b"12345", "more_body": True},
++            {"type": "http.request", "body": b"6789", "more_body": True},
++        ]
++    )
++
++    async def receive():
++        message = next(messages)  # No third receive is allowed after the limit.
++        received.append(message)
++        return message
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        pytest.fail("Oversized request reached the handler")
++
++    headers = [] if declared_length is None else [(b"content-length", declared_length)]
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(headers), receive, send)
++    assert len(received) == 2
++    assert sent[0]["status"] == 413
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("chunks", [[b""], [b"1234", b"", b"5678"]])
++async def test_actual_asgi_chunks_replayed_exactly(chunks):
++    sent = []
++    messages = iter(
++        {"type": "http.request", "body": chunk, "more_body": index < len(chunks) - 1}
++        for index, chunk in enumerate(chunks)
++    )
++
++    async def receive():
++        return next(messages)
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        request = Request(scope, receive)
++        assert await request.body() == b"".join(chunks)
++        await JSONResponse({"ok": True})(scope, receive, send)
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
++    assert sent[0]["status"] == 200
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("content_length, status", [(b"9", 413), (b"invalid", 400)])
++async def test_invalid_or_oversized_header_rejected_without_receiving(content_length, status):
++    sent = []
++
++    async def receive():
++        pytest.fail("Rejected header must not wait for the request body")
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        pytest.fail("Rejected header reached the handler")
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(
++        _http_scope([(b"content-length", content_length)]), receive, send
++    )
++    assert sent[0]["status"] == status
++
++
++@pytest.mark.asyncio
++async def test_disconnected_upload_never_reaches_handler():
++    messages = iter(
++        [
++            {"type": "http.request", "body": b"1234", "more_body": True},
++            {"type": "http.disconnect"},
++        ]
++    )
++
++    async def receive():
++        return next(messages)
++
++    async def send(message):
++        pytest.fail("Disconnected upload must not produce a response")
++
++    async def handler(scope, receive, send):
++        pytest.fail("Incomplete upload reached the handler")
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
++
++
++@pytest.mark.asyncio
++async def test_incomplete_upload_remains_subject_to_request_timeout():
++    import asyncio
++
++    sent = []
++
++    async def receive():
++        await asyncio.Event().wait()
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        pytest.fail("Incomplete upload reached the handler")
++
++    app = RequestTimeoutMiddleware(
++        RequestSizeLimitMiddleware(handler, max_bytes=8), timeout_seconds=0.01
++    )
++    await asyncio.wait_for(app(_http_scope(), receive, send), timeout=1)
++    assert sent[0]["status"] == 504
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("scope", [{"type": "websocket"}, _http_scope(path="/health")])
++async def test_non_http_and_exempt_requests_pass_through_without_reading(scope):
++    handled = []
++
++    async def receive():
++        pytest.fail("Passthrough must not read a body")
++
++    async def send(message):
++        pass
++
++    async def handler(inner_scope, inner_receive, inner_send):
++        assert (inner_scope, inner_receive, inner_send) == (scope, receive, send)
++        handled.append(True)
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(scope, receive, send)
++    assert handled == [True]

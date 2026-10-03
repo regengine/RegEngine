@@ -1,0 +1,21 @@
+UTC: 2026-10-03T03:23:52.001103+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["git","diff","a7f001fc^","a7f001fc","--name-only"],text=True)); files=["frontend/src/app/tools/inflow-lab-dashboard-preview/page.tsx","frontend/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx"]; [(print("FILE",p),print("\n".join(line for line in Path(p).read_text().splitlines() if line.startswith("import") or "gs1" in line.lower()))) for p in files]; print("Changed GS1 parser imports are limited to receiving, field-capture and scanner routes per prior repository-wide import search. Tour geometry source untouched.")'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+frontend/src/lib/gs1-parser.ts
+frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+
+FILE frontend/src/app/tools/inflow-lab-dashboard-preview/page.tsx
+import { Metadata } from "next";
+import { DashboardInflowLab } from "@/app/tools/inflow-lab/components/DashboardInflowLab";
+import { FeatureNotEnabled } from "@/components/experimental/FeatureNotEnabled";
+import { isExperimentalToolEnabled } from "@/lib/experimental-features";
+FILE frontend/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx
+import { useCallback, useSyncExternalStore } from "react";
+import { ChevronRight, GraduationCap, X } from "lucide-react";
+import type { TutorialStep } from "@/components/ui/tutorial";
+Changed GS1 parser imports are limited to receiving, field-capture and scanner routes per prior repository-wide import search. Tour geometry source untouched.

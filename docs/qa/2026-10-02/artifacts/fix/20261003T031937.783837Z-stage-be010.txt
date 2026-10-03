@@ -1,0 +1,12 @@
+UTC: 2026-10-03T03:19:37.783837+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git diff --check -- services/shared/request_safety.py tests/qa_sweep_20261002/test_request_safety.py && git add services/shared/request_safety.py tests/qa_sweep_20261002/test_request_safety.py && git diff --cached --stat && git diff --cached --name-only'
+Exit: 0
+Duration: 0.12s
+Timeout: False
+
+ services/shared/request_safety.py              |  89 ++++++----
+ tests/qa_sweep_20261002/test_request_safety.py | 226 ++++++++++++++++++++++++-
+ 2 files changed, 279 insertions(+), 36 deletions(-)
+services/shared/request_safety.py
+tests/qa_sweep_20261002/test_request_safety.py

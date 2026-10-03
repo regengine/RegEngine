@@ -1,0 +1,48 @@
+UTC: 2026-10-03T03:15:22.736560+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'starlette|fastapi|pytest|request_safety' requirements.txt requirements.lock pyproject.toml docs/qa/2026-10-02/COVERAGE.md
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: requirements.txt: No such file or directory (os error 2)
+requirements.lock:150:    #   fastapi
+requirements.lock:165:    #   starlette
+requirements.lock:811:    # via pytest-cov
+requirements.lock:912:    # via pytest-xdist
+requirements.lock:913:fastapi==0.141.1 \
+requirements.lock:1529:    # via pytest
+requirements.lock:2272:    #   opentelemetry-instrumentation-fastapi
+requirements.lock:2300:    #   opentelemetry-instrumentation-fastapi
+requirements.lock:2306:    # via opentelemetry-instrumentation-fastapi
+requirements.lock:2307:opentelemetry-instrumentation-fastapi==0.62b0 \
+requirements.lock:2339:    #   opentelemetry-instrumentation-fastapi
+requirements.lock:2348:    #   opentelemetry-instrumentation-fastapi
+requirements.lock:2481:    #   pytest
+requirements.lock:2654:    #   pytest
+requirements.lock:2655:    #   pytest-cov
+requirements.lock:2665:    #   prometheus-fastapi-instrumentator
+requirements.lock:2666:prometheus-fastapi-instrumentator==8.1.0 \
+requirements.lock:2900:    #   fastapi
+requirements.lock:3049:    #   pytest
+requirements.lock:3098:pytest==9.1.1 \
+requirements.lock:3103:    #   pytest-asyncio
+requirements.lock:3104:    #   pytest-cov
+requirements.lock:3105:    #   pytest-mock
+requirements.lock:3106:    #   pytest-xdist
+requirements.lock:3107:pytest-asyncio==1.4.0 \
+requirements.lock:3111:pytest-cov==7.1.0 \
+requirements.lock:3115:pytest-mock==3.15.1 \
+requirements.lock:3119:pytest-xdist==3.8.0 \
+requirements.lock:3631:starlette==1.6.0 \
+requirements.lock:3635:    #   fastapi
+requirements.lock:3636:    #   prometheus-fastapi-instrumentator
+requirements.lock:3704:    #   fastapi
+requirements.lock:3722:    #   pytest-asyncio
+requirements.lock:3728:    #   starlette
+requirements.lock:3737:    #   fastapi
+pyproject.toml:16:# [tool.pytest]); the root package is never built or installed (only the
+pyproject.toml:41:[tool.pytest.ini_options]
+pyproject.toml:62:    # bare `pytest` from the repo root skipped them.
+pyproject.toml:74:    "integration: tests requiring docker/testcontainers or other live external services. Auto-skipped in services/graph/tests unless ``--run-integration`` is passed; opt in elsewhere via ``pytest -m integration``.",
+pyproject.toml:81:# omit configuration pytest's own test modules landed in the denominator.

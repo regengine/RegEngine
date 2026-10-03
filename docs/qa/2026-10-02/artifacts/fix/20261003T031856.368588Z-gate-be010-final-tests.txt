@@ -1,0 +1,97 @@
+UTC: 2026-10-03T03:18:56.368588+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: tail -n 90 tests/qa_sweep_20261002/test_request_safety.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+
+    async def handler(scope, receive, send):
+        request = Request(scope, receive)
+        assert await request.body() == b"".join(chunks)
+        await JSONResponse({"ok": True})(scope, receive, send)
+
+    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
+    assert sent[0]["status"] == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content_length, status", [(b"9", 413), (b"invalid", 400)])
+async def test_invalid_or_oversized_header_rejected_without_receiving(content_length, status):
+    sent = []
+
+    async def receive():
+        pytest.fail("Rejected header must not wait for the request body")
+
+    async def send(message):
+        sent.append(message)
+
+    async def handler(scope, receive, send):
+        pytest.fail("Rejected header reached the handler")
+
+    await RequestSizeLimitMiddleware(handler, max_bytes=8)(
+        _http_scope([(b"content-length", content_length)]), receive, send
+    )
+    assert sent[0]["status"] == status
+
+
+@pytest.mark.asyncio
+async def test_disconnected_upload_never_reaches_handler():
+    messages = iter(
+        [
+            {"type": "http.request", "body": b"1234", "more_body": True},
+            {"type": "http.disconnect"},
+        ]
+    )
+
+    async def receive():
+        return next(messages)
+
+    async def send(message):
+        pytest.fail("Disconnected upload must not produce a response")
+
+    async def handler(scope, receive, send):
+        pytest.fail("Incomplete upload reached the handler")
+
+    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
+
+
+@pytest.mark.asyncio
+async def test_incomplete_upload_remains_subject_to_request_timeout():
+    import asyncio
+
+    sent = []
+
+    async def receive():
+        await asyncio.Event().wait()
+
+    async def send(message):
+        sent.append(message)
+
+    async def handler(scope, receive, send):
+        pytest.fail("Incomplete upload reached the handler")
+
+    app = RequestTimeoutMiddleware(
+        RequestSizeLimitMiddleware(handler, max_bytes=8), timeout_seconds=0.01
+    )
+    await asyncio.wait_for(app(_http_scope(), receive, send), timeout=1)
+    assert sent[0]["status"] == 504
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", [{"type": "websocket"}, _http_scope(path="/health")])
+async def test_non_http_and_exempt_requests_pass_through_without_reading(scope):
+    handled = []
+
+    async def receive():
+        pytest.fail("Passthrough must not read a body")
+
+    async def send(message):
+        pass
+
+    async def handler(inner_scope, inner_receive, inner_send):
+        assert (inner_scope, inner_receive, inner_send) == (scope, receive, send)
+        handled.append(True)
+
+    await RequestSizeLimitMiddleware(handler, max_bytes=8)(scope, receive, send)
+    assert handled == [True]

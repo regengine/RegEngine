@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:15:36.881905+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; hook=Path(subprocess.check_output(["git","rev-parse","--git-path","hooks/pre-commit"],text=True).strip()); print("pre-commit hook exists",hook.exists()); print("hook body", hook.read_text() if hook.exists() else "none"); p=Path("docs/qa/2026-10-02/FIX-SESSION-LOG.md"); s=p.read_text(); title="# QA fix session log — 2026-10-02\n\nAll timestamps are UTC. Commands run in the requested fix checkout with a credential-scrubbed environment. Command output links are redacted logs, not production proof. The original sweep logs remain unchanged.\n"; p.write_text(title+s) if not s.startswith("# QA fix session log") else None'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+pre-commit hook exists False
+hook body none

@@ -1,0 +1,13 @@
+UTC: 2026-10-03T03:25:32.409972+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git commit -m 'fix(BE-002): reject nonfinite ingestion quantities' -m 'Root cause: positive float validation allowed infinity, and nested CSV input quantities accepted NaN/infinity. Nonfinite validation inputs also could not be serialized into the intended JSON error response.
+
+Fix: enforce finite event quantities and nested CSV inputs while preserving positive output and nonnegative input rules. Normalize only nonfinite floats in validation error details to strings so raw numeric overflow receives structured HTTP 422 before ingestion.
+
+Proving tests: services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity, test_csv_rejects_nonfinite_input_quantity and test_webhook_nonfinite_quantity_returns_validation_error_before_ingest. Before: 6 CSV failures. Related suites: 216 passed, 6 unrelated expected failures; independent locked-framework selection: 65 passed, 6 expected failures. Ruff passes; focused mypy retains only the pre-existing optional CSV header error. Independent gate accepted.'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+[qa/2026-10-02-fixes f769b82e] fix(BE-002): reject nonfinite ingestion quantities
+ 7 files changed, 73 insertions(+), 8 deletions(-)

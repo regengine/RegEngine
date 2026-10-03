@@ -1,0 +1,18 @@
+UTC: 2026-10-03T03:40:46.484881+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files docs/qa/2026-10-02/artifacts/fix -g '*archive*' -g '*compress*' -g '*index*' -g '*.gz'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+docs/qa/2026-10-02/artifacts/fix/20261003T034036.220358Z-archive-large-new-browser-screenshots.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032137.348984Z-backend_full_collect_overlay.txt.gz
+docs/qa/2026-10-02/artifacts/fix/compressed-log-index.json
+docs/qa/2026-10-02/artifacts/fix/20261003T033947.164448Z-finalize-evidence-index-links.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032854.844492Z-scan-fix-artifacts-before-compression.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt.gz
+docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt.gz
+docs/qa/2026-10-02/artifacts/fix/compressed-screenshot-index.json
+docs/qa/2026-10-02/artifacts/fix/20261003T033000.229090Z-rescan-fix-artifacts-before-compression.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T034036.406363Z-document-screenshot-archives.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T033925.233056Z-compress-large-redacted-logs.txt

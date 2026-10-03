@@ -1,0 +1,196 @@
+UTC: 2026-10-03T03:20:18.744061+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 1300,1515p services/ingestion/app/csv_templates.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+            ingestion_run_id,
+            result.applied_cte_type,
+        )
+        return 0
+    finally:
+        session.close()
+    logger.info(
+        "csv_file_cte_evidence_queued artifacts=%d applied=%s ingestion_run_id=%s",
+        len(artifacts),
+        result.applied_cte_type,
+        ingestion_run_id,
+    )
+    return len(artifacts)
+
+
+def _cte_type_suggestion_result(
+    result: Optional[CteClassificationResult], artifacts_recorded: int = 0
+) -> Optional[CteTypeSuggestionResult]:
+    """The response's ``cte_type_suggestion``; ``None`` when Jev was not asked to consider the file."""
+    if result is None or result.status == "disabled":
+        return None
+    suggestion = result.suggestion
+    evidence = result.evidence
+    return CteTypeSuggestionResult(
+        status=result.status,
+        cte_type=suggestion.cte_type if suggestion else None,
+        confidence=suggestion.confidence if suggestion else None,
+        band=suggestion.band.value if suggestion else None,
+        applied=suggestion.applied if suggestion else False,
+        blocked_reason=suggestion.blocked_reason if suggestion else None,
+        model=evidence.model if evidence else None,
+        request_id=evidence.request_id if evidence else None,
+        questions_version=_JEV_CTE_QUESTIONS_VERSION if evidence else None,
+        apply_enabled=result.apply_enabled,
+        artifacts_recorded=artifacts_recorded,
+    )
+
+
+@router.post(
+    "/ingest/csv",
+    response_model=CsvIngestResponse,
+    summary="Upload and ingest a CSV file",
+    description=(
+        "Parse a CSV file, validate rows, and persist CTE events to the database. "
+        "Supports single-type files (pass cte_type) or mixed-type files with a "
+        "cte_type/event_type column per row."
+    ),
+)
+async def ingest_csv(
+    file: UploadFile = File(..., description="CSV file to ingest"),
+    cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
+    source: str = Form("csv_upload", description="Source identifier"),
+    tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+):
+    """Ingest a CSV file of CTE events (single-type or mixed-type)."""
+
+    # Normalize the fallback cte_type if provided
+    fallback_cte = None
+    if cte_type:
+        fallback_cte = _CTE_TYPE_ALIASES.get(cte_type.strip().lower().replace(" ", "_"))
+        if not fallback_cte:
+            valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
+            raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
+
+    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+
+    # Read and parse CSV
+    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
+    text = content.decode("utf-8-sig")  # Handle BOM
+    file_cte: Optional[CteClassificationResult] = None
+    if fallback_cte is None:
+        # Independent questions over the same upload: ask both at once.
+        header_mapping, file_cte = await asyncio.gather(
+            _suggest_header_mappings_for_upload(text), _suggest_file_cte_for_upload(text)
+        )
+    else:
+        header_mapping = await _suggest_header_mappings_for_upload(text, cte_type=fallback_cte)
+    if file_cte is not None and file_cte.applied_cte_type:
+        fallback_cte = file_cte.applied_cte_type
+        logger.info(
+            "csv_file_cte_applied cte_type=%s confidence=%.3f",
+            fallback_cte,
+            file_cte.suggestion.confidence if file_cte.suggestion else 0.0,
+        )
+    if header_mapping.applied_mapping:
+        logger.info(
+            "csv_header_mappings_applied count=%d mapping=%s",
+            len(header_mapping.applied_mapping),
+            sorted(header_mapping.applied_mapping.items()),
+        )
+    events, parse_errors, kde_warnings = parse_csv_rows(
+        text, fallback_cte, header_mapping=header_mapping.applied_mapping
+    )
+
+    if not events and parse_errors:
+        detail: dict = {"message": "No valid rows found", "errors": parse_errors}
+        suggestion = _cte_type_suggestion_result(file_cte)
+        if suggestion is not None:
+            # The uploader can re-upload with this CTE in one step.
+            detail["cte_type_suggestion"] = suggestion.model_dump()
+        if header_mapping.suggestions:
+            # Which unrecognised column holds a missing field: the uploader can
+            # rename it and upload again. Nothing was applied that is not listed.
+            detail["header_mapping_suggestions"] = [
+                item.model_dump() for item in _header_mapping_suggestion_results(header_mapping)
+            ]
+        raise HTTPException(status_code=400, detail=detail)
+    if not events:
+        raise HTTPException(status_code=400, detail="CSV contained no data rows")
+
+    payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
+    # Receipt: the upload is retained verbatim as an ingestion run (file name,
+    # SHA-256, size, every row counted) and each accepted event carries the
+    # run id, so an export can point at the exact source file for any row.
+    receipt = SourceFileReceipt(
+        filename=file.filename or "upload.csv",
+        raw_bytes=content,
+        content_type=file.content_type,
+        initiated_by=getattr(principal, "key_id", None),
+        record_count=len(events) + len(parse_errors),
+        parse_errors=list(parse_errors),
+    )
+    response = await ingest_events(
+        payload,
+        principal_tenant_id=tenant_id,
+        x_regengine_api_key=[REDACTED],
+        source_file=receipt,
+    )
+
+    artifacts_recorded = 0
+    if header_mapping.ok and header_mapping.suggestions:
+        artifacts_recorded = await run_in_threadpool(
+            _record_header_mapping_evidence,
+            header_mapping,
+            tenant_id=tenant_id,
+            source_hash=receipt.sha256,
+            ingestion_run_id=response.ingestion_run_id,
+        )
+    file_cte_artifacts = 0
+    if file_cte is not None and file_cte.ok:
+        file_cte_artifacts = await run_in_threadpool(
+            _record_file_cte_evidence,
+            file_cte,
+            tenant_id=tenant_id,
+            source_hash=receipt.sha256,
+            ingestion_run_id=response.ingestion_run_id,
+        )
+
+    if parse_errors:
+        from .webhook_models import EventResult
+
+        for err in parse_errors:
+            response.events.append(
+                EventResult(
+                    traceability_lot_code="", cte_type=fallback_cte or "unknown", status="rejected", errors=[err]
+                )
+            )
+            response.rejected += 1
+            response.total += 1
+
+    if kde_warnings:
+        logger.warning(
+            "csv_ingest_kde_warnings: %d events with missing KDEs: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
+        )
+
+    logger.info(
+        "csv_ingest_complete: total=%d accepted=%d rejected=%d kde_warnings=%d",
+        response.total,
+        response.accepted,
+        response.rejected,
+        len(kde_warnings),
+    )
+
+    # #2892: return the declared model rather than a raw JSONResponse.
+    # A JSONResponse bypasses FastAPI serialization entirely, so these two
+    # fields went out on the wire but never appeared in the published
+    # OpenAPI schema — generated SDKs dropped the only signal telling an
+    # integrator which rows are missing required FSMA key data elements.
+    return CsvIngestResponse(
+        **response.model_dump(),
+        kde_warnings=kde_warnings,
+        kde_warning_count=len(kde_warnings),
+        header_mapping_suggestions=_header_mapping_suggestion_results(header_mapping),
+        header_mapping_engine=_header_mapping_engine_result(header_mapping, artifacts_recorded),
+        cte_type_suggestion=_cte_type_suggestion_result(file_cte, file_cte_artifacts),
+    )

@@ -1,0 +1,49 @@
+UTC: 2026-10-03T03:20:25.412636+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 915,956p services/ingestion/app/csv_templates.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+# ``field_mapping_suggestion`` agent artifact for the review queue, and only
+# with REGENGINE_JEV_APPLY_HEADER_MAPPINGS are AUTO_APPLY-band answers copied
+# onto the rows. No failure in this block can fail the upload.
+# ---------------------------------------------------------------------------
+
+
+def _read_header_row(reader: csv.DictReader) -> tuple[list[str], Optional[str]]:
+    """The header row as the parser reads it, and why it cannot be a real one (``None`` if it can).
+
+    An unterminated quote in the header row makes the reader take everything
+    up to the next closing quote, often the rest of the file, as one header.
+    Such a row spans more than one physical line; ``malformed_header_reason``
+    also refuses line breaks and over-long headers. The reason never quotes
+    the header, which may hold row data.
+    """
+    headers = [header or "" for header in (reader.fieldnames or [])]
+    if reader.line_num > 1:
+        return headers, f"the header row spans {reader.line_num} lines"
+    return headers, malformed_header_reason(headers)
+
+
+def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], dict[str, list[str]], Optional[str]]:
+    """The header row, PII-redacted sample values when enabled, and why the header row is malformed.
+
+    When the header row is malformed no samples are collected: the caller
+    must send nothing (``_suggest_header_mappings_for_upload``).
+    """
+    reader = csv.DictReader(io.StringIO(text))
+    headers, malformed = _read_header_row(reader)
+    if malformed or sample_limit <= 0 or not headers:
+        return headers, {}, malformed
+    unknown = unrecognized_headers(headers, _RECOGNIZED_COLUMNS)
+    if not unknown:
+        return headers, {}, None
+    data_rows = (row for row in reader if not str(next(iter(row.values()), "") or "").startswith("#"))
+    return headers, collect_sample_values(data_rows, unknown, sample_limit), None
+
+
+def _per_row_cte_column(headers: Sequence[Optional[str]]) -> Optional[str]:
+    """The first header ``_detect_row_cte_type`` reads a row's CTE from, or ``None``.
+
+    Headers are normalised with ``normalize_csv_header``, exactly as

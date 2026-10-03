@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:18:46.029891+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py tests/qa_sweep_20261002/test_request_safety.py services/ingestion/tests/test_upload_limits_1342.py --no-cov
+Exit: 0
+Duration: 1.22s
+Timeout: False
+
+..............................................................           [100%]
+62 passed in 0.66s

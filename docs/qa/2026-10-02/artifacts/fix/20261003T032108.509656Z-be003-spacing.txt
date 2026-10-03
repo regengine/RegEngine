@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:21:08.509656+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/tests/test_csv_malformed_input.py"); s=p.read_text(); s=s.replace("\n\n\n\n@pytest.mark.parametrize(\"duplicate\"", "\n\n\n@pytest.mark.parametrize(\"duplicate\""); p.write_text(s); print("Removed one excess blank line introduced with the new regression test.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Removed one excess blank line introduced with the new regression test.

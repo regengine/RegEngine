@@ -1,0 +1,30 @@
+UTC: 2026-10-03T03:13:35.918127+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git show --format=fuller --stat --name-status 8634d75e
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+commit 8634d75ed33e6c00d1f882eb4957ec77f7f17430
+Author:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+AuthorDate: Mon Sep 28 11:56:56 2026 -0700
+Commit:     GitHub <noreply@github.com>
+CommitDate: Mon Sep 28 11:56:56 2026 -0700
+
+    fix(ci): skip summary gates when a newer push cancels the run (#3149)
+
+    fix(ci): skip summary gates when the workflow itself is cancelled
+
+    A newer push aborts the in-flight run. Deploy Decision and Backend CI
+    Status Gate still ran under if: always() and exited 1 because their
+    dependencies were cancelled, so the superseded SHA looked like a real
+    failure. Skip those jobs only on workflow cancellation. A failed,
+    skipped, or stage-cancelled result still blocks.
+
+    Co-authored-by: Cursor Agent <cursoragent@cursor.com>
+    Co-authored-by: Christopher <PetrefiedThunder@users.noreply.github.com>
+
+M	.github/workflows/backend-ci.yml
+M	.github/workflows/qa-pipeline.yml
+M	qa/decision.js
+A	tests/scripts/test_deploy_decision_gate.py

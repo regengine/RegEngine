@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:19:30.350890+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import datetime; now=datetime.datetime.now(datetime.timezone.utc).isoformat(); Path("docs/qa/2026-10-02/FIX-SESSION-LOG.md").open("a").write("\n- **"+now+"** Optional scope after the High pass: plan only BE-003 duplicate CSV headers, BE-002 nonfinite quantities and BE-004 unsupported CSV encoding. They have existing strict QA witnesses and can be fixed without schema, deployment, credential or valid-client API changes. BE-001 deferred because existing UTC-normalization expectations conflict with the QA rejection policy. FE-002 deferred after caller review: returning unknown from parser would newly allow malformed Digital Links into FieldCapture synthetic-lot save/upload path; broader caller rejection policy is not confidently in scope. FE-004 account replay requires coordinated owner/session behavior and will remain optional/unmodified. FE-003 deploy/header policy and remaining UX work are outside this focused safe-input pass. No Medium edits until BE-010 commit completes High handling.\n"); print("Optional scope decision recorded")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Optional scope decision recorded

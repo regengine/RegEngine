@@ -1,0 +1,228 @@
+UTC: 2026-10-03T03:20:05.705425+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 630,850p services/ingestion/app/csv_templates.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+def _check_lot_code_integrity(lot_code: str) -> list[str]:
+    """Flag likely O↔0 and I↔1 character swaps in a Traceability Lot Code.
+
+    Returns a (possibly empty) list of human-readable integrity warnings.
+    These are advisory — the row is still ingested.
+    """
+    if not lot_code:
+        return []
+    warnings: list[str] = []
+    suspicious = _LOT_DIGIT_ADJACENT.findall(lot_code)
+    if suspicious:
+        chars = ", ".join(f"'{c}'" for c in set(s.upper() for s in suspicious))
+        warnings.append(
+            f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — verify O vs 0 or I vs 1)"
+        )
+    # All-alpha codes longer than 3 chars have no digits — flag for review
+    if lot_code.isalpha() and len(lot_code) > 3:
+        warnings.append(f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error")
+    return warnings
+
+
+def _parse_input_quantities(
+    row: dict, input_lot_codes: list[str], row_cte: str
+) -> tuple[list[dict], Optional[str], Optional[str]]:
+    """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
+
+    Returns ``(inputs, error, warning)``. ``inputs`` is a list of
+    ``{"traceability_lot_code", "quantity", "unit_of_measure"}`` aligned with
+    ``input_lot_codes``. ``error`` rejects the row (misaligned or non-numeric
+    values); ``warning`` is advisory (a transformation row that names input
+    lots without their quantities).
+    """
+    quantities_raw = (row.get("input_quantities") or "").strip()
+    units_raw = (row.get("input_units_of_measure") or "").strip()
+    if not quantities_raw and not units_raw:
+        if input_lot_codes and row_cte == "transformation":
+            return (
+                [],
+                None,
+                "input_quantities missing: 21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of "
+                "measure of each input lot (add input_quantities and input_units_of_measure)",
+            )
+        return [], None, None
+    if not input_lot_codes:
+        return [], "input_quantities given without input_lot_codes", None
+    quantities = [q.strip() for q in quantities_raw.split(",")] if quantities_raw else []
+    units = [u.strip() for u in units_raw.split(",")] if units_raw else []
+    if len(quantities) != len(input_lot_codes):
+        return (
+            [],
+            f"input_quantities lists {len(quantities)} value(s) for {len(input_lot_codes)} input lot(s); "
+            "give one quantity per input lot in the same order as input_lot_codes",
+            None,
+        )
+    if len(units) == 1 and len(input_lot_codes) > 1:
+        units = units * len(input_lot_codes)
+    if len(units) != len(input_lot_codes):
+        return (
+            [],
+            f"input_units_of_measure lists {len(units)} value(s) for {len(input_lot_codes)} input lot(s); "
+            "give one unit per input lot, or a single unit that applies to all",
+            None,
+        )
+    inputs: list[dict] = []
+    for lot, quantity_text, unit_text in zip(input_lot_codes, quantities, units):
+        try:
+            quantity = float(quantity_text)
+        except ValueError:
+            return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+        if quantity < 0:
+            return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
+        if not unit_text:
+            return [], f"input unit of measure for input lot {lot} is blank", None
+        inputs.append(
+            {"traceability_lot_code": lot, "quantity": quantity, "unit_of_measure": _normalize_uom(unit_text)}
+        )
+    return inputs, None, None
+
+
+def parse_csv_rows(
+    text: str,
+    fallback_cte: Optional[str] = None,
+    header_mapping: Optional[Mapping[str, str]] = None,
+) -> tuple[list[IngestEvent], list[str], list[str]]:
+    """Parse CSV text into ``IngestEvent`` objects.
+
+    Shared by the ``/ingest/csv`` upload route and any other ingestion
+    entrypoint (e.g. the Postmark inbound-email webhook) that needs to accept
+    the same CSV structure and produce identical validation results — this
+    is the single place CTE/KDE row-mapping logic lives.
+
+    ``header_mapping`` (``normalised source column -> canonical column``) is
+    the set of Jev header suggestions that passed the apply policy in
+    ``shared.jev.header_mapping``. Each mapped value is copied under the
+    canonical key before the row is read, unless the row already provides
+    that field through the canonical key or a column the parser consults
+    after it (``_row_provides``): a mapping never replaces a value the file
+    carries. The source column is left in place so the raw column still
+    reaches ``kdes`` and nothing is lost.
+
+    Returns ``(events, parse_errors, kde_warnings)``.
+    """
+    reader = csv.DictReader(io.StringIO(text))
+
+    events: list[IngestEvent] = []
+    parse_errors: list[str] = []
+    kde_warnings: list[str] = []
+
+    # Read the header and every record the loop below can reach before
+    # touching any row: a file the csv module cannot read (CR-only line
+    # endings, a field over csv.field_size_limit(), usually from an unclosed
+    # quote) is rejected whole with its line named, never partially ingested.
+    records: list[dict] = []
+    try:
+        header = reader.fieldnames
+        for record in reader:
+            records.append(record)
+            if len(records) > MAX_CSV_ROWS:
+                break
+    except csv.Error as exc:
+        line = reader.reader.line_num
+        logger.warning("csv_unreadable line=%s error=%s", line, exc)
+        return (
+            [],
+            [
+                f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
+                f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
+            ],
+            [],
+        )
+    if header is not None and not any(name.strip() for name in header):
+        return [], ["CSV has no header row: the first line must list the column names"], []
+
+    for row_num, row in enumerate(records, start=2):
+        # _file_cte_type_for_jev reads exactly the rows before this cut-off.
+        if row_num - 1 > MAX_CSV_ROWS:
+            parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
+            break
+        # DictReader files values past the last header column under the None
+        # restkey. A non-blank one rejects the row below rather than being
+        # dropped; blank ones (a trailing comma) carry nothing and are ignored.
+        extra_values = row.pop(None, None) or []
+        row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+        if header_mapping:
+            for source_key, canonical_field in header_mapping.items():
+                value = row.get(source_key)
+                if value and not _row_provides(row, canonical_field):
+                    row[canonical_field] = value
+        first_val = next(iter(row.values()), "")
+        if first_val and str(first_val).startswith("#"):
+            continue
+        if any(value.strip() for value in extra_values):
+            parse_errors.append(
+                f"Row {row_num}: has more fields than the header "
+                f"({len(header) + len(extra_values)} fields, header has {len(header)})"
+            )
+            continue
+        if not any(row.values()):
+            continue
+
+        try:
+            row_cte = _detect_row_cte_type(row, fallback_cte)
+            if not row_cte:
+                parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
+                continue
+
+            # ── Phase 1: Ingestion — flexible on format, strict on presence ──
+            # Date: accept any human format. An unreadable or empty date
+            # rejects the row; a placeholder timestamp would enter the hash
+            # chain as evidence of when the event happened.
+            raw_date = _first_present(row, _DATE_FIELDS)
+            event_time_raw = (row.get("event_time") or "").strip()
+            ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
+            if ts is None:
+                parse_errors.append(f"Row {row_num}: {date_warning}")
+                continue
+
+            # Location: strip whitespace and expand abbreviations
+            loc_gln = _first_present(row, _LOCATION_GLN_COLUMNS) or None
+            _loc_raw = _first_present(row, _LOCATION_NAME_COLUMNS)
+            loc_name = _normalize_location(_loc_raw) if _loc_raw else None
+
+            # Unit of measure: map abbreviations before Pydantic sees them.
+            # No default: a unit the uploader did not record is not "units".
+            uom_raw = _first_present(row, _UNIT_COLUMNS)
+            if not uom_raw:
+                parse_errors.append(f"Row {row_num}: unit_of_measure is required")
+                continue
+            uom = _normalize_uom(uom_raw)
+
+            # Quantity: required and numeric. The generic exception handler
+            # below would reject the row too, but with an opaque message.
+            quantity_raw = _first_present(row, _QUANTITY_COLUMNS)
+            if not quantity_raw:
+                parse_errors.append(f"Row {row_num}: quantity is required")
+                continue
+            try:
+                quantity = float(quantity_raw)
+            except ValueError:
+                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
+                continue
+
+            # Lot code: extract and run integrity checks
+            lot_code = _first_present(row, _LOT_CODE_COLUMNS)
+            for integrity_warn in _check_lot_code_integrity(lot_code):
+                kde_warnings.append(f"Row {row_num}: {integrity_warn}")
+
+            kdes: dict = {}
+            skip_fields = {
+                "traceability_lot_code",
+                "product_description",
+                "quantity",
+                "unit_of_measure",
+                "location_gln",
+                "location_name",
+                "cte_type",
+                "event_type",
+                "type",
+                "cte",
+                "input_lot_codes",
+                "input_quantities",

@@ -1,0 +1,66 @@
+UTC: 2026-10-03T03:15:15.013020+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -C 4 'def _validate_event_timestamp_window|dt.tzinfo is None|def normalize_csv_header' services/ingestion/app/webhook_router_v2 services/ingestion/app/csv_templates.py services/shared/jev
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/csv_templates.py-597-
+services/ingestion/app/csv_templates.py-598-    # Fast-path: already an ISO timestamp
+services/ingestion/app/csv_templates.py-599-    try:
+services/ingestion/app/csv_templates.py-600-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+services/ingestion/app/csv_templates.py:601:        if dt.tzinfo is None:
+services/ingestion/app/csv_templates.py-602-            dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/csv_templates.py-603-        return dt.isoformat().replace("+00:00", "Z"), None
+services/ingestion/app/csv_templates.py-604-    except (ValueError, AttributeError):
+services/ingestion/app/csv_templates.py-605-        pass
+--
+services/ingestion/app/csv_templates.py-613-                t = _dateutil_parser.parse(event_time)
+services/ingestion/app/csv_templates.py-614-                dt = dt.replace(hour=t.hour, minute=t.minute, second=t.second)
+services/ingestion/app/csv_templates.py-615-            except (_DateParserError, ValueError):
+services/ingestion/app/csv_templates.py-616-                pass
+services/ingestion/app/csv_templates.py:617:        if dt.tzinfo is None:
+services/ingestion/app/csv_templates.py-618-            dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/csv_templates.py-619-        return dt.isoformat().replace("+00:00", "Z"), None
+services/ingestion/app/csv_templates.py-620-    except (_DateParserError, ValueError, OverflowError):
+services/ingestion/app/csv_templates.py-621-        pass
+--
+services/shared/jev/header_mapping.py-248-
+services/shared/jev/header_mapping.py-249-CANONICAL_FIELD_NAMES: frozenset[str] = frozenset(name for name in CANONICAL_FIELDS if name != NO_MATCH)
+services/shared/jev/header_mapping.py-250-
+services/shared/jev/header_mapping.py-251-
+services/shared/jev/header_mapping.py:252:def normalize_csv_header(header: str | None) -> str:
+services/shared/jev/header_mapping.py-253-    """Normalise a header exactly as the CSV parser does before it looks up columns."""
+services/shared/jev/header_mapping.py-254-    return (header or "").strip().lower().replace(" ", "_")
+services/shared/jev/header_mapping.py-255-
+services/shared/jev/header_mapping.py-256-
+--
+services/ingestion/app/webhook_router_v2/security.py-215-    except ValueError:
+services/ingestion/app/webhook_router_v2/security.py-216-        return 24
+services/ingestion/app/webhook_router_v2/security.py-217-
+services/ingestion/app/webhook_router_v2/security.py-218-
+services/ingestion/app/webhook_router_v2/security.py:219:def _validate_event_timestamp_window(timestamp: str) -> Optional[str]:
+services/ingestion/app/webhook_router_v2/security.py-220-    """Return an error string if ``timestamp`` is outside the replay
+services/ingestion/app/webhook_router_v2/security.py-221-    window, else ``None``. Separate from signature-level replay
+services/ingestion/app/webhook_router_v2/security.py-222-    defense: this catches captured webhooks replayed months later with
+services/ingestion/app/webhook_router_v2/security.py-223-    a freshly-computed signature.
+--
+services/ingestion/app/webhook_router_v2/security.py-230-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+services/ingestion/app/webhook_router_v2/security.py-231-    except (ValueError, AttributeError):
+services/ingestion/app/webhook_router_v2/security.py-232-        return f"event.timestamp is not parseable ISO-8601: {timestamp!r}"
+services/ingestion/app/webhook_router_v2/security.py-233-
+services/ingestion/app/webhook_router_v2/security.py:234:    if dt.tzinfo is None:
+services/ingestion/app/webhook_router_v2/security.py-235-        dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/webhook_router_v2/security.py-236-
+services/ingestion/app/webhook_router_v2/security.py-237-    now = datetime.now(timezone.utc)
+services/ingestion/app/webhook_router_v2/security.py-238-    age_cap_days = _pkg._max_event_age_days()
+--
+services/ingestion/app/webhook_router_v2/metrics.py-110-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+services/ingestion/app/webhook_router_v2/metrics.py-111-    except (ValueError, AttributeError, TypeError):
+services/ingestion/app/webhook_router_v2/metrics.py-112-        return ("unparseable", "na")
+services/ingestion/app/webhook_router_v2/metrics.py-113-
+services/ingestion/app/webhook_router_v2/metrics.py:114:    if dt.tzinfo is None:
+services/ingestion/app/webhook_router_v2/metrics.py-115-        dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/webhook_router_v2/metrics.py-116-
+services/ingestion/app/webhook_router_v2/metrics.py-117-    now = datetime.now(timezone.utc)
+services/ingestion/app/webhook_router_v2/metrics.py-118-    delta = dt - now

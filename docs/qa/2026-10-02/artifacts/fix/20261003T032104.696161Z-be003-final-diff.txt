@@ -1,0 +1,103 @@
+UTC: 2026-10-03T03:21:04.696161+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff -- services/ingestion/app/csv_templates.py services/ingestion/tests/test_qa_sweep_20261002_contract.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_jev_header_mapping.py
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+diff --git a/services/ingestion/app/csv_templates.py b/services/ingestion/app/csv_templates.py
+index 0e32d178..3b2c0b08 100644
+--- a/services/ingestion/app/csv_templates.py
++++ b/services/ingestion/app/csv_templates.py
+@@ -742,6 +742,20 @@ def parse_csv_rows(
+     records: list[dict] = []
+     try:
+         header = reader.fieldnames
++        if header and any(name.strip() for name in header):
++            seen_columns: dict[str, int] = {}
++            for position, name in enumerate(header, start=1):
++                normalized = normalize_csv_header(name)
++                if normalized in seen_columns:
++                    return (
++                        [],
++                        [
++                            f"CSV has duplicate column {normalized!r} at positions "
++                            f"{seen_columns[normalized]} and {position}; column names must be unique"
++                        ],
++                        [],
++                    )
++                seen_columns[normalized] = position
+         for record in reader:
+             records.append(record)
+             if len(records) > MAX_CSV_ROWS:
+diff --git a/services/ingestion/tests/test_csv_jev_header_mapping.py b/services/ingestion/tests/test_csv_jev_header_mapping.py
+index b1fcd8de..c366c5a0 100644
+--- a/services/ingestion/tests/test_csv_jev_header_mapping.py
++++ b/services/ingestion/tests/test_csv_jev_header_mapping.py
+@@ -570,13 +570,12 @@ def test_scan_reads_at_most_max_csv_rows(monkeypatch):
+ @pytest.mark.parametrize(
+     "text,withheld",
+     [
+-        # {normalize(k): v} keeps the first key's slot but the last same-named
+-        # key's value: "TLC-1" is tested, so this is not a comment row.
+-        ("Lot,lot,Activity\n# x,TLC-1,receiving\n", True),
+-        # ...and here the tested value is "# x": a comment row, skipped.
+-        ("lot,Lot,Activity\nTLC-1,# x,receiving\n", False),
++        # Only the first column marks a comment; a later hash-prefixed
++        # value must not hide a data row from either the scan or parser.
++        ("Lot,Notes,Activity\nTLC-1,# x,receiving\n", True),
++        ("Lot,Notes,Activity\n# x,TLC-1,receiving\n", False),
+     ],
+-    ids=["value-of-last-duplicate-is-data", "value-of-last-duplicate-is-comment"],
++    ids=["first-column-is-data", "first-column-is-comment"],
+ )
+ def test_comment_rows_are_the_ones_the_parser_skips(text, withheld):
+     events, errors, _ = ct.parse_csv_rows(text, "shipping")
+diff --git a/services/ingestion/tests/test_csv_malformed_input.py b/services/ingestion/tests/test_csv_malformed_input.py
+index 9a04d257..04dcb4c4 100644
+--- a/services/ingestion/tests/test_csv_malformed_input.py
++++ b/services/ingestion/tests/test_csv_malformed_input.py
+@@ -141,6 +141,21 @@ def test_blank_header_row_is_a_400(upload, text):
+     assert captured == {}
+
+
++
++@pytest.mark.parametrize("duplicate", ["quantity", " Quantity ", "reference document"])
++def test_duplicate_normalized_headers_are_rejected_before_reading_data(monkeypatch, duplicate):
++    # BE-003: reject the ambiguous header before DictReader can overwrite data.
++    def unexpected_row_read(_reader):
++        pytest.fail("Duplicate headers reached row dictionary construction")
++
++    monkeypatch.setattr(csv.DictReader, "__next__", unexpected_row_read)
++    events, errors, warnings = ct.parse_csv_rows(f"{HEADER},{duplicate}\n{ROW},999\n", "harvesting")
++    assert events == [] and warnings == []
++    assert len(errors) == 1
++    assert "duplicate column" in errors[0]
++    assert ct.normalize_csv_header(duplicate) in errors[0]
++
++
+ def test_empty_file_keeps_its_existing_400(upload):
+     post, _ = upload
+     resp = post("")
+diff --git a/services/ingestion/tests/test_qa_sweep_20261002_contract.py b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+index 70e2d053..0d844873 100644
+--- a/services/ingestion/tests/test_qa_sweep_20261002_contract.py
++++ b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+@@ -155,9 +155,7 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+     assert not captured
+
+
+-@pytest.mark.xfail(
+-    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
+-)
++# BE-003: ambiguous columns must be rejected before quantities can be overwritten.
+ @pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
+ def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
+     upload, captured = csv_upload
+@@ -165,6 +163,8 @@ def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header)
+     assert response.status_code == 400, (
+         f"status={response.status_code}; ingested_quantities={[e.quantity for e in captured]}"
+     )
++    [error] = response.json()["detail"]["errors"]
++    assert "duplicate column" in error and "quantity" in error and "3 and 8" in error
+     assert not captured

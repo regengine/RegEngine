@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:22:53.062511+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'mypy|python_version|mypy_path|ignore_missing_imports' pyproject.toml mypy.ini setup.cfg docs/qa/2026-10-02/COVERAGE.md
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: mypy.ini: No such file or directory (os error 2)
+rg: setup.cfg: No such file or directory (os error 2)
+pyproject.toml:15:# package metadata and tool configuration ([tool.ruff], [tool.mypy],
+pyproject.toml:34:[tool.mypy]
+pyproject.toml:35:python_version = "3.11"
+pyproject.toml:37:ignore_missing_imports = true
+pyproject.toml:38:# Non-blocking: mypy is available for local use but is not yet a CI gate.

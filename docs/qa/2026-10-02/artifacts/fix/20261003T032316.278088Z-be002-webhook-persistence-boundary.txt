@@ -1,0 +1,50 @@
+UTC: 2026-10-03T03:23:16.278088+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n '^async def|persist|store_event|payload.events|IngestPersistence' services/ingestion/app/webhook_router_v2/routes.py services/ingestion/app/webhook_router_v2/__init__.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/webhook_router_v2/__init__.py:7:persisted to Postgres.
+services/ingestion/app/webhook_router_v2/__init__.py:22:* ``rules_eval`` — rules-engine pre-eval gate + canonical persistence
+services/ingestion/app/webhook_router_v2/__init__.py:160:    _get_persistence,
+services/ingestion/app/webhook_router_v2/__init__.py:162:    _persist_canonical_and_eval,
+services/ingestion/app/webhook_router_v2/__init__.py:163:    _persist_required_canonical_and_eval,
+services/ingestion/app/webhook_router_v2/__init__.py:231:    # Rules / canonical persistence
+services/ingestion/app/webhook_router_v2/__init__.py:233:    "_get_persistence",
+services/ingestion/app/webhook_router_v2/__init__.py:235:    "_persist_canonical_and_eval",
+services/ingestion/app/webhook_router_v2/__init__.py:236:    "_persist_required_canonical_and_eval",
+services/ingestion/app/webhook_router_v2/routes.py:99:        "chain-linked, and persisted to the compliance database. "
+services/ingestion/app/webhook_router_v2/routes.py:104:async def ingest_events(
+services/ingestion/app/webhook_router_v2/routes.py:119:    """Process incoming webhook events with persistent storage."""
+services/ingestion/app/webhook_router_v2/routes.py:133:    # persistence row could still be rolled back by a later failure in this
+services/ingestion/app/webhook_router_v2/routes.py:141:    # Get persistence layer from injected db_session (Depends(get_db_session))
+services/ingestion/app/webhook_router_v2/routes.py:142:    persistence = None
+services/ingestion/app/webhook_router_v2/routes.py:149:        from shared.cte_persistence import CTEPersistence
+services/ingestion/app/webhook_router_v2/routes.py:151:        persistence = CTEPersistence(db_session)
+services/ingestion/app/webhook_router_v2/routes.py:160:        # --- Phase 1: Validate all events, collect valid ones for batch persist ---
+services/ingestion/app/webhook_router_v2/routes.py:162:        for event in payload.events:
+services/ingestion/app/webhook_router_v2/routes.py:224:        # Runs a non-persisting eval per event; decision logic is in
+services/ingestion/app/webhook_router_v2/routes.py:234:        # (services/shared/rules/engine.py:persist_summary).
+services/ingestion/app/webhook_router_v2/routes.py:255:        # --- Phase 2: Batch persist all valid events ---
+services/ingestion/app/webhook_router_v2/routes.py:271:                        # One ledger entry serves both persisted projections.
+services/ingestion/app/webhook_router_v2/routes.py:275:                        # #2902 — without this key ``store_events_batch`` reads an
+services/ingestion/app/webhook_router_v2/routes.py:278:                        # the per-event fallback below persists both. Always pass
+services/ingestion/app/webhook_router_v2/routes.py:294:                store_results = persistence.store_events_batch(
+services/ingestion/app/webhook_router_v2/routes.py:317:                    # rows to the persisted event id. Its alerts are NOT merged
+services/ingestion/app/webhook_router_v2/routes.py:329:                    # from canonical rows or persisted rule-evaluation evidence.
+services/ingestion/app/webhook_router_v2/routes.py:330:                    _pkg._persist_required_canonical_and_eval(
+services/ingestion/app/webhook_router_v2/routes.py:360:                    "batch_persistence_failed",
+services/ingestion/app/webhook_router_v2/routes.py:376:                # The fallback below re-persists the ENTIRE valid_events list
+services/ingestion/app/webhook_router_v2/routes.py:387:                # Fall back to per-event persistence
+services/ingestion/app/webhook_router_v2/routes.py:416:                        store_result = persistence.store_event(
+services/ingestion/app/webhook_router_v2/routes.py:441:                        _pkg._persist_required_canonical_and_eval(
+services/ingestion/app/webhook_router_v2/routes.py:536:            event_count=len(payload.events),
+services/ingestion/app/webhook_router_v2/routes.py:550:    # above has actually succeeded, so every id here is durably persisted --
+services/ingestion/app/webhook_router_v2/routes.py:579:        total=len(payload.events),
+services/ingestion/app/webhook_router_v2/routes.py:589:async def get_recent_events(
+services/ingestion/app/webhook_router_v2/routes.py:702:async def recent_events_endpoint(
+services/ingestion/app/webhook_router_v2/routes.py:729:async def verify_chain(
+services/ingestion/app/webhook_router_v2/routes.py:746:        from shared.cte_persistence import CTEPersistence
+services/ingestion/app/webhook_router_v2/routes.py:750:        persistence = CTEPersistence(db_session)
+services/ingestion/app/webhook_router_v2/routes.py:751:        result = persistence.verify_chain(tenant_id)

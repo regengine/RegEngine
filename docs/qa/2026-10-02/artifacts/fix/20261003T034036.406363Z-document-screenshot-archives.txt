@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:40:36.406363+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text().replace("no original sweep artifact was altered.","no original sweep artifact was altered. Two new WebKit screenshots also use verified lossless .png.gz archives to stay below the file-size limit; their original paths and hashes are mapped in the [screenshot archive index](artifacts/fix/compressed-screenshot-index.json)."); p.write_text(s); print("Screenshot archive index documented")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Screenshot archive index documented

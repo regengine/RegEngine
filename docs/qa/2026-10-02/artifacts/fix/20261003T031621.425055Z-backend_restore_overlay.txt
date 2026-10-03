@@ -1,0 +1,15 @@
+UTC: 2026-10-03T03:16:21.425055+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: uv --cache-dir /private/tmp/regengine-qa-uv-cache pip install --target /private/tmp/regengine-qa-backend-deps --no-deps typesafe-sdk==0.7.2 httpx2==2.12.0 httpcore2==2.12.0 truststore==0.10.4
+Exit: 0
+Duration: 0.33s
+Timeout: False
+
+Using CPython 3.13.14
+Resolved 4 packages in 112ms
+Prepared 4 packages in 105ms
+Installed 4 packages in 4ms
+ + httpcore2==2.12.0
+ + httpx2==2.12.0
+ + truststore==0.10.4
+ + typesafe-sdk==0.7.2

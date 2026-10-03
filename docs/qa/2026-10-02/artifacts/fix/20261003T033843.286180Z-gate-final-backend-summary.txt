@@ -1,0 +1,172 @@
+UTC: 2026-10-03T03:38:43.286180+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat docs/qa/2026-10-02/artifacts/fix/backend-final-summary.json
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+{
+  "generated_utc": "2026-10-03T03:38:28.268763+00:00",
+  "source_freeze": "b6222b2942cfd1fee2ac1a3fa259857afeb55c67",
+  "full_before_inventory": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "summary": "246 failed, 10644 passed, 541 skipped, 3 xfailed, 4 warnings, 480 errors in 512.99s (0:08:32)",
+    "counts": {
+      "passed": 10644,
+      "failed": 246,
+      "skipped": 541,
+      "xfailed": 3,
+      "errors": 480,
+      "deselected": 0
+    },
+    "exit": 1,
+    "command": "/Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py --no-cov --continue-on-collection-errors --tb=short"
+  },
+  "full_after": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt",
+    "summary": "253 failed, 11406 passed, 539 skipped, 5 xfailed, 4 warnings, 342 errors in 519.75s (0:08:39)",
+    "counts": {
+      "passed": 11406,
+      "failed": 253,
+      "skipped": 539,
+      "xfailed": 5,
+      "errors": 342,
+      "deselected": 0
+    },
+    "exit": 1,
+    "command": "env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py --no-cov --continue-on-collection-errors --tb=short"
+  },
+  "scope_limits": [
+    "Full before inventory started before product edits but execution overlapped edits; original sweep remains primary pre-fix evidence.",
+    "Before inventory lacked temporary typesafe-sdk overlay; after restores exact sweep overlay, enabling previously uncollected tests. Full count deltas are not a same-denominator improvement claim.",
+    "Both full attempts used all configured root testpaths with no exclusions, no maxfail, --continue-on-collection-errors and the unchanged safety guard.",
+    "Guard denies network, all database connections, subprocesses and credential-file reads. Full suite is not green and real integrations remain unverified.",
+    "Focused suites retain original sweep file selections and original real_redis deselection but include newly added regression cases; overlapping counts must not be summed.",
+    "Main interpreter environment is not an exact requirements.lock install; separate core-lock targeted checks are owned by root/gate."
+  ],
+  "focused_ingestion": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T032703.857527Z-backend_ingestion_comparable_after.txt",
+    "summary": "107 passed, 3 xfailed in 4.61s",
+    "counts": {
+      "passed": 107,
+      "failed": 0,
+      "skipped": 0,
+      "xfailed": 3,
+      "errors": 0,
+      "deselected": 0
+    },
+    "exit": 0,
+    "command": "env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py services/ingestion/tests/test_qa_sweep_20261002_contract.py --no-cov --tb=short"
+  },
+  "focused_shared": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T032714.103625Z-backend_shared_comparable_after.txt",
+    "summary": "241 passed, 1 deselected, 1 xfailed in 1.33s",
+    "counts": {
+      "passed": 241,
+      "failed": 0,
+      "skipped": 0,
+      "xfailed": 1,
+      "errors": 0,
+      "deselected": 1
+    },
+    "exit": 0,
+    "command": "env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_auth_1338.py services/shared/tests/test_permissions.py services/shared/tests/test_tenant_isolation.py services/shared/tests/test_tenant_context_set_guc.py tests/shared/test_idempotency_middleware_1338.py tests/shared/test_canonical_event_idempotency_key.py tests/shared/test_webhook_security.py tests/qa_sweep_20261002 -k 'not real_redis' --no-cov --tb=short"
+  },
+  "failure_identity_comparison": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/backend-failure-identities.json",
+    "raw_before_bad": 726,
+    "raw_after_bad": 595,
+    "raw_new_bad": 15,
+    "random_uuid_parameter_only": 10,
+    "uuid_normalized_new_bad": [
+      "services/ingestion/tests/test_jev_ask_script.py::test_missing_package_says_how_to_run_it",
+      "services/ingestion/tests/test_jev_header_preview_script.py::test_connection_failure_logs_to_stderr_and_exits_3",
+      "services/ingestion/tests/test_jev_header_preview_script.py::test_script_runs_from_repo_root_without_pythonpath",
+      "services/ingestion/tests/test_jev_header_preview_script.py::test_unexpected_error_never_prints_the_key_and_keeps_stdout_json",
+      "services/shared/tests/test_jev_client.py::test_state_never_reaches_regengine_logs"
+    ],
+    "all_five_new_stable_nodes_had_previous_module_collection_errors": true,
+    "new_stable_classes": {
+      "newly_collected_subprocess_guard_failures": 4,
+      "newly_collected_jev_logging_assertion": 1
+    },
+    "previous_error_now_failed": [
+      "tests/data_integrity/test_fsma_204_verification_phase2b.py::TestIngestionPipelineContract::test_job_status_is_tenant_scoped",
+      "tests/data_integrity/test_fsma_204_verification_phase2b.py::TestIngestionPipelineContract::test_unknown_job_status_is_not_found",
+      "tests/ingestion/test_ingest_url.py::TestIngestUrlEndpoint::test_ingest_url_rejects_private_ip_addresses",
+      "tests/ingestion/test_ingest_url.py::TestIngestUrlEndpoint::test_ingest_url_validates_source_system_required",
+      "tests/security/test_route_security_manifest.py::test_checked_in_manifest_matches_live_route_and_dependency_graph",
+      "tests/security/test_route_security_manifest.py::test_every_omitted_router_path_returns_exact_404",
+      "tests/security/test_security_audit_fixes.py::TestInputValidationAndSanitization::test_malicious_path_segments_handled_safely[%2500%250a%250d]",
+      "tests/security/test_security_audit_fixes.py::TestK8sAuthBypassGuard::test_bypass_token_authenticates_in_test_env",
+      "tests/security/test_security_audit_fixes.py::TestSQLInjectionPrevention::test_malicious_job_id_path_param_is_handled_safely[job' UNION SELECT * FROM secret_data; --]",
+      "tests/security/test_security_audit_fixes.py::TestSQLInjectionPrevention::test_malicious_job_id_path_param_is_handled_safely[job'; DROP TABLE events; --]",
+      "tests/security/test_security_audit_fixes.py::TestSQLInjectionPrevention::test_malicious_job_id_path_param_is_handled_safely[job` OR `1`=`1]"
+    ],
+    "changed_outcome_classes": {
+      "dns_guard": 3,
+      "previously_documented_route_manifest_drift": 2,
+      "http500_guard_assertions_controlled_against_original_module": 6
+    },
+    "after_reason_categories": {
+      "RuntimeError": 543,
+      "Failed": 10,
+      "AssertionError": 38,
+      "assert 0.0 == 0.92 \u00b1 9.2e-07": 2,
+      "assert 0.0 == 0.95 \u00b1 9.5e-07": 1,
+      "assert 0.0 == 0.5 \u00b1 5.0e-07": 1
+    },
+    "after_guard_failure_error_entries": {
+      "database": 354,
+      "subprocess": 117,
+      "dns": 66,
+      "environment_file_read": 6
+    },
+    "new_changed_surface_bad_nodeids": [],
+    "reverts_required_by_observed_regressions": false
+  },
+  "jev_isolated_control": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T033616.358447Z-backend_jev_new_failure_isolated.txt",
+    "summary": "1 passed in 0.40s",
+    "counts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "xfailed": 0,
+      "errors": 0,
+      "deselected": 0
+    },
+    "exit": 0,
+    "command": "env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_jev_client.py::test_state_never_reaches_regengine_logs --no-cov --tb=short"
+  },
+  "http500_final_control": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T033712.252156Z-backend_new_http500_final_control.txt",
+    "summary": "6 failed in 3.77s",
+    "counts": {
+      "passed": 0,
+      "failed": 6,
+      "skipped": 0,
+      "xfailed": 0,
+      "errors": 0,
+      "deselected": 0
+    },
+    "exit": 1,
+    "command": "env PYTHONPATH=/private/tmp/regengine-qa-backend-deps python3 -c 'from pathlib import Path; import json; import subprocess; data=json.loads(Path(\"docs/qa/2026-10-02/artifacts/fix/backend-failure-identities.json\").read_text()); nodes=[n for n in data[\"changed_bad_outcome_nodeids\"] if \"got 500\" in data[\"after_bad_identities\"][n][\"detail\"]]; print(\"Selected HTTP500 identities\",len(nodes),flush=True); print(\"\\n\".join(nodes),flush=True); command=[\"/Users/sellers/Projects/RegEngine/repo/.venv/bin/python\",\"docs/qa/2026-10-02/scripts/backend_pytest.py\",*nodes,\"--no-cov\",\"--tb=short\"]; raise SystemExit(subprocess.call(command))'"
+  },
+  "http500_original_control": {
+    "artifact": "docs/qa/2026-10-02/artifacts/fix/20261003T033712.252155Z-backend_new_http500_original_control.txt",
+    "summary": "6 failed in 3.77s",
+    "counts": {
+      "passed": 0,
+      "failed": 6,
+      "skipped": 0,
+      "xfailed": 0,
+      "errors": 0,
+      "deselected": 0
+    },
+    "exit": 1,
+    "command": "env PYTHONPATH=/private/tmp/regengine-qa-backend-deps python3 -c 'from pathlib import Path; import json; import subprocess; data=json.loads(Path(\"docs/qa/2026-10-02/artifacts/fix/backend-failure-identities.json\").read_text()); nodes=[n for n in data[\"changed_bad_outcome_nodeids\"] if \"got 500\" in data[\"after_bad_identities\"][n][\"detail\"]]; print(\"Selected HTTP500 identities\",len(nodes),flush=True); print(\"\\n\".join(nodes),flush=True); command=[\"/Users/sellers/Projects/RegEngine/repo/.venv/bin/python\",\"/private/tmp/regengine-fix-original-request-safety-control.py\",*nodes,\"--no-cov\",\"--tb=short\"]; raise SystemExit(subprocess.call(command))'"
+  },
+  "http500_control_conclusion": "Identical six HTTP500 assertions fail with final and b5dd065e original request_safety loaded in memory; both traces expose guard-denied Redis DNS. Loader identity and original source SHA256 are preserved in logs. Guard and product files were not edited for controls.",
+  "raw_log_parsing_complete": true
+}

@@ -1,0 +1,52 @@
+UTC: 2026-10-03T03:28:23.574023+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: tail -n 45 docs/qa/2026-10-02/FIX-SESSION-LOG.md
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+| Critical | 0 | 0 | 0 |
+| High | 2 | 0 | 1 |
+| Medium (selected or explicitly assessed) | 3 | 0 | 2 |
+| Low | 0 | 0 | 0 |
+| Total | 5 | 0 | 3 |
+
+FixCounts: fixed=2 partial=0 deferred=1
+
+The machine-readable FixCounts line includes Critical and High only. Other optional findings were not changed and are outside these totals. FE-004 owner/session queue behavior, FE-003 camera policy, and UX findings remain in the original QA backlog. FINDINGS.md was not rewritten.
+
+**Full-suite and comparable results** (pass / fail / xfail / skip; errors listed separately):
+
+| Selection | Before | After | Interpretation |
+| --- | --- | --- | --- |
+| Full frontend Vitest, 137 files | 1033 / 0 / 7 / 2 | 1042 / 0 / 4 / 2 | Three FE-001 expected failures converted; six new passing cases. Coverage thresholds passed. |
+| Existing browser E2E, same 270 identities | 59 / 28 / 0 / 183 | 58 / 29 / 0 / 183 | Same 28 baseline failures plus one Chromium tour geometry fluctuation; unchanged tour source and no GS1 parser dependency. Separate same-build retry: 3 passed / 0 failed. Full-run counts are not replaced with retry results. |
+| Added browser QA regressions, 6 cases | 0 / 0 / 5 / 1 | 3 / 0 / 2 / 1 | FE-001 now passes on Chromium, Firefox and WebKit. FE-004 still xfails on two engines; WebKit native Blob-storage prerequisite remains skipped. |
+| Root backend full inventory during fix-pass bootstrap | 10644 / 246 / 3 / 541, plus 480 errors | Pending final full run | Not a clean snapshot comparison: inventory began before edits, overlapped later work, and lacked the restored temporary SDK overlay. |
+| Sweep-comparable focused ingestion | 75 / 0 / 14 / 0 | Pending | Same original selection plus updated QA contract tests; extra cases will be identified. |
+| Sweep-comparable shared/auth/security | 213 / 0 / 2 / 0, 1 deselected | Pending | Original real-Redis deselection retained only in this focused comparison; full root run has no exclusions. |
+
+The original sweep did not establish a green full backend suite. Its broad ingestion attempt had 463 passed / 6 failed / 14 errors / 50 skipped / 15 deselected before its failure cap; broad shared in-process selection had 886 passed / 3 DNS-guard failures / 16 skipped. These different selections overlap and must not be summed or treated as equivalent full-suite baselines. The fix-pass initial full inventory classified 536 guard denials, 128 missing-module entries and 62 other failures among its 726 failure/error entries. Restoring the exact sweep SDK overlay yielded complete collection of 12,524 tests with two guard-blocked import probes. Final full-run comparison follows below when complete.
+
+**Build, typecheck and lint:**
+
+- Frontend production build passed; served build ID `nbeA56-sCPEIKdGXlL47I` matched the final FE-001 source. The later backend fixes do not affect that build. Generated next-env.d.ts was restored.
+- Standalone `tsc --noEmit --incremental false` passed. There is no npm typecheck script.
+- Frontend lint passed with 0 errors / 41 pre-existing warnings; design lint passed all 676 files, matching the sweep.
+- Python full lint, focused bug gate and type checks: pending final static verification. The sweep already recorded an Optional-header len() error in csv_templates.py.
+- The root Python application is explicitly not packaged/built by pyproject.toml; no backend app build target exists. Docker/deploy work was excluded.
+
+**Evidence and remaining risks:**
+
+Every shell command, test run, decision and dead end is recorded in [FIX-SESSION-LOG.md](FIX-SESSION-LOG.md), with redacted outputs under artifacts/fix. [Frontend result index](artifacts/fix/frontend-final-summary.json) preserves full counts, exact versions, all 270 browser identities, the isolated tour retries and proving logs. Independent local gate reviewed each fix and exact locked-framework backend witnesses. Remote CodeRabbit/Jev calls were not allowed by the package-download-only network restriction.
+
+Backend tests use synthetic authentication and fake persistence with network, database, subprocess and environment-file guards; no live tenant/RLS, real export round-trip, production, provider, remote CI or customer proof is claimed. Accepted request bodies are now buffered up to the existing cap before handler dispatch. Historical supplier capability disclosure remains unresolved. Other expected failures and browser environment/harness/product failures remain visible. No unrelated failing test was weakened or fixed, and no attributable regression has required a revert.
+
+Unit/build Node was 20.19.4 versus the sweep 20.20.2; browser driver Node was 26.7.0 with Playwright 1.63.0. Actual engines matched the sweep (Chromium 153.0.8010.12, Firefox 155.0, WebKit 26.6). Browser traffic used the existing guarded loopback proxy; authenticated persistence, physical cameras, production headers and external resources were not validated. Owned local servers were stopped; the supplied browser server was left running.
+
+The orchestrator owns remote review, push and PR creation. All changes in this pass are local commits only.
+"""); s=Path("docs/qa/2026-10-02/SUMMARY.md"); current=s.read_text(); line="Fix pass: see FIXES.md"; s.write_text(current+"\n"+line+"\n") if line not in current else None; print("FIXES draft and SUMMARY pointer written; final backend/static fields pending")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/fix/20261003T032758.192461Z-prepare-fix-report.txt).
+
+- **2026-10-03T03:28:13.532522+00:00** `update-focused-static-results` — `python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text(); s=s.replace("| Sweep-comparable focused ingestion | 75 / 0 / 14 / 0 | Pending | Same original selection plus updated QA contract tests; extra cases will be identified. |", "| Sweep-comparable focused ingestion | 75 / 0 / 14 / 0 | 107 / 0 / 3 / 0 | Same file selection; 11 expected failures converted and 21 new passing cases. Only BE-001 expected failures remain. |"); s=s.replace("| Sweep-comparable shared/auth/security | 213 / 0 / 2 / 0, 1 deselected | Pending | Original real-Redis deselection retained only in this focused comparison; full root run has no exclusions. |", "| Sweep-comparable shared/auth/security | 213 / 0 / 2 / 0, 1 deselected | 241 / 0 / 1 / 0, 1 deselected | One expected failure converted and 27 new passing cases. BE-011 remains. Original real-Redis deselection retained only here; full root run has no exclusions. |"); s=s.replace("- Python full lint, focused bug gate and type checks: pending final static verification. The sweep already recorded an Optional-header len() error in csv_templates.py.", "- Python Ruff bug gate passed, and Ruff on all 11 changed Python files passed. Full Ruff reports 57 import-order errors across 49 files; every failing file is byte-identical to the sweep base, so those errors are pre-existing.\n- Focused mypy retains exactly the sweep Optional-header len() error (csv_templates.py:784 before, :801 after). Full mypy is blocked by duplicate regengine modules in regengine/__init__.py and cli/regengine.py; those files and pyproject.toml are unchanged. No new static error was attributed to this pass."); p.write_text(s); print("Focused suite and static results recorded")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/fix/20261003T032813.532522Z-update-focused-static-results.txt).
+
+- **2026-10-03T03:28:23.570238+00:00** `gate-fixes-draft` — `cat docs/qa/2026-10-02/FIXES.md`; cwd `.`; exit 0, 0.00s. [Output](artifacts/fix/20261003T032823.570238Z-gate-fixes-draft.txt).

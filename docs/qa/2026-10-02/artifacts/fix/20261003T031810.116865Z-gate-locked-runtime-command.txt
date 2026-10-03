@@ -1,0 +1,22 @@
+UTC: 2026-10-03T03:18:10.116865+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 1,15p docs/qa/2026-10-02/artifacts/backend/20261003T004902.545619Z-locked-runtime-added-tests.txt
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+UTC: 2026-10-03T00:49:02.545619+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-locked-deps:/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 --tb=short
+Exit: 0
+Duration: 3.79s
+Timeout: False
+
+.xxxxxxxxxxx.....xxx.....x..x                                            [100%]
+=========================== short test summary info ============================
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[inf] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[Infinity] - BE-002: CSV accepts nonfinite output quantity into persistence boundary
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[1e309] - BE-002: CSV accepts nonfinite output quantity into persistence boundary

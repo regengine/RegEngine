@@ -1,0 +1,6 @@
+UTC: 2026-10-03T03:19:07.622295+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/obsong-qa-node20/node_modules/node/bin/node node_modules/typescript/bin/tsc --noEmit --incremental false
+Exit: 0
+Duration: 17.96s
+Timeout: False

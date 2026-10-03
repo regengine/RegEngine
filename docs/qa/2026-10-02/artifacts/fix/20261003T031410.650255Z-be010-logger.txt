@@ -1,0 +1,92 @@
+UTC: 2026-10-03T03:14:10.650255+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat docs/qa/2026-10-02/scripts/run_logged.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+#!/usr/bin/env python3
+"""Run an explicitly selected local QA command with UTC timing and redacted output.
+
+Usage: python3 docs/qa/2026-10-02/scripts/run_logged.py GROUP LABEL -- COMMAND ...
+Set QA_TIMEOUT_SECONDS for the time limit (default 900 seconds).
+"""
+from __future__ import annotations
+
+import datetime as dt
+import os
+from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[4]
+QA = ROOT / "docs/qa/2026-10-02"
+
+
+def redact(text: str) -> str:
+    text = re.sub(r"(?i)(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,\"']+", r"\1[REDACTED]", text)
+    text = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk_(?:live|test)_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})", "[REDACTED]", text)
+    text = re.sub(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[REDACTED]", text)
+    text = re.sub(r"(?i)((?:api[_-]?key|access[_-]?token|secret|password)\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(\w+://)[^/@\s]+:[^/@\s]+@", r"\1[REDACTED]@", text)
+    return text
+
+
+def main() -> int:
+    group, label, *command = sys.argv[1:]
+    if command and command[0] == "--":
+        command.pop(0)
+    if not command or not re.fullmatch(r"[a-z0-9_-]+", group + label):
+        raise SystemExit("Expected GROUP LABEL -- COMMAND, using lowercase safe labels")
+    now = dt.datetime.now(dt.timezone.utc)
+    stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+    artifacts = QA / "artifacts" / group
+    artifacts.mkdir(parents=True, exist_ok=True)
+    report = artifacts / f"{stamp}-{label}.txt"
+    log = QA / f"{group.upper()}-SESSION-LOG.md"
+    env = {k: v for k, v in os.environ.items() if k in {
+        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TERM", "SHELL",
+        "SYSTEMROOT", "WINDIR", "COMSPEC",
+    }}
+    env.update({"PYTHON_DOTENV_DISABLED": "1", "NEXT_TELEMETRY_DISABLED": "1",
+                "DO_NOT_TRACK": "1", "CI": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+                "PIP_CONFIG_FILE": os.devnull, "UV_NO_CONFIG": "1",
+                "NPM_CONFIG_USERCONFIG": os.devnull,
+                "NPM_CONFIG_GLOBALCONFIG": os.devnull})
+    started = time.monotonic()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               env=env, start_new_session=True)
+    timed_out = False
+    try:
+        output, _ = process.communicate(timeout=int(os.environ.get("QA_TIMEOUT_SECONDS", "900")))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            output, _ = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            output, _ = process.communicate()
+    result = 124 if timed_out else process.returncode
+    safe = redact(output.decode("utf-8", errors="replace"))
+    cmd = redact(shlex.join(command))
+    duration = time.monotonic() - started
+    header = (f"UTC: {now.isoformat()}\nCWD: {Path.cwd()}\nCommand: {cmd}\n"
+              f"Exit: {result}\nDuration: {duration:.2f}s\nTimeout: {timed_out}\n\n")
+    report.write_text(header + safe)
+    with log.open("a") as handle:
+        handle.write(f"\n- **{now.isoformat()}** `{label}` — `{cmd}`; "
+                     f"cwd `{Path.cwd().relative_to(ROOT) if Path.cwd().is_relative_to(ROOT) else Path.cwd()}`; "
+                     f"exit {result}, {duration:.2f}s. "
+                     f"[Output]({report.relative_to(QA)}).\n")
+    print(header + safe[-20000:])
+    print(f"Full redacted report: {report.relative_to(ROOT)}")
+    return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,35 @@
+UTC: 2026-10-03T03:19:27.742512+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env CI= NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3821/ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3115 /private/tmp/obsong-qa-node20/node_modules/node/bin/node node_modules/playwright/cli.js test --config=/private/tmp/regengine-fix-existing-e2e.config.cjs
+Exit: 1
+Duration: 0.84s
+Timeout: False
+
+[globalSetup] JWT_SIGNING_KEY (or AUTH_SECRET_KEY) is not set.
+  The Next.js middleware needs this to verify tokens from the admin service.
+  Without it, authenticated routes redirect to /login?error=session_expired.
+  Local run: authenticated specs will be skipped; unauthenticated specs can still run.
+  CI run: add JWT_SIGNING_KEY to GitHub Secrets (must match Railway's value).
+Error: No such built-in module: node:sqlite
+
+   at authenticated-core-journeys.spec.ts:2
+
+  1 | import fs from 'node:fs';
+> 2 | import { DatabaseSync } from 'node:sqlite';
+    | ^
+  3 | import { expect, test, type APIResponse, type BrowserContext, type Page } from '@playwright/test';
+  4 | import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
+  5 | import { csrfHeader, loginViaApi, logoutViaApi } from './support/api-auth';
+    at Object.<anonymous> (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts:2:1)
+Error: No such built-in module: node:sqlite
+
+   at inflow-lab-dashboard.spec.ts:3
+
+  1 | import { expect, test, type Page } from '@playwright/test';
+  2 | import { randomUUID } from 'node:crypto';
+> 3 | import { DatabaseSync } from 'node:sqlite';
+    | ^
+  4 | import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
+  5 | import { csrfHeader, loginViaApi, logoutViaApi, type ApiSession } from './support/api-auth';
+  6 |
+    at Object.<anonymous> (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/inflow-lab-dashboard.spec.ts:3:1)
