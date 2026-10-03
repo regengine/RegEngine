@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:49:41.905570+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re,subprocess; p=Path("docs/qa/2026-10-02/BACKEND-REPORT.md"); missing=[x for x in re.findall(r"\]\(([^)]+)\)",p.read_text()) if not (p.parent/x).exists()]; print("Missing report links:",missing); subprocess.run(["git","status","--short"],check=False); subprocess.run(["git","diff","--check"],check=False); assert not missing'
+Exit: 0
+Duration: 0.11s
+Timeout: False
+
+ M frontend/src/__tests__/hooks/useSync.test.tsx
+?? docs/qa/2026-10-02/
+?? frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+?? services/ingestion/tests/test_qa_sweep_20261002_contract.py
+?? tests/qa_sweep_20261002/
+Missing report links: []

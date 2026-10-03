@@ -1,0 +1,16 @@
+{
+  "frontend/src/lib/gs1-parser.ts": {
+    "lines": {
+      "before": 92,
+      "after": 94
+    },
+    "statements": {
+      "before": 108,
+      "after": 112
+    },
+    "branches": {
+      "before": 82,
+      "after": 86
+    }
+  }
+}

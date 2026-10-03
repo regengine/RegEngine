@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:50:22.012463+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; p=Path("docs/qa/2026-10-02/artifacts"); files=["backend/coverage-ingest-before.json","backend/coverage-ingest-after.json","backend/coverage-shared-before.json","backend/coverage-shared-after.json","frontend/coverage-node20-before-summary.json","frontend/coverage-node20-after-summary.json"]; [(print(f,json.loads((p/f).read_text()).get("totals",json.loads((p/f).read_text()).get("total")))) for f in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+backend/coverage-ingest-before.json {'covered_lines': 531, 'num_statements': 816, 'percent_covered': 65.07352941176471, 'percent_covered_display': '65', 'missing_lines': 285, 'excluded_lines': 0, 'percent_statements_covered': 65.07352941176471, 'percent_statements_covered_display': '65'}
+backend/coverage-ingest-after.json {'covered_lines': 540, 'num_statements': 816, 'percent_covered': 66.17647058823529, 'percent_covered_display': '66', 'missing_lines': 276, 'excluded_lines': 0, 'percent_statements_covered': 66.17647058823529, 'percent_statements_covered_display': '66'}
+backend/coverage-shared-before.json {'covered_lines': 607, 'num_statements': 1013, 'percent_covered': 59.92102665350444, 'percent_covered_display': '60', 'missing_lines': 406, 'excluded_lines': 7, 'percent_statements_covered': 59.92102665350444, 'percent_statements_covered_display': '60'}
+backend/coverage-shared-after.json {'covered_lines': 607, 'num_statements': 1013, 'percent_covered': 59.92102665350444, 'percent_covered_display': '60', 'missing_lines': 406, 'excluded_lines': 7, 'percent_statements_covered': 59.92102665350444, 'percent_statements_covered_display': '60'}
+frontend/coverage-node20-before-summary.json {'lines': {'total': 8327, 'covered': 5825, 'skipped': 0, 'pct': 69.95}, 'statements': {'total': 9184, 'covered': 6215, 'skipped': 0, 'pct': 67.67}, 'functions': {'total': 2142, 'covered': 1285, 'skipped': 0, 'pct': 59.99}, 'branches': {'total': 7755, 'covered': 4664, 'skipped': 0, 'pct': 60.14}, 'branchesTrue': {'total': 0, 'covered': 0, 'skipped': 0, 'pct': 100}}
+frontend/coverage-node20-after-summary.json {'lines': {'total': 8327, 'covered': 5827, 'skipped': 0, 'pct': 69.97}, 'statements': {'total': 9184, 'covered': 6219, 'skipped': 0, 'pct': 67.71}, 'functions': {'total': 2142, 'covered': 1285, 'skipped': 0, 'pct': 59.99}, 'branches': {'total': 7755, 'covered': 4668, 'skipped': 0, 'pct': 60.19}, 'branchesTrue': {'total': 0, 'covered': 0, 'skipped': 0, 'pct': 100}}

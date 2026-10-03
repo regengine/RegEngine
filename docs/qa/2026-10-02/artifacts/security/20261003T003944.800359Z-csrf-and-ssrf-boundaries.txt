@@ -1,0 +1,178 @@
+UTC: 2026-10-03T00:39:44.800359+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "csrf|CSRF|origin|Origin|referer|unsafe|AUTH_SESSION_COOKIE" services/shared/middleware/security.py services/admin/app/main.py server/main.py services/admin/app/dependencies.py | head -110; nl -ba services/ingestion/app/routes_ingest.py | sed -n "977,1077p"; rg -n "def require_sysadmin_high_assurance|def require_tenant_provisioner|auth_method|internal\.tenants\.create|tenant_id|scopes" services/admin/app/privileged_auth.py | tail -70; rg -n "^##|^###" /Users/sellers/.codex/skills/security-best-practices/references/python-fastapi-web-server-security.md | head -60'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+rg: services/admin/app/main.py: No such file or directory (os error 2)
+services/shared/middleware/security.py:4:    get_allowed_origins,
+services/shared/middleware/security.py:73:    origins = get_allowed_origins()
+services/shared/middleware/security.py:76:        allow_origins=origins,
+services/admin/app/dependencies.py:22:    AUTH_SESSION_COOKIE,
+services/admin/app/dependencies.py:231:        if request is None or not request.cookies.get(AUTH_SESSION_COOKIE):
+   977	
+   978	    MAX_REDIRECTS = 5
+   979	    current_url = url
+   980	    try:
+   981	        import httpx
+   982	
+   983	        for hop in range(MAX_REDIRECTS + 1):
+   984	            # Re-run the route's own validator on every hop (handles host
+   985	            # allowlist / port checks consistently with non-redirect paths).
+   986	            _validate_url(current_url)
+   987	            async with safe_httpx_client(url=current_url, timeout=60.0, http2=True, headers=headers) as client:
+   988	                async with client.stream("GET", current_url) as response:
+   989	                    if response.is_redirect:
+   990	                        location = response.headers.get("location")
+   991	                        if not location:
+   992	                            raise HTTPException(
+   993	                                status_code=502,
+   994	                                detail="Redirect without Location header",
+   995	                            )
+   996	                        current_url = urljoin(current_url, location)
+   997	                        logger.info(
+   998	                            "ingest_fetch_redirect",
+   999	                            from_url=url,
+  1000	                            to_url=current_url,
+  1001	                            hop=hop,
+  1002	                        )
+  1003	                        continue
+  1004	
+  1005	                    if response.status_code >= 400:
+  1006	                        logger.warning(
+  1007	                            "ingest_fetch_status",
+  1008	                            url=current_url,
+  1009	                            status=response.status_code,
+  1010	                        )
+  1011	                        raise HTTPException(status_code=502, detail="Source system returned error")
+  1012	
+  1013	                    content_type = response.headers.get("Content-Type", content_type)
+  1014	
+  1015	                    async for chunk in response.aiter_bytes():
+  1016	                        raw_bytes.extend(chunk)
+  1017	                        if len(raw_bytes) > MAX_FILE_SIZE:
+  1018	                            logger.error(
+  1019	                                "payload_too_large",
+  1020	                                url=current_url,
+  1021	                                size=len(raw_bytes),
+  1022	                            )
+  1023	                            raise HTTPException(
+  1024	                                status_code=413,
+  1025	                                detail="Payload Too Large (Exceeds 50MB)",
+  1026	                            )
+  1027	                    return bytes(raw_bytes), content_type
+  1028	
+  1029	        raise HTTPException(status_code=502, detail="Too many redirects")
+  1030	
+  1031	    except httpx.RequestError as exc:
+  1032	        logger.error("ingest_fetch_failed", url=current_url, error=str(exc))
+  1033	        raise HTTPException(status_code=502, detail="Failed to fetch source URL") from exc
+  1034	
+  1035	
+  1036	def _validate_url(url: str) -> None:
+  1037	    parsed = urlparse(url)
+  1038	    if parsed.scheme not in ALLOWED_SCHEMES:
+  1039	        raise HTTPException(status_code=400, detail="Unsupported URL scheme")
+  1040	
+  1041	    # Block URLs with embedded credentials to prevent credential leakage
+  1042	    if parsed.username or parsed.password:
+  [REDACTED]	        raise HTTPException(status_code=400, detail="URLs with credentials not allowed")
+  1044	
+  1045	    host = parsed.hostname
+  1046	    if not host:
+  1047	        raise HTTPException(status_code=400, detail="Invalid URL")
+  1048	    if host.lower() in PROHIBITED_HOSTS:
+  1049	        raise HTTPException(status_code=400, detail="Host not allowed")
+  1050	
+  1051	    # Validate port to prevent access to internal services
+  1052	    port = parsed.port
+  1053	    if port is None:
+  1054	        port = 443 if parsed.scheme == "https" else 80
+  1055	    if port not in ALLOWED_PORTS:
+  1056	        raise HTTPException(status_code=400, detail="Port not allowed")
+  1057	
+  1058	    _resolve_and_validate(host)
+  1059	
+  1060	
+  1061	def _resolve_and_validate(host: str) -> set[str]:
+  1062	    """Resolve hostname and validate all IPs are not in prohibited networks."""
+  1063	    try:
+  1064	        infos = socket.getaddrinfo(host, None)
+  1065	    except socket.gaierror as exc:  # pragma: no cover - depends on DNS
+  1066	        logger.error("dns_resolution_failed", host=host, error=str(exc))
+  1067	        raise HTTPException(status_code=400, detail="Failed to resolve host") from exc
+  1068	
+  1069	    addresses = {info[4][0] for info in infos if info[4]}
+  1070	    for addr in addresses:
+  1071	        ip = ip_address(addr)
+  1072	        if any(ip in network for network in PROHIBITED_NETWORKS):
+  1073	            raise HTTPException(status_code=400, detail="Host resolved to a private network")
+  1074	
+  1075	    return addresses
+  1076	
+  1077	
+56:TENANT_PROVISIONER_SCOPE = "internal.tenants.create"
+243:    auth_method: str | None = None
+244:    tenant_id: str | None = None
+296:        auth_method=actor.auth_method if actor else None,
+359:        selected_tenant=actor.tenant_id if actor else request.headers.get("X-Tenant-ID"),
+420:async def require_sysadmin_high_assurance(
+438:        auth_method=getattr(context.session, "auth_method", None),
+453:    if actor.auth_method not in HIGH_ASSURANCE_AUTH_METHODS:
+463:                    "auth_method": actor.auth_method,
+501:        auth_method=getattr(context.session, "auth_method", None),
+506:    if high_assurance and provisional_actor.auth_method not in HIGH_ASSURANCE_AUTH_METHODS:
+516:                    "auth_method": provisional_actor.auth_method,
+557:        tenant_id = organization_membership.organization_id
+563:                MembershipModel.tenant_id == tenant_id,
+565:                or_(RoleModel.tenant_id.is_(None), RoleModel.tenant_id == tenant_id),
+605:        auth_method=getattr(context.session, "auth_method", None),
+606:        tenant_id=str(tenant_id),
+628:        selected_tenant=actor.tenant_id,
+672:    if api_key.tenant_id is not None:
+674:    if list(api_key.scopes or []) != [TENANT_PROVISIONER_SCOPE]:
+691:async def require_tenant_provisioner_key(
+762:        auth_method="database_api_key",
+14:## 0) Safety, boundaries, and anti-abuse constraints (MUST FOLLOW)
+27:## 1) Operating modes
+29:### 1.1 Generation mode (default)
+38:### 1.2 Passive review mode (always on while editing)
+45:### 1.3 Active audit mode (explicit scan request)
+67:## 2) Definitions and review guidance
+69:### 2.1 Untrusted input (treat as attacker-controlled unless proven otherwise)
+82:### 2.2 State-changing request
+86:### 2.3 Required audit finding format
+101:## 3) Secure baseline: minimum production configuration (MUST in production)
+118:## 4) Rules (generation + audit)
+122:### FASTAPI-DEPLOY-001: Do not use auto-reload / dev-only server modes in production
+151:### FASTAPI-DEPLOY-002: Debug mode MUST be disabled in production
+177:### FASTAPI-OPENAPI-001: OpenAPI and interactive docs MUST be disabled or protected in production
+203:### FASTAPI-AUTH-001: Authentication MUST be explicit and consistently enforced via dependencies
+229:### FASTAPI-AUTH-002: Use standard auth transports; avoid secrets in URLs
+254:### FASTAPI-AUTH-003: Password storage MUST be strongly hashed; never store plaintext passwords
+281:### FASTAPI-AUTH-004: JWT validation MUST be strict; JWTs MUST NOT carry secrets
+309:### FASTAPI-AUTHZ-001: Authorization MUST be enforced per-object and per-property
+335:### FASTAPI-SESS-001: If using cookie-based sessions and TLS, cookie attributes MUST be secure in production
+362:### FASTAPI-SESS-002: Do not store sensitive secrets in signed session cookies
+387:### FASTAPI-CSRF-001: Cookie-authenticated state-changing requests MUST be CSRF-protected
+416:### FASTAPI-VALID-001: Request parsing and validation MUST be schema-driven; prevent mass assignment
+442:### FASTAPI-RESP-001: Prevent excessive data exposure via response models and explicit serialization
+467:### FASTAPI-XSS-001: Prevent reflected/stored XSS in HTML responses and templates
+497:### FASTAPI-SSTI-001: Never render untrusted templates (Server-Side Template Injection)
+527:### FASTAPI-HEADERS-001: Set essential security headers (in app or at the edge)
+557:### FASTAPI-CORS-001: CORS MUST be explicit and least-privilege
+587:### FASTAPI-HOST-001: Host header MUST be validated in production
+612:### FASTAPI-PROXY-001: Reverse proxy trust MUST be configured correctly
+639:### FASTAPI-LIMITS-001: Request and multipart limits MUST be enforced to prevent DoS
+665:### FASTAPI-FILES-001: Prevent path traversal and unsafe static file exposure
+692:### FASTAPI-FILES-002: Mitigate Range-header DoS on file-serving endpoints
+718:### FASTAPI-UPLOAD-001: File uploads MUST be validated, stored safely, and served safely
+745:### FASTAPI-INJECT-001: Prevent SQL injection (use parameterized queries / ORM)
+770:### FASTAPI-INJECT-002: Prevent OS command injection
+801:### FASTAPI-SSRF-001: Prevent server-side request forgery (SSRF) in outbound HTTP
+831:### FASTAPI-REDIRECT-001: Prevent open redirects
+854:### FASTAPI-WS-001: WebSocket endpoints MUST be authenticated and protected against cross-site abuse
+881:### FASTAPI-SUPPLY-001: Dependency and patch hygiene (focus on security-relevant deps)
+908:## 5) Practical scanning heuristics (how to “hunt”)
+964:## 6) Sources (accessed 2026-01-27)

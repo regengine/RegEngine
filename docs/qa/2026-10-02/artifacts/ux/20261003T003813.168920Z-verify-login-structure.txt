@@ -1,0 +1,107 @@
+UTC: 2026-10-03T00:38:13.168920+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re; files=["frontend/src/app/verify/page.tsx","frontend/src/app/login/page.tsx","frontend/src/components/ui/field.tsx"]; [print("FILE",p,"\n", "\n".join(str(i)+": "+line for i,line in enumerate(Path(p).read_text().splitlines(),1) if re.search(r"fetch|button|input|aria-|<h[123]|useState|iframe|label|return|href|role=|setStatus|code|cloneElement",line))[:10500]) for p in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE frontend/src/app/verify/page.tsx 
+ 3: import { useCallback, useRef, useState } from 'react';
+22: import { Button } from '@/components/ui/button';
+57: raise SystemExit(result.returncode)`;
+62:         code: 'curl -O https://regengine.co/sdk/verify_chain.py',
+67:         code: 'curl -O https://regengine.co/proof/audit-bundle.zip',
+72:         code: 'python verify_chain.py audit-bundle.zip',
+96:     { step: '1', label: 'Read Manifest', detail: 'Load manifest.json from the audit bundle ZIP' },
+97:     { step: '2', label: 'Hash Files', detail: 'Recompute SHA-256 for each declared evidence file' },
+98:     { step: '3', label: 'Rebuild Merkle Root', detail: 'Use the file hashes as leaves with the published tree algorithm' },
+99:     { step: '4', label: 'Compare', detail: 'If every file hash and the root match the manifest inside the bundle, the bundle is self-consistent. The check does not authenticate who produced it.' },
+124:     if (line.startsWith('✓ VALID')) return 'text-re-success';
+125:     if (line.startsWith('✗ INVALID')) return 'text-re-danger';
+126:     if (line.startsWith('$')) return 'text-re-text-primary';
+127:     if (line.startsWith('===') || line.startsWith('---')) return 'text-re-text-disabled';
+128:     if (line.includes('SUMMARY')) return 'text-re-info';
+129:     if (line.includes('REGENGINE')) return 'text-re-info';
+130:     return 'text-re-text-secondary';
+151:     const [state, setState] = useState<VerifyState>({ kind: 'idle' });
+152:     const [file, setFile] = useState<File | null>(null);
+153:     const [dragOver, setDragOver] = useState(false);
+154:     const inputRef = useRef<HTMLInputElement>(null);
+157:         if (!f) return;
+173:         if (!file) return;
+180:             const res = await fetch(PROOF_VERIFY_ENDPOINT, {
+191:                 return;
+199:                 return;
+216:         if (inputRef.current) inputRef.current.value = '';
+219:     return (
+223:                 <label
+233:                     <input
+235:                         ref={inputRef}
+256:                 </label>
+267:                         leadingIcon={<ShieldCheck strokeWidth={1.75} aria-hidden="true" />}
+280:                 <Callout tone="danger" role="alert" className="mt-4">
+291:                             label={state.data.verified ? 'Self-consistent' : 'Failed'}
+316:                                             aria-hidden="true"
+322:                                             aria-hidden="true"
+371:     const [copied, setCopied] = useState(false);
+372:     return (
+374:             type="button"
+383:             aria-label="Copy to clipboard"
+386:                 <Check className="text-re-success" strokeWidth={1.75} aria-hidden="true" />
+388:                 <Copy strokeWidth={1.75} aria-hidden="true" />
+395:     return (
+403:                             <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+421:                         <a href="/sdk/verify_chain.py" download>
+422:                             <Download strokeWidth={1.75} aria-hidden="true" />
+427:                         <a href="#how-it-works">
+428:                             <Terminal strokeWidth={1.75} aria-hidden="true" />
+442:                     <h2 className="text-heading text-re-text-primary">
+446:                         Drop in a RegEngine export bundle (the <code className="font-mono text-[0.8125rem] text-re-text-primary">.zip</code> or{' '}
+447:                         <code className="font-mono text-[0.8125rem] text-re-text-primary">.json</code> you downloaded
+456:                         <a href="/sdk/verify_chain.py" download className={PROSE_LINK}>
+464:                         untrusted input. A passing result means the bundle is internally self-consistent.
+477:                         <a href="/proof" className={cn('inline-flex items-center gap-1', PROSE_LINK)}>
+479:                             <ExternalLink className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+491:                             <card.Icon className="mb-3 h-5 w-5 text-re-text-muted" strokeWidth={1.75} aria-hidden="true" />
+492:                             <h3 className="mb-2 text-subheading text-re-text-primary">
+505:                 <h2 className="mb-2 text-heading text-re-text-primary">
+515:                         <span className="font-mono text-label uppercase text-re-text-muted">
+532:                 <h2 className="mb-8 text-heading text-re-text-primary">
+539:                             <span className="mt-0.5 w-5 shrink-0 font-mono text-label tabular-nums text-re-text-muted">
+547:                                     <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary">
+548:                                         {step.code}
+549:                                     </code>
+550:                                     <CopyButton text={step.code} />
+561:                 <h2 className="mb-2 text-heading text-re-text-primary">
+565:                     Offline bundle verification with a non-zero exit code if anything has drifted.
+570:                         <span className="font-mono text-label uppercase text-re-text-muted">
+595:                 <h2 className="mb-8 text-heading text-re-text-primary">
+606:                                 <div className="mb-3 font-mono text-label tabular-nums text-re-text-muted">
+609:                                 <div className="mb-1.5 text-subheading text-re-text-primary">{s.label}</div>
+619:                 <h2 className="mb-5 text-heading text-re-text-primary">
+634:                     <h2 className="mb-3 text-heading text-re-text-primary">
+646:                             <a href="/sdk/verify_chain.py" download>
+647:                                 <Download strokeWidth={1.75} aria-hidden="true" />
+652:                             <a href="/tools/ftl-checker">
+654:                                 <ExternalLink strokeWidth={1.75} aria-hidden="true" />
+FILE frontend/src/app/login/page.tsx 
+ 5:     return (
+FILE frontend/src/components/ui/field.tsx 
+ 10:  * Wraps a control with a real <label htmlFor>, an optional hint and an error,
+11:  * wiring aria-describedby and aria-invalid so the association exists without
+12:  * every page author remembering it. The inventory found labels not bound to
+13:  * their inputs on most forms in the app.
+18:   "aria-describedby": string | undefined
+19:   "aria-invalid": true | undefined
+24:   label: string
+37:    * which renders no DOM, so the label points at nothing. Spread the argument
+43: export function Field({ label, htmlFor, hint, error, required, className, children }: FieldProps) {
+50:     "aria-describedby": describedBy,
+51:     "aria-invalid": error ? true : undefined,
+60:   return (
+62:       <label htmlFor={htmlFor} className="text-ui font-medium text-re-text-primary">
+63:         {label}
+65:           <span className="ml-0.5 text-re-danger" aria-hidden="true">
+69:       </label>
+75:           ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+88:           <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

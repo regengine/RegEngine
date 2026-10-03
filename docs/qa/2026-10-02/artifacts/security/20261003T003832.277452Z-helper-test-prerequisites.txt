@@ -1,0 +1,286 @@
+UTC: 2026-10-03T00:38:32.277452+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "435,498p" services/ingestion/app/supplier_portal.py; sed -n "253,326p" services/ingestion/app/fda_export_service.py; sed -n "506,544p" services/ingestion/app/supplier_portal.py; sed -n "1,100p" services/ingestion/app/fda_export_service.py; ls tests/qa_sweep_20261002; sed -n "1,180p" tests/qa_sweep_20261002/conftest.py'
+Exit: 1
+Duration: 0.02s
+Timeout: False
+
+        return None
+
+
+class CreatePortalLinkRequest(BaseModel):
+    """Request to create a supplier portal link."""
+
+    tenant_id: str = Field(..., description="Customer's tenant ID")
+    supplier_name: str = Field(..., description="Supplier business name")
+    supplier_email: Optional[str] = Field(None, description="Supplier contact email")
+    allowed_cte_types: list[str] = Field(
+        default=["shipping"], description="CTE types the supplier can submit (default: shipping only)"
+    )
+    integration_profile_id: Optional[str] = Field(
+        default=None,
+        description="Optional saved integration profile to attach to this supplier link",
+    )
+    expires_days: int = Field(default=90, ge=1, le=365, description="Link expiry in days")
+
+
+class PortalLinkResponse(BaseModel):
+    """Response with the generated portal link."""
+
+    portal_id: str
+    portal_url: str
+    supplier_name: str
+    tenant_id: str
+    expires_at: str
+    allowed_cte_types: list[str]
+    integration_profile_id: Optional[str] = None
+
+
+class SupplierSubmission(BaseModel):
+    """Data submitted by a supplier through the portal."""
+
+    traceability_lot_code: str = Field(..., description="TLC for shipped product", min_length=3)
+    product_description: str = Field(..., description="Product name/description", min_length=1)
+    quantity: float = Field(..., description="Quantity shipped", gt=0)
+    unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets)")
+    ship_date: str = Field(..., description="Ship date (YYYY-MM-DD)")
+    ship_from_location: str = Field(..., description="Origin facility name")
+    ship_from_gln: Optional[str] = Field(None, description="Origin GLN (optional)")
+    ship_to_location: str = Field(..., description="Destination facility name")
+    ship_to_gln: Optional[str] = Field(None, description="Destination GLN (optional)")
+    carrier_name: Optional[str] = Field(None, description="Carrier/logistics company")
+    po_number: Optional[str] = Field(None, description="Purchase order number")
+    temperature_celsius: Optional[float] = Field(None, description="Temperature at shipping (°C)")
+    notes: Optional[str] = Field(None, description="Additional notes")
+
+
+class SubmissionResult(BaseModel):
+    """Result of a supplier submission."""
+
+    status: str  # "accepted" or "error"
+    event_id: Optional[str] = None
+    sha256_hash: Optional[str] = None
+    message: str
+    supplier_name: str
+    submitted_at: str
+
+
+class SupplierPreflightResult(BaseModel):
+    """Validate supplier-submitted data before committing it."""
+
+    status: str
+    # Remaining KDEs not in named columns → JSON blob.
+    # A JSON-encoded string can still begin with ``=`` once a spreadsheet
+    # renders it into a cell, so sanitize the whole blob as well.
+    #
+    # Exclude both:
+    #   • keys already surfaced via ``_NAMED_KDE_COLUMNS`` (explicit map
+    #     of KDE → named column), AND
+    #   • keys surfaced via the literal dict block above (Ship From/To
+    #     Name, Immediate Previous Source, TLC Source GLN/FDA Reg, etc.).
+    # Without the second filter, those PII-bearing KDEs would leak into
+    # the extras blob as a back-channel even after we redacted the named
+    # columns (issue #1219).
+    #
+    # PII redaction for the JSON blob: the "extras" map can carry arbitrary
+    # customer-supplied keys, some of which (``facility_address``,
+    # ``receiver_address``, ``origin_address``) are PII. When
+    # ``include_pii=False`` we strip any key whose name contains a PII
+    # signal (``address``, ``street``, ``location``, ``phone``,
+    # ``contact``) before encoding. This is a defensive default — the
+    # primary PII columns are already redacted above; this catches the
+    # long tail of unknown-shape KDE data.
+    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS and k not in _LITERAL_CONSUMED_KDES}
+    if extra_kdes and not include_pii:
+        extra_kdes = _redact_extra_kde_pii(extra_kdes)
+    row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
+
+    # FSMA 204 requires "system entry timestamp" — when the record was entered
+    # into the traceability system (distinct from when the physical event occurred).
+    # This maps to the ingested_at column which defaults to NOW() on INSERT.
+    row["System Entry Timestamp"] = sanitize_cell(event.get("ingested_at", "") or "")
+
+    return row
+
+
+# KDE-key substrings that signal PII in the freeform "Additional KDEs
+# (JSON)" bucket. Case-insensitive substring match because upstream
+# parsers normalize key casing inconsistently.
+_PII_EXTRA_KDE_SUBSTRINGS = (
+    "address",
+    "street",
+    "location_name",
+    "facility_name",
+    "contact",
+    "phone",
+    "email",
+    "owner_name",
+    "operator_name",
+    "driver_name",
+    "receiver_name",
+    "consignee_name",
+)
+
+
+def _redact_extra_kde_pii(extra_kdes: dict) -> dict:
+    """Replace PII values in the extras JSON blob with the placeholder.
+
+    Preserves the key (so auditors see "this field existed but was
+    redacted") and the surrounding structure; only the string value is
+    replaced. Non-string values (numbers, dates) pass through unchanged
+    because numeric PII is unusual in KDE data and the round-trip would
+    be lossy.
+    """
+    redacted = {}
+    for key, value in extra_kdes.items():
+        key_lower = str(key).lower()
+        is_pii = any(marker in key_lower for marker in _PII_EXTRA_KDE_SUBSTRINGS)
+        if is_pii and isinstance(value, str) and value:
+            redacted[key] = PII_REDACTION_PLACEHOLDER
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _generate_csv(events: list[dict], *, include_pii: bool = False) -> str:
+def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+    kdes: dict = {
+        "ship_date": submission.ship_date,
+        "ship_from_location": submission.ship_from_location,
+        "ship_to_location": submission.ship_to_location,
+        "supplier_name": link["supplier_name"],
+        "submission_source": "supplier_portal",
+        "portal_id": portal_id,
+    }
+    if submission.carrier_name:
+        kdes["carrier_name"] = submission.carrier_name
+    if submission.po_number:
+        kdes["po_number"] = submission.po_number
+    kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+    kdes["tlc_source_reference"] = link["supplier_name"]
+    kdes["ftl_covered"] = True
+    if submission.temperature_celsius is not None:
+        kdes["temperature_celsius"] = submission.temperature_celsius
+    if submission.notes:
+        kdes["notes"] = submission.notes
+
+    return {
+        "cte_type": "shipping",
+        "traceability_lot_code": submission.traceability_lot_code,
+        "product_description": submission.product_description,
+        "quantity": submission.quantity,
+        "unit_of_measure": submission.unit_of_measure,
+        "location_gln": submission.ship_from_gln,
+        "location_name": submission.ship_from_location,
+        "ship_from_location": submission.ship_from_location,
+        "ship_to_location": submission.ship_to_location,
+        "reference_document": kdes["reference_document"],
+        "tlc_source_reference": kdes["tlc_source_reference"],
+        "timestamp": f"{submission.ship_date}T00:00:00Z",
+        "kdes": kdes,
+    }
+
+
+def _build_supplier_preflight(portal_id: str, link: dict, submission: SupplierSubmission) -> SupplierPreflightResult:
+"""
+FDA Export Service — helper functions and constants.
+
+Extracted from fda_export_router.py to separate business logic (CSV generation,
+FDA formatting, chain verification, completeness analysis) from HTTP route
+handling.
+"""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import json
+import zipfile
+from datetime import datetime, timezone
+from typing import Any, Optional
+from uuid import uuid4
+
+from shared.fda_export import safe_filename_token as _shared_safe_filename_token
+from shared.merkle_tree import MerkleTree
+from shared.rules.verdict import classify_event_verdict
+
+from .shared.csv_safety import sanitize_cell
+from .webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+
+# ---------------------------------------------------------------------------
+# FDA Spreadsheet Column Spec
+# ---------------------------------------------------------------------------
+# These columns align with FDA's expected format for FSMA 204 traceability
+# records. The column names match the FDA's IFT spreadsheet specification.
+
+FDA_COLUMNS = [
+    "Traceability Lot Code (TLC)",
+    "Product Description",
+    "Quantity",
+    "Unit of Measure",
+    "Event Type (CTE)",
+    "Event Date",
+    "Event Time",
+    "Location GLN",
+    "Location Name",
+    "Ship From GLN",
+    "Ship From Name",
+    "Ship To GLN",
+    "Ship To Name",
+    "Immediate Previous Source",
+    "TLC Source GLN",
+    "TLC Source FDA Registration",
+    "Source Document",
+    "Record Hash (SHA-256)",
+    "Chain Hash",
+    # KDE columns — FSMA 204 requires all KDEs in export
+    "Reference Document Number",
+    "Receive Date",
+    "Ship Date",
+    "Harvest Date",
+    "Cooling Date",
+    "Packing Date",
+    "Transformation Date",
+    "Landing Date",
+    "Receiving Location",
+    "Temperature (°F)",
+    "Carrier",
+    "Growing Area",
+    "Additional KDEs (JSON)",
+    # FSMA 204 §1.1455(c): date/time event entered into system
+    "System Entry Timestamp",
+]
+
+
+# KDE keys that get their own named columns in the FDA export
+_NAMED_KDE_COLUMNS = {
+    "reference_document_number": "Reference Document Number",
+    "receive_date": "Receive Date",
+    "ship_date": "Ship Date",
+    "harvest_date": "Harvest Date",
+    "cooling_date": "Cooling Date",
+    "packing_date": "Packing Date",
+    "transformation_date": "Transformation Date",
+    "landing_date": "Landing Date",
+    "receiving_location": "Receiving Location",
+    "temperature": "Temperature (°F)",
+    "carrier": "Carrier",
+    "growing_area_name": "Growing Area",
+}
+
+# KDE keys consumed by the literal dict block inside ``_event_to_fda_row``
+# (Ship From/To GLN+Name, Immediate Previous Source, TLC Source GLN/FDA
+# Reg). These must also be excluded from the "Additional KDEs (JSON)"
+# extras blob or they leak their values — including PII-bearing
+# ship_from_location / ship_to_location / immediate_previous_source —
+# through a back channel even when the named columns are redacted
+# (issue #1219).
+_LITERAL_CONSUMED_KDES = frozenset(
+    {
+        "ship_from_gln",
+        "ship_from_location",
+        "ship_to_gln",
+        "ship_to_location",
+ls: tests/qa_sweep_20261002: No such file or directory
+sed: tests/qa_sweep_20261002/conftest.py: No such file or directory

@@ -1,0 +1,10 @@
+UTC: 2026-10-03T00:52:11.444611+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; q=Path("docs/qa/2026-10-02"); print("SCREENSHOTS",[p.name for p in (q/"artifacts/ux").glob("*.jpg")]); print("JSON",[p.name for p in (q/"artifacts/ux").glob("*.json")]); p=q/"UX-REPORT.md"; print(p.read_text() if p.exists() else "UX report pending")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+SCREENSHOTS ['ux-002-verifier-invisible-focus.jpg', 'mobile-home-390-frame.jpg', 'desktop-login-error.jpg', 'desktop-contact-error.jpg', 'ux-004-demo-status-copy.jpg', 'ux-003-verifier-scroll-regions-320.jpg', 'desktop-home.jpg', 'ux-001-mobile-menu-open.jpg']
+JSON ['chrome-axe_verify-320-004936758162.json', 'chrome-axe_login-1728-1.json', 'smoke-results.json', 'chrome-axe_verify-1728-1.json', 'chrome-axe_-390-004818082219.json', 'chrome-axe_demo-390-005044980842.json', 'chrome-axe_contact-1728-005025461082.json', 'chrome-axe_-1728-2.json', 'chrome-axe_verify-320-005144063706.json', 'chrome-axe_-1728-1.json', 'chrome-axe_tools_ftl-checker-390-005144797436.json', 'chrome-axe_login-320-005126883759.json', 'chrome-axe_contact-390-005121708715.json']
+UX report pending

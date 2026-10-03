@@ -1,0 +1,39 @@
+UTC: 2026-10-03T00:40:19.094076+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/scripts/node-isolation.cjs"); print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if 42<=i<=85))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+42:   };
+43: }
+44: function local(host) {
+45:   return !host || ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
+46: }
+47: const connect = net.Socket.prototype.connect;
+48: net.Socket.prototype.connect = function (...args) {
+49:   // net.connect()/http.request() may supply Node's normalized [options, cb]
+50:   // argument array rather than the public positional/options call shape.
+51:   const normalized = Array.isArray(args[0]) ? args[0] : args;
+52:   const options = normalized[0];
+53:   const host = options && typeof options === 'object'
+54:     ? options.host || options.hostname
+55:     : typeof normalized[1] === 'string' ? normalized[1] : undefined;
+56:   if (!local(host)) throw new Error('QA isolation: off-host socket blocked');
+57:   return connect.apply(this, args);
+58: };
+59: for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny']) {
+60:   const original = dns[name];
+61:   dns[name] = function (hostname, ...args) {
+62:     if (!local(hostname)) throw new Error('QA isolation: off-host DNS blocked');
+63:     return original.call(this, hostname, ...args);
+64:   };
+65: }
+66: const fetch = globalThis.fetch;
+67: if (fetch) globalThis.fetch = async function (input, ...args) {
+68:   const raw = typeof input === 'string' || input instanceof URL ? input : input.url;
+69:   const target = new URL(raw, 'http://localhost');
+70:   if (!local(target.hostname)) throw new Error('QA isolation: off-host fetch blocked');
+71:   return fetch.call(this, input, ...args);
+72: };
+73: syncBuiltinESMExports();

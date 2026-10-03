@@ -1,0 +1,578 @@
+UTC: 2026-10-03T00:37:33.516591+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["services/shared/tests/test_auth_1338.py","services/shared/tests/test_permissions.py","services/shared/tests/test_tenant_isolation.py","services/shared/tests/test_tenant_context_set_guc.py","tests/shared/test_canonical_event_idempotency_key.py","services/shared/request_safety.py"]; [(print("FILE",p),print(Path(p).read_text()[:4000])) for p in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE services/shared/tests/test_auth_1338.py
+"""Unit tests for ``services/shared/auth.py`` FastAPI surface — issue #1338.
+
+This file complements three existing focused suites that already cover most
+of ``auth.py``:
+
+- ``services/shared/tests/test_auth_fail_closed.py`` — startup
+  ``validate_auth_config`` env var checks (subprocess, so module-import-time
+  failures actually fire).
+- ``services/shared/tests/test_auth_preshared_tenant_required_1068.py`` —
+  pins the master-key / X-Tenant-ID fail-closed contract.
+- ``tests/shared/test_auth_in_memory_keystore.py`` — covers the in-memory
+  ``APIKeyStore`` (create / validate / rate-limit / revoke / list / hash).
+
+Issue #1338 calls out auth.py / canonical_event.py / external_connectors as
+the three shared-kernel modules with no dedicated tests. After the in-memory
+keystore suite landed, the remaining uncovered surface in auth.py was the
+FastAPI dependency layer:
+
+- ``get_key_store`` selector (dev/test vs production cache).
+- ``require_api_key`` test-bypass branch and the in-memory + DB store async
+  branches (success / 401 / 429).
+- ``optional_api_key`` (no-key returns None vs invalid-key re-raises).
+- ``verify_jurisdiction_access`` entitlement matrix (federal vs sub-region).
+- ``init_demo_keys`` smoke test.
+- ``get_tenant_id`` UUID validator.
+
+This file fills those gaps. The other two modules listed in #1338
+(``canonical_event.py`` and ``external_connectors``) are tracked as
+follow-up — one shared-lib module per PR.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi import HTTPException
+
+# ---------------------------------------------------------------------------
+# Module loading
+# ---------------------------------------------------------------------------
+# auth.py imports ``from shared.api_key_store import ...`` so we need the
+# ``services/`` directory on sys.path before loading it. Reuse the canonical
+# ``shared.auth`` module name so coverage attributes lines correctly even
+# when this file is run in isolation.
+
+_shared_dir = Path(__file__).resolve().parent.parent
+_services_dir = _shared_dir.parent
+if str(_services_dir) not in sys.path:
+    sys.path.insert(0, str(_services_dir))
+
+if "shared.auth" in sys.modules:
+    auth = sys.modules["shared.auth"]
+else:
+    _spec = importlib.util.spec_from_file_location("shared.auth", _shared_dir / "auth.py")
+    auth = importlib.util.module_from_spec(_spec)
+    sys.modules["shared.auth"] = auth
+    _spec.loader.exec_module(auth)
+
+APIKey = [REDACTED]
+APIKeyStore = auth.APIKeyStore
+require_api_key = [REDACTED]
+optional_api_key = [REDACTED]
+verify_jurisdiction_access = auth.verify_jurisdiction_access
+init_demo_keys = auth.init_demo_keys
+get_tenant_id = auth.get_tenant_id
+get_key_store = auth.get_key_store
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_VALID_TENANT_UUID = "11111111-2222-3333-4444-555555555555"
+
+
+def _make_request(headers: dict[str, str] | None = None, path: str = "/x") -> MagicMock:
+    """Build a minimal MagicMock FastAPI Request used by require_api_key."""
+    req = MagicMock()
+    req.headers = headers or {}
+    req.url.path = path
+    req.method = "GET"
+    return req
+
+
+def _run(coro):
+    """Run an async coroutine synchronously inside a sync test."""
+    return asyncio.run(coro)
+
+
+def _make_db_store_stub(*, validate_return=None, rate_limit_return=None):
+    """Create a real ``DatabaseAPIKeyStore`` subclass instance with stubs.
+
+    ``require_api_key`` uses ``isinstance(key_store, DatabaseAPIKeyStore)``
+    to decide which branch to take, so a plain MagicMock won't work. We
+    build the instance via ``object.__new__`` to bypass __init__ (which
+    would otherwise demand a real ``DATABASE_URL``).
+    """
+    instance = object.__new__(auth.DatabaseAPIKeyS
+FILE services/shared/tests/test_permissions.py
+"""Tests for shared permission matching helpers."""
+
+from shared.permissions import has_permission, permission_implies
+
+
+def test_permission_implies_exact_and_separator_normalization() -> None:
+    assert permission_implies("fda:export", "fda.export")
+    assert permission_implies("exchange.write", "exchange:write")
+
+
+def test_permission_implies_wildcards() -> None:
+    assert permission_implies("*", "fda.export")
+    assert permission_implies("fda.*", "fda.export")
+    assert permission_implies("admin.*", "simulations.write")
+    assert not permission_implies("admin", "simulations.write")
+
+
+def test_has_permission_with_mixed_grants() -> None:
+    grants = ["exchange.read", "simulations.*"]
+    assert has_permission(grants, "simulations.export")
+    assert not has_permission(grants, "exchange.write")
+
+FILE services/shared/tests/test_tenant_isolation.py
+"""
+Test suite for tenant isolation infrastructure.
+
+This module tests the TenantValidator and TenantContextMiddleware
+to ensure proper multi-tenant data isolation.
+"""
+
+import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+from fastapi import HTTPException, Request
+
+
+@pytest.mark.security
+class TestTenantValidator:
+    """Test TenantValidator utility."""
+
+    @pytest.fixture
+    def mock_db_connection(self):
+        """Mock database connection."""
+        conn = AsyncMock()
+        return conn
+
+    @pytest.fixture
+    def validator(self, mock_db_connection):
+        """Create TenantValidator instance."""
+        from shared.validators import TenantValidator
+
+        return TenantValidator(mock_db_connection)
+
+    @pytest.mark.asyncio
+    async def test_validate_tenant_exists_true(self, validator, mock_db_connection):
+        """Test validation when tenant exists."""
+        tenant_id = uuid.uuid4()
+        mock_db_connection.fetchval.return_value = True
+
+        result = await validator.validate_tenant_exists(tenant_id)
+
+        assert result is True
+        mock_db_connection.fetchval.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_validate_tenant_exists_false(self, validator, mock_db_connection):
+        """Test validation when tenant does not exist."""
+        tenant_id = uuid.uuid4()
+        mock_db_connection.fetchval.return_value = False
+
+        result = await validator.validate_tenant_exists(tenant_id)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_validate_user_in_tenant_true(self, validator, mock_db_connection):
+        """Test user belongs to tenant."""
+        user_id = uuid.uuid4()
+        tenant_id = uuid.uuid4()
+        mock_db_connection.fetchval.return_value = True
+
+        result = await validator.validate_user_in_tenant(user_id, tenant_id)
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_info_found(self, validator, mock_db_connection):
+        """Test retrieving tenant info when tenant exists."""
+        tenant_id = uuid.uuid4()
+        mock_row = {"id": tenant_id, "name": "Test Tenant", "created_at": "2026-01-01", "status": "active"}
+        mock_db_connection.fetchrow.return_value = mock_row
+
+        result = await validator.get_tenant_info(tenant_id)
+
+        assert result is not None
+        assert result["id"] == tenant_id
+        assert result["name"] == "Test Tenant"
+
+    @pytest.mark.asyncio
+    async def test_validate_tenant_active_true(self, validator, mock_db_connection):
+        """Test validation when tenant is active."""
+        tenant_id = uuid.uuid4()
+        mock_db_connection.fetchval.return_value = True
+
+        result = await validator.validate_tenant_active(tenant_id)
+
+        assert result is True
+
+
+@pytest.mark.security
+class TestTenantDependencies:
+    """Test FastAPI dependency functions."""
+
+    @pytest.mark.asyncio
+    async def test_get_current_tenant_id_success(self):
+        """Test getting tenant_id when available."""
+        from shared.middleware import get_current_tenant_id
+
+        tenant_id = uuid.uuid4()
+        request = SimpleNamespace(state=SimpleNamespace(tenant_id=tenant_id))
+
+        result = await get_current_tenant_id(request)
+
+        assert result == tenant_id
+
+    @pytest.mark.asyncio
+    async def test_get_current_tenant_id_missing(self):
+        """Test error when tenant_id is missing."""
+        from shared.middleware import get_current_tenant_id
+
+        request = SimpleNamespace(state=SimpleNamespace(tenant_id=None))
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_tenant_id(request)
+
+        assert exc_info.value.status_code == 401
+        assert "Tenant ID not found" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_db_issued_api_key_resolves_own_tenant(self):
+        """#2524: a DB-issued API key (no env-key match, so middleware leaves
+        request.state.t
+FILE services/shared/tests/test_tenant_context_set_guc.py
+"""Unit tests for ``set_tenant_guc`` and ``apply_tenant_context``.
+
+These are the canonical primitives added in Phase B of the
+tenant-isolation convergence plan. They will replace the 8+ ad-hoc
+``SET LOCAL app.tenant_id`` call sites scattered across services in
+follow-up sprints.
+
+Coverage:
+  - ``set_tenant_guc`` issues exactly one ``SET LOCAL`` with the right
+    binding when given a valid UUID
+  - Validates the UUID client-side BEFORE executing any SQL — bad input
+    raises ``ValueError`` and never touches the session
+  - ``apply_tenant_context`` accepts a ``TenantContext`` and forwards
+    its ``tenant_id`` to ``set_tenant_guc``
+  - Calling twice in the same transaction is fine (the underlying
+    ``SET LOCAL`` is idempotent at the DB layer; we just re-execute)
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from typing import Any, List, Tuple
+
+import pytest
+
+# Repo root on sys.path so ``services.shared.tenant_context`` resolves
+# without depending on the parent test harness's pythonpath. Same
+# pattern as the sibling ``test_tenant_context.py``.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from services.shared.tenant_context import (  # noqa: E402
+    TenantContext,
+    apply_tenant_context,
+    set_tenant_guc,
+    set_tenant_guc_cursor,
+    set_tenant_guc_if_uuid,
+)
+
+# ---------------------------------------------------------------------------
+# Recording fake session
+# ---------------------------------------------------------------------------
+
+
+class _RecordingSession:
+    """Minimal SQLAlchemy-session-like object that records every
+    ``execute()`` call so tests can assert exact bindings.
+
+    Captures the rendered SQL string of the ``text()`` clause and the
+    params dict separately; that's enough to verify the helper does
+    what it claims without needing a real DB.
+    """
+
+    def __init__(self) -> None:
+        self.calls: List[Tuple[str, dict]] = []
+
+    def execute(self, stmt: Any, params: dict) -> None:
+        self.calls.append((str(stmt), params))
+
+
+# ---------------------------------------------------------------------------
+# set_tenant_guc — happy path
+# ---------------------------------------------------------------------------
+
+
+class TestSetTenantGucHappy:
+    def test_issues_set_config_with_correct_binding(self):
+        session = _RecordingSession()
+        tid = "11111111-1111-1111-1111-111111111111"
+
+        set_tenant_guc(session, tid)
+
+        assert len(session.calls) == 1
+        sql, params = session.calls[0]
+        # Either form should reference the GUC name and accept the
+        # parameterized tenant_id — keep the assertion focused on what
+        # the contract actually is, not which SQL form Postgres is
+        # equivalencing internally.
+        assert "app.tenant_id" in sql
+        assert params == {"tid": tid}
+
+    def test_uses_transaction_scoped_set_config(self):
+        """Transaction-scoped scope is load-bearing — pool-bleed safety
+        relies on the GUC auto-resetting at COMMIT/ROLLBACK.
+
+        The helper now emits ``SELECT set_config('app.tenant_id', :tid,
+        true)`` (the ``true`` = is_local => transaction-scoped). This
+        replaces the prior ``SET LOCAL`` form because Postgres rejects
+        parameterized ``SET LOCAL`` under asyncpg with ``syntax error
+        at or near "$1"`` (#1879); ``set_config`` is a regular function
+        call so the parameterized binding works in both psycopg and
+        asyncpg drivers.
+
+        The legacy V3 SQL function used ``set_config(..., false)``
+        which is session-scoped — that pattern is dangerous under pool
+        reuse (see ``services/admin/app/database.py`` security note on
+        #1381) and MUST NOT be emitted by this helper.
+        """
+        session = _RecordingSession()
+        set_tenant_guc(session, "22222222-2222-2222-2222-222222222222")
+        sql = session.calls[0][0]
+        # Must use set_config with is_local=true (the third arg).
+        assert "set_con
+FILE tests/shared/test_canonical_event_idempotency_key.py
+"""Tests for ``TraceabilityEvent.compute_idempotency_key`` — canonical-side
+mirror of the #1313 regression guard.
+
+Before the fix: canonical_event.TraceabilityEvent.compute_idempotency_key
+called ``json.dumps(..., sort_keys=True, separators=(",", ":"))`` with no
+``default=str``. A KDE carrying a ``datetime`` or ``Decimal`` raised
+``TypeError`` mid-insert and lost the event — the same bug class as
+#1313 on the CTE-side formula, but silently present on the canonical
+path too.
+
+After the fix: ``default=str`` is added, matching
+``shared.cte_persistence.hashing.compute_idempotency_key`` (fixed in
+PR-A) and ``compute_event_hash`` (which has had ``default=str`` since
+inception).
+
+Pure-Python; no DB.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest
+from shared.canonical_event import (
+    CTEType,
+    EventStatus,
+    IngestionSource,
+    ProvenanceMetadata,
+    TraceabilityEvent,
+)
+
+
+def _make_canonical_event(kdes: dict) -> TraceabilityEvent:
+    return TraceabilityEvent(
+        event_id=uuid4(),
+        tenant_id=uuid4(),
+        source_system=IngestionSource.WEBHOOK_API,
+        source_record_id="rec-1",
+        event_type=CTEType.SHIPPING,
+        event_timestamp=datetime(2026, 4, 18, tzinfo=timezone.utc),
+        event_timezone="UTC",
+        product_reference="urn:gs1:01:09506000134352",
+        lot_reference="LOT-1",
+        traceability_lot_code="TLC-1",
+        quantity=10.0,
+        unit_of_measure="kg",
+        from_entity_reference="urn:gs1:417:0614141000005",
+        to_entity_reference="urn:gs1:417:0614141000012",
+        from_facility_reference="urn:gs1:414:0614141000005",
+        to_facility_reference="urn:gs1:414:0614141000012",
+        kdes=kdes,
+        raw_payload={},
+        normalized_payload={},
+        provenance_metadata=ProvenanceMetadata(),
+        confidence_score=1.0,
+        status=EventStatus.ACTIVE,
+    )
+
+
+class TestCanonicalIdempotencyKey_Issue1313Mirror:
+    def test_datetime_kde_does_not_raise(self):
+        evt = _make_canonical_event({"last_updated_at": datetime(2026, 4, 18, tzinfo=timezone.utc)})
+        key = evt.compute_idempotency_key()
+        assert isinstance(key, str) and len(key) == 64
+
+    def test_decimal_kde_does_not_raise(self):
+        evt = _make_canonical_event({"quantity": Decimal("10.5"), "net_weight": Decimal("1234.56")})
+        key = evt.compute_idempotency_key()
+        assert isinstance(key, str) and len(key) == 64
+
+    def test_mixed_non_jsonable_kdes(self):
+        evt = _make_canonical_event(
+            {
+                "quantity": Decimal("42"),
+                "harvested_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                "gtin": "09506000134352",
+                "organic": True,
+            }
+        )
+        key = evt.compute_idempotency_key()
+        assert isinstance(key, str) and len(key) == 64
+
+    def test_stable_across_kde_insertion_order(self):
+        e1 = _make_canonical_event({"a": 1, "b": Decimal("2")})
+        e2 = _make_canonical_event({"b": Decimal("2"), "a": 1})
+        # Same tenants / ids will produce the same key even though the
+        # instances differ — only content-addressable fields feed the
+        # hash, and ``sort_keys=True`` + ``default=str`` make the
+        # serialization deterministic.
+        # (event_id / tenant_id differ between the two; compute_idempotency_key
+        # does not include them, so equality holds.)
+        assert e1.compute_idempotency_key() == e2.compute_idempotency_key()
+
+    def test_key_diverges_from_cte_formula_documented(self):
+        """Documents the intentional formula divergence: the canonical
+        formula uses from_facility/to_facility while the CTE formula
+        uses location_gln/location_name. Cross-table reconciliation by
+        idempotency_key is NOT supported; use sha256_hash instead."""
+        from shared.cte_persistence.hashing import compute_idempotency_key
+
+        kdes = {"ship_
+FILE services/shared/request_safety.py
+"""
+API-01 / API-02: Request body size limiting and global request timeout.
+
+Middleware that protects services from oversized payloads and runaway
+requests.  Wire these into each service's ``main.py`` via
+``app.add_middleware(...)``.
+
+Usage::
+
+    from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+    app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Optional
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
+
+_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+
+
+# ---------------------------------------------------------------------------
+# API-01: Request body size limiter
+# ---------------------------------------------------------------------------
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose Content-Length exceeds *max_bytes*.
+
+    For chunked/streaming uploads where Content-Length is absent the
+    middleware allows the request through (Starlette's own body reader
+    will enforce memory limits downstream).
+    """
+
+    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                length = int(content_length)
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_content_length",
+                        "detail": "Content-Length header is not a valid integer.",
+                    },
+                )
+            if length > self.max_bytes:
+                mb = self.max_bytes / (1024 * 1024)
+                # NOTE: this is the stdlib logger, not structlog — kwargs
+                # here raised TypeError, turning every oversized request
+                # into a 500 instead of the intended 413 (#2503).
+                logger.warning(
+                    "request_too_large: content_length=%s max_bytes=%s path=%s",
+                    length,
+                    self.max_bytes,
+                    request.url.path,
+                )
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "error": "payload_too_large",
+                        "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+                    },
+                )
+        return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# API-02: Global request timeout
+# ---------------------------------------------------------------------------
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Cancel request processing after *timeout_seconds*.
+
+    Returns 504 Gateway Timeout if the handler doesn't complete in time.
+    Health/metrics endpoints are exempt.
+    """
+
+    def __init__(self, app, timeout_seconds: float = 120.0):
+        super().__init__(app)
+        self.timeout_seconds = timeout_seconds
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
+        try:
+            return await asyncio.wait_for(
+                call_next(request),
+                timeout=self.timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            # Same stdlib-logger kwargs bug as above: the structlog-style
+            # call raised TypeError, turning every timed-

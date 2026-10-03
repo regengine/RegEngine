@@ -1,0 +1,20 @@
+UTC: 2026-10-03T00:37:55.090249+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-before.json
+Exit: 0
+Duration: 5.35s
+Timeout: False
+
+.................................................................        [100%]
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                       Stmts   Miss  Cover
+--------------------------------------------------------------
+services/ingestion/app/authz.py              157     68    57%
+services/ingestion/app/csv_templates.py      507    217    57%
+services/ingestion/app/webhook_models.py     152      0   100%
+--------------------------------------------------------------
+TOTAL                                        816    285    65%
+Coverage JSON written to file docs/qa/2026-10-02/artifacts/backend/coverage-ingest-before.json
+65 passed in 4.72s

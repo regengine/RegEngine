@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:57:33.484742+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FINDINGS.md"); s=p.read_text(); s=s.replace("restrictions. |\n\n| UX-001", "restrictions. |\n| UX-001"); p.write_text(s); print("Unified backend/frontend/UX finding rows into one Markdown table")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Unified backend/frontend/UX finding rows into one Markdown table

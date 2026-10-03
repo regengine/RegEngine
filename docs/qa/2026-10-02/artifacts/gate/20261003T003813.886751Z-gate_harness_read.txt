@@ -1,0 +1,208 @@
+UTC: 2026-10-03T00:38:13.886751+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=["docs/qa/2026-10-02/scripts/run_logged.py","docs/qa/2026-10-02/scripts/node-isolation.cjs","docs/qa/2026-10-02/scripts/backend_pytest.py"]; [(print("FILE "+p),print("\n".join(f"{i}: {line}" for i,line in enumerate(Path(p).read_text().splitlines(),1)))) for p in paths]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE docs/qa/2026-10-02/scripts/run_logged.py
+1: #!/usr/bin/env python3
+2: """Run an explicitly selected local QA command with UTC timing and redacted output.
+3: 
+4: Usage: python3 docs/qa/2026-10-02/scripts/run_logged.py GROUP LABEL -- COMMAND ...
+5: Set QA_TIMEOUT_SECONDS for the time limit (default 900 seconds).
+6: """
+7: from __future__ import annotations
+8: 
+9: import datetime as dt
+10: import os
+11: from pathlib import Path
+12: import re
+13: import shlex
+14: import signal
+15: import subprocess
+16: import sys
+17: import time
+18: 
+19: ROOT = Path(__file__).resolve().parents[4]
+20: QA = ROOT / "docs/qa/2026-10-02"
+21: 
+22: 
+23: def redact(text: str) -> str:
+24:     text = re.sub(r"(?i)(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,\"']+", r"\1[REDACTED]", text)
+25:     text = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk_(?:live|test)_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})", "[REDACTED]", text)
+26:     text = re.sub(r"(?i)((?:api[_-]?key|access[_-]?token|secret|password)\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
+27:     text = re.sub(r"(\w+://)[^/@\s]+:[^/@\s]+@", r"\1[REDACTED]@", text)
+28:     return text
+29: 
+30: 
+31: def main() -> int:
+32:     group, label, *command = sys.argv[1:]
+33:     if command and command[0] == "--":
+34:         command.pop(0)
+35:     if not command or not re.fullmatch(r"[a-z0-9_-]+", group + label):
+36:         raise SystemExit("Expected GROUP LABEL -- COMMAND, using lowercase safe labels")
+37:     now = dt.datetime.now(dt.timezone.utc)
+38:     stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+39:     artifacts = QA / "artifacts" / group
+40:     artifacts.mkdir(parents=True, exist_ok=True)
+41:     report = artifacts / f"{stamp}-{label}.txt"
+42:     log = QA / f"{group.upper()}-SESSION-LOG.md"
+43:     env = {k: v for k, v in os.environ.items() if k in {
+44:         "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TERM", "SHELL",
+45:         "SYSTEMROOT", "WINDIR", "COMSPEC",
+46:     }}
+47:     env.update({"PYTHON_DOTENV_DISABLED": "1", "NEXT_TELEMETRY_DISABLED": "1",
+48:                 "DO_NOT_TRACK": "1", "CI": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1"})
+49:     started = time.monotonic()
+50:     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+51:                                env=env, start_new_session=True)
+52:     timed_out = False
+53:     try:
+54:         output, _ = process.communicate(timeout=int(os.environ.get("QA_TIMEOUT_SECONDS", "900")))
+55:     except subprocess.TimeoutExpired:
+56:         timed_out = True
+57:         os.killpg(process.pid, signal.SIGTERM)
+58:         try:
+59:             output, _ = process.communicate(timeout=10)
+60:         except subprocess.TimeoutExpired:
+61:             os.killpg(process.pid, signal.SIGKILL)
+62:             output, _ = process.communicate()
+63:     result = 124 if timed_out else process.returncode
+64:     safe = redact(output.decode("utf-8", errors="replace"))
+65:     cmd = redact(shlex.join(command))
+66:     duration = time.monotonic() - started
+67:     header = (f"UTC: {now.isoformat()}\nCWD: {Path.cwd()}\nCommand: {cmd}\n"
+68:               f"Exit: {result}\nDuration: {duration:.2f}s\nTimeout: {timed_out}\n\n")
+69:     report.write_text(header + safe)
+70:     with log.open("a") as handle:
+71:         handle.write(f"\n- **{now.isoformat()}** `{label}` — `{cmd}`; "
+72:                      f"cwd `{Path.cwd().relative_to(ROOT) if Path.cwd().is_relative_to(ROOT) else Path.cwd()}`; "
+73:                      f"exit {result}, {duration:.2f}s. "
+74:                      f"[Output]({report.relative_to(QA)}).\n")
+75:     print(header + safe[-20000:])
+76:     print(f"Full redacted report: {report.relative_to(ROOT)}")
+77:     return result
+78: 
+79: 
+80: if __name__ == "__main__":
+81:     raise SystemExit(main())
+FILE docs/qa/2026-10-02/scripts/node-isolation.cjs
+1: // QA-only process guard: do not read dotenv/credential files or connect off-host.
+2: // Load with NODE_OPTIONS=--require=/absolute/path/to/this/file.
+3: const fs = require('node:fs');
+4: const path = require('node:path');
+5: const net = require('node:net');
+6: const dns = require('node:dns');
+7: const { syncBuiltinESMExports } = require('node:module');
+8: 
+9: function sensitive(file) {
+10:   if (typeof file !== 'string' && !(file instanceof URL)) return false;
+11:   const name = String(file);
+12:   return /(^|[/\\])\.env(?:[./\\]|$)/.test(name)
+13:     || /(^|[/\\])(?:\.npmrc|\.netrc|credentials|id_rsa|id_ed25519)(?:[/\\]|$)/.test(name);
+14: }
+15: function absent(file) {
+16:   const error = new Error('QA isolation: protected configuration file unavailable');
+17:   error.code = 'ENOENT';
+18:   return error;
+19: }
+20: for (const name of ['readFileSync', 'openSync', 'statSync', 'lstatSync', 'accessSync']) {
+21:   const original = fs[name];
+22:   fs[name] = function (file, ...args) {
+23:     if (sensitive(file)) throw absent(file);
+24:     return original.call(this, file, ...args);
+25:   };
+26: }
+27: const existsSync = fs.existsSync;
+28: fs.existsSync = function (file) { return !sensitive(file) && existsSync.call(this, file); };
+29: for (const name of ['readFile', 'open', 'stat', 'lstat', 'access']) {
+30:   const original = fs[name];
+31:   fs[name] = function (file, ...args) {
+32:     if (sensitive(file)) {
+33:       const callback = args.at(-1);
+34:       if (typeof callback === 'function') return queueMicrotask(() => callback(absent(file)));
+35:       throw absent(file);
+36:     }
+37:     return original.call(this, file, ...args);
+38:   };
+39:   const promiseOriginal = fs.promises[name];
+40:   fs.promises[name] = async function (file, ...args) {
+41:     if (sensitive(file)) throw absent(file);
+42:     return promiseOriginal.call(this, file, ...args);
+43:   };
+44: }
+45: function local(host) {
+46:   return !host || ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
+47: }
+48: const connect = net.Socket.prototype.connect;
+49: net.Socket.prototype.connect = function (...args) {
+50:   const options = args[0];
+51:   const host = options && typeof options === 'object' ? options.host : typeof args[1] === 'string' ? args[1] : undefined;
+52:   if (!local(host)) throw new Error('QA isolation: off-host socket blocked');
+53:   return connect.apply(this, args);
+54: };
+55: for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny']) {
+56:   const original = dns[name];
+57:   dns[name] = function (hostname, ...args) {
+58:     if (!local(hostname)) throw new Error('QA isolation: off-host DNS blocked');
+59:     return original.call(this, hostname, ...args);
+60:   };
+61: }
+62: const fetch = globalThis.fetch;
+63: if (fetch) globalThis.fetch = async function (input, ...args) {
+64:   const raw = typeof input === 'string' || input instanceof URL ? input : input.url;
+65:   const target = new URL(raw, 'http://localhost');
+66:   if (!local(target.hostname)) throw new Error('QA isolation: off-host fetch blocked');
+67:   return fetch.call(this, input, ...args);
+68: };
+69: syncBuiltinESMExports();
+FILE docs/qa/2026-10-02/scripts/backend_pytest.py
+1: #!/usr/bin/env python3
+2: """Run explicitly selected pytest suites without network or credential-file access.
+3: 
+4: Use through run_logged.py with a QA-only environment. This guard is deliberately
+5: stricter than the product: in-process ASGI transports and fake stores are allowed;
+6: socket connections, subprocesses, and reads of .env/credential files are denied.
+7: """
+8: from __future__ import annotations
+9: 
+10: import os
+11: from pathlib import Path
+12: import platform
+13: import sys
+14: 
+15: ROOT = Path(__file__).resolve().parents[4]
+16: sys.path[:0] = [str(ROOT), str(ROOT / "services"), str(ROOT / "services/ingestion")]
+17: os.environ.update({
+18:     "PYTHON_DOTENV_DISABLED": "1",
+19:     "REGENGINE_ENV": "test",
+20:     "ENVIRONMENT": "test",
+21:     "DATABASE_URL": "sqlite:///:memory:",
+22:     "AWS_EC2_METADATA_DISABLED": "true",
+23:     "HYPOTHESIS_STORAGE_DIRECTORY": str(ROOT / ".hypothesis"),
+24:     "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+25: })
+26: # Python on macOS obtains its processor label through a harmless uname command.
+27: # Cache platform metadata before the subprocess guard, then allow only the three
+28: # test plugins actually needed for this QA pass.
+29: platform.platform()
+30: 
+31: 
+32: def deny_external_io(event: str, args: tuple) -> None:
+33:     if event in {"socket.connect", "socket.getaddrinfo", "subprocess.Popen", "os.system"}:
+34:         raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+35:     if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
+36:         path = Path(os.fsdecode(args[0]))
+37:         if path.name.startswith(".env") or any(part in {".aws", ".ssh", ".gnupg"} for part in path.parts):
+38:             raise RuntimeError("QA safety guard denied credential/environment file access")
+39: 
+40: 
+41: sys.addaudithook(deny_external_io)
+42: 
+43: import pytest
+44: 
+45: raise SystemExit(pytest.main([
+46:     "-p", "pytest_cov.plugin", "-p", "pytest_asyncio.plugin",
+47:     "-p", "hypothesis.extra.pytestplugin", *sys.argv[1:]
+48: ]))

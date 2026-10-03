@@ -1,0 +1,57 @@
+UTC: 2026-10-03T00:36:42.226482+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-before.json
+Exit: 3
+Duration: 0.57s
+Timeout: False
+
+INTERNALERROR> Traceback (most recent call last):
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/main.py", line 314, in wrap_session
+INTERNALERROR>     config._do_configure()
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/config/__init__.py", line 1165, in _do_configure
+INTERNALERROR>     self.hook.pytest_configure.call_historic(kwargs=dict(config=self))
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 534, in call_historic
+INTERNALERROR>     res = self._hookexec(self.name, self._hookimpls.copy(), kwargs, False)
+INTERNALERROR>           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120, in _hookexec
+INTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+INTERNALERROR>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 167, in _multicall
+INTERNALERROR>     raise exception
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121, in _multicall
+INTERNALERROR>     res = hook_impl.function(*args)
+INTERNALERROR>           ^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pytest_metadata/plugin.py", line 89, in pytest_configure
+INTERNALERROR>     "Platform": platform.platform(),
+INTERNALERROR>                 ^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/platform.py", line 1212, in platform
+INTERNALERROR>     system, node, release, version, machine, processor = uname()
+INTERNALERROR>     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/platform.py", line 799, in __iter__
+INTERNALERROR>     (self.processor,)
+INTERNALERROR>      ^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/functools.py", line 1001, in __get__
+INTERNALERROR>     val = self.func(instance)
+INTERNALERROR>           ^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/platform.py", line 794, in processor
+INTERNALERROR>     return _unknown_as_blank(_Processor.get())
+INTERNALERROR>                              ^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/platform.py", line 739, in get
+INTERNALERROR>     return func() or ''
+INTERNALERROR>            ^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/platform.py", line 762, in from_subprocess
+INTERNALERROR>     return subprocess.check_output(
+INTERNALERROR>            ^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py", line 466, in check_output
+INTERNALERROR>     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+INTERNALERROR>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py", line 548, in run
+INTERNALERROR>     with Popen(*popenargs, **kwargs) as process:
+INTERNALERROR>          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py", line 1026, in __init__
+INTERNALERROR>     self._execute_child(args, executable, preexec_fn, close_fds,
+INTERNALERROR>   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py", line 1823, in _execute_child
+INTERNALERROR>     sys.audit("subprocess.Popen", executable, args, cwd, env)
+INTERNALERROR>   File "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/backend_pytest.py", line 28, in deny_external_io
+INTERNALERROR>     raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+INTERNALERROR> RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock

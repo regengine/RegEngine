@@ -1,0 +1,12 @@
+UTC: 2026-10-03T00:56:41.840491+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import time,subprocess; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend/next.config.js"); assert p.is_file(); p.write_text(p.read_text()+"\n// QA disposable mirror only: cooperative shutdown after completed sweep.\nprocess.exit(0);\n"); print("Appended cooperative exit to disposable mirror only"); time.sleep(3); r=subprocess.run(["lsof","-n","-P","-iTCP:3102","-sTCP:LISTEN"],capture_output=True,text=True); print("Listener check exit",r.returncode); print(r.stdout)'
+Exit: 0
+Duration: 3.10s
+Timeout: False
+
+Appended cooperative exit to disposable mirror only
+Listener check exit 0
+COMMAND   PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+node    23587 sellers   13u  IPv4 0xe5cfeef3057f77dc      0t0  TCP 127.0.0.1:3102 (LISTEN)
+

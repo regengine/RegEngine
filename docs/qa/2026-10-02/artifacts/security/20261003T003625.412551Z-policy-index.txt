@@ -1,0 +1,308 @@
+UTC: 2026-10-03T00:36:25.412551+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "1,165p" server/router_policy.py; rg -n "TENANT_API_KEY|PUBLIC_OPERATIONS|classification|permission|require|Depends" server/route_security_policy.py; rg -n "require|permission|Depends|scope|tenant" services/ingestion/app/fda_router.py | head -75; rg --files services/admin | rg "(auth|supplier|export|api_key|tenant).*py$"'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+"""Router exposure policy for the consolidated RegEngine API.
+
+Production uses an exact allowlist so deployment drift cannot silently expose
+an optional router.  Development and tests retain the historical broad
+surface, including the ``DISABLED_ROUTERS`` escape hatch used by focused local
+workflows.
+
+This module deliberately owns policy and metadata only.  ``server.main`` owns
+the FastAPI wiring, while the route-security manifest owns operation-level
+classification and test adapters.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import Mapping
+
+VALID_ROUTER_NAMES = frozenset(
+    {
+        "scraping",
+        "discovery",
+        "sources",
+        "sandbox",
+        "inflow_workbench",
+        "fda_export",
+        "csv",
+        "sensitech",
+        "edi",
+        "score",
+        "portal",
+        "audit",
+        "sop",
+        "export",
+        "epcis_ingestion",
+        "qr_decoder",
+        "label_vision",
+        "exchange",
+        "billing",
+        "alerts",
+        "onboarding",
+        "recall",
+        "recall_simulations",
+        "supplier_mgmt",
+        "audit_log",
+        "product_catalog",
+        "notification_prefs",
+        "team_mgmt",
+        "settings",
+        "integration",
+        "canonical_records",
+        "rules",
+        "exceptions",
+        "remediation",
+        "request_workflow",
+        "identity",
+        "auditor",
+        "compliance_metrics",
+        "readiness",
+        "incidents",
+        "chain_verification",
+        "audit_export_log",
+        "sla_tracking",
+        "export_monitoring",
+        "supplier_validation",
+        "disaster_recovery",
+        "admin",
+        "graph",
+        "nlp",
+        "fsma_compliance",
+        "proof_verify",
+        "proof_recall",
+        "email_ingest",
+        "agent_org",
+    }
+)
+
+# Release-approved production surface.  Any addition or removal is a security
+# decision and must update the route-complete tenant/auth gate before deploy.
+PRODUCTION_ENABLED_ROUTERS = frozenset(
+    {
+        "inflow_workbench",
+        "fda_export",
+        "csv",
+        "edi",
+        "epcis_ingestion",
+        "score",
+        "portal",
+        "billing",
+        "onboarding",
+        "recall",
+        "proof_verify",
+        "proof_recall",
+        "canonical_records",
+        "rules",
+        "exceptions",
+        "request_workflow",
+        "auditor",
+        "compliance_metrics",
+        "readiness",
+        "chain_verification",
+        "audit_export_log",
+        "sla_tracking",
+        "export_monitoring",
+        "admin",
+        "fsma_compliance",
+    }
+)
+
+EXPERIMENTAL_ROUTERS = frozenset(
+    {
+        "scraping",
+        "discovery",
+        "sources",
+        "sandbox",
+        "sensitech",
+        "audit",
+        "sop",
+        "export",
+        "qr_decoder",
+        "label_vision",
+        "exchange",
+        "recall_simulations",
+        "graph",
+        "nlp",
+        "agent_org",
+    }
+)
+
+COMPLIANCE_ROUTERS = frozenset(
+    {
+        "canonical_records",
+        "rules",
+        "exceptions",
+        "remediation",
+        "fda_export",
+        "chain_verification",
+    }
+)
+
+
+def _csv_names(raw: str) -> frozenset[str]:
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
+def _truthy(raw: str | None) -> bool:
+    return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass
+class RouterPolicy:
+    """Resolved router policy plus the routers actually mounted by FastAPI."""
+
+    production: bool
+    enabled_routers: frozenset[str]
+    configured_disabled: frozenset[str]
+    unknown_disabled: frozenset[str]
+    experimental_bypass_enabled: bool
+    mounted_routers: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_environment(
+        cls,
+        *,
+        production: bool,
+1:"""Operation-level security classification and executable route adapters."""
+29:PUBLIC_OPERATIONS = frozenset(
+63:OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS = frozenset(
+102:TENANT_API_KEY_OWNER_POLICIES: dict[str, TenantApiKeyRoutePolicy] = {
+205:TENANT_API_KEY_OPERATION_POLICIES: dict[tuple[str, str, str], TenantApiKeyRoutePolicy] = {
+227:REQUIRED_EXACT_TENANT_API_KEY_POLICIES = frozenset(
+234:_METRICS_DEP = "shared.observability.metrics_auth:require_metrics_key"
+235:_WORKLOAD_DEP = "services.admin.app.privileged_auth:require_tenant_provisioner_key"
+238:        "services.admin.app.privileged_auth:require_sysadmin_high_assurance",
+243:        "services.admin.app.auth.session_auth:require_high_assurance_session",
+251:        "services.admin.app.privileged_auth:require_review_read",
+252:        "services.admin.app.privileged_auth:require_review_decide",
+262:_TENANT_API_KEY_DEPS = frozenset(
+264:        "shared.auth:require_api_key",
+266:        "services.ingestion.app.webhook_compat:require_tenant_context",
+270:_OPTIONAL_TENANT_API_KEY_DEP = "services.ingestion.app.authz:get_optional_ingestion_principal"  # pragma: allowlist secret
+281:    | _TENANT_API_KEY_DEPS
+282:    | {_OPTIONAL_TENANT_API_KEY_DEP}
+328:def _required_permissions(route: APIRoute, dependency_keys: set[str]) -> tuple[str, ...]:
+329:    permissions: list[str] = []
+331:        explicit = getattr(call, "required_permission", None)
+332:        if isinstance(explicit, str) and explicit not in permissions:
+333:            permissions.append(explicit)
+338:            permissions.extend(value for value in _closure_strings(call) if value not in permissions)
+343:        ("services.admin.app.privileged_auth:require_review_read", "review.read"),
+344:        ("services.admin.app.privileged_auth:require_review_decide", "review.decide"),
+346:    for dependency, permission in special:
+347:        if dependency in dependency_keys and permission not in permissions:
+348:            permissions.append(permission)
+349:    if dependency_keys & _HIGH_ASSURANCE_SYSADMIN_DEPS and "sysadmin" not in permissions:
+350:        permissions.append("sysadmin")
+351:    if not permissions and dependency_keys & (
+352:        _TENANT_API_KEY_DEPS
+357:        permissions.append("authenticated")
+358:    return tuple(sorted(permissions))
+378:    policy = TENANT_API_KEY_OPERATION_POLICIES.get(key)
+381:    if key in REQUIRED_EXACT_TENANT_API_KEY_POLICIES:
+385:    policy = TENANT_API_KEY_OWNER_POLICIES.get(owner)
+404:    permissions = _required_permissions(route, dependencies)
+414:    elif key in OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS:
+422:    elif key in PUBLIC_OPERATIONS:
+428:            permissions,
+436:            permissions,
+444:            permissions,
+452:            permissions,
+460:            permissions,
+465:        high_assurance = "services.admin.app.privileged_auth:require_review_decide" in dependencies
+469:            permissions,
+477:            permissions,
+485:            permissions,
+489:    elif dependencies & _TENANT_API_KEY_DEPS:
+495:            permissions,
+515:def _assert_dependencies(route: APIRoute, *, required_any=(), forbidden=()) -> None:
+517:    required = set(required_any)
+518:    if required and not observed & required:
+520:            f"Adapter for {route.path} expected one of {sorted(required)}, observed {sorted(observed)}"
+534:        required_any={_OPTIONAL_TENANT_API_KEY_DEP},
+535:        forbidden=_ALL_AUTH_DEPS - {_OPTIONAL_TENANT_API_KEY_DEP},
+537:    _assert_dependencies(route, required_any={_CHECKOUT_RATE_LIMIT_DEP})
+593:    _assert_dependencies(route, required_any=_TENANT_API_KEY_DEPS, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+669:    _assert_dependencies(route, required_any={_DUAL_SESSION_DEP}, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+759:        required_any={_SCOPED_OPAQUE_SESSION_DEP},
+767:        required_any=_HIGH_ASSURANCE_SESSION_DEPS,
+770:    _assert_dependencies(route, required_any={_SCOPED_OPAQUE_SESSION_DEP})
+774:    _assert_dependencies(route, required_any=_REVIEW_DEPS, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+778:    _assert_dependencies(route, required_any=_HIGH_ASSURANCE_SYSADMIN_DEPS, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+782:    _assert_dependencies(route, required_any={_METRICS_DEP}, forbidden=_TENANT_API_KEY_DEPS | {_WORKLOAD_DEP})
+786:    _assert_dependencies(route, required_any={_WORKLOAD_DEP}, forbidden=_TENANT_API_KEY_DEPS | {_METRICS_DEP})
+824:    "OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS",
+826:    "PUBLIC_OPERATIONS",
+827:    "REQUIRED_EXACT_TENANT_API_KEY_POLICIES",
+830:    "TENANT_API_KEY_OPERATION_POLICIES",
+831:    "TENANT_API_KEY_OWNER_POLICIES",
+rg: services/ingestion/app/fda_router.py: IO error for operation on services/ingestion/app/fda_router.py: No such file or directory (os error 2)
+services/admin/scripts/bootstrap_auth.py
+services/admin/tests/test_auth_runtime_hardening.py
+services/admin/tests/test_compliance_service_sync_tenant_isolation.py
+services/admin/tests/test_privileged_auth.py
+services/admin/tests/test_supplier_facilities_routes_1342.py
+services/admin/tests/test_neo4j_driver_tenant_context.py
+services/admin/tests/test_tenant_settings_routes_1342.py
+services/admin/tests/test_supplier_demo_reset_rbac_1407.py
+services/admin/tests/test_tenant_creation_persistence.py
+services/admin/tests/test_auth_revocation_strict.py
+services/admin/tests/test_auth_crypto.py
+services/admin/tests/test_supplier_graph_sync_1342.py
+services/admin/tests/test_session_lifecycle_auth_audit.py
+services/admin/tests/test_supplier_graph_sync_rotation_circuit_1410.py
+services/admin/tests/test_auth_me_router.py
+services/admin/tests/test_permission_checker_sysadmin_tenant_context_1065.py
+services/admin/tests/test_supplier_funnel_routes_1342.py
+services/admin/tests/test_api_key_admin_store.py
+services/admin/tests/test_supplier_onboarding_routes.py
+services/admin/tests/test_supplier_cte_service_1342.py
+services/admin/tests/test_models_tenant_context_1342.py
+services/admin/tests/test_auth_challenges_router.py
+services/admin/tests/test_webauthn_router.py
+services/admin/tests/test_session_auth.py
+services/admin/tests/test_supplier_onboarding_routes_1342.py
+services/admin/tests/test_tenant_session_guard_2696.py
+services/admin/tests/test_data_export_1094.py
+services/admin/tests/test_auth_cluster_hardening.py
+services/admin/tests/test_supplier_graph_sync.py
+services/admin/tests/test_get_current_user_tenant_required.py
+services/admin/tests/test_audit_export_self_log_2522.py
+services/admin/tests/test_supplier_graph_sync_tenant_scoping.py
+services/admin/tests/test_tenant_settings_routes.py
+services/admin/tests/test_get_current_user_tenant_source.py
+services/admin/tests/test_supplier_compliance_routes_1342.py
+services/admin/app/supplier_funnel_routes.py
+services/admin/app/tenant_slug_helpers.py
+services/admin/app/auth_crypto.py
+services/admin/app/supplier_facilities_routes.py
+services/admin/app/tenant_settings_routes.py
+services/admin/app/auth_routes.py
+services/admin/app/supplier_onboarding_routes.py
+services/admin/app/auth_runtime.py
+services/admin/app/tenant_middleware.py
+services/admin/app/privileged_auth.py
+services/admin/app/supplier_graph_sync.py
+services/admin/app/auth_utils.py
+services/admin/app/auth/refresh_router.py
+services/admin/app/auth/webauthn_router.py
+services/admin/app/auth/elevation_helpers.py
+services/admin/app/auth/schemas.py
+services/admin/app/auth/challenges_router.py
+services/admin/app/auth/fingerprint_repair.py
+services/admin/app/auth/session_auth.py
+services/admin/app/auth/identity_helpers.py
+services/admin/app/auth/session_helpers.py
+services/admin/app/auth/__init__.py
+services/admin/app/auth/sessions_router.py
+services/admin/app/api_key_admin_store.py
+services/admin/app/data_export_routes.py
+services/admin/app/supplier_cte_service.py
+services/admin/app/supplier_compliance_routes.py

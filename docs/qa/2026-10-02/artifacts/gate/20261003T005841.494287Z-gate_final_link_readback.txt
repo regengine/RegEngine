@@ -1,0 +1,17 @@
+UTC: 2026-10-03T00:58:41.494287+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re,subprocess; qa=Path("docs/qa/2026-10-02"); missing=[];
+for p in qa.glob("*.md"):
+ for target in re.findall(r"(?<!!)\[[^\]]*\]\(([^)]+)\)",p.read_text()):
+  value=target.split("#",1)[0].strip("<>")
+  if value and "://" not in value and not value.startswith("mailto:") and not (p.parent/value).exists(): missing.append((p.name,value))
+print("Missing targets",missing); print("Master count",next(s for s in (qa/"SUMMARY.md").read_text().splitlines() if s.startswith("Counts:"))); print("Findings rows",sum(bool(re.match(r"\| (BE|FE|UX)-\d{3} \|",s)) for s in (qa/"FINDINGS.md").read_text().splitlines())); print("Cleanup disclosed in summary","23587" in (qa/"SUMMARY.md").read_text()); print("HEAD",subprocess.check_output(["git","rev-parse","--short","HEAD"],text=True).strip()); subprocess.run(["git","diff","--check"],check=True); assert not missing'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+Missing targets []
+Master count Counts: Critical=0 High=3 Medium=10 Low=2
+Findings rows 15
+Cleanup disclosed in summary True
+HEAD 0927b85a

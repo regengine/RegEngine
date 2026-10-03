@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:40:53.619301+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; Path("/private/tmp/regengine-qa-ux-u2059hm8/stop-server").touch(); print("Requested cooperative stop of owned v2 server")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Requested cooperative stop of owned v2 server

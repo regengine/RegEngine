@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:41:09.974781+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'ignoreBuildErrors|ignoreDuringBuilds|typescript|TypeScript|type checking|Skipping|compiled|Compiled|Checking validity|Linting' frontend/next.config.js docs/qa/2026-10-02/artifacts/frontend/20261003T003655.185291Z-frontend-build.txt docs/qa/2026-10-02/artifacts/frontend/20261003T003946.746162Z-node20-build.txt
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+docs/qa/2026-10-02/artifacts/frontend/20261003T003655.185291Z-frontend-build.txt:25:✓ Compiled successfully in 16.1s
+docs/qa/2026-10-02/artifacts/frontend/20261003T003655.185291Z-frontend-build.txt:26:  Running TypeScript ...
+docs/qa/2026-10-02/artifacts/frontend/20261003T003655.185291Z-frontend-build.txt:27:  Finished TypeScript in 10.8s ...
+docs/qa/2026-10-02/artifacts/frontend/20261003T003946.746162Z-node20-build.txt:20:✓ Compiled successfully in 5.5s
+docs/qa/2026-10-02/artifacts/frontend/20261003T003946.746162Z-node20-build.txt:21:  Running TypeScript ...
+docs/qa/2026-10-02/artifacts/frontend/20261003T003946.746162Z-node20-build.txt:22:  Finished TypeScript in 5.1s ...

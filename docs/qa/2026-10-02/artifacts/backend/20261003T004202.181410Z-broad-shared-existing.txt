@@ -1,0 +1,269 @@
+UTC: 2026-10-03T00:42:02.181410+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests '--ignore-glob=*live*' -m 'not integration' --continue-on-collection-errors --maxfail=15 --tb=short --cov=shared --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-broad.json
+Exit: 1
+Duration: 10.08s
+Timeout: False
+
+........................................................................ [  7%]
+........................................................................ [ 15%]
+...........................................FFFFFFFFFF................... [ 23%]
+........................................................................ [ 31%]
+...................................................s.................... [ 39%]
+........................................................................ [ 46%]
+........................................................................ [ 54%]
+........................................................................ [ 62%]
+........................................................................ [ 70%]
+........................................................................ [ 78%]
+.....................................FFFFF
+=================================== FAILURES ===================================
+____________ TestAuthConfigValidation.test_starts_with_valid_config ____________
+services/shared/tests/test_auth_fail_closed.py:59: in test_starts_with_valid_config
+    result = _run_validate({"AUTH_SECRET_KEY": "a-valid-secret-key-long-enough"})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+________ TestAuthConfigValidation.test_starts_in_dev_without_jwt_secret ________
+services/shared/tests/test_auth_fail_closed.py:65: in test_starts_in_dev_without_jwt_secret
+    result = _run_validate({})
+             ^^^^^^^^^^^^^^^^^
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+______ TestAuthConfigValidation.test_cloud_starts_without_supabase_creds _______
+services/shared/tests/test_auth_fail_closed.py:75: in test_cloud_starts_without_supabase_creds
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_____ TestAuthConfigValidation.test_rejects_short_jwt_secret_in_production _____
+services/shared/tests/test_auth_fail_closed.py:91: in test_rejects_short_jwt_secret_in_production
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+____ TestAuthConfigValidation.test_rejects_default_jwt_secret_in_production ____
+services/shared/tests/test_auth_fail_closed.py:106: in test_rejects_default_jwt_secret_in_production
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_______ TestAuthConfigValidation.test_rejects_bypass_token_in_production _______
+services/shared/tests/test_auth_fail_closed.py:121: in test_rejects_bypass_token_in_production
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_ TestAuthConfigValidation.test_cloud_marker_non_production_env_with_ephemeral_secret_hard_fails _
+services/shared/tests/test_auth_fail_closed.py:147: in test_cloud_marker_non_production_env_with_ephemeral_secret_hard_fails
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_ TestAuthConfigValidation.test_cloud_marker_development_env_is_forced_production_with_explicit_secrets _
+services/shared/tests/test_auth_fail_closed.py:164: in test_cloud_marker_development_env_is_forced_production_with_explicit_secrets
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+___ TestAuthConfigValidation.test_cloud_marker_with_explicit_secrets_starts ____
+services/shared/tests/test_auth_fail_closed.py:180: in test_cloud_marker_with_explicit_secrets_starts
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_ TestAuthConfigValidation.test_no_cloud_marker_ephemeral_secret_still_starts __
+services/shared/tests/test_auth_fail_closed.py:196: in test_no_cloud_marker_ephemeral_secret_still_starts
+    result = _run_validate(
+services/shared/tests/test_auth_fail_closed.py:46: in _run_validate
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_________ TestProductionSecretValidation.test_no_op_outside_production _________
+services/shared/tests/test_secrets_fail_closed.py:96: in test_no_op_outside_production
+    result = _run({"REGENGINE_ENV": "development"})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/tests/test_secrets_fail_closed.py:67: in _run
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_____ TestProductionSecretValidation.test_secure_values_pass_in_production _____
+services/shared/tests/test_secrets_fail_closed.py:101: in test_secure_values_pass_in_production
+    result = _run({"REGENGINE_ENV": "production", **_SECURE_ENV})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/tests/test_secrets_fail_closed.py:67: in _run
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_ TestProductionSecretValidation.test_insecure_default_is_rejected_in_production[NEO4J_PASSWORD-neo4j] _
+services/shared/tests/test_secrets_fail_closed.py:114: in test_insecure_default_is_rejected_in_production
+    result = _run(env)
+             ^^^^^^^^^
+services/shared/tests/test_secrets_fail_closed.py:67: in _run
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_ TestProductionSecretValidation.test_insecure_default_is_rejected_in_production[OBJECT_STORAGE_ACCESS_KEY_ID-test] _
+services/shared/tests/test_secrets_fail_closed.py:114: in test_insecure_default_is_rejected_in_production
+    result = _run(env)
+             ^^^^^^^^^
+services/shared/tests/test_secrets_fail_closed.py:67: in _run
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+_ TestProductionSecretValidation.test_skip_flag_cannot_disable_the_check_in_production _
+services/shared/tests/test_secrets_fail_closed.py:121: in test_skip_flag_cannot_disable_the_check_in_production
+    result = _run(
+services/shared/tests/test_secrets_fail_closed.py:67: in _run
+    return subprocess.run(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+=========================== short test summary info ============================
+SKIPPED [1] services/shared/tests/test_db_url.py:58: DATABASE_URL is not Postgres in this run
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_starts_with_valid_config - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_starts_in_dev_without_jwt_secret - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_cloud_starts_without_supabase_creds - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_rejects_short_jwt_secret_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_rejects_default_jwt_secret_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_rejects_bypass_token_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_cloud_marker_non_production_env_with_ephemeral_secret_hard_fails - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_cloud_marker_development_env_is_forced_production_with_explicit_secrets - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_cloud_marker_with_explicit_secrets_starts - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_auth_fail_closed.py::TestAuthConfigValidation::test_no_cloud_marker_ephemeral_secret_still_starts - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_no_op_outside_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_secure_values_pass_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_insecure_default_is_rejected_in_production[NEO4J_PASSWORD-neo4j] - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_insecure_default_is_rejected_in_production[OBJECT_STORAGE_ACCESS_KEY_ID-test] - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/shared/tests/test_secrets_fail_closed.py::TestProductionSecretValidation::test_skip_flag_cannot_disable_the_check_in_production - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 15 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+15 failed, 746 passed, 1 skipped in 8.85s

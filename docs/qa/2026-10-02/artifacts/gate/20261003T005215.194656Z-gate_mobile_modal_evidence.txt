@@ -1,0 +1,221 @@
+UTC: 2026-10-03T00:52:15.194656+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/ux/20261003T004850.605460Z-mobile-dialog-source-lines.txt"); print(p.read_text()[:10000]); q=Path("docs/qa/2026-10-02/UX-SESSION-LOG.md"); print(q.read_text()[-11000:])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+UTC: 2026-10-03T00:48:50.605460+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; print("\n".join(f"{i}: {l}" for i,l in enumerate(Path("frontend/src/components/layout/header/MobileMenu.tsx").read_text().splitlines(),1)))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+1: 'use client';
+2: 
+3: import { filterExperimentalLinks } from '@/lib/experimental-features';
+4: import Link from 'next/link';
+5: import { X } from 'lucide-react';
+6: import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
+7: import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+8: import { ThemeToggle } from '@/components/layout/theme-toggle';
+9: import { cn } from '@/lib/utils';
+10: import { MobileMenuCTA } from './MobileMenuCTA';
+11: import type { MobileMenuProps } from './types';
+12: 
+13: /**
+14:  * Mobile navigation drawer.
+15:  *
+16:  * Every one of the seventeen inline style objects this file used to carry is
+17:  * now a token utility. The contract kept intact: `role="dialog"` +
+18:  * `aria-label="Navigation menu"`, the `.marketing-mobile-drawer` class hook,
+19:  * the safe-area insets, and the parent's `re:mobile-menu-state` CustomEvent
+20:  * (AccessibilityWidget and CookieBanner both listen for it).
+21:  */
+22: const LOGGED_IN_LINKS = [
+23:     { label: 'Dashboard', href: '/dashboard' },
+24:     { label: 'Heartbeat', href: '/dashboard/heartbeat' },
+25:     { label: 'Compliance', href: '/dashboard/compliance' },
+26:     { label: 'Alerts', href: '/dashboard/alerts' },
+27:     { label: 'Suppliers', href: '/dashboard/suppliers' },
+28:     { label: 'Products', href: '/dashboard/products' },
+29:     { label: 'Settings', href: '/dashboard/settings' },
+30: ];
+31: 
+32: export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
+33:     return (
+34:         <>
+35:             {/* Drawer scrim */}
+36:             <div
+37:                 className={cn(
+38:                     'fixed inset-0 z-[var(--re-z-sticky)] bg-re-surface-overlay backdrop-blur-[4px] transition-[opacity,visibility] duration-240 motion-reduce:transition-none',
+39:                     mobileOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+40:                 )}
+41:                 onClick={() => setMobileOpen(false)}
+42:                 aria-hidden="true"
+43:             />
+44: 
+45:             {/* Drawer panel */}
+46:             <div
+47:                 className={cn(
+48:                     'marketing-mobile-drawer fixed bottom-0 right-0 top-0 z-[var(--re-z-modal)] flex w-[min(320px,85vw)] flex-col overflow-y-auto border-l border-[var(--re-mobile-border)] bg-[var(--re-mobile-menu-bg)] pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] transition-[transform,visibility] duration-240 motion-reduce:transition-none',
+49:                     mobileOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'
+50:                 )}
+51:                 role="dialog"
+52:                 aria-modal={mobileOpen ? true : undefined}
+53:                 aria-hidden={!mobileOpen}
+54:                 aria-label="Navigation menu"
+55:             >
+56:                 {/* Drawer header */}
+57:                 <div className="flex min-h-[56px] items-center justify-between border-b border-[var(--re-mobile-border)] px-5 py-4">
+58:                     <RegEngineWordmark size="sm" />
+59:                     <button
+60:                         type="button"
+61:                         onClick={() => setMobileOpen(false)}
+62:                         aria-label="Close menu"
+63:                         className="-mr-2 flex h-11 w-11 items-center justify-center rounded-md border-0 bg-transparent p-0 text-re-text-muted transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+64:                     >
+65:                         <X aria-hidden="true" size={20} strokeWidth={1.75} />
+66:                     </button>
+67:                 </div>
+68: 
+69:                 {/* Primary nav links */}
+70:                 <div className="px-3 py-2">
+71:                     {filterExperimentalLinks(user ? LOGGED_IN_LINKS : MARKETING_PRIMARY_NAV).map((item) => (
+72:                         <Link
+73:                             key={item.label}
+74:                             href={item.href}
+75:                             onClick={() => setMobileOpen(false)}
+76:                             aria-current={pathname === item.href ? 'page' : undefined}
+77:                             className={`relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline ${
+78:                                 pathname === item.href
+79:                                     ? 'bg-re-surface-inset font-medium text-re-text-primary'
+80:                                     : 'text-re-text-secondary'
+81:                             } transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none`}
+82:                         >
+83:                             {pathname === item.href && (
+84:                                 <span
+85:                                     aria-hidden="true"
+86:                                     className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-re-brand"
+87:                                 />
+88:                             )}
+89:                             {item.label}
+90:                         </Link>
+91:                     ))}
+92:                 </div>
+93: 
+94:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+95: 
+96:                 {/* Free tools */}
+97:                 <div className="px-3 py-2">
+98:                     <div className="px-3 pb-1 pt-2 text-label uppercase text-re-text-muted">
+99:                         FSMA 204 Compliance Tools
+100:                     </div>
+101:                     {[...MARKETING_FREE_TOOLS, MARKETING_ALL_TOOLS_LINK].map((tool) => (
+102:                         <Link
+103:                             key={tool.href}
+104:                             href={tool.href}
+105:                             onClick={() => setMobileOpen(false)}
+106:                             className="flex min-h-[48px] items-start gap-3 rounded-md p-3 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+107:                         >
+108:                             <tool.icon
+109:                                 aria-hidden="true"
+110:                                 size={16}
+111:                                 strokeWidth={1.75}
+112:                                 className="mt-0.5 shrink-0 text-re-text-tertiary"
+113:                             />
+114:                             <span className="min-w-0">
+115:                                 <span className="block text-ui font-medium text-re-text-primary">
+116:                                     {tool.href === '/tools' ? `${tool.label} →` : tool.label}
+117:                                 </span>
+118:                                 <span className="mt-0.5 block text-small text-re-text-tertiary">{tool.desc}</span>
+119:                             </span>
+120:                         </Link>
+121:                     ))}
+122:                 </div>
+123: 
+124:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+125: 
+126:                 {/* Theme */}
+127:                 <div className="flex items-center justify-between px-6 py-3">
+128:                     <span className="text-ui text-re-text-secondary">Theme</span>
+129:                     <ThemeToggle />
+130:                 </div>
+131: 
+132:                 <div className="flex-1" />
+133: 
+134:                 <MobileMenuCTA user={user} showLoggedIn={showLoggedIn} setMobileOpen={setMobileOpen} />
+135:             </div>
+136:         </>
+137:     );
+138: }
+
+hon3 -c 'import subprocess,urllib.request,urllib.error; subprocess.run(["lsof","-n","-P","-iTCP:3102","-sTCP:LISTEN"]); request=urllib.request.Request("http://127.0.0.1:3102"); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+try:
+ r=opener.open(request,timeout=15); print("status",r.status); print(r.read(600).decode())
+except urllib.error.HTTPError as e:
+ print("status",e.code,"body",e.read(600).decode())'`; cwd `.`; exit 0, 0.42s. [Output](artifacts/ux/20261003T003950.386865Z-reload-check.txt).
+
+- **2026-10-03T00:39:57.463887+00:00** `reload-guard-content-marker` — `python3 -c 'from pathlib import Path; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend/next.config.js"); p.write_text(p.read_text()+"\n// QA mirror only: restart process after isolation guard hardening.\n"); print("Added inert restart marker to disposable mirror config only")'`; cwd `.`; exit 0, 0.05s. [Output](artifacts/ux/20261003T003957.463887Z-reload-guard-content-marker.txt).
+
+- **2026-10-03T00:40:04.438806+00:00** `local-route-diagnostic` — `python3 -c 'import subprocess,urllib.request,urllib.error,re; subprocess.run(["lsof","-n","-P","-iTCP:3102","-sTCP:LISTEN"]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+for route in ["/","/login","/verify"]:
+ try:
+  r=opener.open("http://127.0.0.1:3102"+route,timeout=30); data=r.read().decode(); status=r.status
+ except urllib.error.HTTPError as e:
+  data=e.read().decode(); status=e.code
+ print(route,status,re.findall(r"<h[12][^>]*>(.*?)</h[12]>",data)[:8])'`; cwd `.`; exit 0, 0.22s. [Output](artifacts/ux/20261003T004004.438806Z-local-route-diagnostic.txt).
+
+- **2026-10-03T00:40:16.906152+00:00** `mirror-route-manifest` — `python3 -c 'from pathlib import Path; import json; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend"); print("app candidates",[(str(x),x.is_dir()) for x in [p/"app",p/"src/app",p/"src/app/page.tsx"]]); print("page file bytes",(p/"src/app/page.tsx").stat().st_size); print("manifest",(p/".next/server/app-paths-manifest.json").read_text()[:2000]); print("package scripts",json.loads((p/"package.json").read_text())["scripts"])'`; cwd `.`; exit 1, 0.04s. [Output](artifacts/ux/20261003T004016.906152Z-mirror-route-manifest.txt).
+
+- **2026-10-03T00:40:42.306831+00:00** `guarded-server-v2-preflight` — `python3 -c 'from pathlib import Path; import urllib.request,urllib.error; print(Path("docs/qa/2026-10-02/artifacts/ux/guarded-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/guarded-server-output.txt").read_text()[-5000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+try:
+ r=opener.open("http://127.0.0.1:3104",timeout=40); print("status",r.status,"bytes",len(r.read()))
+except urllib.error.HTTPError as e:
+ print("status",e.code,"bytes",len(e.read()))'`; cwd `.`; exit 1, 0.12s. [Output](artifacts/ux/20261003T004042.306831Z-guarded-server-v2-preflight.txt).
+
+- **2026-10-03T00:40:53.619301+00:00** `stop-restarting-dev-server` — `python3 -c 'from pathlib import Path; Path("/private/tmp/regengine-qa-ux-u2059hm8/stop-server").touch(); print("Requested cooperative stop of owned v2 server")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004053.619301Z-stop-restarting-dev-server.txt).
+
+- **2026-10-03T00:40:36.067108+00:00** `guarded-server-v2` — `python3 docs/qa/2026-10-02/scripts/ux-server.py`; cwd `.`; exit 0, 17.92s. [Output](artifacts/ux/20261003T004036.067108Z-guarded-server-v2.txt).
+
+- **2026-10-03T00:41:23.566237+00:00** `built-server-preflight` — `python3 -c 'from pathlib import Path; import urllib.request,urllib.error; print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/built-server-output.txt").read_text()[-3000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'`; cwd `.`; exit 1, 0.09s. [Output](artifacts/ux/20261003T004123.566237Z-built-server-preflight.txt).
+
+- **2026-10-03T00:41:30.248988+00:00** `startup-assertion-requirements` — `rg -n 'startup|CSRF_SECRET|JWT_SIGNING|production|assert' frontend/src/instrumentation.ts frontend/src/lib/startup-assertions.ts`; cwd `.`; exit 2, 0.01s. [Output](artifacts/ux/20261003T004130.248988Z-startup-assertion-requirements.txt).
+
+- **2026-10-03T00:41:30.337915+00:00** `stop-unconfigured-built-server` — `python3 -c 'from pathlib import Path; Path("/private/tmp/regengine-qa-ux-u2059hm8/stop-built-server").touch(); print("Requested cooperative stop; missing synthetic production-mode CSRF runtime value")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004130.337915Z-stop-unconfigured-built-server.txt).
+
+- **2026-10-03T00:41:17.828789+00:00** `guarded-built-server` — `python3 docs/qa/2026-10-02/scripts/ux-server.py`; cwd `.`; exit 0, 12.57s. [Output](artifacts/ux/20261003T004117.828789Z-guarded-built-server.txt).
+
+- **2026-10-03T00:41:43.828393+00:00** `ready-server-preflight` — `python3 -c 'from pathlib import Path; import urllib.request; print(Path("docs/qa/2026-10-02/artifacts/ux/ready-server-metadata.txt").read_text()); print(Path("docs/qa/2026-10-02/artifacts/ux/ready-server-output.txt").read_text()[-2000:]); opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open("http://127.0.0.1:3104",timeout=30); print("status",r.status,"bytes",len(r.read()))'`; cwd `.`; exit 0, 0.25s. [Output](artifacts/ux/20261003T004143.828393Z-ready-server-preflight.txt).
+
+- **2026-10-03T00:41:50.831989+00:00** `cross-browser-smoke` — `env QA_MIRROR=/private/tmp/regengine-qa-ux-u2059hm8 PLAYWRIGHT_BROWSERS_PATH=/private/tmp/regengine-qa-ux-u2059hm8/browsers node docs/qa/2026-10-02/scripts/ux-browser-pass.cjs smoke`; cwd `.`; exit 0, 9.53s. [Output](artifacts/ux/20261003T004150.831989Z-cross-browser-smoke.txt).
+
+- **2026-10-03T00:42:05.747355+00:00** `login-verify-control-source` — `python3 -c 'from pathlib import Path; print(Path("frontend/src/app/login/page.tsx").read_text()); p=Path("frontend/src/app/verify/page.tsx"); print("VERIFY", "\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if 145<=i<=280)); print("LOGIN CANDIDATES",[str(p) for p in Path("frontend/src").rglob("*login*")])'`; cwd `.`; exit 0, 0.04s. [Output](artifacts/ux/20261003T004205.747355Z-login-verify-control-source.txt).
+
+- **2026-10-03T00:46:19.808124+00:00** `chrome-axe-initial-results` — `python3 -c 'from pathlib import Path; import json; p=Path("docs/qa/2026-10-02/artifacts/ux"); files=list(p.glob("chrome-axe*.json")); print("reports",[x.name for x in files]);
+for f in files:
+ d=json.loads(f.read_text()); print(f.name,"width",d["width"],"document",d["documentWidth"],"axe",[(x["id"],x["impact"],len(x["nodes"])) for x in d["axe"]["violations"]],"camera",d.get("cameraAllowed"))'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004619.808124Z-chrome-axe-initial-results.txt).
+
+- **2026-10-03T00:46:24.441943+00:00** `axe-first-node-details` — `python3 -c 'import json;from pathlib import Path;d=json.loads(Path("docs/qa/2026-10-02/artifacts/ux/chrome-axe_-1728-1.json").read_text());print(json.dumps(d["axe"]["violations"],indent=2)[:5000])'`; cwd `.`; exit 0, 0.16s. [Output](artifacts/ux/20261003T004624.441943Z-axe-first-node-details.txt).
+
+- **2026-10-03T00:48:04.045958+00:00** `stop-proxy-for-mobile-harness` — `python3 -c 'from pathlib import Path; Path("/private/tmp/regengine-qa-ux-u2059hm8/stop-proxy").touch(); print("Requested cooperative QA proxy stop; adding real app iframe responsive harness")'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004804.045958Z-stop-proxy-for-mobile-harness.txt).
+
+- **2026-10-03T00:43:54.833024+00:00** `managed-chrome-local-proxy` — `python3 docs/qa/2026-10-02/scripts/ux-local-proxy.py`; cwd `.`; exit 0, 249.45s. [Output](artifacts/ux/20261003T004354.833024Z-managed-chrome-local-proxy.txt).
+
+- **2026-10-03T00:48:37.146107+00:00** `mobile-menu-and-axe-review` — `python3 -c 'from pathlib import Path; import json,re; p=Path("frontend/src/components/layout/marketing-header.tsx"); lines=p.read_text().splitlines(); print("\n".join(f"{i}: {l}" for i,l in enumerate(lines,1) if re.search("Escape|keydown|mobileMenu|aria-modal|role=|dialog|onKeyDown|tabIndex|setIsOpen|setMobile|focus",l))); 
+for f in Path("docs/qa/2026-10-02/artifacts/ux").glob("chrome-axe*.json"):
+ d=json.loads(f.read_text()); print(f.name,"size",d["width"],d["documentWidth"],[(v["id"],len(v["nodes"])) for v in d["axe"]["violations"]])'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004837.146107Z-mobile-menu-and-axe-review.txt).
+
+- **2026-10-03T00:48:41.156858+00:00** `menu-keyboard-source` — `rg -n 'function Mobile|Escape|keydown|aria-modal|role="dialog"|focus\(' frontend/src/components/layout/marketing-header.tsx frontend/src/components/layout/marketing-nav.ts`; cwd `.`; exit 0, 0.03s. [Output](artifacts/ux/20261003T004841.156858Z-menu-keyboard-source.txt).
+
+- **2026-10-03T00:48:45.116945+00:00** `mobile-drawer-source` — `python3 -c 'from pathlib import Path; import subprocess; print("\n".join(Path("frontend/src/components/layout/marketing-header.tsx").read_text().splitlines()[:20])); subprocess.run(["rg","-n","export.*MobileNav|function MobileNav|function MobileHamburger|aria-modal","frontend/src/components/layout"])'`; cwd `.`; exit 0, 0.04s. [Output](artifacts/ux/20261003T004845.116945Z-mobile-drawer-source.txt).
+
+- **2026-10-03T00:48:50.605460+00:00** `mobile-dialog-source-lines` — `python3 -c 'from pathlib import Path; print("\n".join(f"{i}: {l}" for i,l in enumerate(Path("frontend/src/components/layout/header/MobileMenu.tsx").read_text().splitlines(),1)))'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/ux/20261003T004850.605460Z-mobile-dialog-source-lines.txt).
+
+- **2026-10-03T00:50:56.866742+00:00** `demo-status-source` — `python3 -c 'from pathlib import Path; import subprocess; subprocess.run(["rg","-n","function DemoBanner|Backend unavailable|DemoBanner visible","frontend/src"]); print("CURRENT AXE"); import json;
+for f in Path("docs/qa/2026-10-02/artifacts/ux").glob("chrome-axe*.json"):
+ d=json.loads(f.read_text()); v=[(x["id"],len(x["nodes"])) for x in d["axe"]["violations"] if not all("aiFabShadowRoot" in str(n["target"]) for n in x["nodes"])]; print(f.name,"width",d["width"],"doc",d["documentWidth"],"product violations",v)'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/ux/20261003T005056.866742Z-demo-status-source.txt).
+
+- **2026-10-03T00:51:02.929390+00:00** `narrow-verifier-axe-evidence` — `python3 -c 'import json;from pathlib import Path;d=json.loads(Path("docs/qa/2026-10-02/artifacts/ux/chrome-axe_verify-320-004936758162.json").read_text()); print(json.dumps([{k:v for k,v in x.items() if k in {"id","impact","tags","nodes"}} for x in d["axe"]["violations"]],indent=2)[:9500])'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/ux/20261003T005102.929390Z-narrow-verifier-axe-evidence.txt).
+

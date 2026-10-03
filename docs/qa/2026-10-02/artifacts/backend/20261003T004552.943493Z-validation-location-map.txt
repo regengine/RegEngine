@@ -1,0 +1,103 @@
+UTC: 2026-10-03T00:45:52.943493+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; names=["test_webhook_naive_timestamp_is_a_validation_response","test_csv_rejects_nonfinite_output_quantity","test_csv_rejects_nonfinite_input_quantity","test_csv_rejects_conflicting_duplicate_headers","test_csv_non_utf8_upload_returns_client_error"]; p=Path("services/ingestion/tests/test_qa_sweep_20261002_contract.py"); print("\n".join(f"{p}:{i+1}:{l}" for i,l in enumerate(p.read_text().splitlines()) if any(n in l for n in names))); p=Path("docs/qa/2026-10-02/scripts/backend_pytest.py"); print(p.read_text())'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:124:def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timestamp):
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:135:def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:148:def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:161:def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:186:def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
+#!/usr/bin/env python3
+"""Run explicitly selected pytest suites without network or credential-file access.
+
+Use through run_logged.py with a QA-only environment. This guard is deliberately
+stricter than the product: in-process ASGI transports and fake stores are allowed;
+socket connections, subprocesses, and reads of .env/credential files are denied.
+"""
+
+from __future__ import annotations
+
+import os
+import platform
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path[:0] = [str(ROOT), str(ROOT / "services"), str(ROOT / "services/ingestion")]
+os.environ.update(
+    {
+        "PYTHON_DOTENV_DISABLED": "1",
+        "REGENGINE_ENV": "test",
+        "ENVIRONMENT": "test",
+        "DATABASE_URL": "sqlite:///:memory:",
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "HYPOTHESIS_STORAGE_DIRECTORY": str(ROOT / ".hypothesis"),
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+)
+# Python on macOS obtains its processor label through a harmless uname command.
+# Cache platform metadata before the subprocess guard, then allow only the three
+# test plugins actually needed for this QA pass.
+platform.platform()
+
+
+def deny_external_io(event: str, args: tuple) -> None:
+    if event in {"socket.connect", "socket.getaddrinfo", "subprocess.Popen", "os.system"}:
+        raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+    if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
+        path = Path(os.fsdecode(args[0]))
+        if path.name.startswith(".env") or any(part in {".aws", ".ssh", ".gnupg"} for part in path.parts):
+            raise RuntimeError("QA safety guard denied credential/environment file access")
+
+
+sys.addaudithook(deny_external_io)
+
+
+def deny_database_connect(*args, **kwargs):
+    raise RuntimeError("QA safety guard denied database connection; use an in-process mock")
+
+
+# Native DB drivers can bypass Python socket audit events. Block their public
+# connection boundaries as well as SQLAlchemy's engine before test collection.
+import importlib
+
+from sqlalchemy.engine import Engine
+
+Engine.connect = deny_database_connect
+Engine.raw_connection = deny_database_connect
+for driver in ("psycopg", "psycopg2", "asyncpg"):
+    try:
+        module = importlib.import_module(driver)
+    except ImportError:
+        continue
+    module.connect = deny_database_connect
+    if driver == "psycopg":
+        module.Connection.connect = classmethod(deny_database_connect)
+        module.AsyncConnection.connect = classmethod(deny_database_connect)
+
+import sqlite3
+
+_coverage_sqlite_connect = sqlite3.connect
+
+
+def coverage_only_sqlite_connect(database, *args, **kwargs):
+    path = Path(database).resolve()
+    if path.parent != ROOT or not path.name.startswith(".coverage"):
+        return deny_database_connect()
+    return _coverage_sqlite_connect(database, *args, **kwargs)
+
+
+sqlite3.connect = coverage_only_sqlite_connect
+sqlite3.dbapi2.connect = coverage_only_sqlite_connect
+
+import pytest
+
+raise SystemExit(
+    pytest.main(
+        ["-p", "pytest_cov.plugin", "-p", "pytest_asyncio.plugin", "-p", "hypothesis.extra.pytestplugin", *sys.argv[1:]]
+    )
+)
+

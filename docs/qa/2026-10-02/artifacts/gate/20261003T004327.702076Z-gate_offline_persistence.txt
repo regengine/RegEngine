@@ -1,0 +1,157 @@
+UTC: 2026-10-03T00:43:27.702076+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("frontend/src/lib/db.ts"); print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if i<=150))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+1: import Dexie, { Table } from 'dexie';
+2: 
+3: const DAY_MS = 24 * 60 * 60 * 1000;
+4: 
+5: export const OFFLINE_SYNC_RETENTION = {
+6:     syncedMaxAgeMs: 7 * DAY_MS,
+7:     unsyncedMaxAgeMs: 30 * DAY_MS,
+8: } as const;
+9: 
+10: export interface ScanRecord {
+11:     id?: number;
+12:     content: string;
+13:     /** Structured payload for offline replay — mirrors the webhook ingest body */
+14:     payload?: string; // JSON-serialized ingest event
+15:     cteType?: string;
+16:     timestamp: number;
+17:     synced: number; // 0 = false, 1 = true
+18:     syncAttempts?: number;
+19:     lastSyncAttemptAt?: number;
+20:     syncError?: string;
+21: }
+22: 
+23: export interface PhotoRecord {
+24:     id?: number;
+25:     blob: Blob;
+26:     timestamp: number;
+27:     synced: number;
+28:     syncAttempts?: number;
+29:     lastSyncAttemptAt?: number;
+30:     syncError?: string;
+31: }
+32: 
+33: interface OfflineRecord {
+34:     timestamp: number;
+35:     synced: number;
+36: }
+37: 
+38: interface OfflineRecordTable<T extends OfflineRecord> {
+39:     where(index: string): {
+40:         equals(value: number): {
+41:             filter(predicate: (record: T) => boolean): {
+42:                 delete(): Promise<number>;
+43:             };
+44:         };
+45:     };
+46: }
+47: 
+48: interface OfflineDatabase {
+49:     scans: OfflineRecordTable<ScanRecord>;
+50:     photos: OfflineRecordTable<PhotoRecord>;
+51: }
+52: 
+53: export interface OfflineRetentionOptions {
+54:     now?: number;
+55:     syncedMaxAgeMs?: number;
+56:     unsyncedMaxAgeMs?: number;
+57:     deleteUnsyncedRecords?: boolean;
+58: }
+59: 
+60: export class MobileDatabase extends Dexie {
+61:     scans!: Table<ScanRecord>;
+62:     photos!: Table<PhotoRecord>;
+63: 
+64:     constructor() {
+65:         super('RegEngineMobileDB');
+66:         this.version(1).stores({
+67:             scans: '++id, timestamp, synced', // Primary key and indexed props
+68:             photos: '++id, timestamp, synced'
+69:         });
+70:     }
+71: }
+72: 
+73: export const db = new MobileDatabase();
+74: 
+75: export async function saveScan(content: string, payload?: Record<string, unknown>, cteType?: string) {
+76:     await db.scans.add({
+77:         content,
+78:         payload: payload ? JSON.stringify(payload) : undefined,
+79:         cteType,
+80:         timestamp: Date.now(),
+81:         synced: 0,
+82:         syncAttempts: 0,
+83:     });
+84: }
+85: 
+86: export async function savePhoto(blob: Blob) {
+87:     await db.photos.add({
+88:         blob,
+89:         timestamp: Date.now(),
+90:         synced: 0,
+91:         syncAttempts: 0,
+92:     });
+93: }
+94: 
+95: export async function getPendingUploads() {
+96:     const scans = await db.scans.where('synced').equals(0).toArray();
+97:     const photos = await db.photos.where('synced').equals(0).toArray();
+98:     return { scans, photos };
+99: }
+100: 
+101: export async function markScanSynced(id: number) {
+102:     await db.scans.update(id, { synced: 1, syncError: undefined, lastSyncAttemptAt: Date.now() });
+103: }
+104: 
+105: export async function markPhotoSynced(id: number) {
+106:     await db.photos.update(id, { synced: 1, syncError: undefined, lastSyncAttemptAt: Date.now() });
+107: }
+108: 
+109: function errorMessage(error: unknown): string {
+110:     return error instanceof Error ? error.message : String(error || 'Unknown sync error');
+111: }
+112: 
+113: export async function markScanSyncFailed(id: number, error: unknown, attemptedAt: number = Date.now()) {
+114:     const record = await db.scans.get(id);
+115:     await db.scans.update(id, {
+116:         synced: 0,
+117:         syncAttempts: (record?.syncAttempts || 0) + 1,
+118:         lastSyncAttemptAt: attemptedAt,
+119:         syncError: errorMessage(error),
+120:     });
+121: }
+122: 
+123: export async function markPhotoSyncFailed(id: number, error: unknown, attemptedAt: number = Date.now()) {
+124:     const record = await db.photos.get(id);
+125:     await db.photos.update(id, {
+126:         synced: 0,
+127:         syncAttempts: (record?.syncAttempts || 0) + 1,
+128:         lastSyncAttemptAt: attemptedAt,
+129:         syncError: errorMessage(error),
+130:     });
+131: }
+132: 
+133: async function deleteBySyncedAndCutoff<T extends OfflineRecord>(
+134:     table: OfflineRecordTable<T>,
+135:     synced: number,
+136:     cutoff: number
+137: ) {
+138:     if (!Number.isFinite(cutoff)) return 0;
+139:     return table
+140:         .where('synced').equals(synced)
+141:         .filter((record) => record.timestamp < cutoff)
+142:         .delete();
+143: }
+144: 
+145: /**
+146:  * Enforce client-side retention for offline field capture data.
+147:  *
+148:  * Synced records are short lived cache. Unsynced records are preserved by
+149:  * default because they are the durable source of truth until the backend
+150:  * acknowledges persistence. Callers must opt in before deleting stale

@@ -1,0 +1,55 @@
+UTC: 2026-10-02T23:46:05.036682+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git ls-files "*AGENTS.md"; rg --files -g "!**/.env*" -g "!**/package-lock.json" -g "!**/requirements.lock" -g "!*lock*" -g "!**/node_modules/**" -g "!**/.git/**" | rg "(^README.md$|^REPO_PURPOSE.md$|^ARCHITECTURE.md$|^CANONICAL_OWNERSHIP.md$|conftest.py$|pytest|pyproject|requirements|playwright|vitest|package.json$|crabbox|^server/|^tests/qa)"; for p in .venv/bin/python venv/bin/python frontend/node_modules/.bin/next frontend/node_modules/.bin/playwright; do test ! -e "$p" || ls -ld "$p"; done; git ls-files --others --exclude-standard'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+AGENTS.md
+docs/archive/AGENTS.md
+docs/engineering/AGENTS.md
+frontend/AGENTS.md
+conftest.py
+REPO_PURPOSE.md
+ARCHITECTURE.md
+CANONICAL_OWNERSHIP.md
+pyproject.toml
+README.md
+requirements.in
+demo/documents/uk-fca-capital-requirements.json
+server/main.py
+server/route_security_policy.py
+server/__init__.py
+server/routes_scheduler_status.py
+server/workers/task_processor.py
+server/workers/__init__.py
+server/workers/embedded_scheduler.py
+server/router_policy.py
+server/route_ownership.py
+server/route_security_manifest.py
+tests/billing/conftest.py
+frontend/package.json
+tests/load/conftest.py
+services/nlp/conftest.py
+frontend/vitest.config.mts
+tests/integration_requirements.py
+docs/research/evidence-wave-2026-08-31/qa-pytest-results.txt
+services/ingestion/tests/conftest.py
+services/compliance/conftest.py
+services/ingestion/tests/remediation/conftest.py
+tests/contract/conftest.py
+tests/conftest.py
+tests/integration/golden_path/conftest.py
+tests/integration/conftest.py
+tests/security/conftest.py
+frontend/playwright.config.ts
+frontend/playwright.demo-smoke.config.ts
+services/ingestion/conftest.py
+services/admin/conftest.py
+frontend/src/app/blog/fda-food-traceability-requirements/page.tsx
+frontend/src/app/blog/fda-food-traceability-requirements/opengraph-image.tsx
+services/graph/tests/conftest.py
+services/admin/tests/conftest.py
+services/scheduler/conftest.py
+services/graph/conftest.py
+docs/qa/2026-10-02/scripts/run_logged.py

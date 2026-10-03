@@ -1,0 +1,19 @@
+UTC: 2026-10-03T02:09:55.397348+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ node frontend/node_modules/playwright/cli.js test --config frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts
+Exit: 0
+Duration: 7.88s
+Timeout: False
+
+
+Running 6 tests using 1 worker
+
+  ✘  1 [chromium] › frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (496ms)
+  ✘  2 [chromium] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests (1.9s)
+  ✘  3 [firefox] › frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (1.0s)
+  ✘  4 [firefox] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests (2.1s)
+  ✘  5 [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts:4:5 › FE-001 preserves complete GS1 lot identifiers in the real scanner form (730ms)
+  -  6 [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests
+
+  1 skipped
+  5 passed (7.7s)

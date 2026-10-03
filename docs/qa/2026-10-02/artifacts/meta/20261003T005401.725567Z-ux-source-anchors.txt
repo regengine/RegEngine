@@ -1,0 +1,355 @@
+UTC: 2026-10-03T00:54:01.725567+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=list(Path("frontend/src").rglob("MobileMenu.tsx"))+list(Path("frontend/src").rglob("DemoBanner.tsx"))+[Path("frontend/src/app/verify/page.tsx")]; [(print("FILE",p),print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if (p.name in {"MobileMenu.tsx","DemoBanner.tsx"} and i<130) or (p.name=="page.tsx" and (150<=i<=235 or 300<=i<=430))))) for p in paths]'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+FILE frontend/src/components/layout/header/MobileMenu.tsx
+1: 'use client';
+2: 
+3: import { filterExperimentalLinks } from '@/lib/experimental-features';
+4: import Link from 'next/link';
+5: import { X } from 'lucide-react';
+6: import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
+7: import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+8: import { ThemeToggle } from '@/components/layout/theme-toggle';
+9: import { cn } from '@/lib/utils';
+10: import { MobileMenuCTA } from './MobileMenuCTA';
+11: import type { MobileMenuProps } from './types';
+12: 
+13: /**
+14:  * Mobile navigation drawer.
+15:  *
+16:  * Every one of the seventeen inline style objects this file used to carry is
+17:  * now a token utility. The contract kept intact: `role="dialog"` +
+18:  * `aria-label="Navigation menu"`, the `.marketing-mobile-drawer` class hook,
+19:  * the safe-area insets, and the parent's `re:mobile-menu-state` CustomEvent
+20:  * (AccessibilityWidget and CookieBanner both listen for it).
+21:  */
+22: const LOGGED_IN_LINKS = [
+23:     { label: 'Dashboard', href: '/dashboard' },
+24:     { label: 'Heartbeat', href: '/dashboard/heartbeat' },
+25:     { label: 'Compliance', href: '/dashboard/compliance' },
+26:     { label: 'Alerts', href: '/dashboard/alerts' },
+27:     { label: 'Suppliers', href: '/dashboard/suppliers' },
+28:     { label: 'Products', href: '/dashboard/products' },
+29:     { label: 'Settings', href: '/dashboard/settings' },
+30: ];
+31: 
+32: export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
+33:     return (
+34:         <>
+35:             {/* Drawer scrim */}
+36:             <div
+37:                 className={cn(
+38:                     'fixed inset-0 z-[var(--re-z-sticky)] bg-re-surface-overlay backdrop-blur-[4px] transition-[opacity,visibility] duration-240 motion-reduce:transition-none',
+39:                     mobileOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+40:                 )}
+41:                 onClick={() => setMobileOpen(false)}
+42:                 aria-hidden="true"
+43:             />
+44: 
+45:             {/* Drawer panel */}
+46:             <div
+47:                 className={cn(
+48:                     'marketing-mobile-drawer fixed bottom-0 right-0 top-0 z-[var(--re-z-modal)] flex w-[min(320px,85vw)] flex-col overflow-y-auto border-l border-[var(--re-mobile-border)] bg-[var(--re-mobile-menu-bg)] pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] transition-[transform,visibility] duration-240 motion-reduce:transition-none',
+49:                     mobileOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'
+50:                 )}
+51:                 role="dialog"
+52:                 aria-modal={mobileOpen ? true : undefined}
+53:                 aria-hidden={!mobileOpen}
+54:                 aria-label="Navigation menu"
+55:             >
+56:                 {/* Drawer header */}
+57:                 <div className="flex min-h-[56px] items-center justify-between border-b border-[var(--re-mobile-border)] px-5 py-4">
+58:                     <RegEngineWordmark size="sm" />
+59:                     <button
+60:                         type="button"
+61:                         onClick={() => setMobileOpen(false)}
+62:                         aria-label="Close menu"
+63:                         className="-mr-2 flex h-11 w-11 items-center justify-center rounded-md border-0 bg-transparent p-0 text-re-text-muted transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+64:                     >
+65:                         <X aria-hidden="true" size={20} strokeWidth={1.75} />
+66:                     </button>
+67:                 </div>
+68: 
+69:                 {/* Primary nav links */}
+70:                 <div className="px-3 py-2">
+71:                     {filterExperimentalLinks(user ? LOGGED_IN_LINKS : MARKETING_PRIMARY_NAV).map((item) => (
+72:                         <Link
+73:                             key={item.label}
+74:                             href={item.href}
+75:                             onClick={() => setMobileOpen(false)}
+76:                             aria-current={pathname === item.href ? 'page' : undefined}
+77:                             className={`relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline ${
+78:                                 pathname === item.href
+79:                                     ? 'bg-re-surface-inset font-medium text-re-text-primary'
+80:                                     : 'text-re-text-secondary'
+81:                             } transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none`}
+82:                         >
+83:                             {pathname === item.href && (
+84:                                 <span
+85:                                     aria-hidden="true"
+86:                                     className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-re-brand"
+87:                                 />
+88:                             )}
+89:                             {item.label}
+90:                         </Link>
+91:                     ))}
+92:                 </div>
+93: 
+94:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+95: 
+96:                 {/* Free tools */}
+97:                 <div className="px-3 py-2">
+98:                     <div className="px-3 pb-1 pt-2 text-label uppercase text-re-text-muted">
+99:                         FSMA 204 Compliance Tools
+100:                     </div>
+101:                     {[...MARKETING_FREE_TOOLS, MARKETING_ALL_TOOLS_LINK].map((tool) => (
+102:                         <Link
+103:                             key={tool.href}
+104:                             href={tool.href}
+105:                             onClick={() => setMobileOpen(false)}
+106:                             className="flex min-h-[48px] items-start gap-3 rounded-md p-3 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+107:                         >
+108:                             <tool.icon
+109:                                 aria-hidden="true"
+110:                                 size={16}
+111:                                 strokeWidth={1.75}
+112:                                 className="mt-0.5 shrink-0 text-re-text-tertiary"
+113:                             />
+114:                             <span className="min-w-0">
+115:                                 <span className="block text-ui font-medium text-re-text-primary">
+116:                                     {tool.href === '/tools' ? `${tool.label} →` : tool.label}
+117:                                 </span>
+118:                                 <span className="mt-0.5 block text-small text-re-text-tertiary">{tool.desc}</span>
+119:                             </span>
+120:                         </Link>
+121:                     ))}
+122:                 </div>
+123: 
+124:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+125: 
+126:                 {/* Theme */}
+127:                 <div className="flex items-center justify-between px-6 py-3">
+128:                     <span className="text-ui text-re-text-secondary">Theme</span>
+129:                     <ThemeToggle />
+FILE frontend/src/app/verify/page.tsx
+150: function VerifyWidget() {
+151:     const [state, setState] = useState<VerifyState>({ kind: 'idle' });
+152:     const [file, setFile] = useState<File | null>(null);
+153:     const [dragOver, setDragOver] = useState(false);
+154:     const inputRef = useRef<HTMLInputElement>(null);
+155: 
+156:     const handleFile = useCallback((f: File | null) => {
+157:         if (!f) return;
+158:         setFile(f);
+159:         setState({ kind: 'idle' });
+160:     }, []);
+161: 
+162:     const onDrop = useCallback(
+163:         (e: React.DragEvent<HTMLLabelElement>) => {
+164:             e.preventDefault();
+165:             setDragOver(false);
+166:             const f = e.dataTransfer.files?.[0] ?? null;
+167:             handleFile(f);
+168:         },
+169:         [handleFile],
+170:     );
+171: 
+172:     const onSubmit = useCallback(async () => {
+173:         if (!file) return;
+174:         setState({ kind: 'loading' });
+175: 
+176:         const formData = new FormData();
+177:         formData.append('bundle', file);
+178: 
+179:         try {
+180:             const res = await fetch(PROOF_VERIFY_ENDPOINT, {
+181:                 method: 'POST',
+182:                 body: formData,
+183:             });
+184: 
+185:             if (res.status === 429) {
+186:                 setState({
+187:                     kind: 'error',
+188:                     message:
+189:                         'Rate limit reached (10/min). Try again in a minute.',
+190:                 });
+191:                 return;
+192:             }
+193: 
+194:             if (!res.ok) {
+195:                 setState({
+196:                     kind: 'error',
+197:                     message: `Verification failed (HTTP ${res.status}). Try again shortly, or run verify_chain.py locally.`,
+198:                 });
+199:                 return;
+200:             }
+201: 
+202:             const data = (await res.json()) as VerifyResponse;
+203:             setState({ kind: 'success', data });
+204:         } catch {
+205:             setState({
+206:                 kind: 'error',
+207:                 message:
+208:                     'Could not reach the verifier endpoint. Try again shortly, or run verify_chain.py locally.',
+209:             });
+210:         }
+211:     }, [file]);
+212: 
+213:     const reset = useCallback(() => {
+214:         setFile(null);
+215:         setState({ kind: 'idle' });
+216:         if (inputRef.current) inputRef.current.value = '';
+217:     }, []);
+218: 
+219:     return (
+220:         <Card className="p-6 sm:p-8">
+221:             {/* ─── Drop zone ─────────────────────────────────────── */}
+222:             {state.kind !== 'success' && (
+223:                 <label
+224:                     htmlFor="verify-bundle-file"
+225:                     onDragOver={(e) => {
+226:                         e.preventDefault();
+227:                         setDragOver(true);
+228:                     }}
+229:                     onDragLeave={() => setDragOver(false)}
+230:                     onDrop={onDrop}
+231:                     className="block cursor-pointer"
+232:                 >
+233:                     <input
+234:                         id="verify-bundle-file"
+235:                         ref={inputRef}
+300:                         {state.data.verified
+301:                             ? 'The files in this bundle match the manifest packaged alongside them. This does not authenticate who produced the bundle: the manifest and Merkle root come from the upload itself, so a bundle with replaced files and a regenerated manifest passes the same checks.'
+302:                             : 'At least one file or the Merkle root does not match the manifest packaged inside the bundle.'}
+303:                     </p>
+304: 
+305:                     <Card variant="outline" className="overflow-hidden">
+306:                         {state.data.checks.map((c, i) => (
+307:                             <div
+308:                                 key={i}
+309:                                 className="flex items-start gap-3 border-b border-re-border-subtle px-4 py-3 last:border-0"
+310:                             >
+311:                                 <div className="mt-0.5 shrink-0">
+312:                                     {c.passed ? (
+313:                                         <CheckCircle2
+314:                                             className="h-4 w-4 text-re-success"
+315:                                             strokeWidth={1.75}
+316:                                             aria-hidden="true"
+317:                                         />
+318:                                     ) : (
+319:                                         <XCircle
+320:                                             className="h-4 w-4 text-re-danger"
+321:                                             strokeWidth={1.75}
+322:                                             aria-hidden="true"
+323:                                         />
+324:                                     )}
+325:                                 </div>
+326:                                 <div className="min-w-0 flex-1">
+327:                                     <div className="text-ui font-medium text-re-text-primary">
+328:                                         {c.name}
+329:                                     </div>
+330:                                     {c.detail && (
+331:                                         <div className="mt-0.5 break-all font-mono text-[0.8125rem] text-re-text-tertiary">
+332:                                             {c.detail}
+333:                                         </div>
+334:                                     )}
+335:                                 </div>
+336:                             </div>
+337:                         ))}
+338:                     </Card>
+339: 
+340:                     <Card variant="inset" className="p-4 font-mono text-[0.8125rem] text-re-text-tertiary">
+341:                         <div className="break-all">
+342:                             <span className="text-re-text-muted">
+343:                                 merkle_root_recomputed:{' '}
+344:                             </span>
+345:                             <span className="text-re-text-primary">
+346:                                 {state.data.merkle_root_recomputed}
+347:                             </span>
+348:                         </div>
+349:                         <div className="mt-1 break-all">
+350:                             <span className="text-re-text-muted">
+351:                                 timestamp:{' '}
+352:                             </span>
+353:                             <span className="text-re-text-primary">
+354:                                 {state.data.timestamp}
+355:                             </span>
+356:                         </div>
+357:                     </Card>
+358: 
+359:                     <div>
+360:                         <Button variant="secondary" size="lg" onClick={reset}>
+361:                             Verify another bundle
+362:                         </Button>
+363:                     </div>
+364:                 </div>
+365:             )}
+366:         </Card>
+367:     );
+368: }
+369: 
+370: function CopyButton({ text }: { text: string }) {
+371:     const [copied, setCopied] = useState(false);
+372:     return (
+373:         <Button
+374:             type="button"
+375:             variant="ghost"
+376:             size="icon"
+377:             onClick={() => {
+378:                 navigator.clipboard.writeText(text);
+379:                 setCopied(true);
+380:                 setTimeout(() => setCopied(false), 2000);
+381:             }}
+382:             title="Copy to clipboard"
+383:             aria-label="Copy to clipboard"
+384:         >
+385:             {copied ? (
+386:                 <Check className="text-re-success" strokeWidth={1.75} aria-hidden="true" />
+387:             ) : (
+388:                 <Copy strokeWidth={1.75} aria-hidden="true" />
+389:             )}
+390:         </Button>
+391:     );
+392: }
+393: 
+394: export default function VerifyPage() {
+395:     return (
+396:         <div className="re-page min-h-screen">
+397:             {/* ─── Hero ──────────────────────────────────────────────── */}
+398:             <Container className="pb-[60px] pt-20">
+399:                 <PageHeader
+400:                     size="hero"
+401:                     eyebrow={
+402:                         <Badge tone="brand">
+403:                             <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+404:                             Open Source • Apache 2.0 License
+405:                         </Badge>
+406:                     }
+407:                     title="Verify, Don't Trust"
+408:                     className="mb-0 border-b-0 pb-0"
+409:                 />
+410: 
+411:                 <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
+412:                     Every public RegEngine proof bundle carries a{' '}
+413:                     <strong className="font-medium text-re-text-primary">SHA-256 manifest and Merkle root</strong>.
+414:                     Our open-source verification script lets you independently check that
+415:                     the bundle is consistent with its own manifest — without relying on our servers.
+416:                     It does not authenticate who published the bundle.
+417:                 </p>
+418: 
+419:                 <div className="mt-8 flex flex-wrap gap-3">
+420:                     <Button asChild size="lg">
+421:                         <a href="/sdk/verify_chain.py" download>
+422:                             <Download strokeWidth={1.75} aria-hidden="true" />
+423:                             Download verify_chain.py
+424:                         </a>
+425:                     </Button>
+426:                     <Button asChild variant="secondary" size="lg">
+427:                         <a href="#how-it-works">
+428:                             <Terminal strokeWidth={1.75} aria-hidden="true" />
+429:                             See How It Works
+430:                         </a>

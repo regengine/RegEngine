@@ -1,0 +1,12 @@
+UTC: 2026-10-03T02:12:10.494615+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import socket; from pathlib import Path; print("Checking only loopback QA listeners"); [(print(port, "open" if socket.socket().connect_ex(("127.0.0.1",port))==0 else "closed")) for port in [3102,3114,3950]]; print("3950 belongs to the orchestrator and is deliberately retained")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Checking only loopback QA listeners
+3102 closed
+3114 closed
+3950 open
+3950 belongs to the orchestrator and is deliberately retained

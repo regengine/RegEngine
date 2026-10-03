@@ -1,0 +1,22 @@
+UTC: 2026-10-03T00:37:43.864053+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; print("\n".join(l for l in Path("/private/tmp/regengine-qa-backend-deps/typesafe_sdk-0.7.2.dist-info/METADATA").read_text().splitlines() if l.startswith("Requires-Dist"))); import subprocess; subprocess.run(["rg","-n","^(httpx2|httpcore2|truststore|brotli|brotlicffi|pydantic|typing-extensions|sniffio|anyio|certifi|h11)==","requirements.lock"],check=False)'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+156:anyio==4.14.2 \
+356:certifi==2026.7.22 \
+1324:h11==0.16.0 \
+1343:httpcore2==2.12.0 \
+1418:httpx2==2.12.0 \
+2895:pydantic==2.13.5 \
+3552:sniffio==1.3.1 \
+3681:truststore==0.10.4 \
+3695:typing-extensions==4.16.0 \
+Requires-Dist: httpx2>=2.0.0
+Requires-Dist: pydantic>=2.12.0
+Requires-Dist: pydantic-core>=2.41.1
+Requires-Dist: tenacity>=9.0.0
+Requires-Dist: typing-extensions>=4.13.0
+Requires-Dist: httpx2[http2]>=2.0.0 ; extra == 'http2'

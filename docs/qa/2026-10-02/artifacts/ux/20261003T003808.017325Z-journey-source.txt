@@ -1,0 +1,684 @@
+UTC: 2026-10-03T00:38:08.017325+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["frontend/src/app/verify/page.tsx","frontend/src/app/login/page.tsx","frontend/src/app/demo/page.tsx","frontend/src/app/contact/page.tsx","frontend/src/components/cookie-consent/CookieBanner.tsx"]; [print("FILE",p,"\n",Path(p).read_text()[:7000]) for p in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE frontend/src/app/verify/page.tsx 
+ 'use client';
+
+import { useCallback, useRef, useState } from 'react';
+import {
+    ShieldCheck,
+    Terminal,
+    Download,
+    ExternalLink,
+    CheckCircle2,
+    Lock,
+    FileCode,
+    Copy,
+    Check,
+    Upload,
+    XCircle,
+    FileArchive,
+} from 'lucide-react';
+
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card, CardHeader } from '@/components/ui/card';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { cn } from '@/lib/utils';
+
+const PROOF_VERIFY_ENDPOINT = '/api/ingestion/api/v1/proof/verify';
+
+const TERMINAL_OUTPUT = `$ python verify_chain.py audit-bundle.zip
+manifest: ok
+files: 2 / 2 sha256 matches
+merkle: root recomputed and matched
+result: bundle intact`;
+
+const CODE_SAMPLE = `#!/usr/bin/env python3
+"""Run the public RegEngine bundle verifier from Python."""
+
+from pathlib import Path
+import subprocess
+import sys
+
+bundle = Path("audit-bundle.zip")
+result = subprocess.run(
+    [sys.executable, "verify_chain.py", str(bundle)],
+    check=False,
+    text=True,
+    capture_output=True,
+)
+
+print(result.stdout, end="")
+if result.stderr:
+    print(result.stderr, file=sys.stderr, end="")
+
+raise SystemExit(result.returncode)`;
+
+const INSTALL_STEPS = [
+    {
+        title: 'Download the script',
+        code: 'curl -O https://regengine.co/sdk/verify_chain.py',
+        desc: 'Single file, no package manager needed.',
+    },
+    {
+        title: 'Download a sample bundle',
+        code: 'curl -O https://regengine.co/proof/audit-bundle.zip',
+        desc: 'The ZIP contains manifest.json plus synthetic FSMA/EPCIS evidence files.',
+    },
+    {
+        title: 'Verify the bundle',
+        code: 'python verify_chain.py audit-bundle.zip',
+        desc: 'Works entirely offline. No RegEngine account required.',
+    },
+];
+
+const TRUST_MODEL = [
+    {
+        Icon: Lock,
+        title: 'Deterministic File Hashing',
+        desc: 'Every evidence file in the bundle is hashed with SHA-256 and compared with the manifest. Same bytes always produce the same hash.',
+    },
+    {
+        Icon: FileCode,
+        title: 'Open Source',
+        desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
+    },
+    {
+        Icon: ShieldCheck,
+        title: 'Offline Capable',
+        desc: 'Download the ZIP and verify it entirely offline. No API calls, no network, no RegEngine account required.',
+    },
+];
+
+const BUNDLE_CHECK_STEPS = [
+    { step: '1', label: 'Read Manifest', detail: 'Load manifest.json from the audit bundle ZIP' },
+    { step: '2', label: 'Hash Files', detail: 'Recompute SHA-256 for each declared evidence file' },
+    { step: '3', label: 'Rebuild Merkle Root', detail: 'Use the file hashes as leaves with the published tree algorithm' },
+    { step: '4', label: 'Compare', detail: 'If every file hash and the root match the manifest inside the bundle, the bundle is self-consistent. The check does not authenticate who produced it.' },
+];
+
+type ManifestField = { field: string; meaning: string; example: string };
+
+const MANIFEST_FIELDS: ManifestField[] = [
+    { field: 'files[].path', meaning: 'Evidence file inside the ZIP', example: 'fsma-204-sample.csv' },
+    { field: 'files[].sha256', meaning: 'Declared SHA-256 digest for that file', example: 'ab250df1f9ed...' },
+    { field: 'files[].size', meaning: 'Declared byte length', example: '1524' },
+    { field: 'merkle.leaves[]', meaning: 'Ordered file hashes used as tree leaves', example: 'ab250df1f9ed...' },
+    { field: 'merkle.root', meaning: 'Declared root of the evidence tree', example: 'a320428f4057...' },
+    { field: 'build.commit', meaning: 'Code revision that produced the sample bundle', example: '64542033f908...' },
+];
+
+const MANIFEST_COLUMNS: DataTableColumn<ManifestField>[] = [
+    { key: 'field', header: 'Field', mono: true, width: '14rem' },
+    { key: 'meaning', header: 'Meaning' },
+    { key: 'example', header: 'Example', mono: true },
+];
+
+const PROSE_LINK =
+    'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
+
+/** Terminal transcript colouring — the word on the line always carries the meaning too. */
+function transcriptLineClass(line: string): string {
+    if (line.startsWith('✓ VALID')) return 'text-re-success';
+    if (line.startsWith('✗ INVALID')) return 'text-re-danger';
+    if (line.startsWith('$')) return 'text-re-text-primary';
+    if (line.startsWith('===') || line.startsWith('---')) return 'text-re-text-disabled';
+    if (line.includes('SUMMARY')) return 'text-re-info';
+    if (line.includes('REGENGINE')) return 'text-re-info';
+    return 'text-re-text-secondary';
+}
+
+/* ─────────────────────────────────────────────────────────────
+   VerifyWidget — drop-and-verify export bundle
+   ───────────────────────────────────────────────────────────── */
+type VerifyCheck = { name: string; passed: boolean; detail?: string };
+type VerifyResponse = {
+    verified: boolean;
+    checks: VerifyCheck[];
+    merkle_root_recomputed: string;
+    timestamp: string;
+};
+
+type VerifyState =
+    | { kind: 'idle' }
+    | { kind: 'loading' }
+    | { kind: 'success'; data: VerifyResponse }
+    | { kind: 'error'; message: string };
+
+function VerifyWidget() {
+    const [state, setState] = useState<VerifyState>({ kind: 'idle' });
+    const [file, setFile] = useState<File | null>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleFile = useCallback((f: File | null) => {
+        if (!f) return;
+        setFile(f);
+        setState({ kind: 'idle' });
+    }, []);
+
+    const onDrop = useCallback(
+        (e: React.DragEvent<HTMLLabelElement>) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0] ?? null;
+            handleFile(f);
+        },
+        [handleFile],
+    );
+
+    const onSubmit = useCallback(async () => {
+        if (!file) return;
+        setState({ kind: 'loading' });
+
+        const formData = new FormData();
+        formData.append('bundle', file);
+
+        try {
+            const res = await fetch(PROOF_VERIFY_ENDPOINT, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (res.status === 429) {
+                setState({
+                    kind: 'error',
+                    message:
+                        'Rate limit reached (10/min). Try again in a minute.',
+                });
+                return;
+            }
+
+            if (!res.ok) {
+                setState({
+                    kind: 'error',
+    
+FILE frontend/src/app/login/page.tsx 
+ import { Suspense } from 'react';
+import PasswordlessEntryClient from './PasswordlessEntryClient';
+
+export default function LoginPageWrapper() {
+    return (
+        <Suspense>
+            <PasswordlessEntryClient />
+        </Suspense>
+    );
+}
+
+FILE frontend/src/app/demo/page.tsx 
+ 'use client';
+
+import Link from 'next/link';
+import {
+  ShieldAlert, Clock, Truck, Leaf, Package, Anchor,
+  Building2, ArrowRight, BarChart3, Users, FileText, Zap,
+} from 'lucide-react';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { StatTile } from '@/components/ui/stat-tile';
+import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
+
+// ---------------------------------------------------------------------------
+// Synthetic demo data — what a mid-market produce distributor would see
+// ---------------------------------------------------------------------------
+
+const COMPLIANCE_SCORE = 94.2;
+const TOTAL_EVENTS = 12847;
+const COMPLIANT_EVENTS = 12102;
+const NON_COMPLIANT_EVENTS = 745;
+const SUPPLIERS = 23;
+const FACILITIES = 3;
+
+const RECENT_EVENTS = [
+  { tlc: 'RVF-ROM-041426-F3-001', cte: 'harvesting', product: 'RM HRTS 3PK 24CT', supplier: 'Rio Verde Farms', status: 'compliant', time: '2h ago' },
+  { tlc: 'VFP-SPIN5-041426-001', cte: 'initial_packing', product: 'BABY SPINACH 5OZ CLAM', supplier: 'Valley Fresh Packhouse', status: 'compliant', time: '3h ago' },
+  { tlc: 'FL-SHIP-041426-088', cte: 'shipping', product: 'RM HRTS 3PK 24CT', supplier: 'FreshLine Distribution', status: 'non_compliant', time: '4h ago' },
+  { tlc: 'MG-RECV-041426-201', cte: 'receiving', product: 'ORG CURLY KALE 1# BAG', supplier: 'Metro Grocery DC', status: 'compliant', time: '5h ago' },
+  { tlc: 'GL-CHPROM-041426-A', cte: 'transformation', product: 'CHOPPED ROMAINE 1# BAG', supplier: 'GreenLeaf Processing', status: 'non_compliant', time: '6h ago' },
+  { tlc: 'RVF-KALE-041426-F1-002', cte: 'harvesting', product: 'CURLY KALE 24CT', supplier: 'Rio Verde Farms', status: 'compliant', time: '6h ago' },
+  { tlc: 'ACS-COOL-041426-007', cte: 'cooling', product: 'BABY SPINACH BULK 20#', supplier: 'Arctic Chain Cold Storage', status: 'compliant', time: '7h ago' },
+  { tlc: 'VFP-CIL-041426-001', cte: 'initial_packing', product: 'CILANTRO BNCH 60CT', supplier: 'Valley Fresh Packhouse', status: 'compliant', time: '8h ago' },
+];
+
+const RULE_VIOLATIONS = [
+  { rule: 'Shipping: Ship-To Location Required', count: 12, severity: 'critical', cte: 'shipping' },
+  { rule: 'Receiving: TLC Source Reference Required', count: 8, severity: 'critical', cte: 'receiving' },
+  { rule: 'Reference Document Required for All CTEs', count: 15, severity: 'warning', cte: 'all' },
+  { rule: 'Transformation: Input TLCs Required', count: 5, severity: 'critical', cte: 'transformation' },
+  { rule: 'Receiving: Immediate Previous Source Required', count: 3, severity: 'critical', cte: 'receiving' },
+];
+
+const SUPPLIER_SCORES = [
+  { name: 'Rio Verde Farms', score: 98.5, events: 3200, status: 'excellent' },
+  { name: 'Valley Fresh Packhouse', score: 96.1, events: 2800, status: 'excellent' },
+  { name: 'Arctic Chain Cold Storage', score: 94.8, events: 1200, status: 'good' },
+  { name: 'FreshLine Distribution', score: 87.3, events: 2400, status: 'needs_attention' },
+  { name: 'GreenLeaf Processing', score: 82.1, events: 1800, status: 'at_risk' },
+];
+
+const CTE_BREAKDOWN = [
+  { cte: 'Harvesting', icon: Leaf, count: 3420, compliant: 3388, pct: 99.1 },
+  { cte: 'Cooling', icon: Clock, count: 1856, compliant: 1820, pct: 98.1 },
+  { cte: 'Initial Packing', icon: Package, count: 2104, compliant: 2055, pct: 97.7 },
+  { cte: 'Shipping', icon: Truck, count: 2680, compliant: 2450, pct: 91.4 },
+  { cte: 'Receiving', icon: Building2, count: 2187, compliant: 1989, pct: 90.9 },
+  { cte: 'Transformation', icon: Zap, count: 480, compliant: 400, pct: 83.3 },
+  { cte: 'FLBR', icon: Anchor, count: 120, compliant: 120, pct: 100 },
+];
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+const SUPPLIER_STATE: Record<string, ComplianceState> = {
+  excellent: 'compliant',
+  good: 'compliant',
+  needs_attention: 'at-risk',
+  at_risk: 'non-compliant',
+};
+
+/** Coverage bar tone. The number beside it carries the same meaning in text. */
+function coverageTone(pct: number) {
+  if (pct >= 95) return 'bg-re-success';
+  if (pct >= 90) return 'bg-re-warning';
+  return 'bg-re-danger';
+}
+
+export default function DemoPage() {
+  return (
+    <Container width="app" className="py-8">
+      <div className="mb-6">
+        <DemoBanner visible={true} />
+      </div>
+      {/* Page header */}
+      <PageHeader
+        title="Compliance Dashboard"
+        description={
+          <>
+            DEMO WORKSPACE &mdash; FreshCo Distribution is a fictional distributor. Numbers are illustrative.
+          </>
+        }
+      />
+
+      {/* Top stats row */}
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatTile label="FSMA Readiness Score" value={`${COMPLIANCE_SCORE}%`} />
+        <StatTile label="Total Events" value={TOTAL_EVENTS.toLocaleString()} />
+        <StatTile label="Active Suppliers" value={String(SUPPLIERS)} />
+        <StatTile label="Open Violations" value={String(NON_COMPLIANT_EVENTS)} />
+      </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* CTE Breakdown */}
+        <Card padding="spacious" className="lg:col-span-2">
+          <h2 className="mb-4 flex items-center gap-2 text-subheading text-re-text-primary">
+            <BarChart3 className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            Compliance by CTE Type
+          </h2>
+          <ul className="space-y-3">
+            {CTE_BREAKDOWN.map((cte) => (
+              <li key={cte.cte} className="flex items-center gap-3">
+                <cte.icon className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+                <span className="w-28 shrink-0 text-ui text-re-text-secondary">{cte.cte}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-re-surface-inset">
+                  <div
+                    className={`h-full rounded-full ${coverageTone(cte.pct)}`}
+                    style={{ width: `${cte.pct}%` }}
+                  />
+                </div>
+                <span className="w-12 shrink-0 text-right font-mono text-ui tabular-nums text-re-text-secondary">
+                  {cte.pct}%
+                </span>
+                <span className="hidden w-24 shrink-0 text-right font-mono text-label tabular-nums text-re-text-muted sm:block">
+                  {cte.count.toLocaleString()} events
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {/* Top Rule Violations */}
+        <Card padding="spacious">
+          <h2 className="mb-4 flex items-center gap-2 text-subheading text-re-text-primary">
+            <ShieldAler
+FILE frontend/src/app/contact/page.tsx 
+ 'use client';
+
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { useState } from 'react';
+import Link from "next/link";
+import { MessageSquare, Clock, Send } from "lucide-react";
+import { Container } from '@/components/layout/container';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Card } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input, fieldControlClasses } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+
+export default function ContactPage() {
+  const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('submitting');
+    try {
+      const res = await fetchWithCsrf('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error(`API responded ${res.status}`);
+      setStatus('success');
+      setForm({ name: '', email: '', company: '', message: '', website: '' });
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-re-surface-base">
+      <Container as="section" width="marketing" className="py-12 sm:py-16">
+        <PageHeader
+          size="hero"
+          eyebrow={<span className="font-mono uppercase">Contact</span>}
+          title="Talk with the RegEngine team"
+          description="Reach out for FSMA 204 implementation support, pilot onboarding, or enterprise pricing."
+          className="border-b-0 pb-0"
+        />
+
+        {/* Gap Analysis Offer */}
+        <Card padding="compact" className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <span className="text-ui text-re-text-secondary">
+            <strong className="font-medium text-re-text-primary">Book a free gap-analysis call</strong>{' '}
+            — 30 minutes with the founder to walk through your FSMA 204 posture and identify coverage gaps.
+          </span>
+          <Button asChild variant="secondary" size="lg" className="shrink-0">
+            <a
+              href="https://calendly.com/regengine/fsma-strategy-session"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Book call
+            </a>
+          </Button>
+        </Card>
+
+        <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {/* ── Contact Form Card ── */}
+          <Card padding="spacious" className="md:col-span-2">
+            <p className="text-subheading text-re-text-primary">Contact options</p>
+
+            {status === 'success' ? (
+              <Callout tone="success" role="status" className="mt-4">
+                <p className="font-medium text-re-text-primary">Message sent</p>
+                <p className="mt-1">
+                  We&apos;ll respond within one business day.
+                </p>
+              </Callout>
+            ) : (
+              <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
+                {/* Honeypot — hidden from humans; bots that auto-fill it are
+                    dropped server-side (/api/contact). */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  value={form.website}
+                  onChange={update('website')}
+                  style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Name" htmlFor="contact-name" required>
+                    <Input
+                      name="name"
+                      type="text"
+                      placeholder="Name"
+                      size="lg"
+                      value={form.name}
+                      onChange={update('name')}
+                    />
+                  </Field>
+                  <Field label="Email" htmlFor="contact-email" required>
+                    <Input
+                      name="email"
+                      type="email"
+                      placeholder="Email"
+                      size="lg"
+                      value={form.email}
+                      onChange={update('email')}
+                    />
+                  </Field>
+                </div>
+                <Field label="Company" htmlFor="contact-company">
+                  <Input
+                    name="company"
+                    type="text"
+                    placeholder="Company"
+                    size="lg"
+                    value={form.company}
+                    onChange={update('company')}
+                  />
+                </Field>
+                <Field label="Message" htmlFor="contact-message" required>
+                  <Textarea
+                    name="message"
+                    placeholder="How can we help?"
+                    rows={4}
+                    value={form.message}
+                    onChange={update('message')}
+                    className={`${fieldControlClasses} h-auto min-h-[7rem] resize-none py-2.5`}
+                  />
+                </Field>
+
+                {status === 'error' && (
+                  <Callout tone="danger" role="alert">
+                    Something went wrong. Please try again or email us directly.
+                  </Callout>
+                )}
+
+                <Button type="submit" size="lg" className="self-start" loading={status === 'submitting'} leadingIcon={<Send className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}>
+                  {status === 'submitting' ? 'Sending…' : 'Send message'}
+                </Button>
+
+                <p className="text-small text-re-text-muted">
+                  Or email us directly at{' '}
+                  <a href="mailto:chris@regengine.co" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
+                    chris@regengine.co
+                  </a>
+                </p>
+              </form>
+            )}
+          </Card>
+
+          {/* ── Side Cards ── */}
+          <div className="flex flex-col gap-4">
+            <Card padding="spacious">
+              <MessageSquare className="mb-2 h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <p className="text-subheading text-re-text-primary">Assessment Intake</p>
+              <p className="mt-1 text-ui text-re-text-se
+FILE frontend/src/components/cookie-consent/CookieBanner.tsx 
+ 'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+import { Cookie, X } from 'lucide-react';
+import {
+  getStoredConsent,
+  setConsentCookie,
+  type ConsentValue,
+} from '@/lib/cookie-consent';
+import { shouldHideMarketingChrome } from '@/lib/app-routes';
+
+interface CookieBannerProps {
+  /** Only render Vercel Analytics + SpeedInsights when this is true (env gate). */
+  enableAnalytics: boolean;
+}
+
+/**
+ * GDPR-compliant cookie consent banner.
+ *
+ * - Shows on first visit (no stored consent).
+ * - Accept / Decline — no pre-checked boxes, no tracking before Accept.
+ * - Consent stored in `re_cookie_consent` cookie (not localStorage).
+ * - Re-openable via the `re:show-cookie-prefs` DOM event (fired from footer link).
+ * - Conditionally mounts Vercel Analytics only after "accepted".
+ */
+export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
+  const pathname = usePathname();
+  const [consent, setConsent] = useState<ConsentValue | null | 'loading'>('loading');
+  const [visible, setVisible] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const hideBanner = shouldHideMarketingChrome(pathname);
+
+  // Read stored consent on mount
+  useEffect(() => {
+    const stored = getStoredConsent();
+    queueMicrotask(() => {
+      setConsent(stored);
+      if (stored === null) setVisible(true);
+    });
+  }, []);
+
+  // Listen for the "reopen preferences" event dispatched by the footer link
+  useEffect(() => {
+    const handler = () => setVisible(true);
+    document.addEventListener('re:show-cookie-prefs', handler);
+    return () => document.removeEventListener('re:show-cookie-prefs', handler);
+  }, []);
+
+  // Keep the first-visit banner from sitting above the mobile navigation drawer.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const { open } = (event as CustomEvent<{ open?: boolean }>).detail ?? {};
+      setMobileMenuOpen(Boolean(open));
+    };
+
+    window.addEventListener('re:mobile-menu-state', handler);
+    return () => window.removeEventListener('re:mobile-menu-state', handler);
+  }, []);
+
+  const handleAccept = () => {
+    setConsentCookie('accepted');
+    setConsent('accepted');
+    setVisible(false);
+  };
+
+  const handleDecline = () => {
+    setConsentCookie('declined');
+    setConsent('declined');
+    setVisible(false);
+  };
+
+  const handleDismiss = () => {
+    // Dismiss without changing consent: only hides if a preference was already set
+    if (consent !== null && consent !== 'loading') {
+      setVisible(false);
+    }
+  };
+
+  return (
+    <>
+      {/* ── Analytics — only after explicit acceptance ── */}
+      {enableAnalytics && consent === 'accepted' && (
+        <>
+          <Analytics />
+          <SpeedInsights />
+        </>
+      )}
+
+      {/* ── Cookie Banner ─────────────────────────────── */}
+      {visible && !hideBanner && !mobileMenuOpen && (
+        <div
+          role="dialog"
+          aria-modal="false"
+          aria-label="Cookie consent"
+          className="fixed bottom-3 left-3 right-3 z-[var(--re-z-toast)] pointer-events-none sm:bottom-4 sm:left-auto sm:right-4"
+        >
+          <div
+            className="pointer-events-auto w-full rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-[0_10px_26px_rgba(16,24,40,0.16)] sm:max-w-[520px]"
+          >
+            <div className="grid gap-2 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+              {/* Icon */}
+              <div className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] sm:flex">
+                <Cookie className="h-4 w-4 text-[var(--re-brand)]" />
+              </div>
+
+              {/* Content */}
+              <div className="min-w-0">
+                <div className="mb-0.5 flex items-start justify-between gap-2">
+                  <h2 className="text-sm font-semibold leading-5 text-[var(--re-text-primary)]">
+                    We use cookies
+                  </h2>
+                  {/* Dismiss button — only shown when a preference is already stored */}
+                  {consent !== null && consent !== 'loading' && (
+                    <button
+                      onClick={handleDismiss}
+                      aria-label="Close cookie banner"
+                      className="flex-shrink-0 text-[var(--re-text-muted)] transition-colors hover:text-[var(--re-text-primary)]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed">
+                  Essential sessions. Analytics only if accepted.{' '}
+                  <Link
+                    href="/privacy"
+                    className="text-[var(--re-brand)] underline hover:opacity-90"
+                  >
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
+              </div>
+
+              {/* Buttons — Accept first, Decline second (GDPR: no hierarchy via styling) */}
+              <div className="grid grid-cols-2 gap-2 sm:w-[230px] sm:flex-shrink-0">
+                <button
+                  onClick={handleAccept}
+                  className="inline-flex min-h-8 items-center justify-center rounded-md bg-[var(--re-brand)] px-2 py-1.5 text-xs font-semibold text-[var(--re-brand-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
+                >
+                  <span className="sm:hidden">Accept</span>
+                  <span className="hidden sm:inline">Accept analytics</span>
+                </button>
+                <button
+                  onClick={handleDecline}
+                  className="inline-flex min-h-8 items-center justify-center rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-2 py-1.5 text-xs font-semibold text-[var(--re-text-secondary)] transition-colors hover:border-[var(--re-text-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--re-brand)] sm:min-h-9 sm:px-3 sm:py-2"
+                >
+                  <span className="sm:hidden">Essential</span>
+                  <span className="hidden sm:inline">Essential only</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+

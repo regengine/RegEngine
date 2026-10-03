@@ -1,0 +1,20 @@
+UTC: 2026-10-03T02:03:33.193469+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env CI= NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ node node_modules/playwright/cli.js test --config=playwright.config.ts --project=chromium --reporter=list
+Exit: 1
+Duration: 0.30s
+Timeout: False
+
+Error: QA environment restriction: database/bootstrap helper is outside browser-only scope
+
+   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13
+
+  11 |   childProcess[method] = function (...args) {
+  12 |     if (args.slice(0, 2).flat().some(value => /seed_passwordless_e2e_user|start-e2e-backend|sqlite|alembic/.test(String(value)))) {
+> 13 |       throw new Error('QA environment restriction: database/bootstrap helper is outside browser-only scope');
+     |             ^
+  14 |     }
+  15 |     return original.apply(this, args);
+  16 |   };
+    at Object.childProcess.<computed> (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:13:13)
+

@@ -1,0 +1,516 @@
+{
+  "errors": [],
+  "csp": [
+    {
+      "directive": "connect-src",
+      "uri": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  ],
+  "requests": [],
+  "startedAt": "2026-10-03T00:51:43.180Z",
+  "lcp": 552,
+  "cls": 0,
+  "url": "/tools/ftl-checker",
+  "width": 390,
+  "height": 844,
+  "documentWidth": 390,
+  "title": "FTL List Checker | RegEngine",
+  "cameraAllowed": false,
+  "headings": [
+    {
+      "level": "H1",
+      "text": "FTL List Checker"
+    },
+    {
+      "level": "H2",
+      "text": "Select Your Product Categories"
+    },
+    {
+      "level": "H3",
+      "text": "Related Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Save your FTL coverage result"
+    },
+    {
+      "level": "H2",
+      "text": "Related Free Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Product"
+    },
+    {
+      "level": "H2",
+      "text": "Free Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Developers"
+    },
+    {
+      "level": "H2",
+      "text": "Company"
+    },
+    {
+      "level": "H2",
+      "text": "We use cookies"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "id": "ftl-search",
+      "type": "text",
+      "required": false,
+      "labels": [
+        "Search products (e.g. shrimp)"
+      ]
+    },
+    {
+      "tag": "INPUT",
+      "id": "email-gate-email",
+      "type": "email",
+      "required": true,
+      "labels": [
+        "Work email"
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "text": "",
+      "name": "Open navigation menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Close menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "All",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Seafood",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Produce",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Dairy",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Eggs",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Other",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Leafy Greens (fresh, intact)ListedWhole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Leafy Greens (fresh-cut)ListedBagged salad mix, spring mix, pre-washed spinach, chopped romaine, salad kits",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "TomatoesListedFresh tomatoes (not canned or dried)",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "PeppersListedBell peppers, jalape\u00f1os, chili peppers (fresh)",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "CucumbersListedFresh cucumbers",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Fresh HerbsListedCilantro, parsley, basil (fresh cut)",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "MelonsListedCantaloupe, honeydew, watermelon",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Tropical Tree FruitsListedMangoes, papayas, mamey, guava",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "SproutsListedAlfalfa, bean, broccoli sprouts",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Fresh-Cut FruitsListedPre-cut fruit mixes, fruit cups",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Fresh-Cut Vegetables (non-leafy)ListedVeggie trays, pre-cut carrots, celery sticks, broccoli florets",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Finfish \u2014 Scombrotoxin/Histamine-FormingListedTuna, mackerel, mahi-mahi, bluefish, amberjack, bonito",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Finfish \u2014 Ciguatoxin-AssociatedListedBarracuda, grouper, snapper, moray eel (tropical reef species)",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Finfish \u2014 Other (fresh/frozen/previously frozen)ListedSalmon, cod, halibut, tilapia, trout, bass, swordfish",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Smoked FinfishListedSmoked salmon, lox, kippered herring, smoked trout, smoked whitefish",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "CrustaceansListedShrimp, crab, lobster, crawfish",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Molluscan Shellfish (bivalves)ListedOysters, clams, mussels, scallops",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Ready-to-Eat Deli SaladsListedEgg salad, seafood salad, pasta salad, potato salad",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Shell EggsListedShell eggs as defined under the FDA FTL \u2014 typically chicken shell eggs from farms with \u22653,000 laying hens",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Nut ButtersListedPeanut butter, almond butter",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Fresh Soft CheeseListedQueso fresco, ricotta, mascarpone, cottage cheese, cream cheese, panela, boursin",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Soft Ripened & Semi-Soft CheeseListedBrie, camembert, monterey jack, muenster, havarti, oaxaca, feta (per FTL definition; verify your specific cheese)",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Cheese Made from Unpasteurized Milk (non-hard)ListedRaw-milk brie, raw-milk feta, raw-milk camembert, artisanal raw-milk soft cheeses",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Check Listed Groupings",
+      "name": null,
+      "disabled": true
+    },
+    {
+      "text": "Send verification code",
+      "name": null,
+      "disabled": true
+    },
+    {
+      "text": "Why do we ask?",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Cookie Preferences",
+      "name": "Manage cookie preferences",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Open accessibility settings",
+      "disabled": false
+    },
+    {
+      "text": "AcceptAccept analytics",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "EssentialEssential only",
+      "name": null,
+      "disabled": false
+    }
+  ],
+  "navigation": [
+    {
+      "responseStart": 13,
+      "domContentLoaded": 138.20000000298023,
+      "duration": 210.89999999850988
+    }
+  ],
+  "paint": [
+    {
+      "name": "first-paint",
+      "startTime": 544
+    },
+    {
+      "name": "first-contentful-paint",
+      "startTime": 544
+    }
+  ],
+  "resources": [
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/33z6z3yqdhczo.css",
+      "duration": 4
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2opt17kb2-y1b.js",
+      "duration": 4.200000002980232
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0if-vqkhyn-zc.js",
+      "duration": 18.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2jje5iww_qd69.js",
+      "duration": 19
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/turbopack-0f7399f4d3jo7.js",
+      "duration": 44.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1bp3h27_--af5.js",
+      "duration": 44.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1rp06u4aestqa.js",
+      "duration": 45.100000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0vpy0j91tkt0g.js",
+      "duration": 45.29999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3ayr3xiw5ibws.js",
+      "duration": 45.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vgpv7vwitdbl.js",
+      "duration": 45.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vwbp_e08hcyw.js",
+      "duration": 46.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2t9axac3ndvlm.js",
+      "duration": 47.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0495weyrij_jb.js",
+      "duration": 48.099999994039536
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3iexxw6lmjb-3.js",
+      "duration": 48.69999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1n9b0cqis20jz.js",
+      "duration": 49.099999994039536
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1kqs7gjo689li.js",
+      "duration": 49.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1v28qe1_f80tl.js",
+      "duration": 50.19999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/16urnqchmh6df.js",
+      "duration": 50.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1ad0m4le0rf6f.js",
+      "duration": 51.099999994039536
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/instrument.js",
+      "duration": 2.100000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/axe.js",
+      "duration": 3
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1jd45o61lrffn.js",
+      "duration": 50.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3mmrg7---us36.js",
+      "duration": 51.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3c62jcaf4y1oz.js",
+      "duration": 51.900000005960464
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/api/tools/check-access",
+      "duration": 1.1999999955296516
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    }
+  ],
+  "axe": {
+    "version": "4.13.0",
+    "violations": [],
+    "incomplete": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=axeAPI",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscuring",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+            "target": [
+              ".text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+          }
+        ]
+      }
+    ],
+    "passes": [
+      "aria-allowed-attr",
+      "aria-allowed-role",
+      "aria-conditional-attr",
+      "aria-deprecated-role",
+      "aria-dialog-name",
+      "aria-hidden-body",
+      "aria-hidden-focus",
+      "aria-prohibited-attr",
+      "aria-required-attr",
+      "aria-roles",
+      "aria-valid-attr-value",
+      "aria-valid-attr",
+      "autocomplete-valid",
+      "avoid-inline-spacing",
+      "button-name",
+      "bypass",
+      "color-contrast",
+      "document-title",
+      "duplicate-id-aria",
+      "empty-heading",
+      "form-field-multiple-labels",
+      "heading-order",
+      "html-has-lang",
+      "html-lang-valid",
+      "label-title-only",
+      "label",
+      "landmark-contentinfo-is-top-level",
+      "landmark-main-is-top-level",
+      "landmark-no-duplicate-contentinfo",
+      "landmark-no-duplicate-main",
+      "landmark-one-main",
+      "landmark-unique",
+      "link-in-text-block",
+      "link-name",
+      "list",
+      "listitem",
+      "meta-viewport-large",
+      "meta-viewport",
+      "nested-interactive",
+      "page-has-heading-one",
+      "region",
+      "scrollable-region-focusable",
+      "skip-link",
+      "tabindex",
+      "target-size"
+    ]
+  }
+}
