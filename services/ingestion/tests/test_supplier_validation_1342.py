@@ -79,6 +79,18 @@ def _mock_db(rows=None, raise_on_execute=False):
     return session
 
 
+def _ddl_columns(sql_file: str, table: str) -> set[str]:
+    """Column names of ``table`` as declared in an ``alembic/sql`` file."""
+    ddl = (Path(__file__).resolve().parents[3] / "alembic/sql" / sql_file).read_text()
+    body = ddl.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split("\n);", 1)[0]
+    return set(re.findall(r"^ {4}([a-z_]+) ", body, flags=re.MULTILINE))
+
+
+def _identifiers(sql: str) -> set[str]:
+    """Lower-case words of ``sql`` other than bind names. Keywords are upper-case, so these are identifiers."""
+    return set(re.findall(r"\b[a-z_]+\b", re.sub(r":\w+", " ", sql)))
+
+
 def _perfect_supplier():
     """A supplier that passes every check (score=100, status=compliant)."""
     now = datetime.now(timezone.utc)
@@ -196,34 +208,43 @@ class TestFetchSuppliers:
         monkeypatch.setattr(sv, "get_db_safe", lambda: None)
         assert _fetch_suppliers("t1") is None
 
-    def test_maps_rows_with_json_fields(self, monkeypatch):
+    def test_maps_rows_with_array_columns(self, monkeypatch):
+        """Rows carry what the driver returns: a uuid.UUID id and lists for the TEXT[] columns.
+
+        ``json.loads`` on those lists raised ``TypeError``, the except branch
+        returned ``None`` and the whole validation report came back empty for
+        any tenant with a populated array. ``SupplierValidationResult.supplier_id``
+        is ``str``, so the id is rendered. ``test_supplier_mgmt_pg.py`` reads
+        real rows back.
+        """
+        supplier_id = uuid.uuid4()
         session = _mock_db(
             rows=[
                 (
-                    "s1",
+                    supplier_id,
                     "Acme",
                     "a@x.com",
                     "pl-1",
                     "active",
                     3,
-                    "2026-04-18T00:00:00+00:00",
+                    datetime(2026, 4, 18, tzinfo=timezone.utc),
                     "compliant",
-                    '["kde1"]',
-                    '["Spinach"]',
+                    ["kde1"],
+                    ["Spinach"],
                 ),
             ]
         )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
         result = _fetch_suppliers("t1")
         assert len(result) == 1
-        assert result[0]["id"] == "s1"
+        assert result[0]["id"] == str(supplier_id)
         assert result[0]["missing_kdes"] == ["kde1"]
         assert result[0]["products"] == ["Spinach"]
 
-    def test_null_json_fields_become_empty(self, monkeypatch):
+    def test_null_array_columns_become_empty(self, monkeypatch):
         session = _mock_db(
             rows=[
-                ("s1", "A", "a@x.com", None, "active", 0, None, "unknown", None, None),
+                (uuid.uuid4(), "A", "a@x.com", None, "active", 0, None, "unknown", None, None),
             ]
         )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
@@ -243,6 +264,24 @@ class TestFetchSuppliers:
         _fetch_suppliers("tenant-xyz")
         _sql, params = session.execute.call_args[0]
         assert params == {"tid": "tenant-xyz"}
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The SELECT names ``fsma.tenant_suppliers`` columns as V042 declares them.
+
+        The mock session never parses SQL; ``test_supplier_mgmt_pg.py`` runs
+        the statement on a live cluster and this is the copy that needs no
+        database.
+        """
+        columns = _ddl_columns("V042__tenant_feature_data_tables.sql", "fsma.tenant_suppliers")
+        assert {"missing_kdes", "products"} <= columns  # the DDL parse itself still works
+
+        session = _mock_db(rows=[])
+        monkeypatch.setattr(sv, "get_db_safe", lambda: session)
+        _fetch_suppliers("t1")
+        sql = str(session.execute.call_args[0][0])
+
+        referenced = _identifiers(sql) - {"fsma", "tenant_suppliers"}
+        assert referenced <= columns, f"not columns of fsma.tenant_suppliers: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------
