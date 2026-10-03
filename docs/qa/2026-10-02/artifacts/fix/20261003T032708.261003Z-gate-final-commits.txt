@@ -1,0 +1,76 @@
+UTC: 2026-10-03T03:27:08.261003+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git log --format=fuller b5dd065e..HEAD
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+commit b6222b2942cfd1fee2ac1a3fa259857afeb55c67
+Author:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+AuthorDate: Fri Oct 2 20:26:47 2026 -0700
+Commit:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+CommitDate: Fri Oct 2 20:26:47 2026 -0700
+
+    fix(BE-004): return a client error for non-UTF8 CSV uploads
+
+    Root cause: CSV upload decoded bytes as UTF-8 without handling UnicodeDecodeError, turning unsupported encodings and binary uploads into HTTP 500.
+
+    Fix: catch only the decode failure after the existing bounded upload read and return actionable HTTP 400 guidance to export UTF-8 CSV. Preserve MIME behavior, BOM handling and valid Unicode content.
+
+    Proving test: services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error. Before: 3 failed with HTTP 500. After QA, malformed-input, upload-limit, streaming-upload and receipt suites: 79 passed, 3 unrelated expected failures. Scoped Ruff and diff checks passed; independent gate accepted.
+
+commit f769b82eb6bfab52efdcdf39b133107579a32064
+Author:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+AuthorDate: Fri Oct 2 20:25:32 2026 -0700
+Commit:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+CommitDate: Fri Oct 2 20:25:32 2026 -0700
+
+    fix(BE-002): reject nonfinite ingestion quantities
+
+    Root cause: positive float validation allowed infinity, and nested CSV input quantities accepted NaN/infinity. Nonfinite validation inputs also could not be serialized into the intended JSON error response.
+
+    Fix: enforce finite event quantities and nested CSV inputs while preserving positive output and nonnegative input rules. Normalize only nonfinite floats in validation error details to strings so raw numeric overflow receives structured HTTP 422 before ingestion.
+
+    Proving tests: services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity, test_csv_rejects_nonfinite_input_quantity and test_webhook_nonfinite_quantity_returns_validation_error_before_ingest. Before: 6 CSV failures. Related suites: 216 passed, 6 unrelated expected failures; independent locked-framework selection: 65 passed, 6 expected failures. Ruff passes; focused mypy retains only the pre-existing optional CSV header error. Independent gate accepted.
+
+commit 21a6e6cce9f74c9322316f953e29843a74101048
+Author:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+AuthorDate: Fri Oct 2 20:21:41 2026 -0700
+Commit:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+CommitDate: Fri Oct 2 20:21:41 2026 -0700
+
+    fix(BE-003): reject duplicate normalized CSV headers
+
+    Root cause: DictReader and normalized header maps silently retained the last duplicate value, replacing a legitimate quantity.
+
+    Fix: inspect normalized header names before constructing row dictionaries and reject duplicate columns with their names and positions. Preserve the existing comment-row test intent using distinct headers and prove duplicate rejection occurs before row reads.
+
+    Proving test: services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers. Before: 2 failed, showing HTTP 200 and quantity 999 replacing 10. After QA, malformed-input, header-mapping and CSV parser suites: 258 passed, 12 unrelated expected failures. Scoped Ruff and diff checks pass. Independent local gate accepted.
+
+commit dbdacb67a3652bfa1c3168b14c633b011b061a80
+Author:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+AuthorDate: Fri Oct 2 20:19:38 2026 -0700
+Commit:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+CommitDate: Fri Oct 2 20:19:38 2026 -0700
+
+    fix(BE-010): enforce request limits on actual ASGI bytes
+
+    Root cause: the global request limiter trusted Content-Length and let streamed or underreported bodies reach handlers without an actual byte cap.
+
+    Fix: use bounded ASGI pre-read and replay, rejecting each oversized chunk before retention or handler dispatch. Preserve header early rejection, exemptions, disconnect and timeout behavior. Convert the QA expected failure and add deceptive-length, exact-limit, parser, multipart and streaming-response controls.
+
+    Proving test: tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length. Before: 1 failed, 2 passed. Final focused suite: 62 passed. Locked-framework gate: 60 passed before two added compatibility controls. Related middleware suite: 46 passed, 5 pre-existing guarded Redis failures, reproduced with original middleware. Ruff and focused mypy pass. Independent gate accepted.
+
+commit a7f001fcadc7d44dfeeacde3e05d337a296e48a8
+Author:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+AuthorDate: Fri Oct 2 20:17:10 2026 -0700
+Commit:     Christopher <131207452+PetrefiedThunder@users.noreply.github.com>
+CommitDate: Fri Oct 2 20:17:10 2026 -0700
+
+    fix(FE-001): preserve complete GS1 lot identifiers
+
+    Root cause: variable-length fields treated AI-like digits within lot and serial data as implicit boundaries, while normalization discarded explicit parenthesized boundaries.
+
+    Fix: terminate variable fields only at explicit group separators or end of input, preserving parenthesized AI delimiters. Convert FE-001 unit and browser expected failures to ordinary regressions and cover delimiter, final-field and maximum-length cases.
+
+    Proving tests: frontend/src/__tests__/lib/qa-sweep-gs1.test.ts::FE-001 preserves lot %s through the group separator; frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts::FE-001 preserves complete GS1 lot identifiers in the real scanner form. Negative control: 9 failed. Related suite: 39 passed, 3 unrelated expected failures. Chromium/Firefox/WebKit: 3 passed. Node 20 build passed. Independent local gate accepted.

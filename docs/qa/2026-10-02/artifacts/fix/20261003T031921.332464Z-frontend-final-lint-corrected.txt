@@ -1,0 +1,79 @@
+UTC: 2026-10-03T03:19:21.332464+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env PATH=/private/tmp/obsong-qa-node20/node_modules/node/bin:/opt/homebrew/bin:/usr/bin:/bin NPM_CONFIG_GLOBALCONFIG=/private/tmp/regengine-fix-empty-global-npmrc NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs npm run lint
+Exit: 0
+Duration: 15.29s
+Timeout: False
+
+
+> regengine-frontend@0.1.0 lint
+> eslint . && node scripts/design-lint.mjs
+
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/eslint.config.mjs
+  8:1  warning  Assign array to a variable before exporting as module default  import/no-anonymous-default-export
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/scripts/design-lint.mjs
+  144:3   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  155:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  159:7   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  164:3   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  167:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  169:32  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  170:3   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/scripts/production-readiness.mjs
+  39:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  40:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  64:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/scripts/promise-audit.mjs
+  198:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  231:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/scripts/security-release-gate-audit.mjs
+  79:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/auth/verify/VerifyClient.tsx
+  66:7  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/dashboard/suppliers/page.tsx
+  440:54  warning  Do not use `window.location.href` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/layout.tsx
+  58:9  warning  Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/marketing/sandbox-grid/SandboxPdfReport.ts
+  243:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+  303:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/global-setup.ts
+   27:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   33:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   64:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   67:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  102:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  116:17  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  120:21  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  143:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  149:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  163:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  166:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  172:17  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  196:5   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  219:21  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/invite_flow.spec.ts
+   18:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   31:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   40:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   51:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   73:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   88:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  121:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  132:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+✖ 41 problems (0 errors, 41 warnings)
+  0 errors and 2 warnings potentially fixable with the `--fix` option.
+
+design-lint: clean (676 files)

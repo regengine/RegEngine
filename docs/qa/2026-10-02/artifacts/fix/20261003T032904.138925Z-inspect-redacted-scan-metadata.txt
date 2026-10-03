@@ -1,0 +1,27 @@
+UTC: 2026-10-03T03:29:04.138925+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import json; from pathlib import Path; findings=json.loads(Path("/private/tmp/regengine-fix-artifacts-prescan.json").read_text()); print(json.dumps([{k:f.get(k) for k in ["RuleID","Description","File","StartLine","EndLine","StartColumn","EndColumn"]} for f in findings],indent=2))'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+[
+  {
+    "RuleID": "generic-api-key",
+    "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "File": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "StartLine": 10843,
+    "EndLine": 10843,
+    "StartColumn": 177,
+    "EndColumn": 233
+  },
+  {
+    "RuleID": "generic-api-key",
+    "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "File": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "StartLine": 13604,
+    "EndLine": 13604,
+    "StartColumn": 173,
+    "EndColumn": 229
+  }
+]

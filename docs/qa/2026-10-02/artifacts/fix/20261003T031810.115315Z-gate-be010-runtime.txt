@@ -1,0 +1,21 @@
+UTC: 2026-10-03T03:18:10.115315+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 1,14p docs/qa/2026-10-02/artifacts/fix/20261003T031402.346918Z-be010-starlette.txt
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+UTC: 2026-10-03T03:14:02.346918+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -c 'import starlette, inspect; from starlette.middleware.base import BaseHTTPMiddleware; print(starlette.__version__); print(inspect.getsource(BaseHTTPMiddleware))'
+Exit: 0
+Duration: 0.12s
+Timeout: False
+
+0.52.1
+class BaseHTTPMiddleware:
+    def __init__(self, app: ASGIApp, dispatch: DispatchFunction | None = None) -> None:
+        self.app = app
+        self.dispatch_func = self.dispatch if dispatch is None else dispatch
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

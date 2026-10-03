@@ -1,0 +1,23 @@
+[
+  {
+    "summary": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "archive": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt.gz",
+    "raw_bytes": 1029631,
+    "gzip_bytes": 57223,
+    "raw_sha256": "3f33c6157f094d9ef3bb87bb72a19b2a446ad15fcc68836f93763416a3afeafc"
+  },
+  {
+    "summary": "docs/qa/2026-10-02/artifacts/fix/20261003T032137.348984Z-backend_full_collect_overlay.txt",
+    "archive": "docs/qa/2026-10-02/artifacts/fix/20261003T032137.348984Z-backend_full_collect_overlay.txt.gz",
+    "raw_bytes": 1430284,
+    "gzip_bytes": 195176,
+    "raw_sha256": "525776eb7794e0e6f3cb444f5161092ddd44c5962b07cc15e25f0f8ca2be9ce5"
+  },
+  {
+    "summary": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt",
+    "archive": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt.gz",
+    "raw_bytes": 15910508,
+    "gzip_bytes": 691053,
+    "raw_sha256": "df1bf0a4fab18e7aa795b0668dd24cf648cb5832075b5f7bffc316339257403b"
+  }
+]

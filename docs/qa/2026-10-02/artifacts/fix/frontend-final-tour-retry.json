@@ -1,0 +1,240 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.7.0/bin/node",
+      "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/playwright/cli.js",
+      "test",
+      "--config=/private/tmp/regengine-fix-tour-retry.config.cjs",
+      "--project=chromium",
+      "--grep",
+      "guided tours \\(desktop\\).*dashboard preview: every step",
+      "--repeat-each=3",
+      "--workers=1"
+    ],
+    "configFile": "/private/tmp/regengine-fix-tour-retry.config.cjs",
+    "rootDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/regengine-fix-tour-retry-details",
+        "repeatEach": 3,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e",
+        "testIgnore": [
+          "**/qa-2026-10-02/**"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-fix-tour-retry-details",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e",
+        "testIgnore": [
+          "**/qa-2026-10-02/**"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-fix-tour-retry-details",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e",
+        "testIgnore": [
+          "**/qa-2026-10-02/**"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/fix/frontend-final-tour-retry.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "inflow-lab-tour.spec.ts",
+      "file": "inflow-lab-tour.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "guided tours (desktop)",
+          "file": "inflow-lab-tour.spec.ts",
+          "line": 98,
+          "column": 10,
+          "specs": [
+            {
+              "title": "dashboard preview: every step keeps the tooltip on-screen and the spotlight on target",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6936,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-03T03:23:34.842Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f23843862106bb640910-2285b3ae8405e0af5d65",
+              "file": "inflow-lab-tour.spec.ts",
+              "line": 105,
+              "column": 17
+            },
+            {
+              "title": "dashboard preview: every step keeps the tooltip on-screen and the spotlight on target",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6934,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-03T03:23:42.065Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f23843862106bb640910-d070bdb511aea6f2f50f",
+              "file": "inflow-lab-tour.spec.ts",
+              "line": 105,
+              "column": 17
+            },
+            {
+              "title": "dashboard preview: every step keeps the tooltip on-screen and the spotlight on target",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6951,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-03T03:23:49.269Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f23843862106bb640910-09a6d5676d8a473cf725",
+              "file": "inflow-lab-tour.spec.ts",
+              "line": 105,
+              "column": 17
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T03:23:34.620Z",
+    "duration": 21708.735,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

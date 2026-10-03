@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:24:17.152633+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/tests/test_csv_input_quantities.py"); s=p.read_text().replace("import pytest\n\nfrom app.csv_templates", "import pytest\nfrom app.csv_templates"); p.write_text(s); print("Removed added blank line within the third-party import group.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Removed added blank line within the third-party import group.

@@ -1,0 +1,22 @@
+UTC: 2026-10-03T03:37:28.914734+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; findings=json.loads(Path("/private/tmp/regengine-fix-final-raw-scan.json").read_text()); print("findings",json.dumps([{k:f.get(k) for k in ["RuleID","File","StartLine","EndLine"]} for f in findings],indent=2)); files=[p for p in Path("docs/qa/2026-10-02/artifacts/fix").rglob("*") if p.is_file()]; print("large_files",sorted([(p.stat().st_size,str(p)) for p in files if p.stat().st_size>1000000],reverse=True))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+findings [
+  {
+    "RuleID": "generic-api-key",
+    "File": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt",
+    "StartLine": 101974,
+    "EndLine": 101974
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt",
+    "StartLine": 109383,
+    "EndLine": 109383
+  }
+]
+large_files [(15910880, 'docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt'), (1430284, 'docs/qa/2026-10-02/artifacts/fix/20261003T032137.348984Z-backend_full_collect_overlay.txt'), (1029631, 'docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt')]

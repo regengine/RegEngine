@@ -1,0 +1,12 @@
+UTC: 2026-10-03T03:41:33.505940+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess,shutil,tempfile; root=Path(tempfile.mkdtemp(prefix="regengine-fix-browser-scan-",dir="/private/tmp")); paths=[p for p in subprocess.check_output(["git","ls-files","--others","--exclude-standard"],text=True).splitlines() if p.startswith("docs/qa/2026-10-02/artifacts/browser/")];
+for name in paths: shutil.copyfile(name,root/Path(name).name)
+print("new_browser_artifacts",len(paths)); result=subprocess.run(["gitleaks","dir",str(root),"--config","/private/tmp/regengine-fix-default-gitleaks.toml","--redact=100","--no-banner","--gitleaks-ignore-path","/dev/null","--ignore-gitleaks-allow","--max-archive-depth","2"],check=False); raise SystemExit(result.returncode)'
+Exit: 0
+Duration: 0.25s
+Timeout: False
+
+[90m8:41PM[0m [32mINF[0m [1mscanned ~2096784 bytes (2.10 MB) in 152ms[0m
+[90m8:41PM[0m [32mINF[0m [1mno leaks found[0m
+new_browser_artifacts 22

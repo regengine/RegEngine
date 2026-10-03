@@ -1,0 +1,239 @@
+{
+  "config": {
+    "argv": [
+      "/private/tmp/obsong-qa-node20/node_modules/node/bin/node",
+      "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/playwright/cli.js",
+      "test",
+      "--config=tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+      "fe-001-barcode.spec.ts"
+    ],
+    "configFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+    "rootDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-16-20-591Z",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-16-20-591Z",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-16-20-591Z",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/fix/fe001-browser-proving-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "fe-001-barcode.spec.ts",
+      "file": "fe-001-barcode.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 756,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T03:16:20.845Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "fe-001",
+                      "contentType": "application/json",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-16-20-838Z/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-chromium/attachments/fe-001-57b05b51af120b87497545c4e0029f7df2ff75fc.json"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "abc432f325efb82bcee5-0138f4c25cd187538f45",
+          "file": "fe-001-barcode.spec.ts",
+          "line": 4,
+          "column": 5
+        },
+        {
+          "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1125,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T03:16:22.122Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "fe-001",
+                      "contentType": "application/json",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-16-22-115Z/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-firefox/attachments/fe-001-5df72457ec23a9eb1ccafde5c54170d43feedf9c.json"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "abc432f325efb82bcee5-9a5ba1cb5487adaa3a8f",
+          "file": "fe-001-barcode.spec.ts",
+          "line": 4,
+          "column": 5
+        },
+        {
+          "title": "FE-001 preserves complete GS1 lot identifiers in the real scanner form",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit",
+              "projectName": "webkit",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1204,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T03:16:24.025Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "fe-001",
+                      "contentType": "application/json",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T03-16-24-018Z/fe-001-barcode-FE-001-pres-85f5a-rs-in-the-real-scanner-form-webkit/attachments/fe-001-07bd96ac058560c93714e929bc5bfe02219b2651.json"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "abc432f325efb82bcee5-c598aacc078efbd71605",
+          "file": "fe-001-barcode.spec.ts",
+          "line": 4,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T03:16:20.594Z",
+    "duration": 5052.8189999999995,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

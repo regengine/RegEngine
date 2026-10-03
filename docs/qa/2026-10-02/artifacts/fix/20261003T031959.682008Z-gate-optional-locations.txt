@@ -1,0 +1,33 @@
+UTC: 2026-10-03T03:19:59.682008+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files services/ingestion tests/qa_sweep_20261002 -g '*csv*' -g '*webhook_models*' -g '*qa_sweep_20261002_contract*'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/csv_templates.py
+services/ingestion/app/webhook_models.py
+services/ingestion/app/sandbox/csv_parser.py
+services/ingestion/app/shared/csv_safety.py
+services/ingestion/tests/test_csv_malformed_input.py
+services/ingestion/tests/test_csv_input_quantities.py
+services/ingestion/tests/test_csv_jev_header_mapping.py
+services/ingestion/tests/test_csv_ingest_response_model_2892.py
+services/ingestion/tests/test_csv_jev_file_cte.py
+services/ingestion/tests/test_csv_safety_1342.py
+services/ingestion/tests/test_webhook_models_1342.py
+services/ingestion/tests/test_webhook_models.py
+services/ingestion/tests/test_csv_ingestion_receipt.py
+services/ingestion/tests/test_sandbox_csv_parser_1342.py
+services/ingestion/tests/test_csv_templates_1342.py
+services/ingestion/tests/test_csv_templates.py
+services/ingestion/tests/test_qa_sweep_20261002_contract.py
+services/ingestion/tests/data/supplier_sprint/06_unknown_product.csv
+services/ingestion/tests/data/supplier_sprint/03_approved_alias.csv
+services/ingestion/tests/data/supplier_sprint/02_whitespace_dates.csv
+services/ingestion/tests/data/supplier_sprint/01_valid.csv
+services/ingestion/tests/data/supplier_sprint/05_missing_tlc_source.csv
+services/ingestion/tests/data/supplier_sprint/08_duplicate_rows.csv
+services/ingestion/tests/data/supplier_sprint/07_invalid_quantity.csv
+services/ingestion/tests/data/supplier_sprint/04_missing_tlc.csv
+services/ingestion/tests/data/fsma_harvest_sample.csv

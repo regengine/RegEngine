@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:14:47.735784+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /private/tmp/obsong-qa-node20/node_modules/node/bin/node --version
+Exit: 0
+Duration: 1.32s
+Timeout: False
+
+v20.19.4

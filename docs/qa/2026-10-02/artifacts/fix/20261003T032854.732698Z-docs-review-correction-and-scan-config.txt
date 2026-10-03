@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:28:54.732698+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text().replace("yielded complete collection of 12,524 tests with two guard-blocked import probes", "reached 12,524 collected tests, with two additional import probes blocked by the guard"); p.write_text(s); Path("/private/tmp/regengine-fix-default-gitleaks.toml").write_text("[extend]\nuseDefault = true\n"); print("Gate wording corrected; temporary scanner config uses default rules only, no repo baseline changed")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Gate wording corrected; temporary scanner config uses default rules only, no repo baseline changed

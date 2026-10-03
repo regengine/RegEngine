@@ -1,0 +1,6 @@
+UTC: 2026-10-03T03:13:33.260584+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 3149 docs AGENTS.md .github --glob '!docs/qa/2026-10-02/artifacts/**' --glob '!FIX-SESSION-LOG.md'
+Exit: 1
+Duration: 0.02s
+Timeout: False

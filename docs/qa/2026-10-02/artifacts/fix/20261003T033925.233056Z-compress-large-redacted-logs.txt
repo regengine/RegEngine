@@ -1,0 +1,36 @@
+UTC: 2026-10-03T03:39:25.233056+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import gzip,hashlib,json,datetime; root=Path("docs/qa/2026-10-02/artifacts/fix"); records=[]
+for p in sorted(root.glob("*.txt")):
+ data=p.read_bytes()
+ if len(data)<=1000000: continue
+ compressed=gzip.compress(data,compresslevel=9,mtime=0); archive=p.with_suffix(p.suffix+".gz"); archive.write_bytes(compressed); assert gzip.decompress(archive.read_bytes())==data
+ digest=hashlib.sha256(data).hexdigest(); text=data.decode(); lines=text.splitlines(); header="\n".join(lines[:6]); tail="\n".join(lines[-35:]); p.write_text(header+"\n\nFull redacted command output is retained losslessly in "+archive.name+".\nRaw UTF-8 bytes: "+str(len(data))+"\nRaw SHA-256: "+digest+"\nCompression: gzip, verified byte-for-byte round trip.\n\nFinal output excerpt:\n"+tail+"\n"); records.append({"summary":str(p),"archive":str(archive),"raw_bytes":len(data),"gzip_bytes":len(compressed),"raw_sha256":digest})
+(root/"compressed-log-index.json").write_text(json.dumps(records,indent=2)+"\n"); now=datetime.datetime.now(datetime.timezone.utc).isoformat(); Path("docs/qa/2026-10-02/FIX-SESSION-LOG.md").open("a").write("\n- **"+now+"** After complete raw Gitleaks scan passed and all test analysis ended, compressed new command logs exceeding 1 MB to meet repository artifact-size policy. Original .txt links now retain command metadata, final excerpt and archive/hash pointer; .txt.gz files preserve all redacted raw bytes with verified round trips. Original sweep artifacts were not changed. See artifacts/fix/compressed-log-index.json. Entries in this ledger append on completion; their timestamps are command start times, so parallel work is not sorted chronologically.\n"); print(json.dumps(records,indent=2))'
+Exit: 0
+Duration: 0.57s
+Timeout: False
+
+[
+  {
+    "summary": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "archive": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt.gz",
+    "raw_bytes": 1029631,
+    "gzip_bytes": 57223,
+    "raw_sha256": "3f33c6157f094d9ef3bb87bb72a19b2a446ad15fcc68836f93763416a3afeafc"
+  },
+  {
+    "summary": "docs/qa/2026-10-02/artifacts/fix/20261003T032137.348984Z-backend_full_collect_overlay.txt",
+    "archive": "docs/qa/2026-10-02/artifacts/fix/20261003T032137.348984Z-backend_full_collect_overlay.txt.gz",
+    "raw_bytes": 1430284,
+    "gzip_bytes": 195176,
+    "raw_sha256": "525776eb7794e0e6f3cb444f5161092ddd44c5962b07cc15e25f0f8ca2be9ce5"
+  },
+  {
+    "summary": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt",
+    "archive": "docs/qa/2026-10-02/artifacts/fix/20261003T032657.821224Z-backend_full_after.txt.gz",
+    "raw_bytes": 15910508,
+    "gzip_bytes": 691053,
+    "raw_sha256": "df1bf0a4fab18e7aa795b0668dd24cf648cb5832075b5f7bffc316339257403b"
+  }
+]

@@ -1,0 +1,21 @@
+UTC: 2026-10-03T03:27:08.261088+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff --name-status b5dd065e..HEAD
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+M	frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+M	frontend/src/lib/gs1-parser.ts
+M	frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+M	services/ingestion/app/csv_templates.py
+M	services/ingestion/app/webhook_models.py
+M	services/ingestion/tests/test_csv_input_quantities.py
+M	services/ingestion/tests/test_csv_jev_header_mapping.py
+M	services/ingestion/tests/test_csv_malformed_input.py
+M	services/ingestion/tests/test_qa_sweep_20261002_contract.py
+M	services/ingestion/tests/test_webhook_models.py
+M	services/shared/error_handling.py
+M	services/shared/request_safety.py
+M	services/shared/tests/test_error_handling.py
+M	tests/qa_sweep_20261002/test_request_safety.py

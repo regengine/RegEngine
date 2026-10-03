@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:15:00.280729+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'print("BE-010 decision: reuse the established bounded request.stream plus cached-body replay pattern from shared/idempotency.py. Count each actual chunk before retaining it; pre-read prevents FastAPI parser exception translation or early responses bypassing the cap. The existing outer request timeout bounds incomplete uploads. Accepted requests gain a bounded in-memory buffer up to the existing global cap; no unbounded buffering or API field change. Add direct ASGI boundary, deceptive-header, early-handler, parser, and disconnect tests.")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+BE-010 decision: reuse the established bounded request.stream plus cached-body replay pattern from shared/idempotency.py. Count each actual chunk before retaining it; pre-read prevents FastAPI parser exception translation or early responses bypassing the cap. The existing outer request timeout bounds incomplete uploads. Accepted requests gain a bounded in-memory buffer up to the existing global cap; no unbounded buffering or API field change. Add direct ASGI boundary, deceptive-header, early-handler, parser, and disconnect tests.

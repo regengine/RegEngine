@@ -1,0 +1,18 @@
+UTC: 2026-10-03T03:13:52.130275+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files frontend/src frontend/tests docs/qa/2026-10-02/scripts -g '*gs1*' -g '*fe-001*' -g '*qa*' -g AGENTS.md -g '*browser*' -g '*node*'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+docs/qa/2026-10-02/scripts/ux-browser-pass.cjs
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+docs/qa/2026-10-02/scripts/browser-followup-server.py
+docs/qa/2026-10-02/scripts/browser-ux-followup.cjs
+frontend/src/lib/gs1-parser.ts
+frontend/src/lib/gs1-parser.test.ts
+frontend/src/__tests__/pages/qa-health.test.tsx
+frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+frontend/src/__tests__/components/qa-health-widget.test.tsx
+frontend/src/components/dashboard/qa-health-widget.tsx

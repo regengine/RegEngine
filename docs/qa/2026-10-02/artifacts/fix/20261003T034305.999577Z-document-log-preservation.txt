@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:43:05.999577+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text().replace("The orchestrator owns remote review, push and PR creation.", "Captured diff/test output sometimes contains trailing whitespace that fails git diff --check. Display-only whitespace was normalized in new text logs; [original command log archive index](artifacts/fix/original-command-log-whitespace-index.json) maps every affected log to its verified complete original bytes.\n\nThe orchestrator owns remote review, push and PR creation."); p.write_text(s); print("Raw-log preservation documented")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Raw-log preservation documented

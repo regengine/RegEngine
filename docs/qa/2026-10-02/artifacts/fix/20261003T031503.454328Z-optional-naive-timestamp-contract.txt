@@ -1,0 +1,157 @@
+UTC: 2026-10-03T03:15:03.454328+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -C 5 'naive|tzinfo|timezone' services/ingestion/app/webhook_router_v2/replay.py services/ingestion/app/csv_templates.py services/ingestion/tests/test_webhook_router_v2_1342.py
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: services/ingestion/app/webhook_router_v2/replay.py: No such file or directory (os error 2)
+services/ingestion/app/csv_templates.py-14-import io
+services/ingestion/app/csv_templates.py-15-import itertools
+services/ingestion/app/csv_templates.py-16-import logging
+services/ingestion/app/csv_templates.py-17-import re
+services/ingestion/app/csv_templates.py-18-from collections.abc import Mapping, Sequence
+services/ingestion/app/csv_templates.py:19:from datetime import datetime, timezone
+services/ingestion/app/csv_templates.py-20-from typing import NamedTuple, Optional
+services/ingestion/app/csv_templates.py-21-
+services/ingestion/app/csv_templates.py-22-from dateutil import parser as _dateutil_parser
+services/ingestion/app/csv_templates.py-23-from dateutil.parser import ParserError as _DateParserError
+services/ingestion/app/csv_templates.py-24-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+--
+services/ingestion/app/csv_templates.py-596-    raw = raw.strip()
+services/ingestion/app/csv_templates.py-597-
+services/ingestion/app/csv_templates.py-598-    # Fast-path: already an ISO timestamp
+services/ingestion/app/csv_templates.py-599-    try:
+services/ingestion/app/csv_templates.py-600-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+services/ingestion/app/csv_templates.py:601:        if dt.tzinfo is None:
+services/ingestion/app/csv_templates.py:602:            dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/csv_templates.py-603-        return dt.isoformat().replace("+00:00", "Z"), None
+services/ingestion/app/csv_templates.py-604-    except (ValueError, AttributeError):
+services/ingestion/app/csv_templates.py-605-        pass
+services/ingestion/app/csv_templates.py-606-
+services/ingestion/app/csv_templates.py-607-    # Flexible parsing: handles M/D/YY, "April 2nd", "04-01-2026", etc.
+--
+services/ingestion/app/csv_templates.py-612-            try:
+services/ingestion/app/csv_templates.py-613-                t = _dateutil_parser.parse(event_time)
+services/ingestion/app/csv_templates.py-614-                dt = dt.replace(hour=t.hour, minute=t.minute, second=t.second)
+services/ingestion/app/csv_templates.py-615-            except (_DateParserError, ValueError):
+services/ingestion/app/csv_templates.py-616-                pass
+services/ingestion/app/csv_templates.py:617:        if dt.tzinfo is None:
+services/ingestion/app/csv_templates.py:618:            dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/csv_templates.py-619-        return dt.isoformat().replace("+00:00", "Z"), None
+services/ingestion/app/csv_templates.py-620-    except (_DateParserError, ValueError, OverflowError):
+services/ingestion/app/csv_templates.py-621-        pass
+services/ingestion/app/csv_templates.py-622-
+services/ingestion/app/csv_templates.py-623-    return None, f"INVALID_FORMAT: could not parse date '{raw}'"
+--
+services/ingestion/tests/test_webhook_router_v2_1342.py-18-
+services/ingestion/tests/test_webhook_router_v2_1342.py-19-from __future__ import annotations
+services/ingestion/tests/test_webhook_router_v2_1342.py-20-
+services/ingestion/tests/test_webhook_router_v2_1342.py-21-import sys
+services/ingestion/tests/test_webhook_router_v2_1342.py-22-import types
+services/ingestion/tests/test_webhook_router_v2_1342.py:23:from datetime import datetime, timedelta, timezone
+services/ingestion/tests/test_webhook_router_v2_1342.py-24-from pathlib import Path
+services/ingestion/tests/test_webhook_router_v2_1342.py-25-from typing import Any, Optional
+services/ingestion/tests/test_webhook_router_v2_1342.py-26-
+services/ingestion/tests/test_webhook_router_v2_1342.py-27-import pytest
+services/ingestion/tests/test_webhook_router_v2_1342.py-28-from fastapi import FastAPI
+--
+services/ingestion/tests/test_webhook_router_v2_1342.py-42-# Helpers / fixtures
+services/ingestion/tests/test_webhook_router_v2_1342.py-43-# ---------------------------------------------------------------------------
+services/ingestion/tests/test_webhook_router_v2_1342.py-44-
+services/ingestion/tests/test_webhook_router_v2_1342.py-45-
+services/ingestion/tests/test_webhook_router_v2_1342.py-46-def _now_iso() -> str:
+services/ingestion/tests/test_webhook_router_v2_1342.py:47:    return datetime.now(timezone.utc).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-48-
+services/ingestion/tests/test_webhook_router_v2_1342.py-49-
+services/ingestion/tests/test_webhook_router_v2_1342.py-50-def _make_shipping_event(
+services/ingestion/tests/test_webhook_router_v2_1342.py-51-    *,
+services/ingestion/tests/test_webhook_router_v2_1342.py-52-    tlc: str = "TLC-2026-ABC",
+--
+services/ingestion/tests/test_webhook_router_v2_1342.py-391-
+services/ingestion/tests/test_webhook_router_v2_1342.py-392-    def test_max_event_future_hours_invalid_falls_back(self, monkeypatch):
+services/ingestion/tests/test_webhook_router_v2_1342.py-393-        monkeypatch.setenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", "bogus")
+services/ingestion/tests/test_webhook_router_v2_1342.py-394-        assert wr._max_event_future_hours() == 24
+services/ingestion/tests/test_webhook_router_v2_1342.py-395-
+services/ingestion/tests/test_webhook_router_v2_1342.py:396:    def test_validate_event_timestamp_window_naive_tz_is_treated_as_utc(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:397:        """A naive (no-tz) timestamp is coerced to UTC and accepted when fresh."""
+services/ingestion/tests/test_webhook_router_v2_1342.py:398:        naive_now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py:399:        assert wr._validate_event_timestamp_window(naive_now) is None
+services/ingestion/tests/test_webhook_router_v2_1342.py-400-
+services/ingestion/tests/test_webhook_router_v2_1342.py-401-
+services/ingestion/tests/test_webhook_router_v2_1342.py-402-# ---------------------------------------------------------------------------
+services/ingestion/tests/test_webhook_router_v2_1342.py-403-# Replay-rejection metric — _classify_replay_rejection / _record_replay_rejection
+services/ingestion/tests/test_webhook_router_v2_1342.py-404-# ---------------------------------------------------------------------------
+--
+services/ingestion/tests/test_webhook_router_v2_1342.py-407-class TestReplayMetricClassification:
+services/ingestion/tests/test_webhook_router_v2_1342.py-408-    def test_unparseable_timestamp_classified(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py-409-        assert wr._classify_replay_rejection("not-a-timestamp") == ("unparseable", "na")
+services/ingestion/tests/test_webhook_router_v2_1342.py-410-
+services/ingestion/tests/test_webhook_router_v2_1342.py-411-    def test_future_lt_48h(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:412:        ts = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-413-        reason, bucket = wr._classify_replay_rejection(ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-414-        assert reason == "future"
+services/ingestion/tests/test_webhook_router_v2_1342.py-415-        assert bucket == "lt_48h"
+services/ingestion/tests/test_webhook_router_v2_1342.py-416-
+services/ingestion/tests/test_webhook_router_v2_1342.py-417-    def test_future_lt_30d(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:418:        ts = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-419-        reason, bucket = wr._classify_replay_rejection(ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-420-        assert reason == "future"
+services/ingestion/tests/test_webhook_router_v2_1342.py-421-        assert bucket == "lt_30d"
+services/ingestion/tests/test_webhook_router_v2_1342.py-422-
+services/ingestion/tests/test_webhook_router_v2_1342.py-423-    def test_future_gte_30d(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:424:        ts = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-425-        reason, bucket = wr._classify_replay_rejection(ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-426-        assert reason == "future"
+services/ingestion/tests/test_webhook_router_v2_1342.py-427-        assert bucket == "gte_30d"
+services/ingestion/tests/test_webhook_router_v2_1342.py-428-
+services/ingestion/tests/test_webhook_router_v2_1342.py-429-    def test_stale_lt_180d(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:430:        ts = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-431-        reason, bucket = wr._classify_replay_rejection(ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-432-        assert reason == "stale"
+services/ingestion/tests/test_webhook_router_v2_1342.py-433-        assert bucket == "lt_180d"
+services/ingestion/tests/test_webhook_router_v2_1342.py-434-
+services/ingestion/tests/test_webhook_router_v2_1342.py-435-    def test_stale_lt_1y(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:436:        ts = (datetime.now(timezone.utc) - timedelta(days=300)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-437-        reason, bucket = wr._classify_replay_rejection(ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-438-        assert reason == "stale"
+services/ingestion/tests/test_webhook_router_v2_1342.py-439-        assert bucket == "lt_1y"
+services/ingestion/tests/test_webhook_router_v2_1342.py-440-
+services/ingestion/tests/test_webhook_router_v2_1342.py-441-    def test_stale_gte_1y(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:442:        ts = (datetime.now(timezone.utc) - timedelta(days=500)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-443-        reason, bucket = wr._classify_replay_rejection(ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-444-        assert reason == "stale"
+services/ingestion/tests/test_webhook_router_v2_1342.py-445-        assert bucket == "gte_1y"
+services/ingestion/tests/test_webhook_router_v2_1342.py-446-
+services/ingestion/tests/test_webhook_router_v2_1342.py:447:    def test_classify_naive_timestamp_is_treated_as_utc(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:448:        naive = (datetime.now(timezone.utc) + timedelta(hours=2)).replace(tzinfo=None).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py:449:        reason, _bucket = wr._classify_replay_rejection(naive)
+services/ingestion/tests/test_webhook_router_v2_1342.py-450-        assert reason == "future"
+services/ingestion/tests/test_webhook_router_v2_1342.py-451-
+services/ingestion/tests/test_webhook_router_v2_1342.py-452-    def test_record_replay_rejection_no_op_when_disabled(self, monkeypatch):
+services/ingestion/tests/test_webhook_router_v2_1342.py-453-        """When metrics are disabled the helper returns silently."""
+services/ingestion/tests/test_webhook_router_v2_1342.py-454-        monkeypatch.setattr(wr, "_WEBHOOK_METRICS_ENABLED", False)
+--
+services/ingestion/tests/test_webhook_router_v2_1342.py-1463-        assert body["rejected"] == 1
+services/ingestion/tests/test_webhook_router_v2_1342.py-1464-        assert any(r["status"] == "rejected" and "Duplicate event in batch" in r["errors"][0] for r in body["events"])
+services/ingestion/tests/test_webhook_router_v2_1342.py-1465-
+services/ingestion/tests/test_webhook_router_v2_1342.py-1466-    def test_replay_window_rejects_stale_events(self, monkeypatch):
+services/ingestion/tests/test_webhook_router_v2_1342.py-1467-        client, _session, _persistence = _client(monkeypatch)
+services/ingestion/tests/test_webhook_router_v2_1342.py:1468:        stale_ts = (datetime.now(timezone.utc) - timedelta(days=180)).isoformat()
+services/ingestion/tests/test_webhook_router_v2_1342.py-1469-        stale = _make_shipping_event(timestamp=stale_ts)
+services/ingestion/tests/test_webhook_router_v2_1342.py-1470-        resp = client.post(
+services/ingestion/tests/test_webhook_router_v2_1342.py-1471-            "/api/v1/webhooks/ingest",
+services/ingestion/tests/test_webhook_router_v2_1342.py-1472-            json=self._payload(events=[stale]),
+services/ingestion/tests/test_webhook_router_v2_1342.py-1473-            headers={"Idempotency-Key": "idem-stale"},
+--
+services/ingestion/tests/test_webhook_router_v2_1342.py-1833-            "Romaine",
+services/ingestion/tests/test_webhook_router_v2_1342.py-1834-            12.0,
+services/ingestion/tests/test_webhook_router_v2_1342.py-1835-            "cases",
+services/ingestion/tests/test_webhook_router_v2_1342.py-1836-            "Valley Fresh",
+services/ingestion/tests/test_webhook_router_v2_1342.py-1837-            "test",
+services/ingestion/tests/test_webhook_router_v2_1342.py:1838:            datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc),
+services/ingestion/tests/test_webhook_router_v2_1342.py-1839-        )
+services/ingestion/tests/test_webhook_router_v2_1342.py-1840-
+services/ingestion/tests/test_webhook_router_v2_1342.py-1841-        def _exec(stmt, params=None):
+services/ingestion/tests/test_webhook_router_v2_1342.py-1842-            return _FakeExecuteResult([row])
+services/ingestion/tests/test_webhook_router_v2_1342.py-1843-

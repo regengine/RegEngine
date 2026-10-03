@@ -1,0 +1,7 @@
+{
+  "stop_file": "/private/tmp/regengine-browser-followup-uysbu5wg/stop",
+  "loopback_ports": {
+    "3114": "closed",
+    "3115": "closed"
+  }
+}

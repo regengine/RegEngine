@@ -1,0 +1,313 @@
+UTC: 2026-10-03T03:14:04.265645+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts","docs/qa/2026-10-02/scripts/node-isolation.cjs","docs/qa/2026-10-02/scripts/browser-followup-server.py","frontend/package.json"]; [(print("FILE: "+f),print(Path(f).read_text())) for f in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE: frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+import { test, expect } from '@playwright/test';
+import { isolateRegressionBrowser, writeRegressionEvidence } from './fe-regression-support';
+
+test('FE-001 preserves complete GS1 lot identifiers in the real scanner form', async ({ context, page, baseURL }, testInfo) => {
+  await isolateRegressionBrowser(context, baseURL!);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const response = await page.goto('/tools/scan');
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'RegEngine • Scan & Ingest', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Save your GS1 scan result', exact: true })).toBeVisible();
+  const input = page.getByLabel('Paste or type barcode string…');
+  const lotField = page.getByLabel('Lot Code', { exact: true });
+  const enterBarcode = async (barcode: string) => {
+    // Firefox's native fill path strips ASCII GS; set the actual DOM input
+    // with the native setter and notify React, exactly retaining scanner bytes.
+    await input.evaluate((element, value) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, value);
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+    }, barcode);
+    expect(await input.inputValue()).toBe(barcode);
+  };
+
+  // Both a simple AI lot and an encoded Digital Link must work first.
+  for (const [barcode, lot] of [
+    ['010950600013435210ALPHA\x1d17260930', 'ALPHA'],
+    ['/01/09506000134352/10/LOT-10-ABC', 'LOT-10-ABC'],
+  ]) {
+    await enterBarcode(barcode);
+    await page.getByRole('button', { name: 'Parse', exact: true }).click();
+    await expect(lotField).toHaveValue(lot);
+  }
+
+  const observations = [];
+  for (const lot of ['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930']) {
+    const barcode = `010950600013435210${lot}\x1d17260930`;
+    await enterBarcode(barcode);
+    await page.getByRole('button', { name: 'Parse', exact: true }).click();
+    await expect(input).toHaveValue(''); // confirms React handler ran
+    await expect(page.getByText('Raw Barcode String', { exact: true })).toBeVisible();
+    observations.push({ barcode, expectedLot: lot, actualLot: await lotField.inputValue() });
+  }
+  expect(errors).toEqual([]);
+  const screenshot = await writeRegressionEvidence(testInfo, 'fe-001', {
+    url: page.url(), browser: testInfo.project.name, controlsPassed: 2,
+    observations, pageErrors: errors, boundary: 'Real built scanner UI; native DOM setter/input event preserves ASCII GS fixture because Firefox fill strips it; no ingest or server persistence.',
+  });
+  await page.screenshot({ path: screenshot, fullPage: true });
+
+  // Setup/controls/evidence are outside expected failure; only defect assertion is marked.
+  test.fail(true, 'FE-001: variable-length GS1 lot is truncated at AI-like digits.');
+  expect(observations.map(value => value.actualLot)).toEqual(observations.map(value => value.expectedLot));
+});
+
+FILE: docs/qa/2026-10-02/scripts/node-isolation.cjs
+// QA-only process guard: do not read dotenv/credential files or connect off-host.
+// Load with NODE_OPTIONS=--require=/absolute/path/to/this/file.
+const fs = require('node:fs');
+const net = require('node:net');
+const dns = require('node:dns');
+const { syncBuiltinESMExports } = require('node:module');
+
+function sensitive(file) {
+  if (typeof file !== 'string' && !(file instanceof URL)) return false;
+  const name = String(file);
+  return /(^|[/\\])\.env(?:[./\\]|$)/.test(name)
+    || /(^|[/\\])(?:\.npmrc|\.netrc|credentials|id_rsa|id_ed25519)(?:[/\\]|$)/.test(name);
+}
+function absent(file) {
+  const error = new Error('QA isolation: protected configuration file unavailable');
+  error.code = 'ENOENT';
+  return error;
+}
+for (const name of ['readFileSync', 'openSync', 'statSync', 'lstatSync', 'accessSync']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return original.call(this, file, ...args);
+  };
+}
+const existsSync = fs.existsSync;
+fs.existsSync = function (file) { return !sensitive(file) && existsSync.call(this, file); };
+for (const name of ['readFile', 'open', 'stat', 'lstat', 'access']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) {
+      const callback = args.at(-1);
+      if (typeof callback === 'function') return queueMicrotask(() => callback(absent(file)));
+      throw absent(file);
+    }
+    return original.call(this, file, ...args);
+  };
+  const promiseOriginal = fs.promises[name];
+  fs.promises[name] = async function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return promiseOriginal.call(this, file, ...args);
+  };
+}
+function local(host) {
+  return !host || ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
+}
+const connect = net.Socket.prototype.connect;
+net.Socket.prototype.connect = function (...args) {
+  // net.connect()/http.request() may supply Node's normalized [options, cb]
+  // argument array rather than the public positional/options call shape.
+  const normalized = Array.isArray(args[0]) ? args[0] : args;
+  const options = normalized[0];
+  const host = options && typeof options === 'object'
+    ? options.host || options.hostname
+    : typeof normalized[1] === 'string' ? normalized[1] : undefined;
+  if (!local(host)) throw new Error('QA isolation: off-host socket blocked');
+  return connect.apply(this, args);
+};
+for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny']) {
+  const original = dns[name];
+  dns[name] = function (hostname, ...args) {
+    if (!local(hostname)) throw new Error('QA isolation: off-host DNS blocked');
+    return original.call(this, hostname, ...args);
+  };
+}
+const fetch = globalThis.fetch;
+if (fetch) globalThis.fetch = async function (input, ...args) {
+  const raw = typeof input === 'string' || input instanceof URL ? input : input.url;
+  const target = new URL(raw, 'http://localhost');
+  if (!local(target.hostname)) throw new Error('QA isolation: off-host fetch blocked');
+  return fetch.call(this, input, ...args);
+};
+syncBuiltinESMExports();
+
+FILE: docs/qa/2026-10-02/scripts/browser-followup-server.py
+"""Reuse the prior production build in a disposable, credential-free local mirror.
+
+The existing node-isolation.cjs protects file reads and off-host sockets.
+Browser clients must intercept API requests and deny off-origin traffic.
+"""
+from pathlib import Path
+import hashlib
+import os
+import secrets
+import shutil
+import subprocess
+import tempfile
+import time
+
+ROOT = Path(__file__).resolve().parents[4]
+OUT = ROOT / 'docs/qa/2026-10-02/artifacts/browser'
+OUT.mkdir(parents=True, exist_ok=True)
+BASE = Path(tempfile.mkdtemp(prefix='regengine-browser-followup-', dir='/private/tmp'))
+APP = BASE / 'frontend'
+APP.mkdir()
+for name in ['next.config.js', 'package.json']:
+    shutil.copy2(ROOT / 'frontend' / name, APP / name)
+shutil.copytree(ROOT / 'frontend/public', APP / 'public')
+shutil.copytree(ROOT / 'frontend/.next', APP / '.next',
+                ignore=lambda directory, names: [name for name in names if name in {'cache', 'dev'}])
+(APP / 'node_modules').symlink_to(ROOT / 'frontend/node_modules', target_is_directory=True)
+GUARD = ROOT / 'docs/qa/2026-10-02/scripts/node-isolation.cjs'
+env = {key: value for key, value in os.environ.items() if key in {'PATH', 'TMPDIR', 'LANG'}}
+env.update({
+    'NODE_OPTIONS': f'--require={GUARD}',
+    'NEXT_TELEMETRY_DISABLED': '1', 'DO_NOT_TRACK': '1',
+    'CSRF_SECRET': secrets.token_urlsafe(48),
+    'ADMIN_SERVICE_URL': 'http://127.0.0.1:3113',
+    'INGESTION_SERVICE_URL': 'http://127.0.0.1:3113',
+    'COMPLIANCE_SERVICE_URL': 'http://127.0.0.1:3113',
+    'NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES': 'true',
+})
+command = ['node', str(ROOT / 'frontend/node_modules/next/dist/bin/next'),
+           'start', '-H', '127.0.0.1', '-p', '3114']
+process = subprocess.Popen(command, cwd=APP, env=env)
+metadata = (f'PID={process.pid}\nPort=3114\nMirror={APP}\n'
+            f'StopFile={BASE / "stop"}\nGuard SHA256={hashlib.sha256(GUARD.read_bytes()).hexdigest()}\n'
+            f'Build ID={(APP / ".next/BUILD_ID").read_text().strip()}\n'
+            'Runtime CSRF value: ephemeral synthetic, not recorded\n')
+stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
+(OUT / f'followup-server-{stamp}-metadata.txt').write_text(metadata)
+print(metadata, flush=True)
+try:
+    deadline = time.monotonic() + 5100
+    while process.poll() is None and time.monotonic() < deadline and not (BASE / 'stop').exists():
+        time.sleep(.25)
+finally:
+    if process.poll() is None:
+        process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+    print(f'QA built server stopped; exit {process.returncode}', flush=True)
+
+FILE: frontend/package.json
+{
+  "name": "regengine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && node scripts/design-lint.mjs",
+    "design:lint": "node scripts/design-lint.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
+    "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
+  },
+  "knip": {
+    "entry": [
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
+    ]
+  },
+  "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@sentry/nextjs": "10.75.1",
+    "@supabase/ssr": "~0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@tanstack/react-query": "~5.103.2",
+    "@tanstack/react-table": "^9.2.4",
+    "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "~1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
+    "framer-motion": "~13.4.0",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "next-themes": "^0.4.6",
+    "posthog-js": "^1.434.5",
+    "qrcode": "^1.5.4",
+    "react": "~18.3.0",
+    "react-dom": "~18.3.0",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "autoprefixer": "^10.6.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "jsdom": "29.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.4"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.63.4",
+    "@rollup/rollup-linux-x64-musl": "4.63.4"
+  },
+  "overrides": {
+    "tar": ">=7.5.10",
+    "rollup": "4.59.0",
+    "esbuild": "0.27.3",
+    "fast-uri": "^3.1.5",
+    "minimatch": ">=3.1.3",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "7.0.3",
+    "workbox-build": {
+      "rollup": "2.79.2"
+    },
+    "yauzl": ">=2.10.1",
+    "next": {
+      "sharp": ">=0.35.0"
+    },
+    "brace-expansion": "^5.0.9"
+  }
+}

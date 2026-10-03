@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:24:17.152644+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'command -v mypy; rg -n "mypy" docs/qa/2026-10-02/FIX-SESSION-LOG.md | tail -6'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+/Library/Frameworks/Python.framework/Versions/3.12/bin/mypy
+362:- **2026-10-03T03:18:53.108617+00:00** `validation-tool-availability` — `sh -c 'command -v uv; command -v ruff; command -v mypy; command -v gitleaks; sed -n "1,170p" pyproject.toml; sed -n "1,120p" .pre-commit-config.yaml'`; cwd `.`; exit 0, 0.01s. [Output](artifacts/fix/20261003T031853.108617Z-validation-tool-availability.txt).
+382:- **2026-10-03T03:19:24.679581+00:00** `be010-binary-mypy` — `/Library/Frameworks/Python.framework/Versions/3.12/bin/mypy --python-executable /Users/sellers/Projects/RegEngine/repo/.venv/bin/python --follow-imports=skip services/shared/request_safety.py`; cwd `.`; exit 0, 1.44s. [Output](artifacts/fix/20261003T031924.679581Z-be010-binary-mypy.txt).
+400:Proving test: tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length. Before: 1 failed, 2 passed. Final focused suite: 62 passed. Locked-framework gate: 60 passed before two added compatibility controls. Related middleware suite: 46 passed, 5 pre-existing guarded Redis failures, reproduced with original middleware. Ruff and focused mypy pass. Independent gate accepted.'`; cwd `.`; exit 0, 0.05s. [Output](artifacts/fix/20261003T031937.973908Z-commit-be010.txt).
+426:- **2026-10-03T03:20:15.374020+00:00** `test-and-sdk-build-inventory` — `sh -c 'rg -n "python.*build|mypy|ruff check|testpaths|pytest" regengine/pyproject.toml regengine/setup.py .github/workflows/test-suite-check.yml .github/workflows/python-sdk.yml .github/workflows/sdk-ci.yml 2>/dev/null; git status --short; git log -3 --oneline'`; cwd `.`; exit 0, 0.11s. [Output](artifacts/fix/20261003T032015.374020Z-test-and-sdk-build-inventory.txt).
+626:- **2026-10-03T03:22:53.062511+00:00** `be002-mypy-config` — `rg -n 'mypy|python_version|mypy_path|ignore_missing_imports' pyproject.toml mypy.ini setup.cfg docs/qa/2026-10-02/COVERAGE.md`; cwd `.`; exit 2, 0.01s. [Output](artifacts/fix/20261003T032253.062511Z-be002-mypy-config.txt).
+750:- **2026-10-03T03:24:07.886850+00:00** `be002-mypy` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -m mypy --follow-imports=skip services/ingestion/app/csv_templates.py services/ingestion/app/webhook_models.py services/shared/error_handling.py`; cwd `.`; exit 1, 0.02s. [Output](artifacts/fix/20261003T032407.886850Z-be002-mypy.txt).

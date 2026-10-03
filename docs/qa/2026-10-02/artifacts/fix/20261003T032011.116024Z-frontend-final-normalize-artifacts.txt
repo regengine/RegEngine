@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:20:11.116024+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import json; art=Path("docs/qa/2026-10-02/artifacts/fix");p=art/"frontend-final-vitest.json";raw=json.loads(p.read_text());original=Path("/private/tmp/regengine-fix-final-vitest-with-coverage.json");p.rename(original);data={k:v for k,v in raw.items() if k!="coverageMap"};p.write_text(json.dumps(data,indent=2)+"\n");cov=art/"frontend-final-coverage-summary.json";cov.rename(Path("/private/tmp/regengine-fix-final-coverage-normalized.json")); report=art/"20261003T031954.697698Z-frontend-final-unit-summary.txt";source=report.read_text();report.rename(Path("/private/tmp/regengine-fix-unit-summary-with-coverage.txt")); lines=source.splitlines();report.write_text("\n".join(line for line in lines if not (line.startswith("{") and "coverageMap" in line))+"\n\nArtifact note: the accidentally printed raw coverage map and original Vitest report were moved to /private/tmp. The retained Vitest JSON contains only test results and scalar counts; coverage output is not retained for staging.\n"); print({k:v for k,v in data.items() if k!="testResults"});print("Preserved raw coverage only under /private/tmp, retained test report without coverage map")'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+{'numTotalTestSuites': 387, 'numPassedTestSuites': 387, 'numFailedTestSuites': 0, 'numPendingTestSuites': 0, 'numTotalTests': 1048, 'numPassedTests': 1046, 'numFailedTests': 0, 'numPendingTests': 2, 'numTodoTests': 0, 'snapshot': {'added': 0, 'failure': False, 'filesAdded': 0, 'filesRemoved': 0, 'filesRemovedList': [], 'filesUnmatched': 0, 'filesUpdated': 0, 'matched': 1, 'total': 1, 'unchecked': 0, 'uncheckedKeysByFile': [], 'unmatched': 0, 'updated': 0, 'didUpdate': False}, 'startTime': 1790997538708, 'success': True}
+Preserved raw coverage only under /private/tmp, retained test report without coverage map

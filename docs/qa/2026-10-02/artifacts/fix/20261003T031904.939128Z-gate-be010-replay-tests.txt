@@ -1,0 +1,152 @@
+UTC: 2026-10-03T03:19:04.939128+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 1,145p tests/qa_sweep_20261002/test_request_safety.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+"""Local ASGI reproduction of BE-010; no sockets or real backend are used."""
+
+import pytest
+from fastapi import FastAPI, Request, UploadFile
+from fastapi.testclient import TestClient
+from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+from starlette.responses import JSONResponse, StreamingResponse
+
+
+@pytest.fixture
+def body_client():
+    app = FastAPI()
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
+    app.state.handled = False
+
+    @app.post("/consume")
+    async def consume(request: Request):
+        app.state.handled = True
+        return {"bytes_read": len(await request.body())}
+
+    @app.post("/parse")
+    async def parse(payload: dict):
+        app.state.handled = True
+        return payload
+
+    @app.post("/ignore")
+    async def ignore():
+        app.state.handled = True
+        return {"ok": True}
+
+    @app.post("/respond-stream")
+    async def respond_stream(request: Request):
+        body = await request.body()
+
+        async def chunks():
+            yield body[:4]
+            yield body[4:]
+
+        return StreamingResponse(chunks())
+
+    with TestClient(app) as client:
+        yield client
+
+
+def test_declared_oversized_body_rejected(body_client):
+    assert body_client.post("/consume", content=b"123456789").status_code == 413
+
+
+def test_body_at_limit_accepted(body_client):
+    response = body_client.post("/consume", content=b"12345678")
+    assert response.status_code == 200
+    assert response.json() == {"bytes_read": 8}
+
+
+def test_streamed_body_is_limited_without_content_length(body_client):
+    response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+    if "content-length" in response.request.headers:
+        pytest.fail("Fixture unexpectedly added Content-Length; chunked-body repro is invalid")
+    assert response.status_code == 413, response.text
+    assert body_client.app.state.handled is False
+
+
+@pytest.mark.parametrize("path", ["/consume", "/parse", "/ignore"])
+@pytest.mark.parametrize("declared_length", ["-1", "0", "1", "8"])
+def test_deceptive_content_length_rejected_before_handler(body_client, path, declared_length):
+    """BE-010: parsers and handlers must never see an oversized request."""
+    response = body_client.post(
+        path,
+        content=b'{"x":123}',
+        headers={"Content-Length": declared_length, "Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+    assert response.json()["error"] == "payload_too_large"
+    assert body_client.app.state.handled is False
+
+
+def test_valid_json_body_replayed_to_parser(body_client):
+    response = body_client.post("/parse", content=b'{"x":1}', headers={"Content-Type": "application/json"})
+    assert response.status_code == 200
+    assert response.json() == {"x": 1}
+
+
+def test_negative_content_length_preserves_existing_acceptance_under_limit(body_client):
+    response = body_client.post("/consume", content=b"1234", headers={"Content-Length": "-1"})
+    assert response.status_code == 200
+    assert response.json() == {"bytes_read": 4}
+
+
+def test_accepted_body_can_produce_streaming_response(body_client):
+    response = body_client.post("/respond-stream", content=iter([b"1234", b"5678"]))
+    assert response.status_code == 200
+    assert response.content == b"12345678"
+
+
+def test_accepted_multipart_upload_preserved():
+    app = FastAPI()
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=1024)
+
+    @app.post("/upload")
+    async def upload(file: UploadFile):
+        return {"filename": file.filename, "content": (await file.read()).decode()}
+
+    with TestClient(app) as client:
+        response = client.post("/upload", files={"file": ("test.txt", b"12345678", "text/plain")})
+    assert response.status_code == 200
+    assert response.json() == {"filename": "test.txt", "content": "12345678"}
+
+
+def _http_scope(headers=(), path="/consume"):
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "method": "POST",
+        "path": path,
+        "query_string": b"",
+        "headers": list(headers),
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("declared_length", [None, b"0", b"8"])
+async def test_actual_asgi_chunks_stop_at_limit_before_dispatch(declared_length):
+    """TestClient may combine chunks; assert real receive-message boundaries."""
+    received = []
+    sent = []
+    messages = iter(
+        [
+            {"type": "http.request", "body": b"12345", "more_body": True},
+            {"type": "http.request", "body": b"6789", "more_body": True},
+        ]
+    )
+
+    async def receive():
+        message = next(messages)  # No third receive is allowed after the limit.
+        received.append(message)
+        return message
+
+    async def send(message):
+        sent.append(message)
+
+    async def handler(scope, receive, send):
+        pytest.fail("Oversized request reached the handler")
+
+    headers = [] if declared_length is None else [(b"content-length", declared_length)]
+    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(headers), receive, send)

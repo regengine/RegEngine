@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:19:35.070757+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs node --version
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+v26.7.0

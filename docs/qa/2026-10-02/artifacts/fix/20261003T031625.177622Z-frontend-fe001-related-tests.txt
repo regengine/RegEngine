@@ -1,0 +1,33 @@
+UTC: 2026-10-03T03:16:25.177622+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'gs1-parser|parseGS1|GS1Scanner|BarcodeScanner' frontend/src/__tests__ frontend/src/lib -g '*.test.ts' -g '*.test.tsx'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+frontend/src/lib/scan-match.test.ts:3:import { parseGS1 } from './gs1-parser';
+frontend/src/lib/scan-match.test.ts:9:    const parsed = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:2:import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+frontend/src/lib/gs1-parser.test.ts:7:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:16:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:23:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:31:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:37:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:47:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:57:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:69:        const result = parseGS1(raw);
+frontend/src/__tests__/pages/receiving.test.tsx:16:vi.mock('@/lib/gs1-parser', () => ({
+frontend/src/__tests__/pages/receiving.test.tsx:17:    parseGS1: (value: string) => mockParseGS1(value),
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:8:    parseGS1: vi.fn(),
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:75:vi.mock('@/lib/gs1-parser', () => ({
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:76:    parseGS1: (...args: any[]) => mocks.parseGS1(...args),
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:99:        mocks.parseGS1.mockReturnValue({
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:2:import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:7:            const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:28:        expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:34:        const parsed = parseGS1(input);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:40:        const parsed = parseGS1(`010950600013435210${lot}`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:47:        const parsed = parseGS1('(01)09506000134352(10)LOT-21-ABC(21)SER-10-ABC(17)260930');
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:54:        const parsed = parseGS1('010950600013435210LOT-10-ABCñ21SER-17-ABCñ17260930');
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:63:        const parsed = parseGS1(`010950600013435210${lot}\x1d17260930`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:71:        expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();

@@ -1,0 +1,65 @@
+UTC: 2026-10-03T03:15:45.013752+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files docs/qa/2026-10-02/scripts docs/qa/2026-10-02/artifacts/browser -g '*.mjs' -g '*.cjs' -g '*.ts' -g '*.json'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+docs/qa/2026-10-02/scripts/existing-e2e-tour-probe.cjs
+docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs
+docs/qa/2026-10-02/scripts/ux-browser-pass.cjs
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+docs/qa/2026-10-02/scripts/browser-ux-followup.cjs
+docs/qa/2026-10-02/scripts/existing-e2e.config.cjs
+docs/qa/2026-10-02/scripts/existing-e2e-summarize.cjs
+docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-07-59-985Z/report.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-chromium-2026-10-03T02-07-16-457Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-chromium-2026-10-03T02-07-36-085Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-engine-probe.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-local-browser-summary.json
+docs/qa/2026-10-02/artifacts/browser/browser-ux-summary.json
+docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-07-59-986Z/report.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-firefox-2026-10-03T02-07-40-515Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-local-browser.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-cleanup.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T02-06-10-247Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T02-08-28-371Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T02-07-34-091Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-results-2026-10-03T02-07-31-484Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-keyboard-platform-control.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-error-page-triage.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-webkit-environment-webkit-2026-10-03T02-10-03-254Z.json
+docs/qa/2026-10-02/artifacts/browser/fe004-webkit-native-idb-control-1790993369038.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T02-10-02-779Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-results.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-chromium-second-run.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-tour-settling.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T02-07-16-037Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-summary.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-chromium-third-run.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-chromium-2026-10-03T02-07-34-417Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-chromium-2026-10-03T02-07-18-126Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T02-09-59-769Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-results-2026-10-03T02-08-26-788Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-firefox-2026-10-03T02-10-01-873Z.json
+docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-06-40-394Z/report.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-final-local-browser-details/.last-run.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-safety-check.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-tour-proxy-settling.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-firefox-2026-10-03T02-07-38-813Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-final-local-browser-summary.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-firefox-2026-10-03T02-10-00-177Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-firefox-2026-10-03T02-08-30-513Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-chromium-2026-10-03T02-09-56-599Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T02-09-56-289Z.json
+docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-04-48-007Z/report.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-results-2026-10-03T02-09-55-607Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T02-08-31-476Z.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-chromium-2026-10-03T02-09-58-261Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-local-browser-details/.last-run.json
+docs/qa/2026-10-02/artifacts/browser/fe-regression-results-2026-10-03T02-09-07-557Z.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-final-local-browser.json
+docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-firefox-2026-10-03T02-08-28-805Z.json
+docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-06-35-723Z/report.json
+docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-details/.last-run.json

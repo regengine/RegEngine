@@ -1,0 +1,20 @@
+UTC: 2026-10-03T03:19:51.556036+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git status --short; rg --files services docs/qa/2026-10-02/scripts -g AGENTS.md -g run_backend_tests.py -g run_pytest.py -g "*guard*" -g "*pytest*"'
+Exit: 0
+Duration: 0.11s
+Timeout: False
+
+?? docs/qa/2026-10-02/FIX-SESSION-LOG.md
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png
+?? docs/qa/2026-10-02/artifacts/browser/followup-server-20261003T031612Z-metadata.txt
+?? docs/qa/2026-10-02/artifacts/fix/
+docs/qa/2026-10-02/scripts/backend_pytest.py
+services/admin/tests/test_invite_audit_chain_guard_2857.py
+services/admin/tests/test_tenant_session_guard_2696.py
+services/scheduler/tests/test_safe_http_guardrail.py

@@ -1,0 +1,31 @@
+UTC: 2026-10-03T03:26:06.725359+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+p=Path("services/ingestion/app/csv_templates.py"); s=p.read_text(); old="    text = content.decode(\"utf-8-sig\")  # Handle BOM\n"; new="""    try:
+        text = content.decode("utf-8-sig")  # Handle BOM
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
+        ) from exc
+"""; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/ingestion/tests/test_qa_sweep_20261002_contract.py"); s=p.read_text(); old="""@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
+)
+"""; assert s.count(old)==1; s=s.replace(old,"# BE-004: unsupported encodings get actionable client feedback before persistence.\n"); old="    assert response.status_code in (400, 415, 422), response.text\n"; new="    assert response.status_code == 400, response.text\n    assert \"UTF-8 CSV\" in response.json()[\"detail\"]\n"; assert s.count(old)==1; s=s.replace(old,new); anchor="\n\n@given(st.integers(min_value=1, max_value=1_000_000))\n"; addition="""
+
+def test_csv_utf8_non_ascii_product_is_accepted(csv_upload):
+    upload, captured = csv_upload
+    row = list(ROW)
+    row[1] = "Caf\u00e9 kale"
+    response = upload(_csv(HEADER, row))
+    assert response.status_code == 200
+    assert captured[0].product_description == row[1]
+"""; assert s.count(anchor)==1; p.write_text(s.replace(anchor,addition+anchor)); print("BE-004 implemented narrow UTF-8 decode client error, converted three QA witnesses, retained BOM and added valid non-ASCII control.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+BE-004 implemented narrow UTF-8 decode client error, converted three QA witnesses, retained BOM and added valid non-ASCII control.

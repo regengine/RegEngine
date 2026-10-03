@@ -1,0 +1,39 @@
+UTC: 2026-10-03T03:24:45.560042+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git status --short --branch
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+## qa/2026-10-02-fixes
+ M services/ingestion/app/csv_templates.py
+ M services/ingestion/app/webhook_models.py
+ M services/ingestion/tests/test_csv_input_quantities.py
+ M services/ingestion/tests/test_qa_sweep_20261002_contract.py
+ M services/ingestion/tests/test_webhook_models.py
+ M services/shared/error_handling.py
+ M services/shared/tests/test_error_handling.py
+?? docs/qa/2026-10-02/FIX-SESSION-LOG.md
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-22-16-011Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-22-16-011Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-22-19-908Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-22-19-908Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-22-23-231Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-22-23-231Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-chromium-2026-10-03T03-22-16-396Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-chromium-2026-10-03T03-22-16-396Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-firefox-2026-10-03T03-22-20-368Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-a-firefox-2026-10-03T03-22-20-368Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-chromium-2026-10-03T03-22-18-094Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-chromium-2026-10-03T03-22-18-094Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-firefox-2026-10-03T03-22-22-112Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-account-b-firefox-2026-10-03T03-22-22-112Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-004-webkit-environment-webkit-2026-10-03T03-22-23-775Z.json
+?? docs/qa/2026-10-02/artifacts/browser/followup-server-20261003T031612Z-metadata.txt
+?? docs/qa/2026-10-02/artifacts/fix/

@@ -1,0 +1,29 @@
+UTC: 2026-10-03T03:20:01.383771+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers --runxfail --tb=short --no-cov
+Exit: 1
+Duration: 1.70s
+Timeout: False
+
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___________ test_csv_rejects_conflicting_duplicate_headers[quantity] ___________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:165: in test_csv_rejects_conflicting_duplicate_headers
+    assert response.status_code == 400, (
+E   AssertionError: status=200; ingested_quantities=[999.0]
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+__________ test_csv_rejects_conflicting_duplicate_headers[ Quantity ] __________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:165: in test_csv_rejects_conflicting_duplicate_headers
+    assert response.status_code == 400, (
+E   AssertionError: status=200; ingested_quantities=[999.0]
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+=========================== short test summary info ============================
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[quantity] - AssertionError: status=200; ingested_quantities=[999.0]
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers[ Quantity ] - AssertionError: status=200; ingested_quantities=[999.0]
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+2 failed in 0.93s

@@ -1,0 +1,10 @@
+UTC: 2026-10-03T03:19:07.624258+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env PATH=/private/tmp/obsong-qa-node20/node_modules/node/bin:/opt/homebrew/bin:/usr/bin:/bin NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs npm run lint
+Exit: 1
+Duration: 0.12s
+Timeout: False
+
+Exit prior to config file resolving
+cause
+double-loading config "/dev/null" as "global", previously loaded as "user"

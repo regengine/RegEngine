@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:31:48.844215+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text(); anchor="| Sweep-comparable focused ingestion |"; row="| Added backend QA selection, exact core-lock overlay | 13 / 0 / 16 / 0 | 56 / 0 / 4 / 0 | 12 expected failures converted and 31 new passing cases; only BE-001 (three) and BE-011 (one) remain. |\n"; s=s.replace(anchor,row+anchor,1); s=s.replace("Independent local gate reviewed each fix and exact locked-framework backend witnesses.","Independent local gate reviewed each fix and exact locked-framework backend witnesses. Per-finding test selections overlap and are not additive."); p.write_text(s); print("Final locked-framework QA evidence recorded")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Final locked-framework QA evidence recorded

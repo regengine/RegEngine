@@ -1,0 +1,13 @@
+{
+  "head": "a7f001fcadc7d44dfeeacde3e05d337a296e48a8",
+  "hashes": {
+    "frontend/src/lib/gs1-parser.ts": "9c1856e295147fd1dd7c853765a31ba4e97f9104c461e3f4fda66b2b9a290b07",
+    "frontend/src/__tests__/lib/qa-sweep-gs1.test.ts": "2a2d20a5de488366adf64b98232a480be17184f2a80e1212b8c36e8a77a17dc4",
+    "frontend/next-env.d.ts": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc",
+    "docs/qa/2026-10-02/scripts/node-isolation.cjs": "174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031",
+    "docs/qa/2026-10-02/scripts/existing-e2e-proxy.py": "451665ebe6e0f52d2a71252d3b69c3f0958c5104d92da8b43ca6b191db289b27"
+  },
+  "build_id": "nbeA56-sCPEIKdGXlL47I",
+  "served_build_id": "nbeA56-sCPEIKdGXlL47I",
+  "product_changes": []
+}

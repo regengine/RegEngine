@@ -1,0 +1,396 @@
+{
+  "archive": "docs/qa/2026-10-02/artifacts/fix/original-command-log-whitespace.tar.gz",
+  "reason": "Display logs normalize trailing whitespace and final blank lines; complete original bytes retained in archive.",
+  "members": [
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031333.259672Z-protected-scope-memory.txt",
+      "archive_member": "20261003T031333.259672Z-protected-scope-memory.txt",
+      "raw_bytes": 218,
+      "raw_sha256": "e342213f09036eaeb5846787e2dab90aa2228ecca8e1782478ed042610b211bc"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031333.260584Z-protected-scope-docs.txt",
+      "archive_member": "20261003T031333.260584Z-protected-scope-docs.txt",
+      "raw_bytes": 251,
+      "raw_sha256": "3dd5269963ed08d79ddffe4b1161606190aabe51c53907c9eb1afc7425eadb45"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031335.918127Z-protected-scope-commit.txt",
+      "archive_member": "20261003T031335.918127Z-protected-scope-commit.txt",
+      "raw_bytes": 1224,
+      "raw_sha256": "6f18e6642f6b1812f106f5a7880fcab08d2089282e2ee4cac4c058ff631180a6"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031343.496249Z-protected-scope-symbols.txt",
+      "archive_member": "20261003T031343.496249Z-protected-scope-symbols.txt",
+      "raw_bytes": 7064,
+      "raw_sha256": "beacecd9d550b5e038f5f24fe529d7546c27531bce16aed7839a69324440fb5c"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031344.163998Z-be010-instructions.txt",
+      "archive_member": "20261003T031344.163998Z-be010-instructions.txt",
+      "raw_bytes": 189,
+      "raw_sha256": "472d5993db868002e79efca76a77805b13803caba9dc92322b1bc36f65e9fb91"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031346.237591Z-frontend-read-instructions.txt",
+      "archive_member": "20261003T031346.237591Z-frontend-read-instructions.txt",
+      "raw_bytes": 2225,
+      "raw_sha256": "4290646df9108b6ac070234391fc2464ca895b3871cb3ad6e8db0bc054652f98"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031402.346918Z-be010-starlette.txt",
+      "archive_member": "20261003T031402.346918Z-be010-starlette.txt",
+      "raw_bytes": 5173,
+      "raw_sha256": "40d5202af970b499dd7b705c32b36d24608c569eb8e3b709eadce6c3ad57c91f"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031404.154688Z-frontend-parser-current.txt",
+      "archive_member": "20261003T031404.154688Z-frontend-parser-current.txt",
+      "raw_bytes": 12350,
+      "raw_sha256": "7c1b5af87eb551498fd3c5157ba5bac83b8e5b6ddfe99968150fa44eb1cac8fc"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031404.265645Z-frontend-browser-witness.txt",
+      "archive_member": "20261003T031404.265645Z-frontend-browser-witness.txt",
+      "raw_bytes": 13269,
+      "raw_sha256": "8483600f9fc1b0f2a0146d51610db43941f0ff01f38660783aee0f58d4a20e4f"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031432.499213Z-frontend-test-guidance.txt",
+      "archive_member": "20261003T031432.499213Z-frontend-test-guidance.txt",
+      "raw_bytes": 7821,
+      "raw_sha256": "0c90b5e2dce7b476af4b9178ee84b799200eb166f3ba67518e413e67a636654b"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031443.174996Z-baseline_static_previous.txt",
+      "archive_member": "20261003T031443.174996Z-baseline_static_previous.txt",
+      "raw_bytes": 28876,
+      "raw_sha256": "5ba39903f36c17d8daf4f9a3308fad4dbd523cc2f8b62db1f6aa60cb32e5442e"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031449.130508Z-frontend-fe001-baseline-node20.txt",
+      "archive_member": "20261003T031449.130508Z-frontend-fe001-baseline-node20.txt",
+      "raw_bytes": 1415,
+      "raw_sha256": "d04e7fd79801cc7013197277935c6edc0c70dc46602aa07f64af6b4b2b0e9f50"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031516.604518Z-frontend-fe001-negative-control.txt",
+      "archive_member": "20261003T031516.604518Z-frontend-fe001-negative-control.txt",
+      "raw_bytes": 14034,
+      "raw_sha256": "bc51640992cea2419e6dd8a32fc691c9ef62857a1adcd8eeb2a5383e2ca6fccb"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031529.599159Z-frontend-fe001-unit-proving.txt",
+      "archive_member": "20261003T031529.599159Z-frontend-fe001-unit-proving.txt",
+      "raw_bytes": 1415,
+      "raw_sha256": "0e33a14f23c8b6476fa5bdd9ce777f3da089b46c6eb8eae22c9e7812ad48c1cc"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031530.487223Z-frontend-fe001-diff.txt",
+      "archive_member": "20261003T031530.487223Z-frontend-fe001-diff.txt",
+      "raw_bytes": 5072,
+      "raw_sha256": "23351336844bc059c66674ee00a66fbc24a45073b6b43cb828deac0b6a0e7f4c"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031535.049175Z-frontend-validation-context.txt",
+      "archive_member": "20261003T031535.049175Z-frontend-validation-context.txt",
+      "raw_bytes": 20126,
+      "raw_sha256": "da28f54dbbf3e684193f3fd18728d2fbd4e18196c306a86862cf268c580cf769"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031544.406432Z-frontend-fe001-build.txt",
+      "archive_member": "20261003T031544.406432Z-frontend-fe001-build.txt",
+      "raw_bytes": 15952,
+      "raw_sha256": "474efcd887f84dfc5985f141fd6244ab0689e287773a6f22ef615adc9f3671e6"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031545.011169Z-frontend-validation-harness.txt",
+      "archive_member": "20261003T031545.011169Z-frontend-validation-harness.txt",
+      "raw_bytes": 13404,
+      "raw_sha256": "3e971e98f9d8c34db3d612cc4aa61070c39edfcd6cb1c25e625245561c5a3633"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031547.331208Z-gate-fe001-diff.txt",
+      "archive_member": "20261003T031547.331208Z-gate-fe001-diff.txt",
+      "raw_bytes": 5072,
+      "raw_sha256": "f86404fb90d1066a6f1ff4f9bb595eaf6f7d94f066189c159528ef00f409f909"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031551.888528Z-be010-targeted.txt",
+      "archive_member": "20261003T031551.888528Z-be010-targeted.txt",
+      "raw_bytes": 15365,
+      "raw_sha256": "fe60e80cf1d651c0ee9d2f344c24fce2b2d93bdc2e436187fa3097f6a1014acb"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031553.682675Z-frontend-browser-proxy-review.txt",
+      "archive_member": "20261003T031553.682675Z-frontend-browser-proxy-review.txt",
+      "raw_bytes": 6891,
+      "raw_sha256": "37956ee818773677541a7c85e1bd21e27c92660a1927597dcaa169ab3c71ecb5"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031553.902686Z-review-fe001-draft.txt",
+      "archive_member": "20261003T031553.902686Z-review-fe001-draft.txt",
+      "raw_bytes": 5095,
+      "raw_sha256": "439f0b01c2f527037c6bd6808369995178af3e5783175dac6b564df465a201ad"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031601.229613Z-frontend-runner-guidance.txt",
+      "archive_member": "20261003T031601.229613Z-frontend-runner-guidance.txt",
+      "raw_bytes": 5951,
+      "raw_sha256": "538109977fb40063faee2d760736b36ba87921f074dd23fe4ae05dce9c0da9c7"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031603.574605Z-frontend-validation-proxy-source.txt",
+      "archive_member": "20261003T031603.574605Z-frontend-validation-proxy-source.txt",
+      "raw_bytes": 12612,
+      "raw_sha256": "9d8159ae339fd5eb324198cb732f050157d51df06a1ddbbecf9acfcec86fbbc6"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031603.575373Z-frontend-validation-baseline-artifact.txt",
+      "archive_member": "20261003T031603.575373Z-frontend-validation-baseline-artifact.txt",
+      "raw_bytes": 25359,
+      "raw_sha256": "3478df5f0e3e546ad8a204f146b96b521b58e9b3144755392810fa43e203709c"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031622.604413Z-frontend-validation-server-source.txt",
+      "archive_member": "20261003T031622.604413Z-frontend-validation-server-source.txt",
+      "raw_bytes": 5705,
+      "raw_sha256": "910b3b5dec15424b8290205ff4f8a9aa05fd39102be50eca75c3168fb106ac62"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031631.536082Z-frontend-fe001-related-proving.txt",
+      "archive_member": "20261003T031631.536082Z-frontend-fe001-related-proving.txt",
+      "raw_bytes": 1885,
+      "raw_sha256": "9491af1b9ff74fe00a2ebb3929a557de555fee032bfce80151375940b15ad722"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031657.653095Z-be010-diff.txt",
+      "archive_member": "20261003T031657.653095Z-be010-diff.txt",
+      "raw_bytes": 163,
+      "raw_sha256": "1511200e5d4199dd0ac5f276c3d7ddf33033179ea152c0a0c645495a7284df2c"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031657.653622Z-be010-stack-tests.txt",
+      "archive_member": "20261003T031657.653622Z-be010-stack-tests.txt",
+      "raw_bytes": 450801,
+      "raw_sha256": "a2cf8ebda91abc8c8220e87c197c293ee5e86ddd05659fe96da6e0b4d9623d18"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031719.211824Z-be010-old-stack-baseline.txt",
+      "archive_member": "20261003T031719.211824Z-be010-old-stack-baseline.txt",
+      "raw_bytes": 471001,
+      "raw_sha256": "0c83d0471d6f84da33fbb996da0cc9843cf1def1789e6184ff863d01826f91b4"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031743.987230Z-gate-be010-diff.txt",
+      "archive_member": "20261003T031743.987230Z-gate-be010-diff.txt",
+      "raw_bytes": 12749,
+      "raw_sha256": "cbe14da61e905d13cde73671af36ee3d7ea4fedff6bc9096980be7fdaa9c57c2"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031800.689558Z-review-be010-draft.txt",
+      "archive_member": "20261003T031800.689558Z-review-be010-draft.txt",
+      "raw_bytes": 12777,
+      "raw_sha256": "2b5874d4073d4136071ba5494d521ae0cf876108ab0be50f7602a03456ac39e2"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031806.588016Z-baseline_process_probe_diagnostic.txt",
+      "archive_member": "20261003T031806.588016Z-baseline_process_probe_diagnostic.txt",
+      "raw_bytes": 532,
+      "raw_sha256": "3b7531c7a55e2fc3b1af32d6b33d7789bbb4f18b5b5a144bda1eee79a38cf3af"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031847.313370Z-be010-final-review.txt",
+      "archive_member": "20261003T031847.313370Z-be010-final-review.txt",
+      "raw_bytes": 247,
+      "raw_sha256": "f8417990a61819a0e95b52fcfcc1ed54659002ff25caa4b0a063e67595529d3a"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031907.596228Z-frontend-final-regression-config.txt",
+      "archive_member": "20261003T031907.596228Z-frontend-final-regression-config.txt",
+      "raw_bytes": 4130,
+      "raw_sha256": "ec6e696787fdd6b0eadf7df8025ad58df712d8c1dc4a02dd3825ae588e53bf2c"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031907.622295Z-frontend-final-tsc.txt",
+      "archive_member": "20261003T031907.622295Z-frontend-final-tsc.txt",
+      "raw_bytes": 401,
+      "raw_sha256": "de8f9b0fdc1b43156ad95a1a82b7b807cd86fc837a11421864a57f9f96995638"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031921.322233Z-frontend-final-e2e-config-create.txt",
+      "archive_member": "20261003T031921.322233Z-frontend-final-e2e-config-create.txt",
+      "raw_bytes": 1064,
+      "raw_sha256": "6eec478225557a50443d7e67fd7d59d7609029fca986103c073b7b1ded127d7e"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031927.742512Z-frontend-final-existing-e2e.txt",
+      "archive_member": "20261003T031927.742512Z-frontend-final-existing-e2e.txt",
+      "raw_bytes": 2092,
+      "raw_sha256": "228d983165d926f64094a8a99bc55b455c112733239e9b2fe2b0507306960cf2"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T031942.418236Z-frontend-final-existing-e2e-node26.txt",
+      "archive_member": "20261003T031942.418236Z-frontend-final-existing-e2e-node26.txt",
+      "raw_bytes": 103493,
+      "raw_sha256": "302c5a44242902e766a8112064995c57efce02386ae31561e0220ffe42f99ba4"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032021.921749Z-frontend-final-browser-qa-sources.txt",
+      "archive_member": "20261003T032021.921749Z-frontend-final-browser-qa-sources.txt",
+      "raw_bytes": 13741,
+      "raw_sha256": "bd08056c725212773058a76d87cf349045d0c8430eee53ecbb7512c77b8dce83"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032043.241944Z-be003-diff.txt",
+      "archive_member": "20261003T032043.241944Z-be003-diff.txt",
+      "raw_bytes": 163,
+      "raw_sha256": "5ee293996c99a77b2b053a7faf273ab8951c31032cec8f888124a2a4c63a0e33"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032043.885129Z-check-qa-fix-artifact-sizes.txt",
+      "archive_member": "20261003T032043.885129Z-check-qa-fix-artifact-sizes.txt",
+      "raw_bytes": 1078,
+      "raw_sha256": "b3135255f3683d09d141d9538e70a590b96f3cb112355b6dd2317634ee5eb7c4"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032100.027840Z-gate-be003-diff.txt",
+      "archive_member": "20261003T032100.027840Z-gate-be003-diff.txt",
+      "raw_bytes": 5285,
+      "raw_sha256": "247abcb30aa0ba685b8da9a932e66e77008f988e3878973cea36891ccbd4efc4"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032103.673462Z-review-be003-draft.txt",
+      "archive_member": "20261003T032103.673462Z-review-be003-draft.txt",
+      "raw_bytes": 5285,
+      "raw_sha256": "2ad5621d8a207879880c77e5c5e97ea830f0aaa63f2adf67e5a3eb6de66a2a56"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032104.696161Z-be003-final-diff.txt",
+      "archive_member": "20261003T032104.696161Z-be003-final-diff.txt",
+      "raw_bytes": 5285,
+      "raw_sha256": "b8f5602173b160b82ad249110200433cf90b4303a50ebf6a7809b59c2ebd8d69"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032433.268261Z-frontend-final-summary-inputs.txt",
+      "archive_member": "20261003T032433.268261Z-frontend-final-summary-inputs.txt",
+      "raw_bytes": 7064,
+      "raw_sha256": "446c39efa1cac1d7d9a79d1c319e05447d98f279a9739f3821c8ff7d91faa28a"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032445.872396Z-be002-review-diff.txt",
+      "archive_member": "20261003T032445.872396Z-be002-review-diff.txt",
+      "raw_bytes": 10778,
+      "raw_sha256": "c6b41ee0718af7ffe4ee3c707218886e7a398218d4654a7000c41a693a676f59"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032445.872425Z-be002-diff-check.txt",
+      "archive_member": "20261003T032445.872425Z-be002-diff-check.txt",
+      "raw_bytes": 163,
+      "raw_sha256": "1c7efdb8170a7f8cdbfb782c3f85f89f3cebfce5ad9b01885ee6107ea1464aad"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032456.772040Z-gate-be002-diff.txt",
+      "archive_member": "20261003T032456.772040Z-gate-be002-diff.txt",
+      "raw_bytes": 9609,
+      "raw_sha256": "f7dc0ec22f5fb3f419337b1b75b5ef4168bfbe62c476d3ca32324256e5ebefd1"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032504.583843Z-gate-be002-error-test.txt",
+      "archive_member": "20261003T032504.583843Z-gate-be002-error-test.txt",
+      "raw_bytes": 1363,
+      "raw_sha256": "6edfe817d27bc56f30adc963db400b9ec18e641de87acdd085e47d209554d52f"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032521.765488Z-review-be002-draft.txt",
+      "archive_member": "20261003T032521.765488Z-review-be002-draft.txt",
+      "raw_bytes": 9444,
+      "raw_sha256": "2c3c01bad941538e3bc1fc87e3aee6ec0d3e0c9c39bad7cf3a5666dc097351f9"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032532.255870Z-stage-be002.txt",
+      "archive_member": "20261003T032532.255870Z-stage-be002.txt",
+      "raw_bytes": 2800,
+      "raw_sha256": "aedecf923cd9a5694dd980767cbbb50973001611dae4af491b4104810a3dee47"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032542.013135Z-frontend-final-original-artifact-check.txt",
+      "archive_member": "20261003T032542.013135Z-frontend-final-original-artifact-check.txt",
+      "raw_bytes": 254,
+      "raw_sha256": "dc0f6f68aa70ec9448dcec054b937a035b9955762e4c382823bba54c91c8e29a"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032603.227198Z-late-artifact-inventory.txt",
+      "archive_member": "20261003T032603.227198Z-late-artifact-inventory.txt",
+      "raw_bytes": 6540,
+      "raw_sha256": "5b1124720415e0e2100a4078e79d33d228b232e718cbd17c3f021312ba508fd4"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032614.647776Z-be004-diff-check.txt",
+      "archive_member": "20261003T032614.647776Z-be004-diff-check.txt",
+      "raw_bytes": 163,
+      "raw_sha256": "c2d5674912ef4506c785336bd70394a1e87754c64abcbbba6ad5a18cff43b309"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032622.792122Z-gate-be004-diff.txt",
+      "archive_member": "20261003T032622.792122Z-gate-be004-diff.txt",
+      "raw_bytes": 2996,
+      "raw_sha256": "05a2d65cff57c54260ac23d21a9b204e9fbdff04c51e67296fbc9b7dfa8f4fce"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032647.003038Z-review-be004-draft.txt",
+      "archive_member": "20261003T032647.003038Z-review-be004-draft.txt",
+      "raw_bytes": 2996,
+      "raw_sha256": "b8d470cb893900e2de1507f0af71b529cc4d351f2e2ede32554b72012df29309"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032704.383459Z-final-ruff-full.txt",
+      "archive_member": "20261003T032704.383459Z-final-ruff-full.txt",
+      "raw_bytes": 70665,
+      "raw_sha256": "66c8443ab2d4c1d42c5833dadcc123130730cc6ce7a195ea07686a58e59f27cb"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032708.261003Z-gate-final-commits.txt",
+      "archive_member": "20261003T032708.261003Z-gate-final-commits.txt",
+      "raw_bytes": 6194,
+      "raw_sha256": "98cec75dfdf3f2708aa363f95f7bf329d3ea7d9b3322eec7f675dd6cbf110cce"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt",
+      "archive_member": "20261003T032708.261182Z-gate-final-product-diff.txt",
+      "raw_bytes": 11085,
+      "raw_sha256": "56c39107d27de6dad2fa86ee13389ef901a7e8d6889d58c5b476f7e0f7e9db4e"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt",
+      "archive_member": "20261003T032725.306781Z-gate-final-test-diff.txt",
+      "raw_bytes": 25032,
+      "raw_sha256": "dcfc040cfd8502559b9ece3731496fabf3db0548e0c0376024da1c2d110dfcb9"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032725.487335Z-final-mypy-duplicate-baseline.txt",
+      "archive_member": "20261003T032725.487335Z-final-mypy-duplicate-baseline.txt",
+      "raw_bytes": 238,
+      "raw_sha256": "f32fad7b8dfd7a8f62dd3194a9483d4e344c2ee31095accdf4006a55f68f7441"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032730.855560Z-gate-final-diff-check.txt",
+      "archive_member": "20261003T032730.855560Z-gate-final-diff-check.txt",
+      "raw_bytes": 178,
+      "raw_sha256": "fd8f9699bb1a719e865675bd6884b3aae6fec4d596d51f4a9cf6ae8d1bbfe0dd"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T032823.570537Z-gate-summary-draft.txt",
+      "archive_member": "20261003T032823.570537Z-gate-summary-draft.txt",
+      "raw_bytes": 1417,
+      "raw_sha256": "befe0799125f3f68c69f8cd0ebe3b3567e19c473469c742e4aa36ccc63a73631"
+    },
+    {
+      "display_log": "docs/qa/2026-10-02/artifacts/fix/20261003T034218.113586Z-stage-final-docs-explicit-paths.txt",
+      "archive_member": "20261003T034218.113586Z-stage-final-docs-explicit-paths.txt",
+      "raw_bytes": 7688,
+      "raw_sha256": "c2fd5c31b2d84d8260e052a225c0f171db4aac8f0918e4b5f45177ee5a871a0e"
+    }
+  ]
+}

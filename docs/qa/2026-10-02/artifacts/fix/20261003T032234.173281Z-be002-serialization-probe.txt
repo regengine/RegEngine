@@ -1,0 +1,29 @@
+UTC: 2026-10-03T03:22:34.173281+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py /private/tmp/test_be002_validation_probe.py --tb=short --no-cov
+Exit: 1
+Duration: 0.92s
+Timeout: False
+
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/tmp
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../../../../../private/tmp/test_be002_validation_probe.py F              [100%]
+
+=================================== FAILURES ===================================
+______________ test_finite_event_overflow_has_validation_response ______________
+/private/tmp/test_be002_validation_probe.py:20: in test_finite_event_overflow_has_validation_response
+    assert response.status_code == 422, response.text
+E   AssertionError: {"error":{"type":"bad_request","message":"Invalid request"}}
+E   assert 400 == 422
+E    +  where 400 = <Response [400 Bad Request]>.status_code
+----------------------------- Captured stdout call -----------------------------
+2026-10-02 20:22:34 [warning  ] value_error                    detail='Out of range float values are not JSON compliant' path=/probe
+=========================== short test summary info ============================
+FAILED ../../../../../private/tmp/test_be002_validation_probe.py::test_finite_event_overflow_has_validation_response - AssertionError: {"error":{"type":"bad_request","message":"Invalid request"}}
+assert 400 == 422
+ +  where 400 = <Response [400 Bad Request]>.status_code
+============================== 1 failed in 0.38s ===============================

@@ -1,0 +1,11 @@
+UTC: 2026-10-03T03:14:56.514800+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files -g AGENTS.md -g '!node_modules' -g '!.venv' -g '!venv'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+docs/engineering/AGENTS.md
+docs/archive/AGENTS.md
+frontend/AGENTS.md
+AGENTS.md

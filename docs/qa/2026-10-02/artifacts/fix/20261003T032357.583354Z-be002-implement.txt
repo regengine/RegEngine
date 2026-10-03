@@ -1,0 +1,75 @@
+UTC: 2026-10-03T03:23:57.583354+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+p=Path("services/ingestion/app/webhook_models.py"); s=p.read_text(); old="quantity: float = Field(..., description=\"Numeric quantity\", gt=0)"; new="quantity: float = Field(..., description=\"Numeric quantity\", gt=0, allow_inf_nan=False)"; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/ingestion/app/csv_templates.py"); s=p.read_text(); s=s.replace("import logging\n", "import logging\nimport math\n",1); old="        if quantity < 0:\n"; new="        if not math.isfinite(quantity):\n            return [], f\"input quantity {quantity_text!r} for input lot {lot} must be finite\", None\n        if quantity < 0:\n"; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/shared/error_handling.py"); s=p.read_text(); s=s.replace("import os\n", "import math\nimport os\n",1); old="    if isinstance(value, (str, int, float, bool)) or value is None:\n"; new="    if isinstance(value, float) and not math.isfinite(value):\n        return str(value)\n    if isinstance(value, (str, int, float, bool)) or value is None:\n"; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/ingestion/tests/test_qa_sweep_20261002_contract.py"); s=p.read_text(); s=s.replace("import io\n", "import io\nimport json\n",1); s=s.replace("import math\n", "import math\nfrom unittest.mock import AsyncMock\n",1); s=s.replace("from hypothesis import given, settings, strategies as st\n", "from hypothesis import given, settings, strategies as st\nfrom shared.error_handling import install_exception_handlers\n",1); old="    app.include_router(routes.router)\n"; new=old+"    install_exception_handlers(app)\n"; assert s.count(old)==1; s=s.replace(old,new)
+for reason in ["CSV accepts nonfinite output quantity into persistence boundary", "transformation input quantity accepts NaN/infinity"]:
+ old="@pytest.mark.xfail(\n    strict=True, raises=AssertionError, reason=\"BE-002: "+reason+"\"\n)\n"; assert s.count(old)==1; s=s.replace(old,"# BE-002: quantities reaching persistence must be finite.\n")
+anchor="\n\n# BE-003: ambiguous columns must be rejected before quantities can be overwritten.\n"; addition="""
+
+@pytest.mark.parametrize("raw_quantity", ["1e309", "-1e309", "NaN"])
+def test_webhook_nonfinite_quantity_returns_validation_error_before_ingest(webhook_client, monkeypatch, raw_quantity):
+    # BE-002: numeric overflow in valid JSON must retain the structured 422.
+    enter_ingest = AsyncMock(side_effect=AssertionError("Invalid quantity reached ingestion"))
+    monkeypatch.setattr(routes._pkg, "resolve_tenant_context", enter_ingest)
+    raw = json.dumps(_payload("2026-04-17T12:00:00Z")).replace(\x27"quantity": 10\x27, f\x27"quantity": {raw_quantity}\x27)
+    response = webhook_client.post(
+        "/api/v1/webhooks/ingest",
+        content=raw,
+        headers={"Content-Type": "application/json", "Idempotency-Key": "qa-nonfinite-quantity"},
+    )
+    assert response.status_code == 422, response.text
+    [error] = response.json()["error"]["details"]
+    assert error["type"] == "finite_number"
+    assert error["loc"] == ["body", "events", 0, "quantity"]
+    assert isinstance(error["input"], str)
+    enter_ingest.assert_not_called()
+"""; assert s.count(anchor)==1; p.write_text(s.replace(anchor,addition+anchor))
+p=Path("services/ingestion/tests/test_webhook_models.py"); s=p.read_text(); anchor="    def test_rejects_future_timestamp(self):\n"; addition="""    @pytest.mark.parametrize("quantity", [float("inf"), float("-inf"), float("nan"), "Infinity", "1e309"])
+    def test_rejects_nonfinite_quantity(self, quantity):
+        # BE-002: enforce finite output quantities for every model caller.
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(**_valid_event_kwargs(quantity=quantity))
+        assert exc_info.value.errors()[0]["type"] == "finite_number"
+
+    @pytest.mark.parametrize("quantity", [0.001, 1, 1_000_000])
+    def test_accepts_positive_finite_quantity(self, quantity):
+        assert IngestEvent(**_valid_event_kwargs(quantity=quantity)).quantity == quantity
+
+    @pytest.mark.parametrize("quantity", [0, -1])
+    def test_still_rejects_nonpositive_quantity(self, quantity):
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(**_valid_event_kwargs(quantity=quantity))
+        assert exc_info.value.errors()[0]["type"] == "greater_than"
+
+"""; assert s.count(anchor)==1; p.write_text(s.replace(anchor,addition+anchor))
+p=Path("services/ingestion/tests/test_csv_input_quantities.py"); s=p.read_text(); s=s.replace("import io\n", "import io\n\nimport pytest\n",1); s += """
+
+@pytest.mark.parametrize("quantity", ["0", "0.25", "1000000"])
+def test_finite_nonnegative_input_quantities_remain_accepted(quantity):
+    # BE-002 preserves the existing input domain, including zero.
+    events, errors, _ = _parse(f"NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,{quantity},cases\\n")
+    assert errors == []
+    assert events[0].kdes["inputs"][0]["quantity"] == float(quantity)
+
+
+def test_negative_input_quantity_remains_rejected():
+    events, errors, _ = _parse("NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,-1,cases\\n")
+    assert events == []
+    assert "is negative" in errors[0]
+"""; p.write_text(s)
+p=Path("services/shared/tests/test_error_handling.py"); s=p.read_text(); s=s.replace("from fastapi import FastAPI, HTTPException\n", "import math\n\nfrom fastapi import FastAPI, HTTPException\n",1); s=s.replace("from shared.error_handling import ClientSafeValueError, install_exception_handlers", "from shared.error_handling import ClientSafeValueError, _json_safe, install_exception_handlers"); s += """
+
+def test_validation_details_are_json_safe_for_nonfinite_numbers() -> None:
+    # BE-002: validation errors may retain numeric JSON overflow as input.
+    details = {"input": [math.inf, -math.inf, math.nan], "context": (1.25, 2, True, None)}
+    assert _json_safe(details) == {"input": ["inf", "-inf", "nan"], "context": [1.25, 2, True, None]}
+"""; p.write_text(s)
+print("BE-002 implemented finite model and nested CSV guards, minimal JSON-safe validation detail conversion, ordinary CSV witnesses, route/model/domain/error-handler regressions.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+BE-002 implemented finite model and nested CSV guards, minimal JSON-safe validation detail conversion, ordinary CSV witnesses, route/model/domain/error-handler regressions.

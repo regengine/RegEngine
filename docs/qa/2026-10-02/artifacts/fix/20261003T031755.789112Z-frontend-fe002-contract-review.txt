@@ -1,0 +1,45 @@
+UTC: 2026-10-03T03:17:55.789112+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'parseGS1|isFSMACompatible|sourceFormat|FE-002' frontend/src/lib/gs1-parser.ts frontend/src/lib/gs1-parser.test.ts frontend/src/__tests__/lib/qa-sweep-gs1.test.ts frontend/src/components/scanner frontend/src/app/tools/scan docs/qa/2026-10-02/FRONTEND-REPORT.md
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: frontend/src/components/scanner: No such file or directory (os error 2)
+docs/qa/2026-10-02/FRONTEND-REPORT.md:39:| FE-001 | High | Frontend | Scanning valid lot codes silently truncates the lot identifier | Execute `qa-sweep-gs1.test.ts`, cases named `FE-001`; pass `010950600013435210LOT-10-ABC\x1d17260930` to `parseGS1`, where `\x1d` is the ASCII group separator. Repeat with `LOT-21-ABC` and `LOT-17260930`. | Expected lot preserved through its explicit group separator. Actual `tlc` is `LOT-`; `LOT-21-ABC` also invents serial `-ABC`. Field capture copies the truncated identifier into the ingest payload. Persistence was not exercised. | `frontend/src/lib/gs1-parser.ts:75` and `:179`; `frontend/src/components/mobile/FieldCaptureClient.tsx:192` and `:224`; test `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:33`; [actual results](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt) | Respect variable-length AI boundaries: explicit FNC1/group separator, preserved parenthesized AI delimiters, end-of-input and the field's maximum length; do not treat ordinary AI-like digits within lot text as delimiters. |
+docs/qa/2026-10-02/FRONTEND-REPORT.md:40:| FE-002 | Medium | Frontend | Malformed Digital Link encoding throws out of scan handlers | Execute the three `FE-002` cases; parse `/01/09506000134352/10/%`, then `%ZZ` and `%E0%A4`. These can be pasted into the public scanner or supplied to receiving/field capture handlers. | Expected rejected input with recoverable feedback. Actual uncaught `URIError: URI malformed` from `decodeURIComponent`; the callers invoke the parser without a catch. | `frontend/src/lib/gs1-parser.ts:107`; `frontend/src/app/tools/scan/page.tsx:30`; `frontend/src/app/dashboard/receiving/page.tsx:158`; test `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:42`; [actual results](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt) | Catch malformed URI decoding at the parser boundary and return an explicit invalid-scan result; display a recoverable validation error in callers. |
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:2:import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:7:            const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:28:        expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:34:        const parsed = parseGS1(input);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:40:        const parsed = parseGS1(`010950600013435210${lot}`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:47:        const parsed = parseGS1('(01)09506000134352(10)LOT-21-ABC(21)SER-10-ABC(17)260930');
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:54:        const parsed = parseGS1('010950600013435210LOT-10-ABCñ21SER-17-ABCñ17260930');
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:63:        const parsed = parseGS1(`010950600013435210${lot}\x1d17260930`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:68:    // FE-002: invalid percent encodings must become a rejected scan, not an
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:70:    it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:71:        expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
+frontend/src/lib/gs1-parser.ts:19:    sourceFormat?: 'gs1_ai' | 'digital_link' | 'unknown';
+frontend/src/lib/gs1-parser.ts:108:    fields.sourceFormat = 'digital_link';
+frontend/src/lib/gs1-parser.ts:129:export function parseGS1(raw: string): GS1ParsedData {
+frontend/src/lib/gs1-parser.ts:132:        sourceFormat: 'unknown',
+frontend/src/lib/gs1-parser.ts:141:        data.sourceFormat = 'gs1_ai';
+frontend/src/lib/gs1-parser.ts:188:export function isFSMACompatible(data: GS1ParsedData): boolean {
+frontend/src/lib/gs1-parser.test.ts:2:import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+frontend/src/lib/gs1-parser.test.ts:7:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:10:        expect(result.sourceFormat).toBe("gs1_ai");
+frontend/src/lib/gs1-parser.test.ts:16:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:23:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:31:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:37:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:47:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:57:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:59:        expect(result.sourceFormat).toBe("digital_link");
+frontend/src/lib/gs1-parser.test.ts:69:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:71:        expect(result.sourceFormat).toBe("digital_link");
+frontend/src/app/tools/scan/page.tsx:8:import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:30:    const result = parseGS1(barcode);
+frontend/src/app/tools/scan/page.tsx:89:  const isCompatible = parsed ? isFSMACompatible(parsed) : false;
+frontend/src/app/tools/scan/page.tsx:211:                    parsed.sourceFormat !== 'unknown'
+frontend/src/app/tools/scan/page.tsx:216:                  {parsed.sourceFormat === 'gs1_ai'
+frontend/src/app/tools/scan/page.tsx:218:                    : parsed.sourceFormat === 'digital_link'

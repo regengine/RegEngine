@@ -22,6 +22,7 @@ from typing import Optional
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
@@ -33,53 +34,83 @@ _EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
 # ---------------------------------------------------------------------------
 
 
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Reject requests whose Content-Length exceeds *max_bytes*.
+class RequestSizeLimitMiddleware:
+    """Reject requests whose declared or actual body exceeds *max_bytes*.
 
-    For chunked/streaming uploads where Content-Length is absent the
-    middleware allows the request through (Starlette's own body reader
-    will enforce memory limits downstream).
+    Check each received chunk before retaining it, then replay the bounded
+    body downstream. Content-Length is only an early rejection shortcut.
     """
 
-    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
-        super().__init__(app)
+    def __init__(self, app: ASGIApp, max_bytes: int = 10 * 1024 * 1024):
+        self.app = app
         self.max_bytes = max_bytes
 
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path in _EXEMPT_PATHS:
-            return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] in _EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+            return
 
+        request = Request(scope)
         content_length = request.headers.get("content-length")
         if content_length is not None:
             try:
                 length = int(content_length)
             except ValueError:
-                return JSONResponse(
+                response = JSONResponse(
                     status_code=400,
                     content={
                         "error": "invalid_content_length",
                         "detail": "Content-Length header is not a valid integer.",
                     },
                 )
+                await response(scope, receive, send)
+                return
             if length > self.max_bytes:
-                mb = self.max_bytes / (1024 * 1024)
-                # NOTE: this is the stdlib logger, not structlog — kwargs
-                # here raised TypeError, turning every oversized request
-                # into a 500 instead of the intended 413 (#2503).
-                logger.warning(
-                    "request_too_large: content_length=%s max_bytes=%s path=%s",
-                    length,
-                    self.max_bytes,
-                    request.url.path,
-                )
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "error": "payload_too_large",
-                        "detail": f"Request body exceeds the {mb:.0f} MB limit.",
-                    },
-                )
-        return await call_next(request)
+                await self._too_large(request, length)(scope, receive, send)
+                return
+
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            chunk = message.get("body", b"")
+            length = len(body) + len(chunk)
+            if length > self.max_bytes:
+                await self._too_large(request, length)(scope, receive, send)
+                return
+            body.extend(chunk)
+            if not message.get("more_body", False):
+                break
+
+        buffered_body: bytes | None = bytes(body)
+        del body
+
+        async def replay_body() -> Message:
+            nonlocal buffered_body
+            if buffered_body is not None:
+                message: Message = {"type": "http.request", "body": buffered_body, "more_body": False}
+                buffered_body = None
+                return message
+            return await receive()
+
+        await self.app(scope, replay_body, send)
+
+    def _too_large(self, request: Request, length: int) -> JSONResponse:
+        mb = self.max_bytes / (1024 * 1024)
+        logger.warning(
+            "request_too_large: body_bytes=%s max_bytes=%s path=%s",
+            length,
+            self.max_bytes,
+            request.url.path,
+        )
+        return JSONResponse(
+            status_code=413,
+            content={
+                "error": "payload_too_large",
+                "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+            },
+        )
 
 
 # ---------------------------------------------------------------------------

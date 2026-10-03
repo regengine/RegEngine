@@ -176,7 +176,7 @@ class IngestEvent(BaseModel):
     cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
     traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
     product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
-    quantity: float = Field(..., description="Numeric quantity", gt=0)
+    quantity: float = Field(..., description="Numeric quantity", gt=0, allow_inf_nan=False)
     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
     location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     location_name: Optional[str] = Field(None, description="Human-readable location name")

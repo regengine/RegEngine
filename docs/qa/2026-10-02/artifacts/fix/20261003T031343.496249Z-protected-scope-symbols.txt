@@ -1,0 +1,168 @@
+UTC: 2026-10-03T03:13:43.496249+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git show --format= --unified=3 8634d75e -- .github/workflows/backend-ci.yml .github/workflows/qa-pipeline.yml qa/decision.js tests/scripts/test_deploy_decision_gate.py
+Exit: 0
+Duration: 0.65s
+Timeout: False
+
+diff --git a/.github/workflows/backend-ci.yml b/.github/workflows/backend-ci.yml
+index b8442d33..055d1fe5 100644
+--- a/.github/workflows/backend-ci.yml
++++ b/.github/workflows/backend-ci.yml
+@@ -1353,7 +1353,13 @@ jobs:
+     # specifically — a shared "CI Status Gate" name previously let a
+     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
+     name: Backend CI Status Gate
+-    if: always()
++    # Run when a needed job failed so this gate still posts failure (#2537:
++    # cancelled or skipped dependencies must not look green). Skip only when
++    # the workflow itself was cancelled by a newer push. In that case the
++    # replacement run owns the gate; this run must not fail the SHA for
++    # jobs that were aborted mid-flight. `!cancelled()` does not relax the
++    # script below: every dependency still has to be success.
++    if: always() && !cancelled()
+     needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+     runs-on: ubuntu-latest
+     steps:
+diff --git a/.github/workflows/qa-pipeline.yml b/.github/workflows/qa-pipeline.yml
+index 8b61e78e..a46350ad 100644
+--- a/.github/workflows/qa-pipeline.yml
++++ b/.github/workflows/qa-pipeline.yml
+@@ -87,7 +87,13 @@ jobs:
+   # ── Stage 4: Decision Gate ─────────────────────────────
+   decision:
+     name: Deploy Decision
+-    if: always()
++    # Still runs when a stage failed, so decision.js can block deploy.
++    # Skip only when the workflow itself was cancelled (a newer push on the
++    # same ref). `cancelled()` is the workflow-cancel signal, not a failed
++    # dependency: a timed-out or otherwise cancelled stage still reaches
++    # decision.js and blocks. A superseded run must not post BLOCK DEPLOY
++    # for a stage that never finished.
++    if: always() && !cancelled()
+     needs: [fast-gate, system-sim]
+     runs-on: ubuntu-latest
+     timeout-minutes: 2
+diff --git a/qa/decision.js b/qa/decision.js
+index 1516c796..a7f49c87 100644
+--- a/qa/decision.js
++++ b/qa/decision.js
+@@ -17,6 +17,7 @@ const results = { fastGate, systemSim };
+ const allPassed = Object.values(results).every(r => r === 'success');
+ const anyFailed = Object.values(results).some(r => r === 'failure');
+ const anySkipped = Object.values(results).some(r => r === 'skipped');
++const anyCancelled = Object.values(results).some(r => r === 'cancelled');
+
+ console.log('');
+
+@@ -57,6 +58,18 @@ if (allPassed) {
+     }
+   }
+   process.exit(1);
++} else if (anyCancelled) {
++  // A stage cancelled inside a workflow that is still running (timeout,
++  // or a dependency aborted without cancelling the workflow) is not a
++  // pass. Workflow-level cancellation never reaches this process: the
++  // job's `if` skips it when `cancelled()` is true.
++  console.error('\u274c BLOCK DEPLOY: A required stage was cancelled.');
++  for (const [stage, result] of Object.entries(results)) {
++    if (result === 'cancelled') {
++      console.error(`  \u2717 ${stage}: cancelled`);
++    }
++  }
++  process.exit(1);
+ } else {
+   console.error(`\u274c BLOCK DEPLOY: Unexpected stage state — ${JSON.stringify(results)}`);
+   console.error('  Investigate the workflow result before deploying.');
+diff --git a/tests/scripts/test_deploy_decision_gate.py b/tests/scripts/test_deploy_decision_gate.py
+new file mode 100644
+index 00000000..38ddf065
+--- /dev/null
++++ b/tests/scripts/test_deploy_decision_gate.py
+@@ -0,0 +1,86 @@
++"""Deploy Decision and the backend status gate must fail closed.
++
++A newer push cancels the in-flight workflow. Those runs used to execute
++their `if: always()` summary jobs anyway and post a failure for stages
++that were aborted, which showed up as a red Backend CI Status Gate and
++Deploy Decision on a SHA whose tests never finished.
++
++`cancelled()` is true only when the workflow itself was cancelled. The
++summary jobs skip in that case. A stage that failed, was skipped, or was
++cancelled while the workflow kept running still blocks.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import subprocess
++from pathlib import Path
++
++import yaml
++
++_REPO = Path(__file__).resolve().parents[2]
++_DECISION = _REPO / "qa" / "decision.js"
++
++
++def _workflow(name: str) -> dict:
++    data = yaml.safe_load((_REPO / ".github" / "workflows" / name).read_text())
++    assert isinstance(data, dict)
++    return data
++
++
++def _run_decision(fast: str, sim: str) -> subprocess.CompletedProcess[str]:
++    env = os.environ.copy()
++    env["FAST_GATE_RESULT"] = fast
++    env["SYSTEM_SIM_RESULT"] = sim
++    return subprocess.run(
++        ["node", str(_DECISION)],
++        cwd=_REPO,
++        env=env,
++        text=True,
++        capture_output=True,
++        check=False,
++    )
++
++
++def test_decision_job_skips_only_when_the_workflow_is_cancelled():
++    job = _workflow("qa-pipeline.yml")["jobs"]["decision"]
++    assert job["if"] == "always() && !cancelled()"
++    assert job["needs"] == ["fast-gate", "system-sim"]
++
++
++def test_backend_status_gate_still_requires_every_dependency_success():
++    job = _workflow("backend-ci.yml")["jobs"]["ci-status"]
++    assert job["name"] == "Backend CI Status Gate"
++    assert job["if"] == "always() && !cancelled()"
++    script = job["steps"][0]["run"]
++    assert '!= "success"' in script
++    assert "needs.test.result" in script
++    assert "needs.ingestion-full-suite.result" in script
++
++
++def test_decision_passes_only_when_both_stages_succeed():
++    result = _run_decision("success", "success")
++    assert result.returncode == 0, result.stderr
++    assert "DEPLOY: All checks passed." in result.stdout
++
++
++def test_decision_blocks_on_failure_skip_and_cancel():
++    failed = _run_decision("failure", "success")
++    assert failed.returncode == 1
++    assert "Critical checks failed." in failed.stderr
++
++    skipped = _run_decision("success", "skipped")
++    assert skipped.returncode == 1
++    assert "Required stages were skipped." in skipped.stderr
++
++    # The state posted when system-sim is aborted but the workflow is not.
++    cancelled = _run_decision("success", "cancelled")
++    assert cancelled.returncode == 1
++    assert "A required stage was cancelled." in cancelled.stderr
++    assert "systemSim" in cancelled.stderr
++
++    unknown = _run_decision("success", "timed_out")
++    assert unknown.returncode == 1
++    payload = unknown.stderr.split("Unexpected stage state — ", 1)[1].splitlines()[0]
++    assert json.loads(payload) == {"fastGate": "success", "systemSim": "timed_out"}

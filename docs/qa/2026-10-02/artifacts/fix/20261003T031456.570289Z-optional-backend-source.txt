@@ -1,0 +1,638 @@
+UTC: 2026-10-03T03:14:56.570289+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths = [("services/ingestion/app/csv_templates.py", [(650,855),(1310,1415)]),("services/ingestion/app/webhook_models.py", [(135,235)]),("services/ingestion/tests/test_qa_sweep_20261002_contract.py", [(1,215)])]; [(print("FILE",p),[(print(str(i)+":"+line)) for a,b in ranges for i,line in enumerate(Path(p).read_text().splitlines(),1) if a<=i<=b]) for p,ranges in paths]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE services/ingestion/app/csv_templates.py
+650:
+651:def _parse_input_quantities(
+652:    row: dict, input_lot_codes: list[str], row_cte: str
+653:) -> tuple[list[dict], Optional[str], Optional[str]]:
+654:    """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
+655:
+656:    Returns ``(inputs, error, warning)``. ``inputs`` is a list of
+657:    ``{"traceability_lot_code", "quantity", "unit_of_measure"}`` aligned with
+658:    ``input_lot_codes``. ``error`` rejects the row (misaligned or non-numeric
+659:    values); ``warning`` is advisory (a transformation row that names input
+660:    lots without their quantities).
+661:    """
+662:    quantities_raw = (row.get("input_quantities") or "").strip()
+663:    units_raw = (row.get("input_units_of_measure") or "").strip()
+664:    if not quantities_raw and not units_raw:
+665:        if input_lot_codes and row_cte == "transformation":
+666:            return (
+667:                [],
+668:                None,
+669:                "input_quantities missing: 21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of "
+670:                "measure of each input lot (add input_quantities and input_units_of_measure)",
+671:            )
+672:        return [], None, None
+673:    if not input_lot_codes:
+674:        return [], "input_quantities given without input_lot_codes", None
+675:    quantities = [q.strip() for q in quantities_raw.split(",")] if quantities_raw else []
+676:    units = [u.strip() for u in units_raw.split(",")] if units_raw else []
+677:    if len(quantities) != len(input_lot_codes):
+678:        return (
+679:            [],
+680:            f"input_quantities lists {len(quantities)} value(s) for {len(input_lot_codes)} input lot(s); "
+681:            "give one quantity per input lot in the same order as input_lot_codes",
+682:            None,
+683:        )
+684:    if len(units) == 1 and len(input_lot_codes) > 1:
+685:        units = units * len(input_lot_codes)
+686:    if len(units) != len(input_lot_codes):
+687:        return (
+688:            [],
+689:            f"input_units_of_measure lists {len(units)} value(s) for {len(input_lot_codes)} input lot(s); "
+690:            "give one unit per input lot, or a single unit that applies to all",
+691:            None,
+692:        )
+693:    inputs: list[dict] = []
+694:    for lot, quantity_text, unit_text in zip(input_lot_codes, quantities, units):
+695:        try:
+696:            quantity = float(quantity_text)
+697:        except ValueError:
+698:            return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+699:        if quantity < 0:
+700:            return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
+701:        if not unit_text:
+702:            return [], f"input unit of measure for input lot {lot} is blank", None
+703:        inputs.append(
+704:            {"traceability_lot_code": lot, "quantity": quantity, "unit_of_measure": _normalize_uom(unit_text)}
+705:        )
+706:    return inputs, None, None
+707:
+708:
+709:def parse_csv_rows(
+710:    text: str,
+711:    fallback_cte: Optional[str] = None,
+712:    header_mapping: Optional[Mapping[str, str]] = None,
+713:) -> tuple[list[IngestEvent], list[str], list[str]]:
+714:    """Parse CSV text into ``IngestEvent`` objects.
+715:
+716:    Shared by the ``/ingest/csv`` upload route and any other ingestion
+717:    entrypoint (e.g. the Postmark inbound-email webhook) that needs to accept
+718:    the same CSV structure and produce identical validation results — this
+719:    is the single place CTE/KDE row-mapping logic lives.
+720:
+721:    ``header_mapping`` (``normalised source column -> canonical column``) is
+722:    the set of Jev header suggestions that passed the apply policy in
+723:    ``shared.jev.header_mapping``. Each mapped value is copied under the
+724:    canonical key before the row is read, unless the row already provides
+725:    that field through the canonical key or a column the parser consults
+726:    after it (``_row_provides``): a mapping never replaces a value the file
+727:    carries. The source column is left in place so the raw column still
+728:    reaches ``kdes`` and nothing is lost.
+729:
+730:    Returns ``(events, parse_errors, kde_warnings)``.
+731:    """
+732:    reader = csv.DictReader(io.StringIO(text))
+733:
+734:    events: list[IngestEvent] = []
+735:    parse_errors: list[str] = []
+736:    kde_warnings: list[str] = []
+737:
+738:    # Read the header and every record the loop below can reach before
+739:    # touching any row: a file the csv module cannot read (CR-only line
+740:    # endings, a field over csv.field_size_limit(), usually from an unclosed
+741:    # quote) is rejected whole with its line named, never partially ingested.
+742:    records: list[dict] = []
+743:    try:
+744:        header = reader.fieldnames
+745:        for record in reader:
+746:            records.append(record)
+747:            if len(records) > MAX_CSV_ROWS:
+748:                break
+749:    except csv.Error as exc:
+750:        line = reader.reader.line_num
+751:        logger.warning("csv_unreadable line=%s error=%s", line, exc)
+752:        return (
+753:            [],
+754:            [
+755:                f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
+756:                f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
+757:            ],
+758:            [],
+759:        )
+760:    if header is not None and not any(name.strip() for name in header):
+761:        return [], ["CSV has no header row: the first line must list the column names"], []
+762:
+763:    for row_num, row in enumerate(records, start=2):
+764:        # _file_cte_type_for_jev reads exactly the rows before this cut-off.
+765:        if row_num - 1 > MAX_CSV_ROWS:
+766:            parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
+767:            break
+768:        # DictReader files values past the last header column under the None
+769:        # restkey. A non-blank one rejects the row below rather than being
+770:        # dropped; blank ones (a trailing comma) carry nothing and are ignored.
+771:        extra_values = row.pop(None, None) or []
+772:        row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+773:        if header_mapping:
+774:            for source_key, canonical_field in header_mapping.items():
+775:                value = row.get(source_key)
+776:                if value and not _row_provides(row, canonical_field):
+777:                    row[canonical_field] = value
+778:        first_val = next(iter(row.values()), "")
+779:        if first_val and str(first_val).startswith("#"):
+780:            continue
+781:        if any(value.strip() for value in extra_values):
+782:            parse_errors.append(
+783:                f"Row {row_num}: has more fields than the header "
+784:                f"({len(header) + len(extra_values)} fields, header has {len(header)})"
+785:            )
+786:            continue
+787:        if not any(row.values()):
+788:            continue
+789:
+790:        try:
+791:            row_cte = _detect_row_cte_type(row, fallback_cte)
+792:            if not row_cte:
+793:                parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
+794:                continue
+795:
+796:            # ── Phase 1: Ingestion — flexible on format, strict on presence ──
+797:            # Date: accept any human format. An unreadable or empty date
+798:            # rejects the row; a placeholder timestamp would enter the hash
+799:            # chain as evidence of when the event happened.
+800:            raw_date = _first_present(row, _DATE_FIELDS)
+801:            event_time_raw = (row.get("event_time") or "").strip()
+802:            ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
+803:            if ts is None:
+804:                parse_errors.append(f"Row {row_num}: {date_warning}")
+805:                continue
+806:
+807:            # Location: strip whitespace and expand abbreviations
+808:            loc_gln = _first_present(row, _LOCATION_GLN_COLUMNS) or None
+809:            _loc_raw = _first_present(row, _LOCATION_NAME_COLUMNS)
+810:            loc_name = _normalize_location(_loc_raw) if _loc_raw else None
+811:
+812:            # Unit of measure: map abbreviations before Pydantic sees them.
+813:            # No default: a unit the uploader did not record is not "units".
+814:            uom_raw = _first_present(row, _UNIT_COLUMNS)
+815:            if not uom_raw:
+816:                parse_errors.append(f"Row {row_num}: unit_of_measure is required")
+817:                continue
+818:            uom = _normalize_uom(uom_raw)
+819:
+820:            # Quantity: required and numeric. The generic exception handler
+821:            # below would reject the row too, but with an opaque message.
+822:            quantity_raw = _first_present(row, _QUANTITY_COLUMNS)
+823:            if not quantity_raw:
+824:                parse_errors.append(f"Row {row_num}: quantity is required")
+825:                continue
+826:            try:
+827:                quantity = float(quantity_raw)
+828:            except ValueError:
+829:                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
+830:                continue
+831:
+832:            # Lot code: extract and run integrity checks
+833:            lot_code = _first_present(row, _LOT_CODE_COLUMNS)
+834:            for integrity_warn in _check_lot_code_integrity(lot_code):
+835:                kde_warnings.append(f"Row {row_num}: {integrity_warn}")
+836:
+837:            kdes: dict = {}
+838:            skip_fields = {
+839:                "traceability_lot_code",
+840:                "product_description",
+841:                "quantity",
+842:                "unit_of_measure",
+843:                "location_gln",
+844:                "location_name",
+845:                "cte_type",
+846:                "event_type",
+847:                "type",
+848:                "cte",
+849:                "input_lot_codes",
+850:                "input_quantities",
+851:                "input_units_of_measure",
+852:                "event_time",
+853:            }
+854:            for key, val in row.items():
+855:                if key and val and key not in skip_fields:
+1310:        ingestion_run_id,
+1311:    )
+1312:    return len(artifacts)
+1313:
+1314:
+1315:def _cte_type_suggestion_result(
+1316:    result: Optional[CteClassificationResult], artifacts_recorded: int = 0
+1317:) -> Optional[CteTypeSuggestionResult]:
+1318:    """The response's ``cte_type_suggestion``; ``None`` when Jev was not asked to consider the file."""
+1319:    if result is None or result.status == "disabled":
+1320:        return None
+1321:    suggestion = result.suggestion
+1322:    evidence = result.evidence
+1323:    return CteTypeSuggestionResult(
+1324:        status=result.status,
+1325:        cte_type=suggestion.cte_type if suggestion else None,
+1326:        confidence=suggestion.confidence if suggestion else None,
+1327:        band=suggestion.band.value if suggestion else None,
+1328:        applied=suggestion.applied if suggestion else False,
+1329:        blocked_reason=suggestion.blocked_reason if suggestion else None,
+1330:        model=evidence.model if evidence else None,
+1331:        request_id=evidence.request_id if evidence else None,
+1332:        questions_version=_JEV_CTE_QUESTIONS_VERSION if evidence else None,
+1333:        apply_enabled=result.apply_enabled,
+1334:        artifacts_recorded=artifacts_recorded,
+1335:    )
+1336:
+1337:
+1338:@router.post(
+1339:    "/ingest/csv",
+1340:    response_model=CsvIngestResponse,
+1341:    summary="Upload and ingest a CSV file",
+1342:    description=(
+1343:        "Parse a CSV file, validate rows, and persist CTE events to the database. "
+1344:        "Supports single-type files (pass cte_type) or mixed-type files with a "
+1345:        "cte_type/event_type column per row."
+1346:    ),
+1347:)
+1348:async def ingest_csv(
+1349:    file: UploadFile = File(..., description="CSV file to ingest"),
+1350:    cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
+1351:    source: str = Form("csv_upload", description="Source identifier"),
+1352:    tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
+1353:    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+1354:    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+1355:    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+1356:):
+1357:    """Ingest a CSV file of CTE events (single-type or mixed-type)."""
+1358:
+1359:    # Normalize the fallback cte_type if provided
+1360:    fallback_cte = None
+1361:    if cte_type:
+1362:        fallback_cte = _CTE_TYPE_ALIASES.get(cte_type.strip().lower().replace(" ", "_"))
+1363:        if not fallback_cte:
+1364:            valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
+1365:            raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
+1366:
+1367:    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+1368:
+1369:    # Read and parse CSV
+1370:    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
+1371:    text = content.decode("utf-8-sig")  # Handle BOM
+1372:    file_cte: Optional[CteClassificationResult] = None
+1373:    if fallback_cte is None:
+1374:        # Independent questions over the same upload: ask both at once.
+1375:        header_mapping, file_cte = await asyncio.gather(
+1376:            _suggest_header_mappings_for_upload(text), _suggest_file_cte_for_upload(text)
+1377:        )
+1378:    else:
+1379:        header_mapping = await _suggest_header_mappings_for_upload(text, cte_type=fallback_cte)
+1380:    if file_cte is not None and file_cte.applied_cte_type:
+1381:        fallback_cte = file_cte.applied_cte_type
+1382:        logger.info(
+1383:            "csv_file_cte_applied cte_type=%s confidence=%.3f",
+1384:            fallback_cte,
+1385:            file_cte.suggestion.confidence if file_cte.suggestion else 0.0,
+1386:        )
+1387:    if header_mapping.applied_mapping:
+1388:        logger.info(
+1389:            "csv_header_mappings_applied count=%d mapping=%s",
+1390:            len(header_mapping.applied_mapping),
+1391:            sorted(header_mapping.applied_mapping.items()),
+1392:        )
+1393:    events, parse_errors, kde_warnings = parse_csv_rows(
+1394:        text, fallback_cte, header_mapping=header_mapping.applied_mapping
+1395:    )
+1396:
+1397:    if not events and parse_errors:
+1398:        detail: dict = {"message": "No valid rows found", "errors": parse_errors}
+1399:        suggestion = _cte_type_suggestion_result(file_cte)
+1400:        if suggestion is not None:
+1401:            # The uploader can re-upload with this CTE in one step.
+1402:            detail["cte_type_suggestion"] = suggestion.model_dump()
+1403:        if header_mapping.suggestions:
+1404:            # Which unrecognised column holds a missing field: the uploader can
+1405:            # rename it and upload again. Nothing was applied that is not listed.
+1406:            detail["header_mapping_suggestions"] = [
+1407:                item.model_dump() for item in _header_mapping_suggestion_results(header_mapping)
+1408:            ]
+1409:        raise HTTPException(status_code=400, detail=detail)
+1410:    if not events:
+1411:        raise HTTPException(status_code=400, detail="CSV contained no data rows")
+1412:
+1413:    payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
+1414:    # Receipt: the upload is retained verbatim as an ingestion run (file name,
+1415:    # SHA-256, size, every row counted) and each accepted event carries the
+FILE services/ingestion/app/webhook_models.py
+135:        "landing_date",
+136:        "receiving_location",
+137:        "reference_document",  # §1.1335(g)
+138:    ],
+139:    WebhookCTEType.SHIPPING: [
+140:        "traceability_lot_code",
+141:        "product_description",
+142:        "quantity",
+143:        "unit_of_measure",
+144:        "ship_date",
+145:        "ship_from_location",
+146:        "ship_to_location",
+147:        "reference_document",  # §1.1340(a)(8)
+148:        "tlc_source_reference",  # §1.1340(a)(7)
+149:    ],
+150:    WebhookCTEType.RECEIVING: [
+151:        "traceability_lot_code",
+152:        "product_description",
+153:        "quantity",
+154:        "unit_of_measure",
+155:        "receive_date",
+156:        "receiving_location",
+157:        "immediate_previous_source",  # §1.1345(a)(4)
+158:        "reference_document",  # §1.1345(a)(8)
+159:        "tlc_source_reference",  # §1.1345(a)(7)
+160:    ],
+161:    WebhookCTEType.TRANSFORMATION: [
+162:        "traceability_lot_code",
+163:        "product_description",
+164:        "quantity",
+165:        "unit_of_measure",
+166:        "transformation_date",
+167:        "location_name",
+168:        "reference_document",  # §1.1350(a)(2)(vi)
+169:    ],
+170:}
+171:
+172:
+173:class IngestEvent(BaseModel):
+174:    """A single CTE event to ingest."""
+175:
+176:    cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
+177:    traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
+178:    product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
+179:    quantity: float = Field(..., description="Numeric quantity", gt=0)
+180:    unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
+181:    location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+182:    location_name: Optional[str] = Field(None, description="Human-readable location name")
+183:    timestamp: str = Field(..., description="ISO 8601 timestamp of the event")
+184:    kdes: Dict[str, Any] = Field(
+185:        default_factory=dict, description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
+186:    )
+187:    input_traceability_lot_codes: Optional[list[str]] = Field(
+188:        None,
+189:        description=(
+190:            "For transformation CTEs (21 CFR §1.1350): list of input TLCs that were "
+191:            "combined/transformed into the new traceability_lot_code. Required per "
+192:            "§1.1350(a)(1) to link each new TLC to all input TLCs."
+193:        ),
+194:    )
+195:
+196:    @field_validator("timestamp")
+197:    @classmethod
+198:    def validate_timestamp(cls, v: str) -> str:
+199:        """Ensure timestamp is parseable and within reasonable bounds."""
+200:        try:
+201:            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+202:        except (ValueError, AttributeError):
+203:            raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
+204:
+205:        now = datetime.now(timezone.utc)
+206:        # Allow historical events for FSMA 204 §1.1455(d) 2-year retention backfill.
+207:        # Events older than 90 days are accepted but flagged via _historical_warning.
+208:        # Reject events more than 24 hours in the future (clock skew)
+209:        if dt > now + timedelta(hours=24):
+210:            raise ValueError(f"Event timestamp {v} is more than 24 hours in the future.")
+211:        return v
+212:
+213:    @field_validator("location_gln")
+214:    @classmethod
+215:    def validate_gln_format(cls, v: Optional[str]) -> Optional[str]:
+216:        """Validate GLN is 13 digits with valid GS1 check digit.
+217:
+218:        Warning-only: logs invalid GLNs but accepts them to avoid
+219:        breaking existing imports. Use validate_gln() for strict checks.
+220:        """
+221:        if v is None or v.strip() == "":
+222:            return v
+223:        clean = re.sub(r"\D", "", v)
+224:        is_valid, error_msg = (
+225:            validate_gln(clean) if len(clean) == 13 else (False, f"GLN must be exactly 13 digits, got {len(clean)}")
+226:        )
+227:        if not is_valid:
+228:            strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
+229:            if strict:
+230:                raise ValueError(f"Invalid GLN: {error_msg}")
+231:            _gln_logger.warning("invalid_gln value=%s error=%s (strict mode disabled)", v, error_msg)
+232:            return clean if len(clean) == 13 else v
+233:        return clean
+234:
+235:    @field_validator("unit_of_measure")
+FILE services/ingestion/tests/test_qa_sweep_20261002_contract.py
+1:"""QA sweep: real ingestion routes, schema boundaries and CSV evidence integrity.
+2:
+3:All persistence/auth/provider boundaries use local fakes. Known defects are strict
+4:expected failures: an unexpected pass requires removing the corresponding finding.
+5:"""
+6:
+7:from __future__ import annotations
+8:
+9:import csv
+10:import io
+11:import math
+12:
+13:import pytest
+14:from app import csv_templates as ct
+15:from app.authz import IngestionPrincipal, get_ingestion_principal
+16:from app.webhook_compat import _verify_api_key
+17:from app.webhook_models import EventResult, IngestResponse, WebhookPayload
+18:from app.webhook_router_v2 import routes
+19:from fastapi import FastAPI
+20:from fastapi.testclient import TestClient
+21:from hypothesis import given, settings, strategies as st
+22:
+23:HEADER = [
+24:    "traceability_lot_code",
+25:    "product_description",
+26:    "quantity",
+27:    "unit_of_measure",
+28:    "harvest_date",
+29:    "location_name",
+30:    "reference_document",
+31:]
+32:ROW = ["LOT-QA-001", "Kale", "10", "lbs", "2026-04-17", "Farm QA", "REF-QA"]
+33:
+34:
+35:def _csv(header, row):
+36:    stream = io.StringIO()
+37:    writer = csv.writer(stream)
+38:    writer.writerow(header)
+39:    writer.writerow(row)
+40:    return stream.getvalue()
+41:
+42:
+43:@pytest.fixture
+44:def csv_upload(monkeypatch):
+45:    captured = []
+46:
+47:    async def fake_ingest(payload, **kwargs):
+48:        captured.extend(payload.events)
+49:        return IngestResponse(
+50:            accepted=len(payload.events),
+51:            total=len(payload.events),
+52:            events=[
+53:                EventResult(traceability_lot_code=e.traceability_lot_code, cte_type=e.cte_type.value, status="accepted")
+54:                for e in payload.events
+55:            ],
+56:        )
+57:
+58:    monkeypatch.setattr(ct, "ingest_events", fake_ingest)
+59:    app = FastAPI()
+60:    app.include_router(ct.router)
+61:    app.dependency_overrides[_verify_api_key] = lambda: None
+62:    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+63:        key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
+64:    )
+65:    with TestClient(app, raise_server_exceptions=False) as client:
+66:
+67:        def upload(text, cte="harvesting"):
+68:            return client.post(
+69:                "/api/v1/ingest/csv",
+70:                data={"cte_type": cte},
+71:                files={"file": ("qa.csv", text if isinstance(text, bytes) else text.encode(), "text/csv")},
+72:            )
+73:
+74:        yield upload, captured
+75:
+76:
+77:@pytest.fixture
+78:def webhook_client():
+79:    app = FastAPI()
+80:    app.include_router(routes.router)
+81:    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+82:        key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
+83:    )
+84:    for dependency in (
+85:        routes._verify_api_key,
+86:        routes._verify_webhook_signature,
+87:        routes.require_active_subscription,
+88:        routes.get_db_session,
+89:    ):
+90:        app.dependency_overrides[dependency] = lambda: None
+91:    with TestClient(app, raise_server_exceptions=False) as client:
+92:        yield client
+93:
+94:
+95:def _payload(timestamp):
+96:    return {
+97:        "source": "qa-local",
+98:        "events": [
+99:            {
+100:                "cte_type": "harvesting",
+101:                "traceability_lot_code": "LOT-QA-001",
+102:                "product_description": "Kale",
+103:                "quantity": 10,
+104:                "unit_of_measure": "lbs",
+105:                "location_name": "Farm QA",
+106:                "timestamp": timestamp,
+107:            }
+108:        ],
+109:    }
+110:
+111:
+112:def test_webhook_invalid_timestamp_is_a_validation_response(webhook_client):
+113:    response = webhook_client.post(
+114:        "/api/v1/webhooks/ingest", json=_payload("invalid"), headers={"Idempotency-Key": "qa-invalid-date"}
+115:    )
+116:    assert response.status_code == 422
+117:
+118:
+119:@pytest.mark.xfail(
+120:    strict=True,
+121:    raises=AssertionError,
+122:    reason="BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500",
+123:)
+124:@pytest.mark.parametrize("timestamp", ["2026-04-17T12:00:00", "2026-04-17", "2026-04-17T00:00:00.123456"])
+125:def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timestamp):
+126:    response = webhook_client.post(
+127:        "/api/v1/webhooks/ingest", json=_payload(timestamp), headers={"Idempotency-Key": "qa-naive-date"}
+128:    )
+129:    assert response.status_code == 422, response.text
+130:
+131:
+132:@pytest.mark.xfail(
+133:    strict=True, raises=AssertionError, reason="BE-002: CSV accepts nonfinite output quantity into persistence boundary"
+134:)
+135:@pytest.mark.parametrize("quantity", ["inf", "Infinity", "1e309"])
+136:def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
+137:    upload, captured = csv_upload
+138:    row = list(ROW)
+139:    row[2] = quantity
+140:    response = upload(_csv(HEADER, row))
+141:    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+142:    assert not captured
+143:
+144:
+145:@pytest.mark.xfail(
+146:    strict=True, raises=AssertionError, reason="BE-002: transformation input quantity accepts NaN/infinity"
+147:)
+148:@pytest.mark.parametrize("quantity", ["nan", "inf", "1e309"])
+149:def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+150:    upload, captured = csv_upload
+151:    header = HEADER + ["input_lot_codes", "input_quantities", "input_units_of_measure"]
+152:    row = ROW + ["INPUT-QA-001", quantity, "lbs"]
+153:    response = upload(_csv(header, row), cte="transformation")
+154:    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+155:    assert not captured
+156:
+157:
+158:@pytest.mark.xfail(
+159:    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
+160:)
+161:@pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
+162:def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
+163:    upload, captured = csv_upload
+164:    response = upload(_csv(HEADER + [duplicate_header], ROW + ["999"]))
+165:    assert response.status_code == 400, (
+166:        f"status={response.status_code}; ingested_quantities={[e.quantity for e in captured]}"
+167:    )
+168:    assert not captured
+169:
+170:
+171:@pytest.mark.parametrize("quantity", ["0", "-1", "nan", "not-a-number", ""])
+172:def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quantity):
+173:    upload, captured = csv_upload
+174:    row = list(ROW)
+175:    row[2] = quantity
+176:    response = upload(_csv(HEADER, row))
+177:    assert response.status_code == 400
+178:    assert not captured
+179:
+180:
+181:@pytest.mark.xfail(
+182:    strict=True,
+183:    raises=AssertionError,
+184:    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
+185:)
+186:@pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
+187:def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
+188:    upload, captured = csv_upload
+189:    response = upload(raw)
+190:    if captured:
+191:        pytest.fail("Invalid encoding reached persistence; encoding-error reproduction no longer applies")
+192:    assert response.status_code in (400, 415, 422), response.text
+193:
+194:
+195:def test_csv_utf8_bom_is_accepted(csv_upload):
+196:    upload, captured = csv_upload
+197:    response = upload(b"\xef\xbb\xbf" + _csv(HEADER, ROW).encode())
+198:    assert response.status_code == 200
+199:    assert len(captured) == 1
+200:
+201:
+202:@given(st.integers(min_value=1, max_value=1_000_000))
+203:@settings(max_examples=60, derandomize=True, deadline=None, database=None)
+204:def test_positive_finite_csv_quantities_round_trip(quantity):
+205:    row = list(ROW)
+206:    row[2] = str(quantity)
+207:    events, errors, _ = ct.parse_csv_rows(_csv(HEADER, row), "harvesting")
+208:    assert errors == []
+209:    assert len(events) == 1
+210:    assert math.isfinite(events[0].quantity)
+211:    assert events[0].quantity == quantity
+212:
+213:
+214:@given(st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=100))
+215:@settings(max_examples=80, derandomize=True, deadline=None, database=None)

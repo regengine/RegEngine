@@ -1,0 +1,155 @@
+UTC: 2026-10-03T03:18:10.053462+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=[("frontend/src/components/mobile/FieldCaptureClient.tsx",207,265),("frontend/src/app/tools/scan/page.tsx",200,240),("frontend/src/app/dashboard/receiving/page.tsx",178,222)]; [(print("FILE: "+f+":"+str(start)), print("\n".join(Path(f).read_text().splitlines()[start-1:end]))) for f,start,end in files]'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+FILE: frontend/src/components/mobile/FieldCaptureClient.tsx:207
+
+        const timestamp = new Date().toLocaleTimeString();
+        setScannedData((prev) => [`[${timestamp}] ${cteLabel}: ${rawScan}`, ...prev]);
+
+        // Build the ingest payload so we can replay it offline
+        const traceabilityLotCode =
+            parsedState.traceabilityLotCode ||
+            parsedState.serial ||
+            parsedState.gtin ||
+            `SCAN-${Date.now()}`;
+
+        const offlinePayload = {
+            source: 'mobile_scanner_pwa',
+            tenant_id: effectiveTenantId,
+            events: [
+                {
+                    cte_type: parsedState.cteType,
+                    traceability_lot_code: traceabilityLotCode,
+                    product_description: parsedState.productDescription,
+                    quantity: 1,
+                    unit_of_measure: 'cases',
+                    timestamp: new Date().toISOString(),
+                    location_name: 'Field Capture Mobile',
+                    kdes: {
+                        gtin: parsedState.gtin,
+                        serial: parsedState.serial,
+                        expiry_date: parsedState.expiryDate,
+                        pack_date: parsedState.packDate,
+                        raw_scan: parsedState.raw,
+                    },
+                },
+            ],
+        };
+
+        if (!isOnline) {
+            await saveScan(rawScan, offlinePayload, parsedState.cteType);
+            toast({
+                title: 'Saved Offline',
+                description: 'Scan saved locally. Will sync when online.',
+            });
+            return;
+        }
+
+        try {
+            await ingestScannedEvent(parsedState);
+            toast({
+                title: 'Scan Ingested',
+                description: parsedState.traceabilityLotCode || parsedState.gtin || parsedState.raw,
+            });
+        } catch {
+            await saveScan(rawScan, offlinePayload, parsedState.cteType);
+            toast({
+                title: 'Upload Failed - Saved Offline',
+                description: 'Connection error. Scan saved locally.',
+                variant: 'destructive',
+            });
+        }
+    };
+
+FILE: frontend/src/app/tools/scan/page.tsx:200
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: Results */}
+        <div className={styles.rightColumn}>
+          {parsed ? (
+            <>
+              {/* Status Badges */}
+              <div className={styles.badgeRow}>
+                <span
+                  className={`${styles.statusBadge} ${
+                    parsed.sourceFormat !== 'unknown'
+                      ? styles.badgeSuccess
+                      : styles.badgeWarning
+                  }`}
+                >
+                  {parsed.sourceFormat === 'gs1_ai'
+                    ? 'GS1-AI'
+                    : parsed.sourceFormat === 'digital_link'
+                      ? 'GS1 Digital Link'
+                      : 'Unknown Format'}
+                </span>
+                <span
+                  className={`${styles.statusBadge} ${
+                    isCompatible ? styles.badgeSuccess : styles.badgeError
+                  }`}
+                >
+                  {isCompatible ? '✓ Likely FSMA-relevant fields detected' : '✗ Insufficient FSMA fields for a complete KDE set'}
+                </span>
+              </div>
+
+              {/* Parsed Fields Grid */}
+              <div className={styles.section}>
+                <h3 className={styles.sectionTitle}>Parsed Fields</h3>
+                <div className={styles.fieldsGrid}>
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>GTIN</span>
+                    <div className={styles.fieldValue}>
+                      {parsed.gtin || 'Not found'}
+                      {parsed.gtin && (
+                        <span
+FILE: frontend/src/app/dashboard/receiving/page.tsx:178
+                item.scannedAt = now;
+                if (parsed.expiryDate) item.expiryDate = parsed.expiryDate;
+                matched = true;
+                toast({ title: '✓ Match', description: item.productName });
+                break;
+            }
+        }
+
+        if (!matched) {
+            // Unexpected scan — add to unexpected list
+            updated.unexpectedScans.push({
+                id: `unx-${Date.now()}`,
+                gtin: scannedGtin,
+                lotCode: scannedLot || raw,
+                productName: scannedGtin ? `GTIN ${scannedGtin}` : `Scan: ${raw.slice(0, 30)}`,
+                quantity: 1,
+                expiryDate: parsed.expiryDate || '',
+                status: 'mismatch',
+                scannedAt: now,
+            });
+            toast({ title: '⚠ Unexpected Item', description: raw.slice(0, 40), variant: 'destructive' });
+        }
+
+        setSession(updated);
+        setScanInput('');
+        scanInputRef.current?.focus();
+    }, [session, toast]);
+
+    /* ─── GTIN auto-fill from catalog ─── */
+    const lookupGtin = useCallback(async (gtin: string) => {
+        if (!isAuthenticated || !tenantId || gtin.length < 8) return;
+        try {
+            const res = await fetchWithCsrf(
+                `${getServiceURL('ingestion')}/api/v1/products/${tenantId}/lookup?gtin=${gtin}`,
+                {
+                    credentials: 'include',
+                    signal: AbortSignal.timeout(8000),
+                },
+            );
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.found && data.product) {
+                setManualProduct(data.product.name || data.product.description || '');
+            }
+        } catch { /* best-effort */ }

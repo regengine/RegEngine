@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:19:24.679581+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Library/Frameworks/Python.framework/Versions/3.12/bin/mypy --python-executable /Users/sellers/Projects/RegEngine/repo/.venv/bin/python --follow-imports=skip services/shared/request_safety.py
+Exit: 0
+Duration: 1.44s
+Timeout: False
+
+Success: no issues found in 1 source file

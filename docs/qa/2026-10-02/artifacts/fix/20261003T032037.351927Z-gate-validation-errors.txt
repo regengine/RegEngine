@@ -1,0 +1,12 @@
+UTC: 2026-10-03T03:20:37.351927+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'RequestValidationError|exception_handler|jsonable_encoder|finite|allow_nan' services/ingestion/main.py services/ingestion/app/webhook_router_v2 services/ingestion/app/webhook_compat.py server/main.py tests/qa_sweep_20261002 services/ingestion/tests/test_webhook_models.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/main.py:147:from shared.error_handling import install_exception_handlers
+services/ingestion/main.py:149:install_exception_handlers(app)
+server/main.py:378:from shared.error_handling import install_exception_handlers
+server/main.py:380:install_exception_handlers(app)
+services/ingestion/app/webhook_router_v2/metrics.py:103:    offsets keeps Prometheus label cardinality finite regardless of

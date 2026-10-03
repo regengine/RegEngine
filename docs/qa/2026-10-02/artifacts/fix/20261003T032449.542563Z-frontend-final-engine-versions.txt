@@ -1,0 +1,10 @@
+UTC: 2026-10-03T03:24:49.542563+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3821/ node -e 'const pw=require("playwright"); (async()=>{for (const name of ["chromium","firefox","webkit"]){const browser=await pw[name].connect(process.env.PW_TEST_CONNECT_WS_ENDPOINT);console.log(JSON.stringify({engine:name,version:browser.version()}));await browser.close();}})().catch(error=>{console.error(error.message);process.exitCode=1})'
+Exit: 0
+Duration: 0.75s
+Timeout: False
+
+{"engine":"chromium","version":"153.0.8010.12"}
+{"engine":"firefox","version":"155.0"}
+{"engine":"webkit","version":"26.6"}

@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:17:50.455153+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess; pids=subprocess.run(["pgrep","-f","docs/qa/2026-10-02/scripts/backend_pytest.py"],capture_output=True,text=True).stdout.split(); subprocess.run(["ps","-o","pid,ppid,etime,pcpu,state,comm","-p",",".join(pids)],check=False) if pids else print("No guarded pytest processes")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+No guarded pytest processes

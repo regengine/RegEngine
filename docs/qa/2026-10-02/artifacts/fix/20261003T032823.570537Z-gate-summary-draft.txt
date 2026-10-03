@@ -1,0 +1,17 @@
+UTC: 2026-10-03T03:28:23.570537+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff -- docs/qa/2026-10-02/SUMMARY.md
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+diff --git a/docs/qa/2026-10-02/SUMMARY.md b/docs/qa/2026-10-02/SUMMARY.md
+index 34d16fc4..61fbde63 100644
+--- a/docs/qa/2026-10-02/SUMMARY.md
++++ b/docs/qa/2026-10-02/SUMMARY.md
+@@ -97,3 +97,5 @@ External fonts were deliberately blocked; synthetic 401/503 responses and CSP co
+ Final review corrected a redirect-isolation gap in the QA wrapper. The existing suite was rerun through a proxy that validates each redirect hop; **all 270 outcomes and the counts above are unchanged**. The [authoritative result](artifacts/browser/existing-e2e-proxy-local-browser-summary.json) supersedes earlier isolation claims. No product fix or original-test modification was needed.
+
+ Independent review and [local handoff validation](artifacts/browser/20261003T022030.966307Z-final-browser-handoff-validation-corrected.txt) passed. All five required reports are updated; earlier content/artifacts are preserved. Follow-up servers 3114/3115 are stopped, and the earlier 3102 listener is also absent; browser server 3950 is left with the orchestrator. [Cleanup readback](artifacts/browser/20261003T021959.765139Z-final-browser-listener-readback.txt). All follow-up changes remain uncommitted on `qa/2026-10-02-sweep`.
++
++Fix pass: see FIXES.md

@@ -1,0 +1,21 @@
+UTC: 2026-10-03T03:16:33.121736+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git status --short
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+ M frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+ M frontend/src/lib/gs1-parser.ts
+ M frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+ M services/shared/request_safety.py
+ M tests/qa_sweep_20261002/test_request_safety.py
+?? docs/qa/2026-10-02/FIX-SESSION-LOG.md
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png
+?? docs/qa/2026-10-02/artifacts/browser/followup-server-20261003T031612Z-metadata.txt
+?? docs/qa/2026-10-02/artifacts/fix/

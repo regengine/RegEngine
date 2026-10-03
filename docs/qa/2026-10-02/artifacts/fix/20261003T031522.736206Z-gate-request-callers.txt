@@ -1,0 +1,43 @@
+UTC: 2026-10-03T03:15:22.736206+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'RequestSizeLimitMiddleware|RequestTimeoutMiddleware|request.stream\(' server/main.py services tests -g '*.py' -g '!**/migrations/**'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+server/main.py:341:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+server/main.py:343:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+server/main.py:344:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+services/nlp/main.py:115:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/nlp/main.py:117:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+services/nlp/main.py:118:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+tests/test_server_idempotency_middleware.py:190:        < names.index("RequestTimeoutMiddleware")
+tests/test_server_idempotency_middleware.py:193:        names.index("RequestSizeLimitMiddleware")
+services/compliance/main.py:97:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/compliance/main.py:99:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+services/compliance/main.py:100:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+services/admin/main.py:307:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/admin/main.py:309:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+services/admin/main.py:310:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+tests/qa_sweep_20261002/test_request_safety.py:6:from shared.request_safety import RequestSizeLimitMiddleware
+tests/qa_sweep_20261002/test_request_safety.py:12:    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
+tests/security/test_security_audit_fixes.py:623:        """Bodies above the 10 MiB RequestSizeLimitMiddleware cap must 413."""
+services/shared/idempotency.py:265:        # This middleware is outside RequestSizeLimitMiddleware in the monolith.
+services/shared/idempotency.py:268:        async for chunk in request.stream():
+services/shared/request_safety.py:10:    from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/shared/request_safety.py:12:    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+services/shared/request_safety.py:13:    app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+services/shared/request_safety.py:36:class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+services/shared/request_safety.py:67:        async for chunk in request.stream():
+services/shared/request_safety.py:98:class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+services/ingestion/main.py:126:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/ingestion/main.py:128:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+services/ingestion/main.py:129:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+services/graph/app/main.py:91:from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/graph/app/main.py:93:app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+services/graph/app/main.py:94:app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+services/scheduler/service.py:980:        RequestTimeoutMiddleware ceiling on long scrapes. The ingestion
+services/ingestion/app/shared/upload_limits.py:68:    ``RequestSizeLimitMiddleware``, which only enforces the ``Content-Length``
+services/ingestion/app/shared/upload_limits.py:73:    async for chunk in request.stream():
+services/ingestion/app/epcis/router.py:333:    # Stream the body with a hard cap. RequestSizeLimitMiddleware only enforces
+services/ingestion/tests/test_upload_limits_1342.py:75:    RequestSizeLimitMiddleware only checks Content-Length, so a streamed body

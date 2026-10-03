@@ -1,0 +1,28 @@
+UTC: 2026-10-03T03:37:54.788240+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re; root=Path("docs/qa/2026-10-02/artifacts/fix");
+for label in ["original", "final"]:
+ p=next(root.glob("*-backend_new_http500_"+label+"_control.txt")); text=p.read_text(); print(label,p.name); print("\n".join(l for l in text.splitlines() if l.startswith(("Original request_safety", "Selected HTTP500", "6 failed", "Exit:", "Duration:")))); heads=list(re.finditer(r"^_{3,} (.*?) _{3,}$",text,re.MULTILINE));
+ for i,m in enumerate(heads):
+  section=text[m.end():heads[i+1].start() if i+1<len(heads) else len(text)]; print(m.group(1), "guard_dns_denial=", "QA safety guard denied socket.getaddrinfo" in section)
+'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+original 20261003T033712.252155Z-backend_new_http500_original_control.txt
+Exit: 1
+Duration: 5.23s
+Selected HTTP500 identities 6
+Original request_safety SHA256 fc5632d5b4636f8546eff577ee434893325bdae8eb398e4c722a08361cf5aef0
+Original request_safety loaded as shared.request_safety
+6 failed in 3.77s
+TestIngestionPipelineContract.test_unknown_job_status_is_not_found guard_dns_denial= True
+TestK8sAuthBypassGuard.test_bypass_token_authenticates_in_test_env guard_dns_denial= True
+final 20261003T033712.252156Z-backend_new_http500_final_control.txt
+Exit: 1
+Duration: 5.23s
+Selected HTTP500 identities 6
+6 failed in 3.77s
+TestIngestionPipelineContract.test_unknown_job_status_is_not_found guard_dns_denial= True
+TestK8sAuthBypassGuard.test_bypass_token_authenticates_in_test_env guard_dns_denial= True

@@ -1,0 +1,43 @@
+UTC: 2026-10-03T03:20:25.412927+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 245,280p services/shared/jev/header_mapping.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+        "examples": ["Row ID", "Notes", "Price", "Temp C", "Pallet Weight", "Approved By"],
+    },
+}
+
+CANONICAL_FIELD_NAMES: frozenset[str] = frozenset(name for name in CANONICAL_FIELDS if name != NO_MATCH)
+
+
+def normalize_csv_header(header: str | None) -> str:
+    """Normalise a header exactly as the CSV parser does before it looks up columns."""
+    return (header or "").strip().lower().replace(" ", "_")
+
+
+def malformed_header_reason(headers: Iterable[str | None]) -> str | None:
+    """Why this cannot be a real header row, or ``None`` when it can.
+
+    An unterminated quote makes the CSV reader take the rest of the file as
+    one header, so whole rows would leave the process as a "column name". A
+    header with a line break, or longer than :data:`MAX_HEADER_CHARS`, is
+    refused. The reason names the problem, never the header's content.
+    """
+    for header in headers:
+        text = (header or "").strip()
+        if "\r" in text or "\n" in text:
+            return "a header contains a line break"
+        if len(text) > MAX_HEADER_CHARS:
+            return f"a header is {len(text)} characters long (limit {MAX_HEADER_CHARS})"
+    return None
+
+
+def unrecognized_headers(headers: Iterable[str | None], recognized: Collection[str]) -> list[str]:
+    """Return the original headers whose normalised form the parser does not recognise.
+
+    Blank headers and duplicates (after normalisation) are dropped: the
+    parser cannot address them, so there is nothing to map.
+    """
+    seen: set[str] = set()

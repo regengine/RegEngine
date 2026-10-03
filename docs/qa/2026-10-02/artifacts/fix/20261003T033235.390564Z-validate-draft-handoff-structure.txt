@@ -1,0 +1,18 @@
+UTC: 2026-10-03T03:32:35.390564+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re,subprocess,json; root=Path.cwd(); qa=root/"docs/qa/2026-10-02"; text=(qa/"FIXES.md").read_text(); rows=[line.split("|")[1:-1] for line in text.splitlines() if re.match(r"\| (?:BE|FE)-\d+ \|",line)]; high=[r for r in rows if r[1].strip() in ("Critical","High")]; counts={s:sum(r[3].strip()==s for r in high) for s in ("fixed","partial","deferred")}; assert counts=={"fixed":2,"partial":0,"deferred":1}; assert "FixCounts: fixed=2 partial=0 deferred=1" in text; assert {r[0].strip() for r in high}=={"BE-011","FE-001","BE-010"}; assert len(rows)==8; assert (qa/"SUMMARY.md").read_text().endswith("Fix pass: see FIXES.md\n"); protected=["AGENTS.md","CLAUDE.md","frontend/AGENTS.md",".github/workflows/backend-ci.yml",".github/workflows/qa-pipeline.yml","qa/decision.js","tests/scripts/test_deploy_decision_gate.py","docs/qa/2026-10-02/FINDINGS.md"]; subprocess.run(["git","diff","--exit-code","b5dd065e","--",*protected],check=True); missing=[p for p in re.findall(r"\]\(([^)]+)\)",text) if not (qa/p).exists()]; assert not missing,missing; print(json.dumps({"rows":len(rows),"critical_high_counts":counts,"protected_paths_unchanged":True,"fix_report_links_exist":True,"final_full_backend_pending":True},indent=2))'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+{
+  "rows": 8,
+  "critical_high_counts": {
+    "fixed": 2,
+    "partial": 0,
+    "deferred": 1
+  },
+  "protected_paths_unchanged": true,
+  "fix_report_links_exist": true,
+  "final_full_backend_pending": true
+}

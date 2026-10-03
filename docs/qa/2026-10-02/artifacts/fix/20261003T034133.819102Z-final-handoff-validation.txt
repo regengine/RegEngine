@@ -1,0 +1,29 @@
+UTC: 2026-10-03T03:41:33.819102+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import re,subprocess,json,gzip,hashlib; qa=Path("docs/qa/2026-10-02"); report=(qa/"FIXES.md").read_text(); assert "FixCounts: fixed=2 partial=0 deferred=1" in report; assert "Pending" not in report; assert "is being checked" not in report; assert "11406 / 253 / 5 / 539, plus 342 errors" in report; assert "1042 / 0 / 4 / 2" in report; assert "58 / 29 / 0 / 183" in report; assert subprocess.check_output(["git","branch","--show-current"],text=True).strip()=="qa/2026-10-02-fixes"; assert subprocess.check_output(["git","rev-parse","--short=8","HEAD"],text=True).strip()=="b6222b29"; subprocess.run(["git","diff","--check"],check=True); paths=subprocess.check_output(["git","ls-files","--others","--exclude-standard"],text=True).splitlines(); assert all(p.startswith(str(qa)+"/") for p in paths); assert all(Path(p).stat().st_size<=1000*1024 for p in paths); forbidden=[p for p in paths if Path(p).name in ("AGENTS.md","CLAUDE.md") or any(s in Path(p).parts for s in ("node_modules","coverage",".next","__pycache__")) or Path(p).name.startswith(".env")]; assert not forbidden,forbidden
+for index in ("compressed-log-index.json","compressed-screenshot-index.json"):
+ for item in json.loads((qa/"artifacts/fix"/index).read_text()):
+  raw=gzip.decompress(Path(item["archive"]).read_bytes()); assert hashlib.sha256(raw).hexdigest()==item["raw_sha256"]; assert len(raw)==item["raw_bytes"]
+print(json.dumps({"branch":"qa/2026-10-02-fixes","product_head":"b6222b29","high_counts":{"fixed":2,"partial":0,"deferred":1},"selected_total_counts":{"fixed":5,"partial":0,"deferred":3},"new_artifacts_and_docs":len(paths),"size_scope_archives_diff_checks":"passed","source_gate":"accepted","new_fix_regressions":0},indent=2))'
+Exit: 0
+Duration: 0.14s
+Timeout: False
+
+{
+  "branch": "qa/2026-10-02-fixes",
+  "product_head": "b6222b29",
+  "high_counts": {
+    "fixed": 2,
+    "partial": 0,
+    "deferred": 1
+  },
+  "selected_total_counts": {
+    "fixed": 5,
+    "partial": 0,
+    "deferred": 3
+  },
+  "new_artifacts_and_docs": 377,
+  "size_scope_archives_diff_checks": "passed",
+  "source_gate": "accepted",
+  "new_fix_regressions": 0
+}

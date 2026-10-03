@@ -1,0 +1,1532 @@
+UTC: 2026-10-03T03:18:58.241893+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs /private/tmp/obsong-qa-node20/node_modules/node/bin/node node_modules/vitest/vitest.mjs run --coverage --reporter=default --reporter=json --outputFile=../docs/qa/2026-10-02/artifacts/fix/frontend-final-vitest.json --coverage.reporter=json-summary --coverage.reportsDirectory=/private/tmp/regengine-fix-final-coverage
+Exit: 0
+Duration: 20.41s
+Timeout: False
+
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.mts:50:31). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+[90mstderr[2m | src/__tests__/hooks/useAuth.test.tsx[2m > [22m[2museAuth Hook[2m > [22m[2mInitialization[2m > [22m[2mstarts with no user when localStorage is empty
+[22m[39mWarning: An update to AuthProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+    at wrapper (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/hooks/useAuth.test.tsx:64:21)
+
+[90mstderr[2m | src/__tests__/api/compliance-proxy-not-configured.test.ts[2m > [22m[2mcompliance proxies return an explicit not-configured 503 on empty base (#2541)[2m > [22m[2mstatus route: 503 backend_not_configured, no relative fetch
+[22m[39m[proxy/compliance-status] 503 — compliance backend not configured
+
+[90mstderr[2m | src/__tests__/api/compliance-proxy-not-configured.test.ts[2m > [22m[2mcompliance proxies return an explicit not-configured 503 on empty base (#2541)[2m > [22m[2msnapshots list route: 503 backend_not_configured, no relative fetch
+[22m[39m[proxy/snapshots] 503 — compliance backend not configured
+
+[90mstderr[2m | src/__tests__/api/compliance-proxy-not-configured.test.ts[2m > [22m[2mcompliance proxies return an explicit not-configured 503 on empty base (#2541)[2m > [22m[2mexport route: 503 backend_not_configured, no relative fetch
+[22m[39m[proxy/export] 503 — compliance backend not configured
+
+[90mstderr[2m | src/__tests__/api/compliance-proxy-not-configured.test.ts[2m > [22m[2mcompliance proxies return an explicit not-configured 503 on empty base (#2541)[2m > [22m[2mverify route: 503 backend_not_configured, no relative fetch
+[22m[39m[proxy/verify] 503 — compliance backend not configured
+
+ [32m✓[39m src/__tests__/api/compliance-proxy-not-configured.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 513[2mms[22m[39m
+     [33m[2m✓[22m[39m status route: 503 backend_not_configured, no relative fetch [33m 371[2mms[22m[39m
+[90mstderr[2m | src/__tests__/hooks/useAuth.test.tsx[2m > [22m[2museAuth Hook[2m > [22m[2mAPI key cookie[2m > [22m[2mrejects a failed cookie write and keeps API-key state unset
+[22m[39m[auth] Failed to set session cookie: [33m503[39m
+
+[90mstderr[2m | src/__tests__/hooks/useAuth.test.tsx[2m > [22m[2museAuth Hook[2m > [22m[2mLogout[2m > [22m[2mwaits for cookie teardown before logout resolves without loading the Supabase browser SDK
+[22m[39mWarning: You called act(async () => ...) without await. This could lead to unexpected testing behaviour, interleaving multiple act calls and mixing their scopes. You should - await act(async () => ...);
+
+[90mstderr[2m | src/__tests__/hooks/useAuth.test.tsx[2m > [22m[2museAuth Hook[2m > [22m[2mComputed Properties[2m > [22m[2misAuthenticated is false when user is null
+[22m[39mWarning: An update to AuthProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+    at wrapper (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/hooks/useAuth.test.tsx:64:21)
+
+ [32m✓[39m src/__tests__/pages/exceptions.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 388[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/useControlPlane.test.tsx [2m([22m[2m24 tests[22m[2m)[22m[33m 877[2mms[22m[39m
+[90mstderr[2m | src/__tests__/pages/inflow-lab.test.tsx[2m > [22m[2mDashboard Inflow Lab[2m > [22m[2mrenders the Inflow Lab header with one Sandbox chip and a single boundary banner
+[22m[39mWarning: An update to DashboardInflowLab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at DashboardInflowLab (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx:417:31)
+    at DashboardInflowLabPage
+    at TenantProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/tenant-context.tsx:41:27)
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+Warning: An update to DashboardInflowLab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at DashboardInflowLab (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx:417:31)
+    at DashboardInflowLabPage
+    at TenantProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/tenant-context.tsx:41:27)
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+Warning: An update to DashboardInflowLab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at DashboardInflowLab (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx:417:31)
+    at DashboardInflowLabPage
+    at TenantProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/tenant-context.tsx:41:27)
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+Warning: An update to DashboardInflowLab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at DashboardInflowLab (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx:417:31)
+    at DashboardInflowLabPage
+    at TenantProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/tenant-context.tsx:41:27)
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+Warning: An update to DashboardInflowLab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at DashboardInflowLab (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx:417:31)
+    at DashboardInflowLabPage
+    at TenantProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/tenant-context.tsx:41:27)
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+Warning: An update to AuthProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+
+[90mstderr[2m | src/__tests__/hooks/useAuth.test.tsx[2m > [22m[2museAuth Hook[2m > [22m[2mError Handling[2m > [22m[2mhandles missing localStorage gracefully
+[22m[39mWarning: An update to AuthProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AuthProvider (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/lib/auth-context.tsx:177:25)
+    at wrapper (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/hooks/useAuth.test.tsx:64:21)
+
+ [32m✓[39m src/__tests__/pages/requests.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 546[2mms[22m[39m
+     [33m[2m✓[22m[39m opens create form and submits a new case [33m 360[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/useAuth.test.tsx [2m([22m[2m30 tests[22m[2m)[22m[33m 891[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/fsma-checklist-pii.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 832[2mms[22m[39m
+     [33m[2m✓[22m[39m submits gap analysis to the server action without persisting lead PII [33m 478[2mms[22m[39m
+     [33m[2m✓[22m[39m stores only non-PII retry state when submission fails [33m 343[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/controls.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 710[2mms[22m[39m
+ [32m✓[39m src/__tests__/auth/login.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 886[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/agent-review-dashboard.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 827[2mms[22m[39m
+     [33m[2m✓[22m[39m renders the MVV columns and sorts human-review/high-risk items first [33m 327[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/data-import.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1280[2mms[22m[39m
+     [33m[2m✓[22m[39m shows 2 accepted and 0 rejected truthfully [33m 301[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/ingest-csv.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1908[2mms[22m[39m
+     [33m[2m✓[22m[39m shows 2 accepted and 0 rejected without polling a document job [33m 433[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/developer-portal-clicks.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1867[2mms[22m[39m
+[90mstderr[2m | src/__tests__/pages/trace.test.tsx[2m > [22m[2mTracePage[2m > [22m[2mruns trace queries for tenant sessions without relying on apiKey truthiness
+[22m[39mWarning: Received `true` for a non-boolean attribute `mono`.
+
+If you want to write it to the DOM, pass a string instead: mono="true" or mono={value.toString()}.
+    at input
+    at Input
+    at div
+    at div
+    at div
+    at CardContent (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/trace.test.tsx:20:18)
+    at div
+    at Card (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/trace.test.tsx:12:11)
+    at div
+    at div
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/trace.test.tsx:6:96)
+    at TracePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/trace/page.tsx:34:68)
+
+ [32m✓[39m src/__tests__/pages/supplier-bulk-upload.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 556[2mms[22m[39m
+   [33m[2m✓[22m[39m keeps a successful commit distinct from a failed status refresh [33m 455[2mms[22m[39m
+[90mstderr[2m | src/__tests__/pages/compliance-profile.test.tsx[2m > [22m[2mComplianceProfilePage[2m > [22m[2mloads the profile through the admin proxy without browser auth headers
+[22m[39mWarning: Unknown event handler property `onCheckedChange`. It will be ignored.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+
+[90mstderr[2m | src/__tests__/pages/compliance-profile.test.tsx[2m > [22m[2mComplianceProfilePage[2m > [22m[2msaves the profile through the admin proxy without browser auth headers
+[22m[39mWarning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+Warning: You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.
+    at input
+    at Checkbox
+    at label
+    at div
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:89:57
+    at div
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/card.tsx:45:50
+    at div
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at ProductProfilePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/profile/page.tsx:140:66)
+
+[90mstderr[2m | src/__tests__/pages/dashboard-auth-gating.test.tsx[2m > [22m[2mdashboard auth gating cleanup[2m > [22m[2msettings page fetches integrations when authenticated even if apiKey is null
+[22m[39mWarning: Received `false` for a non-boolean attribute `loading`.
+
+If you want to write it to the DOM, pass a string instead: loading="false" or loading={value.toString()}.
+
+If you used to conditionally omit it with loading={condition && value}, pass loading={condition ? value : undefined} instead.
+    at button
+    at Button (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:85:77)
+    at div
+    at div
+    at div
+    at div
+    at PageHeader (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-header.tsx:9:23)
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at SettingsPage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/dashboard/settings/page.tsx:234:62)
+    at QueryClientProvider (file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:42:32)
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:205:12
+Warning: React does not recognize the `leadingIcon` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `leadingicon` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at button
+    at Button (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:85:77)
+    at div
+    at div
+    at div
+    at div
+    at PageHeader (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-header.tsx:9:23)
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at SettingsPage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/dashboard/settings/page.tsx:234:62)
+    at QueryClientProvider (file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:42:32)
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:205:12
+Warning: React does not recognize the `trailingIcon` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `trailingicon` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at button
+    at Button (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:85:77)
+    at a
+    at default (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:17:65)
+    at div
+    at CardContent (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:52:18)
+    at div
+    at Card (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:44:11)
+    at div
+    at div
+    at Container (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/container.tsx:16:22)
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/layout/page-container.tsx:10:26)
+    at SettingsPage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/dashboard/settings/page.tsx:234:62)
+    at QueryClientProvider (file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:42:32)
+    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/dashboard-auth-gating.test.tsx:205:12
+
+ [32m✓[39m src/__tests__/pages/trace.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 506[2mms[22m[39m
+     [33m[2m✓[22m[39m runs trace queries for tenant sessions without relying on apiKey truthiness [33m 371[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/compliance-profile.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 497[2mms[22m[39m
+     [33m[2m✓[22m[39m saves the profile through the admin proxy without browser auth headers [33m 432[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/evidence-chain.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 545[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/rules.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 536[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/dashboard-auth-gating.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 503[2mms[22m[39m
+     [33m[2m✓[22m[39m settings page fetches integrations when authenticated even if apiKey is null [33m 365[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/recall-report.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 662[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/dashboard-navigation.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 578[2mms[22m[39m
+     [33m[2m✓[22m[39m exposes Inflow Lab as a top-level active dashboard link [33m 341[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/homepage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 458[2mms[22m[39m
+     [33m[2m✓[22m[39m leads with compliance operating system positioning [33m 311[2mms[22m[39m
+ [32m✓[39m src/__tests__/auth/step-up-modal.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 379[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/sandbox-front-door.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 552[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/compliance-status.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 340[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/qa-health.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 510[2mms[22m[39m
+     [33m[2m✓[22m[39m renders sysadmin QA health details [33m 468[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/core.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 665[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/sandbox-shared-result-base-url.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 375[2mms[22m[39m
+     [33m[2m✓[22m[39m falls back to localhost when NEXT_PUBLIC_SITE_URL is unset, never VERCEL_URL [33m 370[2mms[22m[39m
+ [32m✓[39m src/__tests__/auth/accept-invite.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 606[2mms[22m[39m
+     [33m[2m✓[22m[39m reads fragment invite tokens and scrubs them from browser history [33m 524[2mms[22m[39m
+ [32m✓[39m src/__tests__/public-site-fixes.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 518[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/export-jobs.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 381[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/inflow-lab.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 4783[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps sandbox evaluation non-persistent until Save test run is pressed [33m 920[2mms[22m[39m
+     [33m[2m✓[22m[39m disables saving when the session lacks inflow.write even if the role name looks privileged [33m 804[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/issues.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 702[2mms[22m[39m
+     [33m[2m✓[22m[39m renders loading spinner initially [33m 365[2mms[22m[39m
+Not implemented: navigation to another Document
+ [32m✓[39m src/__tests__/pages/identity.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1077[2mms[22m[39m
+     [33m[2m✓[22m[39m renders entity list with canonical names [33m 412[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/dashboard.test.tsx [2m([22m[2m12 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[33m 1083[2mms[22m[39m
+       [33m[2m✓[22m[39m renders navigation links [33m 387[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/product.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 320[2mms[22m[39m
+     [33m[2m✓[22m[39m shows how Inflow changes what RegEngine can persist and export [33m 318[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/recall-drills.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 248[2mms[22m[39m
+[90mstderr[2m | src/__tests__/pages/compliance.test.tsx[2m > [22m[2mCompliancePage[2m > [22m[2mshows a workspace sign-in prompt instead of an API key prompt for signed-out users
+[22m[39mWarning: React does not recognize the `asChild` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `aschild` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at button
+    at Button (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/compliance.test.tsx:57:77)
+    at div
+    at div
+    at div
+    at div
+    at div
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/compliance.test.tsx:10:96)
+    at CompliancePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/page.tsx:36:84)
+Warning: React does not recognize the `leadingIcon` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `leadingicon` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at input
+    at Input
+    at div
+    at div
+    at div
+    at div
+    at div
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/compliance.test.tsx:10:96)
+    at CompliancePage (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/app/compliance/page.tsx:36:84)
+
+ [32m✓[39m src/__tests__/components/curator-review.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 359[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/compliance.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 304[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/playground-csrf.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 384[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/ingest-handoff.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 395[2mms[22m[39m
+     [33m[2m✓[22m[39m recognizes a saved sandbox test-run handoff and shows the mapping preview contract [33m 393[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/experimental-gating.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 346[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/prod-inert-gates.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 327[2mms[22m[39m
+     [33m[2m✓[22m[39m renders a static handoff that only links back to /login [33m 315[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/scan.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 291[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/proof-recall-drill.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 326[2mms[22m[39m
+     [33m[2m✓[22m[39m starts the public backend drill endpoint and renders returned steps [33m 324[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/proof-trust-copy.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 150[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/useFsma.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 204[2mms[22m[39m
+[90mstderr[2m | src/__tests__/pages/review.test.tsx[2m > [22m[2mReviewPage[2m > [22m[2mshows an admin-capability warning instead of an API key warning
+[22m[39mWarning: React does not recognize the `asChild` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `aschild` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at button
+    at Button (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/review.test.tsx:71:77)
+    at div
+    at div
+    at div
+    at Callout (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/components/ui/callout.tsx:32:20)
+    at div
+    at PageContainer (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/pages/review.test.tsx:10:96)
+    at ReviewPage
+
+ [32m✓[39m src/__tests__/components/dashboard-error-boundary.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 217[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/review.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 269[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/qa-health-widget.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 150[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/admin-page-auth.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m src/__tests__/app/root-layout-csp-nonce.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 59[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/FieldCaptureClient.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 432[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/curation.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 141[2mms[22m[39m
+[90mstderr[2m | src/__tests__/proxy-tenant-gate.test.ts[2m > [22m[2mproxy tenant-suspension gate (Supabase path)[2m > [22m[2mfails CLOSED when the tenant-status query errors
+[22m[39m[middleware] tenant status query failed for tenant-123: permission denied
+
+[90mstderr[2m | src/__tests__/proxy-tenant-gate.test.ts[2m > [22m[2mproxy tenant-suspension gate (Supabase path)[2m > [22m[2mblocks a non-active tenant status
+[22m[39m[middleware] Supabase path: Tenant status "suspended" — blocking access
+
+ [32m✓[39m src/__tests__/proxy-tenant-gate.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 180[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/audit-log.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 162[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/useApiQuery.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 127[2mms[22m[39m
+ [32m✓[39m src/__tests__/styles/globals-css-invariants.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 103[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2835 controls proxy targets the overlay router[2m > [22m[2mmaps /api/controls/controls to /v1/overlay/controls
+[22m[39m[proxy/controls] GET controls → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2835 controls proxy targets the overlay router[2m > [22m[2mmaps a single control to /v1/overlay/controls/{id}
+[22m[39m[proxy/controls] GET controls/abc123 → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/gaps to http://graph.test/api/v1/fsma/compliance/gaps
+[22m[39m[proxy/fsma] GET gaps → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/gaps/orphans to http://graph.test/api/v1/fsma/compliance/gaps/orphans
+[22m[39m[proxy/fsma] GET gaps/orphans → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/export/gaps to http://graph.test/api/v1/fsma/compliance/export/gaps
+[22m[39m[proxy/fsma] GET export/gaps → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/export/trace/LOT-1 to http://graph.test/api/v1/fsma/compliance/export/trace/LOT-1
+[22m[39m[proxy/fsma] GET export/trace/LOT-1 → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/traceability/trace/forward/LOT-1 to http://graph.test/api/v1/fsma/traceability/trace/forward/LOT-1
+[22m[39m[proxy/fsma] GET traceability/trace/forward/LOT-1 → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/metrics/dashboard to http://graph.test/api/v1/fsma/metrics/dashboard
+[22m[39m[proxy/fsma] GET metrics/dashboard → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/compliance/score to http://graph.test/api/v1/fsma/compliance/score
+[22m[39m[proxy/fsma] GET compliance/score → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/recall/readiness to http://graph.test/api/v1/fsma/recall/readiness
+[22m[39m[proxy/fsma] GET recall/readiness → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mmaps /api/fsma/science/mass-balance/LOT-1 to http://graph.test/api/v1/fsma/science/mass-balance/LOT-1
+[22m[39m[proxy/fsma] GET science/mass-balance/LOT-1 → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mnever emits the unregistered /fsma-204/ prefix
+[22m[39m[proxy/fsma] GET checklists → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mdoes not route drift to a graph FSMA path that does not exist
+[22m[39m[proxy/fsma] GET drift/health → 200
+
+[90mstderr[2m | src/__tests__/api/backend-route-mapping.test.ts[2m > [22m[2m#2836 fsma proxy routes each path to its real backend mount[2m > [22m[2mpreserves the query string
+[22m[39m[proxy/fsma] GET gaps → 200
+
+ [32m✓[39m src/__tests__/api/backend-route-mapping.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 208[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/receiving.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 570[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/evidence-integrity-3044.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 270[2mms[22m[39m
+ [32m✓[39m src/test/security/audit-trail.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1014[2mms[22m[39m
+       [33m[2m✓[22m[39m should verify valid digital signatures on log entries [33m 755[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/proxy-sanitization.test.ts[2m > [22m[2mvalidateProxySession Supabase fallback[2m > [22m[2mlets stream proxies reach prepareHeaders after a valid Supabase-only session
+[22m[39m[proxy/test] GET api/v1/thing → 200
+
+[90mstderr[2m | src/__tests__/api/ingestion-proxy-auth.test.ts[2m > [22m[2mingestion BFF credential boundary[2m > [22m[2mnever upgrades a browser-forged API key to the ambient API key
+[22m[39m[proxy/ingestion] GET api/v1/score/summary → 401
+
+[90mstderr[2m | src/__tests__/api/ingestion-proxy-auth.test.ts[2m > [22m[2mingestion BFF credential boundary[2m > [22m[2mnever upgrades a junk bearer token to the ambient API key
+[22m[39m[proxy/ingestion] GET api/v1/score/summary → 401
+
+[90mstderr[2m | src/__tests__/api/ingestion-proxy-auth.test.ts[2m > [22m[2mingestion BFF credential boundary[2m > [22m[2mdoes not upgrade an unsigned JWT and leaves rejection to the upstream verifier
+[22m[39m[proxy/ingestion] GET api/v1/score/summary → 401
+
+[90mstderr[2m | src/__tests__/api/ingestion-proxy-auth.test.ts[2m > [22m[2mingestion BFF credential boundary[2m > [22m[2mopaque session on non-readiness routes[2m > [22m[2mforwards a validated session with the server-derived tenant and no server key
+[22m[39m[proxy/ingestion] GET api/v1/score/summary → 200
+
+[90mstderr[2m | src/__tests__/api/ingestion-proxy-auth.test.ts[2m > [22m[2mingestion BFF credential boundary[2m > [22m[2mopaque session on non-readiness routes[2m > [22m[2mleaves write authorization to the upstream with no server credential attached
+[22m[39m[proxy/ingestion] POST api/v1/inflow-workbench/runs → 403
+
+ [32m✓[39m src/__tests__/api/proxy-sanitization.test.ts [2m([22m[2m66 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/ingestion-proxy-auth.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/workflow-stepper.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 166[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/docs-contract.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 186[2mms[22m[39m
+ [32m✓[39m src/__tests__/seo/crawl-surface.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/audit.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 194[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/tools-verify-route.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 105[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/use-agent-reviews.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/compliance-primitives.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/scan-history-widget.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/useSync.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/demo-banner.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/session-origin.test.ts[2m > [22m[2mPOST /api/session Origin enforcement (RE-SEC-003)[2m > [22m[2mpasses the Origin check when Origin is in ALLOWED_ORIGINS in production
+[22m[39m[csrf] CSRF_SECRET not set in production — all mutating requests will be rejected
+
+[90mstderr[2m | src/__tests__/api/session-origin.test.ts[2m > [22m[2mPOST /api/session Origin enforcement (RE-SEC-003)[2m > [22m[2mreturns 500 when ALLOWED_ORIGINS is unset in production (fail-closed misconfig)
+[22m[39m[session] ALLOWED_ORIGINS not configured in production
+
+[90mstderr[2m | src/__tests__/api/session-origin.test.ts[2m > [22m[2mPOST /api/session Origin enforcement (RE-SEC-003)[2m > [22m[2msets production credential cookies with HttpOnly, Secure, and SameSite=Lax
+[22m[39m[csrf] CSRF_SECRET not set in production — all mutating requests will be rejected
+
+ [32m✓[39m src/__tests__/api/session-origin.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/api-client-review.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/__tests__/public/service-worker-retention.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/billing-checkout-route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/review-id-validation.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+[90mstderr[2m | src/__tests__/instrumentation.test.ts[2m > [22m[2minstrumentation register() — secret separation assertions (RE-SEC-005)[2m > [22m[2mproduction + CSRF_SECRET unset → throws
+[22m[39m[startup-assertion] CSRF_SECRET must be set in production
+
+[90mstderr[2m | src/__tests__/instrumentation.test.ts[2m > [22m[2minstrumentation register() — secret separation assertions (RE-SEC-005)[2m > [22m[2mproduction + CSRF_SECRET =[REDACTED] legacy JWT_SIGNING_KEY material → throws
+[22m[39m[startup-assertion] CSRF_SECRET must not equal legacy JWT_SIGNING_KEY material
+
+[90mstderr[2m | src/__tests__/instrumentation.test.ts[2m > [22m[2minstrumentation register() — secret separation assertions (RE-SEC-005)[2m > [22m[2mproduction + CSRF_SECRET =[REDACTED] AUTH_SECRET_KEY → throws
+[22m[39m[startup-assertion] CSRF_SECRET must not equal legacy AUTH_SECRET_KEY
+
+ [32m✓[39m src/__tests__/instrumentation.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/inflow-lab-proxy.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/api-client-graph-labels.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/__tests__/proxy-csrf.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2mcreates and lists fallback snapshots when the compliance service is unreachable
+[22m[39m[proxy/snapshots] Backend unreachable: Error: ECONNREFUSED
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:103:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2mcreates and lists fallback snapshots when the compliance service is unreachable
+[22m[39m[proxy/snapshots] Backend unreachable: Error: ECONNREFUSED
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:103:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/snapshots] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/snapshots] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/verify] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/snapshot-diff] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/fda-response] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/audit-pack] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+[90mstderr[2m | src/__tests__/api/compliance-snapshots-proxy.test.ts[2m > [22m[2mCompliance snapshot proxy routes[2m > [22m[2msupports verify, diff, FDA response, audit pack, and refreeze via the fallback store
+[22m[39m[proxy/refreeze] Backend unreachable: Error: backend unavailable
+    at [90m/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39msrc/__tests__/api/compliance-snapshots-proxy.test.ts:132:37
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:302:11
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:1903:26
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2323:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2272:10[90m)[39m
+    at [90mfile:///Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-artifact.js:2956:64
+
+ [32m✓[39m src/__tests__/api/compliance-snapshots-proxy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/developer-portal-utils.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/qa-sweep-gs1.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/providers-csp-nonce.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/developer-key-create.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/privileged-session-routes.test.ts[2m > [22m[2mprivileged frontend session forwarding[2m > [22m[2mforwards the selected opaque session through the admin catch-all proxy
+[22m[39m[proxy/admin] GET v1/admin/keys → 200
+
+[90mstderr[2m | src/__tests__/api/privileged-session-routes.test.ts[2m > [22m[2mprivileged frontend session forwarding[2m > [22m[2mattests the platform client IP on the admin privileged proxy
+[22m[39m[proxy/admin] GET v1/admin/keys → 200
+
+[90mstderr[2m | src/__tests__/api/privileged-session-routes.test.ts[2m > [22m[2mprivileged frontend session forwarding[2m > [22m[2mattests the platform client IP on the review catch-all privileged proxy
+[22m[39m[proxy/review] GET flagged-extractions → 200
+
+ [32m✓[39m src/__tests__/api/privileged-session-routes.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/compliance-proxy-auth-boundary.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/enforce-tenant-match.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/cn-type-scale.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/nlp-ask-proxy.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/proxy-ip-attestation.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/client-errors.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/supplier-csv.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/app/api/__tests__/routes.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/admin.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2maccepts a well-formed submission
+[22m[39m[contact] submission_received {
+  submissionId: [32m'd7e52f01-f2b1-49d0-85e4-c661d4558262'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mrate-limits a single IP after the burst threshold
+[22m[39m[contact] submission_received {
+  submissionId: [32m'3358ba5e-6b3f-4b43-b461-addcf298b3a3'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mrate-limits a single IP after the burst threshold
+[22m[39m[contact] submission_received {
+  submissionId: [32m'810dd326-8eb4-45d6-bfa3-29a0d433ce88'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mrate-limits a single IP after the burst threshold
+[22m[39m[contact] submission_received {
+  submissionId: [32m'b6e7e7ec-b018-41bb-b218-33724c01ea1b'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mrate-limits a single IP after the burst threshold
+[22m[39m[contact] submission_received {
+  submissionId: [32m'87f85137-dd36-4ca2-ab68-4f26f073bad5'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mrate-limits a single IP after the burst threshold
+[22m[39m[contact] submission_received {
+  submissionId: [32m'b01675da-9fda-4f3e-95e6-fc440791ccbc'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mkeeps separate budgets per IP
+[22m[39m[contact] submission_received {
+  submissionId: [32m'1ba2b677-a508-46f6-8ac0-cf3469027cf9'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+
+[90mstderr[2m | src/__tests__/api/contact.test.ts[2m > [22m[2mPOST /api/contact abuse controls[2m > [22m[2mfails closed when delivery is not configured
+[22m[39m[contact] submission_received {
+  submissionId: [32m'2b6bb0e4-314c-4f4f-a8a4-10081d9bb85b'[39m,
+  hasCompany: [33mfalse[39m,
+  messageLength: [33m5[39m
+}
+[contact] delivery_unavailable {
+  submissionId: [32m'2b6bb0e4-314c-4f4f-a8a4-10081d9bb85b'[39m,
+  reason: [32m'webhook_not_configured'[39m
+}
+
+ [32m✓[39m src/__tests__/api/contact.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/health-route.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/inflow-workbench-read-proxy.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/api-config.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/app/tools/knowledge-graph/components/__tests__/KnowledgeGraph.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/api-hooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m src/test/security/rbac.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/proxy-csp-nonce.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/test/compliance/data-protection.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/test/security/api-security.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/package-pins.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/fetch-with-csrf.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/sandbox-diagnosis.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/cte-suggestion.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/csrf-exempt-prefixes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/public-openapi.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/admin-targets.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/graph-release-disabled.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/json-ld-component.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/__tests__/auth/step-up.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/inflow-lab-exception-grouping.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/column-suggestions.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+[90mstderr[2m | src/__tests__/lib/csrf-secret.test.ts[2m > [22m[2mcsrf secret resolution (RE-SEC-005)[2m > [22m[2mproduction + no CSRF_SECRET → verifyCsrfToken returns false (fail closed)
+[22m[39m[csrf] CSRF_SECRET not set in production — all mutating requests will be rejected
+[csrf] CSRF_SECRET / AUTH_SECRET_KEY not set — rejecting mutating request
+
+ [32m✓[39m src/__tests__/lib/csrf-secret.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/json-ld.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/proxy-gated-dev-routes.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/experimental-features.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/customer-readiness.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/pages/ingest-sandbox-handoff.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/permissions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/csp.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/gs1-parser.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/safe-redirect.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/hooks/use-fsma-unbacked-endpoints.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/developer-portal-layout.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/compliance-os.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/scan-match.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/inflow-error.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/app-routes.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/db-retention.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/security-public-contract.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m137 passed[39m[22m[90m (137)[39m
+[2m      Tests [22m [1m[32m1042 passed[39m[22m[2m | [22m[36m4 expected fail[39m[2m | [22m[33m2 skipped[39m[90m (1048)[39m
+[2m   Start at [22m 20:18:58
+[2m   Duration [22m 19.84s[2m (transform 8.97s, setup 34.36s, import 26.52s, tests 37.79s, environment 113.16s)[22m
+
+JSON report written to /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/fix/frontend-final-vitest.json

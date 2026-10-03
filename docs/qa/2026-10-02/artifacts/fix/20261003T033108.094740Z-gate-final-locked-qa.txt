@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:31:08.094740+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-locked-deps:/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 --no-cov --tb=short
+Exit: 0
+Duration: 2.90s
+Timeout: False
+
+.xxx.........................x..............................             [100%]
+=========================== short test summary info ============================
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL tests/qa_sweep_20261002/test_portal_export_disclosure.py::test_redacted_fda_export_does_not_disclose_portal_capability - BE-011: supplier portal bearer capability is disclosed in exported KDEs
+56 passed, 4 xfailed in 2.11s
