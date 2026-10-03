@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:49:41.797653+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/BACKEND-REPORT.md"); text=p.read_text(); text=text.replace("| Focused ingestion baseline, 7 existing files |", "| Added tests with locked FastAPI/Starlette/Pydantic runtime overlay | 13 passed,16 strict xfailed; all six findings persist | [compatibility run](artifacts/backend/20261003T004902.545619Z-locked-runtime-added-tests.txt) |\n| Focused ingestion baseline, 7 existing files |"); text += "\n## Locked runtime compatibility check\n\nTo rule out the principal framework-version differences, the added tests were rerun with FastAPI 0.141.1, Starlette 1.6.0, Pydantic 2.13.5, pydantic-core 2.46.5, typing-extensions 4.16.0, typing-inspection 0.4.4, annotated-types 0.8.0, annotated-doc 0.0.5 and anyio 4.14.2 installed into a separate `/private/tmp/regengine-qa-locked-deps` overlay. All pins come from the committed requirements.lock. [Import readback](artifacts/backend/20261003T004926.712769Z-locked-runtime-readback.txt) confirms the four core runtime packages loaded from that overlay. Result:13 passed and16 strict xfailed; all six reproduced findings persist. This is a targeted compatibility check, not a clean installation of the entire dependency lock, and it does not replace the original before/after coverage measurements.\n"; p.write_text(text); print("Recorded locked runtime compatibility result.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Recorded locked runtime compatibility result.

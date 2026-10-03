@@ -1,0 +1,14 @@
+UTC: 2026-10-03T00:39:50.386865+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess,urllib.request,urllib.error; subprocess.run(["lsof","-n","-P","-iTCP:3102","-sTCP:LISTEN"]); request=urllib.request.Request("http://127.0.0.1:3102"); opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+try:
+ r=opener.open(request,timeout=15); print("status",r.status); print(r.read(600).decode())
+except urllib.error.HTTPError as e:
+ print("status",e.code,"body",e.read(600).decode())'
+Exit: 0
+Duration: 0.42s
+Timeout: False
+
+COMMAND   PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+node    23587 sellers   13u  IPv4 0xe5cfeef3057f77dc      0t0  TCP 127.0.0.1:3102 (LISTEN)
+status 404 body <!DOCTYPE html><html lang="en" data-scroll-behavior="smooth"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"/><link rel="stylesheet" href="/_next/static/css/app/layout.css?v=1790987990664" data-precedence="next_static/css/app/layout.css"/><link rel="preload" as="script" fetchPriority="low" href="/_next/static/chunks/webpack.js?v=1790987990664"/><script src="/_next/static/chunks/main-app.js?v=1790987990664" async=""></script><script src="/_next/static/chunks/app-pages-internals.js" async=""></script><script sr

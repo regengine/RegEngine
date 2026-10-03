@@ -1,0 +1,42 @@
+UTC: 2026-10-03T00:47:00.776195+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/tests/test_qa_sweep_20261002_contract.py"); print("\n".join(f"{i}: {x}" for i,x in enumerate(p.read_text().splitlines(),1) if 170<=i<=202)); q=Path("services/ingestion/app/csv_templates.py"); print("SOURCE_DECODE"); print("\n".join(f"{i}: {x}" for i,x in enumerate(q.read_text().splitlines(),1) if "decode(" in x or "UnicodeDecodeError" in x or "await file.read" in x))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+170: @pytest.mark.parametrize("quantity", ["0", "-1", "nan", "not-a-number", ""])
+171: def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quantity):
+172:     upload, captured = csv_upload
+173:     row = list(ROW)
+174:     row[2] = quantity
+175:     response = upload(_csv(HEADER, row))
+176:     assert response.status_code == 400
+177:     assert not captured
+178: 
+179: 
+180: @pytest.mark.xfail(
+181:     strict=True,
+182:     raises=AssertionError,
+183:     reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
+184: )
+185: @pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
+186: def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
+187:     upload, captured = csv_upload
+188:     response = upload(raw)
+189:     if captured:
+190:         pytest.fail("Invalid encoding reached persistence; encoding-error reproduction no longer applies")
+191:     assert response.status_code in (400, 415, 422), response.text
+192: 
+193: 
+194: def test_csv_utf8_bom_is_accepted(csv_upload):
+195:     upload, captured = csv_upload
+196:     response = upload(b"\xef\xbb\xbf" + _csv(HEADER, ROW).encode())
+197:     assert response.status_code == 200
+198:     assert len(captured) == 1
+199: 
+200: 
+201: @given(st.integers(min_value=1, max_value=1_000_000))
+202: @settings(max_examples=60, derandomize=True, deadline=None, database=None)
+SOURCE_DECODE
+1371:     text = content.decode("utf-8-sig")  # Handle BOM

@@ -1,0 +1,367 @@
+{
+  "errors": [],
+  "csp": [
+    {
+      "directive": "script-src-attr",
+      "uri": "inline"
+    },
+    {
+      "directive": "connect-src",
+      "uri": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  ],
+  "requests": [],
+  "startedAt": "2026-10-03T00:50:23.747Z",
+  "lcp": 300,
+  "cls": 0,
+  "url": "/contact",
+  "width": 1728,
+  "height": 906,
+  "documentWidth": 1728,
+  "title": "Contact Us | RegEngine",
+  "cameraAllowed": false,
+  "headings": [
+    {
+      "level": "H1",
+      "text": "Talk with the RegEngine team"
+    },
+    {
+      "level": "H2",
+      "text": "Product"
+    },
+    {
+      "level": "H2",
+      "text": "Free Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Developers"
+    },
+    {
+      "level": "H2",
+      "text": "Company"
+    },
+    {
+      "level": "H2",
+      "text": "We use cookies"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "text",
+      "required": false,
+      "labels": []
+    },
+    {
+      "tag": "INPUT",
+      "id": "contact-name",
+      "type": "text",
+      "required": true,
+      "labels": [
+        "Name*"
+      ]
+    },
+    {
+      "tag": "INPUT",
+      "id": "contact-email",
+      "type": "email",
+      "required": true,
+      "labels": [
+        "Email*"
+      ]
+    },
+    {
+      "tag": "INPUT",
+      "id": "contact-company",
+      "type": "text",
+      "required": false,
+      "labels": [
+        "Company"
+      ]
+    },
+    {
+      "tag": "TEXTAREA",
+      "id": "contact-message",
+      "type": "textarea",
+      "required": true,
+      "labels": [
+        "Message*"
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "text": "Tools",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Close menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "Send message",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Cookie Preferences",
+      "name": "Manage cookie preferences",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Open accessibility settings",
+      "disabled": false
+    },
+    {
+      "text": "AcceptAccept analytics",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "EssentialEssential only",
+      "name": null,
+      "disabled": false
+    }
+  ],
+  "navigation": [
+    {
+      "responseStart": 6.600000001490116,
+      "domContentLoaded": 286.80000000447035,
+      "duration": 390.30000000447035
+    }
+  ],
+  "paint": [
+    {
+      "name": "first-paint",
+      "startTime": 300
+    },
+    {
+      "name": "first-contentful-paint",
+      "startTime": 300
+    }
+  ],
+  "resources": [
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/33z6z3yqdhczo.css",
+      "duration": 15.099999994039536
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2opt17kb2-y1b.js",
+      "duration": 15.299999997019768
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0if-vqkhyn-zc.js",
+      "duration": 244.89999999850988
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2jje5iww_qd69.js",
+      "duration": 245.69999999552965
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/instrument.js",
+      "duration": 13.900000005960464
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/axe.js",
+      "duration": 14.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/turbopack-0f7399f4d3jo7.js",
+      "duration": 274.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vgpv7vwitdbl.js",
+      "duration": 274.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1bp3h27_--af5.js",
+      "duration": 276.70000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0vpy0j91tkt0g.js",
+      "duration": 276.90000000596046
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3ayr3xiw5ibws.js",
+      "duration": 277.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1rp06u4aestqa.js",
+      "duration": 277.70000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vwbp_e08hcyw.js",
+      "duration": 278.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0q8itsl-cz554.js",
+      "duration": 280.70000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2t9axac3ndvlm.js",
+      "duration": 280.40000000596046
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0495weyrij_jb.js",
+      "duration": 280.80000000447035
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/256ynyycl6d62.js",
+      "duration": 281.40000000596046
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3mmrg7---us36.js",
+      "duration": 281.40000000596046
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1jd45o61lrffn.js",
+      "duration": 281.80000000447035
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3c62jcaf4y1oz.js",
+      "duration": 282.20000000298023
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/manifest.json",
+      "duration": 5.699999995529652
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 7.299999997019768
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 33.19999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 48.600000001490116
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    }
+  ],
+  "axe": {
+    "version": "4.13.0",
+    "violations": [],
+    "incomplete": [
+      {
+        "id": "aria-valid-attr-value",
+        "impact": "critical",
+        "tags": [
+          "cat.aria",
+          "wcag2a",
+          "wcag412",
+          "EN-301-549",
+          "EN-9.4.1.2",
+          "RGAAv4",
+          "RGAA-7.1.1"
+        ],
+        "description": "Ensure all ARIA attributes have valid values",
+        "help": "ARIA attributes must conform to valid values",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/aria-valid-attr-value?application=axeAPI",
+        "nodes": [
+          {
+            "any": [],
+            "all": [
+              {
+                "id": "aria-valid-attr-value",
+                "data": {
+                  "messageKey": "controlsWithinPopup",
+                  "needsReview": "aria-controls=\"tools-dropdown\""
+                },
+                "relatedNodes": [],
+                "impact": "critical",
+                "message": "Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+              }
+            ],
+            "none": [],
+            "impact": "critical",
+            "html": "<button type=\"button\" aria-expanded=\"false\" aria-haspopup=\"true\" aria-controls=\"tools-dropdown\" class=\"inline-flex items-ce...\">",
+            "target": [
+              ".gap-1"
+            ],
+            "failureSummary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+          }
+        ]
+      }
+    ],
+    "passes": [
+      "aria-allowed-attr",
+      "aria-allowed-role",
+      "aria-conditional-attr",
+      "aria-deprecated-role",
+      "aria-dialog-name",
+      "aria-hidden-body",
+      "aria-hidden-focus",
+      "aria-prohibited-attr",
+      "aria-required-attr",
+      "aria-roles",
+      "aria-valid-attr-value",
+      "aria-valid-attr",
+      "avoid-inline-spacing",
+      "button-name",
+      "bypass",
+      "color-contrast",
+      "document-title",
+      "duplicate-id-aria",
+      "empty-heading",
+      "form-field-multiple-labels",
+      "heading-order",
+      "html-has-lang",
+      "html-lang-valid",
+      "label-title-only",
+      "label",
+      "landmark-contentinfo-is-top-level",
+      "landmark-main-is-top-level",
+      "landmark-no-duplicate-contentinfo",
+      "landmark-no-duplicate-main",
+      "landmark-one-main",
+      "landmark-unique",
+      "link-in-text-block",
+      "link-name",
+      "list",
+      "meta-viewport-large",
+      "meta-viewport",
+      "nested-interactive",
+      "page-has-heading-one",
+      "region",
+      "scrollable-region-focusable",
+      "skip-link",
+      "tabindex",
+      "target-size"
+    ]
+  }
+}

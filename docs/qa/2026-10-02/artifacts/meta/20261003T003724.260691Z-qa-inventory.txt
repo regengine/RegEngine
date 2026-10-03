@@ -1,0 +1,1050 @@
+UTC: 2026-10-03T00:37:24.260691+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git status --short; rg --files docs/qa/2026-10-02 -g "!artifacts/**"; sed -n "1,100p" frontend/AGENTS.md; sed -n "1,160p" .github/workflows/backend-ci.yml; sed -n "1,170p" .github/workflows/frontend-ci.yml; sed -n "1,140p" .github/copilot-instructions.md'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+ M frontend/next-env.d.ts
+?? docs/qa/2026-10-02/
+docs/qa/2026-10-02/SESSION-LOG.md
+docs/qa/2026-10-02/UX-SESSION-LOG.md
+docs/qa/2026-10-02/PLAN.md
+docs/qa/2026-10-02/scripts/run_logged.py
+docs/qa/2026-10-02/scripts/backend_pytest.py
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+docs/qa/2026-10-02/META-SESSION-LOG.md
+docs/qa/2026-10-02/SECURITY-SESSION-LOG.md
+docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md
+docs/qa/2026-10-02/artifacts/ux/20261003T003706.795138Z-local-runner-and-routes.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003717.191184Z-guidance.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003720.959076Z-browser-guidance.txt
+docs/qa/2026-10-02/artifacts/ux/20261003T003634.080185Z-orientation.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003717.222373Z-install-missing-sdk.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003619.665348Z-csv-fixtures.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003707.069891Z-model-validators.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003711.881698Z-dependency-pin.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003544.562213Z-resume-context.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003659.201367Z-parser-code.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003539.614814Z-identity.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003642.226482Z-baseline-ingest.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003553.155010Z-inventory.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003720.738684Z-install-missing-sdk-retry.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003558.965587Z-focused-test-map.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003653.631279Z-baseline-ingest-retry.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003615.579151Z-suite-read.txt
+docs/qa/2026-10-02/artifacts/backend/20261003T003605.191728Z-target-selection.txt
+docs/qa/2026-10-02/artifacts/meta/20261002T234605.036682Z-inventory.txt
+docs/qa/2026-10-02/artifacts/meta/20261002T234605.182552Z-guides.txt
+docs/qa/2026-10-02/artifacts/meta/20261003T003602.391499Z-scope-map.txt
+docs/qa/2026-10-02/artifacts/meta/20261003T003516.224243Z-resume-inspection.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003654.929544Z-middleware-order.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003620.986253Z-policy-scope.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003643.323378Z-source-index.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003609.838837Z-inventory.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003625.412551Z-policy-index.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003615.339517Z-guidance-and-resume.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003558.957376Z-bootstrap.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003636.395703Z-auth-and-export-map.txt
+docs/qa/2026-10-02/artifacts/security/20261003T003706.216322Z-idempotency-size.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003547.143533Z-resume-inspection.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003711.629315Z-barcode-boundaries-charter.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003607.786492Z-test-configuration.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003644.627518Z-isolation-guard-created.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003655.183624Z-frontend-baseline-coverage.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003602.752872Z-static-inventory.txt
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/coverage-final.json
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/proxy.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/instrumentation.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/step-up-events.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/sort-arrow-sprite.png
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/base.css
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/sorter.js
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/prettify.css
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/favicon.png
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/prettify.js
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/safe-redirect.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/customer-readiness.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/db.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/inflow-error.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/proxy-ip-attestation.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/api-client.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/api-config.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/posthog-provider.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/public-openapi.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/proxy-factory.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/dev-compliance-snapshots.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/compliance-os.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/app-routes.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/utils.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/fetch-with-csrf.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/column-suggestions.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/csp.ts.html
+docs/qa/2026-10-02/artifacts/frontend/20261003T003557.257409Z-locked-install.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003621.689257Z-tooling-read.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003705.439190Z-risk-source-review.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003655.183617Z-frontend-lint.txt
+docs/qa/2026-10-02/artifacts/frontend/20261003T003541.547417Z-resume-inventory.txt
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/experimental-features.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/index.html
+docs/qa/2026-10-02/artifacts/frontend/20261003T003723.940215Z-fe-c3-barcode-callsites.txt
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/block-navigation.js
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov.info
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/jwt-claims.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/constants.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/json-ld.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/polling-config.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/csrf.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/scan-match.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/cte-suggestion.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/auth-context.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/fsma-enforcement.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/sandbox-cta.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/providers.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/permissions.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/admin-targets.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/admin-session-fetch.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/api-proxy.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/inflow-workbench-proxy.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/api-base.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/blog-posts.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/api-hooks.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/supplier-csv.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/tenant-context.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/lib/gs1-parser.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-api-query.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-api.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-review.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-agent-reviews.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-onboarding.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-sync.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-control-plane.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/hooks/use-fsma.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/control-plane/demo-banner.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/control-plane/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/proxy.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/instrumentation.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/billing/PricingCheckoutButton.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/billing/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/sorter.js
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/prettify.css
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/favicon.png
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/prettify.js
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/block-navigation.js
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/sort-arrow-sprite.png
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/base.css
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/fsma-checklist.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/scan-history-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/getting-started-card.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/agent-review-dashboard.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/curator-review.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/metrics-overview-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/error-boundary.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/qa-health-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/dashboard/system-health-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/fsma/CteSuggestionPrompt.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/fsma/ColumnSuggestionList.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/fsma/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/jwt-claims.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/constants.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/json-ld.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/polling-config.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/csrf.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/scan-match.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/cte-suggestion.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/auth-context.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/fsma-enforcement.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/sandbox-cta.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/providers.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/permissions.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/admin-targets.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/admin-session-fetch.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/api-proxy.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/inflow-workbench-proxy.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/api-base.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/blog-posts.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/api-hooks.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/supplier-csv.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/tenant-context.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/gs1-parser.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/experimental-features.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/csp.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/fetch-with-csrf.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/column-suggestions.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/dev-compliance-snapshots.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/compliance-os.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/app-routes.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/utils.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/proxy-ip-attestation.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/api-client.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/api-config.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/posthog-provider.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/public-openapi.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/proxy-factory.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/step-up-events.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/safe-redirect.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/customer-readiness.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/db.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/lib/inflow-error.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/sitemap.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/trace/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/trace/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/control-plane/demo-banner.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/control-plane/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/onboarding/bulk-upload/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/onboarding/bulk-upload/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/seo/json-ld.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/seo/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/mobile/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/mobile/FieldCaptureClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/billing/PricingCheckoutButton.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/billing/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/login/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/login/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/login/PasswordlessEntryClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/compliance/compliance-primitives.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/compliance/compliance-primitives.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/compliance/index.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/compliance/index.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/compliance/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/compliance/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-api-query.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-api.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-review.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-agent-reviews.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-onboarding.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-sync.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-control-plane.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/hooks/use-fsma.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/admin/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/admin/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/components/ToolsLandingClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/openapi.json/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/openapi.json/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/fsma/CteSuggestionPrompt.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/fsma/ColumnSuggestionList.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/fsma/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/layout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/auth/sso/mock/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/auth/sso/mock/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/auth/StepUpModal.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/auth/AuthShell.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/auth/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/docs/authentication/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/docs/authentication/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/docs/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/docs/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/ingest/sandbox-handoff.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/ingest/NormalizedDocumentViewer.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/ingest/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/ingest/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/auth/StepUpModal.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/auth/AuthShell.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/auth/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/seo/json-ld.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/seo/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/ingest/curation/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/ingest/curation/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/tools/EmailGate.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/tools/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/fsma/field-capture/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/fsma/field-capture/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/layout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/tools/EmailGate.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/tools/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/walkthrough/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/walkthrough/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/experimental/FeatureNotEnabled.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/experimental/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/auth/verify/VerifyClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/auth/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/inflow-lab/lib/exception-grouping.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/inflow-lab/lib/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/marketing/sandbox-grid/SandboxResultView.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/marketing/sandbox-grid/diagnosis.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/marketing/sandbox-grid/SandboxPdfReport.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/marketing/sandbox-grid/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/keys/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/keys/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/playground/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/playground/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/controls/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/controls/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/accept-invite/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/accept-invite/AcceptInviteClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/marketing/sandbox-grid/SandboxResultView.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/marketing/sandbox-grid/diagnosis.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/marketing/sandbox-grid/SandboxPdfReport.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/marketing/sandbox-grid/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/fsma-checklist.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/experimental/FeatureNotEnabled.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/experimental/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/usage/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/developer/portal/usage/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/inflow-lab/components/EvidenceChain.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/inflow-lab/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/verify/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/skeleton.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/field-control.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/table.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/tooltip.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/tutorial.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/select.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/stat-tile.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/textarea.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/callout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/badge.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/status-badge.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/tabs.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/code-block.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/data-table.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/field.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/use-toast.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/input.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/card.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/button.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/spinner.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/progress.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/dialog.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/components/ui/empty-state.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/proof/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/proof/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/mobile/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/mobile/FieldCaptureClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/exceptions/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/identity/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/identity/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/exceptions/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/product/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/product/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/proof/recall-drill/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/proof/recall-drill/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/robots.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/scan-history-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/getting-started-card.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/agent-review-dashboard.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/curator-review.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/metrics-overview-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/error-boundary.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/qa-health-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/dashboard/system-health-widget.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/data-import/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/tools/data-import/components/DataImportClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/skeleton.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/field-control.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/table.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/tooltip.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/tutorial.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/select.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/stat-tile.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/textarea.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/callout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/badge.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/status-badge.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/tabs.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/code-block.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/data-table.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/field.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/use-toast.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/input.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/card.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/button.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/spinner.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/progress.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/dialog.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/components/ui/empty-state.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/settings/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/settings/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/docs/connectors/inflow-lab/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/docs/connectors/inflow-lab/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/session/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/session/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/products/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/products/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/qa-health/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/qa-health/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/requests/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/requests/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/inflow-lab/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/inflow-lab/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/layout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/openapi.json/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/openapi.json/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/alerts/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/alerts/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/globals.css.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/contact/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/contact/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/heartbeat/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/heartbeat/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/notifications/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/notifications/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/onboarding/bulk-upload/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/onboarding/bulk-upload/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/recall-drills/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/recall-drills/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/recall-report/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/recall-report/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/issues/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/issues/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/team/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/team/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/login/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/login/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/login/PasswordlessEntryClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/receiving/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/receiving/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/rules/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/fsma/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/rules/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/fsma/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compare/foodlogiq/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compare/foodlogiq/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/client-errors/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/client-errors/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/developer/portal/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/developer/portal/_utils.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/review/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/review/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compare/repositrak/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compare/repositrak/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/openapi.json/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/openapi.json/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/scan/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/scan/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/developer/portal/keys/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/developer/portal/keys/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/export-jobs/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/export-jobs/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compare/tracegains/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compare/tracegains/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/controls/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/controls/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/graph/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/health/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/health/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/graph/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/nlp/ask/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/nlp/ask/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/audit-log/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/dashboard/audit-log/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/sandbox/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/status/[tenantId]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/status/[tenantId]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/fsma/field-capture/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/fsma/field-capture/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/layout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/audit/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/audit/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/sandbox/SandboxClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/sandbox/results/[id]/SharedSandboxResult.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/sandbox/results/[id]/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/sandbox/results/[id]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/accept-invite/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compliance/profile/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compliance/profile/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/accept-invite/AcceptInviteClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compliance/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/tools/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/tools/verify/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/identity/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/identity/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/[id]/approve/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/[id]/approve/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/admin/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/admin/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/items/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/items/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compliance/profile/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compliance/profile/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compliance/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compliance/status/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compliance/status/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/compliance/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/audit-pack/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/audit-pack/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/diff/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/diff/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/sandbox/results/[id]/SharedSandboxResult.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/sandbox/results/[id]/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/sandbox/results/[id]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/sandbox/SandboxClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/sandbox/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/[id]/reject/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/review/[id]/reject/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/export/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/export/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/trace/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/trace/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/exceptions/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/exceptions/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compliance/status/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compliance/status/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compliance/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/session/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/session/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/review/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/review/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/admin/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/admin/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/refreeze/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/refreeze/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/inflow-lab/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/inflow-lab/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/audit/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/audit/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compare/foodlogiq/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compare/foodlogiq/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/ingest/sandbox-handoff.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/ingest/NormalizedDocumentViewer.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/ingest/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/ingest/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/qa-health/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/qa-health/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/scan/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/scan/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/fda-response/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/fda-response/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/product/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/product/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/openapi.json/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/openapi.json/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/ingestion/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/ingestion/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/walkthrough/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/walkthrough/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/controls/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/controls/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compare/tracegains/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compare/tracegains/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/settings/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/settings/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/robots.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/notifications/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/notifications/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/export-jobs/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/export-jobs/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/layout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/client-errors/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/client-errors/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/verify/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compare/repositrak/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/compare/repositrak/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/requests/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/requests/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/keys/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/keys/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/tools/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/tools/verify/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/verify/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/issues/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/issues/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/layout.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/usage/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/usage/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/audit-log/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/audit-log/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/docs/authentication/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/docs/authentication/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/docs/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/docs/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/products/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/products/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/recall-report/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/fsma/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/fsma/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/recall-report/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/playground/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/playground/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/developer/portal/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/components/ToolsLandingClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/admin/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/admin/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/recall-drills/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/recall-drills/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/inflow-lab/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/inflow-lab/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/ingestion/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/ingestion/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/status/[tenantId]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/status/[tenantId]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/heartbeat/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/heartbeat/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/receiving/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/receiving/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/globals.css.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/proof/recall-drill/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/proof/recall-drill/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/proof/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/proof/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/alerts/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/alerts/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/graph/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/graph/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/inflow-lab/lib/exception-grouping.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/inflow-lab/lib/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/ingest/curation/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/ingest/curation/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/contact/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/contact/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/rules/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/rules/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/team/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/dashboard/team/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/sitemap.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/inflow-lab/components/EvidenceChain.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/inflow-lab/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/docs/connectors/inflow-lab/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/docs/connectors/inflow-lab/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/nlp/ask/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/nlp/ask/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/data-import/components/DataImportClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/health/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/tools/data-import/components/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/health/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/auth/sso/mock/page.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/auth/sso/mock/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/inflow-lab/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/inflow-lab/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/auth/verify/VerifyClient.tsx.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/auth/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/diff/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/diff/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/developer/portal/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/developer/portal/_utils.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/developer/portal/keys/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/controls/[...path]/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/controls/[...path]/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/items/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/items/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/audit-pack/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/audit-pack/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/developer/portal/keys/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/[id]/reject/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/[id]/approve/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/[id]/reject/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/review/[id]/approve/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/refreeze/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/refreeze/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/export/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/verify/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/export/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/verify/route.ts.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/fda-response/index.html
+docs/qa/2026-10-02/artifacts/frontend/coverage-before/lcov-report/src/app/api/v1/compliance/snapshots/[tenantId]/[snapshotId]/fda-response/route.ts.html
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+name: Backend Services CI/CD
+
+on:
+  # Nightly run against main. The push/pull_request triggers below are
+  # path-filtered, so a stretch of docs- or frontend-only merges leaves the
+  # backend gauntlet unexercised — that let seven gates rot silently on main
+  # (lock freshness, repo-root RLS suite, ingestion suite, admin tests, ...)
+  # until the next backend-touching PR lit them all up at once (#2566).
+  # A scheduled run converts silent drift into a red run within 24h.
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'alembic/**'
+      - 'server/**'
+      - 'services/**'
+      - 'shared/**'
+      - 'kernel/**'
+      - 'plugins/fsma/**'
+      - 'Dockerfile'
+      - 'railway.toml'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'sample_data/**'
+      - 'demo_exports/**'
+      - 'docs/security/route-security-manifest.json'
+      - 'docs/security/release-evidence/**'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'alembic/**'
+      - 'server/**'
+      - 'services/**'
+      - 'shared/**'
+      - 'kernel/**'
+      - 'plugins/fsma/**'
+      - 'Dockerfile'
+      - 'railway.toml'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'sample_data/**'
+      - 'demo_exports/**'
+      - 'docs/security/route-security-manifest.json'
+      - 'docs/security/release-evidence/**'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/deploy.yml'
+
+# Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
+concurrency:
+  group: backend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.11'
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Dependency Lock Freshness ────────────────────────────
+  dependency-lock:
+    name: Dependency Lock Freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          # Generate, freshness-validate, install, and runtime must all agree on
+          # one interpreter so the --require-hashes lock stays reproducible.
+          # Dockerfile (python:3.11-slim) and PYTHON_VERSION below both use 3.11,
+          # so this gate runs on 3.11 too — was 3.12, which let the 3.12-resolved
+          # lock be installed on 3.11 everywhere else (#2527). requirements.lock
+          # must be regenerated under 3.11 (header reads "with Python 3.11"); the
+          # freshness diff below makes any leftover 3.12 resolution a hard fail.
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify requirements.lock freshness
+        run: |
+          python -m pip install "pip==24.3.1" pip-tools==7.5.2
+          CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
+            pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
+          git diff --exit-code -- requirements.lock
+
+  # ── Test Matrix ──────────────────────────────────────────
+  test:
+    name: Test ${{ matrix.service }}
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    # Ingestion's ~5,000 coverage tests reached 98% before the old 10-minute
+    # job deadline, which also includes service startup and dependency install.
+    timeout-minutes: ${{ matrix.service == 'ingestion' && 15 || 10 }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - admin
+          - compliance
+          - graph
+          - ingestion
+          - nlp
+          - scheduler
+          - shared
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: [REDACTED]
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      neo4j:
+        image: ${{ matrix.service == 'graph' && 'neo4j:5.24-community' || '' }}
+        env:
+          NEO4J_AUTH: neo4j/test-password-for-ci
+        ports:
+          - 7687:7687
+          - 7474:7474
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      localstack:
+        image: localstack/localstack:3
+        env:
+name: Frontend CI/CD
+
+on:
+  # Nightly run against main, mirroring backend-ci: the path-filtered
+  # triggers below leave these gates unexercised during stretches of
+  # backend-only merges, letting drift (promise-audit URL rot, e2e flake)
+  # accumulate silently until an unrelated frontend-touching PR pays for it.
+  # Offset from backend-ci's 05:00 to spread runner load.
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - 'docs/**'
+      - 'sales/**'
+      - 'sales_enablement/**'
+      - 'frontend/public/**'
+      - 'services/admin/app/auth/**'
+      - 'services/admin/app/e2e_safety.py'
+      - 'services/admin/app/session_store.py'
+      - 'services/admin/app/rate_limit_service.py'
+      - 'services/admin/app/sqlalchemy_models.py'
+      - 'services/admin/tests/test_e2e_safety.py'
+      - 'services/admin/tests/test_webauthn_router.py'
+      - 'scripts/seed_passwordless_e2e_user.py'
+      - 'scripts/generate_openapi.py'
+      - 'scripts/start-e2e-backend.sh'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/check_trust_safety_copy.py'
+      - 'scripts/trust_safety_copy_allowlist.txt'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'docs/**'
+      - 'sales/**'
+      - 'sales_enablement/**'
+      - 'frontend/public/**'
+      - 'services/admin/app/auth/**'
+      - 'services/admin/app/e2e_safety.py'
+      - 'services/admin/app/session_store.py'
+      - 'services/admin/app/rate_limit_service.py'
+      - 'services/admin/app/sqlalchemy_models.py'
+      - 'services/admin/tests/test_e2e_safety.py'
+      - 'services/admin/tests/test_webauthn_router.py'
+      - 'scripts/seed_passwordless_e2e_user.py'
+      - 'scripts/generate_openapi.py'
+      - 'scripts/start-e2e-backend.sh'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/check_trust_safety_copy.py'
+      - 'scripts/trust_safety_copy_allowlist.txt'
+      - '.github/workflows/frontend-ci.yml'
+
+# Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
+concurrency:
+  group: frontend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
+  cancel-in-progress: true
+
+# Issue #2875: no job in this workflow uses the GITHUB_TOKEN — no gh CLI, no
+# github-script, no check-run or PR-comment action — so checks:write and
+# pull-requests:write were unused write scope on every run.
+permissions:
+  contents: read
+
+jobs:
+  promise-audit:
+    name: Promise Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run promise audit
+        run: |
+          cd frontend
+          npm run promise:audit
+
+      - name: Check API host strings
+        run: python3 scripts/check_api_host_strings.py
+
+  # ── Build ────────────────────────────────────────────────
+  build:
+    name: Build & Bundle Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build production bundle
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+          NEXT_PUBLIC_API_BASE_URL: https://regengine.co
+          INGESTION_SERVICE_URL: http://localhost:8002
+          COMPLIANCE_SERVICE_URL: http://localhost:8003
+          ADMIN_SERVICE_URL: http://localhost:8001
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Bundle size report
+        run: |
+          cd frontend
+          {
+            echo "### 📦 Bundle Size Report"
+            echo '```'
+            du -sh .next
+            echo ""
+            du -sh .next/static/chunks/
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Lint ─────────────────────────────────────────────────
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run ESLint
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://regengine.co
+          INGESTION_SERVICE_URL: http://localhost:8002
+          COMPLIANCE_SERVICE_URL: http://localhost:8003
+          ADMIN_SERVICE_URL: http://localhost:8001
+---
+applyTo: "**"
+---
+
+# RegEngine coding instructions
+
+Read [AGENTS.md](../AGENTS.md) first.
+
+## Fast repo facts
+
+- Python shared modules live in `services/shared/`, not a repo-root `shared/` directory.
+- The repository is a Python services monorepo plus a Next.js frontend in `frontend/`.
+- `frontend/package-lock.json` is checked in, so default to `npm` for frontend commands.
+- The repo does not contain a `Makefile`. It DOES contain a repo-root `conftest.py`.
+- Current editor agent specs live in `.github/agents/`.
+- Legacy `.agent/` and `.agents/` directories are not part of the current operating model.
+
+## Prefer these sources of truth
+
+- [README.md](../README.md)
+- [Local setup guide](../docs/LOCAL_SETUP_GUIDE.md)
+- [Environment setup checklist](../docs/ENV_SETUP_CHECKLIST.md)
+- [FSMA 204 MVP spec](../docs/specs/FSMA_204_MVP_SPEC.md)
+- [Shared path bootstrap helpers](../services/shared/paths.py)
+- [Repo smoke test script](../scripts/test-all.sh)
+- [Frontend package.json](../frontend/package.json)
+
+## Working rules
+
+- Verify paths and commands before using them.
+- Prefer minimal edits over broad refactors.
+- Reuse existing patterns from nearby files.
+- If you touch Python service code, keep it compatible with `ensure_shared_importable()` patterns.
+- If you touch frontend code, stay within current App Router and component conventions.
+- Say clearly when verification is blocked by missing services, env vars, or secrets.

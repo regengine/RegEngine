@@ -1,0 +1,28 @@
+UTC: 2026-10-03T00:48:37.146107+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json,re; p=Path("frontend/src/components/layout/marketing-header.tsx"); lines=p.read_text().splitlines(); print("\n".join(f"{i}: {l}" for i,l in enumerate(lines,1) if re.search("Escape|keydown|mobileMenu|aria-modal|role=|dialog|onKeyDown|tabIndex|setIsOpen|setMobile|focus",l))); 
+for f in Path("docs/qa/2026-10-02/artifacts/ux").glob("chrome-axe*.json"):
+ d=json.loads(f.read_text()); print(f.name,"size",d["width"],d["documentWidth"],[(v["id"],len(v["nodes"])) for v in d["axe"]["violations"]])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+14:     const [mobileOpen, setMobileOpen] = useState(false);
+26:         queueMicrotask(() => setMobileOpen(false));
+63:     const focusFirstToolsItem = () => {
+65:             const firstItem = toolsWrapperRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+66:             firstItem?.focus();
+71:         if (e.key === 'Escape') {
+73:             toolsButtonRef.current?.focus();
+81:         const menuItems = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+91:             menuItems[fallbackIndex]?.focus();
+99:         menuItems[nextIndex]?.focus();
+139:                         className="flex shrink-0 items-center gap-2.5 rounded-sm no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-ring-offset"
+155:                         focusFirstToolsItem={focusFirstToolsItem}
+158:                     <MobileHamburger mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+167:                 setMobileOpen={setMobileOpen}
+chrome-axe_login-1728-1.json size 1728 1728 []
+chrome-axe_verify-1728-1.json size 1728 1728 [('nested-interactive', 1)]
+chrome-axe_-390-004818082219.json size 390 390 []
+chrome-axe_-1728-2.json size 1728 1728 [('nested-interactive', 1)]
+chrome-axe_-1728-1.json size 1728 1728 [('nested-interactive', 1)]

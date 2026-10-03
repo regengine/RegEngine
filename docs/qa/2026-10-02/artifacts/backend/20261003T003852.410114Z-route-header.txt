@@ -1,0 +1,79 @@
+UTC: 2026-10-03T00:38:52.410114+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 15,86p services/ingestion/app/webhook_router_v2/routes.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+
+from __future__ import annotations
+
+import sys
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from shared.database import get_db_session
+from shared.idempotency import IdempotencyDependency
+from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
+
+from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from ..config import get_settings
+from ..stripe_billing import charge_for_label
+from ..subscription_gate import require_active_subscription
+from ..webhook_models import (
+    ChainVerifyResponse,
+    EventResult,
+    IngestResponse,
+    RecentEventsResponse,
+    WebhookPayload,
+)
+from .security import (
+    _verify_api_key,
+    _verify_api_key_present,
+    _verify_webhook_signature,
+)
+
+_pkg = sys.modules[__package__]
+
+
+def _failure_diagnostics(request: Request, exc: Exception) -> dict:
+    """Structured fields for a 5xx log line on the ingest spine (#2868).
+
+    These endpoints answer a 500 with "Check server logs for details", so the
+    log line has to actually carry details: which tenant, which request, and
+    what kind of failure. ``error_type`` matters because the batch handler
+    catches bare ``Exception`` — without it a database outage and a
+    programming error look identical in the logs.
+
+    Deliberately **not** included: traceability lot codes, product
+    descriptions, KDEs, or anything else from the request body. Those
+    identify a specific customer's shipment, and this is a food-safety
+    compliance platform — an over-eager log line is its own incident. The
+    caller gets the correlation id in the response, and support joins the
+    two on that.
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    if not correlation_id:
+        try:
+            from shared.observability.correlation import get_correlation_id
+
+            correlation_id = get_correlation_id()
+        except Exception:  # pragma: no cover - correlation is best-effort
+            correlation_id = None
+    return {
+        "correlation_id": correlation_id or str(uuid.uuid4()),
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
+
+
+router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
+
+
+# ---------------------------------------------------------------------------
+# Ingest Endpoint
+# ---------------------------------------------------------------------------
+
+# #1232 — enforce ``Idempotency-Key`` on all webhook ingest calls. The

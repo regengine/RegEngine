@@ -1,0 +1,234 @@
+{
+  "errors": [],
+  "csp": [
+    {
+      "directive": "script-src-attr",
+      "uri": "inline"
+    },
+    {
+      "directive": "connect-src",
+      "uri": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  ],
+  "requests": [],
+  "startedAt": "2026-10-03T00:46:54.477Z",
+  "lcp": 320,
+  "cls": 0,
+  "url": "/login",
+  "width": 1728,
+  "height": 906,
+  "documentWidth": 1728,
+  "title": "Sign In | RegEngine",
+  "cameraAllowed": false,
+  "headings": [
+    {
+      "level": "H1",
+      "text": "Continue to RegEngine"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "id": "email",
+      "type": "email",
+      "required": true,
+      "labels": [
+        "Email address"
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "text": "Continue",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "Sign in with passkey",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Open accessibility settings",
+      "disabled": false
+    }
+  ],
+  "navigation": [
+    {
+      "responseStart": 9,
+      "domContentLoaded": 304.09999999403954,
+      "duration": 402.5
+    }
+  ],
+  "paint": [
+    {
+      "name": "first-paint",
+      "startTime": 320
+    },
+    {
+      "name": "first-contentful-paint",
+      "startTime": 320
+    }
+  ],
+  "resources": [
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/33z6z3yqdhczo.css",
+      "duration": 12.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2opt17kb2-y1b.js",
+      "duration": 12.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0if-vqkhyn-zc.js",
+      "duration": 248
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2jje5iww_qd69.js",
+      "duration": 248.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1rp06u4aestqa.js",
+      "duration": 271.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vgpv7vwitdbl.js",
+      "duration": 271.1000000014901
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/turbopack-0f7399f4d3jo7.js",
+      "duration": 271.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1bp3h27_--af5.js",
+      "duration": 272
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3ayr3xiw5ibws.js",
+      "duration": 272.29999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0vpy0j91tkt0g.js",
+      "duration": 272.6000000014901
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vwbp_e08hcyw.js",
+      "duration": 274.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2t9axac3ndvlm.js",
+      "duration": 274.6000000014901
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0495weyrij_jb.js",
+      "duration": 275.70000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3gsic9qjvwnyt.js",
+      "duration": 276.29999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/10g0vjtyhj89j.js",
+      "duration": 276.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3mmrg7---us36.js",
+      "duration": 276.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1jd45o61lrffn.js",
+      "duration": 277.1000000014901
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3c62jcaf4y1oz.js",
+      "duration": 277.29999999701977
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/instrument.js",
+      "duration": 11.799999997019768
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/axe.js",
+      "duration": 11.899999998509884
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/manifest.json",
+      "duration": 4.300000004470348
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 3.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 12.5
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    }
+  ],
+  "axe": {
+    "version": "4.13.0",
+    "violations": [],
+    "incomplete": [],
+    "passes": [
+      "aria-allowed-attr",
+      "aria-allowed-role",
+      "aria-conditional-attr",
+      "aria-deprecated-role",
+      "aria-hidden-body",
+      "aria-hidden-focus",
+      "aria-prohibited-attr",
+      "aria-required-attr",
+      "aria-roles",
+      "aria-valid-attr-value",
+      "aria-valid-attr",
+      "autocomplete-valid",
+      "avoid-inline-spacing",
+      "button-name",
+      "bypass",
+      "color-contrast",
+      "document-title",
+      "duplicate-id-aria",
+      "empty-heading",
+      "form-field-multiple-labels",
+      "heading-order",
+      "html-has-lang",
+      "html-lang-valid",
+      "label-title-only",
+      "label",
+      "landmark-main-is-top-level",
+      "landmark-no-duplicate-main",
+      "landmark-one-main",
+      "landmark-unique",
+      "link-name",
+      "list",
+      "meta-viewport-large",
+      "meta-viewport",
+      "nested-interactive",
+      "page-has-heading-one",
+      "region",
+      "skip-link",
+      "tabindex",
+      "target-size"
+    ]
+  }
+}

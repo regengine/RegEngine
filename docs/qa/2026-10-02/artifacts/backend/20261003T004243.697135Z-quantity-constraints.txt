@@ -1,0 +1,63 @@
+UTC: 2026-10-03T00:42:43.697135+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/shared/canonical_event.py"); lines=p.read_text().splitlines(); hits=[i for i,l in enumerate(lines) if "quantity:" in l and i<500]; print("\n".join(f"{j+1}: {lines[j]}" for i in hits for j in range(max(0,i-3), min(len(lines),i+8)))); p=Path("services/ingestion/tests/test_boundaries.py"); print("\n".join(f"{i+1}: {l}" for i,l in enumerate(p.read_text().splitlines()) if 25<=i<70))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+344:     # the validator raised and the write was swallowed by a best-effort
+345:     # try/except). FDA exports run off the canonical store, so a zero
+346:     # event that vanished from canonical was a regulator-visible gap.
+347:     quantity: float = Field(..., ge=0)
+348:     unit_of_measure: str
+349: 
+350:     # Entity + Facility references
+351:     from_entity_reference: Optional[str] = None
+352:     to_entity_reference: Optional[str] = None
+353:     from_facility_reference: Optional[str] = None
+354:     to_facility_reference: Optional[str] = None
+26: os.environ.setdefault("LOG_LEVEL", "WARNING")
+27: os.environ.setdefault("ENABLE_DB_API_KEYS", "false")
+28: 
+29: # Add service directory to path for imports to work
+30: service_dir = Path(__file__).parent.parent
+31: sys.path.insert(0, str(service_dir))
+32: 
+33: # Pre-mock optional dependencies that app.routes transitively imports
+34: # These are not needed for boundary tests but are required for module load
+35: _mock_kafka = MagicMock()
+36: for _ck in [
+37:     "confluent_kafka",
+38:     "confluent_kafka.admin",
+39:     "confluent_kafka.schema_registry",
+40:     "confluent_kafka.schema_registry.avro",
+41:     "confluent_kafka.serialization",
+42: ]:
+43:     sys.modules.setdefault(_ck, _mock_kafka)
+44: 
+45: for _mod in [
+46:     "feedparser",
+47:     "kafka",
+48:     "kafka.errors",
+49:     "opentelemetry",
+50:     "opentelemetry.trace",
+51:     "opentelemetry.sdk",
+52:     "opentelemetry.sdk.resources",
+53:     "opentelemetry.sdk.trace",
+54:     "opentelemetry.sdk.trace.export",
+55:     "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+56:     "opentelemetry.instrumentation.fastapi",
+57: ]:
+58:     sys.modules.setdefault(_mod, MagicMock())
+59: 
+60: 
+61: import pytest
+62: 
+63: pytest.importorskip("fastapi")
+64: 
+65: from fastapi import HTTPException
+66: 
+67: # ─────────────────────────────────────────────────────────────────────────────
+68: # Lazy import helpers — defer app.routes import to test time
+69: # ─────────────────────────────────────────────────────────────────────────────
+70: 

@@ -1,0 +1,29 @@
+UTC: 2026-10-03T00:48:45.116945+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; print("\n".join(Path("frontend/src/components/layout/marketing-header.tsx").read_text().splitlines()[:20])); subprocess.run(["rg","-n","export.*MobileNav|function MobileNav|function MobileHamburger|aria-modal","frontend/src/components/layout"])'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+frontend/src/components/layout/header/MobileHamburger.tsx:17:export function MobileHamburger({ mobileOpen, setMobileOpen }: MobileHamburgerProps) {
+frontend/src/components/layout/header/MobileMenu.tsx:52:                aria-modal={mobileOpen ? true : undefined}
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
+import { shouldHideMarketingChrome } from '@/lib/app-routes';
+import { Container } from '@/components/layout/container';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import { DesktopNav, MobileMenu, MobileHamburger } from '@/components/layout/header';
+
+export function MarketingHeader() {
+    const pathname = usePathname();
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [toolsOpen, setToolsOpen] = useState(false);
+    const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const toolsWrapperRef = useRef<HTMLDivElement | null>(null);
+    const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
+    const { user, isAuthenticated, isHydrated } = useAuth();
+    // Only show logged-in state when auth is fully verified

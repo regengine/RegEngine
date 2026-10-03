@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:57:12.588167+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -
+Exit: 0
+Duration: 0.14s
+Timeout: False
+
+counts {'High': 3, 'Medium': 7} groups {'Backend': 6, 'Frontend': 4}
+missing_local_markdown_targets []
+branch qa/2026-10-02-sweep
+tracked_diff_names ['frontend/src/__tests__/hooks/useSync.test.tsx']
+diff_check 0
+new_files_outside_qa_or_tests []

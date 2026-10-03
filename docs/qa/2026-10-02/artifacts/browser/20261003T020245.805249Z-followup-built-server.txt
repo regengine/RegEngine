@@ -1,0 +1,75 @@
+UTC: 2026-10-03T02:02:45.805249+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 docs/qa/2026-10-02/scripts/browser-followup-server.py
+Exit: 0
+Duration: 556.51s
+Timeout: False
+
+PID=96905
+Port=3114
+Mirror=/private/tmp/regengine-browser-followup-hz02qdqj/frontend
+StopFile=/private/tmp/regengine-browser-followup-hz02qdqj/stop
+Guard SHA256=174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031
+Build ID=B580X7GslEyeoUljQTLuv
+Runtime CSRF value: ephemeral synthetic, not recorded
+
+▲ Next.js 16.3.5
+- Local:         http://127.0.0.1:3114
+- Network:       http://127.0.0.1:3114
+✓ Ready in 122ms
+✓ Running next.config.js took 8ms
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+[proxy/ingestion] 502 — all targets failed: [ 'target=http://127.0.0.1:3113 error=fetch failed' ]
+QA built server stopped; exit 143

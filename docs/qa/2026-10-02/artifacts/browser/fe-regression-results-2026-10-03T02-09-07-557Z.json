@@ -1,0 +1,186 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.7.0/bin/node",
+      "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/playwright/cli.js",
+      "test",
+      "--config",
+      "frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+      "--project=webkit",
+      "--grep",
+      "FE-004"
+    ],
+    "configFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+    "rootDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-557Z",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-557Z",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-557Z",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02",
+        "testIgnore": [],
+        "testMatch": [
+          "/fe-00[14].*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/browser/fe-regression-results-2026-10-03T02-09-07-557Z.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "fe-004-offline-photo.spec.ts",
+      "file": "fe-004-offline-photo.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "FE-004 keeps account A offline photos out of account B replay requests",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit",
+              "projectName": "webkit",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 371,
+                  "error": {
+                    "message": "Error: page.evaluate: Error: Photo fixture request failed: UnknownError: Error preparing Blob/File data to be stored in object store",
+                    "stack": "Error: page.evaluate: Error: Photo fixture request failed: UnknownError: Error preparing Blob/File data to be stored in object store\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:80:14",
+                    "location": {
+                      "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                      "column": 14,
+                      "line": 80
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 78 |\u001b[39m   \u001b[90m// into REAL IndexedDB. Camera acquisition and data-URL capture are not part of\u001b[39m\n \u001b[90m 79 |\u001b[39m   \u001b[90m// this replay witness; all reads and upload/retry behavior use the built app.\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 80 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mevaluate(\u001b[36masync\u001b[39m () \u001b[33m=>\u001b[39m {\n \u001b[90m    |\u001b[39m              \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 81 |\u001b[39m     \u001b[36mconst\u001b[39m canvas \u001b[33m=\u001b[39m document\u001b[33m.\u001b[39mcreateElement(\u001b[32m'canvas'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 82 |\u001b[39m     canvas\u001b[33m.\u001b[39mwidth \u001b[33m=\u001b[39m \u001b[35m96\u001b[39m\u001b[33m;\u001b[39m canvas\u001b[33m.\u001b[39mheight \u001b[33m=\u001b[39m \u001b[35m64\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m 83 |\u001b[39m     \u001b[36mconst\u001b[39m drawing \u001b[33m=\u001b[39m canvas\u001b[33m.\u001b[39mgetContext(\u001b[32m'2d'\u001b[39m)\u001b[33m!\u001b[39m\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                        "column": 14,
+                        "line": 80
+                      },
+                      "message": "Error: page.evaluate: Error: Photo fixture request failed: UnknownError: Error preparing Blob/File data to be stored in object store\n\n  78 |   // into REAL IndexedDB. Camera acquisition and data-URL capture are not part of\n  79 |   // this replay witness; all reads and upload/retry behavior use the built app.\n> 80 |   await page.evaluate(async () => {\n     |              ^\n  81 |     const canvas = document.createElement('canvas');\n  82 |     canvas.width = 96; canvas.height = 64;\n  83 |     const drawing = canvas.getContext('2d')!;\n    at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:80:14"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T02:09:07.793Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-788Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-webkit/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts",
+                    "column": 14,
+                    "line": 80
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "a9bd36b5e3ca8ea0465a-7a8004c9af25a3ba80e3",
+          "file": "fe-004-offline-photo.spec.ts",
+          "line": 28,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T02:09:07.558Z",
+    "duration": 770.4680000000001,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

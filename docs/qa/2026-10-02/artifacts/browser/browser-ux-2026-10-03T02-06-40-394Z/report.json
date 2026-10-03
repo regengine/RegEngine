@@ -1,0 +1,2316 @@
+{
+  "startedAt": "2026-10-03T02:06:40.394Z",
+  "baseURL": "http://127.0.0.1:3114",
+  "playwrightVersion": "1.63.0",
+  "axePlaywrightVersion": "4.13.0",
+  "restrictions": [
+    "All APIs intercepted with synthetic responses; no backend",
+    "Exact local origin only; external resources/websockets blocked",
+    "Service workers blocked",
+    "HTML preconnect/dns-prefetch links removed and same-origin resource/connect CSP added",
+    "Synthetic login/contact errors; no email sent",
+    "Desktop and mobile are top-level browser viewport emulation, not physical devices"
+  ],
+  "pages": [
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "route": "/login",
+      "startedAt": "2026-10-03T02:06:40.479Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/login",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/login",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/admin/auth/challenges",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/admin/auth/challenges",
+          "status": 503,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/admin/auth/challenges",
+          "method": "POST",
+          "status": 503
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": "",
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "devicePixelRatio": 1,
+      "documentWidth": 1440,
+      "documentHeight": 900,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "Sign In | RegEngine",
+      "h1": [
+        "Continue to RegEngine"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-desktop-_login-state.png",
+      "fullScreenshot": "chromium-desktop-_login-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "autocomplete-valid",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-name",
+          "list",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "skip-link",
+          "tabindex",
+          "target-size"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "route": "/contact",
+      "startedAt": "2026-10-03T02:06:41.784Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/contact",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/contact",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/contact",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/contact",
+          "status": 503,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/contact",
+          "method": "POST",
+          "status": 503
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": {
+        "alert": "",
+        "retainedName": "Synthetic browser QA"
+      },
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "devicePixelRatio": 1,
+      "documentWidth": 1440,
+      "documentHeight": 1452,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "Contact Us | RegEngine",
+      "h1": [
+        "Talk with the RegEngine team"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-desktop-_contact-state.png",
+      "fullScreenshot": "chromium-desktop-_contact-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-valid-attr-value",
+            "impact": "critical",
+            "tags": [
+              "cat.aria",
+              "wcag2a",
+              "wcag412",
+              "EN-301-549",
+              "EN-9.4.1.2",
+              "RGAAv4",
+              "RGAA-7.1.1"
+            ],
+            "description": "Ensure all ARIA attributes have valid values",
+            "help": "ARIA attributes must conform to valid values",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/aria-valid-attr-value?application=playwright",
+            "nodes": [
+              {
+                "any": [],
+                "all": [
+                  {
+                    "id": "aria-valid-attr-value",
+                    "data": {
+                      "messageKey": "controlsWithinPopup",
+                      "needsReview": "aria-controls=\"tools-dropdown\""
+                    },
+                    "relatedNodes": [],
+                    "impact": "critical",
+                    "message": "Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+                  }
+                ],
+                "none": [],
+                "impact": "critical",
+                "html": "<button type=\"button\" aria-expanded=\"false\" aria-haspopup=\"true\" aria-controls=\"tools-dropdown\" class=\"inline-flex items-ce...\">",
+                "target": [
+                  ".gap-1"
+                ],
+                "failureSummary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+              }
+            ]
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-dialog-name",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-contentinfo-is-top-level",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-contentinfo",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-in-text-block",
+          "link-name",
+          "list",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "scrollable-region-focusable",
+          "skip-link",
+          "tabindex",
+          "target-size"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "route": "/verify",
+      "startedAt": "2026-10-03T02:06:43.344Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/ingestion/api/v1/proof/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/ingestion/api/v1/proof/verify",
+          "status": 503,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/ingestion/api/v1/proof/verify",
+          "method": "POST",
+          "status": 503
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": "Synthetic local HTTP503 retained selected bundle and exposed recovery",
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "devicePixelRatio": 1,
+      "documentWidth": 1440,
+      "documentHeight": 4818,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "RegEngine — Food Traceability That Protects Your Brand",
+      "h1": [
+        "Verify, Don't Trust"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-desktop-_verify-state.png",
+      "fullScreenshot": "chromium-desktop-_verify-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-valid-attr-value",
+            "impact": "critical",
+            "tags": [
+              "cat.aria",
+              "wcag2a",
+              "wcag412",
+              "EN-301-549",
+              "EN-9.4.1.2",
+              "RGAAv4",
+              "RGAA-7.1.1"
+            ],
+            "description": "Ensure all ARIA attributes have valid values",
+            "help": "ARIA attributes must conform to valid values",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/aria-valid-attr-value?application=playwright",
+            "nodes": [
+              {
+                "any": [],
+                "all": [
+                  {
+                    "id": "aria-valid-attr-value",
+                    "data": {
+                      "messageKey": "controlsWithinPopup",
+                      "needsReview": "aria-controls=\"tools-dropdown\""
+                    },
+                    "relatedNodes": [],
+                    "impact": "critical",
+                    "message": "Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+                  }
+                ],
+                "none": [],
+                "impact": "critical",
+                "html": "<button type=\"button\" aria-expanded=\"false\" aria-haspopup=\"true\" aria-controls=\"tools-dropdown\" class=\"inline-flex items-ce...\">",
+                "target": [
+                  "button[aria-haspopup=\"true\"]"
+                ],
+                "failureSummary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+              }
+            ]
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-dialog-name",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "empty-table-header",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-contentinfo-is-top-level",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-contentinfo",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-in-text-block",
+          "link-name",
+          "list",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "scrollable-region-focusable",
+          "skip-link",
+          "tabindex",
+          "table-duplicate-name",
+          "target-size",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "route": "/tools/ftl-checker",
+      "startedAt": "2026-10-03T02:06:45.035Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/ftl-checker",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/ftl-checker",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/tools/check-access",
+          "method": "GET",
+          "status": 200
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": {
+        "noMatchesText": 0,
+        "checkDisabled": true
+      },
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "devicePixelRatio": 1,
+      "documentWidth": 1440,
+      "documentHeight": 2232,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "FTL List Checker | RegEngine",
+      "h1": [
+        "FTL List Checker"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-desktop-_tools_ftl-checker-state.png",
+      "fullScreenshot": "chromium-desktop-_tools_ftl-checker-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-valid-attr-value",
+            "impact": "critical",
+            "tags": [
+              "cat.aria",
+              "wcag2a",
+              "wcag412",
+              "EN-301-549",
+              "EN-9.4.1.2",
+              "RGAAv4",
+              "RGAA-7.1.1"
+            ],
+            "description": "Ensure all ARIA attributes have valid values",
+            "help": "ARIA attributes must conform to valid values",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/aria-valid-attr-value?application=playwright",
+            "nodes": [
+              {
+                "any": [],
+                "all": [
+                  {
+                    "id": "aria-valid-attr-value",
+                    "data": {
+                      "messageKey": "controlsWithinPopup",
+                      "needsReview": "aria-controls=\"tools-dropdown\""
+                    },
+                    "relatedNodes": [],
+                    "impact": "critical",
+                    "message": "Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+                  }
+                ],
+                "none": [],
+                "impact": "critical",
+                "html": "<button type=\"button\" aria-expanded=\"false\" aria-haspopup=\"true\" aria-controls=\"tools-dropdown\" class=\"inline-flex items-ce...\">",
+                "target": [
+                  ".gap-1"
+                ],
+                "failureSummary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+              }
+            ]
+          },
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "tags": [
+              "cat.color",
+              "wcag2aa",
+              "wcag143",
+              "TTv5",
+              "TT13.c",
+              "EN-301-549",
+              "EN-9.1.4.3",
+              "ACT",
+              "RGAAv4",
+              "RGAA-3.2.1"
+            ],
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+            "nodes": [
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.0pt (12px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscuring",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it partially overlaps other elements"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+                "target": [
+                  ".text-\\[11px\\]"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ]
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-dialog-name",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "autocomplete-valid",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-contentinfo-is-top-level",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-contentinfo",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-in-text-block",
+          "link-name",
+          "list",
+          "listitem",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "scrollable-region-focusable",
+          "skip-link",
+          "tabindex",
+          "target-size"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/login",
+      "startedAt": "2026-10-03T02:06:46.520Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/login",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/login",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/admin/auth/challenges",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/admin/auth/challenges",
+          "status": 503,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/admin/auth/challenges",
+          "method": "POST",
+          "status": 503
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": "",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "devicePixelRatio": 1,
+      "documentWidth": 390,
+      "documentHeight": 844,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "Sign In | RegEngine",
+      "h1": [
+        "Continue to RegEngine"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-mobile-_login-state.png",
+      "fullScreenshot": "chromium-mobile-_login-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "autocomplete-valid",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-name",
+          "list",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "skip-link",
+          "tabindex",
+          "target-size"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/contact",
+      "startedAt": "2026-10-03T02:06:47.867Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/contact",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/contact",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/contact",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/contact",
+          "status": 503,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/contact",
+          "method": "POST",
+          "status": 503
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": {
+        "alert": "",
+        "retainedName": "Synthetic browser QA"
+      },
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "devicePixelRatio": 1,
+      "documentWidth": 390,
+      "documentHeight": 2624,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "Contact Us | RegEngine",
+      "h1": [
+        "Talk with the RegEngine team"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-mobile-_contact-state.png",
+      "fullScreenshot": "chromium-mobile-_contact-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "tags": [
+              "cat.color",
+              "wcag2aa",
+              "wcag143",
+              "TTv5",
+              "TT13.c",
+              "EN-301-549",
+              "EN-9.1.4.3",
+              "ACT",
+              "RGAAv4",
+              "RGAA-3.2.1"
+            ],
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+            "nodes": [
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "8.3pt (11px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscuring",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it partially overlaps other elements"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+                "target": [
+                  ".text-\\[11px\\]"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ]
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-dialog-name",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-contentinfo-is-top-level",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-contentinfo",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-in-text-block",
+          "link-name",
+          "list",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "scrollable-region-focusable",
+          "skip-link",
+          "tabindex",
+          "target-size"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/verify",
+      "startedAt": "2026-10-03T02:06:49.306Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/ingestion/api/v1/proof/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/ingestion/api/v1/proof/verify",
+          "status": 503,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/ingestion/api/v1/proof/verify",
+          "method": "POST",
+          "status": 503
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": "Synthetic local HTTP503 retained selected bundle and exposed recovery",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "devicePixelRatio": 1,
+      "documentWidth": 390,
+      "documentHeight": 6983,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "RegEngine — Food Traceability That Protects Your Brand",
+      "h1": [
+        "Verify, Don't Trust"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-mobile-_verify-state.png",
+      "fullScreenshot": "chromium-mobile-_verify-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [
+          {
+            "id": "scrollable-region-focusable",
+            "impact": "serious",
+            "tags": [
+              "cat.keyboard",
+              "wcag2a",
+              "wcag211",
+              "wcag213",
+              "TTv5",
+              "TT4.a",
+              "EN-301-549",
+              "EN-9.2.1.1",
+              "EN-9.2.1.3",
+              "RGAAv4",
+              "RGAA-7.3.2"
+            ],
+            "description": "Ensure elements that have scrollable content are accessible by keyboard in Safari",
+            "help": "Scrollable region must have keyboard access",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/scrollable-region-focusable?application=playwright",
+            "nodes": [
+              {
+                "any": [
+                  {
+                    "id": "focusable-content",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should have focusable content"
+                  },
+                  {
+                    "id": "focusable-element",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should be focusable"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/sdk/verify_chain.py</code>",
+                "target": [
+                  ".p-5.items-start.gap-4:nth-child(1) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+              },
+              {
+                "any": [
+                  {
+                    "id": "focusable-content",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should have focusable content"
+                  },
+                  {
+                    "id": "focusable-element",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should be focusable"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/proof/audit-bundle.zip</code>",
+                "target": [
+                  ".p-5.items-start.gap-4:nth-child(2) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+              },
+              {
+                "any": [
+                  {
+                    "id": "focusable-content",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should have focusable content"
+                  },
+                  {
+                    "id": "focusable-element",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should be focusable"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">python verify_chain.py audit-bundle.zip</code>",
+                "target": [
+                  ".p-5.items-start.gap-4:nth-child(3) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+              },
+              {
+                "any": [
+                  {
+                    "id": "focusable-content",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should have focusable content"
+                  },
+                  {
+                    "id": "focusable-element",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should be focusable"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<pre class=\"m-0 overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary\">",
+                "target": [
+                  ".sm\\:pb-\\[60px\\].pb-10:nth-child(6) > .overflow-hidden.border-re-border.rounded-lg > pre"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+              },
+              {
+                "any": [
+                  {
+                    "id": "focusable-content",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should have focusable content"
+                  },
+                  {
+                    "id": "focusable-element",
+                    "data": null,
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element should be focusable"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<div class=\"relative w-full overflow-x-auto\">",
+                "target": [
+                  ".overflow-x-auto.relative.w-full"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+              }
+            ]
+          }
+        ],
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "tags": [
+              "cat.color",
+              "wcag2aa",
+              "wcag143",
+              "TTv5",
+              "TT13.c",
+              "EN-301-549",
+              "EN-9.1.4.3",
+              "ACT",
+              "RGAAv4",
+              "RGAA-3.2.1"
+            ],
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+            "nodes": [
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"text-re-text-primary rounded-lg border border-re-border-subtle bg-re-surface-inset mb-1.5 flex items-center gap-2 py-1 pl-3 pr-1\">",
+                        "target": [
+                          ".p-5.items-start.gap-4:nth-child(1) > .flex-1.min-w-0 > .py-1.pl-3.pr-1"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/sdk/verify_chain.py</code>",
+                "target": [
+                  ".p-5.items-start.gap-4:nth-child(1) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"text-re-text-primary rounded-lg border border-re-border-subtle bg-re-surface-inset mb-1.5 flex items-center gap-2 py-1 pl-3 pr-1\">",
+                        "target": [
+                          ".p-5.items-start.gap-4:nth-child(2) > .flex-1.min-w-0 > .py-1.pl-3.pr-1"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/proof/audit-bundle.zip</code>",
+                "target": [
+                  ".p-5.items-start.gap-4:nth-child(2) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"text-re-text-primary rounded-lg border border-re-border-subtle bg-re-surface-inset mb-1.5 flex items-center gap-2 py-1 pl-3 pr-1\">",
+                        "target": [
+                          ".p-5.items-start.gap-4:nth-child(3) > .flex-1.min-w-0 > .py-1.pl-3.pr-1"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">python verify_chain.py audit-bundle.zip</code>",
+                "target": [
+                  ".p-5.items-start.gap-4:nth-child(3) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "10.5pt (14px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Evidence file inside the ZIP</td>",
+                "target": [
+                  "tr:nth-child(1) > td:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">fsma-204-sample.csv</td>",
+                "target": [
+                  "tr:nth-child(1) > td:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "10.5pt (14px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Declared SHA-256 digest for that file</td>",
+                "target": [
+                  "tr:nth-child(2) > td:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">ab250df1f9ed...</td>",
+                "target": [
+                  "tr:nth-child(2) > td:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "10.5pt (14px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Declared byte length</td>",
+                "target": [
+                  "tr:nth-child(3) > td:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">1524</td>",
+                "target": [
+                  "tr:nth-child(3) > td:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "10.5pt (14px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Ordered file hashes used as tree leaves</td>",
+                "target": [
+                  "tr:nth-child(4) > td:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">ab250df1f9ed...</td>",
+                "target": [
+                  "tr:nth-child(4) > td:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "10.5pt (14px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Declared root of the evidence tree</td>",
+                "target": [
+                  "tr:nth-child(5) > td:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">a320428f4057...</td>",
+                "target": [
+                  "tr:nth-child(5) > td:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "10.5pt (14px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Code revision that produced the sample bundle</td>",
+                "target": [
+                  "tr:nth-child(6) > td:nth-child(2)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "9.8pt (13px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscured",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [
+                      {
+                        "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                        "target": [
+                          ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                        ]
+                      }
+                    ],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it's partially obscured by another element"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">64542033f908...</td>",
+                "target": [
+                  "tr:nth-child(6) > td:nth-child(3)"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+              },
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "8.3pt (11px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscuring",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it partially overlaps other elements"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+                "target": [
+                  ".text-\\[11px\\]"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ]
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-dialog-name",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "empty-table-header",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-contentinfo-is-top-level",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-contentinfo",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-in-text-block",
+          "link-name",
+          "list",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "scrollable-region-focusable",
+          "skip-link",
+          "tabindex",
+          "table-duplicate-name",
+          "target-size",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "browser": "chromium",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/tools/ftl-checker",
+      "startedAt": "2026-10-03T02:06:50.942Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/ftl-checker",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/ftl-checker",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/tools/check-access",
+          "method": "GET",
+          "status": 200
+        }
+      ],
+      "state": "synthetic-interaction",
+      "result": {
+        "noMatchesText": 0,
+        "checkDisabled": true
+      },
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "devicePixelRatio": 1,
+      "documentWidth": 390,
+      "documentHeight": 3076,
+      "horizontalOverflow": false,
+      "topLevel": true,
+      "title": "FTL List Checker | RegEngine",
+      "h1": [
+        "FTL List Checker"
+      ],
+      "cameraAllowed": false,
+      "screenshot": "chromium-mobile-_tools_ftl-checker-state.png",
+      "fullScreenshot": "chromium-mobile-_tools_ftl-checker-state-full.png",
+      "axe": {
+        "version": "4.13.0",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "tags": [
+              "cat.color",
+              "wcag2aa",
+              "wcag143",
+              "TTv5",
+              "TT13.c",
+              "EN-301-549",
+              "EN-9.1.4.3",
+              "ACT",
+              "RGAAv4",
+              "RGAA-3.2.1"
+            ],
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+            "nodes": [
+              {
+                "any": [
+                  {
+                    "id": "color-contrast",
+                    "data": {
+                      "contrastRatio": 0,
+                      "fontSize": "8.3pt (11px)",
+                      "fontWeight": "normal",
+                      "messageKey": "elmPartiallyObscuring",
+                      "expectedContrastRatio": "4.5:1"
+                    },
+                    "relatedNodes": [],
+                    "impact": "serious",
+                    "message": "Element's background color could not be determined because it partially overlaps other elements"
+                  }
+                ],
+                "all": [],
+                "none": [],
+                "impact": "serious",
+                "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+                "target": [
+                  ".text-\\[11px\\]"
+                ],
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ]
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-allowed-role",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-dialog-name",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "autocomplete-valid",
+          "avoid-inline-spacing",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "empty-heading",
+          "form-field-multiple-labels",
+          "heading-order",
+          "html-has-lang",
+          "html-lang-valid",
+          "label-title-only",
+          "label",
+          "landmark-contentinfo-is-top-level",
+          "landmark-main-is-top-level",
+          "landmark-no-duplicate-contentinfo",
+          "landmark-no-duplicate-main",
+          "landmark-one-main",
+          "landmark-unique",
+          "link-in-text-block",
+          "link-name",
+          "list",
+          "listitem",
+          "meta-viewport-large",
+          "meta-viewport",
+          "nested-interactive",
+          "page-has-heading-one",
+          "region",
+          "scrollable-region-focusable",
+          "skip-link",
+          "tabindex",
+          "target-size"
+        ]
+      }
+    }
+  ],
+  "keyboard": [],
+  "errors": [],
+  "completedAt": "2026-10-03T02:06:52.357Z"
+}

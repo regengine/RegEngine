@@ -1,0 +1,13 @@
+UTC: 2026-10-03T02:19:59.765139+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import socket; print("Local QA listeners:"); [(print(port, "open" if socket.socket().connect_ex(("127.0.0.1",port))==0 else "closed")) for port in [3102,3114,3115,3950]]; print("Orchestrator browser server3950 retained; no action on historical PID")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Local QA listeners:
+3102 closed
+3114 closed
+3115 closed
+3950 open
+Orchestrator browser server3950 retained; no action on historical PID

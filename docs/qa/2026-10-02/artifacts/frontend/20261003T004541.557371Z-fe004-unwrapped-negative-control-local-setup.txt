@@ -1,0 +1,52 @@
+UTC: 2026-10-03T00:45:41.557371+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs python3 -c 'from pathlib import Path;import subprocess,sys,json;root=Path.cwd();tmp=Path("/private/tmp/regengine-qa-fe004-witness");(tmp/"setup.ts").write_text((root/"frontend/src/__tests__/setup.ts").read_text());(tmp/"use-sync.ts").write_text((root/"frontend/src/hooks/use-sync.ts").read_text());test=(root/"frontend/src/__tests__/hooks/useSync.test.tsx").read_text().replace("it.fails(","it(").replace("@/hooks/use-sync","./use-sync");(tmp/"fe004.test.tsx").write_text(test);config="import {defineConfig} from \"vitest/config\"; export default defineConfig({test:{environment:\"jsdom\",globals:true,setupFiles:[\"./setup.ts\"],include:[\"fe004.test.tsx\"]},resolve:{alias:{\"@\":"+json.dumps(str(root/"frontend/src"))+"}}});";(tmp/"vitest.config.mts").write_text(config);print("Raw current hook copied byte-for-byte; same test except import location and removed expected-fail wrapper. Expected assertion failure is required.",flush=True);sys.exit(subprocess.run(["/private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node",str(root/"frontend/node_modules/vitest/vitest.mjs"),"run","--config",str(tmp/"vitest.config.mts"),"--root",str(tmp),"-t","FE-004"],cwd=tmp).returncode)'
+Exit: 1
+Duration: 1.06s
+Timeout: False
+
+Raw current hook copied byte-for-byte; same test except import location and removed expected-fail wrapper. Expected assertion failure is required.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/private/tmp/regengine-qa-fe004-witness[39m
+
+ [31m❯[39m fe004.test.tsx [2m([22m[2m4 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m3 skipped[39m[2m)[22m[32m 11[2mms[22m[39m
+     [2m[90m↓[39m[22m replays pending scans through the cookie-backed ingest proxy without browser auth headers
+     [2m[90m↓[39m[22m uploads pending photos without requiring an apiKey argument
+     [2m[90m↓[39m[22m does not sync when the user is signed out
+[31m     [31m×[31m FE-004 does not replay a previous tenant photo after an account switch[39m[32m 10[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m fe004.test.tsx[2m > [22museSync[2m > [22mFE-004 does not replay a previous tenant photo after an account switch
+[31m[1mAssertionError[22m: expected "vi.fn()" to not be called at all, but actually been called 1 times[90m
+
+Received:
+
+[1m  1st vi.fn() call:
+
+[22m    Array [
+      Object {
+        "file": File {},
+        "sourceSystem": "mobile_capture_pwa_offline",
+      },
+    ]
+[31m[90m
+
+Number of calls: [1m1[22m
+[31m[39m
+[36m [2m❯[22m fe004.test.tsx:[2m192:37[22m[39m
+    [90m190|[39m         // Ownerless legacy entries must be quarantined until ownershi…
+    [90m191|[39m         // established; never submit them with the next account's sess…
+    [90m192|[39m         [34mexpect[39m(mockMutateAsync)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m   |[39m                                     [31m^[39m
+    [90m193|[39m     })[33m;[39m
+    [90m194|[39m })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m3 skipped[39m[90m (4)[39m
+[2m   Start at [22m 17:45:41
+[2m   Duration [22m 706ms[2m (transform 30ms, setup 137ms, import 22ms, tests 11ms, environment 460ms)[22m
+

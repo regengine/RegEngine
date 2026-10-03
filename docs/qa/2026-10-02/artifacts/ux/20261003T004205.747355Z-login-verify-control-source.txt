@@ -1,0 +1,155 @@
+UTC: 2026-10-03T00:42:05.747355+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; print(Path("frontend/src/app/login/page.tsx").read_text()); p=Path("frontend/src/app/verify/page.tsx"); print("VERIFY", "\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if 145<=i<=280)); print("LOGIN CANDIDATES",[str(p) for p in Path("frontend/src").rglob("*login*")])'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+import { Suspense } from 'react';
+import PasswordlessEntryClient from './PasswordlessEntryClient';
+
+export default function LoginPageWrapper() {
+    return (
+        <Suspense>
+            <PasswordlessEntryClient />
+        </Suspense>
+    );
+}
+
+VERIFY 145:     | { kind: 'idle' }
+146:     | { kind: 'loading' }
+147:     | { kind: 'success'; data: VerifyResponse }
+148:     | { kind: 'error'; message: string };
+149: 
+150: function VerifyWidget() {
+151:     const [state, setState] = useState<VerifyState>({ kind: 'idle' });
+152:     const [file, setFile] = useState<File | null>(null);
+153:     const [dragOver, setDragOver] = useState(false);
+154:     const inputRef = useRef<HTMLInputElement>(null);
+155: 
+156:     const handleFile = useCallback((f: File | null) => {
+157:         if (!f) return;
+158:         setFile(f);
+159:         setState({ kind: 'idle' });
+160:     }, []);
+161: 
+162:     const onDrop = useCallback(
+163:         (e: React.DragEvent<HTMLLabelElement>) => {
+164:             e.preventDefault();
+165:             setDragOver(false);
+166:             const f = e.dataTransfer.files?.[0] ?? null;
+167:             handleFile(f);
+168:         },
+169:         [handleFile],
+170:     );
+171: 
+172:     const onSubmit = useCallback(async () => {
+173:         if (!file) return;
+174:         setState({ kind: 'loading' });
+175: 
+176:         const formData = new FormData();
+177:         formData.append('bundle', file);
+178: 
+179:         try {
+180:             const res = await fetch(PROOF_VERIFY_ENDPOINT, {
+181:                 method: 'POST',
+182:                 body: formData,
+183:             });
+184: 
+185:             if (res.status === 429) {
+186:                 setState({
+187:                     kind: 'error',
+188:                     message:
+189:                         'Rate limit reached (10/min). Try again in a minute.',
+190:                 });
+191:                 return;
+192:             }
+193: 
+194:             if (!res.ok) {
+195:                 setState({
+196:                     kind: 'error',
+197:                     message: `Verification failed (HTTP ${res.status}). Try again shortly, or run verify_chain.py locally.`,
+198:                 });
+199:                 return;
+200:             }
+201: 
+202:             const data = (await res.json()) as VerifyResponse;
+203:             setState({ kind: 'success', data });
+204:         } catch {
+205:             setState({
+206:                 kind: 'error',
+207:                 message:
+208:                     'Could not reach the verifier endpoint. Try again shortly, or run verify_chain.py locally.',
+209:             });
+210:         }
+211:     }, [file]);
+212: 
+213:     const reset = useCallback(() => {
+214:         setFile(null);
+215:         setState({ kind: 'idle' });
+216:         if (inputRef.current) inputRef.current.value = '';
+217:     }, []);
+218: 
+219:     return (
+220:         <Card className="p-6 sm:p-8">
+221:             {/* ─── Drop zone ─────────────────────────────────────── */}
+222:             {state.kind !== 'success' && (
+223:                 <label
+224:                     htmlFor="verify-bundle-file"
+225:                     onDragOver={(e) => {
+226:                         e.preventDefault();
+227:                         setDragOver(true);
+228:                     }}
+229:                     onDragLeave={() => setDragOver(false)}
+230:                     onDrop={onDrop}
+231:                     className="block cursor-pointer"
+232:                 >
+233:                     <input
+234:                         id="verify-bundle-file"
+235:                         ref={inputRef}
+236:                         type="file"
+237:                         accept=".zip,.json,application/zip,application/json"
+238:                         className="sr-only"
+239:                         onChange={(e) =>
+240:                             handleFile(e.target.files?.[0] ?? null)
+241:                         }
+242:                     />
+243:                     <EmptyState
+244:                         icon={file ? FileArchive : Upload}
+245:                         title={file ? file.name : 'Drop your export bundle here'}
+246:                         description={
+247:                             file
+248:                                 ? `${(file.size / 1024).toFixed(1)} KB — click to choose a different file`
+249:                                 : 'or click to browse — accepts .zip or .json'
+250:                         }
+251:                         className={cn(
+252:                             'transition-colors duration-120 motion-reduce:transition-none',
+253:                             dragOver && 'border-re-brand bg-re-surface-inset',
+254:                         )}
+255:                     />
+256:                 </label>
+257:             )}
+258: 
+259:             {/* ─── Action row ────────────────────────────────────── */}
+260:             {state.kind !== 'success' && (
+261:                 <div className="mt-5 flex flex-wrap items-center gap-3">
+262:                     <Button
+263:                         size="lg"
+264:                         onClick={onSubmit}
+265:                         disabled={!file}
+266:                         loading={state.kind === 'loading'}
+267:                         leadingIcon={<ShieldCheck strokeWidth={1.75} aria-hidden="true" />}
+268:                     >
+269:                         {state.kind === 'loading' ? 'Verifying…' : 'Verify bundle'}
+270:                     </Button>
+271:                     {file && state.kind !== 'loading' && (
+272:                         <Button variant="secondary" size="lg" onClick={reset}>
+273:                             Clear
+274:                         </Button>
+275:                     )}
+276:                 </div>
+277:             )}
+278: 
+279:             {state.kind === 'error' && (
+280:                 <Callout tone="danger" role="alert" className="mt-4">
+LOGIN CANDIDATES ['frontend/src/app/login', 'frontend/src/__tests__/auth/login.test.tsx', 'frontend/src/app/developer/login']

@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:57:44.805636+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import ast,subprocess; from pathlib import Path; base=Path("docs/qa/2026-10-02/scripts"); [ast.parse((base/n).read_text(),filename=n) for n in ["ux-server.py","ux-local-proxy.py"]]; subprocess.run(["node","--check",str(base/"ux-browser-pass.cjs")],check=True); print("PASS: two Python AST parses and Node browser script syntax")'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+PASS: two Python AST parses and Node browser script syntax

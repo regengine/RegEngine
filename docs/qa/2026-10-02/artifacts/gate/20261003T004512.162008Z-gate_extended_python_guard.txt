@@ -1,0 +1,101 @@
+UTC: 2026-10-03T00:45:12.162008+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=["docs/qa/2026-10-02/scripts/backend_pytest.py","services/ingestion/tests/test_qa_sweep_20261002_contract.py"]; [(print("FILE",p),print("\n".join(f"{i}: {line}" for i,line in enumerate(Path(p).read_text().splitlines(),1) if p.endswith("backend_pytest.py") or i>=190))) for p in paths]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE docs/qa/2026-10-02/scripts/backend_pytest.py
+1: #!/usr/bin/env python3
+2: """Run explicitly selected pytest suites without network or credential-file access.
+3: 
+4: Use through run_logged.py with a QA-only environment. This guard is deliberately
+5: stricter than the product: in-process ASGI transports and fake stores are allowed;
+6: socket connections, subprocesses, and reads of .env/credential files are denied.
+7: """
+8: 
+9: from __future__ import annotations
+10: 
+11: import os
+12: import platform
+13: import sys
+14: from pathlib import Path
+15: 
+16: ROOT = Path(__file__).resolve().parents[4]
+17: sys.path[:0] = [str(ROOT), str(ROOT / "services"), str(ROOT / "services/ingestion")]
+18: os.environ.update(
+19:     {
+20:         "PYTHON_DOTENV_DISABLED": "1",
+21:         "REGENGINE_ENV": "test",
+22:         "ENVIRONMENT": "test",
+23:         "DATABASE_URL": "sqlite:///:memory:",
+24:         "AWS_EC2_METADATA_DISABLED": "true",
+25:         "HYPOTHESIS_STORAGE_DIRECTORY": str(ROOT / ".hypothesis"),
+26:         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+27:     }
+28: )
+29: # Python on macOS obtains its processor label through a harmless uname command.
+30: # Cache platform metadata before the subprocess guard, then allow only the three
+31: # test plugins actually needed for this QA pass.
+32: platform.platform()
+33: 
+34: 
+35: def deny_external_io(event: str, args: tuple) -> None:
+36:     if event in {"socket.connect", "socket.getaddrinfo", "subprocess.Popen", "os.system"}:
+37:         raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+38:     if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
+39:         path = Path(os.fsdecode(args[0]))
+40:         if path.name.startswith(".env") or any(part in {".aws", ".ssh", ".gnupg"} for part in path.parts):
+41:             raise RuntimeError("QA safety guard denied credential/environment file access")
+42: 
+43: 
+44: sys.addaudithook(deny_external_io)
+45: 
+46: 
+47: def deny_database_connect(*args, **kwargs):
+48:     raise RuntimeError("QA safety guard denied database connection; use an in-process mock")
+49: 
+50: 
+51: # Native DB drivers can bypass Python socket audit events. Block their public
+52: # connection boundaries as well as SQLAlchemy's engine before test collection.
+53: import importlib
+54: 
+55: from sqlalchemy.engine import Engine
+56: 
+57: Engine.connect = deny_database_connect
+58: for driver in ("psycopg", "psycopg2", "asyncpg", "sqlite3"):
+59:     try:
+60:         module = importlib.import_module(driver)
+61:     except ImportError:
+62:         continue
+63:     module.connect = deny_database_connect
+64: 
+65: import pytest
+66: 
+67: raise SystemExit(
+68:     pytest.main(
+69:         ["-p", "pytest_cov.plugin", "-p", "pytest_asyncio.plugin", "-p", "hypothesis.extra.pytestplugin", *sys.argv[1:]]
+70:     )
+71: )
+FILE services/ingestion/tests/test_qa_sweep_20261002_contract.py
+190: 
+191: @given(st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=100))
+192: @settings(max_examples=80, derandomize=True, deadline=None, database=None)
+193: def test_csv_arbitrary_short_input_returns_structured_result(text):
+194:     events, errors, warnings = ct.parse_csv_rows(text, "harvesting")
+195:     assert isinstance(events, list) and isinstance(errors, list) and isinstance(warnings, list)
+196: 
+197: 
+198: def test_openapi_batch_contract_matches_runtime_boundaries(webhook_client):
+199:     schema = webhook_client.app.openapi()["components"]["schemas"]["WebhookPayload"]
+200:     assert schema["properties"]["events"]["minItems"] == 1
+201:     assert schema["properties"]["events"]["maxItems"] == 500
+202:     payload = _payload("2026-04-17T12:00:00Z")
+203:     assert len(WebhookPayload(**{**payload, "events": payload["events"] * 500}).events) == 500
+204:     for events in ([], payload["events"] * 501):
+205:         response = webhook_client.post(
+206:             "/api/v1/webhooks/ingest",
+207:             json={**payload, "events": events},
+208:             headers={"Idempotency-Key": "qa-batch-boundary"},
+209:         )
+210:         assert response.status_code == 422

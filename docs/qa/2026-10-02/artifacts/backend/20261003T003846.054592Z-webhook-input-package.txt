@@ -1,0 +1,70 @@
+UTC: 2026-10-03T00:38:46.054592+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -A45 -B5 'async def ingest|def ingest|@router.post|def _get_db' services/ingestion/app/webhook_router_v2
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/webhook_router_v2/routes.py-87-# ``IdempotencyMiddleware`` mounted in ``main.py`` then caches the 2xx
+services/ingestion/app/webhook_router_v2/routes.py-88-# response for 24h, scoped per tenant (#1237).
+services/ingestion/app/webhook_router_v2/routes.py-89-_require_idempotency_key = IdempotencyDependency(strict=True)
+services/ingestion/app/webhook_router_v2/routes.py-90-
+services/ingestion/app/webhook_router_v2/routes.py-91-
+services/ingestion/app/webhook_router_v2/routes.py:92:@router.post(
+services/ingestion/app/webhook_router_v2/routes.py-93-    "/ingest",
+services/ingestion/app/webhook_router_v2/routes.py-94-    response_model=IngestResponse,
+services/ingestion/app/webhook_router_v2/routes.py-95-    summary="Ingest traceability events",
+services/ingestion/app/webhook_router_v2/routes.py-96-    description=(
+services/ingestion/app/webhook_router_v2/routes.py-97-        "Accept CTE events from external systems (IoT platforms, ERPs, manual entry). "
+services/ingestion/app/webhook_router_v2/routes.py-98-        "Each event is validated against FSMA 204 KDE requirements, SHA-256 hashed, "
+services/ingestion/app/webhook_router_v2/routes.py-99-        "chain-linked, and persisted to the compliance database. "
+services/ingestion/app/webhook_router_v2/routes.py-100-        "The ``Idempotency-Key`` header is REQUIRED — safe retries replay "
+services/ingestion/app/webhook_router_v2/routes.py-101-        "the cached response for 24 hours. Cache keys are tenant-scoped."
+services/ingestion/app/webhook_router_v2/routes.py-102-    ),
+services/ingestion/app/webhook_router_v2/routes.py-103-)
+services/ingestion/app/webhook_router_v2/routes.py:104:async def ingest_events(
+services/ingestion/app/webhook_router_v2/routes.py-105-    payload: WebhookPayload,
+services/ingestion/app/webhook_router_v2/routes.py-106-    request: Request,
+services/ingestion/app/webhook_router_v2/routes.py-107-    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+services/ingestion/app/webhook_router_v2/routes.py-108-    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+services/ingestion/app/webhook_router_v2/routes.py-109-    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+services/ingestion/app/webhook_router_v2/routes.py-110-    _auth: None = Depends(_verify_api_key),
+services/ingestion/app/webhook_router_v2/routes.py-111-    # #1243: HMAC signature check runs in parallel with the API-key check.
+services/ingestion/app/webhook_router_v2/routes.py-112-    # A leaked key alone is no longer sufficient to forge events when
+services/ingestion/app/webhook_router_v2/routes.py-113-    # ``WEBHOOK_HMAC_SECRET`` is configured.
+services/ingestion/app/webhook_router_v2/routes.py-114-    _signature: None = Depends(_verify_webhook_signature),
+services/ingestion/app/webhook_router_v2/routes.py-115-    _subscription: None = Depends(require_active_subscription),
+services/ingestion/app/webhook_router_v2/routes.py-116-    _idempotency_key: Optional[str] = Depends(_require_idempotency_key),
+services/ingestion/app/webhook_router_v2/routes.py-117-    db_session=Depends(get_db_session),
+services/ingestion/app/webhook_router_v2/routes.py-118-) -> IngestResponse:
+services/ingestion/app/webhook_router_v2/routes.py-119-    """Process incoming webhook events with persistent storage."""
+services/ingestion/app/webhook_router_v2/routes.py-120-    ctx = await _pkg.resolve_tenant_context(request)
+services/ingestion/app/webhook_router_v2/routes.py-121-    tenant_id = ctx.tenant_id
+services/ingestion/app/webhook_router_v2/routes.py-122-    _pkg.validate_tenant_id(tenant_id)
+services/ingestion/app/webhook_router_v2/routes.py-123-
+services/ingestion/app/webhook_router_v2/routes.py-124-    # Rate limiting (tenant-scoped)
+services/ingestion/app/webhook_router_v2/routes.py-125-    _pkg._check_rate_limit(tenant_id, request=request)
+services/ingestion/app/webhook_router_v2/routes.py-126-
+services/ingestion/app/webhook_router_v2/routes.py-127-    results: list[EventResult] = []
+services/ingestion/app/webhook_router_v2/routes.py-128-    accepted = 0
+services/ingestion/app/webhook_router_v2/routes.py-129-    rejected = 0
+services/ingestion/app/webhook_router_v2/routes.py-130-    # Per-label FSMA 204 billing (v121) — event ids to charge once (and only
+services/ingestion/app/webhook_router_v2/routes.py-131-    # once) db_session.commit() below actually lands. Billing from inside
+services/ingestion/app/webhook_router_v2/routes.py-132-    # the loop, before that commit, would charge Stripe for a label whose
+services/ingestion/app/webhook_router_v2/routes.py-133-    # persistence row could still be rolled back by a later failure in this
+services/ingestion/app/webhook_router_v2/routes.py-134-    # same request -- a retry would then get a fresh event_id and bypass the
+services/ingestion/app/webhook_router_v2/routes.py-135-    # UNIQUE(tenant_id, cte_event_id) idempotency guarantee entirely.
+services/ingestion/app/webhook_router_v2/routes.py-136-    billable_event_ids: list[str] = []
+services/ingestion/app/webhook_router_v2/routes.py-137-
+services/ingestion/app/webhook_router_v2/routes.py-138-    # Batch deduplication — detect identical events within the same payload
+services/ingestion/app/webhook_router_v2/routes.py-139-    seen_in_batch: set[str] = set()
+services/ingestion/app/webhook_router_v2/routes.py-140-
+services/ingestion/app/webhook_router_v2/routes.py-141-    # Get persistence layer from injected db_session (Depends(get_db_session))
+services/ingestion/app/webhook_router_v2/routes.py-142-    persistence = None
+services/ingestion/app/webhook_router_v2/routes.py-143-    if db_session is None:
+services/ingestion/app/webhook_router_v2/routes.py-144-        raise HTTPException(
+services/ingestion/app/webhook_router_v2/routes.py-145-            status_code=503,
+services/ingestion/app/webhook_router_v2/routes.py-146-            detail="Database unavailable — cannot accept events. Retry after service recovery.",
+services/ingestion/app/webhook_router_v2/routes.py-147-        )
+services/ingestion/app/webhook_router_v2/routes.py-148-    try:
+services/ingestion/app/webhook_router_v2/routes.py-149-        from shared.cte_persistence import CTEPersistence

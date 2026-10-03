@@ -1,0 +1,16 @@
+UTC: 2026-10-03T02:06:40.217596+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs node docs/qa/2026-10-02/scripts/browser-ux-followup.cjs states
+Exit: 0
+Duration: 12.15s
+Timeout: False
+
+{"browser":"chromium","viewport":"desktop","route":"/login","state":"synthetic-interaction","result":""}
+{"browser":"chromium","viewport":"desktop","route":"/contact","state":"synthetic-interaction","result":{"alert":"","retainedName":"Synthetic browser QA"}}
+{"browser":"chromium","viewport":"desktop","route":"/verify","state":"synthetic-interaction","result":"Synthetic local HTTP503 retained selected bundle and exposed recovery"}
+{"browser":"chromium","viewport":"desktop","route":"/tools/ftl-checker","state":"synthetic-interaction","result":{"noMatchesText":0,"checkDisabled":true}}
+{"browser":"chromium","viewport":"mobile","route":"/login","state":"synthetic-interaction","result":""}
+{"browser":"chromium","viewport":"mobile","route":"/contact","state":"synthetic-interaction","result":{"alert":"","retainedName":"Synthetic browser QA"}}
+{"browser":"chromium","viewport":"mobile","route":"/verify","state":"synthetic-interaction","result":"Synthetic local HTTP503 retained selected bundle and exposed recovery"}
+{"browser":"chromium","viewport":"mobile","route":"/tools/ftl-checker","state":"synthetic-interaction","result":{"noMatchesText":0,"checkDisabled":true}}
+{"output":"/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-06-40-394Z","pages":8,"keyboard":0,"errors":[]}

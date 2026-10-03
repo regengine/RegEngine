@@ -1,0 +1,11 @@
+UTC: 2026-10-03T00:46:19.808124+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; p=Path("docs/qa/2026-10-02/artifacts/ux"); files=list(p.glob("chrome-axe*.json")); print("reports",[x.name for x in files]);
+for f in files:
+ d=json.loads(f.read_text()); print(f.name,"width",d["width"],"document",d["documentWidth"],"axe",[(x["id"],x["impact"],len(x["nodes"])) for x in d["axe"]["violations"]],"camera",d.get("cameraAllowed"))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+reports ['chrome-axe_-1728-1.json']
+chrome-axe_-1728-1.json width 1728 document 1728 axe [('nested-interactive', 'serious', 1)] camera False

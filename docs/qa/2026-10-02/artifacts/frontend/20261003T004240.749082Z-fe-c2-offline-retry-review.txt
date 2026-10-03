@@ -1,0 +1,580 @@
+UTC: 2026-10-03T00:42:40.749082+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=["frontend/src/hooks/use-sync.ts","frontend/src/lib/db.ts","frontend/src/__tests__/hooks/useSync.test.tsx"]; [(print("FILE",p),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p).read_text().splitlines(),1)))) for p in paths]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE frontend/src/hooks/use-sync.ts
+1: import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+2: 
+3: import { useCallback, useEffect, useRef, useState } from 'react';
+4: import {
+5:     markScanSynced,
+6:     markPhotoSynced,
+7:     markScanSyncFailed,
+8:     markPhotoSyncFailed,
+9:     getPendingUploads,
+10:     cleanupOfflineRecords,
+11: } from '@/lib/db';
+12: import { useIngestFile } from '@/hooks/use-api';
+13: import { useAuth } from '@/lib/auth-context';
+14: import { useToast } from '@/components/ui/use-toast';
+15: import { getServiceURL } from '@/lib/api-config';
+16: 
+17: export function useSync() {
+18:     const [isOnline, setIsOnline] = useState(true);
+19:     const [isSyncing, setIsSyncing] = useState(false);
+20:     const isSyncingRef = useRef(false);
+21:     const { isAuthenticated, tenantId } = useAuth();
+22:     const { toast } = useToast();
+23: 
+24:     const { mutateAsync: ingestFile } = useIngestFile();
+25: 
+26:     const syncEndpoint = useCallback(async (payload: string) => {
+27:         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+28:             method: 'POST',
+29:             credentials: 'include', // Send HTTP-only cookies
+30:             headers: {
+31:                 'Content-Type': 'application/json',
+32:             },
+33:             body: payload,
+34:         });
+35:         if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+36:     }, []);
+37: 
+38:     const sync = useCallback(async () => {
+39:         if (!isAuthenticated || isSyncingRef.current || !navigator.onLine) return;
+40: 
+41:         isSyncingRef.current = true;
+42:         setIsSyncing(true);
+43:         let failedUploads = 0;
+44:         let successfulUploads = 0;
+45:         try {
+46:             try {
+47:                 await cleanupOfflineRecords();
+48:             } catch {
+49:                 // cleanup is best-effort
+50:             }
+51: 
+52:             const { scans, photos } = await getPendingUploads();
+53: 
+54:             if (scans.length === 0 && photos.length === 0) {
+55:                 setIsSyncing(false);
+56:                 return;
+57:             }
+58: 
+59:             toast({
+60:                 title: "Syncing Offline Data...",
+61:                 description: `Uploading ${scans.length} scans and ${photos.length} photos.`,
+62:             });
+63: 
+64:             // Sync Scans — replay the stored ingest payload via webhook endpoint
+65:             for (const scan of scans) {
+66:                 try {
+67:                     if (scan.payload) {
+68:                         // Structured payload saved by FieldCaptureClient — replay directly
+69:                         await syncEndpoint(scan.payload);
+70:                     } else {
+71:                         // Legacy record with only raw barcode string — build minimal event
+72:                         const payload = {
+73:                             source: 'mobile_scanner_pwa_offline',
+74:                             tenant_id: tenantId || undefined,
+75:                             events: [{
+76:                                 cte_type: scan.cteType || 'receiving',
+77:                                 traceability_lot_code: scan.content,
+78:                                 product_description: `Offline scan ${scan.content}`,
+79:                                 quantity: 1,
+80:                                 unit_of_measure: 'cases',
+81:                                 timestamp: new Date(scan.timestamp).toISOString(),
+82:                                 location_name: 'Field Capture Mobile (Offline)',
+83:                                 kdes: { raw_scan: scan.content },
+84:                             }],
+85:                         };
+86:                         await syncEndpoint(JSON.stringify(payload));
+87:                     }
+88:                     if (typeof scan.id === 'number') {
+89:                         await markScanSynced(scan.id);
+90:                     }
+91:                     successfulUploads += 1;
+92:                 } catch (e) {
+93:                     failedUploads += 1;
+94:                     if (typeof scan.id === 'number') {
+95:                         await markScanSyncFailed(scan.id, e);
+96:                     }
+97:                     if (process.env.NODE_ENV !== 'production') {
+98:                         console.error("Failed to sync scan", {
+99:                             id: scan.id,
+100:                             timestamp: scan.timestamp,
+101:                             cteType: scan.cteType,
+102:                         }, e);
+103:                     }
+104:                 }
+105:             }
+106: 
+107:             // Sync Photos
+108:             for (const photo of photos) {
+109:                 try {
+110:                     const file = new File([photo.blob], `offline_capture_${photo.timestamp}.jpg`, { type: 'image/jpeg' });
+111:                     await ingestFile({
+112:                         file,
+113:                         sourceSystem: "mobile_capture_pwa_offline"
+114:                     });
+115:                     if (typeof photo.id === 'number') {
+116:                         await markPhotoSynced(photo.id);
+117:                     }
+118:                     successfulUploads += 1;
+119:                 } catch (e) {
+120:                     failedUploads += 1;
+121:                     if (typeof photo.id === 'number') {
+122:                         await markPhotoSyncFailed(photo.id, e);
+123:                     }
+124:                     if (process.env.NODE_ENV !== 'production') {
+125:                         console.error("Failed to sync photo", {
+126:                             id: photo.id,
+127:                             timestamp: photo.timestamp,
+128:                         }, e);
+129:                     }
+130:                 }
+131:             }
+132: 
+133:             if (failedUploads > 0) {
+134:                 toast({
+135:                     title: "Sync Partially Complete",
+136:                     description: `${successfulUploads} uploaded. ${failedUploads} item${failedUploads === 1 ? '' : 's'} remain queued for retry.`,
+137:                     variant: "destructive",
+138:                 });
+139:             } else {
+140:                 toast({
+141:                     title: "Sync Complete",
+142:                     description: "All offline data has been uploaded.",
+143:                     variant: "default"
+144:                 });
+145:             }
+146: 
+147:             // Cleanup records created during this sync attempt.
+148:             try {
+149:                 await cleanupOfflineRecords();
+150:             } catch {
+151:                 // cleanup is best-effort
+152:             }
+153: 
+154:         } catch (err) {
+155:             if (process.env.NODE_ENV !== 'production') { console.error("Sync error", err); }
+156:         } finally {
+157:             isSyncingRef.current = false;
+158:             setIsSyncing(false);
+159:         }
+160:     }, [isAuthenticated, ingestFile, syncEndpoint, tenantId, toast]);
+161: 
+162:     useEffect(() => {
+163:         // Initial check
+164:         setIsOnline(navigator.onLine);
+165: 
+166:         const handleOnline = () => {
+167:             setIsOnline(true);
+168:             sync();
+169:         };
+170: 
+171:         const handleOffline = () => {
+172:             setIsOnline(false);
+173:         };
+174: 
+175:         window.addEventListener('online', handleOnline);
+176:         window.addEventListener('offline', handleOffline);
+177: 
+178:         // Try verifying connection periodically or on mount
+179:         if (navigator.onLine) {
+180:             sync();
+181:         }
+182: 
+183:         return () => {
+184:             window.removeEventListener('online', handleOnline);
+185:             window.removeEventListener('offline', handleOffline);
+186:         };
+187:     }, [sync]);
+188: 
+189:     useEffect(() => {
+190:         if (!('serviceWorker' in navigator)) return;
+191: 
+192:         const handleServiceWorkerMessage = (event: MessageEvent) => {
+193:             if (event.data?.type === 'REGENGINE_SYNC_OFFLINE_QUEUE') {
+194:                 sync();
+195:             }
+196:         };
+197: 
+198:         navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+199:         return () => {
+200:             navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+201:         };
+202:     }, [sync]);
+203: 
+204:     return { isOnline, isSyncing, manualSync: sync };
+205: }
+FILE frontend/src/lib/db.ts
+1: import Dexie, { Table } from 'dexie';
+2: 
+3: const DAY_MS = 24 * 60 * 60 * 1000;
+4: 
+5: export const OFFLINE_SYNC_RETENTION = {
+6:     syncedMaxAgeMs: 7 * DAY_MS,
+7:     unsyncedMaxAgeMs: 30 * DAY_MS,
+8: } as const;
+9: 
+10: export interface ScanRecord {
+11:     id?: number;
+12:     content: string;
+13:     /** Structured payload for offline replay — mirrors the webhook ingest body */
+14:     payload?: string; // JSON-serialized ingest event
+15:     cteType?: string;
+16:     timestamp: number;
+17:     synced: number; // 0 = false, 1 = true
+18:     syncAttempts?: number;
+19:     lastSyncAttemptAt?: number;
+20:     syncError?: string;
+21: }
+22: 
+23: export interface PhotoRecord {
+24:     id?: number;
+25:     blob: Blob;
+26:     timestamp: number;
+27:     synced: number;
+28:     syncAttempts?: number;
+29:     lastSyncAttemptAt?: number;
+30:     syncError?: string;
+31: }
+32: 
+33: interface OfflineRecord {
+34:     timestamp: number;
+35:     synced: number;
+36: }
+37: 
+38: interface OfflineRecordTable<T extends OfflineRecord> {
+39:     where(index: string): {
+40:         equals(value: number): {
+41:             filter(predicate: (record: T) => boolean): {
+42:                 delete(): Promise<number>;
+43:             };
+44:         };
+45:     };
+46: }
+47: 
+48: interface OfflineDatabase {
+49:     scans: OfflineRecordTable<ScanRecord>;
+50:     photos: OfflineRecordTable<PhotoRecord>;
+51: }
+52: 
+53: export interface OfflineRetentionOptions {
+54:     now?: number;
+55:     syncedMaxAgeMs?: number;
+56:     unsyncedMaxAgeMs?: number;
+57:     deleteUnsyncedRecords?: boolean;
+58: }
+59: 
+60: export class MobileDatabase extends Dexie {
+61:     scans!: Table<ScanRecord>;
+62:     photos!: Table<PhotoRecord>;
+63: 
+64:     constructor() {
+65:         super('RegEngineMobileDB');
+66:         this.version(1).stores({
+67:             scans: '++id, timestamp, synced', // Primary key and indexed props
+68:             photos: '++id, timestamp, synced'
+69:         });
+70:     }
+71: }
+72: 
+73: export const db = new MobileDatabase();
+74: 
+75: export async function saveScan(content: string, payload?: Record<string, unknown>, cteType?: string) {
+76:     await db.scans.add({
+77:         content,
+78:         payload: payload ? JSON.stringify(payload) : undefined,
+79:         cteType,
+80:         timestamp: Date.now(),
+81:         synced: 0,
+82:         syncAttempts: 0,
+83:     });
+84: }
+85: 
+86: export async function savePhoto(blob: Blob) {
+87:     await db.photos.add({
+88:         blob,
+89:         timestamp: Date.now(),
+90:         synced: 0,
+91:         syncAttempts: 0,
+92:     });
+93: }
+94: 
+95: export async function getPendingUploads() {
+96:     const scans = await db.scans.where('synced').equals(0).toArray();
+97:     const photos = await db.photos.where('synced').equals(0).toArray();
+98:     return { scans, photos };
+99: }
+100: 
+101: export async function markScanSynced(id: number) {
+102:     await db.scans.update(id, { synced: 1, syncError: undefined, lastSyncAttemptAt: Date.now() });
+103: }
+104: 
+105: export async function markPhotoSynced(id: number) {
+106:     await db.photos.update(id, { synced: 1, syncError: undefined, lastSyncAttemptAt: Date.now() });
+107: }
+108: 
+109: function errorMessage(error: unknown): string {
+110:     return error instanceof Error ? error.message : String(error || 'Unknown sync error');
+111: }
+112: 
+113: export async function markScanSyncFailed(id: number, error: unknown, attemptedAt: number = Date.now()) {
+114:     const record = await db.scans.get(id);
+115:     await db.scans.update(id, {
+116:         synced: 0,
+117:         syncAttempts: (record?.syncAttempts || 0) + 1,
+118:         lastSyncAttemptAt: attemptedAt,
+119:         syncError: errorMessage(error),
+120:     });
+121: }
+122: 
+123: export async function markPhotoSyncFailed(id: number, error: unknown, attemptedAt: number = Date.now()) {
+124:     const record = await db.photos.get(id);
+125:     await db.photos.update(id, {
+126:         synced: 0,
+127:         syncAttempts: (record?.syncAttempts || 0) + 1,
+128:         lastSyncAttemptAt: attemptedAt,
+129:         syncError: errorMessage(error),
+130:     });
+131: }
+132: 
+133: async function deleteBySyncedAndCutoff<T extends OfflineRecord>(
+134:     table: OfflineRecordTable<T>,
+135:     synced: number,
+136:     cutoff: number
+137: ) {
+138:     if (!Number.isFinite(cutoff)) return 0;
+139:     return table
+140:         .where('synced').equals(synced)
+141:         .filter((record) => record.timestamp < cutoff)
+142:         .delete();
+143: }
+144: 
+145: /**
+146:  * Enforce client-side retention for offline field capture data.
+147:  *
+148:  * Synced records are short lived cache. Unsynced records are preserved by
+149:  * default because they are the durable source of truth until the backend
+150:  * acknowledges persistence. Callers must opt in before deleting stale
+151:  * unsynced records.
+152:  */
+153: export async function cleanupOfflineRecords(
+154:     options: OfflineRetentionOptions = {},
+155:     database: OfflineDatabase = db
+156: ) {
+157:     const now = options.now ?? Date.now();
+158:     const syncedMaxAgeMs = options.syncedMaxAgeMs ?? OFFLINE_SYNC_RETENTION.syncedMaxAgeMs;
+159:     const deleteUnsyncedRecords = options.deleteUnsyncedRecords === true;
+160:     const unsyncedMaxAgeMs = options.unsyncedMaxAgeMs ?? OFFLINE_SYNC_RETENTION.unsyncedMaxAgeMs;
+161:     const syncedCutoff = now - syncedMaxAgeMs;
+162:     const unsyncedCutoff = now - unsyncedMaxAgeMs;
+163: 
+164:     const [
+165:         deletedSyncedScans,
+166:         deletedSyncedPhotos,
+167:         deletedStaleUnsyncedScans,
+168:         deletedStaleUnsyncedPhotos,
+169:     ] = await Promise.all([
+170:         deleteBySyncedAndCutoff(database.scans, 1, syncedCutoff),
+171:         deleteBySyncedAndCutoff(database.photos, 1, syncedCutoff),
+172:         deleteUnsyncedRecords ? deleteBySyncedAndCutoff(database.scans, 0, unsyncedCutoff) : Promise.resolve(0),
+173:         deleteUnsyncedRecords ? deleteBySyncedAndCutoff(database.photos, 0, unsyncedCutoff) : Promise.resolve(0),
+174:     ]);
+175: 
+176:     return {
+177:         deletedSyncedScans,
+178:         deletedSyncedPhotos,
+179:         deletedStaleUnsyncedScans,
+180:         deletedStaleUnsyncedPhotos,
+181:     };
+182: }
+183: 
+184: /**
+185:  * Remove synced records older than `maxAgeMs` (default 7 days).
+186:  * Prevents IndexedDB from growing indefinitely on mobile devices.
+187:  */
+188: export async function cleanupSyncedRecords(
+189:     maxAgeMs: number = OFFLINE_SYNC_RETENTION.syncedMaxAgeMs,
+190:     database: OfflineDatabase = db,
+191:     now: number = Date.now()
+192: ) {
+193:     const { deletedSyncedScans, deletedSyncedPhotos } = await cleanupOfflineRecords({
+194:         now,
+195:         syncedMaxAgeMs: maxAgeMs,
+196:         unsyncedMaxAgeMs: Number.POSITIVE_INFINITY,
+197:         deleteUnsyncedRecords: false,
+198:     }, database);
+199:     return { deletedScans: deletedSyncedScans, deletedPhotos: deletedSyncedPhotos };
+200: }
+FILE frontend/src/__tests__/hooks/useSync.test.tsx
+1: import { beforeEach, describe, expect, it, vi } from 'vitest';
+2: import { act, renderHook, waitFor } from '@testing-library/react';
+3: 
+4: const fetchWithCsrfMock = vi.hoisted(() => vi.fn());
+5: const mockUseAuth = vi.hoisted(() => vi.fn());
+6: const mockToast = vi.hoisted(() => vi.fn());
+7: const mockMutateAsync = vi.hoisted(() => vi.fn());
+8: const dbMocks = vi.hoisted(() => ({
+9:     markScanSynced: vi.fn(),
+10:     markPhotoSynced: vi.fn(),
+11:     markScanSyncFailed: vi.fn(),
+12:     markPhotoSyncFailed: vi.fn(),
+13:     getPendingUploads: vi.fn(),
+14:     cleanupOfflineRecords: vi.fn(),
+15: }));
+16: 
+17: vi.mock('@/lib/fetch-with-csrf', () => ({
+18:     fetchWithCsrf: (...args: any[]) => fetchWithCsrfMock(...args),
+19: }));
+20: 
+21: vi.mock('@/lib/auth-context', () => ({
+22:     useAuth: () => mockUseAuth(),
+23: }));
+24: 
+25: vi.mock('@/components/ui/use-toast', () => ({
+26:     useToast: () => ({ toast: mockToast }),
+27: }));
+28: 
+29: vi.mock('@/hooks/use-api', () => ({
+30:     useIngestFile: () => ({
+31:         mutateAsync: (...args: any[]) => mockMutateAsync(...args),
+32:     }),
+33: }));
+34: 
+35: vi.mock('@/lib/db', () => ({
+36:     markScanSynced: (...args: any[]) => dbMocks.markScanSynced(...args),
+37:     markPhotoSynced: (...args: any[]) => dbMocks.markPhotoSynced(...args),
+38:     markScanSyncFailed: (...args: any[]) => dbMocks.markScanSyncFailed(...args),
+39:     markPhotoSyncFailed: (...args: any[]) => dbMocks.markPhotoSyncFailed(...args),
+40:     getPendingUploads: (...args: any[]) => dbMocks.getPendingUploads(...args),
+41:     cleanupOfflineRecords: (...args: any[]) => dbMocks.cleanupOfflineRecords(...args),
+42: }));
+43: 
+44: vi.mock('@/lib/api-config', () => ({
+45:     getServiceURL: () => '/api/ingestion',
+46: }));
+47: 
+48: import { useSync } from '@/hooks/use-sync';
+49: 
+50: function setOnlineState(isOnline: boolean) {
+51:     Object.defineProperty(window.navigator, 'onLine', {
+52:         configurable: true,
+53:         value: isOnline,
+54:     });
+55: }
+56: 
+57: describe('useSync', () => {
+58:     beforeEach(() => {
+59:         vi.clearAllMocks();
+60:         setOnlineState(false);
+61:         mockUseAuth.mockReturnValue({
+62:             isAuthenticated: true,
+63:             tenantId: 'tenant-123',
+64:         });
+65:         dbMocks.cleanupOfflineRecords.mockResolvedValue(undefined);
+66:         dbMocks.markScanSynced.mockResolvedValue(undefined);
+67:         dbMocks.markPhotoSynced.mockResolvedValue(undefined);
+68:         dbMocks.markScanSyncFailed.mockResolvedValue(undefined);
+69:         dbMocks.markPhotoSyncFailed.mockResolvedValue(undefined);
+70:         dbMocks.getPendingUploads.mockResolvedValue({
+71:             scans: [],
+72:             photos: [],
+73:         });
+74:         fetchWithCsrfMock.mockResolvedValue({
+75:             ok: true,
+76:         });
+77:         mockMutateAsync.mockResolvedValue({ job_id: 'job-123' });
+78:     });
+79: 
+80:     it('replays pending scans through the cookie-backed ingest proxy without browser auth headers', async () => {
+81:         dbMocks.getPendingUploads.mockResolvedValue({
+82:             scans: [
+83:                 {
+84:                     id: 1,
+85:                     payload: JSON.stringify({
+86:                         source: 'mobile_scanner_pwa',
+87:                         tenant_id: 'tenant-123',
+88:                         events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-123' }],
+89:                     }),
+90:                     timestamp: Date.now(),
+91:                     cteType: 'receiving',
+92:                     content: 'LOT-123',
+93:                 },
+94:             ],
+95:             photos: [],
+96:         });
+97: 
+98:         const { result } = renderHook(() => useSync());
+99: 
+100:         setOnlineState(true);
+101:         await act(async () => {
+102:             await result.current.manualSync();
+103:         });
+104: 
+105:         await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+106: 
+107:         const [url, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+108:         const headers = new Headers(init?.headers);
+109:         expect(url).toBe('/api/ingestion/api/v1/webhooks/ingest');
+110:         expect(init?.method).toBe('POST');
+111:         expect(init?.credentials).toBe('include');
+112:         expect(headers.get('Content-Type')).toBe('application/json');
+113:         expect(headers.get('X-RegEngine-API-Key')).toBeNull();
+114:         expect(headers.get('X-Tenant-ID')).toBeNull();
+115:     });
+116: 
+117:     it('uploads pending photos without requiring an apiKey argument', async () => {
+118:         dbMocks.getPendingUploads.mockResolvedValue({
+119:             scans: [],
+120:             photos: [
+121:                 {
+122:                     id: 7,
+123:                     blob: new Blob(['fake-photo'], { type: 'image/jpeg' }),
+124:                     timestamp: Date.now(),
+125:                 },
+126:             ],
+127:         });
+128: 
+129:         const { result } = renderHook(() => useSync());
+130: 
+131:         setOnlineState(true);
+132:         await act(async () => {
+133:             await result.current.manualSync();
+134:         });
+135: 
+136:         await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
+137: 
+138:         const uploadArgs = mockMutateAsync.mock.calls[0]?.[0] as {
+139:             apiKey?: string | null;
+140:             file: File;
+141:             sourceSystem: string;
+142:         };
+143:         expect(uploadArgs.file).toBeInstanceOf(File);
+144:         expect(uploadArgs.sourceSystem).toBe('mobile_capture_pwa_offline');
+145:         expect('apiKey' in uploadArgs).toBe(false);
+146:     });
+147: 
+148:     it('does not sync when the user is signed out', async () => {
+149:         mockUseAuth.mockReturnValue({
+150:             isAuthenticated: false,
+151:             tenantId: 'tenant-123',
+152:         });
+153:         setOnlineState(true);
+154: 
+155:         const { result } = renderHook(() => useSync());
+156: 
+157:         await act(async () => {
+158:             await result.current.manualSync();
+159:         });
+160: 
+161:         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
+162:         expect(mockMutateAsync).not.toHaveBeenCalled();
+163:         expect(dbMocks.getPendingUploads).not.toHaveBeenCalled();
+164:     });
+165: });

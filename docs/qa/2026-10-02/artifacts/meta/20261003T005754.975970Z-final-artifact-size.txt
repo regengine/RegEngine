@@ -1,0 +1,11 @@
+UTC: 2026-10-03T00:57:54.975970+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; q=Path("docs/qa/2026-10-02"); files=[p for p in q.rglob("*") if p.is_file() and "__pycache__" not in p.parts]; print("QA files",len(files)); print("QA bytes",sum(p.stat().st_size for p in files)); print("Screenshots",len(list((q/"artifacts/ux").glob("*.jpg")))); print("Largest files",[(str(p.relative_to(q)),p.stat().st_size) for p in sorted(files,key=lambda p:p.stat().st_size,reverse=True)[:5]])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+QA files 355
+QA bytes 6434156
+Screenshots 9
+Largest files [('artifacts/backend/coverage-shared-broad.json', 907367), ('artifacts/backend/20261003T004257.713724Z-admin-auth-matrix.txt', 473112), ('artifacts/security/20261003T003615.339517Z-guidance-and-resume.txt', 148684), ('artifacts/frontend/20261003T003655.183624Z-frontend-baseline-coverage.txt', 143900), ('artifacts/security/20261003T003620.986253Z-policy-scope.txt', 139115)]

@@ -1,0 +1,493 @@
+{
+  "errors": [],
+  "csp": [
+    {
+      "directive": "script-src-attr",
+      "uri": "inline"
+    },
+    {
+      "directive": "connect-src",
+      "uri": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  ],
+  "requests": [],
+  "startedAt": "2026-10-03T00:47:39.184Z",
+  "lcp": 188,
+  "cls": 0,
+  "url": "/verify",
+  "width": 1728,
+  "height": 906,
+  "documentWidth": 1728,
+  "title": "RegEngine \u2014 Food Traceability That Protects Your Brand",
+  "cameraAllowed": false,
+  "headings": [
+    {
+      "level": "H1",
+      "text": "Verify, Don't Trust"
+    },
+    {
+      "level": "H2",
+      "text": "Verify an export bundle"
+    },
+    {
+      "level": "H3",
+      "text": "Deterministic File Hashing"
+    },
+    {
+      "level": "H3",
+      "text": "Open Source"
+    },
+    {
+      "level": "H3",
+      "text": "Offline Capable"
+    },
+    {
+      "level": "H2",
+      "text": "What It Looks Like"
+    },
+    {
+      "level": "H2",
+      "text": "Get Started in 30 Seconds"
+    },
+    {
+      "level": "H2",
+      "text": "Usage Examples"
+    },
+    {
+      "level": "H2",
+      "text": "How the Bundle Check Works"
+    },
+    {
+      "level": "H2",
+      "text": "Manifest Fields (Hash Inputs)"
+    },
+    {
+      "level": "H2",
+      "text": "Math Trust > Process Trust"
+    },
+    {
+      "level": "H2",
+      "text": "Product"
+    },
+    {
+      "level": "H2",
+      "text": "Free Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Developers"
+    },
+    {
+      "level": "H2",
+      "text": "Company"
+    },
+    {
+      "level": "H2",
+      "text": "We use cookies"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "id": "verify-bundle-file",
+      "type": "file",
+      "required": false,
+      "labels": [
+        "Drop your export bundle hereor click to browse \u2014 accepts .zip or .json"
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "text": "Tools",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Close menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "Verify bundle",
+      "name": null,
+      "disabled": true
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "Cookie Preferences",
+      "name": "Manage cookie preferences",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Open accessibility settings",
+      "disabled": false
+    },
+    {
+      "text": "AcceptAccept analytics",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "EssentialEssential only",
+      "name": null,
+      "disabled": false
+    }
+  ],
+  "navigation": [
+    {
+      "responseStart": 17.200000002980232,
+      "domContentLoaded": 167.20000000298023,
+      "duration": 267.20000000298023
+    }
+  ],
+  "paint": [
+    {
+      "name": "first-paint",
+      "startTime": 188
+    },
+    {
+      "name": "first-contentful-paint",
+      "startTime": 188
+    }
+  ],
+  "resources": [
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/33z6z3yqdhczo.css",
+      "duration": 26.69999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2opt17kb2-y1b.js",
+      "duration": 27.100000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0if-vqkhyn-zc.js",
+      "duration": 111.29999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/turbopack-0f7399f4d3jo7.js",
+      "duration": 127.69999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vgpv7vwitdbl.js",
+      "duration": 127.19999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2jje5iww_qd69.js",
+      "duration": 126.39999999850988
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1bp3h27_--af5.js",
+      "duration": 132.29999999701977
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/axe.js",
+      "duration": 17.900000005960464
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0vpy0j91tkt0g.js",
+      "duration": 131.90000000596046
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1rp06u4aestqa.js",
+      "duration": 132.10000000149012
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vwbp_e08hcyw.js",
+      "duration": 133
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3ayr3xiw5ibws.js",
+      "duration": 133.10000000149012
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2t9axac3ndvlm.js",
+      "duration": 133.10000000149012
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0495weyrij_jb.js",
+      "duration": 136.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/01k1n-h64sgdy.js",
+      "duration": 140.10000000149012
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3nu692rt2eook.js",
+      "duration": 140.60000000149012
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1jd45o61lrffn.js",
+      "duration": 143.80000000447035
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3c62jcaf4y1oz.js",
+      "duration": 144.80000000447035
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3mmrg7---us36.js",
+      "duration": 145.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/instrument.js",
+      "duration": 18.80000000447035
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/manifest.json",
+      "duration": 10.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 6.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/icon.png",
+      "duration": 55.69999999552965
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    }
+  ],
+  "axe": {
+    "version": "4.13.0",
+    "violations": [
+      {
+        "id": "nested-interactive",
+        "impact": "serious",
+        "tags": [
+          "cat.keyboard",
+          "wcag2a",
+          "wcag412",
+          "TTv5",
+          "TT6.a",
+          "EN-301-549",
+          "EN-9.4.1.2",
+          "RGAAv4",
+          "RGAA-7.1.1"
+        ],
+        "description": "Ensure interactive controls are not nested as they are not always announced by screen readers or can cause focus problems for assistive technologies",
+        "help": "Interactive controls must not be nested",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/nested-interactive?application=axeAPI",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "no-focusable-content",
+                "data": null,
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"icon-container\" role=\"button\" tabindex=\"0\" aria-label=\"Open AI Assistant\">",
+                    "target": [
+                      [
+                        "#aiFabShadowRoot",
+                        ".icon-container"
+                      ]
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has focusable descendants"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<div class=\"acrobat-button \" role=\"button\" aria-label=\"Get summaries and key insights using AI Assistant\">",
+            "target": [
+              [
+                "#aiFabShadowRoot",
+                ".acrobat-button"
+              ]
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has focusable descendants"
+          }
+        ]
+      }
+    ],
+    "incomplete": [
+      {
+        "id": "aria-valid-attr-value",
+        "impact": "critical",
+        "tags": [
+          "cat.aria",
+          "wcag2a",
+          "wcag412",
+          "EN-301-549",
+          "EN-9.4.1.2",
+          "RGAAv4",
+          "RGAA-7.1.1"
+        ],
+        "description": "Ensure all ARIA attributes have valid values",
+        "help": "ARIA attributes must conform to valid values",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/aria-valid-attr-value?application=axeAPI",
+        "nodes": [
+          {
+            "any": [],
+            "all": [
+              {
+                "id": "aria-valid-attr-value",
+                "data": {
+                  "messageKey": "controlsWithinPopup",
+                  "needsReview": "aria-controls=\"tools-dropdown\""
+                },
+                "relatedNodes": [],
+                "impact": "critical",
+                "message": "Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+              }
+            ],
+            "none": [],
+            "impact": "critical",
+            "html": "<button type=\"button\" aria-expanded=\"false\" aria-haspopup=\"true\" aria-controls=\"tools-dropdown\" class=\"inline-flex items-ce...\">",
+            "target": [
+              "button[aria-haspopup=\"true\"]"
+            ],
+            "failureSummary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"tools-dropdown\""
+          }
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=axeAPI",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.0pt (12px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscuring",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+            "target": [
+              ".text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+          }
+        ]
+      }
+    ],
+    "passes": [
+      "aria-allowed-attr",
+      "aria-allowed-role",
+      "aria-command-name",
+      "aria-conditional-attr",
+      "aria-deprecated-role",
+      "aria-dialog-name",
+      "aria-hidden-body",
+      "aria-hidden-focus",
+      "aria-prohibited-attr",
+      "aria-required-attr",
+      "aria-roles",
+      "aria-valid-attr-value",
+      "aria-valid-attr",
+      "avoid-inline-spacing",
+      "button-name",
+      "bypass",
+      "color-contrast",
+      "document-title",
+      "duplicate-id-aria",
+      "empty-heading",
+      "empty-table-header",
+      "form-field-multiple-labels",
+      "heading-order",
+      "html-has-lang",
+      "html-lang-valid",
+      "label-title-only",
+      "label",
+      "landmark-contentinfo-is-top-level",
+      "landmark-main-is-top-level",
+      "landmark-no-duplicate-contentinfo",
+      "landmark-no-duplicate-main",
+      "landmark-one-main",
+      "landmark-unique",
+      "link-in-text-block",
+      "link-name",
+      "list",
+      "meta-viewport-large",
+      "meta-viewport",
+      "nested-interactive",
+      "page-has-heading-one",
+      "region",
+      "scrollable-region-focusable",
+      "skip-link",
+      "tabindex",
+      "table-duplicate-name",
+      "target-size",
+      "td-headers-attr",
+      "th-has-data-cells"
+    ]
+  }
+}

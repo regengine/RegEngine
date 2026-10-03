@@ -1,0 +1,11 @@
+UTC: 2026-10-03T00:55:11.322118+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02"); print("UX report",(p/"UX-REPORT.md").exists()); print("UX rows",sum(s.startswith("| UX-") for s in (p/"FINDINGS.md").read_text().splitlines())); print("Redirect guard", "HTTPRedirectHandler" in (p/"scripts/ux-local-proxy.py").read_text()); print("Gate indexed", "GATE-SESSION-LOG.md" in (p/"SESSION-LOG.md").read_text())'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+UX report False
+UX rows 0
+Redirect guard True
+Gate indexed True

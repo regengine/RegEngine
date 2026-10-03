@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:48:19.153132+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/BACKEND-REPORT.md"); t=p.read_text().replace("test_qa_sweep_20261002_contract.py:124","test_qa_sweep_20261002_contract.py:125").replace("test_qa_sweep_20261002_contract.py:186","test_qa_sweep_20261002_contract.py:187"); t=t.replace("[final expected failures](artifacts/backend/20261003T004540.374674Z-ingest-after-final.txt)","[observed HTTP 500](artifacts/backend/20261003T004624.437197Z-invalid-encoding-evidence.txt)"); t=t.replace("| Narrow Ruff bug rules", "| Admin privilege/session modules alone, final guard | 34 passed; 286/370 statements (77.2973%) | [isolated matrix](artifacts/backend/20261003T004754.305855Z-admin-auth-final.txt) |\n| Narrow Ruff bug rules"); p.write_text(t); print("Updated line references, encoding evidence, and isolated admin result.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Updated line references, encoding evidence, and isolated admin result.

@@ -1,0 +1,530 @@
+UTC: 2026-10-03T00:52:10.986780+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/ux"); names=["20261003T004850.605460Z-mobile-dialog-source-lines.txt","20261003T004205.747355Z-login-verify-control-source.txt","20261003T005056.866742Z-demo-status-source.txt","20261003T005102.929390Z-narrow-verifier-axe-evidence.txt"]; [(print("FILE",n),print((p/n).read_text()[-16000:])) for n in names]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE 20261003T004850.605460Z-mobile-dialog-source-lines.txt
+UTC: 2026-10-03T00:48:50.605460+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; print("\n".join(f"{i}: {l}" for i,l in enumerate(Path("frontend/src/components/layout/header/MobileMenu.tsx").read_text().splitlines(),1)))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+1: 'use client';
+2: 
+3: import { filterExperimentalLinks } from '@/lib/experimental-features';
+4: import Link from 'next/link';
+5: import { X } from 'lucide-react';
+6: import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
+7: import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+8: import { ThemeToggle } from '@/components/layout/theme-toggle';
+9: import { cn } from '@/lib/utils';
+10: import { MobileMenuCTA } from './MobileMenuCTA';
+11: import type { MobileMenuProps } from './types';
+12: 
+13: /**
+14:  * Mobile navigation drawer.
+15:  *
+16:  * Every one of the seventeen inline style objects this file used to carry is
+17:  * now a token utility. The contract kept intact: `role="dialog"` +
+18:  * `aria-label="Navigation menu"`, the `.marketing-mobile-drawer` class hook,
+19:  * the safe-area insets, and the parent's `re:mobile-menu-state` CustomEvent
+20:  * (AccessibilityWidget and CookieBanner both listen for it).
+21:  */
+22: const LOGGED_IN_LINKS = [
+23:     { label: 'Dashboard', href: '/dashboard' },
+24:     { label: 'Heartbeat', href: '/dashboard/heartbeat' },
+25:     { label: 'Compliance', href: '/dashboard/compliance' },
+26:     { label: 'Alerts', href: '/dashboard/alerts' },
+27:     { label: 'Suppliers', href: '/dashboard/suppliers' },
+28:     { label: 'Products', href: '/dashboard/products' },
+29:     { label: 'Settings', href: '/dashboard/settings' },
+30: ];
+31: 
+32: export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
+33:     return (
+34:         <>
+35:             {/* Drawer scrim */}
+36:             <div
+37:                 className={cn(
+38:                     'fixed inset-0 z-[var(--re-z-sticky)] bg-re-surface-overlay backdrop-blur-[4px] transition-[opacity,visibility] duration-240 motion-reduce:transition-none',
+39:                     mobileOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+40:                 )}
+41:                 onClick={() => setMobileOpen(false)}
+42:                 aria-hidden="true"
+43:             />
+44: 
+45:             {/* Drawer panel */}
+46:             <div
+47:                 className={cn(
+48:                     'marketing-mobile-drawer fixed bottom-0 right-0 top-0 z-[var(--re-z-modal)] flex w-[min(320px,85vw)] flex-col overflow-y-auto border-l border-[var(--re-mobile-border)] bg-[var(--re-mobile-menu-bg)] pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] transition-[transform,visibility] duration-240 motion-reduce:transition-none',
+49:                     mobileOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'
+50:                 )}
+51:                 role="dialog"
+52:                 aria-modal={mobileOpen ? true : undefined}
+53:                 aria-hidden={!mobileOpen}
+54:                 aria-label="Navigation menu"
+55:             >
+56:                 {/* Drawer header */}
+57:                 <div className="flex min-h-[56px] items-center justify-between border-b border-[var(--re-mobile-border)] px-5 py-4">
+58:                     <RegEngineWordmark size="sm" />
+59:                     <button
+60:                         type="button"
+61:                         onClick={() => setMobileOpen(false)}
+62:                         aria-label="Close menu"
+63:                         className="-mr-2 flex h-11 w-11 items-center justify-center rounded-md border-0 bg-transparent p-0 text-re-text-muted transition-colors duration-120 hover:bg-re-surface-inset hover:text-re-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring motion-reduce:transition-none"
+64:                     >
+65:                         <X aria-hidden="true" size={20} strokeWidth={1.75} />
+66:                     </button>
+67:                 </div>
+68: 
+69:                 {/* Primary nav links */}
+70:                 <div className="px-3 py-2">
+71:                     {filterExperimentalLinks(user ? LOGGED_IN_LINKS : MARKETING_PRIMARY_NAV).map((item) => (
+72:                         <Link
+73:                             key={item.label}
+74:                             href={item.href}
+75:                             onClick={() => setMobileOpen(false)}
+76:                             aria-current={pathname === item.href ? 'page' : undefined}
+77:                             className={`relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline ${
+78:                                 pathname === item.href
+79:                                     ? 'bg-re-surface-inset font-medium text-re-text-primary'
+80:                                     : 'text-re-text-secondary'
+81:                             } transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none`}
+82:                         >
+83:                             {pathname === item.href && (
+84:                                 <span
+85:                                     aria-hidden="true"
+86:                                     className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-re-brand"
+87:                                 />
+88:                             )}
+89:                             {item.label}
+90:                         </Link>
+91:                     ))}
+92:                 </div>
+93: 
+94:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+95: 
+96:                 {/* Free tools */}
+97:                 <div className="px-3 py-2">
+98:                     <div className="px-3 pb-1 pt-2 text-label uppercase text-re-text-muted">
+99:                         FSMA 204 Compliance Tools
+100:                     </div>
+101:                     {[...MARKETING_FREE_TOOLS, MARKETING_ALL_TOOLS_LINK].map((tool) => (
+102:                         <Link
+103:                             key={tool.href}
+104:                             href={tool.href}
+105:                             onClick={() => setMobileOpen(false)}
+106:                             className="flex min-h-[48px] items-start gap-3 rounded-md p-3 no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
+107:                         >
+108:                             <tool.icon
+109:                                 aria-hidden="true"
+110:                                 size={16}
+111:                                 strokeWidth={1.75}
+112:                                 className="mt-0.5 shrink-0 text-re-text-tertiary"
+113:                             />
+114:                             <span className="min-w-0">
+115:                                 <span className="block text-ui font-medium text-re-text-primary">
+116:                                     {tool.href === '/tools' ? `${tool.label} →` : tool.label}
+117:                                 </span>
+118:                                 <span className="mt-0.5 block text-small text-re-text-tertiary">{tool.desc}</span>
+119:                             </span>
+120:                         </Link>
+121:                     ))}
+122:                 </div>
+123: 
+124:                 <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+125: 
+126:                 {/* Theme */}
+127:                 <div className="flex items-center justify-between px-6 py-3">
+128:                     <span className="text-ui text-re-text-secondary">Theme</span>
+129:                     <ThemeToggle />
+130:                 </div>
+131: 
+132:                 <div className="flex-1" />
+133: 
+134:                 <MobileMenuCTA user={user} showLoggedIn={showLoggedIn} setMobileOpen={setMobileOpen} />
+135:             </div>
+136:         </>
+137:     );
+138: }
+
+FILE 20261003T004205.747355Z-login-verify-control-source.txt
+UTC: 2026-10-03T00:42:05.747355+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; print(Path("frontend/src/app/login/page.tsx").read_text()); p=Path("frontend/src/app/verify/page.tsx"); print("VERIFY", "\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if 145<=i<=280)); print("LOGIN CANDIDATES",[str(p) for p in Path("frontend/src").rglob("*login*")])'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+import { Suspense } from 'react';
+import PasswordlessEntryClient from './PasswordlessEntryClient';
+
+export default function LoginPageWrapper() {
+    return (
+        <Suspense>
+            <PasswordlessEntryClient />
+        </Suspense>
+    );
+}
+
+VERIFY 145:     | { kind: 'idle' }
+146:     | { kind: 'loading' }
+147:     | { kind: 'success'; data: VerifyResponse }
+148:     | { kind: 'error'; message: string };
+149: 
+150: function VerifyWidget() {
+151:     const [state, setState] = useState<VerifyState>({ kind: 'idle' });
+152:     const [file, setFile] = useState<File | null>(null);
+153:     const [dragOver, setDragOver] = useState(false);
+154:     const inputRef = useRef<HTMLInputElement>(null);
+155: 
+156:     const handleFile = useCallback((f: File | null) => {
+157:         if (!f) return;
+158:         setFile(f);
+159:         setState({ kind: 'idle' });
+160:     }, []);
+161: 
+162:     const onDrop = useCallback(
+163:         (e: React.DragEvent<HTMLLabelElement>) => {
+164:             e.preventDefault();
+165:             setDragOver(false);
+166:             const f = e.dataTransfer.files?.[0] ?? null;
+167:             handleFile(f);
+168:         },
+169:         [handleFile],
+170:     );
+171: 
+172:     const onSubmit = useCallback(async () => {
+173:         if (!file) return;
+174:         setState({ kind: 'loading' });
+175: 
+176:         const formData = new FormData();
+177:         formData.append('bundle', file);
+178: 
+179:         try {
+180:             const res = await fetch(PROOF_VERIFY_ENDPOINT, {
+181:                 method: 'POST',
+182:                 body: formData,
+183:             });
+184: 
+185:             if (res.status === 429) {
+186:                 setState({
+187:                     kind: 'error',
+188:                     message:
+189:                         'Rate limit reached (10/min). Try again in a minute.',
+190:                 });
+191:                 return;
+192:             }
+193: 
+194:             if (!res.ok) {
+195:                 setState({
+196:                     kind: 'error',
+197:                     message: `Verification failed (HTTP ${res.status}). Try again shortly, or run verify_chain.py locally.`,
+198:                 });
+199:                 return;
+200:             }
+201: 
+202:             const data = (await res.json()) as VerifyResponse;
+203:             setState({ kind: 'success', data });
+204:         } catch {
+205:             setState({
+206:                 kind: 'error',
+207:                 message:
+208:                     'Could not reach the verifier endpoint. Try again shortly, or run verify_chain.py locally.',
+209:             });
+210:         }
+211:     }, [file]);
+212: 
+213:     const reset = useCallback(() => {
+214:         setFile(null);
+215:         setState({ kind: 'idle' });
+216:         if (inputRef.current) inputRef.current.value = '';
+217:     }, []);
+218: 
+219:     return (
+220:         <Card className="p-6 sm:p-8">
+221:             {/* ─── Drop zone ─────────────────────────────────────── */}
+222:             {state.kind !== 'success' && (
+223:                 <label
+224:                     htmlFor="verify-bundle-file"
+225:                     onDragOver={(e) => {
+226:                         e.preventDefault();
+227:                         setDragOver(true);
+228:                     }}
+229:                     onDragLeave={() => setDragOver(false)}
+230:                     onDrop={onDrop}
+231:                     className="block cursor-pointer"
+232:                 >
+233:                     <input
+234:                         id="verify-bundle-file"
+235:                         ref={inputRef}
+236:                         type="file"
+237:                         accept=".zip,.json,application/zip,application/json"
+238:                         className="sr-only"
+239:                         onChange={(e) =>
+240:                             handleFile(e.target.files?.[0] ?? null)
+241:                         }
+242:                     />
+243:                     <EmptyState
+244:                         icon={file ? FileArchive : Upload}
+245:                         title={file ? file.name : 'Drop your export bundle here'}
+246:                         description={
+247:                             file
+248:                                 ? `${(file.size / 1024).toFixed(1)} KB — click to choose a different file`
+249:                                 : 'or click to browse — accepts .zip or .json'
+250:                         }
+251:                         className={cn(
+252:                             'transition-colors duration-120 motion-reduce:transition-none',
+253:                             dragOver && 'border-re-brand bg-re-surface-inset',
+254:                         )}
+255:                     />
+256:                 </label>
+257:             )}
+258: 
+259:             {/* ─── Action row ────────────────────────────────────── */}
+260:             {state.kind !== 'success' && (
+261:                 <div className="mt-5 flex flex-wrap items-center gap-3">
+262:                     <Button
+263:                         size="lg"
+264:                         onClick={onSubmit}
+265:                         disabled={!file}
+266:                         loading={state.kind === 'loading'}
+267:                         leadingIcon={<ShieldCheck strokeWidth={1.75} aria-hidden="true" />}
+268:                     >
+269:                         {state.kind === 'loading' ? 'Verifying…' : 'Verify bundle'}
+270:                     </Button>
+271:                     {file && state.kind !== 'loading' && (
+272:                         <Button variant="secondary" size="lg" onClick={reset}>
+273:                             Clear
+274:                         </Button>
+275:                     )}
+276:                 </div>
+277:             )}
+278: 
+279:             {state.kind === 'error' && (
+280:                 <Callout tone="danger" role="alert" className="mt-4">
+LOGIN CANDIDATES ['frontend/src/app/login', 'frontend/src/__tests__/auth/login.test.tsx', 'frontend/src/app/developer/login']
+
+FILE 20261003T005056.866742Z-demo-status-source.txt
+UTC: 2026-10-03T00:50:56.866742+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; subprocess.run(["rg","-n","function DemoBanner|Backend unavailable|DemoBanner visible","frontend/src"]); print("CURRENT AXE"); import json;
+for f in Path("docs/qa/2026-10-02/artifacts/ux").glob("chrome-axe*.json"):
+ d=json.loads(f.read_text()); v=[(x["id"],len(x["nodes"])) for x in d["axe"]["violations"] if not all("aiFabShadowRoot" in str(n["target"]) for n in x["nodes"])]; print(f.name,"width",d["width"],"doc",d["documentWidth"],"product violations",v)'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+frontend/src/components/control-plane/demo-banner.tsx:5:export function DemoBanner({ visible }: { visible: boolean }) {
+frontend/src/components/control-plane/demo-banner.tsx:10:        <strong className="font-medium text-re-text-primary">Sample Data</strong> — Backend unavailable.
+frontend/src/__tests__/components/demo-banner.test.tsx:11:        render(<DemoBanner visible={true} />);
+frontend/src/__tests__/components/demo-banner.test.tsx:16:        render(<DemoBanner visible={true} />);
+frontend/src/__tests__/components/demo-banner.test.tsx:22:        const { container } = render(<DemoBanner visible={false} />);
+frontend/src/app/exceptions/page.tsx:242:      <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
+frontend/src/app/compliance/profile/page.tsx:130:            setSaveMessage({ type: 'error', text: 'Failed to save profile. Backend unavailable.' });
+frontend/src/app/rules/page.tsx:177:      <DemoBanner visible={!!(rules.data?.__isDemo)} />
+frontend/src/app/audit/page.tsx:168:      <DemoBanner visible={false} />
+frontend/src/app/records/page.tsx:159:      <DemoBanner visible={!!(events.data?.__isDemo)} />
+frontend/src/app/identity/page.tsx:203:        <DemoBanner visible={!!(entities.data?.__isDemo)} />
+frontend/src/app/requests/page.tsx:146:      <DemoBanner visible={!!(requests.data?.__isDemo)} />
+frontend/src/app/demo/page.tsx:86:        <DemoBanner visible={true} />
+CURRENT AXE
+chrome-axe_verify-320-004936758162.json width 320 doc 320 product violations [('scrollable-region-focusable', 6)]
+chrome-axe_login-1728-1.json width 1728 doc 1728 product violations []
+chrome-axe_verify-1728-1.json width 1728 doc 1728 product violations []
+chrome-axe_-390-004818082219.json width 390 doc 390 product violations []
+chrome-axe_demo-390-005044980842.json width 390 doc 390 product violations []
+chrome-axe_contact-1728-005025461082.json width 1728 doc 1728 product violations []
+chrome-axe_-1728-2.json width 1728 doc 1728 product violations []
+chrome-axe_-1728-1.json width 1728 doc 1728 product violations []
+
+FILE 20261003T005102.929390Z-narrow-verifier-axe-evidence.txt
+UTC: 2026-10-03T00:51:02.929390+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import json;from pathlib import Path;d=json.loads(Path("docs/qa/2026-10-02/artifacts/ux/chrome-axe_verify-320-004936758162.json").read_text()); print(json.dumps([{k:v for k,v in x.items() if k in {"id","impact","tags","nodes"}} for x in d["axe"]["violations"]],indent=2)[:9500])'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+[
+  {
+    "id": "scrollable-region-focusable",
+    "impact": "serious",
+    "tags": [
+      "cat.keyboard",
+      "wcag2a",
+      "wcag211",
+      "wcag213",
+      "TTv5",
+      "TT4.a",
+      "EN-301-549",
+      "EN-9.2.1.1",
+      "EN-9.2.1.3",
+      "RGAAv4",
+      "RGAA-7.3.2"
+    ],
+    "nodes": [
+      {
+        "any": [
+          {
+            "id": "focusable-content",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should have focusable content"
+          },
+          {
+            "id": "focusable-element",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should be focusable"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<pre class=\"m-0 max-h-[480px] overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary\">",
+        "target": [
+          ".max-h-\\[480px\\]"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+      },
+      {
+        "any": [
+          {
+            "id": "focusable-content",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should have focusable content"
+          },
+          {
+            "id": "focusable-element",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should be focusable"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/sdk/verify_chain.py</code>",
+        "target": [
+          ".p-5.items-start.gap-4:nth-child(1) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+      },
+      {
+        "any": [
+          {
+            "id": "focusable-content",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should have focusable content"
+          },
+          {
+            "id": "focusable-element",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should be focusable"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/proof/audit-bundle.zip</code>",
+        "target": [
+          ".p-5.items-start.gap-4:nth-child(2) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+      },
+      {
+        "any": [
+          {
+            "id": "focusable-content",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should have focusable content"
+          },
+          {
+            "id": "focusable-element",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should be focusable"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">python verify_chain.py audit-bundle.zip</code>",
+        "target": [
+          ".p-5.items-start.gap-4:nth-child(3) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+      },
+      {
+        "any": [
+          {
+            "id": "focusable-content",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should have focusable content"
+          },
+          {
+            "id": "focusable-element",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should be focusable"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<pre class=\"m-0 overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary\">",
+        "target": [
+          ".sm\\:pb-\\[60px\\].pb-10:nth-child(6) > .overflow-hidden.border-re-border.rounded-lg > pre"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+      },
+      {
+        "any": [
+          {
+            "id": "focusable-content",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should have focusable content"
+          },
+          {
+            "id": "focusable-element",
+            "data": null,
+            "relatedNodes": [],
+            "impact": "serious",
+            "message": "Element should be focusable"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<div class=\"relative w-full overflow-x-auto\">",
+        "target": [
+          ".overflow-x-auto.relative.w-full"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+      }
+    ]
+  }
+]
+

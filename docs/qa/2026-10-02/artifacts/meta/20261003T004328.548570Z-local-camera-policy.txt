@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:43:28.548570+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import urllib.request; r=urllib.request.urlopen("http://127.0.0.1:3104/tools/scan", timeout=15); print("local HTTP",r.status); print("Permissions-Policy",r.headers.get("Permissions-Policy")); r.close()'
+Exit: 0
+Duration: 0.08s
+Timeout: False
+
+local HTTP 200
+Permissions-Policy camera=(), microphone=(), geolocation=()

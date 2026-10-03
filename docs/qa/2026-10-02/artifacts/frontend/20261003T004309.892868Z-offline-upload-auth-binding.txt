@@ -1,0 +1,198 @@
+UTC: 2026-10-03T00:43:09.892868+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import subprocess;print(subprocess.check_output(["rg","-n","useIngestFile|ingestFile|clearSession|clearCredentials|setCurrentTenant","frontend/src/hooks/use-api.ts","frontend/src/lib/api-client.ts","frontend/src/lib/auth-context.tsx"],text=True));ranges={"frontend/src/hooks/use-api.ts":(91,135),"frontend/src/lib/api-client.ts":(330,400),"frontend/src/lib/auth-context.tsx":(445,477),"frontend/src/components/mobile/FieldCaptureClient.tsx":(335,357)};[(print("FILE",p),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p).read_text().splitlines(),1) if lo<=i<=hi))) for p,(lo,hi) in ranges.items()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+frontend/src/lib/api-client.ts:212:  setCurrentTenant(tenantId: string | null): void {
+frontend/src/lib/api-client.ts:424:  async ingestFile(apiKey: [REDACTED] | null | undefined, file: File, sourceSystem: string = 'csv_upload', cteType?: string): Promise<IngestCSVResponse> {
+frontend/src/lib/auth-context.tsx:26:  clearCredentials: () => Promise<void>;
+frontend/src/lib/auth-context.tsx:122:async function clearSessionCookies(): Promise<void> {
+frontend/src/lib/auth-context.tsx:256:        clearSessionCookies();
+frontend/src/lib/auth-context.tsx:401:    if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
+frontend/src/lib/auth-context.tsx:445:  const clearCredentials = useCallback(async () => {
+frontend/src/lib/auth-context.tsx:456:    apiClient.setCurrentTenant(null);
+frontend/src/lib/auth-context.tsx:461:    await clearSessionCookies();
+frontend/src/lib/auth-context.tsx:466:    await clearCredentials();
+frontend/src/lib/auth-context.tsx:468:  }, [clearCredentials]);
+frontend/src/lib/auth-context.tsx:502:        clearCredentials,
+frontend/src/hooks/use-api.ts:181:export const useIngestFile = () => {
+frontend/src/hooks/use-api.ts:188:    }) => apiClient.ingestFile(apiKey, file, sourceSystem, cteType),
+
+FILE frontend/src/hooks/use-api.ts
+91:       : healthyCount > 0
+92:         ? 'degraded'
+93:         : 'unhealthy';
+94: 
+95:   return { overall_status, services };
+96: }
+97: 
+98: export const useSystemStatus = () => {
+99:   const query = useQuery({
+100:     queryKey: ['system', 'status'],
+101:     queryFn: fetchAggregatedStatus,
+102:     refetchInterval: POLL_HEALTH,
+103:     retry: false,
+104:   });
+105:   return {
+106:     ...query,
+107:     data: query.data ?? (query.error ? DEMO_STATUS : undefined),
+108:   };
+109: };
+110: 
+111: export const useSystemMetrics = () => {
+112:   const query = useQuery({
+113:     queryKey: ['system', 'metrics'],
+114:     queryFn: () => apiClient.getSystemMetrics(),
+115:     refetchInterval: POLL_METRICS,
+116:     retry: false,
+117:   });
+118:   return {
+119:     ...query,
+120:     data: query.data ?? (query.error ? DEMO_METRICS : undefined),
+121:   };
+122: };
+123: 
+124: export const useQAHealth = (enabled = true) => {
+125:   return useQuery({
+126:     queryKey: ['system', 'qa-health'],
+127:     queryFn: () => apiClient.getQAHealth(),
+128:     staleTime: 60_000,
+129:     retry: false,
+130:     enabled,
+131:   });
+132: };
+133: 
+134: export const useAPIKeys = (enabled = true) => {
+135:   return useQuery({
+FILE frontend/src/lib/api-client.ts
+330:       patch: (path, data, config) => request('PATCH', path, data, config),
+331:       delete: (path, config) => request('DELETE', path, undefined, config),
+332:     };
+333:   }
+334: 
+335: 
+336:   constructor() {
+337:     this.adminClient = this.createClient(getServiceURL('admin'));
+338: 
+339:     // For browser requests, use the Next.js API proxy
+340:     // For server-side, use the backend service directly
+341:     const ingestionBaseUrl = getServiceURL('ingestion');
+342:     this.ingestionClient = this.createClient(ingestionBaseUrl);
+343:     this.complianceClient = this.createClient(getServiceURL('compliance'));
+344:     this.graphClient = this.createClient(getServiceURL('graph'));
+345:   }
+346: 
+347:   // Admin API
+348:   async getAdminHealth(): Promise<HealthCheckResponse> {
+349:     const { data } = await this.adminClient.get('/health');
+350:     return data;
+351:   }
+352: 
+353:   async getSystemStatus(): Promise<SystemStatusResponse> {
+354:     const { data } = await this.adminClient.get('/v1/system/status');
+355:     return data;
+356:   }
+357: 
+358:   async getSystemMetrics(): Promise<SystemMetricsResponse> {
+359:     const { data } = await this.adminClient.get('/v1/system/metrics', { timeout: 8000 });
+360:     return data;
+361:   }
+362: 
+363:   async getQAHealth(): Promise<QAHealthResponse> {
+364:     const { data } = await this.adminClient.get('/v1/system/qa-health', { timeout: 8000 });
+365:     return data;
+366:   }
+367: 
+368: 
+369:   async createAPIKey(params: {
+370:     name: string;
+371:     description?: string;
+372:     tenantId?: string;
+373:   }): Promise<APIKeyResponse> {
+374:     const { data } = await this.adminClient.post(
+375:       '/v1/admin/keys',
+376:       {
+377:         name: params.name,
+378:         description: params.description,
+379:         tenant_id: params.tenantId,
+380:       },
+381:     );
+382:     return data;
+383:   }
+384: 
+385:   async generateAPIKey(tenantId?: string): Promise<APIKeyResponse> {
+386:     const { data } = await this.adminClient.post(
+387:       '/v1/admin/keys',
+388:       {
+389:         name: 'Developer Portal Generated Key',
+390:         tenant_id: tenantId,
+391:       },
+392:     );
+393:     return data;
+394:   }
+395: 
+396:   async listAPIKeys(): Promise<APIKeyResponse[]> {
+397:     const { data } = await this.adminClient.get<CollectionResponse<APIKeyResponse>>('/v1/admin/keys');
+398:     return normalizeCollection(data);
+399:   }
+400: 
+FILE frontend/src/lib/auth-context.tsx
+445:   const clearCredentials = useCallback(async () => {
+446:     setApiKeyState(null);
+447:     setTenantIdState(null);
+448:     setAccessTokenState(null);
+449:     setAuthMethodState(null);
+450:     setUserState(null);
+451:     setIsOnboarded(false);
+452:     setDemoModeState(false);
+453: 
+454:     apiClient.setAccessToken(null);
+455:     apiClient.setUser(null);
+456:     apiClient.setCurrentTenant(null);
+457: 
+458:     if (typeof window !== 'undefined') {
+459:       Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+460:     }
+461:     await clearSessionCookies();
+462:   }, []);
+463: 
+464:   const logout = useCallback(async () => {
+465:     logoutInProgressRef.current = true;
+466:     await clearCredentials();
+467:     logoutInProgressRef.current = false;
+468:   }, [clearCredentials]);
+469: 
+470:   const isAuthenticated = !!(user && accessToken);
+471:   const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
+472:   const hasTenantSession = isAuthenticated && !!tenantId;
+473:   const hasAdminSession = Boolean(
+474:     isAuthenticated && (
+475:       user?.is_sysadmin ||
+476:       normalizedRoleName === 'admin' ||
+477:       normalizedRoleName === 'owner' ||
+FILE frontend/src/components/mobile/FieldCaptureClient.tsx
+335: 
+336:                 toast({
+337:                     title: 'Label Analyzed & Ingested',
+338:                     description: `${productName} — ${visionData.fsma_kdes?.length || 0} KDEs extracted`,
+339:                 });
+340:             } else {
+341:                 // Vision failed — fall back to raw file upload
+342:                 await ingestFileMutation.mutateAsync({ file, sourceSystem: 'mobile_capture_pwa' });
+343:                 toast({ title: 'Photo Uploaded', description: 'Vision analysis unavailable — raw image stored.' });
+344:             }
+345:         } catch {
+346:             await savePhoto(blob);
+347:             toast({
+348:                 title: 'Upload Failed - Saved Offline',
+349:                 description: 'Saved locally for later sync.',
+350:                 variant: 'destructive',
+351:             });
+352:         }
+353:     };
+354: 
+355:     return (
+356:         <div className="min-h-screen bg-re-surface-base pb-20">
+357:             <div className="sticky top-0 z-50 w-full border-b border-re-border-subtle bg-re-surface-base/95 backdrop-blur">

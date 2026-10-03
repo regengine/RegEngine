@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:38:40.977928+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -A55 -B8 'async def ingest|def ingest|@router.post|def _get_db' services/ingestion/app/webhook_router_v2.py
+Exit: 2
+Duration: 0.00s
+Timeout: False
+
+rg: services/ingestion/app/webhook_router_v2.py: IO error for operation on services/ingestion/app/webhook_router_v2.py: No such file or directory (os error 2)

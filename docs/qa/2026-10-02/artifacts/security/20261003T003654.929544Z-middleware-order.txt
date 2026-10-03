@@ -1,0 +1,87 @@
+UTC: 2026-10-03T00:36:54.929544+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "320,356p" server/main.py; rg -n "class Idempotency|body\(|receive|MAX|content.length|scope|tenant|permission" services/shared/middleware/idempotency.py; rg -n "class RequestSize|receive|content.length|body" services/shared/middleware/request_limits.py; rg -n "^class|def |@router|Depends|require_permission" services/ingestion/app/fda_export/router.py | head -120; rg -n "^class|def |@router|Depends|require_permission" services/ingestion/app/fsma_compliance_router.py | head -100'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+
+# Middleware is registered in reverse execution order. RequestIDMiddleware is
+# added after AuditContextMiddleware so it establishes request.state.request_id
+# first; the audit layer then reuses that ID and applies trusted-proxy source-IP
+# resolution to privileged routes.
+app.add_middleware(AuditContextMiddleware)
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(TenantContextMiddleware)
+# default_rpm=100 matches the consolidated services (ingestion/compliance/nlp/
+# graph all use 100) and the documented production default. The monolith is the
+# union of those services, so the stricter ceiling is the correct floor.
+# Operators can still raise it per-deploy via TENANT_RATE_LIMIT_RPM.
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+# Issue #2307: surface X-RateLimit-* headers on 2xx responses by mirroring
+# ``request.state.rate_limit_*`` (populated by authz/routes_ingest/webhook
+# rate-limit guards) onto the outbound response. Read-only: never consumes
+# the bucket, so no double-counting.
+from services.ingestion.app.middleware import RateLimitHeadersMiddleware
+
+app.add_middleware(RateLimitHeadersMiddleware)
+
+from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
+# #1232 — wire the shared IdempotencyMiddleware so webhook_router_v2
+# (and every other POST endpoint) de-duplicates retried requests via the
+# ``Idempotency-Key`` header. Cache keys are tenant-scoped (#1237) so
+# two tenants can safely pick the same key.
+from shared.idempotency import IdempotencyMiddleware
+
+app.add_middleware(IdempotencyMiddleware)
+
+# EPIC-I (#1316): correlation-id middleware. Registered last so Starlette's
+# reverse-LIFO middleware stack runs it FIRST — every downstream handler,
+# logger, and outbound call sees the X-Correlation-ID header value via
+rg: services/shared/middleware/idempotency.py: IO error for operation on services/shared/middleware/idempotency.py: No such file or directory (os error 2)
+rg: services/shared/middleware/request_limits.py: IO error for operation on services/shared/middleware/request_limits.py: No such file or directory (os error 2)
+31:from fastapi import APIRouter, Depends, HTTPException, Query, Request
+42:from ..authz import IngestionPrincipal, require_permission
+104:def _authorize_pii_access(
+168:def _audit_identity(
+194:@router.get(
+221:def export_fda_spreadsheet(
+249:    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
+250:    _subscription=Depends(require_active_subscription),
+498:@router.get(
+516:def export_all_events(
+537:    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
+538:    _subscription=Depends(require_active_subscription),
+785:@router.get(
+791:async def export_history(
+794:    principal: IngestionPrincipal = Depends(require_permission("fda.read")),
+795:    _subscription=Depends(require_active_subscription),
+817:@router.get(
+836:async def export_recall_filtered(
+860:    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
+861:    _subscription=Depends(require_active_subscription),
+904:@router.post(
+913:async def verify_export(
+916:    principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+917:    _subscription=Depends(require_active_subscription),
+933:@router.get(
+956:def export_fda_spreadsheet_v2(
+978:    principal: IngestionPrincipal = Depends(require_permission("fda.export")),
+979:    _subscription=Depends(require_active_subscription),
+1226:@router.get(
+1235:async def get_merkle_root(
+1237:    principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+1238:    _subscription=Depends(require_active_subscription),
+1246:@router.get(
+1255:async def get_merkle_proof(
+1258:    principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+1259:    _subscription=Depends(require_active_subscription),
+1272:@router.get(
+1286:def trace_transformation_graph(
+1290:    principal: IngestionPrincipal = Depends(require_permission("fda.read")),
+1291:    _subscription=Depends(require_active_subscription),
+rg: services/ingestion/app/fsma_compliance_router.py: IO error for operation on services/ingestion/app/fsma_compliance_router.py: No such file or directory (os error 2)

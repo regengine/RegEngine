@@ -1,0 +1,7 @@
+UTC: 2026-10-03T00:36:44.627518+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node --check docs/qa/2026-10-02/scripts/node-isolation.cjs
+Exit: 0
+Duration: 0.03s
+Timeout: False
+

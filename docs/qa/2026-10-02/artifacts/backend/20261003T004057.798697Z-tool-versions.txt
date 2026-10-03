@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:40:57.798697+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -c 'import importlib.metadata as m; pkgs=["pytest","coverage","hypothesis","fastapi","pydantic","httpx","ruff","mypy"]; [(print(p,m.version(p))) for p in pkgs if m.packages_distributions().get(p.replace("-","_"))]'
+Exit: 0
+Duration: 0.61s
+Timeout: False
+
+pytest 9.0.3
+coverage 7.13.5
+hypothesis 6.152.4
+fastapi 0.136.0
+pydantic 2.13.2
+httpx 0.28.1

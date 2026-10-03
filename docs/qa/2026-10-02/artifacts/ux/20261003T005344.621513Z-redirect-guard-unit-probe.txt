@@ -1,0 +1,15 @@
+UTC: 2026-10-03T00:53:44.621513+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import urllib.request,urllib.error; source=Path("docs/qa/2026-10-02/scripts/ux-local-proxy.py").read_text(); namespace={"__file__":str(Path("docs/qa/2026-10-02/scripts/ux-local-proxy.py").resolve())}; exec(source.split("server=ThreadingHTTPServer",1)[0],namespace); handler=namespace["LocalRedirectsOnly"]();
+for target in ["https://example.invalid","http://127.0.0.1:3103","http://localhost:3104"]:
+ try: handler.redirect_request(urllib.request.Request("http://127.0.0.1:3104/"),None,302,"Found",{},target); raise AssertionError("unexpected redirect allowed")
+ except urllib.error.HTTPError as e: assert e.code==502; print("blocked",target)
+r=handler.redirect_request(urllib.request.Request("http://127.0.0.1:3104/"),None,302,"Found",{},"http://127.0.0.1:3104/login"); assert r.full_url=="http://127.0.0.1:3104/login"; print("PASS local redirect allowed;3 off-origin redirects blocked; no requests executed")'
+Exit: 0
+Duration: 0.07s
+Timeout: False
+
+blocked https://example.invalid
+blocked http://127.0.0.1:3103
+blocked http://localhost:3104
+PASS local redirect allowed;3 off-origin redirects blocked; no requests executed

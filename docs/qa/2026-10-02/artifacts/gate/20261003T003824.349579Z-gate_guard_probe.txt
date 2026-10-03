@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:38:24.349579+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node -e 'const net = require("node:net"); let reached = false; net.Socket.prototype.connect = function () { reached = true; return this; }; require("./docs/qa/2026-10-02/scripts/node-isolation.cjs"); const sock = new net.Socket(); for (const arg of [{host:"198.51.100.5",port:443},[{host:"198.51.100.5",port:443}]]) { reached=false; try { sock.connect(arg); console.log(JSON.stringify({form:Array.isArray(arg)?"normalized_array":"options",reachedOriginal:reached})); } catch(e) { console.log(JSON.stringify({form:Array.isArray(arg)?"normalized_array":"options",blocked:true,message:e.message})); } }'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+{"form":"options","blocked":true,"message":"QA isolation: off-host socket blocked"}
+{"form":"normalized_array","reachedOriginal":true}

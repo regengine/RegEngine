@@ -1,0 +1,26 @@
+UTC: 2026-10-03T00:37:53.511139+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess,os; temp=Path("/private/tmp/regengine-qa-ux-u2059hm8"); subprocess.run(["npm","install","--prefix",str(temp/"qa-tools"),"--ignore-scripts","--no-audit","--no-fund","axe-core"],check=True); subprocess.run(["node","frontend/node_modules/playwright/cli.js","install","chromium","firefox","webkit"],env=dict(os.environ,PLAYWRIGHT_BROWSERS_PATH=str(temp/"browsers")),check=True)'
+Exit: 1
+Duration: 0.45s
+Timeout: False
+
+npm error code EPERM
+npm error syscall open
+npm error path /Users/sellers/.npm/_cacache/tmp/***
+npm error errno EPERM
+npm error
+npm error Your cache folder contains root-owned files, due to a bug in previous versions of npm which has since been addressed.
+npm error
+npm error To permanently fix this problem, please run:
+npm error   sudo chown -R 501:20 "/Users/sellers/.npm"
+npm error Log files were not written due to an error writing to the directory: /Users/sellers/.npm/_logs
+npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from pathlib import Path; import subprocess,os; temp=Path("/private/tmp/regengine-qa-ux-u2059hm8"); subprocess.run(["npm","install","--prefix",str(temp/"qa-tools"),"--ignore-scripts","--no-audit","--no-fund","axe-core"],check=True); subprocess.run(["node","frontend/node_modules/playwright/cli.js","install","chromium","firefox","webkit"],env=dict(os.environ,PLAYWRIGHT_BROWSERS_PATH=str(temp/"browsers")),check=True)
+                                                                                                        ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['npm', 'install', '--prefix', '/private/tmp/regengine-qa-ux-u2059hm8/qa-tools', '--ignore-scripts', '--no-audit', '--no-fund', 'axe-core']' returned non-zero exit status 1.

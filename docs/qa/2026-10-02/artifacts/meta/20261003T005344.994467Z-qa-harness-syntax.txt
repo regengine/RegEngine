@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:53:44.994467+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; root=Path("docs/qa/2026-10-02/scripts"); py=list(root.glob("*.py")); js=list(root.glob("*.cjs")); [compile(p.read_text(),str(p),"exec") for p in py]; [subprocess.run(["node","--check",str(p)],check=True) for p in js]; print("Syntax passed:",len(py),"Python and",len(js),"Node QA scripts")'
+Exit: 0
+Duration: 0.09s
+Timeout: False
+
+Syntax passed: 5 Python and 2 Node QA scripts

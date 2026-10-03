@@ -1,0 +1,25 @@
+UTC: 2026-10-03T00:55:24.476071+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import ast,subprocess; p=Path("docs/qa/2026-10-02/scripts"); errors=[]; files=list(p.glob("*.py"))+list(p.glob("*.cjs"));
+for f in files:
+ try:
+  if f.suffix==".py": ast.parse(f.read_text(),filename=str(f))
+  else:
+   r=subprocess.run(["node","--check",str(f)],capture_output=True,text=True)
+   if r.returncode: raise ValueError(r.stderr)
+  print("PASS",f.name)
+ except Exception as e: errors.append((str(f),str(e)))
+print("errors",errors)
+raise SystemExit(bool(errors))'
+Exit: 0
+Duration: 0.10s
+Timeout: False
+
+PASS ux-server.py
+PASS backend_pytest.py
+PASS ux-local-proxy.py
+PASS run_logged.py
+PASS validate_handoff.py
+PASS node-isolation.cjs
+PASS ux-browser-pass.cjs
+errors []

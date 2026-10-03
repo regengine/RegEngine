@@ -1,0 +1,133 @@
+UTC: 2026-10-03T00:38:45.874853+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; paths=["docs/qa/2026-10-02/PLAN.md","docs/qa/2026-10-02/SESSION-LOG.md","docs/qa/2026-10-02/META-SESSION-LOG.md"]; [(print("FILE "+p),print(Path(p).read_text()[-14000:])) for p in paths]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE docs/qa/2026-10-02/PLAN.md
+# RegEngine QA sweep — 2026-10-02
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+## Scope and identity
+
+- Checkout: `/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine`.
+- Branch: `qa/2026-10-02-sweep`; baseline HEAD `0927b85a` (full SHA in the scope-map artifact).
+- Origin: `https://github.com/regengine/RegEngine.git`. Identity verified locally; no remote queries.
+- Initial interrupted inventory: 2026-10-02 23:46 UTC. Resumed: 2026-10-03 00:35 UTC. The directory retains the requested local date, 2026-10-02 (America/Los_Angeles).
+- Preserve all earlier artifacts. Timebox resumed work to approximately 60–90 minutes, prioritizing production-spine risk over exhaustive suite count.
+- Three separate groups apply: Backend QA, Frontend QA, UX QA. Each has its own pass report, UTC command log, charters, and artifact directory. Passes can execute concurrently with disjoint ownership. Backend security review is a supporting lane, not a fourth substitute group.
+
+## Repository map
+
+| Surface | Location | QA significance |
+| --- | --- | --- |
+| Consolidated FastAPI application | `server/main.py`, route policy/security manifests | Actual mounted surface, middleware ordering, auth policy |
+| Ingestion and exports | `services/ingestion/app/` | CSV/webhook/EPCIS normalization, validation, receipts, export integrity |
+| Shared evidence and tenancy | `services/shared/` | Canonical persistence, auth, tenant context, hash chains, retry/idempotency |
+| Administration | `services/admin/` | Users, sessions, API keys, privileges, audit records |
+| Compliance | `services/compliance/`, shared rules | Deterministic validation and explainable results |
+| Other service packages | `services/graph/`, `nlp/`, `scheduler/` | Secondary scope; do not confuse package boundaries with separate deployed services |
+| UI | `frontend/src/` | Next.js App Router, authenticated dashboard, ingestion workbench, public onboarding |
+| Existing tests | `tests/`, service test directories, `frontend/src/**/*.{test,spec}.*`, `frontend/tests/e2e/` | Unit/contract/security foundations plus expensive integration journeys |
+| Dependencies | `requirements.in`, `requirements.lock`, `frontend/package{,-lock}.json` | Reproducible install and advisory evidence |
+| Architecture guidance | `README.md`, `REPO_PURPOSE.md`, `ARCHITECTURE.md`, `CANONICAL_OWNERSHIP.md` | Current purpose; verify older implementation claims against source |
+
+The shared default checkout and team commit rules are superseded by this task's explicit worktree and orchestrator handoff. `docs/specs/FSMA_204_MVP_SPEC.md` labels itself legacy; its older Neo4j/Kafka and route claims are not assumed current.
+
+## Risk ranking
+
+Impact and likelihood use a 1–5 scale. Scores are planning judgments, not observed defect counts.
+
+| Rank | Area | Impact | Likelihood | Score | Reason |
+| --- | --- | ---: | ---: | ---: | --- |
+| 1 | Tenant isolation and authorization | 5 | 4 | 20 | Shared infrastructure and many router guards; one wrong scope can expose another customer's records |
+| 2 | Ingestion validation and evidence integrity | 5 | 4 | 20 | Malformed boundary values or false successful writes compromise the product's primary guarantee |
+| 3 | Retry, duplicate submission and export correctness | 5 | 3 | 15 | Replays/concurrency can duplicate evidence; exports must accurately represent persisted events |
+| 4 | Build/dependency reproducibility and client contracts | 4 | 4 | 16 | An unreproducible build blocks every release and limits runtime verification |
+| 5 | Main user journeys and error recovery | 4 | 3 | 12 | Upload/login/validation failures can prevent a customer completing the workflow |
+| 6 | Keyboard, screen-reader semantics, responsive layouts | 3 | 4 | 12 | Dense forms and dashboard navigation can exclude users or hide critical actions |
+| 7 | Resource use, latency and optional modules | 3 | 3 | 9 | Useful supporting evidence after core correctness; local performance cannot establish production SLOs |
+
+## Methods and pass charters
+
+Use the test pyramid: many isolated unit/schema/security checks, a smaller local API contract layer, and a few realistic browser journeys. Preserve existing failures. New defect witnesses are strict expected failures/skips carrying a finding ID; never loosen a product assertion to make a suite green. Distinguish verified bugs, source-supported risks, and unavailable checks.
+
+### Pass 1 — Backend QA
+
+- **BE-C1, 15 minutes:** challenge tenant/auth boundary decisions using existing negative-path tests and an explicit permissions matrix. Trace guards through actual router mounting; review OWASP API Top 10 categories with evidence and residual limits.
+- **BE-C2, 20 minutes:** test CSV/schema equivalence classes and boundaries (empty, malformed, overflow, non-finite numeric values), canonical evidence and retry/idempotency behavior. Use property-based cases where a stable pure-function boundary exists; stub I/O and prohibit remote connections.
+- **BE-C3, 10 minutes:** run static analysis/type checks on meaningful core surfaces and inspect dependency audit feasibility. Record unresolved imports/tooling instead of presenting incomplete checks as clean.
+- Run existing selected suites with coverage before adding tests; repeat the identical measured source set plus new tests after. Publish denominators, line/branch differences and exclusions. Full database-backed RLS and concurrency cannot be inferred from mocks.
+
+### Pass 2 — Frontend QA
+
+- **FE-C1, 15 minutes:** reproduce the checked-in dependency install and run lint, build/type checks, unit/component suites with coverage.
+- **FE-C2, 15 minutes:** inspect and test auth/session, client API/error handling and traceability input boundaries. Add minimal test-only witnesses as useful.
+- **FE-C3, 10 minutes, shared browser evidence:** local main-flow Playwright smoke on Chromium, Firefox and WebKit; capture console/network errors and performance observations. UX owns browser orchestration to avoid duplicate server/package installs.
+- Exact locked dependencies are essential for faithful results. If public packages are unavailable, do not silently substitute versions or report unrelated mock screens as the product. Record install blockers and continue executable source-level checks.
+
+### Pass 3 — UX QA
+
+- **UX-C1, 15 minutes:** discover, sign in, navigate to ingestion and understand validation results; inspect loading/empty/error feedback and recovery. Use synthetic fixtures only.
+- **UX-C2, 15 minutes:** axe WCAG 2.2 A/AA plus manual keyboard focus, labels, headings, landmarks and screen-reader semantics. Automated checks do not certify WCAG compliance; actual assistive-technology speech output is a separate limitation.
+- **UX-C3, 10 minutes:** mobile and desktop responsive layouts, Nielsen's ten heuristics, action clarity and representative screenshots. Capture meaningful local render/performance evidence if the app can run; otherwise clearly label static review and unavailable screenshots.
+
+## Execution and evidence controls
+
+- Use `scripts/run_logged.py GROUP LABEL -- COMMAND` for all shell work after bootstrap. It records UTC, command, working directory, exit, elapsed duration, timeout and redacted output. Keep per-group logs and link them from `SESSION-LOG.md`.
+- Scrub inherited environment variables; never open `.env` or credential files. Disable dotenv loading and telemetry in test processes. Prevent browser/server outbound calls; do not allow local defaults to contact real external services.
+- Network allowed only for installing dependencies and fetching public packages/browsers. Advisory API calls, CodeRabbit and Jev calls are excluded by this restriction. Report dependency audit limits explicitly.
+- No product changes, CI secret-scan changes, migrations, deploy configuration, environment-file edits, production/database/billing access, secret rotation, commits, pushes, PR operations, or changes to the excluded existing PR/branch.
+- Store compact useful screenshots/reports under `artifacts/`; refer to source locations and test names from findings. Do not commit caches, dependencies, virtualenvs, traces containing sensitive state, or huge generated HTML reports.
+
+## Completion and out-of-scope evidence
+
+Produce `PLAN.md`, `SESSION-LOG.md`, `FINDINGS.md`, `COVERAGE.md`, `SUMMARY.md`, group reports/logs and focused tests. Independently review finding severity, repros, expected failures, scope and artifact hygiene. Leave everything uncommitted for orchestrator review, secret scan, commit, push and creation of the single draft PR. PR URL and CI result are unavailable until that handoff occurs.
+
+Out of scope: deployed behavior, live RLS/database migrations, real email/payment/provider integrations, real credentials, production load/penetration testing, full WCAG certification, external review APIs, and already-known leaked-key investigation. Missing coverage of these surfaces is a limitation, not a passing result.
+
+FILE docs/qa/2026-10-02/SESSION-LOG.md
+# QA session log — 2026-10-02
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+All timestamps are UTC. The folder uses the requested local date (America/Los_Angeles). Command artifacts include exact command text, directory, exit status, duration and redacted output. Some inspection commands intentionally group independent reads in one shell invocation; their exact constituents are in the artifact.
+
+## Interruption and resume
+
+- **2026-10-02T23:46:05Z:** original run performed inventory and read repository guidance. See [original meta log](META-SESSION-LOG.md) and its two preserved artifacts. It was interrupted before producing QA test results or the five mandatory reports. No claim is made about unrecorded work.
+- **2026-10-03T00:35:16Z:** resume timestamp captured by `resume-inspection`. Branch `qa/2026-10-02-sweep`, baseline `0927b85a`, origin RegEngine, and the sole worktree confirmed. Existing untracked QA directory preserved. No product edits were present.
+- **Resume bootstrap, before 00:35:16Z (exact start unavailable):** ran `pwd && git status --short --branch && git worktree list && git remote get-url origin` (exit 0); searched memory registry with `rg -n 'QA|qa-sweep|tenant isolation|ingestion hardening|symlink'` (exit 0); listed QA files and read review-pr/playwright/code-review skills (exit 0); read `META-SESSION-LOG.md`, `scripts/run_logged.py` and the two prior artifacts (exit 0). Then listed instruction files, read the relevant memory registry excerpt and attempted `/Users/sellers/.agents/skills/security-best-practices/SKILL.md` (exit 1: wrong skill root). Correct skill path read in `scope-map`. Bootstrap occurred before the existing logger could be inspected; timestamps are not invented.
+- **2026-10-03T00:35–00:36Z:** delegated Backend, Frontend and UX passes with separate logs/artifact ownership, plus a supporting Backend security review lane. All workers must verify checkout identity before edits and use the existing command logger.
+- **2026-10-03T00:36Z:** created the risk-based plan and this resumed log with `apply_patch`; no product code changes. Chose local isolated tests, contract/boundary checks and browser UX charters; excluded Jev/CodeRabbit and online advisory APIs under the network policy.
+
+## Complete command ledgers
+
+- [Meta / coordination commands](META-SESSION-LOG.md), including preserved pre-interruption entries.
+- [Backend QA commands](BACKEND-SESSION-LOG.md).
+- [Frontend QA commands](FRONTEND-SESSION-LOG.md).
+- [UX QA commands](UX-SESSION-LOG.md).
+- [Backend security-review commands](SECURITY-SESSION-LOG.md).
+
+Each linked ledger is part of this session log, not a replacement for it. Group reports record charter outcomes, tests, findings and verification limits. Final handoff and review entries are appended below.
+
+FILE docs/qa/2026-10-02/META-SESSION-LOG.md
+
+- **2026-10-02T23:46:05.036682+00:00** `inventory` — `sh -c 'git ls-files "*AGENTS.md"; rg --files -g "!**/.env*" -g "!**/package-lock.json" -g "!**/requirements.lock" -g "!*lock*" -g "!**/node_modules/**" -g "!**/.git/**" | rg "(^README.md$|^REPO_PURPOSE.md$|^ARCHITECTURE.md$|^CANONICAL_OWNERSHIP.md$|conftest.py$|pytest|pyproject|requirements|playwright|vitest|package.json$|crabbox|^server/|^tests/qa)"; for p in .venv/bin/python venv/bin/python frontend/node_modules/.bin/next frontend/node_modules/.bin/playwright; do test ! -e "$p" || ls -ld "$p"; done; git ls-files --others --exclude-standard'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261002T234605.036682Z-inventory.txt).
+
+- **2026-10-02T23:46:05.182552+00:00** `guides` — `sh -c 'cat AGENTS.md; cat frontend/package.json; cat pyproject.toml; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,120p" README.md; sed -n "1,120p" REPO_PURPOSE.md; sed -n "1,140p" ARCHITECTURE.md; sed -n "1,100p" CANONICAL_OWNERSHIP.md'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/meta/20261002T234605.182552Z-guides.txt).
+
+- **2026-10-03T00:35:16.224243+00:00** `resume-inspection` — `sh -c 'date -u; cat frontend/AGENTS.md; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,210p" conftest.py; sed -n "1,200p" frontend/playwright.config.ts; sed -n "1,180p" frontend/vitest.config.mts; command -v uv; command -v npx; command -v python3; command -v node; for p in .venv/bin/python venv/bin/python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python frontend/node_modules/.bin/next; do test ! -e "$p" || ls -ld "$p"; done'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/meta/20261003T003516.224243Z-resume-inspection.txt).
+
+- **2026-10-03T00:36:02.391499+00:00** `scope-map` — `sh -c 'git rev-parse HEAD; git ls-files "**/AGENTS.md"; sed -n "1,170p" frontend/AGENTS.md; sed -n "1,90p" README.md; sed -n "1,140p" docs/specs/FSMA_204_MVP_SPEC.md; cat /Users/sellers/.codex/skills/security-best-practices/SKILL.md; rg --files tests services frontend/src frontend/tests server -g "!**/.env*" -g "!**/node_modules/**" -g "!**/package-lock.json" | awk -F/ "{print \$1\"/\"\$2}" | sort | uniq -c'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261003T003602.391499Z-scope-map.txt).
+
+- **2026-10-03T00:37:24.260691+00:00** `qa-inventory` — `sh -c 'git status --short; rg --files docs/qa/2026-10-02 -g "!artifacts/**"; sed -n "1,100p" frontend/AGENTS.md; sed -n "1,160p" .github/workflows/backend-ci.yml; sed -n "1,170p" .github/workflows/frontend-ci.yml; sed -n "1,140p" .github/copilot-instructions.md'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261003T003724.260691Z-qa-inventory.txt).
+
+- **2026-10-03T00:37:58.292867+00:00** `pass-progress` — `sh -c 'for f in docs/qa/2026-10-02/{BACKEND,FRONTEND,UX,SECURITY}-SESSION-LOG.md; do test ! -f "$f" || tail -n 8 "$f"; done; git diff --stat; git ls-files --others --exclude-standard | awk "END {print NR \" untracked files\"}"'`; cwd `.`; exit 0, 0.08s. [Output](artifacts/meta/20261003T003758.292867Z-pass-progress.txt).
+

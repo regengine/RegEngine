@@ -1,0 +1,354 @@
+UTC: 2026-10-03T00:42:36.299017+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -C 8 'validate_timestamp|timezone|timedelta|timestamp|output_quantity|input_quantit' services/ingestion/app/webhook_models.py services/ingestion/app/csv_templates.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/webhook_models.py-6-FSMA 204 traceability events into RegEngine.
+services/ingestion/app/webhook_models.py-7-"""
+services/ingestion/app/webhook_models.py-8-
+services/ingestion/app/webhook_models.py-9-from __future__ import annotations
+services/ingestion/app/webhook_models.py-10-
+services/ingestion/app/webhook_models.py-11-import logging
+services/ingestion/app/webhook_models.py-12-import os
+services/ingestion/app/webhook_models.py-13-import re
+services/ingestion/app/webhook_models.py:14:from datetime import datetime, timedelta, timezone
+services/ingestion/app/webhook_models.py-15-from enum import Enum
+services/ingestion/app/webhook_models.py-16-from typing import Any, Dict, List, Optional
+services/ingestion/app/webhook_models.py-17-from uuid import uuid4
+services/ingestion/app/webhook_models.py-18-
+services/ingestion/app/webhook_models.py-19-from pydantic import BaseModel, Field, field_validator, model_validator
+services/ingestion/app/webhook_models.py-20-from shared.fsma_validation import calculate_gs1_check_digit
+services/ingestion/app/webhook_models.py-21-
+services/ingestion/app/webhook_models.py-22-_gln_logger = logging.getLogger("gln-validation")
+--
+services/ingestion/app/webhook_models.py-175-
+services/ingestion/app/webhook_models.py-176-    cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
+services/ingestion/app/webhook_models.py-177-    traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
+services/ingestion/app/webhook_models.py-178-    product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
+services/ingestion/app/webhook_models.py-179-    quantity: float = Field(..., description="Numeric quantity", gt=0)
+services/ingestion/app/webhook_models.py-180-    unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
+services/ingestion/app/webhook_models.py-181-    location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+services/ingestion/app/webhook_models.py-182-    location_name: Optional[str] = Field(None, description="Human-readable location name")
+services/ingestion/app/webhook_models.py:183:    timestamp: str = Field(..., description="ISO 8601 timestamp of the event")
+services/ingestion/app/webhook_models.py-184-    kdes: Dict[str, Any] = Field(
+services/ingestion/app/webhook_models.py-185-        default_factory=dict, description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
+services/ingestion/app/webhook_models.py-186-    )
+services/ingestion/app/webhook_models.py-187-    input_traceability_lot_codes: Optional[list[str]] = Field(
+services/ingestion/app/webhook_models.py-188-        None,
+services/ingestion/app/webhook_models.py-189-        description=(
+services/ingestion/app/webhook_models.py-190-            "For transformation CTEs (21 CFR §1.1350): list of input TLCs that were "
+services/ingestion/app/webhook_models.py-191-            "combined/transformed into the new traceability_lot_code. Required per "
+services/ingestion/app/webhook_models.py-192-            "§1.1350(a)(1) to link each new TLC to all input TLCs."
+services/ingestion/app/webhook_models.py-193-        ),
+services/ingestion/app/webhook_models.py-194-    )
+services/ingestion/app/webhook_models.py-195-
+services/ingestion/app/webhook_models.py:196:    @field_validator("timestamp")
+services/ingestion/app/webhook_models.py-197-    @classmethod
+services/ingestion/app/webhook_models.py:198:    def validate_timestamp(cls, v: str) -> str:
+services/ingestion/app/webhook_models.py:199:        """Ensure timestamp is parseable and within reasonable bounds."""
+services/ingestion/app/webhook_models.py-200-        try:
+services/ingestion/app/webhook_models.py-201-            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+services/ingestion/app/webhook_models.py-202-        except (ValueError, AttributeError):
+services/ingestion/app/webhook_models.py:203:            raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
+services/ingestion/app/webhook_models.py-204-
+services/ingestion/app/webhook_models.py:205:        now = datetime.now(timezone.utc)
+services/ingestion/app/webhook_models.py-206-        # Allow historical events for FSMA 204 §1.1455(d) 2-year retention backfill.
+services/ingestion/app/webhook_models.py-207-        # Events older than 90 days are accepted but flagged via _historical_warning.
+services/ingestion/app/webhook_models.py-208-        # Reject events more than 24 hours in the future (clock skew)
+services/ingestion/app/webhook_models.py:209:        if dt > now + timedelta(hours=24):
+services/ingestion/app/webhook_models.py:210:            raise ValueError(f"Event timestamp {v} is more than 24 hours in the future.")
+services/ingestion/app/webhook_models.py-211-        return v
+services/ingestion/app/webhook_models.py-212-
+services/ingestion/app/webhook_models.py-213-    @field_validator("location_gln")
+services/ingestion/app/webhook_models.py-214-    @classmethod
+services/ingestion/app/webhook_models.py-215-    def validate_gln_format(cls, v: Optional[str]) -> Optional[str]:
+services/ingestion/app/webhook_models.py-216-        """Validate GLN is 13 digits with valid GS1 check digit.
+services/ingestion/app/webhook_models.py-217-
+services/ingestion/app/webhook_models.py-218-        Warning-only: logs invalid GLNs but accepts them to avoid
+--
+services/ingestion/app/webhook_models.py-313-
+services/ingestion/app/webhook_models.py-314-class IngestResponse(BaseModel):
+services/ingestion/app/webhook_models.py-315-    """Response from the webhook ingestion endpoint."""
+services/ingestion/app/webhook_models.py-316-
+services/ingestion/app/webhook_models.py-317-    accepted: int = 0
+services/ingestion/app/webhook_models.py-318-    rejected: int = 0
+services/ingestion/app/webhook_models.py-319-    total: int = 0
+services/ingestion/app/webhook_models.py-320-    events: List[EventResult] = Field(default_factory=list)
+services/ingestion/app/webhook_models.py:321:    ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+services/ingestion/app/webhook_models.py-322-    ingestion_run_id: Optional[str] = Field(
+services/ingestion/app/webhook_models.py-323-        None,
+services/ingestion/app/webhook_models.py-324-        description=(
+services/ingestion/app/webhook_models.py-325-            "fsma.ingestion_runs id when the upload was retained as an ingestion run (file uploads): "
+services/ingestion/app/webhook_models.py-326-            "the receipt that ties every accepted event back to the verbatim source file and its SHA-256."
+services/ingestion/app/webhook_models.py-327-        ),
+services/ingestion/app/webhook_models.py-328-    )
+services/ingestion/app/webhook_models.py-329-
+--
+services/ingestion/app/csv_templates.py-11-import asyncio
+services/ingestion/app/csv_templates.py-12-import csv
+services/ingestion/app/csv_templates.py-13-import dataclasses
+services/ingestion/app/csv_templates.py-14-import io
+services/ingestion/app/csv_templates.py-15-import itertools
+services/ingestion/app/csv_templates.py-16-import logging
+services/ingestion/app/csv_templates.py-17-import re
+services/ingestion/app/csv_templates.py-18-from collections.abc import Mapping, Sequence
+services/ingestion/app/csv_templates.py:19:from datetime import datetime, timezone
+services/ingestion/app/csv_templates.py-20-from typing import NamedTuple, Optional
+services/ingestion/app/csv_templates.py-21-
+services/ingestion/app/csv_templates.py-22-from dateutil import parser as _dateutil_parser
+services/ingestion/app/csv_templates.py-23-from dateutil.parser import ParserError as _DateParserError
+services/ingestion/app/csv_templates.py-24-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+services/ingestion/app/csv_templates.py-25-from fastapi.concurrency import run_in_threadpool
+services/ingestion/app/csv_templates.py-26-from fastapi.responses import StreamingResponse
+services/ingestion/app/csv_templates.py-27-from shared.agent_task_bridge import enqueue_agent_artifact_task
+--
+services/ingestion/app/csv_templates.py-114-        ("quantity", "200", "Quantity of packed units"),
+services/ingestion/app/csv_templates.py-115-        ("unit_of_measure", "cases", "Unit"),
+services/ingestion/app/csv_templates.py-116-        ("packing_date", "2026-02-26", "Date of packing (YYYY-MM-DD)"),
+services/ingestion/app/csv_templates.py-117-        ("event_time", "14:00:00", "Time of event HH:MM:SS (optional)"),
+services/ingestion/app/csv_templates.py-118-        ("location_name", "Valley Fresh Packhouse", "Packing facility name"),
+services/ingestion/app/csv_templates.py-119-        ("location_gln", "0614141000005", "GS1 GLN (optional)"),
+services/ingestion/app/csv_templates.py-120-        ("input_lot_codes", "TOM-0226-F3-001", "Source lot code(s), comma-separated if multiple"),
+services/ingestion/app/csv_templates.py-121-        (
+services/ingestion/app/csv_templates.py:122:            "input_quantities",
+services/ingestion/app/csv_templates.py-123-            "200",
+services/ingestion/app/csv_templates.py-124-            "Quantity of EACH source lot used, comma-separated in the same order as input_lot_codes",
+services/ingestion/app/csv_templates.py-125-        ),
+services/ingestion/app/csv_templates.py-126-        ("input_units_of_measure", "cases", "Unit for each source lot, comma-separated (one value applies to all)"),
+services/ingestion/app/csv_templates.py-127-        ("reference_document", "PACK-2026-0226-007", "Packing record or reference document number"),
+services/ingestion/app/csv_templates.py-128-        ("harvester_business_name", "Valley Fresh Farms LLC", "Business name of the harvester"),
+services/ingestion/app/csv_templates.py-129-        ("harvester_business_phone", "+1-202-555-0100", "Phone number of the harvester; sample number only"),
+services/ingestion/app/csv_templates.py-130-    ],
+--
+services/ingestion/app/csv_templates.py-172-        ("quantity", "1000", "Output quantity"),
+services/ingestion/app/csv_templates.py-173-        ("unit_of_measure", "bags", "Unit"),
+services/ingestion/app/csv_templates.py-174-        ("transformation_date", "2026-02-28", "Date of transformation (YYYY-MM-DD)"),
+services/ingestion/app/csv_templates.py-175-        ("event_time", "10:00:00", "Time of event HH:MM:SS (optional)"),
+services/ingestion/app/csv_templates.py-176-        ("location_name", "Metro Processing Plant", "Transformation facility"),
+services/ingestion/app/csv_templates.py-177-        ("location_gln", "0614141000036", "Facility GLN (optional)"),
+services/ingestion/app/csv_templates.py-178-        ("input_lot_codes", "TOM-0226-F3-001,LET-0226-A2-003", "ALL input lot codes, comma-separated"),
+services/ingestion/app/csv_templates.py-179-        (
+services/ingestion/app/csv_templates.py:180:            "input_quantities",
+services/ingestion/app/csv_templates.py-181-            "600,400",
+services/ingestion/app/csv_templates.py-182-            "Quantity of EACH input lot used, comma-separated in the same order as input_lot_codes (21 CFR 1.1350(a)(1)(iii))",
+services/ingestion/app/csv_templates.py-183-        ),
+services/ingestion/app/csv_templates.py-184-        (
+services/ingestion/app/csv_templates.py-185-            "input_units_of_measure",
+services/ingestion/app/csv_templates.py-186-            "cases,cases",
+services/ingestion/app/csv_templates.py-187-            "Unit for each input lot, comma-separated (one value applies to all)",
+services/ingestion/app/csv_templates.py-188-        ),
+--
+services/ingestion/app/csv_templates.py-297-    "transform": "transformation",
+services/ingestion/app/csv_templates.py-298-    "transforming": "transformation",
+services/ingestion/app/csv_templates.py-299-    "process": "transformation",
+services/ingestion/app/csv_templates.py-300-    "t": "transformation",
+services/ingestion/app/csv_templates.py-301-    "first_land_based_receiving": "first_land_based_receiving",
+services/ingestion/app/csv_templates.py-302-    "flbr": "first_land_based_receiving",
+services/ingestion/app/csv_templates.py-303-}
+services/ingestion/app/csv_templates.py-304-
+services/ingestion/app/csv_templates.py:305:# Date column names per CTE type, used for timestamp detection
+services/ingestion/app/csv_templates.py-306-_DATE_FIELDS = [
+services/ingestion/app/csv_templates.py-307-    "event_date",
+services/ingestion/app/csv_templates.py-308-    "date",
+services/ingestion/app/csv_templates.py:309:    "timestamp",
+services/ingestion/app/csv_templates.py-310-    "harvest_date",
+services/ingestion/app/csv_templates.py-311-    "cooling_date",
+services/ingestion/app/csv_templates.py-312-    "packing_date",
+services/ingestion/app/csv_templates.py-313-    "ship_date",
+services/ingestion/app/csv_templates.py-314-    "receive_date",
+services/ingestion/app/csv_templates.py-315-    "transformation_date",
+services/ingestion/app/csv_templates.py-316-    "landing_date",
+services/ingestion/app/csv_templates.py-317-]
+--
+services/ingestion/app/csv_templates.py-401-
+services/ingestion/app/csv_templates.py-402-# Every normalised column name ``parse_csv_rows`` (or a validator it feeds)
+services/ingestion/app/csv_templates.py-403-# reads by name. A header outside this set is opaque to the parser: it passes
+services/ingestion/app/csv_templates.py-404-# through into ``kdes`` unchanged and can never satisfy a required KDE. Those
+services/ingestion/app/csv_templates.py-405-# are the only columns the Jev header-mapping step is asked about.
+services/ingestion/app/csv_templates.py-406-_RECOGNIZED_COLUMNS: frozenset[str] = frozenset(
+services/ingestion/app/csv_templates.py-407-    {
+services/ingestion/app/csv_templates.py-408-        "input_lot_codes",
+services/ingestion/app/csv_templates.py:409:        "input_quantities",
+services/ingestion/app/csv_templates.py-410-        "input_units_of_measure",
+services/ingestion/app/csv_templates.py-411-        "event_time",
+services/ingestion/app/csv_templates.py-412-        # Read from ``kdes`` by ``normalize_webhook_event`` (transport_reference).
+services/ingestion/app/csv_templates.py-413-        "carrier",
+services/ingestion/app/csv_templates.py-414-    }
+services/ingestion/app/csv_templates.py-415-    | {key for chain in _COLUMN_PRECEDENCE for key in chain}
+services/ingestion/app/csv_templates.py-416-    | {column for columns in CTE_COLUMNS.values() for column, _, _ in columns}
+services/ingestion/app/csv_templates.py-417-    | {kde for kdes in REQUIRED_KDES_BY_CTE.values() for kde in kdes}
+--
+services/ingestion/app/csv_templates.py-574-        val = re.sub(pattern, replacement, val, flags=re.IGNORECASE)
+services/ingestion/app/csv_templates.py-575-    return val
+services/ingestion/app/csv_templates.py-576-
+services/ingestion/app/csv_templates.py-577-
+services/ingestion/app/csv_templates.py-578-# ── Flexible date parsing ────────────────────────────────────────────────────
+services/ingestion/app/csv_templates.py-579-
+services/ingestion/app/csv_templates.py-580-
+services/ingestion/app/csv_templates.py-581-def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, str | None]:
+services/ingestion/app/csv_templates.py:582:    """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
+services/ingestion/app/csv_templates.py-583-
+services/ingestion/app/csv_templates.py-584-    Handles YYYY-MM-DD, M/D/YY, April 2nd 2026, 04-01-2026, and more.
+services/ingestion/app/csv_templates.py-585-
+services/ingestion/app/csv_templates.py-586-    Returns:
+services/ingestion/app/csv_templates.py-587-        (iso_ts, warning)  — warning is None on success, or a human-readable
+services/ingestion/app/csv_templates.py-588-        message describing why the date could not be parsed.  In that case
+services/ingestion/app/csv_templates.py:589:        iso_ts is None: an unreadable date yields no timestamp. Rows ingested
+services/ingestion/app/csv_templates.py-590-        before this change may carry the old ``1970-01-01T00:00:00Z``
+services/ingestion/app/csv_templates.py-591-        placeholder.
+services/ingestion/app/csv_templates.py-592-    """
+services/ingestion/app/csv_templates.py-593-    if not raw or not raw.strip():
+services/ingestion/app/csv_templates.py-594-        return None, "date field was empty"
+services/ingestion/app/csv_templates.py-595-
+services/ingestion/app/csv_templates.py-596-    raw = raw.strip()
+services/ingestion/app/csv_templates.py-597-
+services/ingestion/app/csv_templates.py:598:    # Fast-path: already an ISO timestamp
+services/ingestion/app/csv_templates.py-599-    try:
+services/ingestion/app/csv_templates.py-600-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+services/ingestion/app/csv_templates.py-601-        if dt.tzinfo is None:
+services/ingestion/app/csv_templates.py:602:            dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/csv_templates.py-603-        return dt.isoformat().replace("+00:00", "Z"), None
+services/ingestion/app/csv_templates.py-604-    except (ValueError, AttributeError):
+services/ingestion/app/csv_templates.py-605-        pass
+services/ingestion/app/csv_templates.py-606-
+services/ingestion/app/csv_templates.py-607-    # Flexible parsing: handles M/D/YY, "April 2nd", "04-01-2026", etc.
+services/ingestion/app/csv_templates.py-608-    try:
+services/ingestion/app/csv_templates.py-609-        dt = _dateutil_parser.parse(raw, fuzzy=True, dayfirst=False)
+services/ingestion/app/csv_templates.py-610-        # Merge in a separate event_time field if provided
+services/ingestion/app/csv_templates.py-611-        if event_time:
+services/ingestion/app/csv_templates.py-612-            try:
+services/ingestion/app/csv_templates.py-613-                t = _dateutil_parser.parse(event_time)
+services/ingestion/app/csv_templates.py-614-                dt = dt.replace(hour=t.hour, minute=t.minute, second=t.second)
+services/ingestion/app/csv_templates.py-615-            except (_DateParserError, ValueError):
+services/ingestion/app/csv_templates.py-616-                pass
+services/ingestion/app/csv_templates.py-617-        if dt.tzinfo is None:
+services/ingestion/app/csv_templates.py:618:            dt = dt.replace(tzinfo=timezone.utc)
+services/ingestion/app/csv_templates.py-619-        return dt.isoformat().replace("+00:00", "Z"), None
+services/ingestion/app/csv_templates.py-620-    except (_DateParserError, ValueError, OverflowError):
+services/ingestion/app/csv_templates.py-621-        pass
+services/ingestion/app/csv_templates.py-622-
+services/ingestion/app/csv_templates.py-623-    return None, f"INVALID_FORMAT: could not parse date '{raw}'"
+services/ingestion/app/csv_templates.py-624-
+services/ingestion/app/csv_templates.py-625-
+services/ingestion/app/csv_templates.py-626-# ── Lot-code integrity checks ────────────────────────────────────────────────
+--
+services/ingestion/app/csv_templates.py-643-            f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — verify O vs 0 or I vs 1)"
+services/ingestion/app/csv_templates.py-644-        )
+services/ingestion/app/csv_templates.py-645-    # All-alpha codes longer than 3 chars have no digits — flag for review
+services/ingestion/app/csv_templates.py-646-    if lot_code.isalpha() and len(lot_code) > 3:
+services/ingestion/app/csv_templates.py-647-        warnings.append(f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error")
+services/ingestion/app/csv_templates.py-648-    return warnings
+services/ingestion/app/csv_templates.py-649-
+services/ingestion/app/csv_templates.py-650-
+services/ingestion/app/csv_templates.py:651:def _parse_input_quantities(
+services/ingestion/app/csv_templates.py-652-    row: dict, input_lot_codes: list[str], row_cte: str
+services/ingestion/app/csv_templates.py-653-) -> tuple[list[dict], Optional[str], Optional[str]]:
+services/ingestion/app/csv_templates.py:654:    """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
+services/ingestion/app/csv_templates.py-655-
+services/ingestion/app/csv_templates.py-656-    Returns ``(inputs, error, warning)``. ``inputs`` is a list of
+services/ingestion/app/csv_templates.py-657-    ``{"traceability_lot_code", "quantity", "unit_of_measure"}`` aligned with
+services/ingestion/app/csv_templates.py-658-    ``input_lot_codes``. ``error`` rejects the row (misaligned or non-numeric
+services/ingestion/app/csv_templates.py-659-    values); ``warning`` is advisory (a transformation row that names input
+services/ingestion/app/csv_templates.py-660-    lots without their quantities).
+services/ingestion/app/csv_templates.py-661-    """
+services/ingestion/app/csv_templates.py:662:    quantities_raw = (row.get("input_quantities") or "").strip()
+services/ingestion/app/csv_templates.py-663-    units_raw = (row.get("input_units_of_measure") or "").strip()
+services/ingestion/app/csv_templates.py-664-    if not quantities_raw and not units_raw:
+services/ingestion/app/csv_templates.py-665-        if input_lot_codes and row_cte == "transformation":
+services/ingestion/app/csv_templates.py-666-            return (
+services/ingestion/app/csv_templates.py-667-                [],
+services/ingestion/app/csv_templates.py-668-                None,
+services/ingestion/app/csv_templates.py:669:                "input_quantities missing: 21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of "
+services/ingestion/app/csv_templates.py:670:                "measure of each input lot (add input_quantities and input_units_of_measure)",
+services/ingestion/app/csv_templates.py-671-            )
+services/ingestion/app/csv_templates.py-672-        return [], None, None
+services/ingestion/app/csv_templates.py-673-    if not input_lot_codes:
+services/ingestion/app/csv_templates.py:674:        return [], "input_quantities given without input_lot_codes", None
+services/ingestion/app/csv_templates.py-675-    quantities = [q.strip() for q in quantities_raw.split(",")] if quantities_raw else []
+services/ingestion/app/csv_templates.py-676-    units = [u.strip() for u in units_raw.split(",")] if units_raw else []
+services/ingestion/app/csv_templates.py-677-    if len(quantities) != len(input_lot_codes):
+services/ingestion/app/csv_templates.py-678-        return (
+services/ingestion/app/csv_templates.py-679-            [],
+services/ingestion/app/csv_templates.py:680:            f"input_quantities lists {len(quantities)} value(s) for {len(input_lot_codes)} input lot(s); "
+services/ingestion/app/csv_templates.py-681-            "give one quantity per input lot in the same order as input_lot_codes",
+services/ingestion/app/csv_templates.py-682-            None,
+services/ingestion/app/csv_templates.py-683-        )
+services/ingestion/app/csv_templates.py-684-    if len(units) == 1 and len(input_lot_codes) > 1:
+services/ingestion/app/csv_templates.py-685-        units = units * len(input_lot_codes)
+services/ingestion/app/csv_templates.py-686-    if len(units) != len(input_lot_codes):
+services/ingestion/app/csv_templates.py-687-        return (
+services/ingestion/app/csv_templates.py-688-            [],
+--
+services/ingestion/app/csv_templates.py-790-        try:
+services/ingestion/app/csv_templates.py-791-            row_cte = _detect_row_cte_type(row, fallback_cte)
+services/ingestion/app/csv_templates.py-792-            if not row_cte:
+services/ingestion/app/csv_templates.py-793-                parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
+services/ingestion/app/csv_templates.py-794-                continue
+services/ingestion/app/csv_templates.py-795-
+services/ingestion/app/csv_templates.py-796-            # ── Phase 1: Ingestion — flexible on format, strict on presence ──
+services/ingestion/app/csv_templates.py-797-            # Date: accept any human format. An unreadable or empty date
+services/ingestion/app/csv_templates.py:798:            # rejects the row; a placeholder timestamp would enter the hash
+services/ingestion/app/csv_templates.py-799-            # chain as evidence of when the event happened.
+services/ingestion/app/csv_templates.py-800-            raw_date = _first_present(row, _DATE_FIELDS)
+services/ingestion/app/csv_templates.py-801-            event_time_raw = (row.get("event_time") or "").strip()
+services/ingestion/app/csv_templates.py-802-            ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
+services/ingestion/app/csv_templates.py-803-            if ts is None:
+services/ingestion/app/csv_templates.py-804-                parse_errors.append(f"Row {row_num}: {date_warning}")
+services/ingestion/app/csv_templates.py-805-                continue
+services/ingestion/app/csv_templates.py-806-
+--
+services/ingestion/app/csv_templates.py-842-                "unit_of_measure",
+services/ingestion/app/csv_templates.py-843-                "location_gln",
+services/ingestion/app/csv_templates.py-844-                "location_name",
+services/ingestion/app/csv_templates.py-845-                "cte_type",
+services/ingestion/app/csv_templates.py-846-                "event_type",
+services/ingestion/app/csv_templates.py-847-                "type",
+services/ingestion/app/csv_templates.py-848-                "cte",
+services/ingestion/app/csv_templates.py-849-                "input_lot_codes",
+services/ingestion/app/csv_templates.py:850:                "input_quantities",
+services/ingestion/app/csv_templates.py-851-                "input_units_of_measure",
+services/ingestion/app/csv_templates.py-852-                "event_time",
+services/ingestion/app/csv_templates.py-853-            }
+services/ingestion/app/csv_templates.py-854-            for key, val in row.items():
+services/ingestion/app/csv_templates.py-855-                if key and val and key not in skip_fields:
+services/ingestion/app/csv_templates.py-856-                    kdes[key] = val
+services/ingestion/app/csv_templates.py-857-
+services/ingestion/app/csv_templates.py-858-            # Parse input_lot_codes (comma-separated) if present
+--
+services/ingestion/app/csv_templates.py-863-                if input_lot_codes:
+services/ingestion/app/csv_templates.py-864-                    kdes["input_lot_codes"] = input_lot_codes
+services/ingestion/app/csv_templates.py-865-
+services/ingestion/app/csv_templates.py-866-            # Per-input quantity and unit (21 CFR 1.1350(a)(1)(iii)), aligned with
+services/ingestion/app/csv_templates.py-867-            # input_lot_codes. A list that cannot be attributed to its lots rejects
+services/ingestion/app/csv_templates.py-868-            # the row: guessing which quantity belongs to which lot would fabricate
+services/ingestion/app/csv_templates.py-869-            # a KDE. Rows without the columns still ingest (older templates) with a
+services/ingestion/app/csv_templates.py-870-            # warning for transformations.
+services/ingestion/app/csv_templates.py:871:            inputs, input_error, input_warning = _parse_input_quantities(row, input_lot_codes, row_cte)
+services/ingestion/app/csv_templates.py-872-            if input_error:
+services/ingestion/app/csv_templates.py-873-                parse_errors.append(f"Row {row_num}: {input_error}")
+services/ingestion/app/csv_templates.py-874-                continue
+services/ingestion/app/csv_templates.py-875-            if inputs:
+services/ingestion/app/csv_templates.py-876-                kdes["inputs"] = inputs
+services/ingestion/app/csv_templates.py-877-            if input_warning:
+services/ingestion/app/csv_templates.py-878-                kde_warnings.append(f"Row {row_num}: {input_warning}")
+services/ingestion/app/csv_templates.py-879-
+--
+services/ingestion/app/csv_templates.py-883-            event = IngestEvent(
+services/ingestion/app/csv_templates.py-884-                cte_type=WebhookCTEType(row_cte),
+services/ingestion/app/csv_templates.py-885-                traceability_lot_code=lot_code,
+services/ingestion/app/csv_templates.py-886-                product_description=_first_present(row, _PRODUCT_COLUMNS),
+services/ingestion/app/csv_templates.py-887-                quantity=quantity,
+services/ingestion/app/csv_templates.py-888-                unit_of_measure=uom,
+services/ingestion/app/csv_templates.py-889-                location_gln=loc_gln,
+services/ingestion/app/csv_templates.py-890-                location_name=loc_name,
+services/ingestion/app/csv_templates.py:891:                timestamp=ts,
+services/ingestion/app/csv_templates.py-892-                kdes=kdes,
+services/ingestion/app/csv_templates.py-893-            )
+services/ingestion/app/csv_templates.py-894-            events.append(event)
+services/ingestion/app/csv_templates.py-895-
+services/ingestion/app/csv_templates.py-896-            # KDE completeness validation (warn, don't reject)
+services/ingestion/app/csv_templates.py-897-            missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
+services/ingestion/app/csv_templates.py-898-            if missing_kdes:
+services/ingestion/app/csv_templates.py-899-                kde_warnings.append(f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}")

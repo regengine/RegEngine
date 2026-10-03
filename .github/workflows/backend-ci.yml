@@ -595,6 +595,30 @@ jobs:
             -q --no-cov \
             ${{ steps.ignores.outputs.flags }}
 
+      - name: Run ingestion live-Postgres tests against alembic head
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/remediation_test # pragma: allowlist secret
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: test-secret-key-for-ci
+          SUPABASE_URL: http://localhost:54321
+          SUPABASE_KEY: test-key-for-ci
+          PYTHONDONTWRITEBYTECODE: 1
+          REMEDIATION_TEST_SUPERUSER_DSN: postgresql://postgres:postgres@localhost:5432/remediation_test # pragma: allowlist secret
+          # An unreachable DB must FAIL this step, never skip it green (#2530).
+          REGENGINE_REQUIRE_DB: "1"
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${PYTHONPATH}"
+          # The suite step above points at the unmigrated test_db and leaves
+          # REMEDIATION_TEST_SUPERUSER_DSN unset, so every *_pg.py file skips
+          # there. Setting the DSN on that step instead would also un-skip
+          # services/ingestion/tests/remediation/, which production excludes
+          # (see the step below). The glob is deliberately non-recursive: it
+          # takes the top-level *_pg.py files only. If it ever matches nothing
+          # pytest exits non-zero on the literal pattern, so the step cannot
+          # pass by running no files.
+          pytest services/ingestion/tests/test_*_pg.py -v --no-cov
+
       - name: Verify disabled remediation production contract
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/remediation_test

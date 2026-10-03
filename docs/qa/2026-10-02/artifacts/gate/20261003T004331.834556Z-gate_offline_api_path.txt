@@ -1,0 +1,230 @@
+UTC: 2026-10-03T00:43:31.834556+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -C 12 'useIngestFile|ingestFile\(|ingest/file|source_system|sourceSystem|currentTenant' frontend/src/hooks/use-api.ts frontend/src/lib/api-client.ts
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+frontend/src/hooks/use-api.ts-164-  const queryClient = useQueryClient();
+frontend/src/hooks/use-api.ts-165-  return useMutation({
+frontend/src/hooks/use-api.ts-166-    mutationFn: ({ keyId }: { keyId: string }) => apiClient.revokeAPIKey(keyId),
+frontend/src/hooks/use-api.ts-167-    onSuccess: () => {
+frontend/src/hooks/use-api.ts-168-      queryClient.invalidateQueries({ queryKey: ['admin', 'keys'] });
+frontend/src/hooks/use-api.ts-169-    },
+frontend/src/hooks/use-api.ts-170-  });
+frontend/src/hooks/use-api.ts-171-};
+frontend/src/hooks/use-api.ts-172-
+frontend/src/hooks/use-api.ts-173-// Ingestion
+frontend/src/hooks/use-api.ts-174-export const useIngestURL = () => {
+frontend/src/hooks/use-api.ts-175-  return useMutation({
+frontend/src/hooks/use-api.ts:176:    mutationFn: ({ apiKey, url, sourceSystem }: { apiKey: [REDACTED]; url: string; sourceSystem?: string }) =>
+frontend/src/hooks/use-api.ts:177:      apiClient.ingestURL(apiKey, url, sourceSystem),
+frontend/src/hooks/use-api.ts-178-  });
+frontend/src/hooks/use-api.ts-179-};
+frontend/src/hooks/use-api.ts-180-
+frontend/src/hooks/use-api.ts:181:export const useIngestFile = () => {
+frontend/src/hooks/use-api.ts-182-  return useMutation({
+frontend/src/hooks/use-api.ts:183:    mutationFn: ({ apiKey, file, sourceSystem, cteType }: {
+frontend/src/hooks/use-api.ts-184-      apiKey?: string | null;
+frontend/src/hooks/use-api.ts-185-      file: File;
+frontend/src/hooks/use-api.ts:186:      sourceSystem?: string;
+frontend/src/hooks/use-api.ts-187-      cteType?: string;
+frontend/src/hooks/use-api.ts:188:    }) => apiClient.ingestFile(apiKey, file, sourceSystem, cteType),
+frontend/src/hooks/use-api.ts-189-  });
+frontend/src/hooks/use-api.ts-190-};
+frontend/src/hooks/use-api.ts-191-
+frontend/src/hooks/use-api.ts-192-export const useCreateTenant = () => {
+frontend/src/hooks/use-api.ts-193-  return useMutation({
+frontend/src/hooks/use-api.ts-194-    mutationFn: ({ name }: { name: string }) => apiClient.createTenant(name),
+frontend/src/hooks/use-api.ts-195-  });
+frontend/src/hooks/use-api.ts-196-};
+frontend/src/hooks/use-api.ts-197-
+frontend/src/hooks/use-api.ts-198-// Compliance
+frontend/src/hooks/use-api.ts-199-export const useIndustries = () => {
+frontend/src/hooks/use-api.ts-200-  return useQuery({
+--
+frontend/src/lib/api-client.ts-195-    || (typeof Blob !== 'undefined' && value instanceof Blob)
+frontend/src/lib/api-client.ts-196-    || (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer)
+frontend/src/lib/api-client.ts-197-    || (typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams);
+frontend/src/lib/api-client.ts-198-}
+frontend/src/lib/api-client.ts-199-
+frontend/src/lib/api-client.ts-200-class APIClient {
+frontend/src/lib/api-client.ts-201-  private adminClient: ServiceClient;
+frontend/src/lib/api-client.ts-202-  private ingestionClient: ServiceClient;
+frontend/src/lib/api-client.ts-203-  private complianceClient: ServiceClient;
+frontend/src/lib/api-client.ts-204-  private graphClient: ServiceClient;
+frontend/src/lib/api-client.ts-205-
+frontend/src/lib/api-client.ts-206-  // Current tenant for multi-tenancy
+frontend/src/lib/api-client.ts:207:  private currentTenantId: string | null = null;
+frontend/src/lib/api-client.ts-208-  private accessToken: [REDACTED] | null = null;
+frontend/src/lib/api-client.ts-209-  private user: User | null = null;
+frontend/src/lib/api-client.ts-210-
+frontend/src/lib/api-client.ts-211-  // Set the current tenant for all API calls
+frontend/src/lib/api-client.ts-212-  setCurrentTenant(tenantId: string | null): void {
+frontend/src/lib/api-client.ts:213:    this.currentTenantId = tenantId;
+frontend/src/lib/api-client.ts-214-  }
+frontend/src/lib/api-client.ts-215-
+frontend/src/lib/api-client.ts-216-  // Get current tenant ID
+frontend/src/lib/api-client.ts-217-  getCurrentTenant(): string | null {
+frontend/src/lib/api-client.ts:218:    return this.currentTenantId;
+frontend/src/lib/api-client.ts-219-  }
+frontend/src/lib/api-client.ts-220-
+frontend/src/lib/api-client.ts-221-  setAccessToken(token: string | null): void {
+frontend/src/lib/api-client.ts-222-    this.accessToken = [REDACTED];
+frontend/src/lib/api-client.ts-223-  }
+frontend/src/lib/api-client.ts-224-
+frontend/src/lib/api-client.ts-225-  getAccessToken(): string | null {
+frontend/src/lib/api-client.ts-226-    return this.accessToken;
+frontend/src/lib/api-client.ts-227-  }
+frontend/src/lib/api-client.ts-228-
+frontend/src/lib/api-client.ts-229-  setUser(user: User | null): void {
+frontend/src/lib/api-client.ts-230-    this.user = user;
+--
+frontend/src/lib/api-client.ts-243-    ): Promise<ApiResponse<T>> => {
+frontend/src/lib/api-client.ts-244-      const trimmedBase = baseURL.replace(/\/+$/, '');
+frontend/src/lib/api-client.ts-245-      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+frontend/src/lib/api-client.ts-246-      const url = appendParams(`${trimmedBase}${normalizedPath}`, config.params);
+frontend/src/lib/api-client.ts-247-      const headers: Record<string, string> = { ...(config.headers || {}) };
+frontend/src/lib/api-client.ts-248-
+frontend/src/lib/api-client.ts-249-      // API keys are not injected by browser code. They live in HTTP-only
+frontend/src/lib/api-client.ts-250-      // cookies and the server-side proxy reads them.
+frontend/src/lib/api-client.ts-251-      if (this.accessToken && !isCookieManagedCredential(this.accessToken) && !headers.Authorization) {
+frontend/src/lib/api-client.ts-252-        headers.Authorization = [REDACTED] ${this.accessToken}`;
+frontend/src/lib/api-client.ts-253-      }
+frontend/src/lib/api-client.ts-254-
+frontend/src/lib/api-client.ts:255:      if (this.currentTenantId && !headers['X-Tenant-ID']) {
+frontend/src/lib/api-client.ts:256:        headers['X-Tenant-ID'] = this.currentTenantId;
+frontend/src/lib/api-client.ts-257-      }
+frontend/src/lib/api-client.ts-258-
+frontend/src/lib/api-client.ts-259-      if (CSRF_PROTECTED_METHODS.has(method.toUpperCase())) {
+frontend/src/lib/api-client.ts-260-        Object.assign(headers, getCsrfHeaders());
+frontend/src/lib/api-client.ts-261-      }
+frontend/src/lib/api-client.ts-262-
+frontend/src/lib/api-client.ts-263-      let body: BodyInit | undefined;
+frontend/src/lib/api-client.ts-264-      if (data !== undefined && data !== null) {
+frontend/src/lib/api-client.ts-265-        if (isBodyInit(data)) {
+frontend/src/lib/api-client.ts-266-          body = data;
+frontend/src/lib/api-client.ts-267-        } else {
+frontend/src/lib/api-client.ts-268-          body = JSON.stringify(data);
+--
+frontend/src/lib/api-client.ts-399-  }
+frontend/src/lib/api-client.ts-400-
+frontend/src/lib/api-client.ts-401-  async revokeAPIKey(keyId: string): Promise<void> {
+frontend/src/lib/api-client.ts-402-    await this.adminClient.delete(`/v1/admin/keys/${keyId}`);
+frontend/src/lib/api-client.ts-403-  }
+frontend/src/lib/api-client.ts-404-
+frontend/src/lib/api-client.ts-405-  // Ingestion API
+frontend/src/lib/api-client.ts-406-  async getIngestionHealth(): Promise<HealthCheckResponse> {
+frontend/src/lib/api-client.ts-407-    const { data } = await this.ingestionClient.get('/health');
+frontend/src/lib/api-client.ts-408-    return data;
+frontend/src/lib/api-client.ts-409-  }
+frontend/src/lib/api-client.ts-410-
+frontend/src/lib/api-client.ts:411:  async ingestURL(apiKey: [REDACTED], url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
+frontend/src/lib/api-client.ts-412-    const response = await this.ingestionClient.post<IngestURLResponse>(
+frontend/src/lib/api-client.ts-413-      '/v1/ingest/url',
+frontend/src/lib/api-client.ts:414:      { url, source_system: sourceSystem },
+frontend/src/lib/api-client.ts-415-      {
+frontend/src/lib/api-client.ts-416-        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+frontend/src/lib/api-client.ts-417-        timeout: 30000
+frontend/src/lib/api-client.ts-418-      }
+frontend/src/lib/api-client.ts-419-    );
+frontend/src/lib/api-client.ts-420-    return response.data;
+frontend/src/lib/api-client.ts-421-  }
+frontend/src/lib/api-client.ts-422-
+frontend/src/lib/api-client.ts-423-
+frontend/src/lib/api-client.ts:424:  async ingestFile(apiKey: [REDACTED] | null | undefined, file: File, sourceSystem: string = 'csv_upload', cteType?: string): Promise<IngestCSVResponse> {
+frontend/src/lib/api-client.ts-425-    const formData = new FormData();
+frontend/src/lib/api-client.ts-426-    formData.append('file', file);
+frontend/src/lib/api-client.ts:427:    formData.append('source', sourceSystem);
+frontend/src/lib/api-client.ts-428-    // cte_type is optional — the backend auto-detects from a cte_type/event_type column
+frontend/src/lib/api-client.ts-429-    if (cteType) {
+frontend/src/lib/api-client.ts-430-      formData.append('cte_type', cteType);
+frontend/src/lib/api-client.ts-431-    }
+frontend/src/lib/api-client.ts-432-
+frontend/src/lib/api-client.ts-433-    try {
+frontend/src/lib/api-client.ts-434-      const response = await this.ingestionClient.post<IngestCSVResponse>(
+frontend/src/lib/api-client.ts-435-        '/api/v1/ingest/csv',
+frontend/src/lib/api-client.ts-436-        formData,
+frontend/src/lib/api-client.ts-437-        {
+frontend/src/lib/api-client.ts-438-          headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+frontend/src/lib/api-client.ts-439-          timeout: 300000 // Longer timeout for large files (5 minutes)
+--
+frontend/src/lib/api-client.ts-858-    return data;
+frontend/src/lib/api-client.ts-859-  }
+frontend/src/lib/api-client.ts-860-
+frontend/src/lib/api-client.ts-861-  async getSupplierBulkUploadStatus(sessionId: string): Promise<SupplierBulkUploadStatusResponse> {
+frontend/src/lib/api-client.ts-862-    const { data } = await this.adminClient.get<SupplierBulkUploadStatusResponse>(
+frontend/src/lib/api-client.ts-863-      `/v1/supplier/bulk-upload/status/${sessionId}`,
+frontend/src/lib/api-client.ts-864-    );
+frontend/src/lib/api-client.ts-865-    return data;
+frontend/src/lib/api-client.ts-866-  }
+frontend/src/lib/api-client.ts-867-
+frontend/src/lib/api-client.ts-868-  // Portal Links — supplier portal link management
+frontend/src/lib/api-client.ts-869-  async listPortalLinks(): Promise<{ links: PortalLink[]; total: number }> {
+frontend/src/lib/api-client.ts:870:    const tenantId = this.currentTenantId;
+frontend/src/lib/api-client.ts-871-    if (!tenantId) throw new Error('No tenant selected');
+frontend/src/lib/api-client.ts-872-    const { data } = await this.ingestionClient.get('/api/v1/portal/links/list', {
+frontend/src/lib/api-client.ts-873-      params: { tenant_id: tenantId },
+frontend/src/lib/api-client.ts-874-    });
+frontend/src/lib/api-client.ts-875-    return data;
+frontend/src/lib/api-client.ts-876-  }
+frontend/src/lib/api-client.ts-877-
+frontend/src/lib/api-client.ts-878-  async createPortalLink(request: {
+frontend/src/lib/api-client.ts-879-    supplier_name: string;
+frontend/src/lib/api-client.ts-880-    supplier_email?: string;
+frontend/src/lib/api-client.ts-881-    expires_days?: number;
+frontend/src/lib/api-client.ts-882-    integration_profile_id?: string;
+frontend/src/lib/api-client.ts-883-  }): Promise<PortalLink> {
+frontend/src/lib/api-client.ts:884:    const tenantId = this.currentTenantId;
+frontend/src/lib/api-client.ts-885-    if (!tenantId) throw new Error('No tenant selected');
+frontend/src/lib/api-client.ts-886-    const { data } = await this.ingestionClient.post('/api/v1/portal/links', {
+frontend/src/lib/api-client.ts-887-      tenant_id: tenantId,
+frontend/src/lib/api-client.ts-888-      supplier_name: request.supplier_name,
+frontend/src/lib/api-client.ts-889-      supplier_email: request.supplier_email,
+frontend/src/lib/api-client.ts-890-      expires_days: request.expires_days || 90,
+frontend/src/lib/api-client.ts-891-      integration_profile_id: request.integration_profile_id,
+frontend/src/lib/api-client.ts-892-    });
+frontend/src/lib/api-client.ts-893-    return data;
+frontend/src/lib/api-client.ts-894-  }
+frontend/src/lib/api-client.ts-895-
+frontend/src/lib/api-client.ts-896-  async revokePortalLink(portalId: string): Promise<void> {
+frontend/src/lib/api-client.ts-897-    await this.ingestionClient.patch(`/api/v1/portal/links/${portalId}/revoke`);
+frontend/src/lib/api-client.ts-898-  }
+frontend/src/lib/api-client.ts-899-
+frontend/src/lib/api-client.ts-900-  // Supplier Integration Profiles — saved field mappings for portal and file feeds
+frontend/src/lib/api-client.ts-901-  async listIntegrationProfiles(): Promise<IntegrationProfilesResponse> {
+frontend/src/lib/api-client.ts:902:    const tenantId = this.currentTenantId;
+frontend/src/lib/api-client.ts-903-    if (!tenantId) throw new Error('No tenant selected');
+frontend/src/lib/api-client.ts-904-    const { data } = await this.ingestionClient.get<IntegrationProfilesResponse>(
+frontend/src/lib/api-client.ts-905-      `/api/v1/integrations/profiles/${tenantId}`,
+frontend/src/lib/api-client.ts-906-    );
+frontend/src/lib/api-client.ts-907-    return data;
+frontend/src/lib/api-client.ts-908-  }
+frontend/src/lib/api-client.ts-909-
+frontend/src/lib/api-client.ts-910-  async createIntegrationProfile(request: CreateIntegrationProfileRequest): Promise<IntegrationProfile> {
+frontend/src/lib/api-client.ts:911:    const tenantId = this.currentTenantId;
+frontend/src/lib/api-client.ts-912-    if (!tenantId) throw new Error('No tenant selected');
+frontend/src/lib/api-client.ts-913-    const { data } = await this.ingestionClient.post<IntegrationProfile>(
+frontend/src/lib/api-client.ts-914-      `/api/v1/integrations/profiles/${tenantId}`,
+frontend/src/lib/api-client.ts-915-      request,
+frontend/src/lib/api-client.ts-916-    );
+frontend/src/lib/api-client.ts-917-    return data;
+frontend/src/lib/api-client.ts-918-  }
+frontend/src/lib/api-client.ts-919-
+frontend/src/lib/api-client.ts-920-  async previewIntegrationProfile(
+frontend/src/lib/api-client.ts-921-    profileId: string,
+frontend/src/lib/api-client.ts-922-    events: Record<string, unknown>[],
+frontend/src/lib/api-client.ts-923-  ): Promise<MappingPreviewResponse> {
+frontend/src/lib/api-client.ts:924:    const tenantId = this.currentTenantId;
+frontend/src/lib/api-client.ts-925-    if (!tenantId) throw new Error('No tenant selected');
+frontend/src/lib/api-client.ts-926-    const { data } = await this.ingestionClient.post<MappingPreviewResponse>(
+frontend/src/lib/api-client.ts-927-      `/api/v1/integrations/profiles/${tenantId}/${profileId}/preview`,
+frontend/src/lib/api-client.ts-928-      { events },
+frontend/src/lib/api-client.ts-929-    );
+frontend/src/lib/api-client.ts-930-    return data;
+frontend/src/lib/api-client.ts-931-  }
+frontend/src/lib/api-client.ts-932-
+frontend/src/lib/api-client.ts-933-  async downloadSupplierBulkUploadTemplate(
+frontend/src/lib/api-client.ts-934-    format: 'csv' | 'xlsx',
+frontend/src/lib/api-client.ts-935-  ): Promise<{ blob: Blob; filename: string }> {
+frontend/src/lib/api-client.ts-936-    const response = await this.adminClient.get('/v1/supplier/bulk-upload/template', {
