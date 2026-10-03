@@ -64,10 +64,17 @@ logger = structlog.get_logger("jev.cte_classification")
 
 # Recorded with every answer and artifact. Bump it whenever the question
 # text, the vocabulary or the meaning of a state key changes.
-QUESTIONS_VERSION = "csv-file-cte.v1"
+# v2: the same question is also asked with the options reversed, in the same
+# request, and an answer is applied only when both orders agree.
+QUESTIONS_VERSION = "csv-file-cte.v2"
 AGENT_NAME = "jev-csv-cte-classifier"
 PURPOSE = "csv_file_cte_type"
 QUESTION_ID = "file_cte"
+# Jev 1.13 leans toward the first option of a Choice (TypeSafe's published
+# model jaggedness, item 8). The vendor's remedy is to reorder the options and
+# check the answer holds; the reversed copy rides in the same request, which
+# runs questions in parallel, so it costs ~700 input tokens and no latency.
+REVERSED_QUESTION_ID = "file_cte_reversed"
 MIXED_OR_UNCLEAR = "mixed_or_unclear"
 # The artifact's ``source_field``: the answer is about the file, not a column.
 FILE_SOURCE_FIELD = "csv_file"
@@ -134,23 +141,30 @@ def build_state(headers: Sequence[str], samples: Mapping[str, Sequence[str]] | N
 
 
 def build_questions() -> dict[str, dict[str, Any]]:
-    """One Choice question over the CTE vocabulary, keyed :data:`QUESTION_ID`."""
+    """The Choice question over the CTE vocabulary, keyed :data:`QUESTION_ID`, and its
+    reversed-order twin, keyed :data:`REVERSED_QUESTION_ID`."""
+    question = _question(CTE_CRITERIA)
     return {
-        QUESTION_ID: {
-            "type": "choice",
-            "instructions": {
-                "task": (
-                    "Decide which FSMA 204 critical tracking event (CTE) every row of this CSV file records. "
-                    "Use the column headers in `csv_headers`, and `sample_values` when the state has them."
-                ),
-                "guidance": (
-                    "Choose a CTE only when the headers show that every row records that one event. "
-                    f"Choose {MIXED_OR_UNCLEAR} when rows could record different events or the headers do "
-                    "not show which event. Do not guess from the product or the file's other columns alone."
-                ),
-            },
-            "criteria": CTE_CRITERIA,
-        }
+        QUESTION_ID: question,
+        REVERSED_QUESTION_ID: {**question, "criteria": dict(reversed(list(CTE_CRITERIA.items())))},
+    }
+
+
+def _question(criteria: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "choice",
+        "instructions": {
+            "task": (
+                "Decide which FSMA 204 critical tracking event (CTE) every row of this CSV file records. "
+                "Use the column headers in `csv_headers`, and `sample_values` when the state has them."
+            ),
+            "guidance": (
+                "Choose a CTE only when the headers show that every row records that one event. "
+                f"Choose {MIXED_OR_UNCLEAR} when rows could record different events or the headers do "
+                "not show which event. Do not guess from the product or the file's other columns alone."
+            ),
+        },
+        "criteria": criteria,
     }
 
 
@@ -204,10 +218,24 @@ def _top_probabilities(probabilities: Mapping[str, float], limit: int = 3) -> di
     return {label: round(float(p), 4) for label, p in ordered[:limit]}
 
 
-def decide(answer: Any, *, thresholds: ConfidenceThresholds, apply_enabled: bool) -> CteTypeSuggestion:
-    """Turn the Choice answer into a suggestion and apply the policy deterministically."""
-    choice = answer.choice if answer.choice in CTE_NAMES else MIXED_OR_UNCLEAR
-    cte_type = None if choice == MIXED_OR_UNCLEAR else choice
+def _cte_of(answer: Any) -> Optional[str]:
+    return answer.choice if answer.choice in CTE_NAMES else None
+
+
+def decide(
+    answer: Any,
+    *,
+    thresholds: ConfidenceThresholds,
+    apply_enabled: bool,
+    reversed_answer: Any | None = None,
+) -> CteTypeSuggestion:
+    """Turn the Choice answer into a suggestion and apply the policy deterministically.
+
+    ``reversed_answer`` is the same question with the options in reverse
+    order. An answer that would be applied is applied only when it names the
+    same CTE; a missing twin blocks it too.
+    """
+    cte_type = _cte_of(answer)
     confidence = float(answer.confidence)
     band = band_for_confidence(confidence, thresholds)
     blocked: Optional[str] = None
@@ -219,6 +247,10 @@ def decide(answer: Any, *, thresholds: ConfidenceThresholds, apply_enabled: bool
         blocked = "below_human_review_threshold"
     elif not apply_enabled:
         blocked = "apply_disabled"
+    elif reversed_answer is None:
+        blocked = "order_check_unavailable"
+    elif _cte_of(reversed_answer) != cte_type:
+        blocked = "order_inconsistent"
     return CteTypeSuggestion(
         cte_type=cte_type,
         confidence=confidence,
@@ -280,7 +312,12 @@ def suggest_file_cte_type(
             apply_enabled=apply_enabled,
             headers=cleaned,
         )
-    suggestion = decide(answer, thresholds=thresholds, apply_enabled=apply_enabled)
+    suggestion = decide(
+        answer,
+        thresholds=thresholds,
+        apply_enabled=apply_enabled,
+        reversed_answer=answers.choices.get(REVERSED_QUESTION_ID),
+    )
     logger.info(
         "jev.cte_classification.suggested",
         cte_type=suggestion.cte_type,
@@ -307,7 +344,8 @@ def _rationale(suggestion: CteTypeSuggestion, result: CteClassificationResult) -
         f"Top probabilities: {suggestion.probabilities}.",
         f"Confidence {suggestion.confidence:.3f} falls in band '{suggestion.band.value}' "
         f"(auto_apply >= {result.thresholds.auto_apply}, review >= {result.thresholds.review}).",
-        "Applied as the file's fallback CTE by deterministic code; a row's own CTE value still wins."
+        "Applied as the file's fallback CTE by deterministic code; a row's own CTE value still wins. "
+        "The answer held with the options in reverse order."
         if suggestion.applied
         else f"Not applied (reason: {suggestion.blocked_reason}); rows without a CTE were rejected.",
     ]

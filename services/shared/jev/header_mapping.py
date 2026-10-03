@@ -40,6 +40,8 @@ nothing is sent.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import logging
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -58,7 +60,7 @@ from shared.agent_artifacts import (
 )
 from shared.pii import redact_pii
 
-from .client import JevDecider, JevEvidence, JevUnavailable, get_jev_decider
+from .client import JevAnswers, JevDecider, JevEvidence, JevUnavailable, get_jev_decider
 from .routing import ConfidenceBand, ConfidenceThresholds, band_for_confidence
 
 logger = structlog.get_logger("jev.header_mapping")
@@ -66,7 +68,9 @@ logger = structlog.get_logger("jev.header_mapping")
 # Recorded with every answer and artifact. Bump it whenever the question text,
 # the vocabulary or the meaning of a state key changes, so the evidence says
 # exactly what was asked. v2: the task text explains ``file_cte_type``.
-QUESTIONS_VERSION = "csv-header-mapping.v2"
+# v3: columns are sent in batches that fit the request limit, and an answer
+# is applied only if it survives the options in reverse order.
+QUESTIONS_VERSION = "csv-header-mapping.v3"
 AGENT_NAME = "jev-csv-header-mapper"
 PURPOSE = "csv_header_mapping"
 NO_MATCH = "no_match"
@@ -80,6 +84,13 @@ MAX_SAMPLE_VALUE_CHARS = 64
 # swallowed into the header (an unterminated quote), so it is never sent.
 MAX_HEADER_CHARS = 128
 MALFORMED_HEADER = "malformed_header"
+# TypeSafe caps one request at 64k tokens (state plus every question). Each
+# question here carries the whole vocabulary (~7k characters), so 48 columns
+# in one request (~86k tokens) were rejected and the upload got no
+# suggestions at all. Columns are split into batches whose JSON stays under
+# this many characters: at a conservative ~3 characters per token that is
+# about 40k tokens, leaving headroom for tokenizer variance.
+MAX_REQUEST_CHARS = 120_000
 
 # Canonical vocabulary. Keys are the exact column names the CSV parser and
 # the FSMA validators consume. Descriptions follow the vendor guidance for
@@ -318,11 +329,26 @@ def build_state(
     return state
 
 
-def build_questions(columns: Sequence[str]) -> dict[str, dict[str, Any]]:
+def reversed_criteria(criteria: Mapping[str, Any]) -> dict[str, Any]:
+    """The same options in reverse order.
+
+    Jev 1.13 leans toward the first option of a Choice (TypeSafe's published
+    model jaggedness, item 8); the vendor's remedy is to reorder the options
+    and check the answer holds. :func:`suggest_header_mappings` asks again
+    with this order before it lets an answer change rows.
+    """
+    return dict(reversed(list(criteria.items())))
+
+
+def build_questions(
+    columns: Sequence[str], *, criteria: Mapping[str, Any] = CANONICAL_FIELDS
+) -> dict[str, dict[str, Any]]:
     """One Choice question per column, keyed ``col_<index>``.
 
     Questions are plain dictionaries (the SDK accepts them) so this module
     stays importable without constructing SDK objects at import time.
+    ``criteria`` defaults to the vocabulary in its declared order; the
+    order-consistency check passes :func:`reversed_criteria`.
     """
     questions: dict[str, dict[str, Any]] = {}
     for index, header in enumerate(columns):
@@ -341,9 +367,39 @@ def build_questions(columns: Sequence[str]) -> dict[str, dict[str, Any]]:
                     "the column is not one of the listed fields. Do not guess from position alone."
                 ),
             },
-            "criteria": CANONICAL_FIELDS,
+            "criteria": criteria,
         }
     return questions
+
+
+def column_batches(
+    all_headers: Sequence[str],
+    columns: Sequence[str],
+    samples: Mapping[str, Sequence[str]] | None,
+    *,
+    cte_type: str | None = None,
+    max_chars: int = MAX_REQUEST_CHARS,
+) -> list[list[str]]:
+    """Split ``columns`` into consecutive batches whose request JSON fits ``max_chars``.
+
+    Every batch holds at least one column, so a single oversized column is
+    still asked about (and the provider decides) rather than silently dropped.
+    """
+    batches: list[list[str]] = []
+    current: list[str] = []
+    for column in columns:
+        candidate = [*current, column]
+        size = len(json.dumps(build_state(list(all_headers), candidate, samples, cte_type=cte_type))) + len(
+            json.dumps(build_questions(candidate))
+        )
+        if current and size > max_chars:
+            batches.append(current)
+            current = [column]
+        else:
+            current = candidate
+    if current:
+        batches.append(current)
+    return batches
 
 
 @dataclass(frozen=True)
@@ -360,6 +416,10 @@ class HeaderMappingSuggestion:
     blocked_reason: Optional[str] = None
     shadowed_columns: tuple[str, ...] = ()
     sample_value: Optional[str] = None
+    # The provider request that produced this answer (columns may span
+    # several requests). Kept out of ``to_dict``: the upload response
+    # contract is unchanged.
+    request_id: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -392,6 +452,9 @@ class HeaderMappingResult:
     # artifact rationale so the evidence records what was asked.
     file_cte_type: Optional[str] = None
     file_cte_type_dropped: Optional[str] = None
+    # Every provider call behind this result, in order: the column batches,
+    # then any order-consistency check. ``evidence`` is the first of them.
+    evidences: tuple[JevEvidence, ...] = ()
 
     @property
     def applied_mapping(self) -> dict[str, str]:
@@ -437,8 +500,16 @@ def _decide(
     apply_enabled: bool,
     samples: Mapping[str, Sequence[str]] | None,
     precedence: Sequence[Sequence[str]] = (),
+    reversed_answers: Mapping[str, Any] | None = None,
+    request_ids: Mapping[str, Optional[str]] | None = None,
 ) -> list[HeaderMappingSuggestion]:
-    """Turn Choice answers into suggestions and apply the policy deterministically."""
+    """Turn Choice answers into suggestions and apply the policy deterministically.
+
+    ``reversed_answers`` holds, per question id, the answer to the same
+    question with the options in reverse order. It is consulted only for an
+    answer that would otherwise be applied: one that does not name the same
+    field, or is missing, keeps the rows unchanged.
+    """
     provisional: list[dict[str, Any]] = []
     for index, header in enumerate(columns):
         answer = answers.get(f"col_{index}")
@@ -450,6 +521,7 @@ def _decide(
         band = band_for_confidence(confidence, thresholds)
         provisional.append(
             {
+                "question_id": f"col_{index}",
                 "header": header,
                 "key": normalize_csv_header(header),
                 "canonical": canonical,
@@ -478,6 +550,10 @@ def _decide(
             blocked = "below_human_review_threshold"
         elif not apply_enabled:
             blocked = "apply_disabled"
+        elif reversed_answers is None or item["question_id"] not in reversed_answers:
+            blocked = "order_check_unavailable"
+        elif _field_of(reversed_answers[item["question_id"]]) != canonical:
+            blocked = "order_inconsistent"
         elif canonical in present_keys:
             blocked = "target_present"
         elif shadowed:
@@ -500,9 +576,16 @@ def _decide(
                 blocked_reason=blocked,
                 shadowed_columns=shadowed,
                 sample_value=sample,
+                request_id=(request_ids or {}).get(item["question_id"]),
             )
         )
     return suggestions
+
+
+def _field_of(answer: Any) -> Optional[str]:
+    """The canonical field an answer names, or ``None`` for ``no_match`` / unknown labels."""
+    choice = answer.choice if answer.choice in CANONICAL_FIELDS else NO_MATCH
+    return None if choice == NO_MATCH else choice
 
 
 def collect_sample_values(
@@ -576,13 +659,31 @@ def suggest_header_mappings(
     present_keys = {normalize_csv_header(header) for header in all_headers}
     file_cte_type = cte_type or None
 
+    def ask_in_batches(batch_columns: Sequence[int], criteria: Mapping[str, Any]) -> list[JevAnswers]:
+        """Ask about ``columns[i]`` for each index, in request-sized batches; answers keyed globally."""
+        asked = [columns[i] for i in batch_columns]
+        collected: list[JevAnswers] = []
+        offset = 0
+        for batch in column_batches(list(all_headers), asked, samples, cte_type=file_cte_type):  # type: ignore[arg-type]
+            batch_answers = decider.ask(
+                build_state(list(all_headers), batch, samples, cte_type=file_cte_type),  # type: ignore[arg-type]
+                build_questions(batch, criteria=criteria),
+                purpose=PURPOSE,
+                questions_version=QUESTIONS_VERSION,
+            )
+            # Question ids are local to their request (``col_<i>`` points at
+            # ``columns_to_map[i]`` of that request's state); map them back.
+            remapped = {
+                f"col_{batch_columns[offset + local]}": batch_answers.choices[f"col_{local}"]
+                for local in range(len(batch))
+                if f"col_{local}" in batch_answers.choices
+            }
+            collected.append(dataclasses.replace(batch_answers, choices=remapped))
+            offset += len(batch)
+        return collected
+
     try:
-        answers = decider.ask(
-            build_state(list(all_headers), columns, samples, cte_type=file_cte_type),  # type: ignore[arg-type]
-            build_questions(columns),
-            purpose=PURPOSE,
-            questions_version=QUESTIONS_VERSION,
-        )
+        batches = ask_in_batches(list(range(len(columns))), CANONICAL_FIELDS)
     except JevUnavailable as exc:
         return HeaderMappingResult(
             status=f"unavailable:{exc.reason}",
@@ -601,14 +702,47 @@ def suggest_header_mappings(
             file_cte_type=file_cte_type,
         )
 
+    choices: dict[str, Any] = {}
+    request_ids: dict[str, Optional[str]] = {}
+    for batch in batches:
+        choices.update(batch.choices)
+        request_ids.update({question_id: batch.evidence.request_id for question_id in batch.choices})
+    evidences = [batch.evidence for batch in batches]
+
+    # Order-consistency check, only where an answer could change rows: ask
+    # again with the options reversed and apply only answers that hold.
+    reversed_answers: dict[str, Any] | None = None
+    if apply_enabled:
+        to_check = [
+            index
+            for index in range(len(columns))
+            if (answer := choices.get(f"col_{index}")) is not None
+            and _field_of(answer) is not None
+            and band_for_confidence(float(answer.confidence), thresholds) is ConfidenceBand.AUTO_APPLY
+        ]
+        reversed_answers = {}
+        if to_check:
+            try:
+                for batch in ask_in_batches(to_check, reversed_criteria(CANONICAL_FIELDS)):
+                    reversed_answers.update(batch.choices)
+                    evidences.append(batch.evidence)
+            except JevUnavailable:
+                reversed_answers = None  # every candidate reports order_check_unavailable
+            except Exception:  # noqa: BLE001
+                logger.exception("jev.header_mapping.order_check_error", column_count=len(to_check))
+                reversed_answers = None
+
+    answers = batches[0]
     suggestions = _decide(
         columns,
-        answers.choices,
+        choices,
         present_keys=present_keys,
         thresholds=thresholds,
         apply_enabled=apply_enabled,
         samples=samples,
         precedence=precedence,
+        reversed_answers=reversed_answers,
+        request_ids=request_ids,
     )
     logger.info(
         "jev.header_mapping.suggested",
@@ -618,6 +752,8 @@ def suggest_header_mappings(
         rejected=sum(1 for s in suggestions if s.band is ConfidenceBand.REJECT),
         no_match=sum(1 for s in suggestions if s.canonical_field is None),
         truncated_columns=truncated,
+        requests=len(evidences),
+        order_inconsistent=sum(1 for s in suggestions if s.blocked_reason == "order_inconsistent"),
         request_id=answers.evidence.request_id,
     )
     return HeaderMappingResult(
@@ -628,6 +764,7 @@ def suggest_header_mappings(
         apply_enabled=apply_enabled,
         truncated_columns=truncated,
         file_cte_type=file_cte_type,
+        evidences=tuple(evidences),
     )
 
 
@@ -680,7 +817,7 @@ def _rationale(suggestion: HeaderMappingSuggestion, result: HeaderMappingResult)
         f"Top probabilities: {suggestion.probabilities}.",
         f"Confidence {suggestion.confidence:.3f} falls in band '{suggestion.band.value}' "
         f"(auto_apply >= {result.thresholds.auto_apply}, review >= {result.thresholds.review}).",
-        "Applied to the upload's rows by deterministic code."
+        "Applied to the upload's rows by deterministic code. The answer held with the options in reverse order."
         if suggestion.applied
         else f"Not applied to rows (reason: {suggestion.blocked_reason}{_blocked_detail(suggestion)}).",
     ]
@@ -746,7 +883,7 @@ def build_field_mapping_artifacts(
                 context=AgentArtifactContext(
                     ingestion_run_id=run_uuid,
                     source_hashes=[source_hash],
-                    request_id=request_id,
+                    request_id=suggestion.request_id or request_id,
                 ),
                 payload=FieldMappingSuggestionPayload(
                     source_field=suggestion.source_header,

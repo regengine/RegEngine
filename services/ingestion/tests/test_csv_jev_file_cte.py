@@ -32,7 +32,13 @@ from app.webhook_models import EventResult, IngestResponse
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from shared.jev import JevDecider, JevSettings
-from shared.jev.cte_classification import CTE_NAMES, MIXED_OR_UNCLEAR, QUESTION_ID, QUESTIONS_VERSION
+from shared.jev.cte_classification import (
+    CTE_NAMES,
+    MIXED_OR_UNCLEAR,
+    QUESTION_ID,
+    QUESTIONS_VERSION,
+    REVERSED_QUESTION_ID,
+)
 from shared.jev.header_mapping import NO_MATCH
 
 TENANT = str(uuid.uuid4())
@@ -74,7 +80,7 @@ def _transport(
             return httpx2.Response(status, text="down")
         answered = {}
         for question_id in body["questions"]:
-            if question_id == QUESTION_ID:
+            if question_id in (QUESTION_ID, REVERSED_QUESTION_ID):
                 answered[question_id] = file_cte
             else:
                 index = int(question_id.split("_")[1])
@@ -240,7 +246,7 @@ def test_advisory_answer_rides_the_400_so_the_uploader_can_re_upload_with_it(har
     # Only the header row left the process: every template column is one the
     # parser knows, so the header mapping asked nothing.
     (sent,) = seen["bodies"]
-    assert list(sent["questions"]) == [QUESTION_ID]
+    assert list(sent["questions"]) == [QUESTION_ID, REVERSED_QUESTION_ID]
     assert sent["state"] == {"csv_headers": RECEIVING_TEMPLATE.decode().splitlines()[0].split(",")}
     assert "TOM-0226-F3-001" not in json.dumps(sent)
     assert harness["payloads"] == [] and harness["artifacts"] == []
@@ -381,8 +387,13 @@ def test_both_questions_are_asked_at_once_and_both_can_apply(harness):
     assert result["cte_type_suggestion"]["applied"] is True
     (mapping,) = result["header_mapping_suggestions"]
     assert mapping["applied"] is True
-    # Two requests: the header mapping and the file CTE, each its own question set.
-    assert sorted(list(b["questions"]) for b in seen["bodies"]) == [["col_0"], [QUESTION_ID]]
+    # Three requests: the header mapping, its reversed-order check (the
+    # mapping is about to change rows) and the file CTE with its twin.
+    assert sorted(list(b["questions"]) for b in seen["bodies"]) == [
+        ["col_0"],
+        ["col_0"],
+        [QUESTION_ID, REVERSED_QUESTION_ID],
+    ]
     (payload,) = harness["payloads"]
     assert payload.events[0].traceability_lot_code == "TOM-0226-F3-001"
     assert payload.events[0].cte_type.value == "receiving"

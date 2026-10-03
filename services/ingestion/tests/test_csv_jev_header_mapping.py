@@ -288,11 +288,11 @@ def test_declared_cte_type_is_sent_to_jev_normalised(harness, declared):
     (sent,) = seen["bodies"]
     assert sent["state"]["file_cte_type"] == "shipping"
     assert [c["header"] for c in sent["state"]["columns_to_map"]] == ["Ship Dt", "Qty Shpd"]
-    assert resp.json()["header_mapping_engine"]["questions_version"] == "csv-header-mapping.v2"
+    assert resp.json()["header_mapping_engine"]["questions_version"] == "csv-header-mapping.v3"
     # The evidence records what Jev was told, next to the question-set version.
     assert len(harness["artifacts"]) == 2
     for artifact in harness["artifacts"]:
-        assert "(csv-header-mapping.v2)" in artifact.payload.rationale
+        assert "(csv-header-mapping.v3)" in artifact.payload.rationale
         assert "State file_cte_type: shipping." in artifact.payload.rationale
 
 

@@ -167,10 +167,38 @@ of a state key changes.
 | --- | --- |
 | `csv-header-mapping.v1` | Initial question set. |
 | `csv-header-mapping.v2` | The task text adds: "When the state has `file_cte_type`, it names the FSMA 204 critical tracking event that every row in the file records." Asked on every upload, with or without `file_cte_type`. |
+| `csv-header-mapping.v3` | Same question text. Columns are sent in batches that fit TypeSafe's per-request limit (see *Request size*), and an answer that would change rows is first asked again with the vocabulary in reverse order (see *Option-order check*). |
 
 Nothing in RegEngine compares the version string: it is free text on the
 response, the evidence and `fsma.agent_artifacts.agent_version`, so v1 and
 v2 artifacts sit side by side and each says which question set produced it.
+
+### Request size
+
+TypeSafe accepts at most 64k tokens per request (state plus every
+question; `docs.typesafe.ai/models`). Each column's question carries the
+whole vocabulary (~7k characters, ~1.8k tokens), so before v3 an upload
+with more than ~35 unrecognised columns exceeded the limit, the provider
+rejected the request, and the upload got no suggestions at all
+(`unavailable:bad_request`). `column_batches` now splits the columns into
+consecutive requests whose JSON stays under `MAX_REQUEST_CHARS` (120,000
+characters, ~40k tokens at a conservative 3 characters per token). The
+requests run one after another; each adds roughly 100 ms. Question ids are
+local to each request and mapped back to columns, and each suggestion keeps
+the request id that produced it (the artifact's `request_id`). If any batch
+fails, the whole result is `unavailable:<reason>`, as before.
+
+### Option-order check
+
+Jev 1.13 leans toward the first option of a `Choice` (TypeSafe's published
+model jaggedness, item 8); the vendor's remedy is to reorder the options
+and check the answer holds. When `REGENGINE_JEV_APPLY_HEADER_MAPPINGS=1`,
+every answer that names a field in the `auto_apply` band is asked again,
+in a second request, with the vocabulary in reverse order. It is applied
+only if the reversed answer names the same field (`order_inconsistent`
+otherwise); if that request fails, nothing is applied
+(`order_check_unavailable`) but the suggestions and artifacts are kept.
+With apply off (the default) no second request is made.
 
 ## Apply policy (single source: `services/shared/jev/header_mapping.py`)
 
@@ -183,6 +211,7 @@ v2 artifacts sit side by side and each says which question set produced it.
 
 `blocked_reason` on each suggestion names which condition stopped an apply:
 `apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`,
+`order_check_unavailable`, `order_inconsistent`,
 `target_present`, `shadows_existing_column`, `conflict`, `no_match`. It is a
 free string on the response (`HeaderMappingSuggestionResult`)
 and appears in the artifact only inside the rationale text. The
@@ -218,9 +247,13 @@ bounded by `REGENGINE_JEV_TIMEOUT_SECONDS` per attempt and
 `REGENGINE_JEV_MAX_RETRIES`, and a failure never changes the outcome.
 
 **The question** (`services/shared/jev/cte_classification.py`,
-`csv-file-cte.v1`): one `Choice` over the seven FDA CTEs plus
+`csv-file-cte.v2`): one `Choice` over the seven FDA CTEs plus
 `mixed_or_unclear`, each described with what it is, what it is not, and
-typical headers. The state is `{"csv_headers": [...]}` plus
+typical headers. The same question is sent again in the same request
+(`file_cte_reversed`) with the options in reverse order, the vendor's
+remedy for Jev's first-option lean; questions in one request run in
+parallel, so it adds ~700 input tokens and no latency. v1 sent the
+question once. The state is `{"csv_headers": [...]}` plus
 `sample_values` only when `REGENGINE_JEV_HEADER_SAMPLE_VALUES` is set (the
 same redacted values the header mapping sends for unrecognised columns).
 `growing` is never offered: it is not an FDA CTE.
@@ -229,8 +262,8 @@ same redacted values the header mapping sends for unrecognised columns).
 
 | Answer | What code does |
 | --- | --- |
-| One CTE, `auto_apply` band, `confidence >= 0.85`, `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`, and no row names a different CTE | Used as the file's fallback CTE (`applied: true`). A row's own CTE still wins. Artifact recorded with `requires_human_review=false`; `csv_file_cte_applied` logged. |
-| One CTE, any other case | Advisory: returned on the response and in the 400 body with `blocked_reason` (`apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`, `row_values_contradict`). Artifact recorded with `requires_human_review=true` unless the band is `reject`. |
+| One CTE, `auto_apply` band, `confidence >= 0.85`, `REGENGINE_JEV_APPLY_FILE_CTE_TYPE=1`, the reversed-order twin names the same CTE, and no row names a different CTE | Used as the file's fallback CTE (`applied: true`). A row's own CTE still wins. Artifact recorded with `requires_human_review=false`; `csv_file_cte_applied` logged. |
+| One CTE, any other case | Advisory: returned on the response and in the 400 body with `blocked_reason` (`apply_disabled`, `below_auto_apply_threshold`, `below_human_review_threshold`, `order_check_unavailable`, `order_inconsistent`, `row_values_contradict`). Artifact recorded with `requires_human_review=true` unless the band is `reject`. |
 | `mixed_or_unclear`, or a label outside the vocabulary | `cte_type: null`, `blocked_reason: mixed_or_unclear`. Nothing offered, no artifact. |
 
 `row_values_contradict` reuses the scan that withholds a declared CTE from
@@ -256,7 +289,7 @@ again. A successful upload carries the same object as
 `field_mapping_suggestion` artifact after the run is retained:
 `source_field: "csv_file"`, `source_value` the header row,
 `target_canonical_field: "cte_type"`, `normalized_value` the CTE,
-`agent_name: jev-csv-cte-classifier`, `agent_version: csv-file-cte.v1`. A
+`agent_name: jev-csv-cte-classifier`, `agent_version: csv-file-cte.v2`. A
 400 retains no run, so it records no artifact.
 
 **Statuses** (`cte_type_suggestion.status`): `ok`, `per_row_cte_column`,
